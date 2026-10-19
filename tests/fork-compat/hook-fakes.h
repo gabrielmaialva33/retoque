@@ -48,11 +48,11 @@ struct Config
         return &config;
     }
 };
-namespace FSR4Upgrade
+namespace FSR4DriverProvider
 {
 void* module = nullptr;
-void* GetFSR4Module() { return module; }
-} // namespace FSR4Upgrade
+void* LoadedModule() { return module; }
+} // namespace FSR4DriverProvider
 DWORD GetModuleFileNameW(void*, WCHAR* output, DWORD)
 {
     std::wstring path = L"C:\\signed\\amd_fidelityfx_dx12.dll";

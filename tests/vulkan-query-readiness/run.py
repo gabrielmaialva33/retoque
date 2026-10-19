@@ -19,7 +19,8 @@ unit = (here / 'fakes.h').read_text()
 unit += without_includes(production / 'GpuTime_Vk.h')
 unit += without_includes(production / 'GpuTime_Vk.cpp')
 unit += (here / 'cases.cpp').read_text()
-cases = ['inactive', 'start-alone', 'ring', 'not-ready-retry', 'errors', 'reversed', 'lifetime']
+cases = ['inactive', 'start-alone', 'ring', 'not-ready-retry', 'errors', 'reversed', 'lifetime',
+         'interop-missing', 'interop-ready', 'interop-busy', 'interop-abort', 'interop-errors']
 with tempfile.TemporaryDirectory(prefix='optiscaler-vulkan-query-readiness-') as directory:
     cpp = Path(directory) / 'timing.cpp'
     binary = Path(directory) / 'timing'

@@ -19,6 +19,7 @@ here or beside the code it describes.
 - [linux-proton/fork-fixes-20261016.md](linux-proton/fork-fixes-20261016.md): NGX/library compatibility, menu GPU completion and FG lock-pairing fixes from the fork audit.
 - [linux-proton/streamline-game-camera.md](linux-proton/streamline-game-camera.md): preserve valid game camera matrices by frame and D3D12 resource-tag origins.
 - [linux-proton/upstream-20261016.md](linux-proton/upstream-20261016.md): Vulkan FG and common DLSS-G integration, retained fork protections and automated validation boundaries.
+- [linux-proton/upstream-20261019.md](linux-proton/upstream-20261019.md): fifth upstream merge, lifetime changes and explicit conflict/validation decisions.
 
 ## DLSS Neural Rendering design
 

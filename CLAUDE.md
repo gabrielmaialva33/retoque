@@ -34,6 +34,9 @@ URLs redirect), which adds Linux/Proton overlay patches on top.
   - The fourth is on `merge/optiscaler-20261016` (19 commits, to `0e42d595`): Vulkan FG inputs/output and HUDfix,
     common DLSS-G factoring, Streamline initialization, Quirks/ASI status and x64-only project configurations.
     Resolution and validation boundaries: `docs/linux-proton/upstream-20261016.md`.
+  - The fifth is on `merge/optiscaler-20261019` (28 commits, to `c2e44a8b`): Vulkan reprojection/resource
+    flipping, reprojection cache, XeFG Dynamic MFG, FSR4 driver/model handling and deferred resource release.
+    Resolution decisions and validation boundaries: `docs/linux-proton/upstream-20261019.md`.
   - Conflicts resolve as upstream's structure first, with our changes re-applied on top. Where one
     of our commits was a port of upstream work that later landed there (reprojection, the
     FGPreserveSwapChain factoring), take upstream's.
@@ -253,11 +256,11 @@ before committing C++, because nothing local enforces it and it had drifted by 5
 
 ### Tests
 
-`tests/README.md` is the index; read it before adding or changing a suite. Seventy-one directories under
+`tests/README.md` is the index; read it before adding or changing a suite. Seventy-two directories under
 `tests/`, each self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
 
 ```bash
-python3 tests/run_all.py            # host tier, the default; 59 suites
+python3 tests/run_all.py            # host tier, the default; 60 suites
 python3 tests/run_all.py --list     # registry, tiers, and what is runnable here
 python3 tests/run_all.py --tier all # adds the twelve wine suites
 python3 tests/<name>/run.py         # one suite, unchanged

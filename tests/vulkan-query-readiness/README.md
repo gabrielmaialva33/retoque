@@ -7,7 +7,7 @@ python3 tests/run_all.py --only vulkan-query-readiness -v
 
 The runner compiles the actual `GpuTime_Vk.h` classes (`GpuTime_Vk`, `ScopedGpuTime_Vk`) and every
 method in `GpuTime_Vk.cpp`, removing only their platform includes and `#pragma once`. The Vulkan API,
-`State` and `LOG_ERROR` are local fakes. It builds with `g++`, C++20, `-Wall -Wextra -Werror`, ASan and
+`State`, logging and timeline-counter lookup are local fakes. It builds with `g++`, C++20, `-Wall -Wextra -Werror`, ASan and
 UBSan in a temporary directory, and runs each case in a fresh process.
 
 ## Subject, and why it moved
@@ -39,6 +39,14 @@ class to it.
 
 Not filtered here, unlike the deleted class: a zero duration, and implausibly long ones. The caller
 filters (`hkvkQueuePresentKHR` drops upscaler times of 100 ms and more).
+
+## Vulkan w/Dx12 interop timing (2026-10-19)
+
+The suite also compiles the upstream interop API and exercises missing counter lookup, overlapping
+Evaluate rejection, ring exhaustion, timeline completion before timestamp polling, both availability
+words, NOT_READY/error retries, single consumption, and quarantine after aborted or markerless submits.
+The fake API scripts only query/counter results; slot selection, reuse and publication execute the
+production methods. These are host state-machine checks, not evidence of real GPU completion.
 
 ## RED / GREEN evidence
 

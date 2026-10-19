@@ -65,9 +65,13 @@ int main()
     assert(query(L"nvngx.dll", 2) == 73 && observedObject != nullptr && observedPath.empty());
     assert(verify(L"nvngx.dll", 999) == 97 && observedPath == L"nvngx.dll");
     assert(verify(nullptr) == 97 && observedPath.empty());
-    FSR4Upgrade::module = reinterpret_cast<void*>(1);
-    assert(query(L"C:\\game\\amd_fidelityfx_dx12.dll") == 73);
-    assert(observedPath == L"C:\\signed\\amd_fidelityfx_dx12.dll");
+    FSR4DriverProvider::module = reinterpret_cast<void*>(1);
+    for (const WCHAR* path : { L"C:\\game\\amd_fidelityfx_dx12.dll", L"C:\\game\\amd_fidelityfx_vk.dll",
+                               L"C:\\game\\amd_fidelityfx_upscaler_vk.dll" })
+    {
+        assert(query(path) == 73);
+        assert(observedPath == L"C:\\signed\\amd_fidelityfx_dx12.dll");
+    }
     calls = 0;
     assert(verify(L"C:\\game\\amd_fidelityfx_dx12.dll") == ERROR_SUCCESS && calls == 0);
     std::cout << "PASS: exact NGX basename in both hooks, trust-state propagation, gates and FFX behavior\n";

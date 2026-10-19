@@ -74,8 +74,15 @@ int main(int argc, char** argv)
         }
         Record(timer);
         Record(timer);
-        Check(recorded == std::vector<Command> { { 'R', 2 }, { 'T', 2 }, { 'T', 3 }, { 'R', 4 }, { 'T', 4 },
-                                                 { 'T', 5 }, { 'R', 0 }, { 'T', 0 }, { 'T', 1 } },
+        Check(recorded == std::vector<Command> { { 'R', 2 },
+                                                 { 'T', 2 },
+                                                 { 'T', 3 },
+                                                 { 'R', 4 },
+                                                 { 'T', 4 },
+                                                 { 'T', 5 },
+                                                 { 'R', 0 },
+                                                 { 'T', 0 },
+                                                 { 'T', 1 } },
               "per pair: reset, start, end; pairs advance 1, 2, 0");
         replies.push_back({ VK_SUCCESS, { 100, 1500100 } });
         Near(timer.ReadGpuTime(), 3.0, "the oldest pair is read, scaled by timestampPeriod");
@@ -118,6 +125,90 @@ int main(int argc, char** argv)
         replies.push_back({ VK_SUCCESS, { 200, 100 } });
         Check(!timer.ReadGpuTime().has_value(), "an end before its start publishes nothing");
         Check(!timer.ReadGpuTime().has_value() && polled.size() == 1, "and is consumed, not retried");
+    }
+    else if (name == "interop-missing")
+    {
+        counterAvailable = false;
+        Check(!timer.StartInterop(commandBuffer), "missing timeline counter disables interop timing");
+        Check(!timer.StartInterop(commandBuffer), "counter absence remains cached");
+        Check(counterLookups == 2 && recorded.empty(), "core and KHR lookup once, no unsafe recording");
+    }
+    else if (name == "interop-ready")
+    {
+        Check(timer.StartInterop(commandBuffer), "first interop starts");
+        Check(!timer.StartInterop(commandBuffer), "overlapping evaluate cannot reset a recording");
+        timer.EndInterop(commandBuffer);
+        timer.SubmitInterop(9, 5);
+        completedValue = 4;
+        Check(!timer.ReadInteropGpuTime() && polled.empty(), "no timestamp query before copy-back completes");
+        completedValue = 5;
+        replies.push_back({ VK_NOT_READY, { 100, 1, 1500100, 1 }, 4 });
+        Check(!timer.ReadInteropGpuTime(), "NOT_READY retains the submitted slot");
+        replies.push_back({ VK_SUCCESS, { 100, 1, 1500100, 0 }, 4 });
+        Check(!timer.ReadInteropGpuTime(), "missing end availability retains the slot");
+        replies.push_back({ VK_SUCCESS, { 100, 1, 1500100, 1 }, 4 });
+        Near(timer.ReadInteropGpuTime(), 3.0, "finished copy-back with available timestamps publishes");
+        Check(!timer.ReadInteropGpuTime(), "interop sample consumed once");
+        Check(recorded == std::vector<Command> { { 'R', 0 }, { 'T', 0 }, { 'T', 1 } },
+              "no reset while waiting for completion or availability");
+        Check(timer.StartInterop(commandBuffer), "completed slot can be recorded again");
+    }
+    else if (name == "interop-busy")
+    {
+        for (uint64_t value = 1; value <= kPairs; ++value)
+        {
+            Check(timer.StartInterop(commandBuffer), "free slot accepted");
+            timer.EndInterop(commandBuffer);
+            timer.SubmitInterop(9, value);
+        }
+        const auto size = recorded.size();
+        Check(!timer.StartInterop(commandBuffer) && recorded.size() == size, "full ring skips without reset");
+        completedValue = 1;
+        replies.push_back({ VK_SUCCESS, { 100, 1, 1500100, 1 }, 4 });
+        Check(timer.StartInterop(commandBuffer), "only completed slot can be reused");
+        Check(recorded[size] == Command { 'R', 0 }, "reuse completed pair zero");
+        Near(timer.ReadInteropGpuTime(), 3.0, "other pending slots do not overwrite the ready sample");
+    }
+    else if (name == "interop-abort")
+    {
+        for (int index = 0; index < 3; ++index)
+        {
+            Check(timer.StartInterop(commandBuffer), "free slot available before quarantine");
+            if (index == 0)
+                timer.AbortInterop();
+            else if (index == 1)
+                timer.SubmitInterop(9, 1); // no end timestamp
+            else
+            {
+                timer.EndInterop(commandBuffer);
+                timer.SubmitInterop(VK_NULL_HANDLE, 0); // no completion marker
+            }
+        }
+        const auto size = recorded.size();
+        Check(!timer.StartInterop(commandBuffer) && recorded.size() == size,
+              "aborted or markerless slots never reset possibly submitted queries");
+        Check(!timer.ReadInteropGpuTime() && polled.empty(), "quarantined slots cannot publish");
+    }
+    else if (name == "interop-errors")
+    {
+        Check(timer.StartInterop(commandBuffer), "interop starts");
+        timer.EndInterop(commandBuffer);
+        timer.SubmitInterop(9, 1);
+        completedValue = 1;
+        counterResult = VK_ERROR_DEVICE_LOST;
+        Check(!timer.ReadInteropGpuTime() && polled.empty(), "counter error does not query timestamps");
+        counterResult = VK_SUCCESS;
+        replies.push_back({ VK_ERROR_DEVICE_LOST, { 100, 1, 1500100, 1 }, 4 });
+        Check(!timer.ReadInteropGpuTime(), "query error publishes nothing and keeps ownership");
+        replies.push_back({ VK_SUCCESS, { 100, 0, 1500100, 1 }, 4 });
+        Check(!timer.ReadInteropGpuTime(), "missing start availability cannot publish");
+        replies.push_back({ VK_SUCCESS, { 200, 1, 100, 1 }, 4 });
+        Check(!timer.ReadInteropGpuTime(), "reversed timestamps are consumed without publication");
+        Check(timer.StartInterop(commandBuffer), "invalid completed sample frees its slot");
+        timer.EndInterop(commandBuffer);
+        timer.SubmitInterop(9, 1);
+        replies.push_back({ VK_SUCCESS, { 100, 1, 100, 1 }, 4 });
+        Check(!timer.ReadInteropGpuTime(), "zero duration cannot publish");
     }
     else if (name == "lifetime")
     {

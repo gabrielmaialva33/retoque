@@ -14,7 +14,10 @@ HERE = Path(__file__).resolve().parent
 OUT = HERE / 'artifacts'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
 TOOLCHAIN_PREFIX = Path.home() / '.local/opt/msvc-wineprefix'
-RUNTIME = Path.home() / '.local/share/Steam/compatibilitytools.d/GE-Proton11-6-x86_64/files/lib/wine/vkd3d-proton/x86_64-windows'
+RUNTIME = next((path / 'vkd3d-proton/x86_64-windows'
+                for path in sorted((Path.home() / '.local/share/Steam/compatibilitytools.d').glob('*/files/lib/wine'), reverse=True)
+                if (path / 'vkd3d-proton/x86_64-windows/d3d12.dll').exists()
+                and (path / 'vkd3d-proton/x86_64-windows/d3d12core.dll').exists()), None)
 
 
 def digest(path):
@@ -55,6 +58,8 @@ def build():
              '/Fo' + str(OUT) + '/', '/Fe' + str(work / 'nr-timing-harness.exe'), '/link',
              '/LIBPATH:' + str(ROOT / 'OptiScaler/library/detours'), 'detours.lib', 'd3d12.lib',
              'dxgi.lib', 'dxguid.lib'], env=env, logfile=OUT / 'build.log', timeout=600)
+    if RUNTIME is None:
+        raise RuntimeError('no installed Proton with vkd3d-proton')
     for name in ('d3d12.dll', 'd3d12core.dll'):
         shutil.copy2(RUNTIME / name, work / name)
     redists = sorted(MSVC.parents[1].glob('VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT'))

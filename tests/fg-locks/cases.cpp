@@ -104,6 +104,32 @@ template <typename T> void releaseCases()
     check(fg.Mutex.getOwner() == 0, "foreign window does not acquire a mutex");
 }
 
+template <typename T> void releaseOrder()
+{
+    T fg;
+    bool destroyed = false;
+    Config::Instance()->FGUseMutexForSwapchain.value = true;
+    State::Instance().currentFGSwapchain = reinterpret_cast<void*>(2);
+    fg._swapChainContext = reinterpret_cast<void*>(3);
+    cleanup = [] {};
+    destroyContext = [&]
+    {
+        check(State::Instance().currentFGSwapchain == nullptr,
+              "provider teardown callbacks cannot see the obsolete FG swapchain");
+        check(fg.Mutex.getOwner() == 1, "provider teardown remains inside its acquired FG mutex");
+        destroyed = true;
+    };
+    lsfgReleased = [&]
+    {
+        check(destroyed && fg._swapChainContext == nullptr,
+              "LSFG release waits for presenter destruction and clearing its context");
+    };
+    check(fg.ReleaseSwapchain(fg._hwnd) && destroyed, "matching live context is destroyed");
+    check(fg.Mutex.getOwner() == 0, "teardown releases its own FG mutex");
+    destroyContext = [] {};
+    lsfgReleased = [] {};
+}
+
 int main(int argc, char** argv)
 {
     assert(argc == 2);
@@ -121,6 +147,8 @@ int main(int argc, char** argv)
         releaseCases<FSRFG_Dx12>();
         releaseCases<DLSSG_Dx12>();
         releaseCases<XeFG_Dx12>();
+        releaseOrder<FSRFG_Dx12>();
+        releaseOrder<XeFG_Dx12>();
     }
     if (std::strcmp(argv[1], "dispatch") == 0)
     {

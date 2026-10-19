@@ -58,6 +58,8 @@ struct State
 static void* _device = nullptr;
 static std::function<int()> operation;
 static std::function<void()> cleanup;
+static std::function<void()> destroyContext = [] {};
+static std::function<void()> lsfgReleased = [] {};
 void CheckForHdrOutput() {}
 namespace MenuOverlayDx
 {
@@ -69,10 +71,14 @@ const char* ReturnCodeToString(int) { return "OK"; }
 } // namespace FfxApiProxy
 namespace Lsfg
 {
-void OnSwapchainReleased() {}
+void OnSwapchainReleased() { lsfgReleased(); }
 namespace Presenter
 {
-int D3D12_DestroyContext(void**, void*) { return 0; }
+int D3D12_DestroyContext(void**, void*)
+{
+    destroyContext();
+    return 0;
+}
 } // namespace Presenter
 } // namespace Lsfg
 struct Backend : FG
@@ -81,7 +87,7 @@ struct Backend : FG
     void* _fgContext = nullptr;
     void* _swapChainContext = nullptr;
     void DestroyFGContext() {}
-    void DestroySwapchainContext() {}
+    void DestroySwapchainContext() { destroyContext(); }
     void ReleaseObjects() {}
 };
 struct FSRFG_Dx12 : Backend

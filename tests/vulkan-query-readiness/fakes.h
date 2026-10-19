@@ -5,6 +5,8 @@
 #include <deque>
 #include <iostream>
 #include <optional>
+#include <mutex>
+#include <cstring>
 #include <string_view>
 #include <vector>
 
@@ -18,11 +20,13 @@ static void Check(bool condition, const char* message)
 }
 
 #define LOG_ERROR(...) ((void) 0)
+#define LOG_WARN(...) ((void) 0)
 
 using VkDevice = uintptr_t;
 using VkPhysicalDevice = uintptr_t;
 using VkCommandBuffer = uintptr_t;
 using VkQueryPool = uint64_t;
+using VkSemaphore = uint64_t;
 using VkDeviceSize = uint64_t;
 using VkQueryResultFlags = uint32_t;
 constexpr VkQueryPool VK_NULL_HANDLE = 0;
@@ -31,6 +35,7 @@ constexpr uint32_t VK_QUERY_TYPE_TIMESTAMP = 2;
 constexpr uint32_t VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT = 1;
 constexpr uint32_t VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT = 0x2000;
 constexpr VkQueryResultFlags VK_QUERY_RESULT_64_BIT = 1;
+constexpr VkQueryResultFlags VK_QUERY_RESULT_WITH_AVAILABILITY_BIT = 4;
 enum VkResult
 {
     VK_SUCCESS = 0,
@@ -73,7 +78,7 @@ static constexpr uint32_t kPairs = 3;
 struct Reply
 {
     VkResult result;
-    std::array<uint64_t, 2> timestamps;
+    std::array<uint64_t, 4> timestamps;
     unsigned writeCount = 2;
 };
 struct Command
@@ -136,8 +141,10 @@ static VkResult vkGetQueryPoolResults(VkDevice d, VkQueryPool p, uint32_t first,
                                       void* data, VkDeviceSize stride, VkQueryResultFlags flags)
 {
     Check(d == device && p == pool && first % 2 == 0 && first < kPairs * 2 && count == 2, "read one whole pair");
-    Check(size == 2 * sizeof(uint64_t) && stride == sizeof(uint64_t), "64-bit pair layout");
-    Check(flags == VK_QUERY_RESULT_64_BIT, "nonblocking read, without WAIT or PARTIAL flags");
+    const bool interop = flags == (VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
+    Check(size == (interop ? 4 : 2) * sizeof(uint64_t) && stride == (interop ? 2 : 1) * sizeof(uint64_t),
+          "64-bit pair layout, with availability words for interop");
+    Check(interop || flags == VK_QUERY_RESULT_64_BIT, "nonblocking read, without WAIT or PARTIAL flags");
     Check(!replies.empty(), "unexpected query poll (pair already consumed or never armed)");
     polled.push_back(first);
     const auto reply = replies.front();
@@ -146,4 +153,25 @@ static VkResult vkGetQueryPoolResults(VkDevice d, VkQueryPool p, uint32_t first,
     for (unsigned i = 0; i < reply.writeCount; ++i)
         timestamps[i] = reply.timestamps[i];
     return reply.result;
+}
+
+using PFN_vkGetSemaphoreCounterValue = VkResult (*)(VkDevice, VkSemaphore, uint64_t*);
+using PFN_vkVoidFunction = void (*)();
+static bool counterAvailable = true;
+static uint64_t completedValue = 0;
+static VkResult counterResult = VK_SUCCESS;
+static unsigned counterLookups = 0;
+static VkResult Counter(VkDevice d, VkSemaphore semaphore, uint64_t* value)
+{
+    Check(d == device && semaphore == 9, "poll the submitted copy-back semaphore");
+    *value = completedValue;
+    return counterResult;
+}
+static PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice d, const char* name)
+{
+    Check(d == device && (std::strcmp(name, "vkGetSemaphoreCounterValue") == 0 ||
+                          std::strcmp(name, "vkGetSemaphoreCounterValueKHR") == 0),
+          "timeline counter lookup");
+    ++counterLookups;
+    return counterAvailable ? reinterpret_cast<PFN_vkVoidFunction>(Counter) : nullptr;
 }

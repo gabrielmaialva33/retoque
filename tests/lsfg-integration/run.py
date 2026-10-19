@@ -87,7 +87,8 @@ sites = {
                        r'[^\n]*\n\s*else if \(retCode == FFX_API_RETURN_OK && _isActive\)',
     'hand-off': r'Lsfg::TakesFrame\(fIndex, params\)\s*\?\s*Lsfg::FfxDispatch\(params\)[^:]*:\s*'
                 r'FfxApiProxy::D3D12_Dispatch\(&_fgContext, &params->header\)',
-    'release': r'State::Instance\(\)\.currentFGSwapchain = nullptr;\s*Lsfg::OnSwapchainReleased\(\);',
+    'release': r'(?s)auto result = Lsfg::Presenter::D3D12_DestroyContext\(&_swapChainContext, nullptr\);'
+               r'.*?_swapChainContext = nullptr;\s*Lsfg::OnSwapchainReleased\(\);',
 }
 found = {name: re.search(pattern, fsrfg) is not None for name, pattern in sites.items()}
 check(all(found.values()), f'FSRFG_Dx12.cpp call sites: {found}')

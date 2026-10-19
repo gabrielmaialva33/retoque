@@ -18,3 +18,7 @@ thread races are exercised. The production FG instances currently live until
 process exit: hooks allocate them and teardown releases their resources rather
 than deleting the object. A future change to that ownership requires retaining the
 instance for each pending lock transaction as well.
+
+The upstream release-order regression also observes the scripted provider teardown callback: the
+obsolete global swapchain is cleared before FSRFG/XeFG destroy their context, the acquired mutex
+stays held, and the LSFG notification follows presenter destruction. No real provider runs here.

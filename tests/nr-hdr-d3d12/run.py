@@ -45,7 +45,7 @@ def main():
     env = dict(os.environ, WINEPREFIX=str(PREFIX), WINEDEBUG='-all', WINE_MSVC_RAW_STDOUT='1')
     sources = [HERE / 'harness.cpp', ROOT / 'retoque/shaders/dlssnr/DlssNr_PresentHdr_Dx12.cpp',
                ROOT / 'OptiScaler/shaders/Shader_Dx12.cpp', ROOT / 'OptiScaler/shaders/Shader_Common.cpp',
-               ROOT / 'OptiScaler/gpu_time/GpuTime_Dx12.cpp']
+               ROOT / 'OptiScaler/gpu_time/GpuTime_Dx12.cpp', ROOT / 'OptiScaler/misc/DeferredRelease.cpp']
     run([MSVC / 'cl', '/nologo', '/std:c++latest', '/EHsc', '/MD', '/W4', '/O2',
          '/I' + str(HERE / 'stubs'), '/I' + str(ROOT / 'retoque'), '/I' + str(ROOT / 'OptiScaler'),
          '/I' + str(ROOT / 'OptiScaler/include'), *sources, '/Fo' + str(OUT) + '/',
