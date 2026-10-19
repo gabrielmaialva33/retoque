@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 
 
 @contextmanager
@@ -67,6 +68,16 @@ def execute(command, *, cwd, env, log, timeout):
             except ProcessLookupError:
                 pass
             child.wait()
+            # SIGKILL is delivered asynchronously: a descendant can still be running for a moment after
+            # the leader is reaped, and the next fixture would start beside it. Wait, bounded, until the
+            # group has no live member left (a zombie awaiting its new parent's reap still answers).
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                try:
+                    os.killpg(child.pid, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(.01)
             raise
 
 
