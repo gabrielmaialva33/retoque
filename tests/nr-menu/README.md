@@ -59,3 +59,12 @@ feature uses the D3D12 bridge, because `IsRunningVk()` alone is false before the
 native NR evaluation. Unknown Vulkan features hide the editor conservatively. This
 selection is inspected in source; the scripted ImGui harness receives the resulting
 backend flag rather than constructing the real State/feature graph.
+
+## Simple view
+
+The harness also compiles the production simple-view gate, shared preset/strength controls, the active weight-set
+report and the timing readout. Scripted frames check the default simple view, toggling and retaining ShowAllSettings,
+equivalent Config writes through the shared full-view controls, hidden individual overrides remaining active,
+preset visibility with one or unknown weight sets, native Vulkan/proxy pass refusal, read-only timing when enabled,
+and balanced item widths. Source guards place the early return after the profile/status block and before Source;
+the full RenderMenu body is not compiled against these fakes. Full UI appearance still requires a game run.

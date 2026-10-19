@@ -310,6 +310,7 @@ class Config
     // and never written back. Also finds Proton's nvapi64.dll for a prefix Proton gave none. Only with NR on. See
     // dlssnr/DlssNr_GameProfiles.h and docs/dlssnr/design/game-profiles.md.
     CustomOptional<bool> DlssNrGameProfiles { true };
+    CustomOptional<bool> DlssNrShowAllSettings { false }; // Menu preference only.
     // D3D12 DRED (auto-breadcrumbs and page-fault tracking) for chasing a device removal; costs a little on
     // every command list, so off by default. See dlssnr/DlssNr_Dred.h.
     CustomOptional<bool> DlssNrDred { false };

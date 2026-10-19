@@ -395,6 +395,10 @@ there.
 ; true or false - Default (auto) is true
 GameProfiles=auto
 
+; Menu preference only: simple controls by default; true reveals the full NR panel. Hidden settings remain active.
+; true or false - Default (auto) is false
+ShowAllSettings=auto
+
 ; Keep NR off for one session after a session that ended badly while NR ran (crash, killed hang, lost
 ; graphics device). A marker file retoque_nr_session.state beside the log records it; a normal quit, seen
 ; by a hook on NtTerminateProcess however the game ends itself, removes it; the ini is never rewritten.

@@ -331,40 +331,8 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s", Localization::Tr(status.reason));
 }
 
-// Historical confirmed samples have their own immutable contract. Never present them as the
-// current frame's cost, or as an average of the active configuration.
-static void RenderGpuTiming(Config* config, bool nativeVulkan)
+static void RenderGpuTimingReadout()
 {
-    ImGui::SeparatorText(Localization::Tr("Fence-confirmed GPU timing"));
-    if (nativeVulkan || config->DlssNrUseProxy.value_or_default())
-    {
-        GpuTiming::SetEnabled(false);
-        ImGui::TextWrapped(Localization::Tr("Confirmed timing is available on the D3D12 NR path and its bridges. "
-                                            "This backend is not instrumented."));
-        return;
-    }
-    auto settings = config->GetDlssNrGpuTimingSettings();
-    if (ImGui::Checkbox(Localization::Label("Measure NR on the GPU###nrGpuTiming"), &settings.Enabled))
-        config->SetDlssNrGpuTimingEnabled(settings.Enabled);
-    HelpMarker("Each published sample belongs to one NR evaluation and one observed queue submission. "
-               "It is read only after that submission completes and the command-list recording is sealed "
-               "against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded."
-               "\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, "
-               "composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, "
-               "and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.");
-    GpuTiming::SetEnabled(settings.Enabled && config->DlssNrEnabled.value_or_default());
-    if (!settings.Enabled)
-    {
-        ImGui::TextDisabled(Localization::Tr("Measurement off. Pending samples may still be retained safely."));
-        return;
-    }
-    int interval = static_cast<int>(settings.Interval);
-    if (ImGui::SliderInt(Localization::Label("Sample every N eligible evaluations###nrGpuTimingInterval"), &interval, 1,
-                         10000))
-        config->SetDlssNrGpuTimingInterval(static_cast<uint32_t>(interval));
-    ImGui::TextWrapped(Localization::Tr("The first eligible evaluation is sampled, then every %u evaluations. "
-                                        "An evaluation is not necessarily a presentation frame."),
-                       static_cast<unsigned>(interval));
     const auto sample = GpuTiming::GetSnapshot();
     ImGui::Text(Localization::Tr("Accepted %llu | discarded %llu | pending %u"),
                 static_cast<unsigned long long>(sample.accepted), static_cast<unsigned long long>(sample.discarded),
@@ -403,6 +371,43 @@ static void RenderGpuTiming(Config* config, bool nativeVulkan)
                            sample.metadata.cadence);
     ImGui::TextWrapped(Localization::Tr("This is one historical sample, not the current frame or an average. "
                                         "Use matching contracts in the INFO log for comparisons."));
+}
+
+// Historical confirmed samples have their own immutable contract. Never present them as the
+// current frame's cost, or as an average of the active configuration.
+static void RenderGpuTiming(Config* config, bool nativeVulkan)
+{
+    ImGui::SeparatorText(Localization::Tr("Fence-confirmed GPU timing"));
+    if (nativeVulkan || config->DlssNrUseProxy.value_or_default())
+    {
+        GpuTiming::SetEnabled(false);
+        ImGui::TextWrapped(Localization::Tr("Confirmed timing is available on the D3D12 NR path and its bridges. "
+                                            "This backend is not instrumented."));
+        return;
+    }
+    auto settings = config->GetDlssNrGpuTimingSettings();
+    if (ImGui::Checkbox(Localization::Label("Measure NR on the GPU###nrGpuTiming"), &settings.Enabled))
+        config->SetDlssNrGpuTimingEnabled(settings.Enabled);
+    HelpMarker("Each published sample belongs to one NR evaluation and one observed queue submission. "
+               "It is read only after that submission completes and the command-list recording is sealed "
+               "against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded."
+               "\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, "
+               "composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, "
+               "and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.");
+    GpuTiming::SetEnabled(settings.Enabled && config->DlssNrEnabled.value_or_default());
+    if (!settings.Enabled)
+    {
+        ImGui::TextDisabled(Localization::Tr("Measurement off. Pending samples may still be retained safely."));
+        return;
+    }
+    int interval = static_cast<int>(settings.Interval);
+    if (ImGui::SliderInt(Localization::Label("Sample every N eligible evaluations###nrGpuTimingInterval"), &interval, 1,
+                         10000))
+        config->SetDlssNrGpuTimingInterval(static_cast<uint32_t>(interval));
+    ImGui::TextWrapped(Localization::Tr("The first eligible evaluation is sampled, then every %u evaluations. "
+                                        "An evaluation is not necessarily a presentation frame."),
+                       static_cast<unsigned>(interval));
+    RenderGpuTimingReadout();
 }
 
 // A slider that only writes its value when the handle is released.
@@ -503,7 +508,7 @@ static bool PassChoice(const char* label, std::optional<uint32_t>& field, uint32
     return changed;
 }
 
-static void RenderPassControls(Config* config, bool vulkan)
+static void RenderPassControls(Config* config, bool vulkan, bool showIndividualSettings = true)
 {
     ImGui::SeparatorText(Localization::Tr("Sequential model passes"));
     if (vulkan || config->DlssNrUseProxy.value_or_default())
@@ -527,6 +532,9 @@ static void RenderPassControls(Config* config, bool vulkan)
                "Requested passes are not proof of completed work; check the last evaluation and INFO log."
                "\n\nEnabling this after untracked NR has already run requires restarting the application. "
                "Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.");
+
+    if (!showIndividualSettings)
+        return;
 
     bool individual = snapshot.Individual;
     if (ImGui::Checkbox(Localization::Label("Individual pass settings###nrIndividualPassSettings"), &individual))
@@ -657,6 +665,87 @@ static void RenderCadenceControls(Config* config, bool nativeVulkan)
                "\nthe cadence. Turn it on to measure it, not to play.");
 
     ImGui::TextWrapped("%s", Localization::Tr(DlssNr::CadenceStatus()));
+}
+
+static void RenderDetailStrength(Config* config)
+{
+    float transfer = config->DlssNrTransferStrength.value_or_default();
+    if (ImGui::SliderFloat(Localization::Label("Detail strength"), &transfer, 0.0f, 2.0f, "%.2f"))
+        config->DlssNrTransferStrength = transfer;
+
+    ImGui::SameLine();
+    if (ImGui::SmallButton(Localization::Label("Reset##detail")))
+        config->DlssNrTransferStrength = 1.0f;
+
+    HelpMarker("How far the frame moves toward the model's picture."
+               "\n\nThe model's answer is not added to the frame -- it is a complete picture of its"
+               "\nown, rescaled so its luminance sits where the original says it should. This"
+               "\nblends between the two, so both ends are real pictures and everything between"
+               "\nthem is one too."
+               "\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture."
+               "\n\nAbove 1 carries on past it in the same direction, which is not something the"
+               "\nmodel asked for -- use it to see what it is doing, then come back down. This"
+               "\nis the control to push if you want more effect: Intensity belongs to the model"
+               "\nand it decides what to do with it.");
+}
+
+static void RenderModelPreset(Config* config)
+{
+    const auto master = config->GetDlssNrMasterSettings();
+    // The preset picks one of the model's weight sets, and only the model knows how many it has.
+    // 310.8 says "1 config(s) available" and falls back to that one whatever is asked, so a combo
+    // there edits nothing and still rebuilds the model on every change (DEVELOPMENT.md rule 2).
+    // Until the model has said, the control stays as it was.
+    if (DlssNr::ModelLog::ConfigCount() == 1)
+    {
+        ImGui::TextDisabled("%s", Localization::Tr("Model preset: this model has one weight set, so there is "
+                                                   "nothing to choose."));
+        RenderActiveWeightSet();
+    }
+    else
+    {
+        ImGui::TextUnformatted(
+            Localization::Tr("Read when the model is built, so a change rebuilds it after a moment."));
+
+        static const char* nrPresetNames[] = { Localization::Label("Default"), Localization::Label("Preset 1"),
+                                               Localization::Label("Preset 2"), Localization::Label("Preset 3") };
+        int preset = (int) master.Preset;
+        if (ImGui::Combo(Localization::Label("Model preset"), &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
+            config->SetDlssNrMasterSetting(&Config::DlssNrPreset, (uint32_t) preset);
+
+        HelpMarker("Default leaves the choice to the model."
+                   "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
+                   "\nthe same number means something different here."
+                   "\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,"
+                   "\nPreset 2 the smaller October one, and Default (or any other number) falls back"
+                   "\nto Preset 2. The line below is what the model says it built.");
+
+        RenderActiveWeightSet();
+    }
+}
+
+// Returns true when the simple view consumed the panel; full view continues at Source below.
+static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResScale)
+{
+    bool showAll = config->DlssNrShowAllSettings.value_or_default();
+    if (ImGui::Checkbox(Localization::Label("Show all settings"), &showAll))
+        config->DlssNrShowAllSettings = showAll;
+    HelpMarker("Show the full Neural Rendering panel. Hidden settings stay active and unchanged.");
+    if (showAll)
+        return false;
+
+    ImGui::PushItemWidth(220.0f * menuResScale);
+    RenderModelPreset(config);
+    if (!nativeVulkan && !config->DlssNrUseProxy.value_or_default())
+        RenderPassControls(config, nativeVulkan, false);
+    RenderDetailStrength(config);
+    if (!nativeVulkan && !config->DlssNrUseProxy.value_or_default() && config->GetDlssNrGpuTimingSettings().Enabled)
+    {
+        ImGui::SeparatorText(Localization::Tr("Fence-confirmed GPU timing"));
+        RenderGpuTimingReadout();
+    }
+    ImGui::PopItemWidth();
+    return true;
 }
 
 void RenderMenu(Config* config, float menuResScale)
@@ -824,6 +913,13 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nonly where OptiScaler.ini leaves them on auto, and never written back to it. A value"
                        "\nyou set in the ini always wins. [DlssNr] GameProfiles=false turns this off.");
         }
+
+        // Runtime activity alone cannot identify a native Vulkan backend before its first NR frame.
+        const auto& state = State::Instance();
+        const bool nativeVulkan =
+            vulkan || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
+        if (RenderSimpleView(config, nativeVulkan, menuResScale))
+            return;
 
         ImGui::Spacing();
         ImGui::SeparatorText(Localization::Tr("Source"));
@@ -1285,24 +1381,7 @@ void RenderMenu(Config* config, float menuResScale)
 
         ImGui::SeparatorText(Localization::Tr("How much of it lands"));
 
-        float transfer = config->DlssNrTransferStrength.value_or_default();
-        if (ImGui::SliderFloat(Localization::Label("Detail strength"), &transfer, 0.0f, 2.0f, "%.2f"))
-            config->DlssNrTransferStrength = transfer;
-
-        ImGui::SameLine();
-        if (ImGui::SmallButton(Localization::Label("Reset##detail")))
-            config->DlssNrTransferStrength = 1.0f;
-
-        HelpMarker("How far the frame moves toward the model's picture."
-                   "\n\nThe model's answer is not added to the frame -- it is a complete picture of its"
-                   "\nown, rescaled so its luminance sits where the original says it should. This"
-                   "\nblends between the two, so both ends are real pictures and everything between"
-                   "\nthem is one too."
-                   "\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture."
-                   "\n\nAbove 1 carries on past it in the same direction, which is not something the"
-                   "\nmodel asked for -- use it to see what it is doing, then come back down. This"
-                   "\nis the control to push if you want more effect: Intensity belongs to the model"
-                   "\nand it decides what to do with it.");
+        RenderDetailStrength(config);
 
         float colour = config->DlssNrColourStrength.value_or_default();
         if (ImGui::SliderFloat(Localization::Label("Colour strength"), &colour, 0.0f, 4.0f, "%.2f"))
@@ -1386,36 +1465,7 @@ void RenderMenu(Config* config, float menuResScale)
 
         auto master = config->GetDlssNrMasterSettings();
 
-        // The preset picks one of the model's weight sets, and only the model knows how many it has.
-        // 310.8 says "1 config(s) available" and falls back to that one whatever is asked, so a combo
-        // there edits nothing and still rebuilds the model on every change (DEVELOPMENT.md rule 2).
-        // Until the model has said, the control stays as it was.
-        if (DlssNr::ModelLog::ConfigCount() == 1)
-        {
-            ImGui::TextDisabled("%s", Localization::Tr("Model preset: this model has one weight set, so there is "
-                                                       "nothing to choose."));
-            RenderActiveWeightSet();
-        }
-        else
-        {
-            ImGui::TextUnformatted(
-                Localization::Tr("Read when the model is built, so a change rebuilds it after a moment."));
-
-            static const char* nrPresetNames[] = { Localization::Label("Default"), Localization::Label("Preset 1"),
-                                                   Localization::Label("Preset 2"), Localization::Label("Preset 3") };
-            int preset = (int) master.Preset;
-            if (ImGui::Combo(Localization::Label("Model preset"), &preset, nrPresetNames, IM_ARRAYSIZE(nrPresetNames)))
-                config->SetDlssNrMasterSetting(&Config::DlssNrPreset, (uint32_t) preset);
-
-            HelpMarker("Default leaves the choice to the model."
-                       "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
-                       "\nthe same number means something different here."
-                       "\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,"
-                       "\nPreset 2 the smaller October one, and Default (or any other number) falls back"
-                       "\nto Preset 2. The line below is what the model says it built.");
-
-            RenderActiveWeightSet();
-        }
+        RenderModelPreset(config);
 
         static const char* nrStyleNames[] = { Localization::Label("Model A (Default)"),
                                               Localization::Label("Model B (Natural)"),
@@ -1465,10 +1515,6 @@ void RenderMenu(Config* config, float menuResScale)
                    "\nstrength of zero. 0 and above set skin independently of the rest of the frame."
                    "\n\nRead only with the auto skin mask on; with it off the model ignores this.");
 
-        // Runtime activity alone cannot identify a native Vulkan backend before its first NR frame.
-        const auto& state = State::Instance();
-        const bool nativeVulkan =
-            vulkan || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
         RenderPassControls(config, nativeVulkan);
         RenderGpuTiming(config, nativeVulkan);
 

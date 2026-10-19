@@ -538,3 +538,6 @@ Windows SDR white	Branco SDR do Windows
 HDR conversion did not produce a submitted frame	A conversão HDR não produziu um quadro enviado
 
 HDR present conversion is inactive; the game's original frame is shown.	A conversão HDR no Present está inativa; o quadro original do jogo é exibido.
+
+Show all settings	Mostrar todas as configurações
+Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Mostrar o painel completo de Neural Rendering. As configurações ocultas continuam ativas e inalteradas.
