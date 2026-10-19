@@ -1400,9 +1400,9 @@ void RenderMenu(Config* config, float menuResScale)
             HelpMarker("Default leaves the choice to the model."
                        "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
                        "\nthe same number means something different here."
-                       "\n\n310.9.16 carries two weight sets: reportedly Default and Preset 2 select the"
-                       "\nsmaller October model and Preset 1 the original one. The line below is what the"
-                       "\nmodel says it built.");
+                       "\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,"
+                       "\nPreset 2 the smaller October one, and Default (or any other number) falls back"
+                       "\nto Preset 2. The line below is what the model says it built.");
 
             RenderActiveWeightSet();
         }

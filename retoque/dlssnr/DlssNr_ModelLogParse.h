@@ -9,8 +9,7 @@
 // The parts of the model's own diagnostics (DlssNr_ModelLog) that OptiScaler reads back. Header-only and
 // free of <windows.h>, so tests/nr-model-loader runs it as shipped. Each function takes one line as the
 // model wrote it, with or without the "DLSSNR: " prefix, and the formats are the model's printf strings
-// (read from 310.8.2.0; not yet read from 310.9.16, whose reverse-engineering notes name the same
-// functions):
+// (read from 310.8.2.0 and 310.9.16.0):
 //
 //   "DLSSNR: %zu config(s) available:"
 //   "DLSSNR:   [%zu] %s (backbone: %s)"
