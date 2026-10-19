@@ -305,6 +305,11 @@ class Config
     // Session guard: after a session that ended without closing while NR ran, keep NR off for the next
     // launch (this session only, the ini is not rewritten) and say why. See dlssnr/DlssNr_Session.h.
     CustomOptional<bool> DlssNrSessionGuard { false };
+    // The keys a game needs before NR can run in it at all (HookMethod=2 for a D3D11 game with no upscaler, the
+    // Vulkan present host for DOOM Eternal, ...), applied at start-up only where the user's ini leaves them unset,
+    // and never written back. Also finds Proton's nvapi64.dll for a prefix Proton gave none. Only with NR on. See
+    // dlssnr/DlssNr_GameProfiles.h and docs/dlssnr/design/game-profiles.md.
+    CustomOptional<bool> DlssNrGameProfiles { true };
     // D3D12 DRED (auto-breadcrumbs and page-fault tracking) for chasing a device removal; costs a little on
     // every command list, so off by default. See dlssnr/DlssNr_Dred.h.
     CustomOptional<bool> DlssNrDred { false };

@@ -6,6 +6,7 @@
 #include "DlssNr_Cadence.h"
 #include "DlssNr_Dx11Upscaler.h"
 #include "DlssNr_Enlarge.h"
+#include "DlssNr_GameProfiles.h"
 #include "DlssNr_ExposureScan.h"
 #include "DlssNr_GpuTiming.h"
 #include "DlssNr_ModelLog.h"
@@ -813,6 +814,15 @@ void RenderMenu(Config* config, float menuResScale)
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.3f, 1.0f));
             ImGui::TextWrapped("%s", Localization::Tr(routeNotice));
             ImGui::PopStyleColor();
+        }
+
+        // What the game profile set at start-up, so a key the ini does not show is not a mystery.
+        if (const std::string profile = DlssNr::GameProfiles::Summary(); !profile.empty())
+        {
+            ImGui::TextWrapped("%s %s", Localization::Tr("Game profile:"), profile.c_str());
+            HelpMarker("Keys this game needs before Neural Rendering can run in it, applied when the game started,"
+                       "\nonly where OptiScaler.ini leaves them on auto, and never written back to it. A value"
+                       "\nyou set in the ini always wins. [DlssNr] GameProfiles=false turns this off.");
         }
 
         ImGui::Spacing();

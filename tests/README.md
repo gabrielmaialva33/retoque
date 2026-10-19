@@ -223,6 +223,10 @@ code with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
   session replay, and the four real report classifications/initializers extracted
   from the renderer, including manual configuration changes and reversals.
 - `nr-menu` — pass-menu control flow driven by scripted ImGui events.
+- `nr-game-profiles` — the keys some games need before NR runs in them (`DlssNr_GameProfiles.h`): exe match, table
+  integrity, the apply rules against a fake option (the user's ini wins, values go in volatile), Proton's
+  nvapi64.dll found through `WINEDLLPATH`, and the wiring (gated on NR and `GameProfiles`, one call after upstream's
+  `ApplyGameConfigs`, four config points).
 - `nr-model-loader` — what the model loaders decide from bytes: the model's caller-path import
   slots (for `ModelLoader=direct`) and the NGX loader's feature-18 table (the 616.64 route), against
   synthetic PE64 images and, when present, this machine's real `_nvngx.dll` and model; the 616.64

@@ -78,6 +78,7 @@ Related, outside that sequence:
 - [present-depth-without-upscaler.md](design/present-depth-without-upscaler.md): the game's own depth for the present pass in titles that call no upscaler: heuristic discovery from depth-stencil binds, Streamline depth tags, or synthesized motion alone; NeuRotic's built-in capture as prior art (design; step 0, log only, proposed).
 - [dx11-native-dlss-guides.md](design/dx11-native-dlss-guides.md): NR for D3D11 games that call DLSS themselves: `dlss_12` by default with NR on (steps 1-2), and native D3D11 DLSS's own depth and motion carried to the present pass (step 3, option (c); built, not yet run in a game).
 - [pr-improvements.md](design/pr-improvements.md): review of state, exposure, multipass and localization work taken from open PRs.
+- [game-profiles.md](design/game-profiles.md): the keys some games need before NR runs in them, applied automatically where the ini leaves them unset, and Proton's nvapi64.dll found for prefixes that lack it.
 
 ## Frame generation
 

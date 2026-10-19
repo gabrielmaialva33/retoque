@@ -388,6 +388,13 @@ there.
 
 ```ini
 [DlssNr]
+; Game profiles: the keys some games need before NR runs in them at all (HookMethod=2 for a D3D11 game with no
+; upscaler, VulkanPresentHost for DOOM Eternal, ...), applied at start-up only where this file leaves them on
+; auto, never written back. Under Proton it also points NvapiPath at Proton's own nvapi64.dll when the prefix
+; has none. Only with Enabled=true (docs/dlssnr/design/game-profiles.md).
+; true or false - Default (auto) is true
+GameProfiles=auto
+
 ; Keep NR off for one session after a session that ended badly while NR ran (crash, killed hang, lost
 ; graphics device). A marker file retoque_nr_session.state beside the log records it; a normal quit, seen
 ; by a hook on NtTerminateProcess however the game ends itself, removes it; the ini is never rewritten.

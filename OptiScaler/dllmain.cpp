@@ -50,6 +50,7 @@
 #include <version_check.h>
 #include <misc/IdentifyGpu.h>
 #include <dlssnr/DlssNr_Session.h>
+#include <dlssnr/DlssNr_GameProfiles.h>
 #include <sha1/sha1.hpp>
 
 static std::vector<HMODULE> _asiHandles;
@@ -1355,6 +1356,7 @@ static void CheckQuirks(bool isNvidia)
     context.isNvidia = isNvidia;
 
     auto quirks = ApplyGameConfigs(State::Instance().gameExe, context);
+    DlssNr::GameProfiles::Apply(); // the keys a game needs for NR, only where the ini leaves them unset
 
     // For Luma, we assume if Luma addon in game folder it's used
     const auto dir = Util::ExePath().parent_path();

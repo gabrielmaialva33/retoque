@@ -256,11 +256,11 @@ before committing C++, because nothing local enforces it and it had drifted by 5
 
 ### Tests
 
-`tests/README.md` is the index; read it before adding or changing a suite. Seventy-two directories under
+`tests/README.md` is the index; read it before adding or changing a suite. Seventy-three directories under
 `tests/`, each self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
 
 ```bash
-python3 tests/run_all.py            # host tier, the default; 60 suites
+python3 tests/run_all.py            # host tier, the default; 61 suites
 python3 tests/run_all.py --list     # registry, tiers, and what is runnable here
 python3 tests/run_all.py --tier all # adds the twelve wine suites
 python3 tests/<name>/run.py         # one suite, unchanged
@@ -271,7 +271,7 @@ regressions serially, without a game. See `tools/README.md` for prerequisites an
 
 The `nr-ab-compare` suite is stdlib Python and tests the offline PNG/PFM/raw A/B metrics and provenance checks.
 
-Three tiers. **host** needs only Python plus `g++`/`clang++` and runs in parallel: the 39
+Three tiers. **host** needs only Python plus `g++`/`clang++` and runs in parallel: the 40
 `nr-*` suites plus `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `mfg-pattern`,
 `mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy` (no home path, LAN/tailnet address or token in
 a tracked file; the tree is public), `deploy-safety` (`tools/deploy-to-game.sh` on fake game directories),

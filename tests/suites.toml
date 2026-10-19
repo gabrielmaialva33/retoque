@@ -28,6 +28,11 @@ tier = "host"
 timeout = 60
 summary = "Exposure plausibility latch (WhitePointSource=1): out-of-range readings, swinging window, reset, and white-point fallback."
 
+[nr-game-profiles]
+tier = "host"
+timeout = 120
+summary = "Game profiles (DlssNr_GameProfiles.h): exe match, table integrity, apply rules where the ini leaves keys unset, the Proton nvapi64.dll search, and the wiring (gated on NR, volatile values, one call after ApplyGameConfigs)."
+
 [nr-invariants]
 tier = "host"
 timeout = 120
