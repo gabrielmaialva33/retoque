@@ -32,6 +32,7 @@
 // ("DLSS options will be disabled"). Held across each Begin...Commit in this file and nothing else, so it
 // is always the innermost lock. Transactions in other files are not covered.
 static std::mutex g_detoursTransactionMutex;
+#include <shaders/reproject/mouseInputs/InputCollection.h>
 
 #include <intrin.h>
 #pragma intrinsic(_ReturnAddress)
@@ -1943,11 +1944,15 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
             auto result = o_slGetNewFrameToken(newFramePointer, &newFrameId);
 
             LOG_WARN("Simulation start marker sent after end marker, offset: {}", correction_offset);
+            InputCollection::getInstance().startCollectingForFrame(newFrameId);
 
             result = o_slPCLSetMarker(marker, *newFramePointer);
             return result;
         }
     }
+
+    if (marker == sl::PCLMarker::eSimulationStart)
+        InputCollection::getInstance().startCollectingForFrame(frame);
 
     if (State::Instance().activeFgInput == FGInput::DLSSG)
     {

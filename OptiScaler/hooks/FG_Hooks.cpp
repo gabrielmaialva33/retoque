@@ -306,6 +306,8 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
             pDesc->SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         }
 
+        scResult = fg->CreateSwapchain(pFactory, cq, pDesc, ppSwapChain, true);
+
         // Looks like game is creating new swapchain,
         // without releasing old one, be sure gpu is in idle state
         if (State::Instance().currentFGSwapchain != nullptr)
@@ -326,8 +328,6 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
 
             oldSwapChain = State::Instance().currentFGSwapchain;
         }
-
-        scResult = fg->CreateSwapchain(pFactory, cq, pDesc, ppSwapChain, true);
 
         if (Config::Instance()->FGDontUseSwapchainBuffers.value_or_default())
             State::Instance().skipHeapCapture = false;
@@ -417,6 +417,8 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
             pDesc->SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         }
 
+        scResult = fg->CreateSwapchain1(pFactory, cq, hWnd, pDesc, pFullscreenDesc, ppSwapChain, true);
+
         // Looks like game is creating new swapchain,
         // without releasing old one, be sure gpu is in idle state
         if (State::Instance().currentFGSwapchain != nullptr)
@@ -437,8 +439,6 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
 
             oldSwapChain = State::Instance().currentFGSwapchain;
         }
-
-        scResult = fg->CreateSwapchain1(pFactory, cq, hWnd, pDesc, pFullscreenDesc, ppSwapChain, true);
 
         if (Config::Instance()->FGDontUseSwapchainBuffers.value_or_default())
             State::Instance().skipHeapCapture = false;
@@ -1483,6 +1483,7 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
 #endif
 
     HRESULT result;
+    const auto presentStart = Util::MillisecondsNow();
     if (pPresentParameters == nullptr)
         result = o_FGSCPresent(This, SyncInterval, Flags);
     else
@@ -1539,6 +1540,9 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
     {
         FrameLimit::sleep(fg != nullptr ? fg->IsActive() && !fg->IsPaused() : false);
     }
+
+    if (willPresent)
+        state.lastFGPresentMs = Util::MillisecondsNow() - presentStart;
 
     if ((config->SimulateWaitableObject.value_or_default() ||
          (state.gameEngine == GameEngineType::Unity && state.activeFgOutput == FGOutput::XeFG)) &&

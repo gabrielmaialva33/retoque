@@ -28,8 +28,7 @@
 #include "inputs/FG/FSR3_Dx12_FG.h"
 #include "inputs/FG/XeFG_Inputs_Dx12.h"
 
-#include <fsr4/FSR4ModelSelection.h>
-
+#include <hooks/Amdxc64_Hooks.h>
 #include <hooks/Dxgi_Hooks.h>
 #include <hooks/D3D11_Hooks.h>
 #include <hooks/D3D12_Hooks.h>
@@ -127,6 +126,25 @@ static bool IsRunningOnWine()
 
     LOG_WARN("Wine not detected");
     return false;
+}
+
+uint32_t CheckAgilitySDK(HMODULE exe)
+{
+    auto version = reinterpret_cast<const uint32_t*>(GetProcAddress(exe, "D3D12SDKVersion"));
+    auto path = reinterpret_cast<const char* const*>(GetProcAddress(exe, "D3D12SDKPath"));
+
+    LOG_INFO(" ");
+
+    if (version && path)
+    {
+        LOG_INFO("Agility SDK Version: {}", *version);
+        LOG_INFO("Agility SDK Path: {}", *path);
+
+        return *version;
+    }
+
+    LOG_INFO("Agility SDK exports missing");
+    return 0;
 }
 
 UINT customD3D12SDKVersion = 615;
@@ -1179,6 +1197,17 @@ static void CheckWorkingMode()
         KernelHooks::Hook();
     }
 
+    auto gameAgilityVersion = CheckAgilitySDK(exeModule);
+    if (State::Instance().isWindows10 && !State::Instance().isRunningOnLinux &&
+        !Config::Instance()->FsrAgilitySDKUpgrade.has_value())
+    {
+        if (gameAgilityVersion < customD3D12SDKVersion)
+        {
+            LOG_INFO("Enabling AgilitySDKUpgrade");
+            Config::Instance()->FsrAgilitySDKUpgrade.set_volatile_value(true);
+        }
+    }
+
     // For Agility SDK Upgrade
     if (Config::Instance()->FsrAgilitySDKUpgrade.value_or_default())
     {
@@ -1508,7 +1537,7 @@ DWORD WINAPI getGpuInfo(LPVOID hModuleVoid)
     if (primaryGpu.vendorId == VendorId::AMD)
         Amdxc64Hooks::Init();
 
-    else if (Config::Instance()->Fsr4ForceModel.value_or_default() == FSR4Support::INT8)
+    else if (Config::Instance()->Fsr4GpuSupport.value_or_default() == FSR4Support::INT8)
     {
         // We need spoofing hooks for FFX but want to avoid spoofing for the rest of the game
         if (!Config::Instance()->DxgiSpoofing.value_or_default())
@@ -1614,6 +1643,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
                          winVer.dwMinorVersion, winVer.dwBuildNumber, winVer.dwPlatformId);
         else
             spdlog::warn("Can't read windows version");
+
+        State::Instance().isWindows10 = winVer.dwMajorVersion == 10 && winVer.dwBuildNumber < 22000;
 
         spdlog::info("");
 

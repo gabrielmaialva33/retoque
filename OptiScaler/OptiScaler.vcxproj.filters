@@ -242,6 +242,9 @@
     <ClInclude Include="inputs\FSR3_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="scanner\rtti.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="scanner\scanner.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -392,6 +395,9 @@
     <ClInclude Include="misc\FrameLimit.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="misc\DeferredRelease.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="inputs\FfxApi_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -524,6 +530,9 @@
     <ClInclude Include="shaders\resource_flip\RF_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shaders\resource_flip\RF_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="shaders\resource_flip\precompiled\RF_Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -617,7 +626,13 @@
     <ClInclude Include="inputs\FG\XeFG_Inputs_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="fsr4\FSR4ModelSelection.h">
+    <ClInclude Include="fsr4\FSR4DriverProvider.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fsr4\FSR4Models.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fsr4\FSR4Presets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="inputs\FG\FSR3_Dx12_FG.h">
@@ -1124,6 +1139,33 @@
     <ClInclude Include="shaders\reproject\Reproject_Common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shaders\reproject\Reproject.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\Reproject_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="framegen\reprojection\Reprojection_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_mask_h_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_mask_v_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_latch_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_cache_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_stats_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="shaders\reproject\Reproject_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1179,6 +1221,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\reproject\precompile\reproject_mask_v_Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_cache_Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\reproject\precompile\reproject_stats_Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -1322,6 +1370,9 @@
     <ClCompile Include="inputs\FSR3_Dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="scanner\rtti.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="scanner\scanner.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -1389,6 +1440,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="misc\FrameLimit.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="misc\DeferredRelease.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="hooks\Reflex_Hooks.cpp">
@@ -1463,6 +1517,9 @@
     <ClCompile Include="shaders\resource_flip\RF_Dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="shaders\resource_flip\RF_Vk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="include\imgui\imgui_impl_dx11.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -1499,7 +1556,13 @@
     <ClCompile Include="inputs\FG\XeFG_Inputs_Dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="fsr4\FSR4ModelSelection.cpp">
+    <ClCompile Include="fsr4\FSR4DriverProvider.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="fsr4\FSR4Models.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="fsr4\FSR4Presets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="inputs\FG\FSR3_Dx12_FG.cpp">
@@ -1845,6 +1908,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="framegen\reprojection\Reprojection_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shaders\reproject\Reproject.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shaders\reproject\Reproject_Vk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="framegen\reprojection\Reprojection_Vk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="shaders\reproject\Reproject_Dx12.cpp">

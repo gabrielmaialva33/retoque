@@ -12,6 +12,7 @@
 #include <menu/menu_overlay_dx.h>
 
 #include <misc/FrameLimit.h>
+#include <misc/DeferredRelease.h>
 
 #include <d3d11.h>
 #include <d3d12.h>
@@ -484,7 +485,7 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         if (auto currentFeature = State::Instance().currentFeature; currentFeature != nullptr)
         {
             if (auto currentFg = State::Instance().currentFG; currentFg != nullptr)
-                currentFeature->TickFrozenCheck(currentFg->GetInterpolatedFrameCount());
+                currentFeature->TickFrozenCheck(std::max(currentFg->GetInterpolatedFrameCount(), 1u));
             else
                 currentFeature->TickFrozenCheck();
         }
@@ -545,6 +546,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         presentResult = pSwapChain->Present(SyncInterval, Flags);
     else
         presentResult = ((IDXGISwapChain1*) pSwapChain)->Present1(SyncInterval, Flags, pPresentParameters);
+
+    DeferredRelease::Process();
 
 #ifdef LOW_LATENCY_INPUTS
     if (fgPresentQueue != nullptr)
@@ -1035,6 +1038,10 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
     }
     DlssNr::SwapchainColour::NoteResized(_real, result);
 
+    // Game recreates its views before the next present, resource tracking filters them by swapchain size
+    if (result == S_OK && _real->GetDesc(&State::Instance().currentSwapchainDesc) != S_OK)
+        LOG_WARN("Can't get swapchain desc!");
+
     if (result == DXGI_ERROR_DEVICE_REMOVED && State::Instance().currentD3D12Device != nullptr)
         Util::GetDeviceRemovedReason(State::Instance().currentD3D12Device);
 
@@ -1495,6 +1502,10 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
                                         ppPresentQueue);
     }
     DlssNr::SwapchainColour::NoteResized(_real, result);
+
+    // Game recreates its views before the next present, resource tracking filters them by swapchain size
+    if (result == S_OK && _real->GetDesc(&State::Instance().currentSwapchainDesc) != S_OK)
+        LOG_WARN("Can't get swapchain desc!");
 
     if (result == DXGI_ERROR_DEVICE_REMOVED && State::Instance().currentD3D12Device != nullptr)
         Util::GetDeviceRemovedReason(State::Instance().currentD3D12Device);

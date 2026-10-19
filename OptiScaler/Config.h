@@ -234,6 +234,7 @@ enum class ReprojectionFill : uint32_t
     Dithering,
     Noise,
     Debug,
+    SoftEdge,
 };
 
 template <> struct EnumConfig<ReprojectionFill>
@@ -244,7 +245,8 @@ template <> struct EnumConfig<ReprojectionFill>
         { ReprojectionFill::StrechEdge, "strech" },
         { ReprojectionFill::Dithering, "dithering" },
         { ReprojectionFill::Noise, "noise" },
-        { ReprojectionFill::Debug, "debug" }
+        { ReprojectionFill::Debug, "debug" },
+        { ReprojectionFill::SoftEdge, "soft" }
     };
 };
 
@@ -916,8 +918,10 @@ class Config
     CustomOptional<float> FsrMinDisOccAcc { -0.333f };
 
     // FSR4
-    CustomOptional<FSR4Support> Fsr4ForceModel { FSR4Support::None };
+    // Overrides the FSR 4 support detected for the GPU
+    CustomOptional<FSR4Support> Fsr4GpuSupport { FSR4Support::None };
     CustomOptional<uint32_t, NoDefault> Fsr4Preset;
+    CustomOptional<FSR4Model, NoDefault> Fsr4Model;
     CustomOptional<bool> Fsr4EnableWatermark { false };
     CustomOptional<bool, SoftDefault> Fsr4DoNotLoadAmdxc64 { false };
 
@@ -1073,6 +1077,11 @@ class Config
     // XeFG
     CustomOptional<bool> FGXeFGIgnoreInitChecks { false };
     CustomOptional<int> FGXeFGInterpolationCount { 1 };
+    CustomOptional<bool> FGXeFGDynamicMFG { false };          // Count picked up to FGXeFGInterpolationCount
+    CustomOptional<float> FGXeFGFramerateTargetDMFG { 0.0f }; // 0 = the FPS limit, else just under the refresh rate
+    CustomOptional<int> FGXeFGRoundingDMFG { 1 };             // 0 at most, 1 around, 2 at least the target
+    CustomOptional<bool> FGXeFGDynamicAllow1X { true };       // Dynamic MFG may turn frame generation off (1X)
+    CustomOptional<bool> FGXeFGTargetAsCapDMFG { false };     // The Dynamic MFG target is also the FPS limit
     CustomOptional<int, NoDefault> FGXeFGOverrideInterpolationCount; // Game's own XeFG (XeFG input), 0 = off
     CustomOptional<bool> FGXeFGUIComposition { false };
     CustomOptional<bool> FGXeFGDepthInverted { true };
@@ -1106,6 +1115,10 @@ class Config
     CustomOptional<float> ReprojectionDepthCutoff { 0.1f };
     CustomOptional<uint32_t> ReprojectionCutoffExpand { 1 };
     CustomOptional<bool> ReprojectionLateLatch { true };
+    CustomOptional<bool> ReprojectionDirectionCache { true };
+    CustomOptional<bool> ReprojectionParallaxAuto { true };   // estimated from the motion vectors
+    CustomOptional<float> ReprojectionParallaxScale { 0.0f }; // when not auto, 0 = rotation only
+    CustomOptional<bool> ReprojectionThirdPersonDetection { true };
 
     // As per
     // https://github.com/artur-graniszewski/dlss-enabler-main/blob/a92464d468eb0d91ae17befa66c6bf6229f20b9f/Utils/DlssgProxy.cpp#L1033

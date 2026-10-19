@@ -3,6 +3,7 @@
 
 #include "Config.h"
 #include "State.h"
+#include <framegen/IFGFeature.h>
 // #include "hooks/D3D11Hooks.h"
 
 // https://learn.microsoft.com/en-us/windows/win32/sync/using-waitable-timer-objects
@@ -52,23 +53,47 @@ inline int FrameLimit::combined_sleep(int64_t ns)
     return status;
 }
 
+float FrameLimit::targetFps()
+{
+    auto& state = State::Instance();
+    auto fpsLimit = Config::Instance()->FramerateLimit.value_or_default();
+
+    if (auto fg = state.currentFG; fg != nullptr && fg->IsActive() && !fg->IsPaused() &&
+                                   state.activeFgOutput == FGOutput::XeFG && state.xefgDynamicCapFps > 0.0f &&
+                                   (fpsLimit <= 0.0f || state.xefgDynamicCapFps < fpsLimit))
+    {
+        return state.xefgDynamicCapFps;
+    }
+
+    return fpsLimit;
+}
+
 void FrameLimit::sleep(bool fgActive)
 {
-    if (auto fpsCap = Config::Instance()->FramerateLimit.value_or_default(); fpsCap != 0.0f)
+    if (auto fpsCap = targetFps(); fpsCap != 0.0f)
     {
         uint64_t min_interval_us = std::clamp((uint64_t) (1'000'000 / fpsCap), 0ULL, 100'000'000ULL);
 
+        // The limit counts presented frames, the real frames come once per batch
         if (fgActive)
         {
-            int multiplier = 2;
-            if (State::Instance().dlssgDetectedInterpolationCount > 0)
-                multiplier = State::Instance().dlssgDetectedInterpolationCount + 1;
-            else if (Config::Instance()->FGDLSSGOverrideInterpolationCount.has_value())
-                multiplier = Config::Instance()->FGDLSSGOverrideInterpolationCount.value() + 1;
-            else if (Config::Instance()->FGXeFGInterpolationCount.value_or_default() > 1)
-                multiplier = Config::Instance()->FGXeFGInterpolationCount.value_or_default();
+            auto fg = State::Instance().CurrentFG();
+            if (fg != nullptr)
+            {
+                min_interval_us *= fg->GetInterpolatedFrameCount() + 1;
+            }
+            else
+            {
+                int multiplier = 2;
+                if (State::Instance().dlssgDetectedInterpolationCount > 0)
+                    multiplier = State::Instance().dlssgDetectedInterpolationCount + 1;
+                else if (Config::Instance()->FGDLSSGOverrideInterpolationCount.has_value())
+                    multiplier = Config::Instance()->FGDLSSGOverrideInterpolationCount.value() + 1;
+                else if (Config::Instance()->FGXeFGInterpolationCount.value_or_default() > 1)
+                    multiplier = Config::Instance()->FGXeFGInterpolationCount.value_or_default();
 
-            min_interval_us *= std::max(2, multiplier);
+                min_interval_us *= std::max(2, multiplier);
+            }
         }
 
         static uint64_t previous_frame_time = 0;

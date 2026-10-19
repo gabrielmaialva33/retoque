@@ -30,9 +30,8 @@
 #include <hooks/Vulkan_Hooks.h>
 #include <hooks/Gdi32_Hooks.h>
 #include <hooks/Streamline_Hooks.h>
+#include <hooks/Amdxc64_Hooks.h>
 
-#include <fsr4/FSR4ModelSelection.h>
-#include <fsr4/FSR4Upgrade.h>
 #include <misc/IdentifyGpu.h>
 #include <low_latency/input/input_uell.h>
 
@@ -683,6 +682,22 @@ std::optional<NTSTATUS> LibraryLoadHooks::FreeLibrary(PVOID lpLibrary)
         State::Instance().modulesToFree.insert(lpLibrary);
         result = TRUE;
     }
+    else if (lpLibrary == FfxApiProxy::Dx12Module_SR())
+    {
+#ifdef LOG_LIB_OPERATIONS
+        LOG_WARN("Call for FFX Dx12 SR, caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+#endif
+        State::Instance().modulesToFree.insert(lpLibrary);
+        result = TRUE;
+    }
+    else if (lpLibrary == FfxApiProxy::Dx12Module_FG())
+    {
+#ifdef LOG_LIB_OPERATIONS
+        LOG_WARN("Call for FFX Dx12 FG, caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+#endif
+        State::Instance().modulesToFree.insert(lpLibrary);
+        result = TRUE;
+    }
     else if (lpLibrary == FfxApiProxy::VkModule())
     {
 #ifdef LOG_LIB_OPERATIONS
@@ -695,6 +710,30 @@ std::optional<NTSTATUS> LibraryLoadHooks::FreeLibrary(PVOID lpLibrary)
     {
 #ifdef LOG_LIB_OPERATIONS
         LOG_WARN("Call for XeSS, caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+#endif
+        State::Instance().modulesToFree.insert(lpLibrary);
+        result = TRUE;
+    }
+    else if (lpLibrary == XeSSProxy::ModuleDx11())
+    {
+#ifdef LOG_LIB_OPERATIONS
+        LOG_WARN("Call for XeSS Dx11, caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+#endif
+        State::Instance().modulesToFree.insert(lpLibrary);
+        result = TRUE;
+    }
+    else if (lpLibrary == XeLLProxy::Module())
+    {
+#ifdef LOG_LIB_OPERATIONS
+        LOG_WARN("Call for XeLL, caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+#endif
+        State::Instance().modulesToFree.insert(lpLibrary);
+        result = TRUE;
+    }
+    else if (lpLibrary == XeFGProxy::Module())
+    {
+#ifdef LOG_LIB_OPERATIONS
+        LOG_WARN("Call for XeFG, caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
 #endif
         State::Instance().modulesToFree.insert(lpLibrary);
         result = TRUE;

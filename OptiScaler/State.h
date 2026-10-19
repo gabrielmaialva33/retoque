@@ -177,6 +177,7 @@ class State
     std::string gameName;
     std::string gameVersion;
     GameEngineType gameEngine = GameEngineType::Other;
+    bool isWindows10 = false;
 
     bool nvngxDx11Inited = false;
     bool nvngxDx12Inited = false;
@@ -218,7 +219,7 @@ class State
     bool fgHudlessCompare = false;
     bool fgChanged = false;
     bool scChanged = false;
-    bool skipHeapCapture = false;
+    inline static thread_local bool skipHeapCapture = false;
 
     // Set when a save thumbnail upscaler (<=640x360) is created.
     // Stays true through the entire thumbnail sequence (thumbnail create →
@@ -301,6 +302,9 @@ class State
     float lastMipBiasMax = -100.0f;
 
     bool WAR_xefgRequestFGToggle = false;
+
+    // XeFG Dynamic MFG with "Use target as cap": its target while it runs (0 = no cap), the FPS limit when lower
+    float xefgDynamicCapFps = 0.0f;
 
     bool dlssgGameDMFGSupported = false;
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
@@ -400,6 +404,8 @@ class State
     std::vector<DetailedGpuTime> detailedGpuTimes;
     double lastFGFrameTime = 0.0;
     double presentFrameTime = 0.0;
+    // Time the game's last present to the FG swapchain took, with the FPS limiter's sleep (V-Sync, a full queue)
+    double lastFGPresentMs = 0.0;
     std::mutex frameTimeMutex;
 
     // Opti checking if everything is setup correctly on game launch

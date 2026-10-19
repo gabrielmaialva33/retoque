@@ -351,6 +351,7 @@ void DLSSG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
     {
         LOG_DEBUG("!FGEnabled");
         Deactivate();
+        ReleaseResourceCopies();
 
         state.clearCapturedHudlesses = true;
         Hudfix_Dx12::ResetCounters();
@@ -401,6 +402,8 @@ void DLSSG_Dx12::ReleaseObjects()
     _hudlessCompare.reset();
     _mvFlip.reset();
     _depthFlip.reset();
+
+    ReleaseResourceCopies();
 }
 
 void DLSSG_Dx12::CreateObjects(ID3D12Device* InDevice)
