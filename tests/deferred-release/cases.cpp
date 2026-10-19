@@ -46,6 +46,15 @@ int main()
     DeferredRelease::RetireOwner(7, true);
     check(freedA == 2, "new lifetime of reused handle accepts callbacks");
 
+    int flushed = 0;
+    DeferredRelease::RegisterOwner(10);
+    DeferredRelease::Enqueue([&] { ++flushed; }, 10);
+    DeferredRelease::FlushOwner(10);
+    check(flushed == 1, "device-wide idle flushes queued objects without waiting for wall time");
+    DeferredRelease::Enqueue([&] { ++flushed; }, 10);
+    DeferredRelease::FlushOwner(10);
+    check(flushed == 2, "flushing for menu recreation keeps the live device open to enqueues");
+
     // The collector extracts both callbacks before executing the first. Pause it there so retirement
     // must account for work no longer in the pending vector, not merely erase vector entries.
     std::mutex barrier;

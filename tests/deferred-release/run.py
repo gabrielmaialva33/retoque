@@ -51,3 +51,14 @@ assert 'destroyDeferred = !unproven && !dev.leaked;' in host
 created = host[host.index('VkResult VKAPI_CALL hkCreateDevice('):]
 assert created.index('DeferredRelease::RegisterOwner(H(*device));') < created.index('HookDevice(*device);')
 print('PASS: NR teardown retires the owner before destroying its device; creation reopens reused handles')
+
+menu = (ROOT / 'OptiScaler/menu/menu_overlay_vk.cpp').read_text()
+cleanup = menu[menu.index('static bool DestroyVulkanObjectsLocked(bool shutdown)\n{'):menu.index('void MenuOverlayVk::DestroyVulkanObjects(')]
+assert cleanup.index('vkDeviceWaitIdle(') < cleanup.index('DeferredRelease::FlushOwner(') < cleanup.index('_ImVulkan_Info = {};')
+assert 'if (!_vulkanDeviceLost && !shutdown)' in cleanup[:cleanup.index('DeferredRelease::FlushOwner(')]
+assert 'DeferredRelease::RetireOwner((uint64_t) _ImVulkan_Info.Device, false);' in cleanup
+print('PASS: drained menu cleanup flushes deferred resources; device loss abandons them')
+
+hooks = (ROOT / 'OptiScaler/hooks/Vulkan_Hooks.cpp').read_text()
+assert 'DeferredRelease::RegisterOwner((uint64_t) *pDevice);' in hooks
+print('PASS: the Vulkan bundle also reopens handles when the NR host is disabled')

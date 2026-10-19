@@ -3,7 +3,7 @@
 `python3 tests/deferred-release/run.py` compiles the production deferred queue, replacing
 only its clock and platform/logging includes, under ASan/UBSan. It checks drained-owner
 cleanup before device destruction, abandonment of lost/undrained owners, refusal of
-late enqueues, numeric-handle reuse and a collector/retirement race. A barrier pauses
+late enqueues, numeric-handle reuse, idle-device flushing without retiring the owner, and a collector/retirement race. A barrier pauses
 a collector after it detached its callbacks; retirement must wait until those callbacks
 finish before the device can die. Source guards hold the NR device hook to that order.
 

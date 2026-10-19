@@ -65,7 +65,7 @@ void DeferredRelease::RegisterOwner(uint64_t owner)
     retiredOwners.erase(owner);
 }
 
-void DeferredRelease::RetireOwner(uint64_t owner, bool destroy)
+static void FinishOwner(uint64_t owner, bool destroy, bool retire)
 {
     if (owner == 0)
         return;
@@ -74,7 +74,8 @@ void DeferredRelease::RetireOwner(uint64_t owner, bool destroy)
     std::vector<std::function<void()>> pending;
     {
         std::lock_guard lock(mutex);
-        retiredOwners.insert(owner);
+        if (retire)
+            retiredOwners.insert(owner);
         std::erase_if(entries,
                       [&](Entry& entry)
                       {
@@ -88,6 +89,10 @@ void DeferredRelease::RetireOwner(uint64_t owner, bool destroy)
     for (auto& release : pending)
         release();
 }
+
+void DeferredRelease::RetireOwner(uint64_t owner, bool destroy) { FinishOwner(owner, destroy, true); }
+
+void DeferredRelease::FlushOwner(uint64_t owner) { FinishOwner(owner, true, false); }
 
 static void ReleaseReady(bool present)
 {

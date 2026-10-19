@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <misc/DeferredRelease.h>
 #include "menu_overlay_base.h"
 #include "menu_overlay_vk.h"
 
@@ -1013,6 +1014,17 @@ static bool DestroyVulkanObjectsLocked(bool shutdown)
 
         if (_ImVulkan_Info.DescriptorPool)
             vkDestroyDescriptorPool(_ImVulkan_Info.Device, _ImVulkan_Info.DescriptorPool, VK_NULL_HANDLE);
+    }
+
+    if (!_vulkanDeviceLost && !shutdown)
+    {
+        // The successful device-wide idle above covers every queued shader destruction, including
+        // the blur just released. Do not leave callbacks referring to this device after menu teardown.
+        DeferredRelease::FlushOwner((uint64_t) _ImVulkan_Info.Device);
+    }
+    else if (_vulkanDeviceLost)
+    {
+        DeferredRelease::RetireOwner((uint64_t) _ImVulkan_Info.Device, false);
     }
 
     _vkRenderPass = VK_NULL_HANDLE;

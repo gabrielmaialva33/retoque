@@ -23,6 +23,9 @@ void Collect();
 // destroying the objects then would be invalid, leaking them is the safe option.
 void DropOwnersExcept(uint64_t keep);
 
+// After a successful device-wide idle, finish queued callbacks for this owner without retiring it.
+void FlushOwner(uint64_t owner);
+
 // A newly created device can reuse an old handle. Call only after successful device creation.
 void RegisterOwner(uint64_t owner);
 

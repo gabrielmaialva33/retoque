@@ -548,7 +548,10 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
         LOG_INFO("DLSS-NR Vulkan: vkCreateDevice returned {} with {} extensions requested", (int) result,
                  localCreteInfo.enabledExtensionCount);
     if (result == VK_SUCCESS)
+    {
+        DeferredRelease::RegisterOwner((uint64_t) *pDevice);
         DeferredRelease::DropOwnersExcept((uint64_t) *pDevice);
+    }
 
     if (result == VK_SUCCESS && fg != nullptr)
     {
