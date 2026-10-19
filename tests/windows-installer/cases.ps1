@@ -232,6 +232,86 @@ Add-Case 'scripts_parse_and_use_no_powershell7_only_syntax' {
     }
 }
 
+Add-Case 'enable_nr_reversible_with_both_ini_edits' {
+    param($tmp)
+    $src = New-Src $tmp 'v1'
+    $original = "[Other]`r`nEnabled=false`r`n[DlssNr]`r`nEnabled=auto`r`n[Plugins]`r`nLoadReshade=false`r`n"
+    [IO.File]::WriteAllText((Join-Path $src 'OptiScaler.ini'), $original)
+    foreach ($preserve in @($false, $true)) {
+        $files = @{ 'dxgi.dll' = $ReShade }
+        if ($preserve) { $files['OptiScaler.ini'] = $original }
+        $game = New-Game $tmp $files -Name "nr-$preserve"
+        $before = Get-Snapshot $game
+        $r = Install-Ok $game @('-EnableNR', '-KeepReShade') -Src $src
+        $expected = $original.Replace('Enabled=auto', 'Enabled=true').Replace('LoadReshade=false', 'LoadReshade=true')
+        Expect ([IO.File]::ReadAllText((Join-Path $game 'OptiScaler.ini')) -ceq $expected) 'both keys replaced in place, CRLF preserved'
+        $rc = Read-ReceiptFile $game
+        Expect ($rc.Backups.Count -eq [int]$preserve) 'one backup only for the preserved ini'
+        $r = Install-Ok $game @('-EnableNR', '-KeepReShade') -Src $src
+        Expect ((Read-ReceiptFile $game).Backups.Count -eq [int]$preserve) 'reinstall does not duplicate backup'
+        $r = Uninstall-Ok $game
+        Expect ((Get-SnapshotDiff $before (Get-Snapshot $game)).Count -eq 0) 'restore original folder'
+    }
+}
+
+Add-Case 'release_package_and_refusals' {
+    param($tmp)
+    $packageRoot = Join-Path $tmp 'package'
+    [void][IO.Directory]::CreateDirectory($packageRoot)
+    foreach ($rel in @('tools', 'retoque', 'README.md')) {
+        Copy-Item (Join-Path $Root $rel) (Join-Path $packageRoot $rel) -Recurse
+    }
+    $src = Join-Path $packageRoot 'x64/Release/a'
+    Write-Files $src @{
+        'OptiScaler.dll' = (New-Opti 'package')
+        'nvngx.dll_dlssnr.dll' = 'dlssnr_call_create dlssnr_call_evaluate dlssnr_call_set_extras dlssnr_abi_version'
+        'OptiScaler.ini' = "[DlssNr]`nEnabled=auto`n[Menu]`nShortcutKey=auto`n[Log]`nLogToFile=auto`nLogLevel=auto`n"
+        'setup_windows.bat' = 'rem legacy setup'
+        'setup_linux.sh' = '# legacy setup'
+        'Licenses/RenoDX_ATTRIBUTION.txt' = 'attribution fixture'
+        'OptiScaler/libxess.dll' = 'support fixture'
+    }
+    $script = Join-Path $packageRoot 'tools/package_release.ps1'
+    $args = @('-NoProfile', '-NonInteractive', '-File', $script, '-SkipBuild', '-Version', 'retoque-v0.3.0')
+    $r = Invoke-Tool $Pwsh $args
+    Expect ($r.Code -eq 0) "package dry fixture exits 0: $($r.Err)"
+    $zip = Join-Path $packageRoot 'release/Retoque-retoque-v0.3.0.zip'
+    Expect ([IO.File]::Exists($zip)) 'Retoque-named zip exists'
+    $extract = Join-Path $tmp 'extracted'
+    Expand-Archive -LiteralPath $zip -DestinationPath $extract
+    foreach ($rel in @('install-linux.sh', 'deploy-to-game.sh', 'install-windows.cmd', 'install-windows.ps1',
+                        'README.md', 'Licenses/RenoDX_ATTRIBUTION.txt', 'OptiScaler/libxess.dll')) {
+        Expect ([IO.File]::Exists((Join-Path $extract $rel))) "$rel in zip"
+    }
+    foreach ($rel in @('install-linux.sh', 'deploy-to-game.sh')) {
+        Expect (-not [IO.File]::ReadAllText((Join-Path $extract $rel)).Contains("`r")) "$rel keeps LF"
+    }
+    $ini = [IO.File]::ReadAllText((Join-Path $extract 'OptiScaler.ini'))
+    Expect ($ini.Contains('Enabled=auto') -and $ini.Contains('ShortcutKey=0x24')) 'NR off and menu Home in package'
+    Expect (-not [IO.File]::Exists((Join-Path $extract 'nvngx_dlssnr.dll'))) 'no model in zip'
+    $game = New-Game $tmp
+    $r = Invoke-Tool 'bash' @((Join-Path $extract 'install-linux.sh'), '--enable-nr', '--no-nvngx', $game)
+    Expect ($r.Code -eq 0) "extracted Linux installer runs: $($r.Err)"
+    Expect ([IO.File]::ReadAllText((Join-Path $game 'OptiScaler.ini')).Contains('Enabled=true')) 'extracted ini enabled'
+    Expect ([IO.File]::Exists((Join-Path $game 'OptiScaler/libxess.dll'))) 'extracted support file installed'
+    foreach ($bad in @('model', 'enabled', 'stale', 'license', 'missing-dll')) {
+        $path = switch ($bad) {
+            model { Join-Path $src 'OptiScaler/nvngx_dlssnr.dll' }
+            enabled { Join-Path $src 'OptiScaler.ini' }
+            stale { Join-Path $src 'nvngx.dll_dlssnr.dll' }
+            license { Join-Path $src 'Licenses/RenoDX_ATTRIBUTION.txt' }
+            missing-dll { Join-Path $src 'OptiScaler.dll' }
+        }
+        $old = if ([IO.File]::Exists($path)) { [IO.File]::ReadAllBytes($path) } else { $null }
+        if ($bad -in @('license', 'missing-dll')) { [IO.File]::Delete($path) }
+        elseif ($bad -eq 'enabled') { [IO.File]::WriteAllText($path, "[DlssNr]`n Enabled = true`n") }
+        else { [IO.File]::WriteAllText($path, 'bad fixture') }
+        $r = Invoke-Tool $Pwsh $args
+        Expect ($r.Code -ne 0) "package refuses $bad"
+        if ($null -eq $old) { [IO.File]::Delete($path) } else { [IO.File]::WriteAllBytes($path, $old) }
+    }
+}
+
 Add-Case 'clean_install' {
     param($tmp)
     $src = New-Src $tmp 'v1'

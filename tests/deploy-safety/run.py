@@ -60,7 +60,7 @@ def run(game, *args, src=None, env_extra=None, proxy=None):
     --source-dir is added when given; the result is kept for the failure report."""
     env = {k: v for k, v in os.environ.items() if not k.startswith('RETOQUE_DEPLOY_')}
     env.update(env_extra or {})
-    cmd = ['bash', str(SCRIPT)]
+    cmd = ['bash', str(SCRIPT), '--no-nvngx']
     if src is not None:
         cmd += ['--source-dir', str(src)]
     cmd += [*args, str(game)] + ([proxy] if proxy else [])
@@ -527,6 +527,133 @@ def libxell_rename_recorded(tmp):
            'the libxell rename is not in the receipt')
     run(game, '--uninstall')
     expect(snapshot(game) == before, 'uninstall did not undo the libxell rename')
+
+
+@case
+def enable_nr_release_and_preserved_ini(tmp):
+    src = make_src(tmp, 'release')
+    original = b'[Other]\r\nEnabled=false\r\n[DlssNr]\r\nEnabled=auto\r\n'
+    (src / 'OptiScaler.ini').write_bytes(original)
+    for preserve in (False, True):
+        root = tmp / str(preserve)
+        root.mkdir()
+        game = make_game(root, {'OptiScaler.ini': original} if preserve else {})
+        before = snapshot(game)
+        deploy_ok(game, '--enable-nr', src=src)
+        expect((game / 'OptiScaler.ini').read_bytes() == original.replace(b'Enabled=auto', b'Enabled=true'),
+               'NR edit must use release ini and replace only DlssNr key')
+        expect(len(receipt(game)['backups']) == int(preserve), 'backup only the preserved ini')
+        deploy_ok(game, '--enable-nr', src=src)
+        expect(len(receipt(game)['backups']) == int(preserve), 'reinstall must not duplicate backup')
+        expect(run(game, '--uninstall').returncode == 0, 'uninstall')
+        expect(snapshot(game) == before, 'restore pre-install state')
+
+
+@case
+def nr_and_reshade_share_one_ini_backup(tmp):
+    original = b'[DlssNr]\nEnabled=false\n[Plugins]\nLoadReshade=false\n'
+    game = make_game(tmp, {'OptiScaler.ini': original, 'dxgi.dll': RESHADE})
+    before = snapshot(game)
+    deploy_ok(game, '--enable-nr', '--keep-reshade', src=make_src(tmp, 'v1'))
+    expect(len(receipt(game)['backups']) == 1, 'one backup for both edits')
+    expect(b'Enabled=true' in (game / 'OptiScaler.ini').read_bytes(), 'NR enabled')
+    expect(run(game, '--uninstall').returncode == 0, 'uninstall')
+    expect(snapshot(game) == before, 'restore both edits')
+
+
+@case
+def driver_copy_refusal_and_uninstall(tmp):
+    src = make_src(tmp, 'v1')
+    driver = tmp / 'driver.dll'
+    driver.write_bytes(PE + b'driver v1')
+    # Override discovery only in the subprocess; never writes a system driver or game.
+    env = {'RETOQUE_DEPLOY_TEST_NVNGX': str(driver)}
+    game = make_game(tmp)
+    def install(*flags):
+        r = subprocess.run(['bash', str(SCRIPT), '--source-dir', str(src), *flags, str(game)],
+                           env={**os.environ, **env}, capture_output=True, text=True)
+        last_run.append(r)
+        return r
+    expect(install().returncode == 0, 'copy driver')
+    expect((game / '_nvngx.dll').read_bytes() == driver.read_bytes(), 'driver bytes')
+    driver.write_bytes(PE + b'driver v2')
+    expect(install().returncode == 0, 'update recorded driver')
+    expect((game / '_nvngx.dll').read_bytes() == driver.read_bytes(), 'updated bytes')
+    expect(run(game, '--uninstall').returncode == 0, 'uninstall driver')
+    expect(snapshot(game) == {}, 'remove installed driver')
+    (game / '_nvngx.dll').write_bytes(FOREIGN)
+    before = snapshot(game)
+    expect(install().returncode == 4, 'foreign driver refused')
+    expect(snapshot(game) == before, 'refusal writes nothing')
+    expect(install('--replace-foreign').returncode == 0, 'explicit replacement')
+    expect(run(game, '--uninstall').returncode == 0, 'restore driver')
+    expect(snapshot(game) == before, 'foreign driver restored')
+    expect(install('--no-nvngx').returncode == 0, 'opt out')
+    expect((game / '_nvngx.dll').read_bytes() == FOREIGN, 'opt out leaves driver alone')
+
+
+@case
+def release_wrapper_passthrough(tmp):
+    src = make_src(tmp, 'zip')
+    for name in ('install-linux.sh', 'deploy-to-game.sh'):
+        shutil.copyfile(REPO / 'tools' / name, src / name)
+    (src / 'OptiScaler.ini').write_text('[DlssNr]\nEnabled=auto\n')
+    game = make_game(tmp)
+    r = subprocess.run(['bash', str(src / 'install-linux.sh'), '--no-nvngx', '--enable-nr', str(game)],
+                       cwd=tmp, capture_output=True, text=True)
+    last_run.append(r)
+    expect(r.returncode == 0, 'wrapper works outside repo with flags')
+    expect((game / 'OptiScaler.ini').read_text() == '[DlssNr]\nEnabled=true\n', 'release ini enabled')
+    expect(run(game, '--uninstall').returncode == 0, 'uninstall')
+    expect(snapshot(game) == {}, 'wrapper install reversible')
+
+
+@case
+def release_support_files_and_parent_refusal(tmp):
+    src = make_src(tmp, 'support')
+    support = src / 'OptiScaler' / 'D3D12_OptiScaler'
+    support.mkdir(parents=True)
+    (support / 'D3D12Core.dll').write_bytes(PE + b'core')
+    (src / 'OptiScaler' / 'nvngx_dlssnr.dll').write_bytes(b'model must not copy')
+    game = make_game(tmp)
+    deploy_ok(game, src=src)
+    rel = 'OptiScaler/D3D12_OptiScaler/D3D12Core.dll'
+    expect((game / rel).exists(), 'release support DLL copied')
+    expect(rel in receipt(game)['files'], 'support file recorded')
+    expect(not (game / 'OptiScaler/nvngx_dlssnr.dll').exists(), 'model not copied')
+    expect(run(game, '--uninstall').returncode == 0, 'uninstall')
+    expect(not (game / rel).exists(), 'support DLL removed')
+    shutil.rmtree(game / 'OptiScaler')
+    outside = tmp / 'outside'
+    outside.mkdir()
+    (game / 'OptiScaler').symlink_to(outside, target_is_directory=True)
+    before = snapshot(game)
+    expect(run(game, src=src).returncode == 4, 'support symlink parent refused')
+    expect(snapshot(game) == before and not list(outside.iterdir()), 'no writes through parent link')
+
+
+@case
+def uninstall_refuses_replaced_parent_links(tmp):
+    src = make_src(tmp, 'support')
+    (src / 'OptiScaler').mkdir()
+    (src / 'OptiScaler/helper.dll').write_bytes(PE + b'helper')
+    game = make_game(tmp)
+    deploy_ok(game, src=src)
+    outside = tmp / 'outside'
+    (game / 'OptiScaler').rename(outside)
+    (game / 'OptiScaler').symlink_to(outside, target_is_directory=True)
+    before, external_before = snapshot(game), snapshot(outside)
+    result = run(game, '--uninstall')
+    expect(result.returncode == 4, 'uninstall must refuse a linked parent before any writes')
+    expect(snapshot(game) == before and snapshot(outside) == external_before, 'no removal outside game')
+    # Even restore-only receipt entries must validate both destination and backup ancestors.
+    (game / '.retoque/receipt.txt').write_text(
+        f'version\t1\nstatus\tpartial\nbackup\t{sha(outside / "helper.dll")}\tOptiScaler/restored.dll\t.retoque/backup/helper.dll\n')
+    (game / '.retoque/backup').mkdir()
+    (game / '.retoque/backup/helper.dll').write_bytes(b'original')
+    before, external_before = snapshot(game), snapshot(outside)
+    expect(run(game, '--uninstall').returncode == 4, 'restore through linked parent refused')
+    expect(snapshot(game) == before and snapshot(outside) == external_before, 'restore touches neither side')
 
 
 @case

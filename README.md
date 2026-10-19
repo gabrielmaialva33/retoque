@@ -14,6 +14,25 @@
 </div>
 <br />
 
+## Quick start
+
+Download a versioned **Retoque zip** from [Releases](https://github.com/gabrielmaialva33/retoque/releases)
+and extract the whole archive into a separate folder. Close the game.
+
+1. **Windows:** run `install-windows.cmd`. **Linux / Proton:** open a terminal in the extracted folder and
+   run `bash install-linux.sh` (zip extraction may lose executable permissions).
+2. Give the folder containing the game's executable, choose a proxy (`dxgi.dll` by default), and answer
+   **yes** to **Turn Neural Rendering on?** The installer preserves your settings and records how to uninstall.
+3. Put your own **`nvngx_dlssnr.dll`** beside the game's executable. It is not included. With **310.9.16**,
+   **Preset 2** selects the October weights; RTX 20/30/40 need the compatible model build. See the
+   [model compatibility and preset notes](docs/dlssnr/design/model-310-9-16.md) before choosing a build.
+4. On Proton, set Steam launch options to `WINEDLLOVERRIDES="dxgi=n,b" %command%` (replace `dxgi` if you
+   selected another proxy). The Linux installer copies the driver's Wine `_nvngx.dll` when available.
+
+**Home** opens the menu with the release's ini. A preserved ini keeps your existing menu key (the repository
+fallback is Insert). **F7 only toggles NR if you set `[DlssNr] ToggleKey=0x76`**; no toggle is bound by default.
+If a mod already occupies the proxy name, the installer explains the conflict before writing anything.
+
 ## Table of Contents
 
 **1.** [**About**](#about)  
@@ -196,14 +215,19 @@ Builds are also run on native Windows with an RTX 3060.
 <details open>
 <summary><b>Linux (Proton)</b></summary>
 
-1. Copy `OptiScaler.dll`, `OptiScaler.ini`, `nvngx.dll_dlssnr.dll` and your `nvngx_dlssnr.dll` into the
-   folder that holds the game's executable.
-2. Copy `/usr/lib/nvidia/wine/_nvngx.dll` there too, and refresh it when the driver updates.
-3. Rename `OptiScaler.dll` to a name the game loads early: `dxgi.dll`, `winmm.dll`, `version.dll`,
-   `dbghelp.dll`, `d3d12.dll`, `wininet.dll` or `winhttp.dll` (or `OptiScaler.asi`). `setup_linux.sh`
-   asks and renames it for you.
-4. Steam launch options, for a `dxgi.dll` proxy: `WINEDLLOVERRIDES="dxgi=n,b" %command%`
-5. Turn the module on in `OptiScaler.ini` (see [Using it](#using-it)).
+1. Extract the release zip into a separate folder, close the game, then run `bash install-linux.sh` there.
+2. Enter the game's executable folder and proxy name. Accept the NR prompt to set `[DlssNr] Enabled=true`.
+   Existing keys are replaced in place; a preserved user ini is backed up for uninstall.
+3. Supply your own `nvngx_dlssnr.dll` beside the game. The installer copies the driver's Wine `_nvngx.dll`
+   from standard NVIDIA locations; `--no-nvngx` opts out. If it is missing, the installer tells you.
+   Run the installer again after a driver update to refresh a copy it previously installed.
+4. For `dxgi.dll`, use Steam launch options `WINEDLLOVERRIDES="dxgi=n,b" %command%`.
+
+Command-line install: `bash install-linux.sh --enable-nr "/path/to/game/bin64" dxgi.dll`.
+Preview with `--dry-run`; undo with `bash install-linux.sh --uninstall "/path/to/game/bin64"`.
+The installer refuses running games, unknown conflicting files and a second OptiScaler proxy. Use
+`--keep-reshade` to keep ReShade, or `--replace-foreign` only after checking the named conflict.
+Replaced files are recorded under `.retoque/backup/`; uninstall restores them and leaves subsequent user edits alone.
 
 Native Vulkan games can hit fence timeouts when the Vulkan overlay runs next to DLSS-G under Proton. Set
 `[Vulkan] SkipHooks=true` for those.
@@ -213,7 +237,7 @@ Native Vulkan games can hit fence timeouts when the Vulkan overlay runs next to 
 <details>
 <summary><b>Windows</b></summary>
 
-From a release zip, the installer does steps 1 and 2:
+From a release zip:
 
 1. Extract the zip anywhere, close the game, and double-click `install-windows.cmd`. Give it the folder that
    holds the game's executable (drag it into the window) and pick Install, Uninstall or a dry run.
@@ -224,7 +248,8 @@ From a release zip, the installer does steps 1 and 2:
      overrides each one (`-KeepReShade`, `-ReplaceForeign`, `-AllowSecondProxy`).
    - Whatever it replaces goes to `.retoque\backup\` in the game folder, and Uninstall puts it back.
    - It never ships, copies or removes `nvngx_dlssnr.dll`; put your own beside the game's executable.
-2. Turn the module on in `OptiScaler.ini` (see [Using it](#using-it)).
+2. Answer **yes** to **Turn Neural Rendering on?**, or pass `-EnableNR` on the command line. The existing
+   `[DlssNr] Enabled` line is replaced in place; uninstall restores a preserved ini that the installer edited.
 
 By hand instead:
 
@@ -253,7 +278,8 @@ ToggleKey=0x76    ; F7 switches the pass on and off (no key by default)
 ```
 
 > [!TIP]
-> * **`Insert`** opens the in-game menu (`[Menu] ShortcutKey`). Its Neural Rendering tab has the options
+> * **`Home`** opens the menu with the release ini (`[Menu] ShortcutKey=0x24`); a preserved ini keeps
+>   its key, and the repository fallback is **Insert**. Its Neural Rendering tab has the options
 >   below, the comparison views and the GPU timing row.
 > * With `[Log] LogToFile=true`, `OptiScaler.log` beside the game says which route the pass took and
 >   why, and carries the model's own messages as `DLSS-NR model:` lines.

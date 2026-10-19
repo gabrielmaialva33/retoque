@@ -49,9 +49,14 @@ goto :finish
 set "PROXY="
 set /p "PROXY=Proxy DLL name, Enter for dxgi.dll (or winmm.dll, version.dll, dbghelp.dll, d3d12.dll, winhttp.dll, wininet.dll): "
 if not defined PROXY set "PROXY=dxgi.dll"
+set "NRANSWER="
+set "NR=-EnableNR"
+set /p "NRANSWER=Turn Neural Rendering on? [Y/n] "
+if /i "%NRANSWER%"=="n" set "NR="
+if /i "%NRANSWER%"=="no" set "NR="
 set "DRY="
 if "%ACTION%"=="3" set "DRY=-DryRun"
-"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -GameDir "%GAMEDIR%" -ProxyName "%PROXY%" %DRY%
+"%PS%" -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT%" -GameDir "%GAMEDIR%" -ProxyName "%PROXY%" %DRY% %NR%
 
 :finish
 set "RC=%ERRORLEVEL%"

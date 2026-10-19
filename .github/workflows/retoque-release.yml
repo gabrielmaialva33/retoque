@@ -1,0 +1,87 @@
+name: Retoque draft release
+
+on:
+  push:
+    tags: ['retoque-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag, e.g. retoque-v0.3.0 (notes must exist on the selected ref)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: retoque-release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+      - name: Validate version, notes and source commit
+        id: release
+        shell: pwsh
+        env:
+          REQUESTED_VERSION: ${{ inputs.version || github.ref_name }}
+        run: |
+          $version = $env:REQUESTED_VERSION
+          if ($version -cnotmatch '^retoque-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$') {
+            throw 'Expected retoque-vX.Y.Z, optionally with a prerelease suffix'
+          }
+          if (-not (Test-Path -LiteralPath "docs/releases/$version.md")) { throw 'Release notes are missing' }
+          $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve checkout' }
+          $tag = git rev-parse --verify "refs/tags/$version^{commit}" 2>$null
+          if ($LASTEXITCODE -eq 0 -and $tag -ne $commit) { throw 'Tag does not point to the selected checkout' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "commit=$commit" >> $env:GITHUB_OUTPUT
+          # A nonexistent tag is allowed for manual drafts; GitHub gets the exact checkout as target.
+          exit 0
+      - uses: microsoft/setup-msbuild@v3
+      - name: Build Release
+        shell: pwsh
+        run: |
+          msbuild OptiScaler.sln /m /p:Configuration=Release /p:Platform=x64 /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed' }
+      - name: Package
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: ./tools/package_release.ps1 -SkipBuild -Version $env:RELEASE_VERSION
+      - name: Create draft and attach zip
+        uses: actions/github-script@v8
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
+        with:
+          script: |
+            const fs = require('fs');
+            const version = process.env.RELEASE_VERSION;
+            if (!/^retoque-v\d+\.\d+\.\d+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$/.test(version)) {
+              throw new Error('Invalid release version');
+            }
+            const repo = context.repo;
+            const releases = await github.paginate(github.rest.repos.listReleases, {...repo, per_page: 100});
+            if (releases.some(r => r.tag_name === version)) {
+              throw new Error('Release already exists; refusing to edit a draft or published release');
+            }
+            const name = `Retoque-${version}.zip`;
+            const data = fs.readFileSync(`release/${name}`);
+            const body = fs.readFileSync(`docs/releases/${version}.md`, 'utf8');
+            // This workflow has no publish/update/delete operation. Approval and publication are manual.
+            const {data: release} = await github.rest.repos.createRelease({
+              ...repo, tag_name: version, target_commitish: process.env.RELEASE_COMMIT,
+              name: `Retoque ${version}`, body, draft: true, prerelease: true
+            });
+            if (!release.draft) throw new Error('Expected a draft release');
+            await github.rest.repos.uploadReleaseAsset({
+              ...repo, release_id: release.id, name, data,
+              headers: {'content-type': 'application/zip', 'content-length': data.length}
+            });

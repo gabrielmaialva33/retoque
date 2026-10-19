@@ -37,6 +37,12 @@ STAGE = {
     'tools/deploy-to-game.sh': REPO / 'tools' / 'deploy-to-game.sh',
     'OptiScaler.ini': REPO / 'OptiScaler.ini',
     'cases.ps1': HERE / 'cases.ps1',
+    'tools/package_release.ps1': PACKAGER,
+    'tools/install-linux.sh': REPO / 'tools' / 'install-linux.sh',
+    'tools/install-windows.cmd': CMD,
+    'README.md': REPO / 'README.md',
+    'retoque/translations/optional/pt-BR.lang': REPO / 'retoque/translations/optional/pt-BR.lang',
+    'retoque/translations/README.md': REPO / 'retoque/translations/README.md',
 }
 
 
@@ -63,7 +69,7 @@ def static_checks():
     packager = PACKAGER.read_text()
     if '@("install-windows.ps1", "install-windows.cmd")' not in packager:
         failures.append('tools/package_release.ps1: does not ship install-windows.ps1 and install-windows.cmd')
-    for refusal in ('STALE forwarder', "Pattern '^Enabled=true'"):
+    for refusal in ('STALE forwarder', "REFUSING: the packaged ini has features switched on"):
         if refusal not in packager:
             failures.append(f'tools/package_release.ps1: lost {refusal!r}')
     return failures

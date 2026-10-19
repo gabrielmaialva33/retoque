@@ -1,2 +1,5 @@
 # cmd.exe can fail to find a label in a batch file with LF line ends, so ours keep CRLF in every checkout.
 *.cmd text eol=crlf
+
+# Release shell entry points must also survive Windows checkouts.
+*.sh text eol=lf

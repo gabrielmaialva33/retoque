@@ -1,4 +1,4 @@
-# Assemble a release zip. Run: pwsh tools\package_release.ps1 [-Version <tag>] [-SkipBuild]
+# Assemble a release zip. Run: pwsh tools/package_release.ps1 [-Version <tag>] [-SkipBuild]
 #
 # The build output directory is not the release: it also holds import libraries, export files, debug
 # symbols, and whatever earlier experiments left behind. Shipping that folder wholesale is how a
@@ -7,10 +7,10 @@
 #
 # What is deliberately NOT here: nvngx_dlssnr.dll. That is NVIDIA's, it is not ours to redistribute,
 # and the user supplies their own copy per game folder. Only the ~115 KB forwarder ships, with
-# install-windows.ps1/.cmd from tools\ to put it, OptiScaler.dll and the OptiScaler\ folder in place.
+# install-windows.ps1/.cmd from tools/ to put it, OptiScaler.dll and the OptiScaler/ folder in place.
 
 param(
-    [string]$Version = "v0.1.0-dlssnr",
+    [string]$Version = "retoque-v0.3.0",
     [switch]$SkipBuild
 )
 
@@ -20,20 +20,24 @@ $ErrorActionPreference = "Stop"
 # than one now -- the experiment runs in a git worktree beside the main tree, and a hardcoded root
 # silently packages the other one's build output while reporting success.
 $root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)   # this script lives in tools/
-$msb = "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe"
-$stage = "$root\release\$Version"
-$zip = "$root\release\OptiScaler-DLSSNR-$Version.zip"
+$msb = "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe"
+if ($Version -notmatch '^retoque-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$') {
+    throw 'Version must be a retoque-vX.Y.Z tag (optionally with a prerelease suffix)'
+}
+$stage = "$root/release/$Version"
+$zip = "$root/release/Retoque-$Version.zip"
 
 if (-not $SkipBuild) {
-    foreach ($proj in @("$root\retoque\dlssnr\forwarder\dlssnr_forwarder.vcxproj", "$root\OptiScaler.sln")) {
+    foreach ($proj in @("$root/retoque/dlssnr/forwarder/dlssnr_forwarder.vcxproj", "$root/OptiScaler.sln")) {
         $out = & $msb $proj /p:Configuration=Release /p:Platform=x64 /v:minimal /m 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "MSBuild failed: $proj ($LASTEXITCODE)" }
         $err = $out | Select-String "error "
         if ($err) { Write-Host "FAILED: $proj"; $err | Select-Object -First 6; exit 1 }
     }
     Write-Host "built"
 }
 
-$src = "$root\x64\Release\a"
+$src = "$root/x64/Release/a"
 
 # The forwarder is taken from its own build output, not from the shared folder. The solution build
 # does not reliably rebuild it, and a stale one here would ship silently.
@@ -41,10 +45,10 @@ $src = "$root\x64\Release\a"
 # A fresh checkout has no per-project output directory until that project has been built on its own,
 # so fall back to the shared folder rather than failing. The export check below is what actually
 # guards against a stale one, and it runs either way.
-$forwarder = "$root\retoque\dlssnr\forwarder\x64\Release\a\nvngx.dll_dlssnr.dll"
+$forwarder = "$root/retoque/dlssnr/forwarder/x64/Release/a/nvngx.dll_dlssnr.dll"
 
 if (-not (Test-Path $forwarder)) {
-    $forwarder = "$root\x64\Release\a\nvngx.dll_dlssnr.dll"
+    $forwarder = "$root/x64/Release/a/nvngx.dll_dlssnr.dll"
     Write-Host "forwarder: using the shared build output ($forwarder)"
 }
 
@@ -71,46 +75,57 @@ $files = @(
     "OptiScaler.dll",
     "OptiScaler.ini",
     "setup_windows.bat",
-    "setup_linux.sh",
-    "!! EXTRACT ALL FILES TO GAME FOLDER !!",
-    "READ ME - DLSS Neural Rendering.txt"
+    "setup_linux.sh"
 )
 
 foreach ($f in $files) {
-    if (Test-Path "$src\$f") { Copy-Item "$src\$f" "$stage\$f" -Force }
-    else { Write-Host "missing from build output: $f" }
+    if (Test-Path "$src/$f") { Copy-Item "$src/$f" "$stage/$f" -Force }
+    else { throw "missing from build output: $f" }
 }
 
 foreach ($d in @("Licenses", "OptiScaler")) {
-    Copy-Item "$src\$d" "$stage\$d" -Recurse -Force
+    Copy-Item "$src/$d" "$stage/$d" -Recurse -Force
 }
 
-Copy-Item $forwarder "$stage\nvngx.dll_dlssnr.dll" -Force
+Copy-Item $forwarder "$stage/nvngx.dll_dlssnr.dll" -Force
 
-# The Windows installer ships beside the DLLs it installs (tools\README.md). It is source, not build output,
-# so it comes from tools\ as checked out, and a release without it is refused rather than shipped. The .cmd
+# The Windows installer ships beside the DLLs it installs (tools/README.md). It is source, not build output,
+# so it comes from tools/ as checked out, and a release without it is refused rather than shipped. The .cmd
 # is written with CRLF whatever the checkout's line ends: cmd.exe can miss a label in a batch file with LF.
 foreach ($f in @("install-windows.ps1", "install-windows.cmd")) {
-    $from = "$root\tools\$f"
+    $from = "$root/tools/$f"
     if (-not (Test-Path $from)) {
-        Write-Host "REFUSING: tools\$f is missing; the release would ship without its installer"
+        Write-Host "REFUSING: tools/$f is missing; the release would ship without its installer"
         exit 1
     }
     if ($f -like "*.cmd") {
         $text = [System.IO.File]::ReadAllText($from) -replace "`r?`n", "`r`n"
-        [System.IO.File]::WriteAllText("$stage\$f", $text, [System.Text.Encoding]::ASCII)
+        [System.IO.File]::WriteAllText("$stage/$f", $text, [System.Text.Encoding]::ASCII)
     } else {
-        Copy-Item $from "$stage\$f" -Force
+        Copy-Item $from "$stage/$f" -Force
     }
+}
+
+# Shell scripts ship with LF, including from a Windows checkout.
+foreach ($f in @("install-linux.sh", "deploy-to-game.sh")) {
+    $text = [IO.File]::ReadAllText("$root/tools/$f").Replace("`r`n", "`n")
+    [IO.File]::WriteAllText("$stage/$f", $text, (New-Object Text.UTF8Encoding($false)))
+}
+Copy-Item "$root/README.md" "$stage/README.md" -Force
+if (-not (Test-Path "$stage/Licenses/RenoDX_ATTRIBUTION.txt")) {
+    throw 'REFUSING: RenoDX attribution is missing'
+}
+if (Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -ieq 'nvngx_dlssnr.dll' }) {
+    throw 'REFUSING: NVIDIA model must never ship'
 }
 
 # Optional dictionaries are source assets, not build-output discoveries. Keep them inactive:
 # the loader only reads OptiScaler.lang immediately beside the DLL, never this subdirectory.
-$translationStage = "$stage\translations\optional"
+$translationStage = "$stage/translations/optional"
 New-Item -ItemType Directory -Force -Path $translationStage | Out-Null
-Copy-Item "$root\retoque\translations\optional\pt-BR.lang" "$translationStage\pt-BR.lang" -Force
-Copy-Item "$root\retoque\translations\README.md" "$stage\translations\README.md" -Force
-if (Test-Path "$stage\OptiScaler.lang") {
+Copy-Item "$root/retoque/translations/optional/pt-BR.lang" "$translationStage/pt-BR.lang" -Force
+Copy-Item "$root/retoque/translations/README.md" "$stage/translations/README.md" -Force
+if (Test-Path "$stage/OptiScaler.lang") {
     throw "REFUSING: an active localization dictionary must not ship beside the DLL"
 }
 
@@ -125,10 +140,12 @@ if (Test-Path "$stage\OptiScaler.lang") {
 # Info rather than Trace: every line explaining why the pass did not start is Info or worse, so it
 # answers the common report at almost no cost. Crash reports need Trace and synchronous writes, and
 # the notes say so rather than everyone paying for it.
-$iniPath = "$stage\OptiScaler.ini"
+$iniPath = "$stage/OptiScaler.ini"
 $ini = Get-Content $iniPath -Raw
 $ini = $ini -replace '(?m)^LogToFile=auto', 'LogToFile=true'
 $ini = $ini -replace '(?m)^LogLevel=auto', 'LogLevel=2'
+# The release quick start uses Home; preserve the source/default user's configuration elsewhere.
+$ini = $ini -replace '(?m)^ShortcutKey=auto', 'ShortcutKey=0x24'
 Set-Content $iniPath $ini -Encoding utf8 -NoNewline
 
 $check = Select-String -Path $iniPath -Pattern '^LogToFile=|^LogLevel=' | ForEach-Object { $_.Line }
@@ -144,7 +161,7 @@ Get-ChildItem $stage -Recurse -Include *.exp, *.lib, *.pdb, *.ilk, *latewarp* | 
 # sharpening, the magnifier and two more -- while trying to enable one, because the ini has six keys
 # called Enabled in six different sections. That was in a test install rather than a release, and
 # only because nothing was checking. This checks.
-$on = Select-String -Path "$stage\OptiScaler.ini" -Pattern '^Enabled=true'
+$on = Select-String -Path "$stage/OptiScaler.ini" -Pattern '^\s*Enabled\s*=\s*true\s*(?:[;#].*)?$'
 
 if ($on) {
     Write-Host "REFUSING: the packaged ini has features switched on:"
@@ -155,7 +172,7 @@ if ($on) {
 Write-Host "ini verified: nothing switched on by default"
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
-Compress-Archive -Path "$stage\*" -DestinationPath $zip -CompressionLevel Optimal
+Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
 
 Write-Host ""
 Write-Host "staged at $stage"

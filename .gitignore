@@ -455,3 +455,7 @@ tests/dlssnr-loopback/artifacts/
 
 # Personal, untracked helper scripts
 tools/local/
+
+# Fork-owned release notes are source, not generated release archives.
+!docs/releases/
+!docs/releases/*.md
