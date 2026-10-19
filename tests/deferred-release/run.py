@@ -45,6 +45,7 @@ host = (ROOT / 'retoque/dlssnr/DlssNr_VkPresentHost.cpp').read_text()
 destroy = host[host.index('void OnDestroyDevice('):host.index('\nvoid OnGetQueue(')]
 assert destroy.index('TeardownDevice(*dev, destroyDeferred)') < destroy.index('DeferredRelease::RetireOwner(H(device), destroyDeferred);')
 assert destroy.index('DeferredRelease::RetireOwner(H(device), destroyDeferred);') < destroy.index('next(device, allocator);')
+assert 'bool destroyDeferred = false;' in destroy
 assert 'destroyDeferred = false;' in host[host.index('std::string TeardownDevice('):]
 assert 'destroyDeferred = !unproven && !dev.leaked;' in host
 created = host[host.index('VkResult VKAPI_CALL hkCreateDevice('):]

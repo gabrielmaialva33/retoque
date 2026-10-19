@@ -2653,7 +2653,7 @@ void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocati
     std::string line;
     std::vector<std::string> modelLines;
     RecordId deviceId = 0;
-    bool destroyDeferred = true;
+    bool destroyDeferred = false;
     {
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(device))
