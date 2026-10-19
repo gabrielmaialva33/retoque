@@ -23,6 +23,10 @@ runner a failure instead.
 
 Cases:
 
+- `-EnableNR` with a new or preserved CRLF ini, combined with ReShade, repeat installation and restoration;
+- package assembly with fake binaries under PowerShell: extract the zip, verify installers/line endings,
+  attribution, Home menu key and NR off; run the extracted Linux wrapper; refuse a nested model, an enabled
+  feature (including whitespace), stale forwarder, missing attribution and missing main DLL;
 - both scripts parse; the installer uses none of PowerShell 7's own syntax (ternary, `&&`/`||`, `??`, `?.`),
   no `$IsWindows`, no multi-child `Join-Path`;
 - a clean install (the proxy, `OptiScaler.dll` beside it, the forwarder, the release's `OptiScaler\` support

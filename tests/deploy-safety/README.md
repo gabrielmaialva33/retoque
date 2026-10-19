@@ -32,6 +32,13 @@ Cases:
   receipt; without a receipt it touches nothing; a receipt path pointing outside the directory is
   refused;
 - the libxell rename is recorded and reversed;
+- NR enabled in the source-directory ini and in a preserved CRLF user ini, in-place and reversible;
+  NR plus ReShade uses one backup, and reinstall does not duplicate it;
+- a fake driver discovered through `RETOQUE_DEPLOY_TEST_NVNGX`: copy, receipt-owned update, foreign-file
+  refusal/replacement/restoration, and `--no-nvngx`;
+- the release Linux wrapper run outside the repository, and support-file copy/receipt/uninstall,
+  skipping the model and refusing a symlink parent; uninstall also refuses replaced parent links
+  before removal or restoration, without changing either directory;
 - `shellcheck -S warning` is clean, when shellcheck is installed.
 
 After every uninstall the directory is compared to a snapshot taken before the deploy: every entry,

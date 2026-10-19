@@ -79,7 +79,9 @@ Options:
       --replace-foreign     Replace a file at one of our names that is not ours; the original is
                             kept under .retoque/backup/ and --uninstall puts it back
       --allow-second-proxy  Deploy even though another proxy name here already holds OptiScaler
-      --source-dir DIR      Take OptiScaler.dll and ${FORWARDER_NAME} from DIR (default: x64/out)
+      --enable-nr           Set [DlssNr] Enabled=true (a preserved ini is backed up first)
+      --no-nvngx            Do not copy the NVIDIA driver Wine _nvngx.dll
+      --source-dir DIR      Take OptiScaler.ini and OptiScaler.dll and ${FORWARDER_NAME} from DIR (default: x64/out)
   -h, --help                This text
 
 Refuses, writing nothing, while any process maps a file in the game directory.
@@ -103,13 +105,15 @@ die() {
 # Arguments
 # ------------------------------------------------------------------------------
 
-DRY_RUN=0 UNINSTALL=0 KEEP_RESHADE=0 REPLACE_FOREIGN=0 ALLOW_SECOND_PROXY=0 SRC_DIR=''
+DRY_RUN=0 UNINSTALL=0 KEEP_RESHADE=0 REPLACE_FOREIGN=0 ALLOW_SECOND_PROXY=0 ENABLE_NR=0 NO_NVNGX=0 SRC_DIR=''
 POSITIONAL=()
 while (( $# )); do
     case $1 in
         -n | --dry-run) DRY_RUN=1 ;;
         --uninstall) UNINSTALL=1 ;;
         --keep-reshade) KEEP_RESHADE=1 ;;
+        --enable-nr) ENABLE_NR=1 ;;
+        --no-nvngx) NO_NVNGX=1 ;;
         --replace-foreign) REPLACE_FOREIGN=1 ;;
         --allow-second-proxy) ALLOW_SECOND_PROXY=1 ;;
         --source-dir)
@@ -190,7 +194,7 @@ ci_lookup() {
     shopt -s nocaseglob nullglob
     CI_HITS=("${TARGET_DIR}"/["${name:0:1}"]"${name:1}")
     shopt -u nocaseglob nullglob
-    CI_HITS=("${CI_HITS[@]##*/}")
+    CI_HITS=("${CI_HITS[@]#"${TARGET_DIR}/"}")
 }
 
 exists() { [[ -e ${TARGET_DIR}/$1 || -L ${TARGET_DIR}/$1 ]]; }
@@ -202,6 +206,19 @@ safe_rel() {
     case /$1/ in
         *//* | */../* | */./*) return 1 ;;
     esac
+}
+
+# Receipts can outlive the directory tree they describe. Never follow a replaced parent link,
+# including backup/rename parents, even if the final file still has the recorded hash.
+check_parents() {
+    local rel=$1 parent
+    while [[ $rel == */* ]]; do
+        parent=${rel%/*}
+        if [[ -L ${TARGET_DIR}/${parent} ]] || { exists "$parent" && [[ ! -d ${TARGET_DIR}/${parent} ]]; }; then
+            die 4 "${parent}: receipt parent is a link or not a directory; nothing was written"
+        fi
+        rel=$parent
+    done
 }
 
 # ------------------------------------------------------------------------------
@@ -261,10 +278,13 @@ load_receipt() {
             proxy) add_proxy "$a" ;;
             file)
                 safe_rel "$b" || die 1 "unsafe path '${b}' in ${RECEIPT}"
+                check_parents "$b"
                 remember_file "$b" "$a"
                 ;;
             backup | rename)
                 { safe_rel "$b" && safe_rel "$c"; } || die 1 "unsafe path in ${RECEIPT}: ${b} ${c}"
+                check_parents "$b"
+                check_parents "$c"
                 if [[ $kind == backup ]]; then
                     BACKUPS+=("${a}"$'\t'"${b}"$'\t'"${c}")
                 else
@@ -504,7 +524,7 @@ classify() {
             CLASS=same
         elif [[ ${FILE_SHA[$rel]:-} == "$sha" ]]; then
             CLASS=ours
-        elif has_marker "$path" "$marker"; then
+        elif [[ -n $marker ]] && has_marker "$path" "$marker"; then
             CLASS=known
         elif has_marker "$path" "$MARK_RESHADE"; then
             CLASS=reshade
@@ -627,24 +647,78 @@ plan_ini() {
         input=$path
     fi
 
-    (( RESHADE_ROUTE )) || return 0
-    ini_scan "$input" Plugins LoadReshade
-    if (( ${#INI_VALUES[@]} == 1 )) && [[ ${INI_VALUES[0],,} == true ]]; then
-        echo "[=] ${ini_rel}: [Plugins] LoadReshade is already true"
-        return 0
-    fi
-    if exists "$ini_rel"; then
-        sha=$(sha_of "$path")
-        if [[ ${FILE_SHA[$ini_rel]:-} != "$sha" ]]; then
-            plan backup "$ini_rel" '' '' "back up ${ini_rel} to ${BACKUP_REL}/ before editing it"
+    local setting section key backed=0
+    local -a settings=()
+    if (( RESHADE_ROUTE )); then settings+=(Plugins:LoadReshade); fi
+    if (( ENABLE_NR )); then settings+=(DlssNr:Enabled); fi
+    for setting in "${settings[@]}"; do
+        section=${setting%%:*} key=${setting#*:}
+        ini_scan "$input" "$section" "$key"
+        if (( ${#INI_VALUES[@]} == 1 )) && [[ ${INI_VALUES[0],,} == true ]]; then
+            continue
         fi
-    fi
-    if (( ${#INI_VALUES[@]} )); then
-        how="replacing the ${#INI_VALUES[@]} line(s) it already has"
-    else
-        how="the section has no such key, so one line is added"
-    fi
-    plan setini "$ini_rel" Plugins LoadReshade=true "set [Plugins] LoadReshade=true in ${ini_rel} (${how})"
+        if exists "$ini_rel" && (( ! backed )); then
+            sha=$(sha_of "$path")
+            if [[ ${FILE_SHA[$ini_rel]:-} != "$sha" ]]; then
+                plan backup "$ini_rel" '' '' "back up ${ini_rel} to ${BACKUP_REL}/ before editing it"
+                backed=1
+            fi
+        fi
+        how="replacing existing lines; adding only if missing"
+        plan setini "$ini_rel" "$section" "$key=true" "set [$section] $key=true in ${ini_rel} (${how})"
+    done
+}
+
+# Release support files (FSR, XeSS, Agility); never traverse a target directory link.
+# The repository's OptiScaler/ is source code, so only the supplied release folder is copied.
+plan_support() {
+    local file rel parent component prefix bad
+    [[ -d ${SRC_DIR}/OptiScaler ]] || return 0
+    while IFS= read -r -d '' file; do
+        rel=${file#"${SRC_DIR}/"}
+        safe_rel "$rel" || { refuse 4 "unsafe support path: $rel"; continue; }
+        case ${rel,,} in */nvngx_dlssnr.dll|*.disabled) continue ;; esac
+        parent=${rel%/*} prefix='' bad=0
+        local -a components=()
+        IFS=/ read -r -a components <<< "$parent"
+        for component in "${components[@]}"; do
+            prefix=${prefix:+$prefix/}$component
+            ci_lookup "$prefix"
+            if (( ${#CI_HITS[@]} > 1 )) || { (( ${#CI_HITS[@]} == 1 )) && [[ ${CI_HITS[0]} != "$prefix" ]]; }; then
+                refuse 4 "${prefix}: conflicting directory spelling"
+                bad=1
+                break
+            fi
+            if [[ -L ${TARGET_DIR}/${prefix} ]] || { exists "$prefix" && [[ ! -d ${TARGET_DIR}/${prefix} ]]; }; then
+                refuse 4 "${prefix}: support parent is a link or not a directory"
+                bad=1
+                break
+            fi
+        done
+        (( ! bad )) || continue
+        if [[ ${rel,,} == optiscaler/libxell.dll && -f ${TARGET_DIR}/libxell.dll ]] &&
+           [[ $(sha_of "$file") != "$(sha_of "${TARGET_DIR}/libxell.dll")" ]]; then
+            echo "[=] libxell.dll: the game ships its own, so ${rel} is not installed"
+            continue
+        fi
+        plan_dll "$rel" "$file" '' "$(sha_of "$file")" 0
+    done < <(find "${SRC_DIR}/OptiScaler" -type f -print0 | sort -z)
+}
+
+# The driver belongs to the machine, never the archive. Unknown existing files need explicit replacement.
+plan_nvngx() {
+    (( ! NO_NVNGX )) || return 0
+    local driver
+    local -a candidates=(/usr/lib/nvidia/wine/_nvngx.dll /usr/lib64/nvidia/wine/_nvngx.dll
+                         /usr/lib/x86_64-linux-gnu/nvidia/wine/_nvngx.dll)
+    if [[ -n ${RETOQUE_DEPLOY_TEST_NVNGX:-} ]]; then candidates=("$RETOQUE_DEPLOY_TEST_NVNGX"); fi
+    for driver in "${candidates[@]}"; do
+        if [[ -f $driver ]]; then
+            plan_dll _nvngx.dll "$driver" '' "$(sha_of "$driver")" 0
+            return 0
+        fi
+    done
+    echo '[!] NVIDIA Wine _nvngx.dll not found; install your driver Wine NGX component or supply it beside the game.'
 }
 
 # Stand our libxell down when the game ships its own.
@@ -679,6 +753,7 @@ plan_libxell() {
 # which is the Cyberpunk failure. The running-game refusal comes first anyway; this is the second line.
 put_file() {
     local src=$1 rel=$2
+    if [[ $rel == */* ]]; then mkdir -p -- "${TARGET_DIR}/${rel%/*}"; fi
     INCOMING=$(mktemp "${STATE_DIR}/incoming.XXXXXX")
     cp -- "$src" "$INCOMING"
     chmod "$FILE_MODE" "$INCOMING"
@@ -862,7 +937,9 @@ uninstall() {
     run_plan uninstall-incomplete
     RECEIPT_OPEN=0
 
-    rmdir -- "${STATE_DIR}"/backup/* 2>/dev/null || true
+    if [[ -d ${STATE_DIR}/backup ]]; then
+        find "${STATE_DIR}/backup" -depth -type d -empty -delete
+    fi
     if (( ${#FILE_ORDER[@]} + ${#BACKUPS[@]} + ${#RENAMES[@]} == 0 )); then
         rm -f -- "$RECEIPT"
         rmdir -- "${STATE_DIR}/backup" 2>/dev/null || true
@@ -890,6 +967,7 @@ deploy() {
     else
         SRC_DIR="${REPO_ROOT}/x64/out"
     fi
+    if [[ -f ${SRC_DIR}/OptiScaler.ini ]]; then INI_SRC="${SRC_DIR}/OptiScaler.ini"; fi
     BIN_SRC_OPTI="${SRC_DIR}/OptiScaler.dll"
     BIN_SRC_DLSSNR="${SRC_DIR}/${FORWARDER_NAME}"
 
@@ -936,8 +1014,10 @@ deploy() {
     plan_dll "$FORWARDER_NAME" "$BIN_SRC_DLSSNR" "$MARK_FORWARDER" "$sha_fwd" 0
     # 3. No second OptiScaler under another proxy name
     check_other_proxies
-    # 4. OptiScaler.ini: installed if absent, otherwise preserved; edited only for --keep-reshade
+    # 4. OptiScaler.ini: installed if absent, otherwise preserved; edited for --keep-reshade and --enable-nr
     plan_ini
+    plan_support
+    plan_nvngx
     # 5. libxell
     plan_libxell
 
@@ -986,12 +1066,18 @@ deploy() {
     if (( RESHADE_ROUTE )); then
         echo "    ReShade is kept beside it and loaded by OptiScaler ([Plugins] LoadReshade=true)."
     fi
+    if (( ENABLE_NR )); then echo '    Neural Rendering requested: [DlssNr] Enabled=true.'; fi
+    if [[ ! -f ${TARGET_DIR}/nvngx_dlssnr.dll ]]; then
+        echo '    Supply your own nvngx_dlssnr.dll beside the game; the model is not included.'
+    fi
     echo "    Receipt: ${RECEIPT}"
     echo "      (undo with: $0 --uninstall \"${TARGET_DIR}\")"
     echo ""
     echo "    Proton / Steam Launch Option reminder (if needed):"
     echo "      WINEDLLOVERRIDES=\"${PROXY_NAME%.*}=n,b\" %command%"
 }
+
+check_parents .retoque/receipt.txt
 
 if (( UNINSTALL )); then
     uninstall

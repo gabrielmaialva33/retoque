@@ -43,6 +43,9 @@ The folder that holds the game's executable (for Unreal Engine games usually <Ga
 The name OptiScaler is installed under: dxgi.dll (default), winmm.dll, version.dll, dbghelp.dll, d3d12.dll,
 winhttp.dll or wininet.dll.
 
+.PARAMETER EnableNR
+Set [DlssNr] Enabled=true in place, backing up a preserved user ini before editing it.
+
 .PARAMETER SourceDir
 Where OptiScaler.dll, nvngx.dll_dlssnr.dll, OptiScaler.ini and the OptiScaler\ folder are taken from.
 Defaults to this script's own folder, which is where the release zip puts them.
@@ -60,6 +63,7 @@ param(
     [Parameter(Position = 1)] [string]$ProxyName = 'dxgi.dll',
     [string]$SourceDir,
     [switch]$KeepReShade,
+    [switch]$EnableNR,
     [switch]$ReplaceForeign,
     [switch]$AllowSecondProxy,
     [switch]$DryRun,
@@ -157,6 +161,7 @@ Usage: install-windows.ps1 -GameDir <folder> [-ProxyName dxgi.dll] [options]
   -ReplaceForeign     replace a file at one of our names that is not ours; the original is kept
                       under .retoque\backup\ and -Uninstall puts it back
   -AllowSecondProxy   install although another proxy name here already holds OptiScaler
+  -EnableNR          set [DlssNr] Enabled=true, with a reversible edit
   -SourceDir <folder> take the files from there instead of this script's folder
 
 Refuses, writing nothing, while the game is running. Never touches nvngx_dlssnr.dll.
@@ -720,20 +725,24 @@ function Add-IniPlan([string]$SrcIni) {
         $text = Read-Text (Get-FullPath $iniRel)
     }
 
-    if (-not $script:ReshadeRoute) { return }
-    $values = @(Get-IniValues $text 'Plugins' 'LoadReshade')
-    if ($values.Count -eq 1 -and $values[0] -ieq 'true') {
-        Write-Line "[=] ${iniRel}: [Plugins] LoadReshade is already true"
-        return
-    }
-    if (Test-Entry $iniRel) {
-        $sha = Get-Sha (Get-FullPath $iniRel)
-        if (-not ($script:FileSha.Contains($iniRel) -and $script:FileSha[$iniRel] -eq $sha)) {
-            Add-Plan backup $iniRel '' '' "back up $iniRel to $($script:BackupRel)/ before editing it"
+    $settings = @()
+    if ($script:ReshadeRoute) { $settings += ,@('Plugins', 'LoadReshade') }
+    if ($EnableNR) { $settings += ,@('DlssNr', 'Enabled') }
+    $backed = $false
+    foreach ($setting in $settings) {
+        $section = $setting[0]
+        $key = $setting[1]
+        $values = @(Get-IniValues $text $section $key)
+        if ($values.Count -eq 1 -and $values[0] -ieq 'true') { continue }
+        if ((Test-Entry $iniRel) -and -not $backed) {
+            $sha = Get-Sha (Get-FullPath $iniRel)
+            if (-not ($script:FileSha.Contains($iniRel) -and $script:FileSha[$iniRel] -eq $sha)) {
+                Add-Plan backup $iniRel '' '' "back up $iniRel to $($script:BackupRel)/ before editing it"
+                $backed = $true
+            }
         }
+        Add-Plan setini $iniRel $section "$key=true" "set [$section] $key=true in $iniRel (replace existing lines; add only if missing)"
     }
-    $how = if ($values.Count -gt 0) { "replacing the $($values.Count) line(s) it already has" } else { 'the section has no such key, so one line is added' }
-    Add-Plan setini $iniRel 'Plugins' 'LoadReshade=true' "set [Plugins] LoadReshade=true in $iniRel ($how)"
 }
 
 # Stand our libxell down when the game ships its own. XeLL_Proxy::InitXeLLProper points one at the other with
@@ -1032,7 +1041,7 @@ function Invoke-Deploy {
     Add-SupportPlan $support
     # 4. No second OptiScaler under another proxy name
     Test-OtherProxies
-    # 5. OptiScaler.ini: installed if absent, otherwise kept; edited only for -KeepReShade
+    # 5. OptiScaler.ini: installed if absent, otherwise kept; edited for -KeepReShade and -EnableNR
     Add-IniPlan ([IO.Path]::Combine($src, $IniName))
     # 6. libxell
     Add-LibxellPlan
@@ -1064,7 +1073,8 @@ function Invoke-Deploy {
     if ($script:ReshadeRoute) { Write-Line '    ReShade is kept beside it and loaded by OptiScaler ([Plugins] LoadReshade=true).' }
     Write-Line "    Receipt: $($script:ReceiptPath)"
     Write-Line "    Undo: install-windows.cmd -Uninstall -GameDir `"$($script:Game)`""
-    Write-Line '    Neural Rendering stays off until [DlssNr] Enabled=true in OptiScaler.ini (change the line that is there).'
+    if ($EnableNR) { Write-Line '    Neural Rendering requested: [DlssNr] Enabled=true.' }
+    else { Write-Line '    To enable Neural Rendering, use -EnableNR or set [DlssNr] Enabled=true in OptiScaler.ini.' }
 }
 
 # ------------------------------------------------------------------------------------------------------------

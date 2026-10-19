@@ -40,7 +40,7 @@ See [the tests index](../tests/README.md) for the individual boundaries.
 ## deploy-to-game.sh
 
 Copies the built `x64/out/OptiScaler.dll` and forwarder into a game directory under a proxy DLL
-name, installs `OptiScaler.ini` only if the game has none, and reports the Vulkan-hook state.
+name, installs the release support folder and `OptiScaler.ini` only if the game has none, and reports the Vulkan-hook state.
 Builds first if there is no output yet. Every change is planned before the first write, and it
 writes nothing when any of these holds:
 
@@ -79,17 +79,40 @@ tools/deploy-to-game.sh --uninstall [--dry-run] <game-directory>
   --keep-reshade          keep a ReShade proxy as ReShade64.dll, loaded by OptiScaler
   --replace-foreign       replace a file that is not ours; the original goes to .retoque/backup/
   --allow-second-proxy    deploy although another proxy name here holds OptiScaler
-  --source-dir DIR        take the DLLs from DIR instead of x64/out (never builds then)
+  --enable-nr             set [DlssNr] Enabled=true in place, backing up a preserved user ini
+  --no-nvngx              skip copying the NVIDIA driver's Wine _nvngx.dll
+  --source-dir DIR        take DLLs, ini and OptiScaler/ support files from DIR (never builds then)
 ```
 
+The ini comes from `--source-dir` when available, falling back to the repository ini. The optional support
+folder comes only from the release source: the repository's `OptiScaler/` contains C++ source, not a release.
+Unknown support DLLs are refused unless `--replace-foreign` is passed. A target directory link is refused.
+Linux uninstall leaves empty support directories in place. `_nvngx.dll` is discovered under
+`/usr/lib/nvidia/wine/`, `/usr/lib64/nvidia/wine/` or `/usr/lib/x86_64-linux-gnu/nvidia/wine/`, and copied
+with the same receipt and foreign-file rules as the other DLLs. No driver found means a visible warning.
+`--enable-nr` and `--keep-reshade` share one backup when both edit a preserved ini.
+
 `tests/deploy-safety` runs it against fake game directories.
+
+## install-linux.sh
+
+Run `bash install-linux.sh` from an extracted release. It asks for the executable folder, proxy name
+(default `dxgi.dll`) and whether to turn Neural Rendering on (default yes). With arguments it passes
+through to `deploy-to-game.sh`, taking source files from the extracted folder. The shell scripts ship
+with LF; invoking bash works even when zip extraction loses the executable bit.
+
+```bash
+bash install-linux.sh --enable-nr "/path/to/game/bin64" dxgi.dll
+bash install-linux.sh --dry-run --enable-nr "/path/to/game/bin64"
+bash install-linux.sh --uninstall "/path/to/game/bin64"
+```
 
 ## install-windows.ps1 and install-windows.cmd
 
 The Windows counterpart of `deploy-to-game.sh`, for end users: both ship in the release zip beside the DLLs
 (`package_release.ps1` refuses to build a release without them). The `.ps1` runs on Windows PowerShell 5.1
 and PowerShell 7 with no modules. The `.cmd` is the double-click entry: it asks for the game folder and
-whether to install, uninstall or dry-run, then starts the `.ps1` with `-ExecutionPolicy Bypass` for that one
+whether to install, uninstall or dry-run, and whether to enable NR (default yes), then starts the `.ps1` with `-ExecutionPolicy Bypass` for that one
 `powershell.exe` process (no policy is changed for the user or the machine). With arguments it passes them
 through and adds nothing.
 
@@ -100,7 +123,7 @@ when the game has none. The refusals, exit codes, Keep-ReShade handling, backups
 loaded from the game folder, or when a file it would touch cannot be opened for writing with no sharing (an
 elevated or anti-cheat-protected game hides its module list, but not that). The receipt is the same file in
 the same format, so either script uninstalls what the other installed; the one difference is that the Linux
-script, which creates no folders, leaves the emptied `OptiScaler\` folders behind. `nvngx_dlssnr.dll`,
+script leaves the emptied `OptiScaler\` folders behind. `nvngx_dlssnr.dll`,
 NVIDIA's model, is never copied, moved or removed; a missing one is reported.
 
 ```powershell
@@ -108,6 +131,7 @@ install-windows.cmd                                         # asks
 install-windows.cmd -GameDir "D:\Games\Crimson Desert\bin64" [-ProxyName winmm.dll] [-DryRun]
 install-windows.cmd -GameDir "D:\Games\Crimson Desert\bin64" -Uninstall [-DryRun]
 
+  -EnableNR          set [DlssNr] Enabled=true with a receipt-recorded ini edit
   -KeepReShade        keep a ReShade proxy as ReShade64.dll, loaded by OptiScaler
   -ReplaceForeign     replace a file that is not ours; the original goes to .retoque\backup\
   -AllowSecondProxy   install although another proxy name here holds OptiScaler
@@ -120,10 +144,19 @@ is not exercised there; its README says what stands in for what.
 
 ## package_release.ps1
 
-Windows. Assembles the release zip from an explicit allow-list under `release/`; it refuses a stale
+Assembles `release/Retoque-<version>.zip` from an explicit allow-list under `release/`; it refuses a stale
 forwarder, refuses any `Enabled=true` in the packaged ini, and never ships `nvngx_dlssnr.dll`. It adds
 `install-windows.ps1` and `install-windows.cmd` from `tools/` (the `.cmd` rewritten with CRLF line ends) and
-refuses when either is missing.
+refuses when either is missing. It also ships `install-linux.sh`, `deploy-to-game.sh` (LF), the README,
+and RenoDX attribution. The release ini sets Home as the menu key and enables file logging; NR remains
+off until the installer is asked to enable it. Required missing files and a model hidden in a support
+folder are refused. `-SkipBuild` can package fixture build output under PowerShell 7 on Linux as well.
+
+`.github/workflows/retoque-release.yml` builds Release on Windows for `retoque-v*` tags or a manual version
+input, packages it and creates **only a draft prerelease**, using `docs/releases/<tag>.md`. The input is
+validated and an existing tag must match the selected checkout. Any existing release with that tag
+(including a draft) is refused; retries never edit or publish it. If upload fails, inspect the partial
+draft manually before retrying. Publication is a separate human action; the workflow never uses `nightly`.
 
 ```powershell
 pwsh tools\package_release.ps1 [-Version <tag>] [-SkipBuild]
