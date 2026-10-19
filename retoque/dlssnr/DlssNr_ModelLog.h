@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <string>
+#include <vector>
 
 namespace DlssNr::ModelLog
 {
@@ -23,6 +24,24 @@ void Install(const std::filesystem::path& snippet);
 // feature build; -1 until it has said. The preset is an index into these, so with one there is
 // nothing to choose (310.8 reports one, and a request for another falls back to it).
 int ConfigCount();
+
+// The weight sets themselves, by name, in the order the model listed them after that line; empty
+// until it has. 310.9.16 is reported to list two. The list index is the model's own descriptor order,
+// not the preset number: which preset selects which set is the model's choice.
+std::vector<std::string> ConfigNames();
+
+// The weight set the model last built a network from, whatever preset was asked for, and the preset
+// its create line reported (-1 when no line said); an empty config until it has built one. This is
+// what the preset actually did.
+struct ActiveWeightSet
+{
+    std::string config;
+    int preset = -1;
+};
+ActiveWeightSet Active();
+
+// All three read only what the model writes, and no Proton run here has seen it write these lines;
+// see DlssNr_ModelLogParse.h for why that is thought to be.
 
 // "exception 0xC0000005 at nvngx_dlssnr.dll+0x1A2B3C", for a fault the forwarder caught inside the
 // model (dlssnr_fault_state). The module is whichever one owns the address, which need not be the

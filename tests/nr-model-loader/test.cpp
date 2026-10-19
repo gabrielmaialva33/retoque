@@ -1,9 +1,12 @@
 // The two byte-level answers the NR model loaders act on (retoque/dlssnr/DlssNr_PeScan.h), against
 // synthetic PE64 images; plus, when run.py finds them on this machine, the real NGX loader and model.
+// Also the model's own log lines that DlssNr_ModelLog reads back (DlssNr_ModelLogParse.h), and, on the
+// real model, that it still carries the printf formats those lines come from.
 //
 // DlssNr_PeScan.h is included as shipped. DriverFromLoaderVersion is sliced out of DlssNr_NgxInfo.cpp
 // by run.py and injected at the marker below, because that file needs <windows.h>.
 
+#include "DlssNr_ModelLogParse.h"
 #include "DlssNr_PeScan.h"
 
 #include <algorithm>
@@ -12,6 +15,7 @@
 #include <cstring>
 #include <format>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -477,6 +481,77 @@ void FaultingPairing()
     CHECK(std::strstr(Describe(Feature18Route::Present), "routes feature 18 itself") != nullptr);
 }
 
+// ------------------------------------------------------------------------------------------------
+
+void ModelLogLines()
+{
+    using namespace DlssNr::ModelLogParse;
+
+    CHECK(ConfigCount("DLSSNR: 1 config(s) available:") == 1);
+    CHECK(ConfigCount("DLSSNR: 2 config(s) available:") == 2);
+    CHECK(ConfigCount("12 config(s) available") == 12);
+    CHECK(!ConfigCount("DLSSNR: config(s) available:"));
+    CHECK(!ConfigCount("DLSSNR: no network descriptors have embedded weights"));
+
+    const auto september =
+        ConfigLine("DLSSNR:   [0] CC_Control_History_Blend_Quantize_With_Teacher_honest_tench_2026_07_"
+                   "04_22_30_weights (backbone: CC_SILVER_AARDWOLD)");
+    CHECK(september && september->index == 0);
+    CHECK(september &&
+          september->name == "CC_Control_History_Blend_Quantize_With_Teacher_honest_tench_2026_07_04_22_30_weights");
+    CHECK(september && september->backbone == "CC_SILVER_AARDWOLD");
+
+    const auto october = ConfigLine("DLSSNR:   [1] hnet-crazy-cuckoo-small-fp8 (backbone: CC_SMALL_FP8)\r\n");
+    CHECK(october && october->index == 1 && october->name == "hnet-crazy-cuckoo-small-fp8");
+    CHECK(october && october->backbone == "CC_SMALL_FP8");
+
+    // Without the prefix, and a name with parentheses of its own: the last " (backbone: " ends it.
+    const auto nested = ConfigLine("  [12] a (b) c (backbone: X)");
+    CHECK(nested && nested->index == 12 && nested->name == "a (b) c" && nested->backbone == "X");
+
+    CHECK(!ConfigLine("DLSSNR:   [0] name (backbone: X"));
+    CHECK(!ConfigLine("DLSSNR:   [x] name (backbone: X)"));
+    CHECK(!ConfigLine("DLSSNR:   [0]name (backbone: X)"));
+    CHECK(!ConfigLine("DLSSNR:   [0]  (backbone: X)"));
+    CHECK(!ConfigLine("DLSSNR:   [123456] name (backbone: X)"));
+    CHECK(!ConfigLine("DLSSNR: weight '[0] a (backbone: b)'"));
+    CHECK(!ConfigLine("DLSSNR: weight x [0] a (backbone: b)"));
+    const auto twice = ConfigLine("[0] a (backbone: b) (backbone: c)");
+    CHECK(twice && twice->name == "a (backbone: b)" && twice->backbone == "c");
+    CHECK(!ConfigLine("DLSSNR: 1 config(s) available:"));
+
+    const auto built = ActiveConfig("DLSSNR: BuildActiveNetwork config=hnet-crazy-cuckoo-small-fp8 N=1 W=1920 H=1080");
+    CHECK(built && built->name == "hnet-crazy-cuckoo-small-fp8" && !built->preset);
+    const auto only = ActiveConfig("BuildActiveNetwork config=only");
+    CHECK(only && only->name == "only");
+    CHECK(!ActiveConfig("DLSSNR: BuildActiveNetwork config= N=1 W=1 H=1"));
+    CHECK(!ActiveConfig("DLSSNR: LoadWeights failed for config 'x'"));
+
+    // The create line, as the 2026-09-21 Windows trace recorded it from 310.8.
+    const auto created =
+        ActiveConfig("DLSSNR: Created feature 1 (output 1920x1080, network 1920x1080, preset=1 -> "
+                     "CC_Control_History_Blend_Quantize_With_Teacher_honest_tench_2026_07_04_22_30_weights)\r\n");
+    CHECK(created && created->preset == 1 && Classify(created->name) == WeightSet::September);
+    const auto two =
+        ActiveConfig("Created feature 2 (output 8x8, network 8x8, preset=12 -> hnet-crazy-cuckoo-small-fp8)");
+    CHECK(two && two->preset == 12 && two->name == "hnet-crazy-cuckoo-small-fp8");
+    const auto negative = ActiveConfig("Created feature 3 (output 8x8, network 8x8, preset=-1 -> x)");
+    CHECK(negative && negative->preset == -1);
+    CHECK(!ActiveConfig("Created feature 1 (output 8x8, network 8x8, preset=1 -> x"));
+    CHECK(!ActiveConfig("Created feature 1 (output 8x8, network 8x8, preset=a -> x)"));
+    CHECK(!ActiveConfig("Created feature 1 (output 8x8, network 8x8, preset= -> x)"));
+    CHECK(!ActiveConfig("Created feature 1 (output 8x8, network 8x8, preset=1 -> )"));
+    CHECK(!ActiveConfig("Created feature 1 (output 8x8, network 8x8, preset=123456 -> x)"));
+    CHECK(!ActiveConfig("Created feature 1 (output 8x8, network 8x8)"));
+
+    CHECK(Classify("CC_Control_History_Blend_Quantize_With_Teacher_honest_tench_2026_07_04_22_30_weights") ==
+          WeightSet::September);
+    CHECK(Classify("hnet-crazy-cuckoo-small-fp8") == WeightSet::October);
+    // 310.8 names its September set's backbone "crazy-cuckoo"; only the small set is the October model.
+    CHECK(Classify("crazy-cuckoo") == WeightSet::Unknown);
+    CHECK(Classify("") == WeightSet::Unknown);
+}
+
 void DriverNumbering()
 {
     using DlssNr::NgxInfo::DriverFromLoaderVersion;
@@ -584,6 +659,22 @@ void RealModel(const char* path)
     // ModelLoader=direct depends on both halves: a parsable table and at least one slot to answer from.
     CHECK(parsed);
     CHECK(!slots.empty());
+
+    // The menu's weight-set line reads these three lines back; a model that no longer writes them
+    // leaves it blank, which is safe but should be known.
+    std::ifstream file(path, std::ios::binary);
+    const std::string raw((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    const bool count = raw.find("DLSSNR: %zu config(s) available:") != std::string::npos;
+    const bool entry = raw.find("DLSSNR:   [%zu] %s (backbone: %s)") != std::string::npos;
+    const bool created =
+        raw.find("DLSSNR: Created feature %u (output %ux%u, network %ux%u, preset=%d -> %s)") != std::string::npos;
+    const bool active = raw.find("DLSSNR: BuildActiveNetwork config=%s N=") != std::string::npos;
+    std::printf("local model %s: weight-set log formats %s/%s/%s/%s (count/entry/create/build)\n", path,
+                count ? "yes" : "NO", entry ? "yes" : "NO", created ? "yes" : "NO", active ? "yes" : "NO");
+    CHECK(count);
+    CHECK(entry);
+    CHECK(created);
+    CHECK(active);
 }
 } // namespace
 
@@ -599,6 +690,7 @@ int main(int argc, char** argv)
     TableNotRecognised();
     TableAfterDecoy();
     FaultingPairing();
+    ModelLogLines();
     DriverNumbering();
 
     for (int i = 1; i + 1 < argc; i += 2)
@@ -614,7 +706,8 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "%d of %d checks failed\n", g_failures, g_checks);
         return 1;
     }
-    std::printf("PASS: %d checks (PE import scan, feature-18 table scan, faulting pairing, driver numbering)\n",
+    std::printf("PASS: %d checks (PE import scan, feature-18 table scan, faulting pairing, model log lines, driver "
+                "numbering)\n",
                 g_checks);
     return 0;
 }

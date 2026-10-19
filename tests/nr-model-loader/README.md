@@ -33,10 +33,21 @@ Both come from `retoque/dlssnr/DlssNr_PeScan.h`, which is header-only and free o
    - `DriverFromLoaderVersion`, **sliced out of `DlssNr_NgxInfo.cpp`** by `run.py` (that file needs
      `<windows.h>`): 32.0.16.1664 → 616.64, 32.0.15.6636 → 566.36, leading-zero minors, and empty
      for shapes that are not NVIDIA's.
+   - the model's own log lines that `DlssNr_ModelLog` reads back for the menu's weight-set line
+     (`DlssNr_ModelLogParse.h`, header-only, included as shipped): the "N config(s) available" count,
+     the "[i] name (backbone: b)" entries after it (a name with parentheses of its own, a stray
+     " (backbone: " inside a name, a bracket in the middle of an unrelated line, a missing space or
+     parenthesis, a six-digit index, an empty name), the "Created feature ... preset=N -> name" line
+     (as the 2026-09-21 Windows trace recorded it, a two-digit and a negative preset, and five
+     malformed shapes), the "BuildActiveNetwork config=" line, and the two weight sets recognised by
+     name -- the September set (310.8 and 310.9.16) and the October `hnet-crazy-cuckoo-small-fp8` set
+     (310.9.16), while 310.8's backbone name "crazy-cuckoo" is not;
 2. **Local evidence**, when the files exist on this machine (override with `NR_LOADER_DLL`,
    `NR_MODEL_DLL`): the real `/usr/lib/nvidia/wine/_nvngx.dll` must have a recognisable table, and
-   the real model must have a parsable import table with at least one caller-path slot. Mapped from
-   disk by section at the preferred base. CI has neither file and runs the synthetic cases only.
+   the real model must have a parsable import table with at least one caller-path slot, and must still
+   carry the four printf formats the weight-set line is read from. Mapped from disk by section at the
+   preferred base. CI has neither file and runs the synthetic cases only. To check a new model before
+   installing it, point `NR_MODEL_DLL` at it.
    On 2026-09-28, with Linux driver 615.71.09 (wine loader **32.0.16.1691**) and model 310.8.2.0:
    the loader *routes feature 18 itself* (table at +0x15fa60), and the model has one W and one A slot.
 3. **Drift** (`run.py`): the direct runtime's `QueryScalingRatio`, `Create`, `Evaluate`, `SetExtras`
@@ -50,6 +61,12 @@ Both come from `retoque/dlssnr/DlssNr_PeScan.h`, which is header-only and free o
    the NGX line is logged before `ModelLog::Install` at the first build; `ProbeD3D11` checks for a
    null forwarder before `GetProcAddress` (a null module there searches the game's executable); the
    proxy refuses the faulting pairing before it creates feature 18; and the forwarder is the default.
+
+The weight-set parsing was mutation-checked on 2026-10-19: matching any "crazy-cuckoo" as the
+October set, dropping the leading-text check, finding the first " (backbone: " instead of the last,
+widening the index to nine digits and keeping " N=..." in the built name each fail it, as do, for the
+create line, an unbounded preset, a dropped minus sign, keeping the closing parenthesis in the name and
+accepting non-digits as the preset.
 
 All of the above was mutation-checked when the suite was written: fourteen single-point mutations
 (a changed value, a dropped write, the application id, the fault filter, the alias restore, a tail

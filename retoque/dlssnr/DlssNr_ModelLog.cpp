@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "DlssNr_ModelLog.h"
+#include "DlssNr_ModelLogParse.h"
 
 #include <Logger.h>
 
@@ -13,6 +14,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace DlssNr::ModelLog
 {
@@ -26,6 +28,11 @@ std::atomic<PFN_OutputDebugStringW> g_realW { nullptr };
 std::mutex g_installMutex;
 std::atomic<int> g_configCount { -1 };
 
+// What the model said about its weight sets, written from its own logging thread and read by the menu.
+std::mutex g_configMutex;
+std::vector<std::string> g_configNames;
+ActiveWeightSet g_active;
+
 // The model is not expected to talk per frame, but nothing guarantees it, and a per-frame line would
 // bury everything else in the log. Forty lines per ten seconds is far above anything event-driven
 // (a feature build, a reset) and far below a frame rate; whatever is dropped is counted and reported
@@ -37,21 +44,37 @@ std::chrono::steady_clock::time_point g_windowStart {};
 unsigned int g_inWindow = 0;
 unsigned int g_dropped = 0;
 
-// "DLSSNR: 1 config(s) available:" -- read before the rate limit, so a dropped line still counts.
-void NoteConfigCount(const std::string& text)
+// "DLSSNR: 1 config(s) available:", the "[i] name (backbone: b)" lines after it, and the config a
+// build used -- read before the rate limit, so a dropped line still counts.
+void NoteConfigs(const std::string& text)
 {
-    constexpr std::string_view kMarker = " config(s) available";
-    const auto at = text.find(kMarker);
-
-    if (at == std::string::npos)
+    if (const auto count = ModelLogParse::ConfigCount(text))
+    {
+        g_configCount = *count;
+        std::lock_guard<std::mutex> lock(g_configMutex);
+        g_configNames.clear();
         return;
+    }
 
-    size_t start = at;
-    while (start > 0 && std::isdigit(static_cast<unsigned char>(text[start - 1])) && at - start < 4)
-        --start;
+    if (auto entry = ModelLogParse::ConfigLine(text))
+    {
+        std::lock_guard<std::mutex> lock(g_configMutex);
+        g_configNames.push_back(std::move(entry->name));
+        return;
+    }
 
-    if (start != at)
-        g_configCount = std::stoi(text.substr(start, at - start));
+    if (auto active = ModelLogParse::ActiveConfig(text))
+    {
+        std::lock_guard<std::mutex> lock(g_configMutex);
+
+        // A build line names no preset; it keeps the one the create line gave for the same set.
+        if (active->preset)
+            g_active.preset = *active->preset;
+        else if (active->name != g_active.config)
+            g_active.preset = -1;
+
+        g_active.config = std::move(active->name);
+    }
 }
 
 void Emit(std::string text)
@@ -62,7 +85,7 @@ void Emit(std::string text)
     if (text.empty())
         return;
 
-    NoteConfigCount(text);
+    NoteConfigs(text);
 
     unsigned int dropped = 0;
     {
@@ -199,6 +222,18 @@ void* PatchImport(HMODULE module, const char* importDll, const char* function, v
 } // namespace
 
 int ConfigCount() { return g_configCount.load(); }
+
+std::vector<std::string> ConfigNames()
+{
+    std::lock_guard<std::mutex> lock(g_configMutex);
+    return g_configNames;
+}
+
+ActiveWeightSet Active()
+{
+    std::lock_guard<std::mutex> lock(g_configMutex);
+    return g_active;
+}
 
 std::string DescribeFault(unsigned long code, void* address)
 {

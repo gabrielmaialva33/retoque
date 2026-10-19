@@ -9,6 +9,7 @@
 #include "DlssNr_ExposureScan.h"
 #include "DlssNr_GpuTiming.h"
 #include "DlssNr_ModelLog.h"
+#include "DlssNr_ModelLogParse.h"
 #include "DlssNr_PresentBoundary.h"
 #include "DlssNr_PresentHdr.h"
 #include "DlssNr_PairCapture.h"
@@ -45,6 +46,59 @@ static void HelpMarker(const char* tip)
         ImGui::BeginTooltip();
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
         ImGui::TextUnformatted(Localization::Tr(tip));
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+// A weight set the model named, in words when it is one we know; its raw name otherwise.
+static std::string WeightSetLabel(const std::string& name)
+{
+    switch (ModelLogParse::Classify(name))
+    {
+    case ModelLogParse::WeightSet::September:
+        return Localization::Tr("September model (the original)");
+    case ModelLogParse::WeightSet::October:
+        return Localization::Tr("October model (smaller, faster)");
+    default:
+        return name;
+    }
+}
+
+// Which weight set the model built last, from its own log: what the preset actually did.
+static void RenderActiveWeightSet()
+{
+    const auto active = ModelLog::Active();
+
+    if (active.config.empty())
+        return;
+
+    ImGui::TextDisabled("%s %s", Localization::Tr("Running:"), WeightSetLabel(active.config).c_str());
+
+    if (active.preset >= 0)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled(Localization::Tr("(preset %d)"), active.preset);
+    }
+
+    const auto names = ModelLog::ConfigNames();
+
+    if (names.size() < 2)
+        return;
+
+    std::string listed;
+    for (const auto& name : names)
+        listed += "\n- " + WeightSetLabel(name);
+
+    ImGui::SameLine();
+    ImGui::TextDisabled(Localization::Tr("(?)"));
+
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 40.0f);
+        ImGui::TextUnformatted(Localization::Tr("The model's own report of the weight set it built. It carries:"));
+        ImGui::TextUnformatted(listed.c_str() + 1);
         ImGui::PopTextWrapPos();
         ImGui::EndTooltip();
     }
@@ -1330,6 +1384,7 @@ void RenderMenu(Config* config, float menuResScale)
         {
             ImGui::TextDisabled("%s", Localization::Tr("Model preset: this model has one weight set, so there is "
                                                        "nothing to choose."));
+            RenderActiveWeightSet();
         }
         else
         {
@@ -1344,7 +1399,12 @@ void RenderMenu(Config* config, float menuResScale)
 
             HelpMarker("Default leaves the choice to the model."
                        "\n\nNot the same scale as the super resolution or ray reconstruction presets --"
-                       "\nthe same number means something different here.");
+                       "\nthe same number means something different here."
+                       "\n\n310.9.16 carries two weight sets: reportedly Default and Preset 2 select the"
+                       "\nsmaller October model and Preset 1 the original one. The line below is what the"
+                       "\nmodel says it built.");
+
+            RenderActiveWeightSet();
         }
 
         static const char* nrStyleNames[] = { Localization::Label("Model A (Default)"),
