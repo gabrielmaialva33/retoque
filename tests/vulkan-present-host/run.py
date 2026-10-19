@@ -993,7 +993,9 @@ NR_TIMING = {
     'nr-hdr-half-synth': ({'PROTON_ENABLE_WAYLAND': '1', 'PROTON_ENABLE_HDR': '1'}, ['--hdr', '--frames', '32']),
     'nr-hdr-control': ({'PROTON_ENABLE_WAYLAND': '1', 'PROTON_ENABLE_HDR': '1'}, ['--hdr', '--frames', '24']),
     'nr-hdr': ({'PROTON_ENABLE_WAYLAND': '1', 'PROTON_ENABLE_HDR': '1'}, ['--hdr', '--frames', '24']),
-    'nr-stall-watch': ({'RETOQUE_STALL_PRESENT_AT': '30:2600'}, []),
+    # Stall at the sixth present of the resized (third) swapchain, retaining enough frames afterward
+    # for a builder which timed out on the held queue lock to retry and the model to leave warm-up.
+    'nr-stall-watch': ({'RETOQUE_STALL_PRESENT_AT': '54:2600'}, ['--frames', '24']),
     'nr-build-slow': ({'RETOQUE_SLOW_OFF_DEVICE_THREAD_MS': '400', 'RETOQUE_SLOW_OFF_DEVICE_THREAD_TOTAL_MS': '4000',
                        'RETOQUE_COUNT_OFF_THREAD_QUEUE': '1'}, ['--slow-build']),
     'nr-synth-motion': ({}, ['--pan', '4', '--frames', '40']),
@@ -1417,7 +1419,7 @@ def check_nr(name, facts, log):
         need(len([l for l in traces if '(destroyed)' in l]) == len(facts['swapchains']),
              f'{len(traces)} trace lines for {len(facts["swapchains"])} swapchains')
     need(sum(1 for l in lines if INSTALL_LINE in l) == 1, 'expected one install line')
-    # The stall watchdog: silent, but in nr-stall-watch, where the test layer holds the 30th present 2.6 s below the
+    # The stall watchdog: silent, but in nr-stall-watch, where the test layer holds the 54th present 2.6 s below the
     # host's hook: then one line naming the present, its stage, and the present lock it holds.
     stalls = [l[l.index('STALL: ') + 7:] for l in lines if 'DLSS-NR Vulkan present host: STALL: ' in l]
     if name == 'nr-stall-watch':
