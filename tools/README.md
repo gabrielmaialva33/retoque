@@ -144,8 +144,9 @@ is not exercised there; its README says what stands in for what.
 
 ## package_release.ps1
 
-Assembles `release/Retoque-<version>.zip` from an explicit allow-list under `release/`; it refuses a stale
-forwarder, refuses any `Enabled=true` in the packaged ini, and never ships `nvngx_dlssnr.dll`. It adds
+Assembles `release/Retoque-vX.Y.Z.zip` (the `retoque-vX.Y.Z` tag without its prefix) from an explicit
+allow-list under `release/`; it refuses a stale forwarder, refuses any `Enabled=true` in the packaged ini,
+and never ships `nvngx_dlssnr.dll`. It adds
 `install-windows.ps1` and `install-windows.cmd` from `tools/` (the `.cmd` rewritten with CRLF line ends) and
 refuses when either is missing. It also ships `install-linux.sh`, `deploy-to-game.sh` (LF), the README,
 and RenoDX attribution. The release ini sets Home as the menu key and enables file logging; NR remains

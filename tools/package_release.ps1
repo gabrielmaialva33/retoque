@@ -25,7 +25,7 @@ if ($Version -notmatch '^retoque-v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9][A-Za-z0-
     throw 'Version must be a retoque-vX.Y.Z tag (optionally with a prerelease suffix)'
 }
 $stage = "$root/release/$Version"
-$zip = "$root/release/Retoque-$Version.zip"
+$zip = "$root/release/Retoque-$($Version.Substring('retoque-'.Length)).zip"   # retoque-v0.3.0 -> Retoque-v0.3.0.zip
 
 if (-not $SkipBuild) {
     foreach ($proj in @("$root/retoque/dlssnr/forwarder/dlssnr_forwarder.vcxproj", "$root/OptiScaler.sln")) {

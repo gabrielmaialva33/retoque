@@ -1,6 +1,7 @@
 # Game profiles: the keys a game needs, applied without the ini
 
-Status: built and host-tested on `claude/game-profiles-20261019` (2026-10-19, from `2af53d2c`); not yet run in a game.
+Status: built and host-tested on `claude/game-profiles-20261019` (2026-10-19, from `2af53d2c`), and measured in two
+games on 2026-10-19 with every route key at `auto` (see "In game" below).
 
 ## The problem
 
@@ -69,8 +70,10 @@ shipped ini), checked by `nr-invariants`.
 - No entry without a measured run here. The Witcher 3's DirectX 11 renderer needed `HookMethod=2` on 2026-09-18, but
   its `bin\x64` holds no executable on this machine any more (only `bin\x64_dx12\witcher3.exe`, which must not get
   it), so it waits for a measurement.
-- Crimson Desert's `HookMethod=2`: under the game's own DLSS-G the present pass declines and NR stays after the
-  upscaler anyway ([nr-before-dlssg.md](nr-before-dlssg.md)), so it needs no profile.
+- Crimson Desert: it runs after Ray Reconstruction with every key at `auto`. Its `HookMethod=2` (kept in the ini
+  here) moves the pass to the game's Present, ahead of its DLSS-G ([nr-before-dlssg.md](nr-before-dlssg.md);
+  the log says `present: at the game's own Present, ahead of its frame generation`), which is a choice about where
+  NR sits relative to frame generation, not something the game needs before NR can run, so it is no profile.
 
 ## Tests
 
@@ -79,3 +82,20 @@ apply rules against a fake option type with `has_value`/`set_volatile_value` (us
 in, NR off changes nothing, `GameProfiles=false` changes nothing), every profile key being a real config member, and
 the `WINEDLLPATH` search (Unix to `Z:` paths, entries without `/wine`, a missing file, a present `system32` copy).
 In game: Divinity, Sons Of The Forest, DOOM Eternal and Generation Zero with their keys removed from the ini.
+
+## In game, 2026-10-19
+
+Build `cd568080` (this branch merged with the ViT-reuse experiment, which stayed off), GE-Proton11-10, RTX 4090,
+the inis regenerated from the shipped template with the route keys at `auto`:
+
+- **Divinity: Original Sin 2**: `HookMethod=2 (from the profile)`, and `the prefix has no nvapi64.dll;
+  NvapiPath=Z:\...\GE-Proton11-10-x86_64\files\lib\wine\nvapi\x86_64-windows\nvapi64.dll (found in Proton, this
+  session only)`. NGX then reported native NVAPI, built the 310.9.16 model, and the present host ran it on 3745 of
+  3746 base frames with synthesized motion, beside LSFG x4.
+- **Sons Of The Forest**: `HookMethod=2 (from the profile), Dx11Upscaler=dlss (from the profile)`. Once the game's
+  DLSS started, its depth and motion were carried to the bridge's present pass on 8177 of 8177 evaluates, and the
+  model ran on 10209 of 10210 frames. Before that (menus, loading) the pass ran on zero guides, as designed.
+- **Crimson Desert** (no profile): no profile line, as expected.
+
+DOOM Eternal, Generation Zero, Hellraiser and PCSX2 were measured with the same keys set by hand before this change;
+their profile entries have not yet been run through `Apply`.

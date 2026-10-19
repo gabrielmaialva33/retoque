@@ -72,7 +72,7 @@ jobs:
             if (releases.some(r => r.tag_name === version)) {
               throw new Error('Release already exists; refusing to edit a draft or published release');
             }
-            const name = `Retoque-${version}.zip`;
+            const name = `Retoque-${version.slice('retoque-'.length)}.zip`;
             const data = fs.readFileSync(`release/${name}`);
             const body = fs.readFileSync(`docs/releases/${version}.md`, 'utf8');
             // This workflow has no publish/update/delete operation. Approval and publication are manual.

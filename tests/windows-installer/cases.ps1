@@ -275,7 +275,7 @@ Add-Case 'release_package_and_refusals' {
     $args = @('-NoProfile', '-NonInteractive', '-File', $script, '-SkipBuild', '-Version', 'retoque-v0.3.0')
     $r = Invoke-Tool $Pwsh $args
     Expect ($r.Code -eq 0) "package dry fixture exits 0: $($r.Err)"
-    $zip = Join-Path $packageRoot 'release/Retoque-retoque-v0.3.0.zip'
+    $zip = Join-Path $packageRoot 'release/Retoque-v0.3.0.zip'
     Expect ([IO.File]::Exists($zip)) 'Retoque-named zip exists'
     $extract = Join-Path $tmp 'extracted'
     Expand-Archive -LiteralPath $zip -DestinationPath $extract
