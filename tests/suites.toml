@@ -367,3 +367,8 @@ summary = "Moving-scene evidence analyzer: independent depth/projection motion o
 tier = "host"
 timeout = 60
 summary = "Real DLSS-G evidence judge rejects missing interpolation, incomplete phase/frame records and unverified plugin coverage. No GPU."
+
+[deferred-release]
+tier = "host"
+timeout = 60
+summary = "Production deferred queue: owner retirement before NR Vulkan device destruction, lost-device abandonment, handle reuse and detached-collector race. No GPU."

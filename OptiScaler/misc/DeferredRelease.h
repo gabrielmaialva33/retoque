@@ -23,6 +23,14 @@ void Collect();
 // destroying the objects then would be invalid, leaking them is the safe option.
 void DropOwnersExcept(uint64_t keep);
 
+// A newly created device can reuse an old handle. Call only after successful device creation.
+void RegisterOwner(uint64_t owner);
+
+// Before destroying a device, finish callbacks already being collected, then retire this owner.
+// After its GPU work drained, destroy=true releases pending objects while the device is still alive.
+// A lost/undrained device uses false: abandon callbacks instead. Later enqueues for it are refused.
+void RetireOwner(uint64_t owner, bool destroy);
+
 template <typename T> void Release(T*& object)
 {
     if (object == nullptr)

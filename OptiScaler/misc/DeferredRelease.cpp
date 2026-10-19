@@ -5,6 +5,7 @@
 
 #include <mutex>
 #include <vector>
+#include <unordered_set>
 
 namespace
 {
@@ -22,7 +23,11 @@ struct Entry
     std::chrono::steady_clock::time_point time;
 };
 
+// Serializes execution as well as extraction: a device cannot die while Collect has detached its callbacks.
+// Recursive for API callbacks which re-enter collection on the same thread.
+std::recursive_mutex executionMutex;
 std::mutex mutex;
+std::unordered_set<uint64_t> retiredOwners;
 std::vector<Entry> entries;
 uint64_t presentCounter = 0;
 } // namespace
@@ -37,11 +42,14 @@ void DeferredRelease::Enqueue(std::function<void()> destroy, uint64_t owner)
         return;
 
     std::lock_guard lock(mutex);
+    if (owner != 0 && retiredOwners.contains(owner))
+        return;
     entries.push_back({ std::move(destroy), owner, presentCounter, std::chrono::steady_clock::now() });
 }
 
 void DeferredRelease::DropOwnersExcept(uint64_t keep)
 {
+    std::lock_guard executionLock(executionMutex);
     std::lock_guard lock(mutex);
 
     const auto dropped =
@@ -51,8 +59,39 @@ void DeferredRelease::DropOwnersExcept(uint64_t keep)
         LOG_WARN("Dropped {} deferred objects of a previous device", dropped);
 }
 
+void DeferredRelease::RegisterOwner(uint64_t owner)
+{
+    std::lock_guard lock(mutex);
+    retiredOwners.erase(owner);
+}
+
+void DeferredRelease::RetireOwner(uint64_t owner, bool destroy)
+{
+    if (owner == 0)
+        return;
+
+    std::lock_guard executionLock(executionMutex);
+    std::vector<std::function<void()>> pending;
+    {
+        std::lock_guard lock(mutex);
+        retiredOwners.insert(owner);
+        std::erase_if(entries,
+                      [&](Entry& entry)
+                      {
+                          if (entry.owner != owner)
+                              return false;
+                          if (destroy && !State::Instance().isShuttingDown)
+                              pending.push_back(std::move(entry.destroy));
+                          return true;
+                      });
+    }
+    for (auto& release : pending)
+        release();
+}
+
 static void ReleaseReady(bool present)
 {
+    std::lock_guard executionLock(executionMutex);
     if (State::Instance().isShuttingDown)
         return;
 

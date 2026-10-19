@@ -11,6 +11,7 @@
 
 #include <Config.h>
 #include <State.h>
+#include <misc/DeferredRelease.h>
 #include <hooks/Vulkan_Hooks.h>
 #include <proxies/KernelBase_Proxy.h>
 
@@ -2468,8 +2469,9 @@ void EndModelBuild(DeviceTransport& dev)
     ActivityStage("tearing the device's objects down");
 }
 
-std::string TeardownDevice(DeviceTransport& dev)
+std::string TeardownDevice(DeviceTransport& dev, bool& destroyDeferred)
 {
+    destroyDeferred = false;
     EndModelBuild(dev);
     if (dev.model != nullptr && dev.model->DeviceLost())
         MarkLost(dev); // a build saw it lost: nothing below is waited for or destroyed
@@ -2566,6 +2568,7 @@ std::string TeardownDevice(DeviceTransport& dev)
     // none with work of the host's never seen complete (its model's frames, a retired swapchain's slots, the
     // hand-back's fences), and every queue drained now within its own bound. Otherwise both only forget the device.
     const bool unproven = dev.lost || forgetOnly || abandoned != 0 || !drained || !DrainForDestroy(dev, kDrainNs);
+    destroyDeferred = !unproven && !dev.leaked;
     DlssNr::AfterUpscaleDeviceGone(dev.device, unproven, dev.lines);
     DlssNr::ShutdownPresentNgx(dev.device, unproven, dev.lines);
 
@@ -2650,13 +2653,14 @@ void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocati
     std::string line;
     std::vector<std::string> modelLines;
     RecordId deviceId = 0;
+    bool destroyDeferred = true;
     {
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(device))
         {
             deviceId = dev->id;
             line = "DLSS-NR Vulkan present host: device " + Hex(H(device)) + " #" + std::to_string(dev->id) +
-                   " destroyed; " + TeardownDevice(*dev);
+                   " destroyed; " + TeardownDevice(*dev, destroyDeferred);
             modelLines.swap(dev->lines);
             g_transport.erase(device);
         }
@@ -2685,6 +2689,10 @@ void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocati
 
     if (!line.empty())
         LOG_INFO("{}", line);
+
+    // Shader_Vk now queues its destruction. Finish/drop this device's queue before its handle dies,
+    // also waiting for callbacks detached by a concurrent collector. Never destroy after a failed drain.
+    DeferredRelease::RetireOwner(H(device), destroyDeferred);
 
     activity.scope.Stage("calling down vkDestroyDevice");
     next(device, allocator);
@@ -3719,6 +3727,7 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
 
     LOG_INFO("{}", line);
 
+    DeferredRelease::RegisterOwner(H(*device));
     HookDevice(*device);
 
     // The round trip's own submits go through the host's trampoline of the device's vkQueueSubmit. The next layer
