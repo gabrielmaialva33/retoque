@@ -36,7 +36,7 @@ assert 'const auto now = DlssNr::ReplayClock::Now();' in dispatch               
 assert dispatch.count('g_chainSchedule.Create(observedFrame, DlssNr::ReplayClock::Now())') == 2
 assert 'g_chainSchedule.Create(observedFrame)' not in renderer and 'Create(observedFrame, now)' not in renderer
 # The enlargement model's frame time is an input to a model: recorded time under replay.
-enlarge = renderer[renderer.index('DlssNr::PrivateSr::Frame sr;') - 600:renderer.index('DlssNr::PrivateSr::Frame sr;')]
+enlarge = body(renderer, 'ID3D12Resource* EnlargeEdit(')
 assert 'const auto now = DlssNr::ReplayClock::Now();' in enlarge
 for gate in ('if (now - g_nr.uiMaskLast > std::chrono::milliseconds(250))',
              'const bool lapsed = now - g_nr.stabilizerLast > std::chrono::milliseconds(250);'):
