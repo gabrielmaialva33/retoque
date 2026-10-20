@@ -134,8 +134,15 @@ struct LogGate
 {
 };
 } // namespace Pulse
+namespace PrivateSr
+{
+struct Feature
+{
+};
+} // namespace PrivateSr
 namespace Enlarge
 {
+struct Decision;
 constexpr uint32_t kTransferMatched = 1;
 enum class Why
 {

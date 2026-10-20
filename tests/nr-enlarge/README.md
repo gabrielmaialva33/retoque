@@ -53,3 +53,13 @@ No GPU, no NGX, no shader runs. Nothing here says the carrier survives DLSS, wha
 whether native D3D12 accepts the states and calls, or what it looks like and costs. The bytecode is
 not compared with the HLSL (`nr-invariants` compares headers with bytecode only). That is the
 loopback's `--transfer-ab` and a game, on Proton and on native Windows.
+
+## Split renderer ownership
+
+The host fixture assembles named definitions from their owners: result names from
+`DlssNr_Dx12_Model.cpp`, enlargement behavior from `DlssNr_Dx12_Enlarge.cpp`,
+shared complete types from `DlssNr_Dx12_Internal.h`, and storage/retirement/retry
+from `DlssNr_Dx12.cpp`. Definitions must be unique; no assembly slice crosses a
+TU or namespace boundary. The out-of-line destructor is the actual production
+body, still checked for feature-before-textures and re-entrant retirement order.
+The fixture uses the named internal namespace and the real private-SR adapter.

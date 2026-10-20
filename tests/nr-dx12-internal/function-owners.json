@@ -36,6 +36,16 @@
       "void RestoreResourceState::Restore()\n{",
       "RestoreResourceState::~RestoreResourceState() {",
       "ReadResourceScope::ReadResourceScope("
+    ],
+    "DlssNr_Dx12_Enlarge.cpp": [
+      "DlssNr::PrivateSr::Api PrivateSrApi()\n{",
+      "bool NrEnlarger::CoreGone() const {",
+      "NrEnlarger::~NrEnlarger()\n{",
+      "void PublishEnlarge(",
+      "DlssNr::Enlarge::Decision PlanEnlarge(",
+      "void FailEnlarge(",
+      "void BuildEnlarger(",
+      "ID3D12Resource* EnlargeEdit("
     ]
   }
 }

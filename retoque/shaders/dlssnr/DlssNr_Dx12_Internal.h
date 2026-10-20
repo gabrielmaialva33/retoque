@@ -15,6 +15,7 @@
 #include <dlssnr/DlssNr_PresentGuideRing.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 #include <dlssnr/DlssNr_Enlarge.h>
+#include <dlssnr/DlssNr_PrivateSr.h>
 #include "DlssNr_DetailStats_Dx12.h"
 #include "DlssNr_Pulse_Dx12.h"
 #include <Config.h>
@@ -37,7 +38,63 @@ class DlssNr_PresentHdr_Dx12;
 
 namespace DlssNr::Dx12Internal
 {
-struct NrEnlarger; // Complete definition and destructor remain beside PrivateSrApi in the owner TU.
+struct NrEnlarger
+{
+    DlssNr::PrivateSr::Feature feature;
+    ID3D12Device* device = nullptr;     // compared, not held: the bundle is rebuilt for a different device
+    ID3D12Resource* carrier = nullptr;  // the edit at the working size, RGBA16F
+    ID3D12Resource* enlarged = nullptr; // what DLSS made of it, RGBA16F at the frame's size
+    ID3D12Resource* exposure = nullptr; // one R32 texel, written to 1 before every evaluation
+    ID3D12Resource* depth = nullptr;    // the private guide resample, when the model's own did not run
+    ID3D12Resource* motion = nullptr;
+    DlssNr::Submission::Usage creation; // where submissions are tracked: the recording that created it
+    bool tracked = false;
+    uint64_t createdPresent = 0;
+    uint64_t createdFrame = 0;
+    uint64_t lastFrame = 0; // the pass's dispatch counter at the last evaluation; 0 before the first
+    std::chrono::steady_clock::time_point lastTime {};
+
+    // The driver core's shutdown count when the feature was made. A game that shuts NGX down (and often
+    // starts it again, applying settings) takes every feature with it; a handle from before is not one to
+    // evaluate or release in the core that follows.
+    uint64_t coreShutdowns = 0;
+
+    // The guide resample failed on this bundle: say so until it is rebuilt, rather than planning a run and
+    // falling back on every frame.
+    bool guidesFailed = false;
+
+    NrEnlarger() = default;
+    NrEnlarger(const NrEnlarger&) = delete;
+    NrEnlarger& operator=(const NrEnlarger&) = delete;
+
+    bool CoreGone() const;
+
+    // The feature first, then what it read and wrote. No NGX call while the process exits: the core may
+    // already be gone, so the handle and its table are left to the process, as OptiScaler's own DLSS does.
+    // Nor into a core that was shut down since the feature was made: the feature went with it.
+    ~NrEnlarger();
+};
+
+// What one Transfer 2 frame reads. Every texture arrives readable (NON_PIXEL_SHADER_RESOURCE) and is left so.
+struct EnlargeFrame
+{
+    ID3D12Resource* proxy = nullptr;        // the model's input at the working size
+    ID3D12Resource* answer = nullptr;       // the chain's final answer at the working size
+    ID3D12Resource* matchedDepth = nullptr; // the model's own resampled pair, when it ran
+    ID3D12Resource* matchedMotion = nullptr;
+    ID3D12Resource* gameDepth = nullptr; // the game's guides, typed
+    ID3D12Resource* gameMotion = nullptr;
+    unsigned int depthBaseX = 0, depthBaseY = 0, depthWidth = 0, depthHeight = 0;
+    unsigned int motionBaseX = 0, motionBaseY = 0, motionWidth = 0, motionHeight = 0;
+    unsigned int workWidth = 0, workHeight = 0, width = 0, height = 0;
+    bool depthInverted = false;
+    float mvScaleX = 1.0f, mvScaleY = 1.0f; // Enlarge::MotionScale: 0 while held
+    bool passthrough = false;
+    bool reset = false; // everything that reset the model this frame
+    bool hold = false;
+    uint64_t present = 0;
+    uint64_t frame = 0; // g_frames
+};
 
 using PFN_NrCreate = void*(__cdecl*) (const wchar_t*, const wchar_t*, ID3D12Device*, ID3D12GraphicsCommandList*, void*,
                                       unsigned int, unsigned int, int, float, int, float, float, float, int, int);
@@ -638,6 +695,16 @@ struct ReadResourceScope
     RestoreResourceState restore;
     ReadResourceScope(ID3D12GraphicsCommandList* cmd, ID3D12Resource* resource, D3D12_RESOURCE_STATES arrival);
 };
+// Enlargement behavior lives in DlssNr_Dx12_Enlarge.cpp; storage/retirement stay in core.
+DlssNr::Enlarge::Decision PlanEnlarge(uint32_t configured, bool proxy, bool periphery, uint32_t debugView,
+                                      const DlssNrFrameInfo& frame, ID3D12Device* device, bool beforeUpscale,
+                                      bool guidesUsable, unsigned int width, unsigned int height,
+                                      unsigned int workWidth, unsigned int workHeight, uint64_t present,
+                                      uint64_t frameIndex);
+ID3D12Resource* EnlargeEdit(DlssNr_Dx12& pass, ID3D12GraphicsCommandList* cmdList, ID3D12Device* device,
+                            const DlssNr::Enlarge::Decision& plan, const EnlargeFrame& f);
+void ParkNrEnlarger(NrEnlarger*& enlarger);
+bool RetiredCapacity();
 } // namespace DlssNr::Dx12Internal
 
 // Functions one renderer unit defines and another calls, with the unit that defines them. Public entry points keep

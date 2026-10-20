@@ -4,7 +4,7 @@
 Three binaries and a set of source guards:
   rules.cpp    DlssNr_Enlarge.h: the decision table, the carrier through FP16, the menu table, resets, guides.
   adapter.cpp  DlssNr_PrivateSr.cpp as built, against a recording driver core (ngx_fakes.h).
-  host         DlssNr_Dx12.cpp's Transfer 2 section, its retirement list and RetryAfterFailure, sliced out of
+  host         enlargement definitions and core retirement/retry, assembled explicitly per owner out of
                production and compiled against D3D12 fakes that hold every barrier to the state it claims.
 The guards pin the shader's numbers and branches to the header's, and Dispatch, the Vulkan resolve and the
 menu to the shape the host binary drives. No GPU, no NGX, no shader is executed: see README.md.
@@ -15,11 +15,10 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import renderer_internal_header  # noqa: E402
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
-renderer = renderer_source()
 shader = (root / 'retoque/shaders/dlssnr/precompile/dlssnr.hlsl').read_text()
 common = (root / 'retoque/shaders/dlssnr/DlssNr_Common.h').read_text()
 rules = (root / 'retoque/dlssnr/DlssNr_Enlarge.h').read_text()
@@ -41,6 +40,39 @@ def between(source, start, end):
 def once(source, text, what):
     assert source.count(text) == 1, f'{what}: expected exactly one {text!r}, found {source.count(text)}'
     return source.index(text)
+
+
+# Assemble exact definitions from their owners. No slice crosses a TU or namespace boundary.
+render_dir = root / 'retoque/shaders/dlssnr'
+core = (render_dir / 'DlssNr_Dx12.cpp').read_text()
+model = (render_dir / 'DlssNr_Dx12_Model.cpp').read_text()
+enlargement = (render_dir / 'DlssNr_Dx12_Enlarge.cpp').read_text()
+internal = renderer_internal_header()
+
+
+def definition(text, signature):
+    assert text.count(signature) == 1, f'definition must be unique: {signature!r}'
+    start = text.index(signature)
+    brace = text.index('{', start)
+    assert ';' not in text[start:brace], f'not a definition: {signature!r}'
+    depth, end = 1, brace + 1
+    while depth:
+        depth += (text[end] == '{') - (text[end] == '}')
+        end += 1
+    return text[start:end] + '\n'
+
+
+def shared_type(name):
+    signature = 'struct ' + name + '\n'
+    assert internal.count(signature) == 1, f'missing/duplicate shared type: {name}'
+    start = internal.index(signature)
+    return internal[start:internal.index('\n};', start) + 4] + '\n'
+
+
+def storage(signature):
+    assert core.count(signature) == 1, f'missing/duplicate core storage: {signature}'
+    return signature + '\n'
+
 
 
 # --- The shader holds the header's numbers and takes Transfer 2 only where it says it does. ----------------
@@ -73,7 +105,7 @@ assert 'float3 fullProxy = gPassthrough != 0' in matched
 
 # --- Dispatch has the shape host.cpp drives. ------------------------------------------------------------------
 
-dispatch = between(renderer, 'bool DlssNr_Dx12::Dispatch(', '\nnamespace DlssNr\n{')
+dispatch = definition(core, 'bool DlssNr_Dx12::Dispatch(')
 plans = list(re.finditer(r'const auto enlargePlan =\s*PlanEnlarge\(\s*cfg\.DlssNrTransfer\.value_or_default\(\), '
                          r'useProxy, peripheryActive,', dispatch))
 assert len(plans) == 1 and dispatch.count('PlanEnlarge(') == 1, \
@@ -97,18 +129,18 @@ assert resolve_at < restore
 assert dispatch.count('timing.ModelBegin();') == 2 and dispatch.count('g_nr.evaluate(') == 2
 
 # The creation frame never evaluates.
-enlarge = between(renderer, 'ID3D12Resource* EnlargeEdit(', '\n} // namespace DlssNr::Dx12Internal\n')
+enlarge = definition(enlargement, 'ID3D12Resource* EnlargeEdit(')
 assert re.search(r'BuildEnlarger\(cmdList, device, f\);\s*return nullptr;', enlarge)
 
 # Released last, after the list is whole; the bundle is one entry.
-tick = between(renderer, 'void TickNrRetired(bool shutdown = false)', 'bool RetiredCapacity()')
+tick = definition(core, 'void TickNrRetired(bool shutdown = false)')
 assert tick.index('g_nrRetired.pop_back();') < tick.index('delete enlarger;')
-shutdown = between(renderer, 'void Shutdown()\n{', '\n} // namespace DlssNr')
+shutdown = definition(core, 'void Shutdown()\n{')
 assert shutdown.index('g_nrRetired.clear();') < shutdown.index('delete enlarger;')
 assert 'enlargers.push_back(g_enlarge.live);' in shutdown
-retry = between(renderer, 'void RetryAfterFailure()', 'Enlarge::Status EnlargeStatus()')
+retry = definition(core, 'void RetryAfterFailure()') + definition(core, 'void RetryEnlargement()')
 assert retry.count('ParkNrEnlarger(g_enlarge.live);') == 2 and retry.count('g_enlarge.failed = false;') == 2
-narrow = between(retry, 'void RetryEnlargement()', '}')
+narrow = definition(core, 'void RetryEnlargement()')
 assert 'g_nr.' not in narrow and 'Extent' not in narrow, 'the enlargement Retry reaches past the enlargement'
 
 # --- Native Vulkan maps 2 to 1, and the menu goes through the header's table. --------------------------------
@@ -129,15 +161,26 @@ for why in whys:
 
 # --- Compile and run. ----------------------------------------------------------------------------------------
 
-ngx_name = between(renderer, 'const char* NgxResultName(unsigned int r)', "// Does the driver's own nvngx.dll")
-retirement = between(renderer, 'DlssNr::PrivateSr::Api PrivateSrApi()', '// The inject point decides which buffer')
-section = between(renderer, '// The live bundle, whether it failed this session',
-                  '\n} // namespace DlssNr::Dx12Internal\n\nusing namespace DlssNr::Dx12Internal;\n\n// ---------------------------------------------------------------------------------------------\n// The pass itself.')
-retry_status = between(renderer, 'void RetryAfterFailure()', 'struct PresentGuideClone')
-
-host = ('#include "host_fakes.h"\n'
-        'namespace\n{\n' + ngx_name + retirement + section + '\n} // namespace\n'
-        'namespace DlssNr\n{\n' + retry_status + '} // namespace DlssNr\n' +
+retirement_names = ['void ParkNrFeature(', 'void ParkNrResource(', 'void ParkNrScaler(',
+                    'void ParkNrStabilizer(', 'void ParkNrUiMask(', 'void ParkNrCadence(',
+                    'void ParkNrEnlarger(', 'void TickNrRetired(bool shutdown = false)',
+                    'bool RetiredCapacity()\n{']
+enlarge_names = ['void PublishEnlarge(', 'DlssNr::Enlarge::Decision PlanEnlarge(',
+                 'void FailEnlarge(', 'void BuildEnlarger(', 'ID3D12Resource* EnlargeEdit(']
+retry_names = ['void RetryAfterFailure()', 'void RetryEnlargement()', 'Enlarge::Status EnlargeStatus()']
+host = ('#include "host_fakes.h"\nnamespace DlssNr::Dx12Internal\n{\n' +
+        definition(model, 'const char* NgxResultName(unsigned int r)') +
+        shared_type('NrEnlarger') + shared_type('NrRetired') + shared_type('EnlargeSession') +
+        shared_type('EnlargeFrame') + storage('std::vector<NrRetired> g_nrRetired;') +
+        storage('EnlargeSession g_enlarge;') +
+        definition(enlargement, 'DlssNr::PrivateSr::Api PrivateSrApi()') +
+        definition(enlargement, 'bool NrEnlarger::CoreGone() const') +
+        definition(enlargement, 'NrEnlarger::~NrEnlarger()') +
+        ''.join(definition(core, name) for name in retirement_names) +
+        ''.join(definition(enlargement, name) for name in enlarge_names) +
+        '\n} // namespace DlssNr::Dx12Internal\nusing namespace DlssNr::Dx12Internal;\n' +
+        'namespace DlssNr\n{\nusing namespace Dx12Internal;\n' +
+        ''.join(definition(core, name) for name in retry_names) + '} // namespace DlssNr\n' +
         (here / 'host_cases.h').read_text())
 
 with tempfile.TemporaryDirectory(prefix='optiscaler-nr-enlarge-') as directory:
