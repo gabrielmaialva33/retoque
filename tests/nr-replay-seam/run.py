@@ -86,3 +86,6 @@ with tempfile.TemporaryDirectory() as scratch:
     if run.returncode:
         raise SystemExit(f'seam cases failed ({run.returncode})')
 print('PASS: replay clock and adapter; decision clocks, outcome notes and exports wired as designed')
+
+# Harness scheduling metadata and comparison policy, including negative controls.
+subprocess.run([sys.executable, str(HERE / 'inflight.py')], check=True)

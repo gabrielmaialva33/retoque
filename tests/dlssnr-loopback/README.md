@@ -552,9 +552,10 @@ Both controls were run on 2026-10-20 against the `b2eed6e3` baseline:
 - **Same renderer code:** all six variants were identical.
 - **`Intensity=0.9`:** failed from frame 62, the first model frame, with no change in decisions.
 
-For a refactor, run the 17-variant set the baseline was extended with: off, every-frame x2, Cadence 2/3/4,
+For a refactor, run the frozen `variants-extended.json` set (now 19 variants): off, every-frame x2, Cadence 2/3/4,
 adaptive, smoothing at 2 and 4, Passes 2 and 3, MinRatio, MaxRatio, WorkingScale 0.5 with Transfer 1 and 2, the
-direct model loader and ReversibleMode 2. On 2026-10-20 the original DLL replayed all 17 identical to themselves.
+direct model loader, ReversibleMode 2, pulse and GPU timing. On 2026-10-20 the original DLL replayed all 19
+identical to the frozen baseline with the in-flight-capable harness in synchronous mode.
 Passes 2 and 3 grow one pass per 500 ms of logical time, so on this corpus their chains are still growing on
 scored frames: they are compared bit for bit, growth included, but the judge does not score them (NOT-JUDGED).
 
@@ -562,3 +563,41 @@ The gate covers the after-upscale route through the seam. The present route, the
 bridge and Vulkan are outside it.
 
 Not covered: the upscaler and everything upstream of it, frame generation, swapchain pacing and native Windows.
+
+### In-flight lifetime gate
+
+`LOOPBACK_REPLAY_INFLIGHT=2`, `3` or `4` uses independent command-list/resource slots.
+Reset occurs only when a slot returns. A CPU-signalled queue gate keeps the newer
+submissions pending deterministically; every output is mapped only after its fence.
+Default `0` retains synchronous replay. See
+[the scheduling contract](../../docs/dlssnr/design/replay-inflight.md).
+
+Optional `LOOPBACK_REPLAY_CANCEL_EVERY=53` discards each selected recorded NR list
+without execution; a separate copy submission returns fenced original pixels.
+`LOOPBACK_REPLAY_RECREATE_EVERY=47` replaces a completed slot's previous list without
+Reset. Both default to `0`; enabled periods must be at least 16. The gate requires
+actual NR work on cancelled/released lists, not just empty warmup lists.
+
+For a candidate DLL, run each original-DLL mode baseline independently:
+
+```bash
+B=~/.cache/retoque-replay/baselines/b2eed6e3
+M=$B/inflight/ring4-lifecycle
+LOOPBACK_REPLAY_CALIBRATE=0 LOOPBACK_REPLAY_JUDGE=0 \
+LOOPBACK_REPLAY_INFLIGHT=4 LOOPBACK_REPLAY_CANCEL_EVERY=53 \
+LOOPBACK_REPLAY_RECREATE_EVERY=47 \
+LOOPBACK_REPLAY_VARIANTS="$(cat "$M/variants.json")" \
+LOOPBACK_REPLAY_CAPTURE="$B/corpus/capture.json" \
+LOOPBACK_REPLAY_BASELINE="$M" LOOPBACK_REPLAY_SYNC_BASELINE="$B" \
+python3 tests/dlssnr-loopback/run.py --replay-nr --dll <candidate>/x64/out/OptiScaler.dll
+```
+
+The other sets are `inflight/ring2`, `ring3` and `ring4` (set the matching ring size
+and both lifecycle periods to `0`). Each includes every-frame, Cadence 4, adaptive 4
+and Passes 3. Baseline manifests retain output hashes and scheduling/NR-recorded
+evidence for all frames, including warmup. Missing variants, mode/settings mismatch,
+fence/schedule violations, and changed decisions or pixels fail. The synchronous
+comparison enforces identical pixels until the first admission-history difference;
+later differences are reported, while same-mode comparison remains exact throughout.
+This controlled single-queue stress does not cover arbitrary multi-queue engines,
+present/pre-upscale routes, D3D11/Vulkan, or native Windows validation.

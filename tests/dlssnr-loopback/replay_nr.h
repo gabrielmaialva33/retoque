@@ -12,6 +12,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -216,6 +217,13 @@ struct Host
         params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, plan.width);
         params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, plan.height);
 
+        MakeSurfaces(plan);
+        Require(begin() == 1, "RetoqueReplay_Begin refused: the process needs RETOQUE_REPLAY=1");
+        session = true;
+    }
+
+    void MakeSurfaces(const Plan& plan)
+    {
         constexpr auto Srv =
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         Make(ColorIn, DXGI_FORMAT_R16G16B16A16_FLOAT, 8, D3D12_RESOURCE_FLAG_NONE, Srv, plan.width, plan.height);
@@ -232,24 +240,32 @@ struct Host
         Buffer(timing, sizeof(UINT64) * 2, D3D12_HEAP_TYPE_READBACK);
         Check(queue->GetTimestampFrequency(&hz), "replay timestamp frequency");
         Require(hz != 0, "zero GPU timestamp frequency");
-
-        Require(begin() == 1, "RetoqueReplay_Begin refused: the process needs RETOQUE_REPLAY=1");
-        session = true;
     }
 
-    void Step(const Plan& plan, size_t index)
+    void Inputs(const Plan& plan, size_t index)
     {
         const auto& f = plan.frames[index];
-        stage = "upload/evaluate/readback";
         Load(ColorIn, f.color, plan.width, plan.height);
         Load(DepthIn, f.depth, plan.width, plan.height);
         Load(MotionIn, f.motion, plan.width, plan.height);
-        Begin();
+    }
+
+    void UploadInputs()
+    {
         Upload(surfaces[ColorIn].texture, surfaces[ColorIn], surfaces[ColorIn].rest);
         Upload(surfaces[DepthIn].texture, surfaces[DepthIn], surfaces[DepthIn].rest);
         Upload(surfaces[MotionIn].texture, surfaces[MotionIn], surfaces[MotionIn].rest);
-        // The colour as the upscaler wrote it: the same bytes go to Output, which the pass edits in place.
         Upload(surfaces[Output].texture, surfaces[ColorIn], surfaces[Output].rest);
+    }
+
+    Outcome Record(const Plan& plan, size_t index)
+
+    {
+        const auto& f = plan.frames[index];
+        stage = "upload/evaluate/readback";
+        Inputs(plan, index);
+        Begin();
+        UploadInputs();
 
         params->Set(NVSDK_NGX_Parameter_Color, surfaces[ColorIn].texture.p);
         params->Set(NVSDK_NGX_Parameter_Output, surfaces[Output].texture.p);
@@ -269,6 +285,15 @@ struct Host
         const int entered = evaluate(list, params, queue, &frame, &outcome);
         list->EndQuery(queries, D3D12_QUERY_TYPE_TIMESTAMP, 1);
         list->ResolveQueryData(queries, D3D12_QUERY_TYPE_TIMESTAMP, 0, 2, timing, 0);
+        Readback();
+        Require(entered == 1, "RetoqueReplay_Evaluate refused the frame");
+        ++evaluations;
+        anyRecorded = anyRecorded || outcome.recorded != 0;
+        return outcome;
+    }
+
+    void Readback()
+    {
         auto& out = surfaces[Output];
         ColdNr::Transition(list, out.texture, out.rest, D3D12_RESOURCE_STATE_COPY_SOURCE);
         D3D12_TEXTURE_COPY_LOCATION src {}, dst {};
@@ -279,19 +304,24 @@ struct Host
         dst.PlacedFootprint = out.footprint;
         list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         ColdNr::Transition(list, out.texture, D3D12_RESOURCE_STATE_COPY_SOURCE, out.rest);
-        Submit();
-        Require(entered == 1, "RetoqueReplay_Evaluate refused the frame");
-        ++evaluations;
-        anyRecorded = anyRecorded || outcome.recorded != 0;
-        Check(device->GetDeviceRemovedReason(), "replay device health");
+    }
 
-        UINT64* ticks = nullptr;
-        const D3D12_RANGE read { 0, sizeof(UINT64) * 2 };
-        Check(timing->Map(0, &read, reinterpret_cast<void**>(&ticks)), "replay timing Map");
-        const double ms =
-            ticks[1] >= ticks[0] ? static_cast<double>(ticks[1] - ticks[0]) * 1000.0 / static_cast<double>(hz) : -1.0;
+    void Consume(const Plan& plan, size_t index, const Outcome& outcome, bool timed = true)
+    {
+        const auto& f = plan.frames[index];
+        auto& out = surfaces[Output];
+        Check(device->GetDeviceRemovedReason(), "replay device health");
+        double ms = -1.0;
         const D3D12_RANGE noWrite { 0, 0 };
-        timing->Unmap(0, &noWrite);
+        if (timed)
+        {
+            UINT64* ticks = nullptr;
+            const D3D12_RANGE read { 0, sizeof(UINT64) * 2 };
+            Check(timing->Map(0, &read, reinterpret_cast<void**>(&ticks)), "replay timing Map");
+            ms = ticks[1] >= ticks[0] ? static_cast<double>(ticks[1] - ticks[0]) * 1000.0 / static_cast<double>(hz)
+                                      : -1.0;
+            timing->Unmap(0, &noWrite);
+        }
 
         void* mapped = nullptr;
         const D3D12_RANGE all { 0, static_cast<SIZE_T>(out.bytes) };
@@ -314,6 +344,13 @@ struct Host
         PumpMessages();
     }
 
+    void Step(const Plan& plan, size_t index)
+    {
+        const auto outcome = Record(plan, index);
+        Submit();
+        Consume(plan, index, outcome);
+    }
+
     void Finish()
     {
         stage = "teardown after fence";
@@ -333,17 +370,171 @@ struct Host
     }
 };
 
+// All objects survive to the outer failure handler: unknown completion exits without releasing them.
+struct FlightSlot
+{
+    Com<ID3D12CommandAllocator> allocator, copyAllocator;
+    Com<ID3D12GraphicsCommandList> commands, copyCommands;
+    std::unique_ptr<Host> host;
+    Outcome outcome {};
+    UINT64 serial = 0;
+    size_t index = 0;
+    bool pending = false, cancelled = false;
+};
+
+static unsigned Option(const char* name, unsigned minimum, unsigned maximum)
+{
+    char value[32] {};
+    const auto length = GetEnvironmentVariableA(name, value, sizeof(value));
+    if (length == 0)
+        return 0;
+    Require(length < sizeof(value), "inflight option too long");
+    char* end = nullptr;
+    const auto number = strtoul(value, &end, 10);
+    Require(end != value && *end == 0 && (number == 0 || (number >= minimum && number <= maximum)),
+            "invalid inflight option");
+    return static_cast<unsigned>(number);
+}
+
+static void Wait(Host& owner, UINT64 serial)
+{
+    const auto deadline = GetTickCount64() + 10000;
+    for (;;)
+    {
+        const auto complete = owner.fence->GetCompletedValue();
+        Require(complete != UINT64_MAX, "inflight fence device removed");
+        if (complete >= serial)
+            return;
+        Check(owner.fence->SetEventOnCompletion(serial, owner.event), "inflight completion event");
+        const auto now = GetTickCount64();
+        Require(now < deadline, "inflight fence timeout");
+        Require(WaitForSingleObject(owner.event, static_cast<DWORD>(deadline - now)) != WAIT_FAILED,
+                "inflight fence wait failed");
+    }
+}
+
+static void Inflight(Host& owner, const Plan& plan, unsigned count, unsigned cancelEvery, unsigned recreateEvery,
+                     std::vector<std::unique_ptr<FlightSlot>>& slots, Com<ID3D12Fence>& gate)
+{
+    Check(owner.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&gate)), "inflight gate fence");
+    for (unsigned i = 0; i < count; ++i)
+    {
+        slots.push_back(std::make_unique<FlightSlot>());
+        auto& slot = *slots.back();
+        Check(owner.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&slot.allocator)),
+              "inflight allocator");
+        Check(owner.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slot.allocator, nullptr,
+                                              IID_PPV_ARGS(&slot.commands)),
+              "inflight list");
+        Check(slot.commands->Close(), "inflight initial close");
+        Check(owner.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&slot.copyAllocator)),
+              "inflight copy allocator");
+        Check(owner.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slot.copyAllocator, nullptr,
+                                              IID_PPV_ARGS(&slot.copyCommands)),
+              "inflight copy list");
+        Check(slot.copyCommands->Close(), "inflight initial copy close");
+        slot.host.reset(
+            new Host { owner.device, owner.queue, slot.allocator, slot.commands, owner.fence, owner.event });
+        slot.host->params = owner.params;
+        slot.host->evaluate = owner.evaluate;
+        slot.host->MakeSurfaces(plan);
+    }
+    auto collect = [&](FlightSlot& slot)
+    {
+        if (!slot.pending)
+            return;
+        // CPU signal releases only this oldest submission; later queue work stays blocked.
+        Check(gate->Signal(slot.serial), "inflight release gate");
+        Wait(owner, slot.serial);
+        slot.host->Consume(plan, slot.index, slot.outcome, !slot.cancelled);
+        Say("FLIGHT frame=%u slot=%u executed=%u cancelled=%u fence=%llu completed=%llu\n", plan.frames[slot.index].id,
+            static_cast<unsigned>(slot.index % count), !slot.cancelled, slot.cancelled, slot.serial,
+            owner.fence->GetCompletedValue());
+        slot.pending = false;
+    };
+    for (size_t i = 0; i < plan.frames.size(); ++i)
+    {
+        auto& slot = *slots[i % count];
+        collect(slot);
+        const bool recreate = i >= count && recreateEvery && (i + 1) % recreateEvery == 0 && !slot.cancelled;
+        if (recreate)
+        {
+            // The old list is fenced, but deliberately NOT Reset before Release. Keep it alive until the
+            // new list exists so the COM allocator cannot recycle its address for the replacement.
+            Check(slot.allocator->Reset(), "inflight replacement allocator reset");
+            ID3D12GraphicsCommandList* replacement = nullptr;
+            Check(owner.device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, slot.allocator, nullptr,
+                                                  IID_PPV_ARGS(&replacement)),
+                  "inflight replacement list");
+            slot.commands->Release();
+            slot.commands.p = replacement;
+            slot.host->list = replacement;
+            Check(replacement->Close(), "inflight replacement close");
+        }
+        const auto completedBefore = owner.fence->GetCompletedValue();
+        Require(completedBefore != UINT64_MAX && completedBefore <= owner.serial, "inflight pre-evaluate fence");
+        Say("FLIGHT_REUSE frame=%u prior=%u age=%u recreated=%u pending=%llu ready=%llu\n", plan.frames[i].id,
+            i >= count ? plan.frames[slot.index].id : 0, i >= count ? count : 0, recreate,
+            owner.serial - completedBefore, completedBefore);
+        slot.outcome = slot.host->Record(plan, i);
+        owner.anyRecorded = owner.anyRecorded || slot.outcome.recorded != 0;
+        ++owner.evaluations;
+        slot.index = i;
+        slot.cancelled = cancelEvery && (i + 1) % cancelEvery == 0;
+        Check(slot.commands->Close(), "inflight close");
+        ID3D12CommandList* execute = slot.commands;
+        if (slot.cancelled)
+        {
+            // Never submit the NR list. Its next slot reuse Reset is the terminal cancellation.
+            Check(slot.copyAllocator->Reset(), "inflight copy allocator reset");
+            Check(slot.copyCommands->Reset(slot.copyAllocator, nullptr), "inflight copy reset");
+            slot.host->list = slot.copyCommands;
+            slot.host->UploadInputs();
+            slot.host->Readback();
+            slot.host->list = slot.commands;
+            Check(slot.copyCommands->Close(), "inflight copy close");
+            execute = slot.copyCommands;
+        }
+        slot.serial = ++owner.serial;
+        Check(owner.queue->Wait(gate, slot.serial), "inflight queue gate");
+        owner.queue->ExecuteCommandLists(1, &execute);
+        Check(owner.queue->Signal(owner.fence, slot.serial), "inflight output signal");
+        slot.pending = true;
+    }
+    // Oldest first, retaining one output per frame and monotonically increasing gate values.
+    const size_t first = plan.frames.size() > count ? plan.frames.size() - count : 0;
+    for (size_t i = first; i < plan.frames.size(); ++i)
+        collect(*slots[i % count]);
+    // A last cancelled recording must also reach terminal Reset before teardown.
+    for (auto& slot : slots)
+        if (slot->cancelled)
+        {
+            Check(slot->allocator->Reset(), "inflight final cancelled allocator reset");
+            Check(slot->commands->Reset(slot->allocator, nullptr), "inflight final cancelled reset");
+            Check(slot->commands->Close(), "inflight final cancelled close");
+        }
+}
+
 static void Run(const char* dllPath, const char* planPath, ID3D12Device* device, ID3D12CommandQueue* queue,
                 ID3D12CommandAllocator* alloc, ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event)
 {
     // Keep all GPU-owned objects outside the try block. A failed/unknown fence cannot unwind them.
     Host host { device, queue, alloc, list, fence, event };
+    std::vector<std::unique_ptr<FlightSlot>> slots;
+    Com<ID3D12Fence> gate;
     try
     {
+        const unsigned count = Option("LOOPBACK_REPLAY_INFLIGHT", 2, 4);
+        const unsigned cancelEvery = Option("LOOPBACK_REPLAY_CANCEL_EVERY", 16, 100000);
+        const unsigned recreateEvery = Option("LOOPBACK_REPLAY_RECREATE_EVERY", 16, 100000);
+        Require(count || (!cancelEvery && !recreateEvery), "lifecycle stress requires inflight ring");
         const Plan plan = LoadPlan(planPath);
         host.Init(dllPath, plan);
-        for (size_t i = 0; i < plan.frames.size(); ++i)
-            host.Step(plan, i);
+        if (count)
+            Inflight(host, plan, count, cancelEvery, recreateEvery, slots, gate);
+        else
+            for (size_t i = 0; i < plan.frames.size(); ++i)
+                host.Step(plan, i);
         host.Finish();
         Say("REPLAY PASS: frames=%u\n", host.evaluations);
     }
