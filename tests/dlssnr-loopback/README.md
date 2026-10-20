@@ -458,3 +458,19 @@ What remains unexplained is therefore structural, not parametric: production run
 created from a D3D11 device through the interop bridge, records the create onto a command list that
 already carries barriers, a clear and a dispatch, and does all of it inside a process where
 OptiScaler's hooks are installed. This mode does none of those three.
+
+### Cadence measurements
+
+Set `LOOPBACK_MOVING_PRESENT=1` to present the fixture's own swapchain through the
+production DXGI factory after NGX initialization. This advances the real present
+counter required by cadence. Without it the scheduler correctly refuses cadence.
+Do not force DxgiFactoryWrapping: that hides DXVK's private factory interface from
+NVAPI in this fixture. The optional path preserves the usual device/NGX load order.
+
+`LOOPBACK_NR_EXTRA='Cadence=2;CadenceSmoothing=true;GpuTiming=true;GpuTimingInterval=1'`
+adds semicolon-separated `[DlssNr]` entries to NR-on trials only. With no variable,
+the original INI is unchanged. `LOOPBACK_MODEL` selects an alternative model file
+by absolute or caller-relative path; the fixture resolves and links it, never edits
+it. Selected values and binary hashes are recorded in provenance. Verify actual
+`carried=true` timing records, not only the requested setting. The nonblocking
+compiler/GPU lease applies to the entire run; retry a busy lease, never bypass it.

@@ -17,6 +17,9 @@
 // builds a new object (and the scheduler, which folds the switch into the settings it watches, drops the stored edit
 // with it).
 
+#include <dlssnr/DlssNr_CadenceAdaptive.h>
+#include <dlssnr/DlssNr_Submission.h>
+#include <optional>
 #include <d3d12.h>
 #include <d3dx/d3dx12.h>
 #include <shaders/Shader_Dx12.h>
@@ -96,6 +99,7 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
         float LimitStep = 0.0f;
         float LimitInputTol = 0.0f;
         float LimitMaxGain = 0.0f;
+        uint32_t ProbeHistory = 0;
     };
 
     static constexpr uint32_t kSrvCount = 11;
@@ -124,6 +128,21 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     ID3D12Resource* _lightGrid = nullptr;  // R32G32F, kLightGrid square: summed light of the shown answer, the proxy
     ID3D12Resource* _lightState = nullptr; // R32F 4x1: shown light, frame light, valid, gain (stops)
 
+    // Adaptive only: separate descriptor/constant storage; never overwrite a pending recording.
+    FrameDescriptorHeap _probeHeap;
+    ID3D12Resource* _probeConstants = nullptr;
+    void* _probeMapped = nullptr;
+    ID3D12Resource* _probeGrid = nullptr;
+    ID3D12Resource* _probeReadback = nullptr;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT _probeFootprint {};
+    UINT64 _probeBytes = 0;
+    DlssNr::Submission::Usage _probeUsage {};
+    DlssNr::Cadence::Adaptive::Sample _probeSample {};
+    bool _probePending = false;
+    bool _probeIgnored = false;
+    bool _probeTried = false;
+    bool InitProbe();
+
     UINT _width = 0;
     UINT _height = 0;
     UINT _lowWidth = 0;
@@ -135,7 +154,7 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
 
     // One dispatch. srvs/uavs are slot-indexed; a null entry gets a null descriptor of the slot's type.
     bool Run(ID3D12GraphicsCommandList* cmdList, const Constants& constants, ID3D12Resource* const (&srvs)[kSrvCount],
-             ID3D12Resource* const (&uavs)[kUavCount], UINT groupsX, UINT groupsY);
+             ID3D12Resource* const (&uavs)[kUavCount], UINT groupsX, UINT groupsY, bool probe = false);
 
     Constants Base(uint32_t mode, const Frame& frame) const;
 
@@ -159,6 +178,11 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     }
 
     bool Smoothing() const { return _smoothing; }
+
+    std::optional<DlssNr::Cadence::Adaptive::Sample> PollProbe();
+    void InvalidateProbe() { _probeIgnored = true; }
+    void Probe(ID3D12GraphicsCommandList* cmd, const Frame& frame, ID3D12Resource* ui, bool history, bool chainStart,
+               uint64_t present, int64_t ms);
 
     // A model frame: keep the model's final answer minus its proxy, the proxy, the depth and the coarse edit.
     // InAnswer is the answer at the working size, readable.

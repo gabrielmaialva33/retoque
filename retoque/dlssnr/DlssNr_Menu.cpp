@@ -644,6 +644,15 @@ static void RenderCadenceControls(Config* config, bool nativeVulkan)
     if (configured <= 1)
         return;
 
+    bool adaptive = config->DlssNrCadenceAdaptive.value_or_default();
+    if (ImGui::Checkbox(Localization::Label("Adapt cadence to motion###nrCadenceAdaptive"), &adaptive))
+        config->DlssNrCadenceAdaptive = adaptive;
+    HelpMarker(
+        "Shortens the interval when motion or rejected carry coverage is high; lengthens after 300 ms of calm."
+        "\nCadence above is the maximum. Delayed GPU feedback cannot catch a cut on its first frame."
+        "\nRequires a restart when enabled after NR has already run. Missing feedback runs the model every frame."
+        "\nExperimental: measured in the moving fixture, not validated in games. Off adds no probe work.");
+
     // Smoothing (docs/dlssnr/design/cadence-smoothing.md) acts on the cadence's own frames, so it exists only above 1.
     bool smoothing = config->DlssNrCadenceSmoothing.value_or_default();
     if (ImGui::Checkbox(Localization::Label("Smooth the model's frames###nrCadenceSmoothing"), &smoothing))

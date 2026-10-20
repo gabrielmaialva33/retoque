@@ -55,6 +55,7 @@ cbuffer Params : register(b0)
     float gLimitStep;   // limit: how far the edit's light may move this frame, in stops
     float gLimitInputTol; // limit: a step of the frame's own light, in stops, that lets the limit go
     float gLimitMaxGain;  // limit: the most the gain may move a frame's light, in stops
+    uint gProbeHistory; // adaptive probe only: a valid previous model edit exists
 };
 
 Texture2D<float4>   gAnswer      : register(t0); // record: the model's final answer
@@ -153,6 +154,30 @@ CadenceParams LoadParams()
 void PixelModes(uint3 id)
 {
     const CadenceParams P = LoadParams();
+
+    // Sparse adaptive feedback, including model frames: refusal must not latch by stopping its own probe.
+    if (gMode == 9)
+    {
+        if (id.x >= 16 || id.y >= 16) return;
+        const int x = int(((2 * id.x + 1) * gWidth) / 32);
+        const int y = int(((2 * id.y + 1) * gHeight) / 32);
+        const float d = DepthNowAt(x, y);
+        const float2 motion = MotionAt(x, y);
+        float4 sample = 0.0;
+        if (!isfinite(d) || !CadenceFinite2(motion)) sample.z = -1.0;
+        else if (d > 0.0 && d < 1.0 && (gHaveUi == 0 || UiAt(x, y) < 0.5))
+        {
+            sample.z = -1.0;
+            if (gProbeHistory != 0)
+            {
+                const float2 acc = CadenceChainStep(x, y, gChainStart != 0, P);
+                const CadenceCarry carry = CadenceCarryEdit(x, y, acc, P);
+                sample = float4(length(motion) * (1080.0 / float(gHeight)), 1.0 - carry.accept, 1.0, 0.0);
+            }
+        }
+        gOut0[id.xy] = sample;
+        return;
+    }
 
     if (gMode == 1)
     {

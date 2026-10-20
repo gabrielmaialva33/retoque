@@ -114,7 +114,7 @@ def run_trials(runner, proton, env, dll):
             (directory / source.name).symlink_to(source.resolve())
         enabled = name.startswith('on')
         (directory / 'OptiScaler.ini').write_text(
-            '; Controlled moving scene. Written by run.py; no game files are modified.\n'
+            '; Controlled moving scene. Written by run.py; no game files are modified.\n' +
             '[Upscalers]\nDx12Upscaler=dlss\n'
             '[FrameGen]\nFGOutput=none\n'
             '[Menu]\nOverlayMenu=true\n'
@@ -129,7 +129,8 @@ def run_trials(runner, proton, env, dll):
         print(f'  moving scene trial {name}: production DLAA, NR={enabled}', flush=True)
         gpu_states[name] = dict(before=gpu_state())
         returncode = execute([proton, 'run', directory / 'dlssnr-loopback.exe',
-                              'OptiScaler.dll', '--moving-scene'], cwd=directory,
+                              'OptiScaler.dll', '--moving-scene'] +
+                             (['--moving-present'] if os.environ.get('LOOPBACK_MOVING_PRESENT') == '1' else []), cwd=directory,
                              env=env, log=directory / 'proton.log', timeout=300)
         gpu_states[name]['after'] = gpu_state()
         if returncode:
@@ -152,7 +153,8 @@ def run_trials(runner, proton, env, dll):
                       proton=str(proton), proton_sha256=digest(proton),
                       gpu_states=gpu_states,
                       environment={k: os.environ[k] for k in ('VKD3D_CONFIG', 'DXVK_CONFIG', 'PROTON_ENABLE_NVAPI',
-                                                             'CUDA_VISIBLE_DEVICES') if k in os.environ},
+                                                             'CUDA_VISIBLE_DEVICES', 'LOOPBACK_MODEL', 'LOOPBACK_NR_EXTRA',
+                                                             'LOOPBACK_MOVING_PRESENT') if k in os.environ},
                       timing_scope='public EvaluateFeature GPU duration, DLSS plus optional NR; warmup=64 n=16',
                       limitations=['unlocked clocks and concurrent GPU load can confound comparisons',
                                    'synthetic opaque cube, not game image quality or FPS'])

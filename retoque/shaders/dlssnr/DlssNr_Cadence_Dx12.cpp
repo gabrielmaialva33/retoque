@@ -198,6 +198,13 @@ DlssNr_Cadence_Dx12::~DlssNr_Cadence_Dx12()
     if (State::Instance().isShuttingDown)
         return;
 
+    if (_probeConstants && _probeMapped)
+        _probeConstants->Unmap(0, nullptr);
+    SAFE_RELEASE(_probeConstants);
+    SAFE_RELEASE(_probeGrid);
+    SAFE_RELEASE(_probeReadback);
+    _probeHeap.ReleaseHeaps();
+
     // Shader_Dx12 releases these only for an object that finished initialising.
     if (!_init)
     {
@@ -257,11 +264,12 @@ DlssNr_Cadence_Dx12::Constants DlssNr_Cadence_Dx12::Base(uint32_t mode, const Fr
 
 bool DlssNr_Cadence_Dx12::Run(ID3D12GraphicsCommandList* cmdList, const Constants& constants,
                               ID3D12Resource* const (&srvs)[kSrvCount], ID3D12Resource* const (&uavs)[kUavCount],
-                              UINT groupsX, UINT groupsY)
+                              UINT groupsX, UINT groupsY, bool probe)
 {
     const uint32_t slot = _heapIndex;
-    _heapIndex = (_heapIndex + 1) % DLSSNR_CADENCE_NUM_OF_HEAPS;
-    FrameDescriptorHeap& heap = _frameHeaps[slot];
+    if (!probe)
+        _heapIndex = (_heapIndex + 1) % DLSSNR_CADENCE_NUM_OF_HEAPS;
+    FrameDescriptorHeap& heap = probe ? _probeHeap : _frameHeaps[slot];
 
     // Every slot gets a view, a null one where the mode reads nothing: an unbound descriptor is not an empty
     // read, it is a read from nothing.
@@ -295,7 +303,7 @@ bool DlssNr_Cadence_Dx12::Run(ID3D12GraphicsCommandList* cmdList, const Constant
         _device->CreateUnorderedAccessView(nullptr, nullptr, &empty, heap.GetUavCPU(i));
     }
 
-    std::memcpy(_mappedConstants[slot], &constants, sizeof(constants));
+    std::memcpy(probe ? _probeMapped : _mappedConstants[slot], &constants, sizeof(constants));
 
     ID3D12DescriptorHeap* heaps[] = { heap.GetHeapCSU() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
@@ -516,4 +524,104 @@ bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame
     // As Carry: the caller's transition orders the write for the resolve; this orders it against a UAV reader.
     UavBarrier(InCmdList, InOut);
     return true;
+}
+
+// The owning NR generation must be tracked before any call to Probe. Retirement then retains
+// these resources with the generation; the local certificate additionally protects readback/reuse.
+bool DlssNr_Cadence_Dx12::InitProbe()
+{
+    if (_probeTried)
+        return _probeMapped && _probeGrid && _probeReadback && _probeHeap.GetHeapCSU();
+    _probeTried = true;
+    const auto upload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+    const auto cb = CD3DX12_RESOURCE_DESC::Buffer(sizeof(Constants));
+    if (FAILED(_device->CreateCommittedResource(&upload, D3D12_HEAP_FLAG_NONE, &cb, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                                nullptr, IID_PPV_ARGS(&_probeConstants))))
+        return false;
+    const D3D12_RANGE noRead { 0, 0 };
+    if (FAILED(_probeConstants->Map(0, &noRead, &_probeMapped)) || !InitHeaps(_device, &_probeHeap, 1))
+        return false;
+    D3D12_CONSTANT_BUFFER_VIEW_DESC view { _probeConstants->GetGPUVirtualAddress(), sizeof(Constants) };
+    _device->CreateConstantBufferView(&view, _probeHeap.GetCbvCPU(0));
+    constexpr auto grid = DlssNr::Cadence::Adaptive::Grid;
+    _probeGrid = CreateTexture(_device, DXGI_FORMAT_R32G32B32A32_FLOAT, grid, grid, L"DLSS-NR cadence probe");
+    if (!_probeGrid)
+        return false;
+    const auto desc = _probeGrid->GetDesc();
+    _device->GetCopyableFootprints(&desc, 0, 1, 0, &_probeFootprint, nullptr, nullptr, &_probeBytes);
+    const auto readback = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
+    const auto buffer = CD3DX12_RESOURCE_DESC::Buffer(_probeBytes);
+    return SUCCEEDED(_device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
+                                                      D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                      IID_PPV_ARGS(&_probeReadback)));
+}
+
+std::optional<DlssNr::Cadence::Adaptive::Sample> DlssNr_Cadence_Dx12::PollProbe()
+{
+    if (!_probePending)
+        return std::nullopt;
+    const auto certificate = DlssNr::Submission::TimingCertificate(_probeUsage);
+    if (!certificate.reusable)
+        return std::nullopt;
+    auto result = _probeSample;
+    result.valid = false;
+    if (certificate.accepted && !_probeIgnored)
+    {
+        void* data = nullptr;
+        const D3D12_RANGE read { 0, static_cast<SIZE_T>(_probeBytes) };
+        if (SUCCEEDED(_probeReadback->Map(0, &read, &data)) && data)
+        {
+            using namespace DlssNr::Cadence::Adaptive;
+            std::array<Pixel, Grid * Grid> pixels {};
+            for (uint32_t y = 0; y < Grid; ++y)
+                std::memcpy(pixels.data() + y * Grid,
+                            static_cast<const char*>(data) + _probeFootprint.Offset +
+                                y * _probeFootprint.Footprint.RowPitch,
+                            Grid * sizeof(Pixel));
+            const D3D12_RANGE noWrite { 0, 0 };
+            _probeReadback->Unmap(0, &noWrite);
+            result = Summarize(pixels, result.present, result.ms);
+        }
+    }
+    _probePending = false;
+    _probeUsage = {};
+    return result;
+}
+
+void DlssNr_Cadence_Dx12::Probe(ID3D12GraphicsCommandList* cmd, const Frame& frame, ID3D12Resource* ui, bool history,
+                                bool chainStart, uint64_t present, int64_t ms)
+{
+    if (!_init || !cmd || !frame.proxy || !frame.depth || !frame.motion || _probePending || !InitProbe())
+        return;
+    if (!DlssNr::Submission::Track(cmd, _probeUsage))
+        return;
+    _probePending = true;
+    _probeIgnored = false;
+    _probeSample = { present, ms };
+    auto c = Base(9, frame);
+    c.ProbeHistory = history ? 1u : 0u;
+    c.ChainStart = chainStart ? 1u : 0u;
+    c.HaveUi = ui ? 1u : 0u;
+    ID3D12Resource* const srvs[kSrvCount] = { nullptr,
+                                              frame.proxy,
+                                              frame.depth,
+                                              frame.motion,
+                                              history && !chainStart ? _chain[_current] : nullptr,
+                                              history ? _depthThen : nullptr,
+                                              history ? _proxyThen : nullptr,
+                                              history ? _residual : nullptr,
+                                              history ? _residualLow : nullptr,
+                                              ui };
+    ID3D12Resource* const uavs[kUavCount] = { _probeGrid };
+    Transition(cmd, _probeGrid, kRest, kWrite);
+    Run(cmd, c, srvs, uavs, 2, 2, true);
+    Transition(cmd, _probeGrid, kWrite, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    D3D12_TEXTURE_COPY_LOCATION source {}, target {};
+    source.pResource = _probeGrid;
+    source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    target.pResource = _probeReadback;
+    target.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    target.PlacedFootprint = _probeFootprint;
+    cmd->CopyTextureRegion(&target, 0, 0, 0, &source, nullptr);
+    Transition(cmd, _probeGrid, D3D12_RESOURCE_STATE_COPY_SOURCE, kRest);
 }

@@ -386,15 +386,47 @@ struct Host
 };
 
 static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* queue, ID3D12CommandAllocator* alloc,
-                ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event)
+                ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event, HWND window, bool present)
 {
     // Keep all GPU-owned objects outside the try block. A failed/unknown fence cannot unwind them.
     Host host { device, queue, alloc, list, fence, event };
+    Com<IDXGISwapChain1> swapchain;
+    Com<IDXGIFactory4> presentFactory;
     try
     {
         host.Init(dllPath);
+        if (present)
+        {
+            // Call the production factory export explicitly: this proves its actual wrapper, without requiring
+            // detours on Wine's generated factory methods or early DLL loading before NGX device creation.
+            using CreateFactory = HRESULT(WINAPI*)(UINT, REFIID, void**);
+            auto createFactory =
+                reinterpret_cast<CreateFactory>(GetProcAddress(GetModuleHandleA(dllPath), "CreateDXGIFactory2"));
+            Require(createFactory != nullptr, "production CreateDXGIFactory2 export");
+            Check(createFactory(0, IID_PPV_ARGS(&presentFactory)), "moving production factory");
+            DXGI_SWAP_CHAIN_DESC1 desc {};
+            desc.Width = Width;
+            desc.Height = Height;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.SampleDesc.Count = 1;
+            desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+            desc.BufferCount = 2;
+            desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+            Check(presentFactory->CreateSwapChainForHwnd(queue, window, &desc, nullptr, nullptr, &swapchain),
+                  "moving cadence swapchain");
+        }
         for (unsigned frame = 0; frame < Count; ++frame)
+        {
             host.Frame(frame);
+            if (present)
+                Check(swapchain->Present(0, 0), "moving cadence Present");
+        }
+        // Present hooks may submit overlay work. Drain it before teardown; never time it as EvaluateFeature.
+        if (present)
+        {
+            host.Begin();
+            host.Submit();
+        }
         host.Finish();
     }
     catch (const std::exception& e)

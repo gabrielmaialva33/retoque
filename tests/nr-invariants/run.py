@@ -175,6 +175,11 @@ else:
 
 before = len(failures)
 precompile = nr / 'shaders/dlssnr/precompile'
+def header_text(path):
+    # create_header.py emits trailing spaces; stripping those must not change any byte token or declaration.
+    return b'\n'.join(line.rstrip(b' \t\r') for line in path.read_bytes().split(b'\n'))
+
+
 create_header = root / 'OptiScaler/shaders/shader_tools/create_header.py'
 targets = [
     ('DlssNr_Shader.cso', 'DlssNr_Shader.h', 'DlssNr_cso', b'DXBC'),
@@ -248,10 +253,7 @@ with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / header
         subprocess.run([sys.executable, str(create_header), str(precompile / binary), str(regenerated), array],
                        check=True, capture_output=True)
-        # The upstream generator leaves spaces after each byte row. Allow removing only those line-end
-        # spaces for git diff --check; every byte literal, array name and other character must still match.
-        canonical = lambda data: re.sub(rb'[ \t]+(?=\r?$)', b'', data, flags=re.M)
-        if canonical(regenerated.read_bytes()) != canonical((precompile / header).read_bytes()):
+        if header_text(regenerated) != header_text(precompile / header):
             fail(f'{header} is not what create_header.py makes from {binary}: regenerate it (array {array})')
 
 if len(failures) == before:
@@ -288,7 +290,7 @@ with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / header.name
         subprocess.run([sys.executable, str(create_header), str(binary), str(regenerated), f'{stem}_cso'],
                        check=True, capture_output=True)
-        if regenerated.read_bytes() != header.read_bytes():
+        if header_text(regenerated) != header_text(header):
             fail(f'{header.name} is not what create_header.py makes from {binary.name}: regenerate it')
         synth_checked.append(header.name)
 
@@ -304,7 +306,7 @@ with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / header.name
         subprocess.run([sys.executable, str(create_header), str(binary), str(regenerated), array],
                        check=True, capture_output=True)
-        if regenerated.read_bytes() != header.read_bytes():
+        if header_text(regenerated) != header_text(header):
             fail(f'{header.name} is not what create_header.py makes from {binary.name}: regenerate it')
         synth_checked.append(header.name)
     for header in sorted(synth_precompile.glob('*_Shader_Vk.h')):

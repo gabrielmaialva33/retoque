@@ -148,6 +148,16 @@ assert 'g_nr.cadence->ShowFaded(cmdList, cadenceFrame, uiAlpha, cadenceSmooth, f
 # A failed allocation of the smoothing surfaces leaves the carry running: the object still initialises.
 assert 'carrying without smoothing' in pass_cpp
 
+# Adaptive probes own a separate slot, and CPU access/reuse require an exact submission certificate.
+assert 'Submission::TimingCertificate(_probeUsage)' in pass_cpp
+assert 'if (!certificate.reusable)' in pass_cpp
+assert 'certificate.accepted && !_probeIgnored' in pass_cpp
+assert 'if (!DlssNr::Submission::Track(cmd, _probeUsage))' in pass_cpp
+assert 'probe ? _probeMapped : _mappedConstants[slot]' in pass_cpp
+assert 'adaptiveRequested && g_tracked && cadenceInputs.surfaces' in renderer
+assert 'if (adaptiveActive)' in renderer and 'g_nr.cadence->Probe(' in renderer
+assert 'g_cadenceAdaptive.Reset()' in renderer and 'InvalidateProbe()' in renderer
+
 # Registered in the project, once each.
 project = read('OptiScaler.vcxproj')
 filters = read('OptiScaler.vcxproj.filters')
@@ -170,7 +180,7 @@ print('PASS: cadence constants == cbuffer, registers == root signature, every ru
 # --- The production headers, compiled ---------------------------------------------------------------------------
 
 with tempfile.TemporaryDirectory(prefix='optiscaler-nr-cadence-') as directory:
-    for name in ('scheduler', 'rule'):
+    for name in ('scheduler', 'rule', 'adaptive'):
         binary = str(Path(directory) / name)
         subprocess.run(['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
                         '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(retoque), '-I', str(opti),

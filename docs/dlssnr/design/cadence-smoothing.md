@@ -1,7 +1,8 @@
 # Cadence smoothing: the spread and the light limiter
 
 Status: implemented on D3D12 behind `[DlssNr] CadenceSmoothing` (default **off** until measured; it acts only when
-`Cadence` is above 1, and the cadence itself is off by default). **Not yet run in a game.** The cadence shader was
+`Cadence` is above 1, and the cadence itself is off by default). **Not yet run in a game.** Synthetic moving-scene timing and residuals were measured
+on 2026-10-20; see [cadence-adaptive.md](cadence-adaptive.md). The cadence shader was
 rebuilt with its four new modes on 2026-10-13. Native Vulkan has no cadence and no smoothing.
 
 ## The problem

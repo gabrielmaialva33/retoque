@@ -656,6 +656,11 @@ CadenceWithFrameGen=auto
 ; true or false - Default (auto) is false
 CadenceSmoothing=auto
 
+; Opt-in adaptive admission; Cadence is the maximum interval.
+; Shortens with motion/rejection, recovers after calm; D3D12 only, restart after enabling.
+; auto = false. See docs/dlssnr/design/cadence-adaptive.md.
+CadenceAdaptive=auto
+
 ; The pulse metric (docs/dlssnr/design/pulse-metric.md). Measures the light step per frame: how far the picture's
 ; light moves from one frame to the next because of the edit (the change of log2 output light / frame light, in
 ; stops), split into frames where the model ran and frames where model cadence carried its edit. The step on the
