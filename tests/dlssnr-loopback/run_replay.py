@@ -52,6 +52,59 @@ LINE = re.compile(r'^REPLAY frame=(\d+) present=(\d+) gpu_ms=(-?[\d.]+) recorded
                   r'requested=(\d+) completed=(\d+) result=(-?\d+) skip=(.*)$', re.M)
 
 
+
+def replay_mode(env=None):
+    env = os.environ if env is None else env
+    def option(name, minimum, maximum):
+        value = env.get(name, '0')
+        if not re.fullmatch(r'[0-9]+', value):
+            raise ValueError(f'{name}: expected unsigned decimal')
+        number = int(value)
+        if number != 0 and not minimum <= number <= maximum:
+            raise ValueError(f'{name}: expected 0 or {minimum}..{maximum}')
+        return number
+    ring = option('LOOPBACK_REPLAY_INFLIGHT', 2, 4)
+    cancel = option('LOOPBACK_REPLAY_CANCEL_EVERY', 16, 100000)
+    recreate = option('LOOPBACK_REPLAY_RECREATE_EVERY', 16, 100000)
+    if not ring and (cancel or recreate):
+        raise ValueError('lifecycle stress requires LOOPBACK_REPLAY_INFLIGHT')
+    return dict(ring=ring, cancel_every=cancel, recreate_every=recreate,
+                completion='gated-oldest' if ring else 'synchronous')
+
+
+def mode_of(run):
+    return run.get('replay_mode', replay_mode({}))
+
+
+def flight_rows(log, frames, mode):
+    """Require every scheduling/readback event, before accepting stress outputs as fenced."""
+    if not mode['ring']:
+        return {}
+    done = re.findall(r'^FLIGHT frame=(\d+) slot=(\d+) executed=(\d) cancelled=(\d) fence=(\d+) completed=(\d+)$', log, re.M)
+    reuse = re.findall(r'^FLIGHT_REUSE frame=(\d+) prior=(\d+) age=(\d+) recreated=(\d) pending=(\d+) ready=(\d+)$', log, re.M)
+    ids = [f['id'] for f in frames]
+    if [int(r[0]) for r in done] != ids or [int(r[0]) for r in reuse] != ids:
+        raise ValueError('missing/duplicate/out-of-order flight event')
+    result = {}
+    n = mode['ring']
+    for i, (d, r) in enumerate(zip(done, reuse)):
+        frame, slot, executed, cancelled, fence, completed = map(int, d)
+        _, prior, age, recreated, pending, ready = map(int, r)
+        expected_cancel = bool(mode['cancel_every'] and (i + 1) % mode['cancel_every'] == 0)
+        previous_cancel = i >= n and mode['cancel_every'] and (i - n + 1) % mode['cancel_every'] == 0
+        expected_recreate = bool(i >= n and mode['recreate_every'] and
+                                 (i + 1) % mode['recreate_every'] == 0 and not previous_cancel)
+        if (slot != i % n or fence != i + 1 or completed != fence or cancelled != expected_cancel or
+                executed != (not expected_cancel) or prior != (ids[i - n] if i >= n else 0) or
+                age != (n if i >= n else 0) or recreated != expected_recreate or
+                ready != max(0, i - n + 1) or pending != min(i, n - 1)):
+            raise ValueError(f'frame {frame}: invalid slot/reset/cancel/recreate/fence schedule')
+        result[frame] = dict(slot=slot, executed=bool(executed), cancelled=bool(cancelled),
+                             fence=fence, completed_fence=completed, previous_frame=prior,
+                             reset_age=age, recreated=bool(recreated), pending_before=pending, completed_before=ready)
+    return result
+
+
 def windows_path(path):
     path = str(Path(path).resolve())
     if any(c.isspace() for c in path):
@@ -236,6 +289,8 @@ def run_variant(runner, proton, env, root, name, settings, capture, capture_path
     log = (directory / 'dlssnr-loopback.log').read_text(errors='replace')
     if code or f'REPLAY PASS: frames={len(frames)}' not in log:
         raise SystemExit(f'replay {name} failed ({code}); see {directory}')
+    mode = replay_mode()
+    flight = flight_rows(log, frames, mode)
     rows = [dict(id=int(m[0]), present=int(m[1]), gpu_ms=float(m[2]), recorded=int(m[3]), carried=int(m[4]),
                  interval=int(m[5]), requested=int(m[6]), completed=int(m[7]), result=int(m[8]),
                  skip='' if m[9] == '-' else m[9]) for m in LINE.findall(log)]
@@ -244,17 +299,22 @@ def run_variant(runner, proton, env, root, name, settings, capture, capture_path
     entries = []
     for f, r in zip(frames, rows):
         out = plane(directory, f'f{f["id"]}.output', 'f16', 4, 2)
-        entries.append(dict(id=r['id'], kind=kind(r), interval=r['interval'], requested_passes=r['requested'],
+        event = flight.get(r['id'], {})
+        cancelled = event.get('cancelled', False)
+        entries.append(dict(id=r['id'], kind='skipped' if cancelled else kind(r), interval=r['interval'], requested_passes=r['requested'],
                             completed_passes=r['completed'], completion='fence-complete',
                             gpu_ms=r['gpu_ms'] if r['gpu_ms'] >= 0 else None, model_result=r['result'],
-                            skip=r['skip'] or None, output=out))
+                            skip='harness-cancelled-not-submitted' if cancelled else r['skip'] or None,
+                            recorded=bool(r['recorded']), production_skip=r['skip'] or None,
+                            flight=event or None, output=out))
     scored = sum(1 for f in frames if f['score'])
     record = dict(schema='retoque-replay-run', version=1, complete=True,
                   capture_sha256=digest(capture_path), environment=environment,
                   producer=dict(dll_sha256=digest(root / 'OptiScaler.dll'), commit=producer_id,
                                 trial=uuid.uuid4().hex),  # one fresh process per run
                   settings=dict(settings or {}, Enabled=settings is not None),
-                  requirements=requirements(settings, scored), frames=entries)
+                  replay_mode=mode, requirements=(dict(min_model=1, min_carried=0) if mode['ring'] else
+                                                 requirements(settings, scored)), frames=entries)
     (directory / ('control.json' if settings is None else 'run.json')).write_text(json.dumps(record, indent=1) + '\n')
     return record
 
@@ -283,9 +343,15 @@ def baseline_gates(runs, baseline):
     for name, run in runs.items():
         old = baseline.get(name)
         if old is None:
+            results[f'{name}-identical-to-baseline'] = dict(ok=False, detail='variant absent from baseline')
             continue
-        same_length = len(run['frames']) == len(old['frames'])
-        decisions = [x['id'] for x, y in zip(run['frames'], old['frames']) if any(x[k] != y[k] for k in fields)]
+        if (mode_of(run) != mode_of(old) or run['settings'] != old['settings'] or
+                run['environment'] != old['environment'] or run['capture_sha256'] != old['capture_sha256']):
+            results[f'{name}-identical-to-baseline'] = dict(ok=False, detail='mode/settings/environment/capture mismatch')
+            continue
+        same_length = [x['id'] for x in run['frames']] == [x['id'] for x in old['frames']]
+        compare_fields = fields + (('recorded', 'production_skip', 'flight') if mode_of(run)['ring'] else ())
+        decisions = [x['id'] for x, y in zip(run['frames'], old['frames']) if any(x.get(k) != y.get(k) for k in compare_fields)]
         pixels = [x['id'] for x, y in zip(run['frames'], old['frames'])
                   if x['output']['sha256'] != y['output']['sha256']]
         results[f'{name}-identical-to-baseline'] = dict(
@@ -296,8 +362,74 @@ def baseline_gates(runs, baseline):
     return results
 
 
+
+def sync_gates(runs, baseline):
+    """History changes after the first differing admission; local frame equality then is not an oracle."""
+    results = {}
+    fields = ('kind', 'interval', 'requested_passes', 'completed_passes', 'model_result', 'skip')
+    for name, run in runs.items():
+        old = baseline.get(name)
+        if old is None:
+            results[f'{name}-sync-comparison'] = dict(ok=False, detail='variant absent from synchronous baseline')
+            continue
+        if (mode_of(old)['ring'] or run['settings'] != old['settings'] or
+                run['capture_sha256'] != old['capture_sha256'] or run['environment'] != old['environment'] or
+                [f['id'] for f in run['frames']] != [f['id'] for f in old['frames']]):
+            results[f'{name}-sync-comparison'] = dict(ok=False, detail='incompatible synchronous reference')
+            continue
+        different = [x['id'] for x, y in zip(run['frames'], old['frames'])
+                     if any(x[k] != y[k] for k in fields) or (x.get('flight') or {}).get('cancelled')]
+        pixels = [x['id'] for x, y in zip(run['frames'], old['frames']) if x['output']['sha256'] != y['output']['sha256']]
+        prefix = next((i for i, (x, y) in enumerate(zip(run['frames'], old['frames']))
+                       if any(x[k] != y[k] for k in fields) or (x.get('flight') or {}).get('cancelled')),
+                      len(run['frames']))
+        prefix_bad = [x['id'] for x, y in zip(run['frames'][:prefix], old['frames'][:prefix])
+                      if x['output']['sha256'] != y['output']['sha256']]
+        results[f'{name}-sync-identical-history-prefix'] = dict(ok=not prefix_bad,
+            detail=f'{prefix} frames before admission divergence; mismatches {prefix_bad[:8]}')
+        results[f'{name}-sync-comparison'] = dict(ok=None if different else not pixels,
+            detail=f'admission differences {len(different)} (first {different[:8]}); pixel differences '
+                   f'{len(pixels)} (first {pixels[:8]}); ' +
+                   ('changed temporal history: same-mode baseline required' if different else 'same admission history'))
+    return results
+
+
+def stress_gates(capture, runs):
+    results = {}
+    for name, run in runs.items():
+        scored = {f['id'] for f in capture['frames'] if f['score']}
+        active = [f for f in run['frames'] if f['id'] in scored and f['recorded'] and f['flight']['executed']]
+        cancelled = [f for f in run['frames'] if f['flight']['cancelled']]
+        original = {f['id']: f['color']['sha256'] for f in capture['frames']}
+        mode = mode_of(run)
+        by_id = {f['id']: f for f in run['frames']}
+        cancelled_nr = [f for f in cancelled if f['recorded']]
+        recreated_nr = [f for f in run['frames'] if f['flight']['recreated'] and
+                        by_id[f['flight']['previous_frame']]['recorded'] and
+                        by_id[f['flight']['previous_frame']]['flight']['executed']]
+        if mode['cancel_every']:
+            results[f'{name}-cancelled-NR-exercised'] = dict(ok=bool(cancelled_nr),
+                detail=f'{len(cancelled_nr)} cancelled lists contained NR commands')
+        if mode['recreate_every']:
+            results[f'{name}-released-NR-exercised'] = dict(ok=bool(recreated_nr),
+                detail=f'{len(recreated_nr)} released lists previously executed NR')
+        pending = [f['flight']['pending_before'] for f in run['frames'] if f['recorded']]
+        results[f'{name}-pending-GPU-work-exercised'] = dict(ok=mode['ring'] - 1 in pending,
+            detail=f'pending submissions before NR recording: {sorted(set(pending))}')
+        results[f'{name}-stress-active'] = dict(ok=bool(active), detail=f'{len(active)} scored NR recordings executed')
+        results[f'{name}-cancelled-input-identical'] = dict(
+            ok=all(f['output']['sha256'] == original[f['id']] for f in cancelled),
+            detail=f'{len(cancelled)} discarded lists, copy-only fenced output')
+        results[f'{name}-stress-model-success'] = dict(
+            ok=all(f['model_result'] == 1 or f['kind'] == 'carried' for f in active),
+            detail='successful model result for executed recorded non-carried frames')
+    return results
+
+
 def gates(capture, runs):
     """The seam's own acceptance (offline-replay-seam.md, Validation). Pixel quality is the judge's."""
+    if runs and mode_of(next(iter(runs.values())))['ring']:
+        return stress_gates(capture, runs)
     scored = [i for i, f in enumerate(capture['frames']) if f['score']]
     results = {}
 
@@ -407,6 +539,9 @@ def judge(runner, root, capture_path, runs, calibration=None):
 
 
 def run(runner, proton, env, dll):
+    mode = replay_mode()
+    if mode['ring'] and (CALIBRATE != 0 or os.environ.get('LOOPBACK_REPLAY_JUDGE', '1') != '0'):
+        raise SystemExit('inflight stress needs CALIBRATE=0 and JUDGE=0 (deliberate scored skips)')
     root = runner.RUN
     report_path = root / 'replay-report.json'
     report_path.unlink(missing_ok=True)
@@ -433,6 +568,9 @@ def run(runner, proton, env, dll):
     results = gates(capture, runs)
     if baseline:
         results.update(baseline_gates(runs, baseline))
+    sync_baseline = os.environ.get('LOOPBACK_REPLAY_SYNC_BASELINE')
+    if sync_baseline:
+        results.update(sync_gates(runs, load_baseline(sync_baseline, digest(capture_path))))
     repeats = [name for name in runs if name.startswith('aa-')]
     calibration, calibration_report = calibrate(runner, root, capture_path, repeats) if repeats else (None, None)
     if repeats:
