@@ -1747,7 +1747,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             g_nr.cadence->InvalidateProbe();
     }
     const bool carried = !cadence.runModel;
-    PublishCadence(cadence);
+    PublishCadence(cadence, adaptiveActive ? &g_cadenceAdaptive.Last() : nullptr, cadenceEvaluation, cadenceNowMs);
 
     // What smoothing does on this frame, for the carry, the fade and the light limiter: the walk's share, and the
     // limiter's step for the time since the pass last ran (cadence-smoothing.md). A gap is clamped by LimitStep, and

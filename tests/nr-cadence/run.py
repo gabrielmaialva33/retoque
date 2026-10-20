@@ -170,6 +170,9 @@ assert 'probe ? probe->heap : _frameHeaps[slot]' in pass_cpp
 assert 'return !slot.pending && InitProbe(slot);' in pass_cpp
 assert 'for (const auto& sample : g_nr.cadence->PollProbes())' in renderer
 assert 'g_cadenceAdaptive.Reset()' in renderer and 'InvalidateProbe()' in renderer
+# A change of interval under adaptive cadence is logged with the sample that explains it.
+assert 'PublishCadence(cadence, adaptiveActive ? &g_cadenceAdaptive.Last() : nullptr, cadenceEvaluation' in renderer
+assert 'carry rejected {:.1f}%' in renderer
 # Feedback age counts evaluations, not presents: under frame generation presents run ahead of evaluations.
 assert 'const uint64_t cadenceEvaluation = ++g_cadenceEvaluations;' in renderer
 assert 'g_cadenceAdaptive.Observe(sample, cadenceEvaluation, cadenceNowMs)' in renderer

@@ -71,7 +71,7 @@
     "DlssNr_Dx12_Lifetime.cpp": [
       "uint32_t PostContract(unsigned int nativeWidth, unsigned int nativeHeight, uint32_t format)\n{",
       "void ChainStatus(const char* reason)\n{",
-      "void PublishCadence(const DlssNr::Cadence::Decision& decision)\n{",
+      "void PublishCadence(const DlssNr::Cadence::Decision& decision, const DlssNr::Cadence::Adaptive::Sample* feedback,\n                    uint64_t evaluation, int64_t nowMs)\n{",
       "bool FrameGenerationActive()\n{",
       "bool PausedWithoutFrameGen(const Config& cfg)\n{",
       "void AdvanceNrClock() {",

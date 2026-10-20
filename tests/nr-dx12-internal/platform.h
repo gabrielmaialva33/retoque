@@ -123,6 +123,7 @@ enum class Reason
 inline const char* Describe(Reason, int) { return "off"; }
 namespace Adaptive
 {
+struct Sample;
 struct Controller
 {
 };

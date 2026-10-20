@@ -43,15 +43,27 @@ void ChainStatus(const char* reason)
 // Published, and logged once on change, for a refusal or a running cadence. A forced model frame -- a reset,
 // a change, a gap -- is one frame's event, not a state, and leaves the status alone. A second call in one
 // present is published: a title that does it every present never carries, and should say why.
-void PublishCadence(const DlssNr::Cadence::Decision& decision)
+// feedback: adaptive cadence's newest sample (cadence-adaptive.md), logged with the change it explains, so a game run
+// says which measurement moved the interval and how far it was from the thresholds. Null when adaptive is not active.
+void PublishCadence(const DlssNr::Cadence::Decision& decision, const DlssNr::Cadence::Adaptive::Sample* feedback,
+                    uint64_t evaluation, int64_t nowMs)
 {
     using DlssNr::Cadence::Reason;
     if (DlssNr::Cadence::IsForced(decision.reason) && decision.reason != Reason::SamePresent)
         return;
 
     const char* status = DlssNr::Cadence::Describe(decision.reason, decision.cadence);
-    if (g_cadenceStatus.exchange(status) != status)
+    if (g_cadenceStatus.exchange(status) == status)
+        return;
+    if (feedback == nullptr)
         LOG_INFO("DLSS-NR cadence: {}", status);
+    else if (!feedback->valid)
+        LOG_INFO("DLSS-NR cadence: {} (adaptive: no valid feedback)", status);
+    else
+        LOG_INFO("DLSS-NR cadence: {} (adaptive: motion p90 {:.2f} px/frame at 1080 lines, carry rejected {:.1f}%, "
+                 "sample {} evaluations / {} ms old)",
+                 status, feedback->motion, feedback->rejection * 100.0f, evaluation - feedback->present,
+                 nowMs - feedback->ms);
 }
 
 // Whether any frame generation is turning this pass's frames into more than one present: OptiScaler's own
