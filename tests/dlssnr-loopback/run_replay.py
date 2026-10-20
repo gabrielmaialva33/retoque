@@ -320,8 +320,11 @@ def calibrate(runner, root, capture_path, repeats):
                        [arg for name in repeats for arg in ('--repeat', str(root / 'runs' / name / 'run.json'))],
                        cwd=runner.ROOT, capture_output=True, text=True)
     data = json.loads(out.read_text()) if out.is_file() else {}
-    return out if p.returncode == 0 and data.get('verdict') != 'INVALID' else None, \
-        dict(exit=p.returncode, verdict=data.get('verdict'), reasons=data.get('reasons'), stderr=p.stderr[-2000:])
+    ok = p.returncode == 0 and data.get('verdict') != 'INVALID'
+    # A calibration file carries no verdict when it succeeds, only its bounds.
+    return out if ok else None, dict(exit=p.returncode, verdict='CALIBRATED' if ok else data.get('verdict'),
+                                     reasons=data.get('reasons'), bounds=data.get('bounds', {}).get('all'),
+                                     stderr=p.stderr[-2000:])
 
 
 def judge(runner, root, capture_path, runs, calibration=None):
