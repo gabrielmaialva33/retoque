@@ -497,7 +497,9 @@ adapter (`docs/dlssnr/design/offline-replay-seam.md`; capture and run formats in
   - adaptive reports intervals;
   - two identical runs make identical decisions.
 
-  When `tools/replay` is present it judges every candidate against `every-a`.
+  When `tools/replay` is present it judges every candidate against `every-a`, with an A/A envelope calibrated
+  from `LOOPBACK_REPLAY_CALIBRATE` (5) fresh every-frame repeats, `aa-1..aa-5` (`0` skips calibration). The
+  control gate is `every-b` in the candidate's place: it must PASS.
 
 First run, 2026-10-20 (RTX 4090, Proton Experimental, model 310.8.2.0, 640x360, 96 scored frames): every gate
 passed.
