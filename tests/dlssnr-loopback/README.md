@@ -512,4 +512,18 @@ passed.
 The two every-frame runs were bitwise identical on all 256 frames, which is observed, not promised. The run directory
 is about 4 GB (corpus plus six output sets) under `artifacts/replay-run`, which is ignored.
 
+Judged against `every-a` on the same corpus (NumPy backend; whole frame; verdict INCONCLUSIVE because no A/A
+calibration exists yet, so these are measurements, not a pass or fail):
+
+| Candidate | Error vs every frame, mean / max | Detail lost | Pulse p95 (stops) |
+|---|---|---|---|
+| every-b | 0 / 0 | 0 | 0.0044 |
+| Cadence 2 | 0.00067 / 0.20 | 1.6% | 0.0045 |
+| Cadence 4 | 0.00142 / 0.47 | 3.3% | 0.0055 |
+| Adaptive, max 4 (ran at 2) | 0.00060 / 0.21 | 1.7% | 0.0035 |
+
+Cadence 4 doubles Cadence 2's departure from the every-frame answer, and its pulse is about a quarter above it, on
+the moving cube. That is the same direction as the light pulses and blur seen in Cyberpunk at Cadence 4 on
+2026-10-20.
+
 Not covered: the upscaler and everything upstream of it, frame generation, swapchain pacing and native Windows.
