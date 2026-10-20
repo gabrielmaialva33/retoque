@@ -703,11 +703,18 @@ def record_check(runner, proton, env, root, capture_path, environment, producer_
         ok=not mismatches and colour_checked > 0,
         detail=f'clip starts at scene frame {k}; depth/motion of {len(ids)} frames and colour of {colour_checked} '
                f'compared; mismatches {mismatches[:6]}')
-    # The recording replays through the seam as a v2 capture (offline-replay-seam.md, Plan v3), twice.
-    clip = load_capture(manifests[0])
-    replays = {name: run_variant(runner, proton, env, root, name, {'Cadence': '1'}, clip, manifests[0], environment,
-                                 producer_id) for name in ('clip-a', 'clip-b')}
-    results.update(v2_replay_gates('recorded-clip', clip, replays))
+    # The recording replays through the seam as a v2 capture (offline-replay-seam.md, Plan v3), twice. The moving
+    # scene never presents, so the production present counter it recorded stays 0, and the seam takes only presents
+    # that move forward: the replayed manifest, a sibling of the recording's own, numbers them by frame.
+    presents = sorted({f['present'] for f in clip['frames']})
+    results['recorder-presents-as-the-scene-left-them'] = dict(ok=None, detail=f'recorded presents {presents[:4]}')
+    renumbered = dict(clip, frames=[dict(f, present=f['id']) for f in clip['frames']])
+    replayed_path = base / 'capture-replay.json'
+    replayed_path.write_text(json.dumps(renumbered, indent=1) + '\n')
+    replayed = load_capture(replayed_path)
+    replays = {name: run_variant(runner, proton, env, root, name, {'Cadence': '1'}, replayed, replayed_path,
+                                 environment, producer_id) for name in ('clip-a', 'clip-b')}
+    results.update(v2_replay_gates('recorded-clip', replayed, replays))
     return results
 
 

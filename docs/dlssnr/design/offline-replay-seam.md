@@ -186,7 +186,14 @@ A capture the harness cannot transport is refused with the reason, never approxi
 - an output without unordered access;
 - a guide that denies shader resource views;
 - nonfinite parameters;
-- a subrect plus base outside the guide's extent.
+- a subrect plus base outside the guide's extent;
+- presents that do not move forward.
+
+The last refusal is the adapter's own rule: it sets the present counter from the frame. Two things would hit it:
+- **A source that never presents.** The loopback moving scene is one: its recorded present counter stays 0. The
+  record check numbers its presents by frame in a sibling manifest.
+- **A game that evaluates twice per present.** None has been seen. Supporting one would take an adapter that
+  accepts presents that do not decrease, an ABI change made only when a recording needs it.
 
 ### The run manifest
 

@@ -624,7 +624,10 @@ raw-dxgi in the colour plane's shape.
    and every recorded depth and motion plane must be the scene's own bytes. Colour must match the NR-off corpus
    wherever the two overlap.
 2. **Replaying the recording.** The clip, a v2 capture, replays through the seam twice at Cadence 1. The model must
-   run on every scored frame, and the two processes must agree on every decision and output byte.
+   run on every scored frame, and the two processes must agree on every decision and output byte. The moving scene
+   never presents, so the present counter the recorder took from the production DLL stays 0. The seam takes only
+   presents that move forward, so the replayed manifest, `capture-replay.json` beside the recording's own, numbers
+   them by frame. A game's presents move by themselves.
 3. **Game-shaped guides.** A v2 capture is derived from the corpus:
    - depth and motion are point-sampled to half resolution;
    - they are placed at base (16, 12) inside a 336x192 plane;
