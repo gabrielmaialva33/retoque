@@ -71,9 +71,9 @@ FrameMeta Meta(uint64_t present)
 {
     FrameMeta m;
     m.present = present;
-    m.color = { 10, 64, 32, 8 };
-    m.depth = { 41, 32, 16, 4 };
-    m.motion = { 34, 32, 16, 4 };
+    m.color = { 10, 64, 32, 8, 9, 4 };  // R16G16B16A16_TYPELESS, ALLOW_UNORDERED_ACCESS
+    m.depth = { 41, 32, 16, 4, 39, 0 }; // R32_TYPELESS
+    m.motion = { 34, 32, 16, 4, 34, 0 };
     m.frameTimeMs = 16.0f;
     return m;
 }

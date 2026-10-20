@@ -113,3 +113,96 @@ The host suites that extract Dispatch source learn the facade.
   - two identical runs agree on every decision field.
 
   Pixel agreement between runs is the judge's A/A calibration, not an exact gate.
+
+## Plan v3: game recordings (capture schema v2)
+
+2026-10-20, written before the code. The recorder ([offline-replay-recorder.md](offline-replay-recorder.md)) writes
+capture schema v2:
+- planes in their native format and extent;
+- guides at render resolution;
+- the guide geometry of every frame.
+
+The seam itself needs nothing new. `Frame` v1 already carries `rayReconstruction`, and the pass reads the geometry
+from the parameter block. So this is the harness's change, plus two fields the recorder adds.
+
+### What the recorder adds
+
+Each plane also records `source_format` and `source_flags`: the game resource's own DXGI format and resource
+flags, before the typed-for-copy mapping. The pass branches on both: guide clones are keyed on the source format
+and flags (`clone.sourceDepthFlags` in `DlssNr_Dx12.cpp`). A replay that uploaded into a typed texture with no
+flags would take a path the game did not. Both are optional in the schema. When they are absent, the replay uses
+`dxgi_format` and the v1 flags.
+
+### The plan
+
+`run_replay.py` writes one plan version for both capture versions. A v1 capture becomes a v3 plan with:
+- a full-extent subrect;
+- zero bases;
+- MV scale 1;
+- formats 10, 41 and 34.
+
+So the existing baselines gate the new harness bit for bit.
+
+```
+replay-plan 3 <frames>
+plane color <dxgi_format> <source_format> <source_flags> <width> <height> <pixel_bytes>
+plane depth ...
+plane motion ...
+<id> <present> <time_ms> <delta_ms> <reset> <jitter_x> <jitter_y> <pre_exposure> <create_flags>
+  <ray_reconstruction> <mv_scale_x> <mv_scale_y> <render_w> <render_h> <depth_base_x> <depth_base_y>
+  <motion_base_x> <motion_base_y> <color_path> <depth_path> <motion_path>
+```
+
+### Surfaces
+
+- **Output:** created in `source_format` with `source_flags`. It must allow unordered access, because it arrives in
+  that state (where DLSS leaves it) and the pass writes it in place. A recording whose output does not is refused,
+  rather than replayed under a state the game never used.
+- **Depth and motion:** `source_format`, `source_flags` and the recorded extent. The rest state is v1's (shader
+  resource). A guide that denies shader resource views is refused for the same reason.
+- **Colour (the Color key):** the typed colour format. The pass reads it only for the spatial-contract log.
+- **Upload footprints:** each surface has its own, so a typeless output is filled through its own layout.
+
+### The parameter block, per frame
+
+- Width and Height: the render subrect, or the colour extent when the recording says 0.
+- OutWidth and OutHeight: the colour extent.
+- Render_Subrect_Dimensions, when nonzero.
+- The depth and motion subrect bases.
+- The MV scale.
+- The create flags.
+- Jitter, Reset, pre-exposure and frame time.
+- `Frame.rayReconstruction`, from the recording.
+
+### Refusals
+
+A capture the harness cannot transport is refused with the reason, never approximated:
+- not finalized;
+- a digest, size or pitch that does not match;
+- a format outside the recorder's whitelist;
+- a shape that changes mid-capture;
+- create flags that change;
+- an exposure texture;
+- an output without unordered access;
+- a guide that denies shader resource views;
+- nonfinite parameters;
+- a subrect plus base outside the guide's extent.
+
+### The run manifest
+
+A v2 capture gives a v2 run. Its output descriptors are raw-dxgi with the colour plane's shape (the v2 section of
+offline-replay.md, the judge's side).
+
+### Validation
+
+- **Baselines:** the 19-variant and in-flight baselines, replayed through plan v3, must stay identical. The harness
+  change gates itself.
+- **Record check:** it gains a replay. The recorded clip runs through the seam twice. The two runs must agree on
+  every decision and output byte, and the model must run on every scored frame.
+- **Render-resolution guides:** a synthetic v2 capture derived from the moving corpus, with:
+  - half-resolution guides inside a larger texture (nonzero bases);
+  - MVLowRes set;
+  - an MV scale of 0.5.
+
+  It must run through the seam with no skip and no device error. Its pixels are judged against the
+  full-resolution replay by the judge, not gated.
