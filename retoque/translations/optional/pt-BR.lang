@@ -20,6 +20,21 @@ After the upscaler	Depois do upscaler
 Before the upscaler (experimental)	Antes do upscaler (experimental)
 Stage: after the upscaler (native Vulkan)	Etapa: depois do upscaler (Vulkan nativo)
 Model resolution	Resolução do modelo
+Pause when the game turns frame generation off	Pausar quando o jogo desligar a geração de quadros
+Look	Visual
+Natural	Natural
+Cinematic	Cinematográfico
+Subtle	Sutil
+Gentle	Suave
+Game colour	Cor do jogo
+The model's own defaults: style A, everything at 1.	Os padrões do próprio modelo: estilo A, tudo em 1.
+NVIDIA's style B: softer contrast and saturation, kinder to skin.	O estilo B da NVIDIA: contraste e saturação mais suaves, melhor com pele.
+NVIDIA's style C: a gentler, filmic saturation.	O estilo C da NVIDIA: uma saturação mais contida, de cinema.
+What NVIDIA's RTX Remix ships: structure 0.7, tone 0.3, no skin mask -- closer to the game.	O que o RTX Remix da NVIDIA usa: estrutura 0.7, tom 0.3, sem máscara de pele -- mais perto do jogo.
+A conservative community recipe: intensity 0.5, structure 0.7, tone 0.3, colour 0.5, detail 0.85.	Uma receita conservadora da comunidade: intensidade 0.5, estrutura 0.7, tom 0.3, cor 0.5, detalhe 0.85.
+Keeps the game's own hue (colour strength 0); only the light changes.	Mantém o matiz do próprio jogo (força de cor 0); só a luz muda.
+A starting point for how NR looks, in one click: it sets the model's style and\nstrengths and the colour and detail strength, and every control still shows and\nedits what it set. Custom means the current values are not one of these.\n\nPerformance settings (resolution, passes, cadence) and exposure are left alone.\nWith individual pass settings on, a pass's own overrides still win for that pass.	Um ponto de partida para o visual do NR, num clique: define o estilo e as forças do\nmodelo e as forças de cor e detalhe, e cada controle continua mostrando e editando o\nque ele definiu. Personalizado quer dizer que os valores atuais não são nenhum destes.\n\nDesempenho (resolução, passes, cadência) e exposição ficam como estão. Com ajustes\npor passe ligados, os ajustes próprios de cada passe continuam valendo nele.
+Many games turn their own DLSS frame generation off in menus, dialogue and\ncutscenes, and lift the frame cap with it, so NR runs at the full uncapped rate.\nThis skips NR there and resumes the moment frame generation comes back.\n\nOnly after the game's frame generation was seen on, after half a second off,\nand never while this menu is open (the menu turns frame generation off itself).	Muitos jogos desligam a própria geração de quadros DLSS em menus, diálogos e\ncutscenes, e tiram o limite de FPS junto, então o NR roda sem limite. Isto pula o\nNR nesses momentos e volta assim que a geração de quadros voltar.\n\nSó depois de ver a geração de quadros do jogo ligada, depois de meio segundo\ndesligada, e nunca com este menu aberto (o menu desliga a geração de quadros sozinho).
 Downscaler (NR)	Redutor de resolução (NR)
 Enlargement	Ampliação
 Classic	Clássica

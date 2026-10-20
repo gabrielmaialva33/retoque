@@ -9,6 +9,7 @@
 #include "DlssNr_GameProfiles.h"
 #include "DlssNr_ExposureScan.h"
 #include "DlssNr_GpuTiming.h"
+#include "DlssNr_Looks.h"
 #include "DlssNr_ModelLog.h"
 #include "DlssNr_ModelLogParse.h"
 #include "DlssNr_PresentBoundary.h"
@@ -742,6 +743,51 @@ static void RenderDarkeningFloor(Config* config, bool nativeVulkan)
                "\nLater game processing and temporal stabilization are outside this limit.");
 }
 
+// docs/dlssnr/design/looks.md: one click writes a named set of appearance values into the existing keys. Not a
+// setting of its own -- the selector reads which look the current values are, or Custom.
+static void RenderLooks(Config* config)
+{
+    namespace L = DlssNr::Looks;
+    const auto master = config->GetDlssNrMasterSettings();
+    const L::Values current { master.Intensity,
+                              master.Style,
+                              master.LocalStructure,
+                              master.LocalTone,
+                              master.SkinStructure,
+                              master.AutoMask,
+                              config->DlssNrColourStrength.value_or_default(),
+                              config->DlssNrTransferStrength.value_or_default() };
+    const int active = L::Find(current);
+    const char* preview = active >= 0 ? Localization::Label(L::kLooks[active].Name) : Localization::Label("Custom");
+    if (ImGui::BeginCombo(Localization::Label("Look###nrLook"), preview))
+    {
+        for (size_t i = 0; i < L::kLooks.size(); ++i)
+        {
+            const auto& look = L::kLooks[i];
+            if (ImGui::Selectable(Localization::Label(look.Name), active == static_cast<int>(i)))
+            {
+                const auto& v = look.Value;
+                config->SetDlssNrMasterSetting(&Config::DlssNrIntensity, v.Intensity);
+                config->SetDlssNrMasterSetting(&Config::DlssNrStyle, v.Style);
+                config->SetDlssNrMasterSetting(&Config::DlssNrLocalStructure, v.LocalStructure);
+                config->SetDlssNrMasterSetting(&Config::DlssNrLocalTone, v.LocalTone);
+                config->SetDlssNrMasterSetting(&Config::DlssNrSkinStructure, v.SkinStructure);
+                config->SetDlssNrMasterSetting(&Config::DlssNrAutoMask, v.AutoMask);
+                config->DlssNrColourStrength = v.ColourStrength;
+                config->DlssNrTransferStrength = v.DetailStrength;
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", Localization::Tr(look.Help));
+        }
+        ImGui::EndCombo();
+    }
+    HelpMarker("A starting point for how NR looks, in one click: it sets the model's style and"
+               "\nstrengths and the colour and detail strength, and every control still shows and"
+               "\nedits what it set. Custom means the current values are not one of these."
+               "\n\nPerformance settings (resolution, passes, cadence) and exposure are left alone."
+               "\nWith individual pass settings on, a pass's own overrides still win for that pass.");
+}
+
 // Returns true when the simple view consumed the panel; full view continues at Source below.
 static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResScale)
 {
@@ -754,6 +800,7 @@ static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResSca
 
     ImGui::PushItemWidth(220.0f * menuResScale);
     RenderModelPreset(config);
+    RenderLooks(config);
     if (!nativeVulkan && !config->DlssNrUseProxy.value_or_default())
         RenderPassControls(config, nativeVulkan, false);
     RenderDetailStrength(config);
@@ -1258,6 +1305,21 @@ void RenderMenu(Config* config, float menuResScale)
                    "\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces"
                    "\nit; Auto puts it back.");
 
+        // docs/dlssnr/design/pause-without-frame-gen.md. D3D12 and the bridges only: native Vulkan has no such
+        // admission.
+        if (!nativeVulkan)
+        {
+            bool pause = config->DlssNrPauseWithoutFrameGen.value_or_default();
+            if (ImGui::Checkbox(Localization::Label("Pause when the game turns frame generation off###nrPauseNoFg"),
+                                &pause))
+                config->DlssNrPauseWithoutFrameGen = pause;
+            HelpMarker("Many games turn their own DLSS frame generation off in menus, dialogue and"
+                       "\ncutscenes, and lift the frame cap with it, so NR runs at the full uncapped rate."
+                       "\nThis skips NR there and resumes the moment frame generation comes back."
+                       "\n\nOnly after the game's frame generation was seen on, after half a second off,"
+                       "\nand never while this menu is open (the menu turns frame generation off itself).");
+        }
+
         RenderPeriphery(config);
 
         // Meaningful only when the model runs BELOW the frame's size. At 100% -- and above, where
@@ -1481,9 +1543,10 @@ void RenderMenu(Config* config, float menuResScale)
 
         ImGui::SeparatorText(Localization::Tr("Model"));
 
-        auto master = config->GetDlssNrMasterSettings();
-
         RenderModelPreset(config);
+        RenderLooks(config);
+
+        auto master = config->GetDlssNrMasterSettings();
 
         static const char* nrStyleNames[] = { Localization::Label("Model A (Default)"),
                                               Localization::Label("Model B (Natural)"),

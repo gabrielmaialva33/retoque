@@ -1417,6 +1417,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     // newOptions is the same content, correctly sized, and still pre-policy: this records what the
     // game asked for, which is what the menu's replay needs.
     lastDlssgOptions = newOptions;
+    State::Instance().dlssgGameRequestsFg.store(newOptions.mode != sl::DLSSGMode::eOff, std::memory_order_relaxed);
 
     auto& state = State::Instance();
 

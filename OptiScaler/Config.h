@@ -318,6 +318,9 @@ class Config
     CustomOptional<bool> DlssNrApplyAfterRR { false };
     CustomOptional<unsigned int> DlssNrRRPasses { 1 };
     CustomOptional<float> DlssNrRRWorkingScale { 0.5f };
+    // docs/dlssnr/design/pause-without-frame-gen.md: skip the pass while the game has turned its own DLSS-G off
+    // (menus, cutscenes), once it was seen on. Never while our menu is open.
+    CustomOptional<bool> DlssNrPauseWithoutFrameGen { false };
     // Toggles the pass in game. Unbound by default -- a key that does something unexpected is worse
     // than one that does nothing.
     CustomOptional<int> DlssNrToggleKey { UnboundKey };

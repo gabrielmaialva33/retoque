@@ -118,6 +118,11 @@ tier = "host"
 timeout = 300
 summary = "Portable multi-pass chain helpers."
 
+[nr-pause-frame-gen]
+tier = "host"
+timeout = 60
+summary = "PauseWithoutFrameGen config, arm/debounce/menu-exclusion rule and placement."
+
 [nr-pass-config]
 tier = "host"
 timeout = 300

@@ -36,7 +36,7 @@ what keeps it honest (last taken 2026-09-23).
 | `resource_tracking/ResTrack_dx12.cpp` | exposure-scan resource notes and submission tracking |
 | `nvapi/NvApiHooks.cpp` | CUDA kernel wrapper hook for `[DlssNr] KernelProfile` (`DlssNr::KernelProfile::WrapNvapi`) |
 | `hooks/Vulkan_Hooks.cpp` | the device extensions the Vulkan route needs (`VkExt`) |
-| `hooks/Streamline_Hooks.cpp` | the Streamline boundary probe (`DlssNr::SlBoundaryProbe`: installed with `sl.interposer.dll`, removed with it), and every Streamline log message handed to the Vulkan present host's pacer trace (`DlssNr::VkPresentHost::NoteStreamline`, in both SDK generations' callbacks; it returns at once unless `[DlssNr] VulkanPresentTrace` is on) |
+| `hooks/Streamline_Hooks.cpp` | the Streamline boundary probe (`DlssNr::SlBoundaryProbe`: installed with `sl.interposer.dll`, removed with it), and every Streamline log message handed to the Vulkan present host's pacer trace (`DlssNr::VkPresentHost::NoteStreamline`, in both SDK generations' callbacks; it returns at once unless `[DlssNr] VulkanPresentTrace` is on); and the game's own DLSS-G request, before any OptiScaler policy, into `State::dlssgGameRequestsFg` for `PauseWithoutFrameGen` (`docs/dlssnr/design/pause-without-frame-gen.md`) |
 | `menu/menu_common.cpp` | the Neural Rendering tab and its card (`DlssNr::RenderMenu`), the timing row, the toggle key, compare tags, the scan meter |
 | `Config.h` / `Config.cpp` | the `[DlssNr]` declarations and their read/write runs |
 

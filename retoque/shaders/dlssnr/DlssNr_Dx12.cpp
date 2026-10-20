@@ -70,6 +70,7 @@
 #include "DlssNr_PresentHdr_Dx12.h"
 #include <dlssnr/DlssNr_Pulse.h>
 #include <dlssnr/DlssNr_PresentGuideRing.h>
+#include <menu/menu_overlay_base.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 
 namespace
@@ -1153,6 +1154,39 @@ bool FrameGenerationActive()
     if (auto* fg = state.currentFG; fg != nullptr && fg->IsActive() && !fg->IsPaused())
         return true;
     return state.dlssgDetectedInterpolationCount > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
+}
+
+// docs/dlssnr/design/pause-without-frame-gen.md. Whether to skip the pass because the game turned its own DLSS-G off.
+// The signal is what the game asked Streamline for, recorded before any OptiScaler policy (the menu interlock, the
+// interpolation override, substituting our own DLSS-G), so none of those can pause it. Under g_nrMutex. Arms only
+// after the game was seen asking for DLSS-G this session; never while our menu is open; and only once the off state
+// has held for half a second. While paused, the next evaluation is marked to reset its history: the model did not
+// see the frames in between, and any reset the game asked for then was not delivered.
+bool PausedWithoutFrameGen(const Config& cfg)
+{
+    using Clock = std::chrono::steady_clock;
+    static bool seenOn = false;
+    static std::optional<Clock::time_point> offSince;
+    static bool paused = false;
+    const bool on = State::Instance().dlssgGameRequestsFg.load(std::memory_order_relaxed);
+    if (on)
+        seenOn = true;
+    const bool candidate =
+        cfg.DlssNrPauseWithoutFrameGen.value_or_default() && seenOn && !on && !MenuOverlayBase::IsVisible();
+    if (!candidate)
+        offSince.reset();
+    else if (!offSince)
+        offSince = Clock::now();
+    const bool now = offSince && Clock::now() - *offSince >= std::chrono::milliseconds(500);
+    if (now)
+        g_resetOnReturn = true;
+    if (now != paused)
+    {
+        paused = now;
+        LOG_INFO("DLSS-NR {} (PauseWithoutFrameGen)",
+                 now ? "paused: the game turned its frame generation off" : "resumed after the frame-generation pause");
+    }
+    return now;
 }
 
 bool RetiredCapacity();
@@ -3463,6 +3497,13 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         output == nullptr)
     {
         reportSkip(g_nr.failed ? "it already failed this session" : "a resource was missing");
+        return false;
+    }
+
+    // Before any recording, state change or tracking (pause-without-frame-gen.md): the frame goes out as drawn.
+    if (PausedWithoutFrameGen(cfg))
+    {
+        reportSkip("paused: the game turned its frame generation off");
         return false;
     }
 
