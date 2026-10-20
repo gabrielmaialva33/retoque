@@ -1,0 +1,11 @@
+{
+  "comment": "Split steps move whole functions out of DlssNr_Dx12.cpp. Each listed definition must exist exactly once, in its unit, and nowhere else among the renderer units.",
+  "owners": {
+    "DlssNr_Dx12_Inputs.cpp": [
+      "void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, ID3D12Resource* output, bool before,",
+      "DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)\n{",
+      "DlssNrFrameInfo GatherFrame(NVSDK_NGX_Parameter* params)\n{",
+      "int GuideRestState(bool motionVectors)\n{"
+    ]
+  }
+}
