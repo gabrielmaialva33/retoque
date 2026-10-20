@@ -418,8 +418,10 @@ this runner's `run_under_proton()` directly to preserve those settings. It produ
 GPU samples and three expected contract generations across the extent changes. This validates
 the instrumented path, not comparable frame-time or image-quality measurements.
 
-Still to do: the deterministic scene (`scene.hlsl` is written, not yet wired), analytic
-motion and frame dumps for controlled run-to-run comparison.
+Historical follow-up (superseded): deterministic moving geometry, analytic motion and frame
+dumps are now wired through `--moving-scene`, described at the top of this README. The default
+wall-clock sweep remains a different test. The next step is a versioned recorder→replay round
+trip from this moving fixture; see [offline replay](../../docs/dlssnr/design/offline-replay.md).
 
 A stage that cannot reach its own instrumentation must fail loudly rather than pass quietly;
 that is the `ZERO COVERAGE` rule the Vulkan harness established and this one inherits.
