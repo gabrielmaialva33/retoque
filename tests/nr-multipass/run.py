@@ -16,3 +16,16 @@ assert dispatch.count('g_nr.superDown->Dispatch(cmdList, finalOutput, g_nr.outpu
 assert 'DlssNr::Chain::Routing<ID3D12Resource*> chain(modelInput, g_nr.output, g_nr.passPing)' in dispatch
 assert 'DlssNr::Chain::Resolve(g_nr.colorCopy, modelInput, g_nr.outputNative, finalOutput, superDownOk)' in dispatch
 print('PASS: renderer uses tested routing/resolve; one supersampling down-leg after finalOutput selection')
+
+# Rebuild headroom (docs/dlssnr/design/chain-in-flight.md): a refused generation first parks the one it replaces
+# and waits; only a refusal with nothing left to free latches the session failure.
+refusal = source[source.index('!DlssNr::Chain::Admit(budget.Budget, budget.CurrentUsage'):]
+refusal = refusal[:refusal.index('g_nr.reason = "chain generation refused')]
+assert refusal.index('if (MakeRoomForGeneration())') < refusal.index('g_nr.failed = true;')
+assert 'return false;' in refusal[refusal.index('if (MakeRoomForGeneration())'):refusal.index('g_nr.failed = true;')]
+room = source[source.index('bool MakeRoomForGeneration()\n{'):source.index('void ParkAltSurfaces()')]
+for name in ('g_nr.feature', 'g_nr.passFeature', 'g_nr.output', 'g_nr.passPing', 'g_nr.colorCopy', 'g_nr.hdrCopy',
+             'g_nr.colorSmall', 'g_nr.outputNative', 'g_nr.depthMatched', 'g_nr.motionMatched'):
+    assert name in room, name
+assert '!r.stuck' in room
+print('PASS: a refused chain generation parks the current one and waits; latches only with nothing left to free')

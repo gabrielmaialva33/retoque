@@ -25,5 +25,6 @@ with tempfile.TemporaryDirectory(prefix="nr-gpu-timing-") as directory:
 
 source = (ROOT / "retoque/dlssnr/DlssNr_Submission.cpp").read_text()
 batch = source.split("Batch::Batch(", 1)[1].split("void Batch::Submitted()", 1)[0]
-assert re.search(r"else\s+Detail::Model::CountExecution\(e\)", batch), "duplicate execution guard missing"
+# DuplicateInBatch counts the occurrence and latches replay (docs/dlssnr/design/chain-in-flight.md).
+assert re.search(r"else\s+model\.DuplicateInBatch\(e\)", batch), "duplicate execution guard missing"
 print("PASS duplicate-list occurrence guard at the production submission boundary")

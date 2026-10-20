@@ -208,6 +208,8 @@ unsigned trackingCalls = 0;
 std::atomic<const char*> g_chainStatus { "test submission tracking refused" };
 DlssNr::Chain::RecordingGate g_recordings;
 bool trackingOptIn = false;
+unsigned clockAdvances = 0; // chain-in-flight.md: every NR entry moves the renderer's clock
+void AdvanceNrClock() { ++clockAdvances; }
 bool WantsTrackedRecording(const DlssNrPassSnapshot&) { return trackingOptIn; }
 bool TrackNrRecording(ID3D12GraphicsCommandList*, const DlssNrPassSnapshot&, DlssNr::Chain::RecordingLease*)
 {

@@ -1155,6 +1155,37 @@ bool FrameGenerationActive()
 
 bool RetiredCapacity();
 
+// docs/dlssnr/design/chain-in-flight.md: the clock that ages epochs whose fences cannot answer, and parked objects.
+// Every NR entry advances it before anything can return, so refused or skipped work still moves it. Under g_nrMutex.
+uint64_t g_nrTicks = 0;
+void AdvanceNrClock() { DlssNr::Submission::Advance(++g_nrTicks); }
+
+const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission)
+{
+    using DlssNr::Submission::Detail::Admission;
+    switch (admission)
+    {
+    case Admission::InFlight:
+        return "More than three earlier NR recordings still on the GPU; new recording skipped this frame";
+    case Admission::Queues:
+        return "Earlier NR recordings still running on two GPU queues; new recording skipped until one finishes";
+    case Admission::SameList:
+        return "This command list already holds an unsubmitted NR recording; new recording skipped";
+    case Admission::Pending:
+        return "An NR recording is still waiting for the game to submit it; new recordings skipped until it runs or "
+               "is discarded";
+    case Admission::Behind:
+        return "The GPU is eight NR recordings behind; new recording skipped this frame";
+    case Admission::Serial:
+        return "Waiting for the previous NR recording to finish on the GPU (one queue not yet established, or more "
+               "than one in use)";
+    case Admission::Replay:
+    default:
+        return "Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may "
+               "decrease)";
+    }
+}
+
 bool WantsTrackedRecording(const DlssNrPassSnapshot& requested)
 {
     return g_tracked || (!g_legacyRecorded && (requested.Count > 1 || requested.Individual));
@@ -1181,10 +1212,24 @@ bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& 
     }
     if (lease->Tracked())
         return true; // Explicit pre scope borrowing its own recording.
-    if (!lease->MayTrack(g_haveTrackedUsage, !g_haveTrackedUsage || DlssNr::Submission::Ready(g_usage)))
+    // Bounded in flight, not serialized (docs/dlssnr/design/chain-in-flight.md): earlier recordings need only be
+    // finished on the GPU, or few enough and on one queue. Waiting for the game's Reset of its own list skipped
+    // frames whenever it rotated lists, and for good once it stopped using one.
+    if (DlssNr::Submission::Strict())
     {
-        ChainStatus("Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may "
-                    "decrease)");
+        static bool warned = false;
+        if (!warned)
+        {
+            warned = true;
+            LOG_WARN("DLSS-NR chain: the game executed a command list again without resetting it; tracked NR now "
+                     "waits for Reset and all GPU fences for the rest of the session");
+        }
+    }
+    const auto admission =
+        g_haveTrackedUsage ? DlssNr::Submission::Admit(g_usage, cmd) : DlssNr::Submission::Detail::Admission::Admit;
+    if (!lease->MayTrack(g_haveTrackedUsage, admission == DlssNr::Submission::Detail::Admission::Admit))
+    {
+        ChainStatus(AdmissionRefusal(admission));
         return false;
     }
     if (!RetiredCapacity())
@@ -1193,7 +1238,7 @@ bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& 
                     "completion or restart");
         return false;
     }
-    if (!DlssNr::Submission::Track(cmd, g_usage))
+    if (!DlssNr::Submission::Track(cmd, g_usage, true))
     {
         ChainStatus(DlssNr::Submission::LastRefusal());
         return false;
@@ -1295,6 +1340,11 @@ struct NrRetired
     int framesLeft = 32;
     bool tracked = false;
     DlssNr::Submission::Usage usage;
+    // Tracked objects (chain-in-flight.md): freed once every epoch in usage is finished AND framesLeft ticks
+    // passed, which covers work NGX may keep on queues of its own that no fence of ours sees.
+    uint64_t parkedAt = DlssNr::Submission::Clock();
+    // Waiting only on epochs no fence will ever answer: retained for good unless they finish, and out of the cap.
+    bool stuck = false;
     OS_Dx12* scaler = nullptr;
     DlssNr_Stabilizer_Dx12* stabilizer = nullptr;
     DlssNr_UiMask_Dx12* uiMask = nullptr;
@@ -1414,14 +1464,40 @@ void ParkNrEnlarger(NrEnlarger*& enlarger)
     g_nrRetired.push_back(r);
 }
 
-void TickNrRetired()
+// shutdown: Ready only, no replay window (chain-in-flight.md).
+void TickNrRetired(bool shutdown = false)
 {
     std::vector<NrEnlarger*> enlargers;
 
     for (size_t i = 0; i < g_nrRetired.size();)
     {
         auto& retired = g_nrRetired[i];
-        if (retired.tracked ? !DlssNr::Submission::Ready(retired.usage) : --retired.framesLeft > 0)
+        bool keep;
+        if (retired.tracked)
+        {
+            const uint64_t age = DlssNr::Submission::Clock() - retired.parkedAt;
+            const bool finished =
+                shutdown ? DlssNr::Submission::Ready(retired.usage) : DlssNr::Submission::Settled(retired.usage);
+            keep = age < static_cast<uint64_t>(retired.framesLeft) || !finished;
+            // Recomputed every tick: a late first submission makes the epoch answerable again.
+            const bool stuck = keep && !shutdown && age >= DlssNr::Submission::Detail::AgeOutTicks &&
+                               DlssNr::Submission::OnlyUnanswerableLeft(retired.usage);
+            if (stuck && !retired.stuck)
+            {
+                static bool said = false;
+                if (!said)
+                {
+                    said = true;
+                    LOG_WARN("DLSS-NR chain: a parked object waits on a recording no GPU fence will report (never "
+                             "submitted, or its signal failed); it is kept, not freed, and no longer counts toward "
+                             "the parking limit");
+                }
+            }
+            retired.stuck = stuck;
+        }
+        else
+            keep = --retired.framesLeft > 0;
+        if (keep)
         {
             ++i;
             continue;
@@ -1458,11 +1534,17 @@ bool RetiredCapacity()
     if (!g_tracked)
         return true;
     TickNrRetired();
+    // Stuck objects are retained without evidence ever to free them; the first 64 do not block rebuilds, so one
+    // discarded list cannot stop the chain, but past that a pathological game is refused rather than leaking more.
+    size_t stuck = 0;
+    for (const auto& retired : g_nrRetired)
+        stuck += retired.stuck;
+    const size_t counted = g_nrRetired.size() - std::min<size_t>(stuck, 64);
     // A rebuild can retire at most 18 objects (16, and peripheral compression's unpacked pair), the six of
     // the other colour format's set with a resolution change (ParkAltSurfaces), and Transfer 2's bundle (one
     // entry for its feature and its five textures). Refuse BEFORE recording or allocation, not after
     // unsubmitted slider/DRS changes already consumed arbitrary memory.
-    return DlssNr::Chain::RetirementAllowed(g_nrRetired.size());
+    return DlssNr::Chain::RetirementAllowed(counted);
 }
 
 // The inject point decides which buffer is being measured -- the upscaler's linear output or the
@@ -1795,6 +1877,35 @@ static void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device
             }
         }
     }
+}
+
+// A new chain generation did not fit beside the one it replaces (docs/dlssnr/design/chain-in-flight.md, "Rebuild
+// headroom"). Park the whole current generation -- features, pass features, scratch -- as a rebuild on a resolution
+// change would, so its memory goes once the GPU is done with it, and say whether there is anything still to wait
+// for. False: nothing is parked or on its way out, so waiting would never make room.
+bool MakeRoomForGeneration()
+{
+    bool parked = false;
+    const auto park = [&parked](void*& feature)
+    {
+        parked |= feature != nullptr;
+        ParkNrFeature(feature);
+    };
+    park(g_nr.feature);
+    for (void*& f : g_nr.passFeature)
+        park(f);
+    for (auto& reset : g_nr.passReset)
+        reset = true;
+    for (ID3D12Resource** r : { &g_nr.output, &g_nr.colorCopy, &g_nr.hdrCopy, &g_nr.colorSmall, &g_nr.outputNative,
+                                &g_nr.passPing, &g_nr.depthMatched, &g_nr.motionMatched })
+    {
+        parked |= *r != nullptr;
+        ParkNrResource(*r);
+    }
+    g_nr.reset = true;
+    if (parked)
+        return true;
+    return std::any_of(g_nrRetired.begin(), g_nrRetired.end(), [](const NrRetired& r) { return !r.stuck; });
 }
 
 void ParkAltSurfaces()
@@ -3330,6 +3441,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ReportSkipOnce(why);
     };
 
+    AdvanceNrClock();
+
     // A fault the forwarder caught inside the model, on this frame or any before it, ends the session's
     // NR here: the forwarder already refuses to enter the model again, and this stops asking.
     NoteModelFault();
@@ -3872,6 +3985,16 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         if (!VideoMemory(device, budget) ||
             !DlssNr::Chain::Admit(budget.Budget, budget.CurrentUsage, g_nr.measuredModelBytes, surfaceBytes))
         {
+            // The usage counted here still includes the generation being replaced. Free that first and try again
+            // once it is gone; only a refusal with nothing left to free is final for the session.
+            if (MakeRoomForGeneration())
+            {
+                ChainStatus("Chain generation waits for the previous one to be freed (adapter headroom); NR resumes "
+                            "once it is");
+                reportSkip("chain generation waits for the previous one to be freed (adapter headroom)");
+                device->Release();
+                return false;
+            }
             g_nr.failed = true;
             g_nr.reason = "chain generation refused: insufficient or unavailable adapter headroom (retry latched)";
             ChainStatus(g_nr.reason);
@@ -9061,6 +9184,7 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
 
     {
         std::lock_guard<std::mutex> lock(g_nrMutex);
+        AdvanceNrClock();
 
         const auto requested = cfg.GetDlssNrPassSnapshot();
         if (WantsTrackedRecording(requested))
@@ -9547,7 +9671,7 @@ void Shutdown()
 
     if (g_tracked)
     {
-        TickNrRetired();
+        TickNrRetired(true);
         const bool pendingRetired =
             std::any_of(g_nrRetired.begin(), g_nrRetired.end(), [](const NrRetired& retired)
                         { return retired.tracked && !DlssNr::Submission::Ready(retired.usage); });

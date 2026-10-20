@@ -123,18 +123,66 @@ int main()
         assert(next.MayTrack(true, true)); ++cases;
     }
     {
+        // chain-in-flight.md: bounded in flight, not serialized. The game's Reset is not awaited.
         S::Model pendingModel;
         S::Usage pendingUse;
         completed = 0;
         auto epoch = pendingModel.Track(44, pendingUse, completion);
         auto queued = pendingModel.BeforeExecute(44);
         S::Model::AfterExecute(queued, 0, 4, true);
-        DlssNr::Chain::RecordingLease next(gate, 45); // May be a different GPU queue.
-        assert(!next.MayTrack(true, S::IsReady(*epoch, completion)));
+        DlssNr::Chain::RecordingLease next(gate, 45);
+        const auto admitted = [&]
+        {
+            return S::Admit(pendingUse, completion, pendingModel.Clock(), pendingModel.Strict(), true, 45) ==
+                   S::Admission::Admit; // one queue established
+        };
+        const auto serial = [&]
+        {
+            return S::Admit(pendingUse, completion, pendingModel.Clock(), pendingModel.Strict(), false, 45) ==
+                   S::Admission::Serial;
+        };
+        assert(next.MayTrack(true, admitted())); // One earlier recording in flight on one queue.
+        assert(serial());                        // ...but not before that queue is established.
         completed = 4;
-        assert(!next.MayTrack(true, S::IsReady(*epoch, completion))); // Completed but replayable.
-        S::Model::AfterReset(epoch, true);
-        assert(next.MayTrack(true, S::IsReady(*epoch, completion))); ++cases;
+        assert(next.MayTrack(true, admitted())); // Completed but never Reset: admitted.
+        assert(!S::IsReady(*epoch, completion));
+        ++cases;
     }
-    std::cout << "PASS: " << cases << " production chain/scheduling/admission/completion cases; 1000 same-present rejects\n";
+    {
+        // More than MaxEarlierInFlight unresolved recordings refuse; the oldest finishing admits again.
+        S::Model m;
+        S::Usage u;
+        completed = 0;
+        for (uintptr_t list = 50; list < 50 + S::MaxEarlierInFlight + 1; ++list)
+        {
+            m.Track(list, u, completion);
+            S::Model::AfterExecute(m.BeforeExecute(list), 0, list - 49, true);
+        }
+        assert(S::Admit(u, completion, m.Clock(), m.Strict(), true, 70) == S::Admission::InFlight);
+        completed = 1;
+        assert(S::Admit(u, completion, m.Clock(), m.Strict(), true, 70) == S::Admission::Admit);
+        ++cases;
+    }
+    {
+        // The pause in Cyberpunk: the list is never Reset again. Its fence completes, and nothing stalls.
+        S::Model m;
+        S::Usage u;
+        completed = 0;
+        m.Track(60, u, completion);
+        S::Model::AfterExecute(m.BeforeExecute(60), 0, 7, true);
+        completed = 7;
+        for (uint64_t tick = 1; tick <= 1000; ++tick)
+        {
+            m.Advance(tick);
+            const uintptr_t list = 61 + tick % 3; // the game rotates three lists after the pause
+            S::PruneLifetime(u, completion, m.Clock(), m.Strict());
+            assert(S::Admit(u, completion, m.Clock(), m.Strict(), true, list) == S::Admission::Admit);
+            m.Track(list, u, completion);
+            S::Model::AfterExecute(m.BeforeExecute(list), 0, 7 + tick, true);
+            completed = 7 + tick;
+            S::Model::AfterReset(m.Current(list), true);
+        }
+        ++cases;
+    }
+    std::cout << "PASS: " << cases << " production chain/scheduling/admission/completion cases; 1000 same-present rejects; 1000 post-pause admissions\n";
 }

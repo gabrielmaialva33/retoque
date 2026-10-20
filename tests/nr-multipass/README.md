@@ -22,9 +22,10 @@ host time spent inside the forwarder, **not GPU execution**. The existing NGX GP
 covers the whole chain; per-pass GPU timings are not available. Stage coverage continues
 to count one final composition, rather than calling three model passes three applied frames.
 
-The recording-lease checks cover borrowing only the explicit pre-upscale scope token,
-rejecting unrelated scopes even on the same list, and refusing new recordings while the
-previous epoch is incomplete or completed but replayable. Only Reset plus fence completion
-allows another recording. This intentionally reduces throughput when the game keeps lists
-open or the GPU is behind. An A/B must compare applied coverage as well as timings; skipped
-NR frames must not be presented as a faster model.
+The recording-lease checks cover borrowing only the explicit pre-upscale scope token and
+rejecting unrelated scopes even on the same list. Admission follows
+`docs/dlssnr/design/chain-in-flight.md`: a recording whose fence completed is admitted
+without the game's Reset; more than three unresolved earlier recordings refuse until the
+oldest finishes; and a list that is never Reset again (the Cyberpunk pause) still admits
+1000 later recordings. An A/B must still compare applied coverage as well as timings;
+skipped NR frames must not be presented as a faster model.

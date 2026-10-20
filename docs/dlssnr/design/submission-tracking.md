@@ -25,7 +25,13 @@ tracker refuses new recording rather than evicting potentially live resources.
 
 The caller owns retirement storage and must bound it, refuse rebuilds at capacity,
 and never clear an unresolved Usage while freeing its resources. There is no timer,
-frame-count or 32-evaluation fallback. Keeping a resource alive is not an implicit
+frame-count or 32-evaluation fallback. (Amended 2026-10-19 by
+[chain-in-flight.md](chain-in-flight.md): outside strict mode a completed epoch counts as finished
+for admission without Reset, and for freeing once it is also 128 renderer ticks old; a recording
+Reset before any execution counts as cancelled, and one whose list the game released (only our
+reference left) as safe. Elapsed ticks are still never destruction evidence for anything unknown,
+unsubmitted or outstanding. The tracker may reclaim safe epochs and completed, unreferenced ones
+aged 128 ticks. A replay latches the original Ready-only rule.) Keeping a resource alive is not an implicit
 GPU ordering guarantee for reusing its contents; the renderer must independently
 order dependent passes and reject unsupported concurrent recording.
 

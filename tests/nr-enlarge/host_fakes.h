@@ -23,6 +23,7 @@
 std::vector<std::string> g_log;
 #define LOG_INFO(...) g_log.push_back(std::format(__VA_ARGS__))
 #define LOG_ERROR(...) g_log.push_back("ERROR " + std::format(__VA_ARGS__))
+#define LOG_WARN(...) g_log.push_back("WARN " + std::format(__VA_ARGS__))
 
 enum DXGI_FORMAT
 {
@@ -120,7 +121,7 @@ struct Usage
 };
 inline bool trackOk = true, ready = true, completed = true;
 inline unsigned tracks = 0;
-inline bool Track(ID3D12GraphicsCommandList* list, Usage& usage)
+inline bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool = false)
 {
     assert(list != nullptr);
     ++tracks;
@@ -129,6 +130,16 @@ inline bool Track(ID3D12GraphicsCommandList* list, Usage& usage)
 }
 inline bool Ready(const Usage&) { return ready; }
 inline bool Completed(const Usage& usage) { return usage.tracked && completed; }
+// docs/dlssnr/design/chain-in-flight.md: the renderer's tick, and "every epoch resolved".
+inline uint64_t clock = 0;
+inline uint64_t Clock() { return clock; }
+inline bool Settled(const Usage&) { return ready; }
+inline bool unanswerable = false;
+inline bool OnlyUnanswerableLeft(const Usage&) { return !ready && unanswerable; }
+namespace Detail
+{
+constexpr uint64_t AgeOutTicks = 128;
+}
 } // namespace DlssNr::Submission
 
 bool g_tracked = false;
