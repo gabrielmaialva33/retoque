@@ -122,7 +122,10 @@ def run_trials(runner, proton, env, dll):
             '[Log]\nLogToFile=true\nLogLevel=2\n'
             '[DlssNr]\nEnabled=' + str(enabled).lower() + '\n'
             'HookMethod=1\nWorkingScale=1\nWhitePointSource=0\nWhitePointScale=1\n'
-            'ApplyModel=true\nTransferStrength=1\nColourStrength=1\nSessionGuard=false\n')
+            'ApplyModel=true\nTransferStrength=1\nColourStrength=1\nSessionGuard=false\n' +
+            # LOOPBACK_NR_EXTRA: extra [DlssNr] lines for the NR-on trials, ';'-separated (an A/B of one key).
+            (''.join(line.strip() + '\n' for line in os.environ.get('LOOPBACK_NR_EXTRA', '').split(';')
+                     if line.strip()) if enabled else ''))
         print(f'  moving scene trial {name}: production DLAA, NR={enabled}', flush=True)
         gpu_states[name] = dict(before=gpu_state())
         returncode = execute([proton, 'run', directory / 'dlssnr-loopback.exe',

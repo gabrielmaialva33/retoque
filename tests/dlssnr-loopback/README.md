@@ -19,6 +19,11 @@ testing representative content; the synthetic present fixture cannot establish e
 
 ## Automated moving scene
 
+Two optional environment variables serve one-key A/Bs: `LOOPBACK_MODEL=/path/to/nvngx_dlssnr.dll` links
+another model instead of the kit's (linked, never copied or modified), and `LOOPBACK_NR_EXTRA="Key=value;..."`
+appends `[DlssNr]` lines to the NR-on trials only. First used to measure `DLSSNR.ScalingRatio`
+(`docs/dlssnr/design/network-scale.md`: ignored by the unmodified runtimes).
+
 ```bash
 python3 tests/dlssnr-loopback/run.py --runtime proton --moving-scene
 python3 tests/dlssnr-loopback/test_moving.py  # Host evidence/negative-control checks only.
