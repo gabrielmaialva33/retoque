@@ -55,6 +55,31 @@ def ancestors():
     return pids
 
 
+def build_running():
+    """Whether build-local.sh or an MSBuild is running -- the program itself, never a command line that mentions it.
+
+    Matching command text found shells that had merely mentioned the script, this runner's own parent or another
+    session's idle wrapper, and refused forever (2026-10-20). Wine names a Windows process after its executable, so
+    MSBuild is found by name. build-local.sh runs through env bash, so it is a bash whose script argument is
+    build-local.sh -- not a bash -c whose command string happens to contain it.
+    """
+    mine = ancestors()
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit() or int(proc.name) in mine:
+            continue
+        try:
+            if (proc / 'comm').read_text().strip().lower() == 'msbuild.exe':
+                return True
+            argv = (proc / 'cmdline').read_bytes().split(b'\0')
+        except OSError:
+            continue
+        names = [Path(a.decode(errors='replace')).name for a in argv[:2]]
+        if names[:1] == ['build-local.sh'] or (len(names) > 1 and names[0] in ('bash', 'sh') and
+                                                names[1] == 'build-local.sh'):
+            return True
+    return False
+
+
 def run_watched(args, *, env, log, attempts=4):
     """Run a wine-side compiler command, recovering from the msvc-wine stall.
 
@@ -405,10 +430,7 @@ def main():
       # Compiling goes through the same msvc-wine prefix that build-local.sh uses. Two clients on
       # one wineserver is the condition under which the build has stalled; refuse rather than race.
       # Running the built harness does not touch that prefix, so --skip-build is exempt.
-      # Not this process's own ancestors: a shell that ran build-local.sh and then this runner matches the pattern
-      # by its command line, and refusing on it made such a shell retry forever (2026-10-20).
-      busy = subprocess.run(['pgrep', '-f', r'[M]SBuild\.exe|[b]uild-local\.sh'], capture_output=True, text=True)
-      if any(int(pid) not in ancestors() for pid in busy.stdout.split()):
+      if build_running():
           raise SystemExit('a solution build is using the msvc-wine prefix; compile after it finishes, or --skip-build')
       run_watched([MSVC / 'cl', '/nologo', '/std:c++20', '/EHsc', '/MD', '/W4',
          '/I' + str(ROOT / 'external/nvngx_dlss_sdk'), HERE / 'harness.cpp',
