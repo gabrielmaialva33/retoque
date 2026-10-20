@@ -3,7 +3,8 @@
 import json
 from pathlib import Path
 from .format import load_capture, load_run, read_plane, need, number, integer, sha
-from .metrics import rgb, frame_metrics, validate_guides, mean, percentile
+from .metrics import mean, percentile
+from .backend import select
 from .png import preview, heatmap, contact, write_png
 
 ERROR_METRICS = (
@@ -16,6 +17,9 @@ ERROR_METRICS = (
     "pulse_p95",
     "temporal_mae",
 )
+# Warmup predecessor pairing and exclusion of unpaired disocclusion changed in v1c.
+# Old envelopes must not silently grade the new metric population.
+METRICS_REVISION = 2
 
 
 def policy_values(policy=None):
@@ -48,6 +52,7 @@ def policy_values(policy=None):
 
 
 def analyze(capture_path, reference_path, candidate_path, policy=None):
+    backend_name, backend = select()
     policy = policy_values(policy)
     capture = load_capture(capture_path)
     reference, candidate = (
@@ -64,17 +69,14 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
     )
     capture["_pixel_tolerance"] = policy["pixel_tolerance"]
     previous = None
+    previous_frame = None
     rows = []
     first = last = worst = None
     worst_error = -1
-    for source_f, ref_f, cand_f in zip(
-        capture["frames"], reference["frames"], candidate["frames"]
+    for index, (source_f, ref_f, cand_f) in enumerate(
+        zip(capture["frames"], reference["frames"], candidate["frames"])
     ):
-        source = rgb(
-            read_plane(capture["_root"], source_f["color"]),
-            capture["color_space"],
-            source_f["pre_exposure"],
-        )
+        source = read_plane(capture["_root"], source_f["color"])
         depth = read_plane(capture["_root"], source_f["depth"])
         motion = read_plane(capture["_root"], source_f["motion"])
         if source_f["exposure"] is not None:
@@ -85,42 +87,46 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
             if "motion_oracle" in source_f
             else None
         )
-        validate_guides(
+        backend.validate_guides(
             capture,
             source_f,
             motion,
             depth,
-            previous["frame"] if previous else None,
+            previous_frame,
             oracle,
         )
-        ref_image = rgb(
-            read_plane(reference["_root"], ref_f["output"]),
-            capture["color_space"],
-            source_f["pre_exposure"],
-        )
-        output = rgb(
-            read_plane(candidate["_root"], cand_f["output"]),
-            capture["color_space"],
-            source_f["pre_exposure"],
-        )
+        ref_image = read_plane(reference["_root"], ref_f["output"])
+        output = read_plane(candidate["_root"], cand_f["output"])
         # load_run only admits skipped entries during warmup, with a reason and
         # fenced output. Validate their planes above, but never retain a skipped
         # answer as history or silently bridge across it in either run.
         if ref_f["kind"] == "skipped" or cand_f["kind"] == "skipped":
             previous = None
+            previous_frame = None
             continue
-        old = (
-            previous
-            if previous and previous["frame"]["score"] and source_f["score"]
-            else None
+        previous_frame = source_f
+        next_scored = (
+            index + 1 < len(capture["frames"]) and capture["frames"][index + 1]["score"]
         )
-        metrics, retained = frame_metrics(
+        if not source_f["score"] and not next_scored:
+            previous = None
+            continue
+        source = backend.rgb(source, capture["color_space"], source_f["pre_exposure"])
+        output = backend.rgb(output, capture["color_space"], source_f["pre_exposure"])
+        if not source_f["score"]:
+            previous = dict(
+                backend.retain(source_f, source, depth, output), kind=cand_f["kind"]
+            )
+            continue
+        ref_image = backend.rgb(
+            ref_image, capture["color_space"], source_f["pre_exposure"]
+        )
+        old = previous
+        metrics, retained = backend.frame_metrics(
             capture, source_f, source, depth, motion, output, ref_image, old
         )
         old_kind = previous["kind"] if previous else None
         previous = dict(retained, kind=cand_f["kind"])
-        if not source_f["score"]:
-            continue
         row = dict(
             id=source_f["id"],
             present=source_f["present"],
@@ -202,6 +208,8 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
     return dict(
         schema="retoque-replay-result",
         version=1,
+        backend=backend_name,
+        metrics_revision=METRICS_REVISION,
         capture_sha256=capture["_sha256"],
         reference_sha256=reference["_sha256"],
         candidate_sha256=candidate["_sha256"],
@@ -281,6 +289,7 @@ def calibrate(capture, reference, repeats, policy=None):
         version=1,
         capture_sha256=base["capture_sha256"],
         reference_sha256=base["reference_sha256"],
+        metrics_revision=base["metrics_revision"],
         environment=base["environment"],
         policy=base["policy"],
         samples=len(observations),
@@ -309,7 +318,13 @@ def validate_calibration(calibration, report):
         and calibration["version"] == 1,
         "invalid calibration schema",
     )
-    for key in ("capture_sha256", "reference_sha256", "environment", "policy"):
+    for key in (
+        "capture_sha256",
+        "reference_sha256",
+        "environment",
+        "policy",
+        "metrics_revision",
+    ):
         need(calibration.get(key) == report[key], "calibration mismatch: " + key)
     integer(calibration.get("samples"), "calibration samples", 5)
     observations = calibration.get("observations")

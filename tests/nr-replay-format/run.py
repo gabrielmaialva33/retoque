@@ -223,6 +223,25 @@ class FormatTests(unittest.TestCase):
         )
         with patch.object(registry, "TESTS", directory):
             self.assertEqual(registry.check_registry({"stable-id": entry}), [])
+            import os
+
+            scan = os.scandir
+            for ignored in ("artifacts", "_cache", ".hidden"):
+                nested = directory / "nr" / "suite" / ignored / "nested"
+                nested.mkdir(parents=True)
+                (nested / "run.py").write_text("pass\n")
+
+            def guarded_scan(path):
+                self.assertFalse(
+                    any(
+                        p in ("artifacts", "_cache", ".hidden")
+                        for p in Path(path).parts
+                    )
+                )
+                return scan(path)
+
+            with patch("os.scandir", side_effect=guarded_scan):
+                self.assertEqual(registry.check_registry({"stable-id": entry}), [])
             self.assertTrue(registry.check_registry({"a": entry, "b": entry}))
             self.assertTrue(
                 registry.check_registry({"a": dict(entry, path="../outside")})

@@ -158,6 +158,22 @@ with incomplete status rather than dropping temporal frames. Record scene cuts a
 
 ## Judge metrics and verdicts
 
+V1c performance: the default backend is NumPy when importable, otherwise the stdlib reference.
+Use `uv run --with numpy python -m tools.replay ...`; never install into system Python.
+`RETOQUE_REPLAY_BACKEND=python|numpy|auto` can force a backend for parity/benchmarks; explicitly
+requesting unavailable NumPy fails rather than silently changing the measurement. Report the backend.
+Both paths preserve float32 image/metric storage boundaries and double-precision arithmetic.
+Host parity tests compare every summary metric within 1e-6 and require identical verdicts.
+This tolerance is a test agreement criterion, not an automatic expansion of golden envelopes.
+
+All warmup files still undergo checksum/shape/finite-value validation. Compute metrics only for
+scored frames, retaining just the immediate warmup predecessor of the first scored frame when
+neither run skipped it. That predecessor may supply the first temporal/pulse pair; resets, skips
+and time gaps still break pairs. Unpaired disocclusion error is null and excluded from summary
+means, not a measured zero. A paired frame with no rejected pixels retains zero disocclusion error.
+Reports and calibrations bind `metrics_revision:2` for these changed pair/summary populations;
+regenerate earlier envelopes. The revision is shared by both backends, not a backend identity.
+
 `python3 -m tools.replay --capture CAPTURE --reference RUN --candidate RUN --out DIR`
 accepts optional `--calibration FILE` and `--policy FILE`. Calibration command:
 `python3 -m tools.replay calibrate --capture CAPTURE --reference RUN --repeat RUN ... --out FILE`.
@@ -171,7 +187,8 @@ Calibration observations retain each trial ID alongside its run digest and reval
 when consumed. Earlier calibration files without these IDs must be regenerated.
 
 Metrics, for whole-frame and each rectangular region [x,y,width,height]:
-- Pulse: e=log2(sum Yout / sum Yin), absolute step in e between consecutive scored frames,
+- Pulse: e=log2(sum Yout / sum Yin), absolute step in e at scored frames against the immediate
+  predecessor (including the final warmup frame),
   grouped by destination kind and source→destination kind. Resets/gaps/nonpositive light break
   pairs. Region pulse prevents cancellation of opposing local changes.
 - Motion-compensated temporal edit residual: mean absolute change of (out-input), bilinearly

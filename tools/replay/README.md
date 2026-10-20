@@ -1,9 +1,21 @@
 # Offline replay judge
 
-Stdlib Python; no dependency installation, GPU, DLL or model required. The judge reads
+Stdlib Python works without dependency installation, GPU, DLL or model. The judge reads
 already recorded inputs/outputs. It does not generate model outputs or capture a game.
 
 From the repository root:
+
+For large captures, use the optional, automatically selected NumPy backend in a uv-managed
+environment: `uv run --with numpy python -m tools.replay ...`. Never use system pip.
+`RETOQUE_REPLAY_BACKEND=python` forces the scalar reference; `numpy` requires acceleration
+and `auto` (default) falls back cleanly if unavailable. Result metadata names the backend.
+Both paths validate all warmup inputs but calculate metrics only for scored frames, retaining
+the immediate predecessor for the first pair. Calibration files from before `metrics_revision:2`
+must be regenerated (first-pair and unpaired-disocclusion semantics changed).
+
+CPU metric-only benchmark (no model, GPU or files read):
+`uv run --with numpy python -m tools.replay.benchmark --width 640 --height 360 --repeats 3`.
+It reports paired/unpaired medians and labeled pixel-count extrapolations, not whole-judge timings.
 
 ```sh
 python3 -m tools.replay --capture /local/clip/capture.json \
@@ -38,7 +50,8 @@ Captures explicitly declare `color_jitter: "removed"|"present"`; DLAA boundary o
 entries are accepted only on unscored warmup frames and break temporal pairs; scored skips
 remain INVALID. A/A rejects reused trial IDs even with different paths or manifest hashes.
 Process one frame at a time (plus previous-frame history); pure Python still needs realistic
-profiling before using long full-resolution corpora. Game frames/models stay local, outside Git.
+profiling for complete decoding/I/O/preview cost on long full-resolution corpora.
+Game frames/models stay local, outside Git.
 
 The complete producer contract, clocks, completion rules and limitations live in
 [offline-replay.md](../../docs/dlssnr/design/offline-replay.md).

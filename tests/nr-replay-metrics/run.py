@@ -41,6 +41,141 @@ class MetricsTests(unittest.TestCase):
             **kwargs,
         )
 
+    def test_unpaired_disocclusion_is_not_measured_zero(self):
+        change(self.capture, lambda c: [f.update(reset=True) for f in c["frames"]])
+        ref = run(self.root / "cuts", self.capture, self.pixels)
+        report = self.judge(self.capture, ref, ref)
+        self.assertIsNone(report["metrics"]["all"]["disocclusion_mae"])
+        self.assertTrue(
+            all(
+                r["regions"]["all"]["disocclusion_mae"] is None
+                for r in report["frames"]
+            )
+        )
+
+    def test_old_metric_population_calibration_is_rejected(self):
+        for revision in (None, 1):
+            cal = dict(self.calibration, metrics_revision=revision)
+            self.assertEqual(
+                self.judge(self.capture, self.reference, self.trial(), cal)["verdict"],
+                "INVALID",
+            )
+
+    def test_warmup_only_scores_frames_and_retains_first_predecessor(self):
+        from unittest.mock import patch
+        from tools.replay import metrics
+
+        change(
+            self.capture,
+            lambda c: [f.update(score=i >= 4) for i, f in enumerate(c["frames"])],
+        )
+        ref = run(self.root / "warmup", self.capture, self.pixels)
+        with patch.dict("os.environ", RETOQUE_REPLAY_BACKEND="python"):
+            with patch.object(
+                metrics, "frame_metrics", wraps=metrics.frame_metrics
+            ) as calculate:
+                report = self.judge(self.capture, ref, ref)
+        self.assertEqual(calculate.call_count, 4)
+        self.assertEqual(report["metrics"]["all"]["temporal_pairs"], 4)
+        self.assertEqual(report["frames"][0]["transition"], "every->every")
+        # Even an unused warmup plane must be checked.
+        c = json.loads(self.capture.read_text())
+        (self.capture.parent / c["frames"][0]["color"]["path"]).write_bytes(b"bad")
+        self.assertEqual(self.judge(self.capture, ref, ref)["verdict"], "INVALID")
+
+    def test_numpy_backend_parity(self):
+        import importlib.util
+        from unittest.mock import patch
+
+        if importlib.util.find_spec("numpy") is None:
+            self.skipTest("optional NumPy absent; use uv run --with numpy")
+
+        def compare(a, b):
+            if isinstance(a, dict):
+                self.assertEqual(set(a), set(b))
+                for key in a:
+                    compare(a[key], b[key])
+            elif isinstance(a, list):
+                self.assertEqual(len(a), len(b))
+                for x, y in zip(a, b):
+                    compare(x, y)
+            elif type(a) in (int, float):
+                self.assertAlmostEqual(a, b, delta=1e-6)
+            else:
+                self.assertEqual(a, b)
+
+        for mutation in ("same", "pulse", "blur", "stale", "invalid"):
+            transform = {
+                "same": None,
+                "pulse": lambda i, p: [v * (1.2 if i % 2 else 0.8) for v in p],
+                "blur": lambda i, p: [sum(p) / len(p)] * len(p),
+                "stale": lambda i, p: [v * 1.1 for v in self.pixels[0]],
+                "invalid": None,
+            }[mutation]
+            candidate = self.trial(transform)
+            if mutation == "invalid":
+                change(candidate, lambda r: r["frames"][2].update(completed_passes=0))
+            reports = []
+            for backend in ("python", "numpy"):
+                with patch.dict("os.environ", RETOQUE_REPLAY_BACKEND=backend):
+                    reports.append(
+                        self.judge(
+                            self.capture, self.reference, candidate, self.calibration
+                        )
+                    )
+                    if mutation != "invalid":
+                        self.assertEqual(reports[-1]["backend"], backend)
+            a, b = reports
+            with self.subTest(mutation=mutation):
+                self.assertEqual(a["verdict"], b["verdict"])
+                for key in ("metrics", "timing", "counts", "pulse_groups", "frames"):
+                    compare(a.get(key), b.get(key))
+
+        # Fractional UV flow, signed scale, jitter, sRGB and linear-depth rejection.
+        for color_jitter, includes_jitter in (
+            ("removed", False),
+            ("present", False),
+            ("present", True),
+        ):
+            clip, pixels = corpus(
+                self.root / f"{color_jitter}-{includes_jitter}", moving=True
+            )
+            c = json.loads(clip.read_text())
+            c.update(color_jitter=color_jitter, color_space="srgb-rec709")
+            c["motion"].update(
+                units="uv", scale=[2, -1], includes_jitter=includes_jitter
+            )
+            c["depth"].update(kind="linear", threshold=0.03)
+            c["regions"]["pixel"] = [3, 3, 1, 1]
+            for i, f in enumerate(c["frames"]):
+                f.update(
+                    jitter=[i % 2 * 0.2, i % 3 * 0.1], pre_exposure=2, reset=i in (0, 4)
+                )
+                f["motion"] = plane(
+                    clip.parent, f"{i}.fractional", [-0.04, 0.025] * 48, channels=2
+                )
+                f["depth"] = plane(
+                    clip.parent,
+                    f"{i}.linear",
+                    [1 + (i + p) % 3 * 0.05 for p in range(48)],
+                    channels=1,
+                )
+            clip.write_text(json.dumps(c))
+            ref = run(self.root / f"{color_jitter}-{includes_jitter}-ref", clip, pixels)
+            candidate = run(
+                self.root / f"{color_jitter}-{includes_jitter}-candidate",
+                clip,
+                pixels,
+                transform=lambda i, p: [v * (1.1 if i % 2 else 0.9) for v in p],
+            )
+            reports = []
+            for backend in ("python", "numpy"):
+                with patch.dict("os.environ", RETOQUE_REPLAY_BACKEND=backend):
+                    reports.append(self.judge(clip, ref, candidate))
+            self.assertEqual(reports[0]["verdict"], reports[1]["verdict"])
+            for key in ("metrics", "timing", "counts", "pulse_groups", "frames"):
+                compare(reports[0][key], reports[1][key])
+
     def test_same_inputs_calibrated_pass_and_missing_calibration_inconclusive(self):
         candidate = self.trial()
         self.assertEqual(

@@ -107,6 +107,17 @@ def gradient(values, width, rect):
     return total / count if count else 0.0
 
 
+def retain(frame, source, depth, output):
+    return dict(
+        frame=frame,
+        source=source,
+        depth=depth,
+        output=output,
+        source_y=luma(source),
+        out_y=luma(output),
+    )
+
+
 def frame_metrics(capture, frame, source, depth, motion, output, reference, previous):
     width, height = source.width, source.height
     regions = {"all": [0, 0, width, height], **capture["regions"]}
@@ -183,7 +194,9 @@ def frame_metrics(capture, frame, source, depth, motion, output, reference, prev
             )
             / len(indices),
             ghost_mae=mean(pixel_error),
-            disocclusion_mae=mean(disoccluded) if disoccluded else 0.0,
+            disocclusion_mae=(mean(disoccluded) if disoccluded else 0.0)
+            if paired
+            else None,
             detail_error=abs(out_gradient - ref_gradient) / max(ref_gradient, 1e-6),
             candidate_gradient=out_gradient,
             reference_gradient=ref_gradient,
