@@ -316,13 +316,18 @@ def judge(runner, root, capture_path, runs):
         out = root / 'judge' / name
         if out.exists():
             shutil.rmtree(out)
-        p = subprocess.run([sys.executable, '-m', 'tools.replay', '--capture', str(capture_path), '--reference',
-                            str(reference), '--candidate', str(root / 'runs' / name / 'run.json'), '--out', str(out)],
+        # tools/replay picks its NumPy backend when importable; uv supplies NumPy in a throwaway environment,
+        # never in system Python. Without uv the scalar reference runs, about twenty times slower.
+        python = ['uv', 'run', '--no-project', '-q', '--with', 'numpy', 'python'] if shutil.which('uv') \
+            else [sys.executable]
+        p = subprocess.run(python + ['-m', 'tools.replay', '--capture', str(capture_path), '--reference',
+                                     str(reference), '--candidate', str(root / 'runs' / name / 'run.json'),
+                                     '--out', str(out)],
                            cwd=runner.ROOT, capture_output=True, text=True)
         result = out / 'result.json'
-        verdicts[name] = dict(exit=p.returncode,
-                              verdict=json.loads(result.read_text()).get('verdict') if result.is_file() else None,
-                              stderr=p.stderr[-2000:])
+        data = json.loads(result.read_text()) if result.is_file() else {}
+        verdicts[name] = dict(exit=p.returncode, verdict=data.get('verdict'), reasons=data.get('reasons'),
+                              backend=data.get('backend'), stderr=p.stderr[-2000:])
     return dict(available=True, verdicts=verdicts)
 
 
