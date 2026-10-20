@@ -514,8 +514,10 @@ passed.
 The two every-frame runs were bitwise identical on all 256 frames, which is observed, not promised. The run directory
 is about 4 GB (corpus plus six output sets) under `artifacts/replay-run`, which is ignored.
 
-Judged against `every-a` on the same corpus (NumPy backend; whole frame; verdict INCONCLUSIVE because no A/A
-calibration exists yet, so these are measurements, not a pass or fail):
+Judged against `every-a` on the same corpus (NumPy backend; whole frame). Calibrated from five fresh every-frame
+repeats, the envelope is zero for every error metric: the model gave bitwise-identical output in every process, so
+any change to the NR output, even one bit, FAILs. `every-b` PASSes; the cadence variants FAIL by design, because they
+are not the every-frame answer, and the numbers say by how much:
 
 | Candidate | Error vs every frame, mean / max | Detail lost | Pulse p95 (stops) |
 |---|---|---|---|
