@@ -1,0 +1,17 @@
+{
+  "baseline": "1081a48d",
+  "definitions": {
+    "const char* NgxResultName(unsigned int r)": "e8ccfdd5c24a7e7462dcc7f0421018d37700dce2a2774dd80fcafe4ff20f03e7",
+    "void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList)": "bfa923a91b5de04a033c2555276cea311e345dde0a0ee7cf76790ab5571be258",
+    "bool EnsureDirectRuntime()": "01bbca16b518016579365f2ea889c2278a70c9a3a1418d324b997dc897e62eec",
+    "bool EnsureForwarder()": "1a908213fa18f5ffb2f669da409eaab3b34430ca8f4807d515b3fec94efeef7b",
+    "bool NoteModelFault()": "301fde34ac811679b98074fcc87728a678d64743ea3c1c5c4158c862b3bd88b4",
+    "bool EnsureCapabilityParams(ID3D12Device* device)": "edd414ee6ae643b3a3fc0ecb57f9ef97d5ab264981b2c7d5341467be8b6f442b",
+    "void ReportScalingRatios()\n{": "602089ec3141a8e6e175a908947e83783614a00662b74cf7625c53efac825827",
+    "void DiscoverFloatSlot(NVSDK_NGX_Parameter* params)\n{": "de233b918fcd40a0e42520d2305ab42ecea9d72c808d9b38dbe65baa93e390f4",
+    "void SetExtras(const Config& cfg,": "693b78b3cf78ea646f718d80fdd9c919defa9abfa1402e50e08b25193c99aecc",
+    "bool TuningMatchesFeature(const Config& cfg)": "ba464e6ba22bfd6cce0f4af026f80d6d90b1dab2967953986d5067f6db0897ab",
+    "void RecordBuiltTuning(const Config& cfg)": "26283708061dbca966f0174677656754c64b6509e2f612d2f4976b69f10f3162",
+    "void ProbeD3D11(void* d3d11Device)": "a78315401a3b6b52725f9e622c338cb63108fe92dbdeec9b70e2b8f19ce99da0"
+  }
+}
