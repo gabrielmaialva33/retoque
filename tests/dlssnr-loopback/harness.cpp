@@ -311,6 +311,7 @@ static void PumpMessages()
 #include "cold_nr.h"
 #include "present_nr.h"
 #include "moving_scene.h"
+#include "replay_nr.h"
 
 int main(int argc, char** argv)
 {
@@ -343,7 +344,8 @@ int main(int argc, char** argv)
         const std::string argument = argv[i];
 
         // --cold-size takes a value, which is not a DLL path either.
-        if (argument == "--cold-size" || argument == "--cold-ui-correction" || argument == "--cold-core-sdk")
+        if (argument == "--cold-size" || argument == "--cold-ui-correction" || argument == "--cold-core-sdk" ||
+            argument == "--replay-nr" || argument == "--moving-corpus")
         {
             ++i;
             continue;
@@ -360,6 +362,8 @@ int main(int argc, char** argv)
     unsigned coldWidth = 640, coldHeight = 360;
     int coldUiCorrection = 0;
     unsigned coldCoreSdk = 0;
+    const char* replayPlan = nullptr; // --replay-nr PLAN (offline-replay-seam.md)
+    unsigned corpusFrames = 0;        // --moving-corpus N: the moving scene, every frame captured
     const bool coldLoadOptiScaler = hasFlag("--cold-load-optiscaler");
     const bool coldDeviceFromD3D11 = hasFlag("--cold-device-from-d3d11");
     const bool coldSiblingSnippets = hasFlag("--cold-sibling-snippets");
@@ -383,6 +387,14 @@ int main(int argc, char** argv)
         else if (flag == "--cold-core-sdk")
         {
             coldCoreSdk = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 0));
+        }
+        else if (flag == "--replay-nr")
+        {
+            replayPlan = argv[i + 1];
+        }
+        else if (flag == "--moving-corpus")
+        {
+            corpusFrames = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
         }
     }
 
@@ -492,10 +504,18 @@ int main(int argc, char** argv)
         Require(fenceEvent != nullptr, "CreateEvent");
         UINT64 fenceValue = 0;
 
-        if (hasFlag("--moving-scene"))
+        if (hasFlag("--moving-scene") || corpusFrames > 0)
         {
             MovingScene::Run(dllPath, device, queue, alloc, list, fence, fenceEvent, window,
-                             hasFlag("--moving-present"));
+                             hasFlag("--moving-present"), corpusFrames);
+            DestroyWindow(window);
+            CloseHandle(fenceEvent);
+            return 0;
+        }
+
+        if (replayPlan != nullptr)
+        {
+            ReplayNr::Run(dllPath, replayPlan, device, queue, alloc, list, fence, fenceEvent);
             DestroyWindow(window);
             CloseHandle(fenceEvent);
             return 0;

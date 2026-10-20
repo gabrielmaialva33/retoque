@@ -472,3 +472,42 @@ Combine it with `LOOPBACK_NR_EXTRA` (see "Automated moving scene" above), e.g.
 Selected values and binary hashes are recorded in provenance. Verify actual
 `carried=true` timing records, not only the requested setting. The nonblocking
 compiler/GPU lease applies to the entire run; retry a busy lease, never bypass it.
+
+## Offline replay through the production seam (`--replay-nr`)
+
+`python3 tests/dlssnr-loopback/run.py --replay-nr` replays NR-boundary frames through the production DLL's replay
+adapter (`docs/dlssnr/design/offline-replay-seam.md`; capture and run formats in `offline-replay.md`).
+- **Default corpus.** Without `LOOPBACK_REPLAY_CAPTURE=/path/capture.json` it first records one: the moving scene
+  with NR off (`--moving-corpus N`), every frame captured. Its DLAA output is exactly what the NR pass receives in
+  that pipeline. `LOOPBACK_REPLAY_FRAMES` (256) and `LOOPBACK_REPLAY_WARMUP` (160) set its length. The warmup must
+  outlast both 500 ms settle gates that tracked recording adds.
+- **One fresh Proton process per variant.** Each runs with `RETOQUE_REPLAY=1`, reads `plan.txt` (the validated
+  capture, line by line) and enters `RetoqueReplay_Evaluate` once per frame. The decision clocks follow the
+  capture's logical time, so the harness's speed does not change what is judged.
+- **Variants.** The defaults are `off`, `every-a`, `every-b`, `cadence2`, `cadence4` and `adaptive4`.
+  `LOOPBACK_REPLAY_VARIANTS` takes a JSON object of name to `[DlssNr]` keys, with `null` for NR off.
+- **Outputs.** `runs/<v>/run.json` for each NR-on variant, `runs/off/control.json`, and `replay-report.json` with
+  the seam's gates:
+  - NR off leaves every byte;
+  - no scored frame is skipped;
+  - every-frame runs complete every requested pass;
+  - Cadence 2 and 4 carry at their interval;
+  - adaptive reports intervals;
+  - two identical runs make identical decisions.
+
+  When `tools/replay` is present it judges every candidate against `every-a`.
+
+First run, 2026-10-20 (RTX 4090, Proton Experimental, model 310.8.2.0, 640x360, 96 scored frames): every gate
+passed.
+
+| Variant | GPU per frame |
+|---|---|
+| Every frame | 2.32 ms mean |
+| Cadence 2 | 1.20 ms mean (model frames p50 2.22 ms, carried frames p50 0.065 ms) |
+| Cadence 4 | 0.67 ms mean |
+| Adaptive (maximum 4) | ran at interval 2 on this cube's moderate motion |
+
+The two every-frame runs were bitwise identical on all 256 frames, which is observed, not promised. The run directory
+is about 4 GB (corpus plus six output sets) under `artifacts/replay-run`, which is ignored.
+
+Not covered: the upscaler and everything upstream of it, frame generation, swapchain pacing and native Windows.

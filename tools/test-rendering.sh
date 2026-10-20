@@ -27,4 +27,5 @@ if "$build"; then
 fi
 python3 tests/fg-inputs-d3d12/run.py
 python3 tests/dlssnr-loopback/run.py --runtime proton --moving-scene
+python3 tests/dlssnr-loopback/run.py --runtime proton --replay-nr
 exec python3 tests/fg-provider-d3d12/run.py --strict

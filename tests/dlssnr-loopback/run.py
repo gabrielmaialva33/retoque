@@ -138,7 +138,7 @@ def check_present_coverage(harness):
 def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_ab=False, cold_size=None,
                      cold_ui=None, cold_sdk=None, cold_load_opti=False, cold_from_d3d11=False,
                      cold_siblings=False, mask_ab=False, transfer_ab=False, reset_cost=False,
-                     ui_protect_ab=False, moving_scene=False, dll=None):
+                     ui_protect_ab=False, moving_scene=False, dll=None, replay_nr=False):
     """Run the harness the way a Steam game runs: through Proton, in a compatdata prefix of its own.
 
     Hand-mirroring what Proton provides (vkd3d-proton, dxvk-nvapi, the driver's nvngx pair and the
@@ -166,6 +166,9 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
     if moving_scene:
         import run_moving
         return run_moving.run_trials(sys.modules[__name__], proton, env, dll)
+    if replay_nr:
+        import run_replay
+        return run_replay.run(sys.modules[__name__], proton, env, dll)
     for stale in ('OptiScaler.log', 'dlssnr-loopback.log'):
         (RUN / stale).unlink(missing_ok=True)
     if present_nr:
@@ -302,6 +305,10 @@ def main():
     modes.add_argument('--moving-scene', action='store_true',
                        help='deterministic graphics scene through production NGX exports; NR off/on/on/off '
                             'GPU timing, guide oracle, captures and temporal metrics; requires Proton')
+    modes.add_argument('--replay-nr', action='store_true',
+                       help='offline replay (docs/dlssnr/design/offline-replay-seam.md): recorded NR-boundary frames '
+                            'through the production seam, one fresh process per variant; LOOPBACK_REPLAY_CAPTURE '
+                            'names a capture.json, else the moving-scene corpus is recorded first; requires Proton')
     modes.add_argument('--cold-nr', action='store_true',
                     help='probe core cold defaults and NR feature 18 through the production forwarder; '
                          'no OptiScaler Init, DLSS or RR feature; isolated artifacts/cold-run')
@@ -332,6 +339,10 @@ def main():
         ap.error('--reset-cost requires --present-nr')
     if args.moving_scene and args.runtime != 'proton':
         ap.error('--moving-scene requires --runtime proton')
+    if args.replay_nr and args.runtime != 'proton':
+        ap.error('--replay-nr requires --runtime proton')
+    # The replay records its first corpus with the moving scene, so it stages exactly what that scene needs.
+    scene = args.moving_scene or args.replay_nr
     if args.present_nr and args.runtime != 'proton':
         ap.error('--present-nr requires --runtime proton')
     if args.hud_ab or args.composition_ab or args.mask_ab or args.transfer_ab or args.ui_protect_ab:
@@ -349,6 +360,8 @@ def main():
         RUN = OUT / 'cold-run'
     if args.moving_scene:
         RUN = OUT / 'moving-run'
+    if args.replay_nr:
+        RUN = OUT / 'replay-run'
 
     dll = Path(args.dll)
     if not dll.exists():
@@ -392,7 +405,7 @@ def main():
     if not (RUN / 'dlssnr-loopback.exe').exists():
         raise SystemExit('no harness binary; run without --skip-build first')
 
-    if args.moving_scene:
+    if scene:
         shutil.copy2(HERE / 'scene.hlsl', RUN / 'scene.hlsl')
 
     # NR needs the forwarder beside the DLL (the NVIDIA snippet rejects callers whose module path
@@ -405,13 +418,13 @@ def main():
         'LOOPBACK_DONOR',
         str(Path.home() / '.local/share/Steam/steamapps/common/Crimson Desert/bin64')))
     if donor.is_dir() and not standalone:
-        for src in ([] if args.moving_scene else sorted(donor.glob('sl.*.dll'))) + [donor / 'nvngx_dlss.dll']:
+        for src in ([] if scene else sorted(donor.glob('sl.*.dll'))) + [donor / 'nvngx_dlss.dll']:
             if src.exists():
                 link = RUN / src.name
                 link.unlink(missing_ok=True)
                 link.symlink_to(src)
     names = ['nvngx.dll_dlssnr.dll', 'nvngx_dlssnr.dll', '_nvngx.dll']
-    if args.moving_scene:
+    if scene:
         names += ['nvngx_dlss.dll']
     if args.cold_sibling_snippets:
         # The other feature snippets a game folder carries. They are only staged so that
@@ -432,14 +445,14 @@ def main():
         # Cold bring-up should test the installed driver, not a possibly stale kit copy.
         # Leave the legacy sweep's dependency selection unchanged.
         installed_core = Path('/usr/lib/nvidia/wine/_nvngx.dll')
-        if (standalone or args.moving_scene) and name == '_nvngx.dll' and installed_core.exists():
+        if (standalone or scene) and name == '_nvngx.dll' and installed_core.exists():
             src = installed_core
         # Test the forwarder built alongside this DLL. The kit remains a fallback
         # for external builds that do not ship their matching forwarder.
         if name == 'nvngx.dll_dlssnr.dll' and (dll.parent / name).exists():
             src = (dll.parent / name).resolve()
         siblings = ('nvngx_dlss.dll', 'nvngx_dlssd.dll', 'nvngx_dlssg.dll')
-        if not src.exists() and name == 'nvngx_dlss.dll' and args.moving_scene and (donor / name).is_file():
+        if not src.exists() and name == 'nvngx_dlss.dll' and scene and (donor / name).is_file():
             src = donor / name
         if not src.exists() and name in siblings:
             # The kit may not carry them; a game folder does. Fall back to the one we know has them.
@@ -448,7 +461,7 @@ def main():
                 src = game
 
         if not src.exists():
-            if args.moving_scene:
+            if scene:
                 raise SystemExit(f'SETUP FAILURE: moving scene dependency missing: {name}')
             if standalone and name not in siblings:
                 raise SystemExit(f'SETUP FAILURE: missing cold NR dependency {src}; no NGX result')
@@ -474,7 +487,8 @@ def main():
                                 args.cold_ui_correction, args.cold_core_sdk, args.cold_load_optiscaler,
                                 args.cold_device_from_d3d11, args.cold_sibling_snippets, mask_ab=args.mask_ab,
                                 transfer_ab=args.transfer_ab, reset_cost=args.reset_cost,
-                                ui_protect_ab=args.ui_protect_ab, moving_scene=args.moving_scene, dll=dll)
+                                ui_protect_ab=args.ui_protect_ab, moving_scene=args.moving_scene, dll=dll,
+                                replay_nr=args.replay_nr)
 
     # A separate runtime prefix: the compiler prefix is configured for MSVC, not for graphics, and
     # running the app there conflates "the harness is wrong" with "this prefix has no D3D12".
@@ -521,6 +535,10 @@ if __name__ == '__main__':
     if '--moving-scene' in sys.argv and '--help' not in sys.argv:
         import run_moving
         with run_moving.lease(OUT / 'moving-run'):
+            main()
+    elif '--replay-nr' in sys.argv and '--help' not in sys.argv:
+        import run_moving
+        with run_moving.lease(OUT / 'replay-run'):
             main()
     else:
         main()
