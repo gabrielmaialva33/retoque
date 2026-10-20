@@ -46,6 +46,8 @@ int main()
     // The residual limit too: it bounds the composed picture, so a change is logged at once and resets the stabilizer.
     ManualChange("residual limit", 1, [](auto& s) { s.residualLimit = 0.5f; });
 
+    ManualChange("minimum brightness", 1, [](auto& s) { s.minRatio = 0.75f; });
+
     // The tolerance is normalised out while the stabilizer is off, like the other inactive controls.
     ComposeSite stabilizerOff;
     Expect(stabilizerOff.Observe(At(0)), "first composition with the stabilizer off");

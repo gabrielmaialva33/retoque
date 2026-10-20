@@ -100,3 +100,5 @@ Related, outside that sequence:
   default until a game run confirms it.
 - [dred.md](design/dred.md): opt-in D3D12 DRED, so a device removal on native Windows names the queue, the command list and the operation the GPU stopped at.
 - [../history/FORWARDER_INVESTIGATION.md](../history/FORWARDER_INVESTIGATION.md) and [retoque/dlssnr/forwarder/README.md](../../retoque/dlssnr/forwarder/README.md) (linked, not design notes).
+
+- [Final darkening floor](design/darken-limit.md): independent MinRatio bound, applied once after composition.

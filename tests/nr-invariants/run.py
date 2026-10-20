@@ -248,11 +248,14 @@ with tempfile.TemporaryDirectory() as scratch:
         regenerated = Path(scratch) / header
         subprocess.run([sys.executable, str(create_header), str(precompile / binary), str(regenerated), array],
                        check=True, capture_output=True)
-        if regenerated.read_bytes() != (precompile / header).read_bytes():
+        # The upstream generator leaves spaces after each byte row. Allow removing only those line-end
+        # spaces for git diff --check; every byte literal, array name and other character must still match.
+        canonical = lambda data: re.sub(rb'[ \t]+(?=\r?$)', b'', data, flags=re.M)
+        if canonical(regenerated.read_bytes()) != canonical((precompile / header).read_bytes()):
             fail(f'{header} is not what create_header.py makes from {binary}: regenerate it (array {array})')
 
 if len(failures) == before:
-    print(f'PASS: {", ".join(header for _, header, _, _ in targets)} are byte-identical to '
+    print(f'PASS: {", ".join(header for _, header, _, _ in targets)} match (ignoring trailing spaces) '
           'create_header.py over the committed .cso and .spv')
 
 # Bytecode known to predate a source change. Whether a binary is the compile of its .hlsl needs dxc; what a host can

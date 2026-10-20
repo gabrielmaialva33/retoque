@@ -377,3 +377,8 @@ summary = "Real DLSS-G evidence judge rejects missing interpolation, incomplete 
 tier = "host"
 timeout = 60
 summary = "Production deferred queue: owner retirement before NR Vulkan device destruction, lost-device abandonment, handle reuse and detached-collector race. No GPU."
+
+[nr-darken-limit]
+tier = "host"
+timeout = 120
+summary = "Actual final composition floor: luminance semantics, HDR, passthrough, black and off-path float32 identity. No GPU."

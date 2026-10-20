@@ -1,4 +1,5 @@
 #include <dlssnr/DlssNr_PassSettings.h>
+#include <shaders/dlssnr/DlssNr_Common.h>
 #include <dlssnr/DlssNr_Cadence.h>
 #include <algorithm>
 #include <map>
@@ -151,6 +152,7 @@ struct Config
 {
     OptionalBool DlssNrShowAllSettings;
     OptionalFloat DlssNrTransferStrength;
+    OptionalFloat DlssNrMinRatio;
     OptionalU32 DlssNrPreset;
     struct Timing
     {

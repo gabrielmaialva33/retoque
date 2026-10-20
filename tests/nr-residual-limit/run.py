@@ -28,7 +28,7 @@ live = code(shader)
 assert live.count('gResidualLimit') == 4, live.count('gResidualLimit')
 cbuffer = live[live.index('cbuffer Params'):]
 cbuffer = cbuffer[cbuffer.index('{') + 1:cbuffer.index('};')]
-assert re.findall(r'\b(?:uint|float)\s+(\w+)\s*;', cbuffer)[-1] == 'gResidualLimit', 'appended last'
+assert re.findall(r'\b(?:uint|float)\s+(\w+)\s*;', cbuffer)[-2:] == ['gResidualLimit', 'gMinRatio'], 'append-only layout'
 gate = live.index('if (gResidualLimit > 0.0)')
 assert live.index('gTransferStrength <= 0.0') < gate, 'strength zero returns the frame before the limit is read'
 assert live.index('float boundedRatio = clamp(amplified, drop, lift);') < gate
@@ -52,7 +52,7 @@ assert 'reversibleNow != 2 && reversibleNow != 4 && (vulkan || !config->DlssNrUs
 assert 'kDlssNrResidualLimitMax' in menu
 
 print('PASS: read once, after the guard and the strength-zero return, before the correction, the colour blend and '
-      'the replace curves; appended last; sent clamped on D3D12 and Vulkan; logged, resetting the stabilizer and the '
+      'the replace curves; append-only layout; sent clamped on D3D12 and Vulkan; logged, resetting the stabilizer and the '
       'pulse window; hidden where nothing composes', flush=True)
 
 # The bound, twice: whole, and cut before the residual limit.

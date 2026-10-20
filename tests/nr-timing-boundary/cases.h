@@ -1,104 +1,191 @@
-int main() {
-    int cases=0;
+int main()
+{
+    int cases = 0;
     Config cfg;
     DlssNrPassSnapshot passes;
-    auto make=[&](const char* stage="after", unsigned w=3440, unsigned h=1440, float scale=1.0f,
-                  bool reset=false, bool capture=false, bool hdr=true, unsigned format=10, unsigned cadence=1,
-                  bool carried=false, uint32_t effective=1, const char* enlarge="not-selected") {
-        return TimingMetadata(cfg,passes,42,17,stage,2293,960,w,h,unsigned(w*scale),unsigned(h*scale),scale,reset,capture,hdr,format,
-                              cadence,carried,effective,enlarge);
+    auto make = [&](const char* stage = "after", unsigned w = 3440, unsigned h = 1440, float scale = 1.0f,
+                    bool reset = false, bool capture = false, bool hdr = true, unsigned format = 10,
+                    unsigned cadence = 1, bool carried = false, uint32_t effective = 1,
+                    const char* enlarge = "not-selected")
+    {
+        return TimingMetadata(cfg, passes, 42, 17, stage, 2293, 960, w, h, unsigned(w * scale), unsigned(h * scale),
+                              scale, reset, capture, hdr, format, cadence, carried, effective, enlarge);
     };
-    auto a=make(), b=make();
-    assert(a.settingsGeneration==b.settingsGeneration && a.contractHash==b.contractHash); ++cases;
-    auto before=make("before",2293,960);
-    assert(before.settingsGeneration>a.settingsGeneration && before.contractHash!=a.contractHash);
-    assert(before.outputWidth==2293 && before.renderWidth==2293 && before.modelWidth==2293); ++cases;
-    auto restored=make(), repeated=make();
-    assert(restored.contractHash==a.contractHash && restored.settingsGeneration>before.settingsGeneration);
-    assert(repeated.contractHash==restored.contractHash && repeated.settingsGeneration==restored.settingsGeneration); ++cases;
-    auto scaled=make("after",3440,1440,2.0f);
-    assert(scaled.modelWidth==6880 && scaled.workingScale==2 && scaled.contractHash!=a.contractHash); ++cases;
-    auto normal=make(), reset=make("after",3440,1440,1,true,true);
-    assert(reset.settingsGeneration==normal.settingsGeneration && reset.modelReset && reset.captureActive);
-    assert(reset.evaluationId==42 && reset.presentId==17); ++cases;
-    passes.Count=2; passes.Individual=true;
-    auto two=make(); passes.Settings[1].Intensity=0.7f; auto edited=make();
-    assert(two.contractHash!=edited.contractHash && edited.requestedPasses==2); ++cases;
-    cfg.DlssNrApplyModel.value=false; auto hidden=make();
-    assert(hidden.contractHash!=edited.contractHash && std::string(hidden.modelIdentity)=="fixture-file-attributes"); ++cases;
-    auto sdr=make("after",3440,1440,1,false,false,false,28);
-    assert(sdr.contractHash!=hidden.contractHash); ++cases;
-    assert(a.modelWidth==3440 && a.settingsGeneration<hidden.settingsGeneration); ++cases;
+    auto a = make(), b = make();
+    assert(a.settingsGeneration == b.settingsGeneration && a.contractHash == b.contractHash);
+    ++cases;
+    auto before = make("before", 2293, 960);
+    assert(before.settingsGeneration > a.settingsGeneration && before.contractHash != a.contractHash);
+    assert(before.outputWidth == 2293 && before.renderWidth == 2293 && before.modelWidth == 2293);
+    ++cases;
+    auto restored = make(), repeated = make();
+    assert(restored.contractHash == a.contractHash && restored.settingsGeneration > before.settingsGeneration);
+    assert(repeated.contractHash == restored.contractHash &&
+           repeated.settingsGeneration == restored.settingsGeneration);
+    ++cases;
+    auto scaled = make("after", 3440, 1440, 2.0f);
+    assert(scaled.modelWidth == 6880 && scaled.workingScale == 2 && scaled.contractHash != a.contractHash);
+    ++cases;
+    auto normal = make(), reset = make("after", 3440, 1440, 1, true, true);
+    assert(reset.settingsGeneration == normal.settingsGeneration && reset.modelReset && reset.captureActive);
+    assert(reset.evaluationId == 42 && reset.presentId == 17);
+    ++cases;
+    passes.Count = 2;
+    passes.Individual = true;
+    auto two = make();
+    passes.Settings[1].Intensity = 0.7f;
+    auto edited = make();
+    assert(two.contractHash != edited.contractHash && edited.requestedPasses == 2);
+    ++cases;
+    cfg.DlssNrApplyModel.value = false;
+    auto hidden = make();
+    assert(hidden.contractHash != edited.contractHash &&
+           std::string(hidden.modelIdentity) == "fixture-file-attributes");
+    ++cases;
+    auto sdr = make("after", 3440, 1440, 1, false, false, false, 28);
+    assert(sdr.contractHash != hidden.contractHash);
+    ++cases;
+    assert(a.modelWidth == 3440 && a.settingsGeneration < hidden.settingsGeneration);
+    ++cases;
     // Model cadence: the cadence in effect is configuration, a carried frame is not; off reads as it always did.
-    auto plain=make("after",3440,1440,1,false,false,false,28,1,false);
-    assert(plain.contractHash==sdr.contractHash && plain.cadence==1 && !plain.carried); ++cases;
-    auto modelFrame=make("after",3440,1440,1,false,false,false,28,2,false);
-    auto carriedFrame=make("after",3440,1440,1,false,false,false,28,2,true);
-    assert(modelFrame.contractHash!=plain.contractHash && modelFrame.cadence==2 && !modelFrame.carried);
-    assert(carriedFrame.contractHash==modelFrame.contractHash && carriedFrame.settingsGeneration==modelFrame.settingsGeneration);
-    assert(carriedFrame.carried && carriedFrame.cadence==2); ++cases;
+    auto plain = make("after", 3440, 1440, 1, false, false, false, 28, 1, false);
+    assert(plain.contractHash == sdr.contractHash && plain.cadence == 1 && !plain.carried);
+    ++cases;
+    auto modelFrame = make("after", 3440, 1440, 1, false, false, false, 28, 2, false);
+    auto carriedFrame = make("after", 3440, 1440, 1, false, false, false, 28, 2, true);
+    assert(modelFrame.contractHash != plain.contractHash && modelFrame.cadence == 2 && !modelFrame.carried);
+    assert(carriedFrame.contractHash == modelFrame.contractHash &&
+           carriedFrame.settingsGeneration == modelFrame.settingsGeneration);
+    assert(carriedFrame.carried && carriedFrame.cadence == 2);
+    ++cases;
     // Peripheral compression is in the contract only while it is switched on, so the default keeps its hash;
     // two centre bands at one packed extent are two contracts.
-    cfg.DlssNrPeripheryCenter.value=70; auto offAgain=make();
-    assert(offAgain.contractHash==hidden.contractHash); ++cases;
-    cfg.DlssNrPeripheryCompression.value=true; auto band70=make();
-    cfg.DlssNrPeripheryCenter.value=80; auto band80=make();
-    assert(band70.contractHash!=offAgain.contractHash && band80.contractHash!=band70.contractHash); ++cases;
-    cfg.DlssNrPeripheryCompression.value=false; auto off=make();
-    assert(off.contractHash==offAgain.contractHash); ++cases;
+    cfg.DlssNrPeripheryCenter.value = 70;
+    auto offAgain = make();
+    assert(offAgain.contractHash == hidden.contractHash);
+    ++cases;
+    cfg.DlssNrPeripheryCompression.value = true;
+    auto band70 = make();
+    cfg.DlssNrPeripheryCenter.value = 80;
+    auto band80 = make();
+    assert(band70.contractHash != offAgain.contractHash && band80.contractHash != band70.contractHash);
+    ++cases;
+    cfg.DlssNrPeripheryCompression.value = false;
+    auto off = make();
+    assert(off.contractHash == offAgain.contractHash);
+    ++cases;
     // Highlight recovery: a contract of its own only where the resolve is sent it, so off -- and on over a buffer
     // the game already tone mapped -- keeps the default hash.
-    cfg.DlssNrHighlightRecovery.value=true; auto recovering=make();
-    auto recoverySdr=make("after",3440,1440,1,false,false,false,28);
-    assert(recovering.contractHash!=off.contractHash && recoverySdr.contractHash==plain.contractHash); ++cases;
-    cfg.DlssNrHighlightRecovery.value=false; auto recoveryOff=make();
-    assert(recoveryOff.contractHash==off.contractHash); ++cases;
+    cfg.DlssNrHighlightRecovery.value = true;
+    auto recovering = make();
+    auto recoverySdr = make("after", 3440, 1440, 1, false, false, false, 28);
+    assert(recovering.contractHash != off.contractHash && recoverySdr.contractHash == plain.contractHash);
+    ++cases;
+    cfg.DlssNrHighlightRecovery.value = false;
+    auto recoveryOff = make();
+    assert(recoveryOff.contractHash == off.contractHash);
+    ++cases;
+    cfg.DlssNrMinRatio.value = .75f;
+    auto floorOn = make();
+    assert(floorOn.contractHash != recoveryOff.contractHash);
+    ++cases;
+    cfg.DlssNrMinRatio.value = 0;
+    auto floorOff = make();
+    assert(floorOff.contractHash == recoveryOff.contractHash);
+    ++cases;
     // Transfer 2: its warm-up (sent 1) and its running DLSS (sent 2) are different contracts, and the same
     // effective transfer with a different reason is too -- the private SR's cost sits in outside_model_ms.
-    auto warming=make("after",3440,1440,0.5f,false,false,true,10,1,false,1,"warming-up");
-    auto running=make("after",3440,1440,0.5f,false,false,true,10,1,false,2,"dlss-sr");
-    auto failed=make("after",3440,1440,0.5f,false,false,true,10,1,false,1,"failed");
-    assert(warming.contractHash!=running.contractHash && warming.contractHash!=failed.contractHash);
-    assert(running.settingsGeneration>warming.settingsGeneration && running.modelWidth==1720); ++cases;
+    auto warming = make("after", 3440, 1440, 0.5f, false, false, true, 10, 1, false, 1, "warming-up");
+    auto running = make("after", 3440, 1440, 0.5f, false, false, true, 10, 1, false, 2, "dlss-sr");
+    auto failed = make("after", 3440, 1440, 0.5f, false, false, true, 10, 1, false, 1, "failed");
+    assert(warming.contractHash != running.contractHash && warming.contractHash != failed.contractHash);
+    assert(running.settingsGeneration > warming.settingsGeneration && running.modelWidth == 1720);
+    ++cases;
 
     using DlssNr::RenderGpuTiming;
-    ImGui::Clear(); RenderGpuTiming(&cfg,true);
-    assert(ImGui::checkboxCalls==0 && ImGui::sliderCalls==0 && ImGui::Contains("not instrumented")); ++cases;
-    cfg.DlssNrUseProxy.value=true; ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(ImGui::checkboxCalls==0); ++cases;
-    cfg.DlssNrUseProxy.value=false; ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(ImGui::checkboxCalls==1 && ImGui::sliderCalls==0 && snapshotReads==0 && ImGui::Contains("Measurement off")); ++cases;
-    ImGui::toggle=1; ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(cfg.settings.Enabled && cfg.writes==1 && ImGui::sliderCalls==1 && ImGui::Contains("No confirmed")); ++cases;
-    ImGui::interval=17; ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(cfg.settings.Interval==17 && cfg.writes==2 && ImGui::Contains("17 evaluations")); ++cases;
-    published.valid=true; published.sampleId=12; published.sampleAgeMs=2500; published.metadata=a;
-    published.sampleInterval=30; published.interval=17; published.actualPasses=1;
-    published.totalMs=6; published.modelMs=4; published.otherMs=2;
-    ImGui::Clear(); RenderGpuTiming(&cfg,false);
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, true);
+    assert(ImGui::checkboxCalls == 0 && ImGui::sliderCalls == 0 && ImGui::Contains("not instrumented"));
+    ++cases;
+    cfg.DlssNrUseProxy.value = true;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::checkboxCalls == 0);
+    ++cases;
+    cfg.DlssNrUseProxy.value = false;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::checkboxCalls == 1 && ImGui::sliderCalls == 0 && snapshotReads == 0 &&
+           ImGui::Contains("Measurement off"));
+    ++cases;
+    ImGui::toggle = 1;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(cfg.settings.Enabled && cfg.writes == 1 && ImGui::sliderCalls == 1 && ImGui::Contains("No confirmed"));
+    ++cases;
+    ImGui::interval = 17;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(cfg.settings.Interval == 17 && cfg.writes == 2 && ImGui::Contains("17 evaluations"));
+    ++cases;
+    published.valid = true;
+    published.sampleId = 12;
+    published.sampleAgeMs = 2500;
+    published.metadata = a;
+    published.sampleInterval = 30;
+    published.interval = 17;
+    published.actualPasses = 1;
+    published.totalMs = 6;
+    published.modelMs = 4;
+    published.otherMs = 2;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
     assert(ImGui::Contains("Historical sample 12, 2.5 s") && ImGui::Contains("interval was 30 evaluations"));
-    assert(ImGui::Contains("not the current frame") && !ImGui::Contains("ms per frame")); ++cases;
-    published.metadata=carriedFrame; published.actualPasses=0; published.modelMs=0;
-    ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(ImGui::Contains("A carried frame of model cadence 2") && !ImGui::Contains("A model frame of model cadence")); ++cases;
-    published.metadata=modelFrame; published.actualPasses=1; published.modelMs=4;
-    ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(ImGui::Contains("A model frame of model cadence 2") && !ImGui::Contains("A carried frame")); ++cases;
-    published.metadata=a;
-    ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(!ImGui::Contains("model cadence") && !ImGui::Contains("HDR conversion")); ++cases;
+    assert(ImGui::Contains("not the current frame") && !ImGui::Contains("ms per frame"));
+    ++cases;
+    published.metadata = carriedFrame;
+    published.actualPasses = 0;
+    published.modelMs = 0;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::Contains("A carried frame of model cadence 2") && !ImGui::Contains("A model frame of model cadence"));
+    ++cases;
+    published.metadata = modelFrame;
+    published.actualPasses = 1;
+    published.modelMs = 4;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::Contains("A model frame of model cadence 2") && !ImGui::Contains("A carried frame"));
+    ++cases;
+    published.metadata = a;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(!ImGui::Contains("model cadence") && !ImGui::Contains("HDR conversion"));
+    ++cases;
     // The HDR present conversion's sample is its own line, beside the evaluation's and not folded into it, and shown
     // even before any evaluation has been confirmed.
-    published.conversionValid=true; published.conversionSampleId=5; published.conversionMs=0.3;
-    published.conversionDecodeMs=0.1; published.conversionEncodeMs=0.2; published.conversionAgeMs=1500;
-    ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(ImGui::Contains("HDR conversion, outside the dispatch") && ImGui::Contains("Last confirmed")); ++cases;
-    published.valid=false;
-    ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(ImGui::Contains("HDR conversion, outside the dispatch") && ImGui::Contains("No confirmed")); ++cases;
-    published.valid=true; published.conversionValid=false;
-    ImGui::toggle=0; ImGui::Clear(); RenderGpuTiming(&cfg,false);
-    assert(!cfg.settings.Enabled && ImGui::sliderCalls==0 && !ImGui::Contains("Last confirmed")); ++cases;
-    assert(cases==29);
-    std::printf("PASS %d timing boundary metadata/UI cases\n",cases);
+    published.conversionValid = true;
+    published.conversionSampleId = 5;
+    published.conversionMs = 0.3;
+    published.conversionDecodeMs = 0.1;
+    published.conversionEncodeMs = 0.2;
+    published.conversionAgeMs = 1500;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::Contains("HDR conversion, outside the dispatch") && ImGui::Contains("Last confirmed"));
+    ++cases;
+    published.valid = false;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::Contains("HDR conversion, outside the dispatch") && ImGui::Contains("No confirmed"));
+    ++cases;
+    published.valid = true;
+    published.conversionValid = false;
+    ImGui::toggle = 0;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(!cfg.settings.Enabled && ImGui::sliderCalls == 0 && !ImGui::Contains("Last confirmed"));
+    ++cases;
+    assert(cases == 31);
+    std::printf("PASS %d timing boundary metadata/UI cases\n", cases);
 }

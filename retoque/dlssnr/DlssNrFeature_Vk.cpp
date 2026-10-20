@@ -1306,6 +1306,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // The residual limit, as on D3D12 (docs/dlssnr/design/residual-limit.md); the shared shader reads it in the
     // resolve.
     encode.ResidualLimit = DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default());
+    encode.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());
 
     // This path has no composition summary, so the settings a screenshot cannot show are said when they change. Both
     // start at off, so a session that never turns them on logs nothing about them.
@@ -3066,6 +3067,7 @@ bool VkPresentModel::Record(const VkPresentNrFrame& input)
     encode.GuideHeight = m.workHeight;
     encode.HighlightRecovery = frame.hdrProfile != 0 ? cfg.DlssNrHighlightRecovery.value_or_default() : 0u;
     encode.ResidualLimit = DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default());
+    encode.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());
 
     Transition(cmd, m.proxy, VK_IMAGE_LAYOUT_GENERAL);
     Transition(cmd, m.keep, VK_IMAGE_LAYOUT_GENERAL);
