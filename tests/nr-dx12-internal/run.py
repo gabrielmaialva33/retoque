@@ -113,4 +113,33 @@ int main() {{
     negative = subprocess.run(flags + objects + [objects[0], '-o', str(out / 'duplicate-owner')], capture_output=True,
                               env=c_locale)
     assert negative.returncode != 0 and b'multiple definition' in negative.stderr
-print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls')
+# Functions moved out of the main unit: one definition each, in the unit that owns it (function-owners.json).
+from nr_sources import renderer_paths  # noqa: E402
+units = {p.name: p.read_text(encoding='utf-8-sig') for p in renderer_paths()}
+owners = json.loads((HERE / 'function-owners.json').read_text())['owners']
+moved = 0
+for unit, signatures in owners.items():
+    assert unit in units, f'{unit} is listed as an owner but is not a renderer unit'
+    for signature in signatures:
+        homes = [name for name, text in units.items() if signature in text]
+        assert homes == [unit] and units[unit].count(signature) == 1, f'{signature!r} defined in {homes}, not once in {unit}'
+        moved += 1
+print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls; '
+      f'{moved} moved functions defined once in their owning unit')
+
+# Resource extraction contract: same helper definitions, allowing clang-format whitespace only.
+resource_contract = json.loads((HERE / 'resource-contract.json').read_text())
+resource_source = units['DlssNr_Dx12_Resources.cpp']
+for name, expected in resource_contract['definitions'].items():
+    match = re.search(r'^([\w:*]+ ' + name + r'\([^;{]*\))\s*\{', resource_source, re.M)
+    assert match, f'missing resource definition: {name}'
+    start = resource_source.index('{', match.start())
+    level, end = 1, start + 1
+    while level:
+        level += (resource_source[end] == '{') - (resource_source[end] == '}')
+        end += 1
+    actual = hashlib.sha256(normalize(resource_source[match.start():end]).encode()).hexdigest()
+    assert actual == expected, f'{name} changed from {resource_contract["base"]}'
+assert 'uint64_t g_nrScratchGeneration = 1;' in units['DlssNr_Dx12.cpp']
+assert 'bool DescriptorReuseAvailable()' in units['DlssNr_Dx12.cpp']
+print('PASS: resource helper bodies preserved; scratch generation/descriptor reuse remain in core')

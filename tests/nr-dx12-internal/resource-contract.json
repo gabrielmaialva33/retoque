@@ -1,0 +1,16 @@
+{
+  "base": "3a05c194",
+  "definitions": {
+    "CreateScratch": "126f16234b5d9134fc16dfd947621961c45d236b63a144a3afef2495da24cfff",
+    "CreatePreUpscaleScratch": "657f901d8f0b696a63c658d509320a548099eed1c9c29996b9b547ba5803220a",
+    "IsSrgb": "b51530445621dc3e05ac0c840060c106430a418cf4ce24d0ffc5b739d71eb76d",
+    "Barrier": "4d82330e6ae07cc202bb568694678b8d8adb776c9aebd715593ba32ca255eaa5",
+    "TypedGuideFormat": "2530c900ca5ea0a52ad5102798540dec135ea5bf4ec986281fd2bfb6526a03ee",
+    "IsTypeless": "3d88470f95bd3dab462f553042f423721386472df9ff01fd9d2bb0c914631fee",
+    "CreateGuideClone": "553d676962d216248f1439ab121d36a75ff237f9a7fe40cd00c33db76da0ca89",
+    "ExposureTextureUsable": "cecc4d996beb84691592fcd3f06e1984a4e22f8d3c0ba49f0589065be7383ca0",
+    "ReadableGuide": "bed77c8640a4f23ce78d6311913981f0a6013d1d39549f6f013c4c4e4b161b88",
+    "FormatCanHoldLinearHdr": "e91b8547dbadb4b6e7ce6c80927543ced0e5cd09e0e3ac8bdd47201fc0940f7c",
+    "GetResource": "6f8d570c6591846259c8da786362c7cfe1ce873a01fcd7a2fa403026aaa7baa2"
+  }
+}
