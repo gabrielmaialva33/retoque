@@ -43,6 +43,8 @@ DEFAULT_VARIANTS = {
     'cadence4': {'Cadence': '4'},
     'adaptive4': {'Cadence': '4', 'CadenceAdaptive': 'true'},
 }
+# Fresh every-frame repeats for the judge's A/A envelope (offline-replay.md: five at least); 0 skips calibration.
+CALIBRATE = int(os.environ.get('LOOPBACK_REPLAY_CALIBRATE', '5'))
 LINE = re.compile(r'^REPLAY frame=(\d+) present=(\d+) gpu_ms=(-?[\d.]+) recorded=(\d) carried=(\d) interval=(\d+) '
                   r'requested=(\d+) completed=(\d+) result=(-?\d+) skip=(.*)$', re.M)
 
@@ -304,25 +306,40 @@ def gates(capture, runs):
     return results
 
 
-def judge(runner, root, capture_path, runs):
+def judge_python():
+    # tools/replay picks its NumPy backend when importable; uv supplies NumPy in a throwaway environment, never in
+    # system Python. Without uv the scalar reference runs, about twenty times slower.
+    return ['uv', 'run', '--no-project', '-q', '--with', 'numpy', 'python'] if shutil.which('uv') else [sys.executable]
+
+
+def calibrate(runner, root, capture_path, repeats):
+    out = root / 'judge' / 'calibration.json'
+    p = subprocess.run(judge_python() + ['-m', 'tools.replay', 'calibrate', '--capture', str(capture_path),
+                                         '--reference', str(root / 'runs' / 'every-a' / 'run.json'), '--out',
+                                         str(out)] +
+                       [arg for name in repeats for arg in ('--repeat', str(root / 'runs' / name / 'run.json'))],
+                       cwd=runner.ROOT, capture_output=True, text=True)
+    data = json.loads(out.read_text()) if out.is_file() else {}
+    return out if p.returncode == 0 and data.get('verdict') != 'INVALID' else None, \
+        dict(exit=p.returncode, verdict=data.get('verdict'), reasons=data.get('reasons'), stderr=p.stderr[-2000:])
+
+
+def judge(runner, root, capture_path, runs, calibration=None):
     package = runner.ROOT / 'tools/replay'
     if not (package / '__main__.py').is_file():
         return dict(available=False)
     verdicts = {}
     reference = root / 'runs' / 'every-a' / 'run.json'
     for name in runs:
-        if name in ('off', 'every-a'):
+        if name in ('off', 'every-a') or name.startswith('aa-'):
             continue
         out = root / 'judge' / name
         if out.exists():
             shutil.rmtree(out)
-        # tools/replay picks its NumPy backend when importable; uv supplies NumPy in a throwaway environment,
-        # never in system Python. Without uv the scalar reference runs, about twenty times slower.
-        python = ['uv', 'run', '--no-project', '-q', '--with', 'numpy', 'python'] if shutil.which('uv') \
-            else [sys.executable]
-        p = subprocess.run(python + ['-m', 'tools.replay', '--capture', str(capture_path), '--reference',
-                                     str(reference), '--candidate', str(root / 'runs' / name / 'run.json'),
-                                     '--out', str(out)],
+        p = subprocess.run(judge_python() + ['-m', 'tools.replay', '--capture', str(capture_path), '--reference',
+                                             str(reference), '--candidate', str(root / 'runs' / name / 'run.json'),
+                                             '--out', str(out)] +
+                           (['--calibration', str(calibration)] if calibration else []),
                            cwd=runner.ROOT, capture_output=True, text=True)
         result = out / 'result.json'
         data = json.loads(result.read_text()) if result.is_file() else {}
@@ -348,14 +365,31 @@ def run(runner, proton, env, dll):
     capture = load_capture(capture_path)
     variants = json.loads(os.environ['LOOPBACK_REPLAY_VARIANTS']) if os.environ.get('LOOPBACK_REPLAY_VARIANTS') \
         else DEFAULT_VARIANTS
+    if 'every-a' in variants and CALIBRATE > 0 and (runner.ROOT / 'tools/replay/__main__.py').is_file():
+        if CALIBRATE < 5:
+            raise SystemExit('LOOPBACK_REPLAY_CALIBRATE needs at least five repeats (offline-replay.md)')
+        variants = dict(variants, **{f'aa-{i}': {'Cadence': '1'} for i in range(1, CALIBRATE + 1)})
     runs = {name: run_variant(runner, proton, env, root, name, settings, capture, capture_path, environment,
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)
-    verdicts = judge(runner, root, capture_path, runs)
+    repeats = [name for name in runs if name.startswith('aa-')]
+    calibration, calibration_report = calibrate(runner, root, capture_path, repeats) if repeats else (None, None)
+    if repeats:
+        results['aa-calibration'] = dict(ok=calibration is not None,
+                                         detail=f'{len(repeats)} fresh every-frame repeats, verdict '
+                                                f'{calibration_report["verdict"]}')
+    verdicts = judge(runner, root, capture_path, runs, calibration)
     # The judge's strict reader is the compatibility test of everything written above.
     for name, verdict in verdicts.get('verdicts', {}).items():
         results[f'{name}-judge-accepts-manifests'] = dict(ok=verdict['verdict'] not in (None, 'INVALID'),
                                                           detail=f'verdict {verdict["verdict"]}, exit {verdict["exit"]}')
+    # The control: an every-frame repeat in the candidate's place must pass its own calibrated envelope.
+    if calibration and 'every-b' in verdicts.get('verdicts', {}):
+        verdict = verdicts['verdicts']['every-b']
+        results['every-b-passes-calibrated-judge'] = dict(ok=verdict['verdict'] == 'PASS',
+                                                          detail=f'{verdict["verdict"]}: {verdict["reasons"]}')
+    if calibration_report:
+        verdicts['calibration'] = calibration_report
     report = dict(schema='retoque-replay-seam-report', version=1, capture=str(capture_path),
                   capture_sha256=digest(capture_path), provenance=provenance, environment=environment,
                   gates=results, judge=verdicts)
