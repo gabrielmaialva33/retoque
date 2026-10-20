@@ -7,6 +7,7 @@ class Config;
 using HMODULE = void*;
 using HANDLE = void*;
 using UINT64 = uint64_t;
+using D3D12_RESOURCE_STATES = int;
 enum DXGI_FORMAT
 {
     DXGI_FORMAT_UNKNOWN

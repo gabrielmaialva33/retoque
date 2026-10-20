@@ -127,3 +127,20 @@ for unit, signatures in owners.items():
         moved += 1
 print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls; '
       f'{moved} moved functions defined once in their owning unit')
+
+# Resource extraction contract: same helper definitions, allowing clang-format whitespace only.
+resource_contract = json.loads((HERE / 'resource-contract.json').read_text())
+resource_source = units['DlssNr_Dx12_Resources.cpp']
+for name, expected in resource_contract['definitions'].items():
+    match = re.search(r'^([\w:*]+ ' + name + r'\([^;{]*\))\s*\{', resource_source, re.M)
+    assert match, f'missing resource definition: {name}'
+    start = resource_source.index('{', match.start())
+    level, end = 1, start + 1
+    while level:
+        level += (resource_source[end] == '{') - (resource_source[end] == '}')
+        end += 1
+    actual = hashlib.sha256(normalize(resource_source[match.start():end]).encode()).hexdigest()
+    assert actual == expected, f'{name} changed from {resource_contract["base"]}'
+assert 'uint64_t g_nrScratchGeneration = 1;' in units['DlssNr_Dx12.cpp']
+assert 'bool DescriptorReuseAvailable()' in units['DlssNr_Dx12.cpp']
+print('PASS: resource helper bodies preserved; scratch generation/descriptor reuse remain in core')

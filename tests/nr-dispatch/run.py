@@ -21,7 +21,7 @@ def between(source, start, end):
 
 
 # The descriptor keys read a generation that lives above the constructor, so it comes along.
-generation = between(renderer, 'uint64_t g_nrScratchGeneration', 'ID3D12Resource* CreateScratch(')
+generation = between(renderer, 'uint64_t g_nrScratchGeneration', '// A change has to hold still')
 
 declaration = header[header.index('#define DLSSNR_NUM_OF_HEAPS'):]
 implementation = between(renderer, 'DlssNr_Dx12::DlssNr_Dx12(', 'bool DlssNr_Dx12::Dispatch(')

@@ -6,6 +6,36 @@
       "DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)\n{",
       "DlssNrFrameInfo GatherFrame(NVSDK_NGX_Parameter* params)\n{",
       "int GuideRestState(bool motionVectors)\n{"
+    ],
+    "DlssNr_Dx12_Model.cpp": [
+      "const char* NgxResultName(unsigned int r)",
+      "void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList)",
+      "bool EnsureDirectRuntime()",
+      "bool EnsureForwarder()",
+      "bool NoteModelFault()",
+      "bool EnsureCapabilityParams(ID3D12Device* device)",
+      "void ReportScalingRatios()\n{",
+      "void DiscoverFloatSlot(NVSDK_NGX_Parameter* params)\n{",
+      "void SetExtras(const Config& cfg,",
+      "bool TuningMatchesFeature(const Config& cfg)",
+      "void RecordBuiltTuning(const Config& cfg)",
+      "void ProbeD3D11(void* d3d11Device)"
+    ],
+    "DlssNr_Dx12_Resources.cpp": [
+      "ID3D12Resource* CreateScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned int width, unsigned int height)\n{",
+      "ID3D12Resource* CreatePreUpscaleScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned int width,\n                                        unsigned int height)\n{",
+      "bool IsSrgb(DXGI_FORMAT f)\n{",
+      "void Barrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* res, D3D12_RESOURCE_STATES from,\n             D3D12_RESOURCE_STATES to)\n{",
+      "DXGI_FORMAT TypedGuideFormat(DXGI_FORMAT f)\n{",
+      "bool IsTypeless(DXGI_FORMAT f) {",
+      "ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source)\n{",
+      "bool ExposureTextureUsable(ID3D12Device* device, ID3D12Resource* resource)\n{",
+      "ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* source,\n                              ID3D12Resource** clone)\n{",
+      "bool FormatCanHoldLinearHdr(DXGI_FORMAT format)\n{",
+      "ID3D12Resource* GetResource(NVSDK_NGX_Parameter* params, const char* a, const char* b)\n{",
+      "void RestoreResourceState::Restore()\n{",
+      "RestoreResourceState::~RestoreResourceState() {",
+      "ReadResourceScope::ReadResourceScope("
     ]
   }
 }

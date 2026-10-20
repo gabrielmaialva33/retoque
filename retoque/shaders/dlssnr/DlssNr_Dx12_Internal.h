@@ -607,6 +607,37 @@ void SetExtras(const Config& cfg, ID3D12Resource* ui, ID3D12Resource* backbuffer
                unsigned int uiHeight, unsigned int bbWidth, unsigned int bbHeight);
 bool TuningMatchesFeature(const Config& cfg);
 void RecordBuiltTuning(const Config& cfg);
+// Resource mechanics; callers retain the existing lock and lifetime policy.
+ID3D12Resource* CreateScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned int width, unsigned int height);
+ID3D12Resource* CreatePreUpscaleScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned int width,
+                                        unsigned int height);
+bool IsSrgb(DXGI_FORMAT f);
+void Barrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* res, D3D12_RESOURCE_STATES from,
+             D3D12_RESOURCE_STATES to);
+DXGI_FORMAT TypedGuideFormat(DXGI_FORMAT f);
+bool IsTypeless(DXGI_FORMAT f);
+ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source);
+bool ExposureTextureUsable(ID3D12Device* device, ID3D12Resource* resource);
+ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* source,
+                              ID3D12Resource** clone);
+bool FormatCanHoldLinearHdr(DXGI_FORMAT format);
+ID3D12Resource* GetResource(NVSDK_NGX_Parameter* params, const char* a, const char* b);
+void ParkNrResource(ID3D12Resource*& res);
+
+struct RestoreResourceState
+{
+    ID3D12GraphicsCommandList* cmd;
+    ID3D12Resource* resource;
+    D3D12_RESOURCE_STATES from, to;
+    void Restore();
+    ~RestoreResourceState();
+};
+
+struct ReadResourceScope
+{
+    RestoreResourceState restore;
+    ReadResourceScope(ID3D12GraphicsCommandList* cmd, ID3D12Resource* resource, D3D12_RESOURCE_STATES arrival);
+};
 } // namespace DlssNr::Dx12Internal
 
 // Functions one renderer unit defines and another calls, with the unit that defines them. Public entry points keep
