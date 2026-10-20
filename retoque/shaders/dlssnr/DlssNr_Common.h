@@ -11,6 +11,7 @@
 // so it does not belong in a shader class.
 
 #include <cstdint>
+#include <cmath>
 
 // The evaluate signature this build expects nvngx.dll_dlssnr.dll to have.
 //
@@ -68,6 +69,11 @@ namespace DlssNr
 constexpr float ResidualLimitStops(float configured)
 {
     return !(configured > 0.0f) ? 0.0f : (configured > kDlssNrResidualLimitMax ? kDlssNrResidualLimitMax : configured);
+}
+// A final luminance fraction; invalid values disable it on every rendering route.
+inline float MinimumRatio(float configured)
+{
+    return !std::isfinite(configured) || configured <= 0.0f ? 0.0f : (configured > 1.0f ? 1.0f : configured);
 }
 } // namespace DlssNr
 
@@ -322,6 +328,9 @@ struct alignas(256) DlssNrConstants
     // then takes the path it took before this existed. docs/dlssnr/design/residual-limit.md. Trailing scalar,
     // mirrored in the shader cbuffer.
     float ResidualLimit;
+
+    // Final composition luminance / original luminance floor. 0 = off; appended to the shared cbuffer.
+    float MinRatio;
 };
 
 class DlssNr_Common

@@ -32,6 +32,7 @@ cbuffer Params : register(b0)
     uint  gForceResidual;  // 1 = matched residual even at the frame's size (peripheral compression), else 0
     uint  gHighlightRecovery; // 1 = NVIDIA's highlight recovery after the composition (linear HDR only), else 0
     float gResidualLimit;     // stops the model may move a pixel's light, either way, inside the guard; 0 = off
+    float gMinRatio;          // final luminance floor relative to original, applied once; 0 = off
 };
 
 // Bringing an impossible colour back into a possible one.
@@ -271,6 +272,26 @@ float WhitePoint()
 
 
 static const float3 kLuma = float3(0.2126, 0.7152, 0.0722);
+
+// --- darkening floor maths ---
+// Work in the final buffer's domain: linear HDR or already tone-mapped RGB under gPassthrough.
+// A convex blend restores luminance even from black, without dividing by the candidate's luminance.
+float3 ApplyDarkeningFloor(float3 candidate, float3 original, float minimumRatio)
+{
+    float originalY = dot(original, kLuma);
+    float candidateY = dot(candidate, kLuma);
+    if (!isfinite(originalY) || !isfinite(candidateY) || originalY <= 0.0)
+        return candidate;
+    float floorY = min(minimumRatio, 1.0) * originalY;
+    if (candidateY >= floorY)
+        return candidate;
+    float distance = originalY - candidateY;
+    if (minimumRatio >= 1.0 || !isfinite(distance))
+        return original;
+    return lerp(candidate, original, saturate((floorY - candidateY) / distance));
+}
+// --- end darkening floor maths ---
+
 
 // sRGB rather than a plain 2.2 power: it is what an SDR game buffer actually carries, and the model was
 // trained on those.
@@ -1269,6 +1290,12 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     // Back out of the normalised space the composition worked in, still non-negative as it always was, and
     // give the frame back what the composition never saw.
     result = max(result * normScale, 0.0) + signedRest;
+
+    // --- final darkening floor ---
+    // After replace curves, recovery and signed restoration; no transforms, including under gPassthrough.
+    if (gMinRatio > 0.0 && isfinite(gMinRatio))
+        result = ApplyDarkeningFloor(result, originalSample.rgb, gMinRatio);
+    // --- end final darkening floor ---
 
     // The side being shown untouched takes the frame as it arrived, past every step above.
     if (showOriginal)

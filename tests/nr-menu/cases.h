@@ -1,6 +1,22 @@
 int main()
 {
     Config c;
+    ImGui::Reset();
+    ImGui::actions["Minimum brightness"] = .75;
+    DlssNr::RenderDarkeningFloor(&c, false);
+    assert(c.DlssNrMinRatio.value == .75f && ImGui::actions.empty());
+    ImGui::Reset();
+    ImGui::actions["Reset##minRatio"] = true;
+    DlssNr::RenderDarkeningFloor(&c, false);
+    assert(c.DlssNrMinRatio.value == 0 && ImGui::actions.empty());
+    c.DlssNrUseProxy = true;
+    ImGui::Reset();
+    DlssNr::RenderDarkeningFloor(&c, false);
+    assert(!ImGui::Saw("Minimum brightness"));
+    ImGui::Reset();
+    DlssNr::RenderDarkeningFloor(&c, true);
+    assert(ImGui::Saw("Minimum brightness"));
+    c.DlssNrUseProxy = false;
     auto run = [&](bool vulkan = false)
     {
         DlssNr::RenderPassControls(&c, vulkan);
@@ -235,6 +251,7 @@ int main()
     assert(!ImGui::Saw("Individual pass settings###nrIndividualPassSettings"));
     ImGui::Reset();
     assert(view(true));
+    assert(!ImGui::Saw("Minimum brightness"));
     assert(!ImGui::Saw("Requested passes###nrPassCount"));
     simple.DlssNrUseProxy = true;
     ImGui::Reset();
@@ -266,6 +283,7 @@ int main()
     unsigned reads = DlssNr::GpuTiming::reads;
     ImGui::Reset();
     assert(view(true));
+    assert(!ImGui::Saw("Minimum brightness"));
     assert(DlssNr::GpuTiming::reads == reads);
     simple.DlssNrUseProxy = true;
     ImGui::Reset();

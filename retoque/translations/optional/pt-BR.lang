@@ -541,3 +541,6 @@ HDR present conversion is inactive; the game's original frame is shown.	A conver
 
 Show all settings	Mostrar todas as configurações
 Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Mostrar o painel completo de Neural Rendering. As configurações ocultas continuam ativas e inalteradas.
+
+Minimum brightness	Brilho mínimo
+Final luminance relative to the original frame: 0.75 keeps at least 75 percent.\nApplied once, after composition, including replace curves. 0 is off.\nRestores darkened pixels toward the original; does not cap individual channels.\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB.\nLater game processing and temporal stabilization are outside this limit.	Luminância final relativa ao quadro original: 0,75 mantém pelo menos 75 por cento.\nAplicado uma vez, após a composição, inclusive nas curvas de substituição. 0 desativa.\nRestaura pixels escurecidos em direção ao original; não limita canais individuais.\nHDR usa luminância linear do buffer; passthrough usa RGB já mapeado em tons.\nO processamento posterior do jogo e a estabilização temporal ficam fora deste limite.

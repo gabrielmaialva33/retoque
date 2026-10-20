@@ -413,6 +413,7 @@ class Config
     // The most the pass may multiply or divide a pixel by. A detail pass has no business restyling a
     // light source, whatever the model returns.
     CustomOptional<float> DlssNrMaxRatio { 2.0f };
+    CustomOptional<float> DlssNrMinRatio { 0.0f };
 
     // NVIDIA's highlight recovery, from RTX Remix: after the composition, pixels that were very bright and
     // that the encode compressed hard are blended back toward the frame -- so the model's verdict on a pixel

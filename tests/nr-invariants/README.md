@@ -19,7 +19,7 @@ the live tree rather than pinned to a baseline:
    conversion's `DlssNr_PresentHdr_Dx12::Constants` and the `Params` cbuffer of
    `dlssnr_present_hdr.hlsl` are held to each other the same way.
 3. **Headers are the committed bytecode (rule 6, the half a host can check).** `DlssNr_Shader.h` and
-   `DlssNr_Shader_Vk.h` are byte-identical to what `create_header.py` makes from the `.cso` and
+   `DlssNr_Shader_Vk.h` match what `create_header.py` makes (ignoring only trailing spaces/tabs) from the `.cso` and
    `.spv` beside them, and each binary starts with its container magic. The optional passes are checked
    once their bytecode is committed: the guide resample, the HDR present conversion
    (`DlssNr_PresentHdr_Shader`, whose header without its `.cso` fails), and peripheral compression's three passes

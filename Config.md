@@ -595,6 +595,12 @@ HighlightRecovery=auto
 ; 0 to 2 - Default (auto) is 0 (off)
 ResidualLimit=auto
 
+; Final composition luminance floor, applied once after replace curves and HDR recovery.
+; 0.75 keeps at least 75% of the original weighted RGB luminance; not a per-channel limit.
+; Passthrough uses the already-tone-mapped signal. Later processing/stabilization is outside the bound.
+; Finite values clamp to 0..1; nonfinite values disable it. Default (auto) is 0, identical to off.
+MinRatio=auto
+
 ; How a model running below full resolution is enlarged: 0 classic, 1 matched residual,
 ; 2 matched residual + DLSS, 3 matched residual with a sharp enlargement.
 ; Matched residual carries only the model's edit onto the full-size frame's proxy, avoiding

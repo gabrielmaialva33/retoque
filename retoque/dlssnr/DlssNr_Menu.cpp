@@ -724,6 +724,24 @@ static void RenderModelPreset(Config* config)
     }
 }
 
+// The final floor also applies to present buffers and replace curves.
+static void RenderDarkeningFloor(Config* config, bool nativeVulkan)
+{
+    if (!nativeVulkan && config->DlssNrUseProxy.value_or_default())
+        return;
+    float minimum = DlssNr::MinimumRatio(config->DlssNrMinRatio.value_or_default());
+    if (ImGui::SliderFloat(Localization::Label("Minimum brightness"), &minimum, 0.0f, 1.0f, "%.2fx"))
+        config->DlssNrMinRatio = DlssNr::MinimumRatio(minimum);
+    ImGui::SameLine();
+    if (ImGui::SmallButton(Localization::Label("Reset##minRatio")))
+        config->DlssNrMinRatio = 0.0f;
+    HelpMarker("Final luminance relative to the original frame: 0.75 keeps at least 75 percent."
+               "\nApplied once, after composition, including replace curves. 0 is off."
+               "\nRestores darkened pixels toward the original; does not cap individual channels."
+               "\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB."
+               "\nLater game processing and temporal stabilization are outside this limit.");
+}
+
 // Returns true when the simple view consumed the panel; full view continues at Source below.
 static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResScale)
 {
@@ -1557,9 +1575,11 @@ void RenderMenu(Config* config, float menuResScale)
         if (RenderPresentHdr(config))
         {
             // Converted present frames: the block just drawn carries the one white control that applies to them.
+            RenderDarkeningFloor(config, nativeVulkan);
         }
         else if (config->DlssNrHookMethod.value_or_default() == 2)
         {
+            RenderDarkeningFloor(config, nativeVulkan);
             const auto hdr = DlssNr::GetPresentHdrStatus();
             if (hdr.available && hdr.seen)
                 ImGui::TextDisabled(
@@ -1930,6 +1950,8 @@ void RenderMenu(Config* config, float menuResScale)
                            "\nanswer does the most damage; 2x leaves detail intact while stopping a strip"
                            "\nlight turning into a string of coloured cells. Raise it only if bright areas"
                            "\nlook clipped.");
+
+                RenderDarkeningFloor(config, nativeVulkan);
 
                 // Highlight recovery (docs/dlssnr/design/hdr-highlight-recovery.md), beside the guard because both
                 // decide how highlights come back. Only where it can act: a linear HDR buffer, which the encode

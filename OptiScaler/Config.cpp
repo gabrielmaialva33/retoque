@@ -437,6 +437,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrTransferStrength.set_from_config(readFloat("DlssNr", "TransferStrength"));
             DlssNrColourStrength.set_from_config(readFloat("DlssNr", "ColourStrength"));
             DlssNrMaxRatio.set_from_config(readFloat("DlssNr", "MaxRatio"));
+            DlssNrMinRatio.set_from_config(readFloat("DlssNr", "MinRatio"));
             DlssNrHighlightRecovery.set_from_config(readBool("DlssNr", "HighlightRecovery"));
             DlssNrResidualLimit.set_from_config(readFloat("DlssNr", "ResidualLimit"));
             DlssNrTransfer.set_from_config(readUInt("DlssNr", "Transfer"));
@@ -1472,6 +1473,7 @@ bool Config::SaveIni()
         ini.SetValue("DlssNr", "ColourStrength",
                      GetFloatValue(Instance()->DlssNrColourStrength.value_for_config()).c_str());
         ini.SetValue("DlssNr", "MaxRatio", GetFloatValue(Instance()->DlssNrMaxRatio.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "MinRatio", GetFloatValue(Instance()->DlssNrMinRatio.value_for_config()).c_str());
         ini.SetValue("DlssNr", "HighlightRecovery",
                      GetBoolValue(Instance()->DlssNrHighlightRecovery.value_for_config()).c_str());
         ini.SetValue("DlssNr", "ResidualLimit",

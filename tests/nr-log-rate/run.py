@@ -48,6 +48,7 @@ struct ComposeInputs {
     float stabilizerStrength = 0, stabilizerTolerance = 0.05f;
     unsigned highlightRecovery = 0;
     float residualLimit = 0;
+    float minRatio = 0;
     struct { Value<bool> DlssNrScanExposure; } cfg;
     std::vector<ExposureScan::AnchorPoint> anchors { { 1, 1 } };
     struct { unsigned workWidth = 1720, workHeight = 720; } g_nr;
@@ -66,6 +67,7 @@ struct ComposeSite : ComposeInputs {
         resolveParams.MaxRatio = 2;
         resolveParams.HighlightRecovery = highlightRecovery;
         resolveParams.ResidualLimit = residualLimit;
+        resolveParams.MinRatio = minRatio;
 ''' + initializer('const ComposeReport composeNow') + r'''
         return reporter.Observe(composeNow, time);
     }
