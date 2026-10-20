@@ -11,6 +11,7 @@
 #include <array>
 #include <sstream>
 #include <dlssnr/DlssNr_ModelLogParse.h>
+#include <dlssnr/DlssNr_Looks.h>
 #define IM_ARRAYSIZE(a) (sizeof(a) / sizeof((a)[0]))
 using ImGuiID = size_t;
 namespace Localization
@@ -71,6 +72,25 @@ bool Checkbox(const char* label, bool* x) { return Input(label, x); }
 bool SliderFloat(const char* label, float* x, float, float, const char*) { return Input(label, x); }
 bool SliderInt(const char* label, int* x, int, int) { return Input(label, x); }
 bool Combo(const char* label, int* x, const char* const*, int) { return Input(label, x); }
+// Combos (the Look selector): BeginCombo records "label=preview" as shown; a scripted action on "label/item" picks it.
+std::string comboOpen;
+bool BeginCombo(const char* label, const char* preview)
+{
+    last = Key(label);
+    shown.push_back(last + "=" + preview);
+    comboOpen = last;
+    return true;
+}
+bool Selectable(const char* label, bool)
+{
+    auto item = actions.find(comboOpen + "/" + label);
+    if (item == actions.end())
+        return false;
+    actions.erase(item);
+    return true;
+}
+void EndCombo() { comboOpen.clear(); }
+template <class... T> void SetTooltip(const char*, T...) {}
 bool SmallButton(const char* label)
 {
     bool x = false;
@@ -151,16 +171,38 @@ struct Config
 {
     OptionalBool DlssNrShowAllSettings;
     OptionalFloat DlssNrTransferStrength;
+    OptionalFloat DlssNrColourStrength;
     OptionalU32 DlssNrPreset;
+    OptionalU32 DlssNrStyle;
+    OptionalFloat DlssNrIntensity, DlssNrLocalStructure, DlssNrLocalTone, DlssNrSkinStructure;
+    OptionalBool DlssNrAutoMask;
     struct Timing
     {
         bool Enabled = false;
         unsigned Interval = 1;
     } timing;
     Timing GetDlssNrGpuTimingSettings() const { return timing; }
-    void SetDlssNrMasterSetting(OptionalU32 Config::*, uint32_t v)
+    void SetDlssNrMasterSetting(OptionalU32 Config::* member, uint32_t v)
     {
-        master.Preset = v;
+        (member == &Config::DlssNrStyle ? master.Style : master.Preset) = v;
+        ++writes;
+    }
+    void SetDlssNrMasterSetting(OptionalFloat Config::* member, float v)
+    {
+        if (member == &Config::DlssNrIntensity)
+            master.Intensity = v;
+        else if (member == &Config::DlssNrLocalStructure)
+            master.LocalStructure = v;
+        else if (member == &Config::DlssNrLocalTone)
+            master.LocalTone = v;
+        else if (member == &Config::DlssNrSkinStructure)
+            master.SkinStructure = v;
+        ++writes;
+    }
+    void SetDlssNrMasterSetting(OptionalBool Config::* member, bool v)
+    {
+        if (member == &Config::DlssNrAutoMask)
+            master.AutoMask = v;
         ++writes;
     }
     OptionalBool DlssNrUseProxy;

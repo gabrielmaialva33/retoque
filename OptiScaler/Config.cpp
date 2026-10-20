@@ -423,6 +423,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrApplyAfterRR.set_from_config(readBool("DlssNr", "ApplyAfterRR"));
             DlssNrRRPasses.set_from_config(readUInt("DlssNr", "RRPasses"));
             DlssNrRRWorkingScale.set_from_config(readFloat("DlssNr", "RRWorkingScale"));
+            DlssNrPauseWithoutFrameGen.set_from_config(readBool("DlssNr", "PauseWithoutFrameGen"));
             DlssNrToggleKey.set_from_config(readInt("DlssNr", "ToggleKey"));
             DlssNrHookMethod.set_from_config(readUInt("DlssNr", "HookMethod"));
             DlssNrRequireDlss.set_from_config(readBool("DlssNr", "RequireDlss"));
@@ -1450,6 +1451,8 @@ bool Config::SaveIni()
         ini.SetValue("DlssNr", "RRPasses", GetIntValue(Instance()->DlssNrRRPasses.value_for_config()).c_str());
         ini.SetValue("DlssNr", "RRWorkingScale",
                      GetFloatValue(Instance()->DlssNrRRWorkingScale.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "PauseWithoutFrameGen",
+                     GetBoolValue(Instance()->DlssNrPauseWithoutFrameGen.value_for_config()).c_str());
         {
             auto toggle = Instance()->DlssNrToggleKey.value_for_config();
             ini.SetValue("DlssNr", "ToggleKey", GetIntValue(toggle, toggle > 0).c_str());

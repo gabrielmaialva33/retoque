@@ -308,6 +308,9 @@ class State
 
     bool dlssgGameDMFGSupported = false;
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
+    // DLSS-NR (docs/dlssnr/design/pause-without-frame-gen.md): whether the game itself asked Streamline for DLSS-G,
+    // before any OptiScaler policy (menu interlock, interpolation override, own-instance substitution) touched it.
+    std::atomic<bool> dlssgGameRequestsFg { false };
     int dlssgDetectedInterpolationCount = 0;
 
     // What the game requested from DLSSG when it's used as FG Input

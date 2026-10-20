@@ -271,6 +271,54 @@ int main()
     ImGui::Reset();
     assert(view());
     assert(DlssNr::GpuTiming::reads == reads && simple.timing.Enabled);
+    // The look table itself: every value inside its control's range, every look distinct and found as itself.
+    for (size_t i = 0; i < DlssNr::Looks::kLooks.size(); ++i)
+    {
+        const auto& v = DlssNr::Looks::kLooks[i].Value;
+        assert(v.Intensity >= 0.0f && v.Intensity <= 2.0f && v.Style <= 2);
+        assert(v.LocalStructure >= 0.0f && v.LocalStructure <= 2.0f && v.LocalTone >= 0.0f && v.LocalTone <= 2.0f);
+        assert(v.SkinStructure >= -1.0f && v.SkinStructure <= 2.0f);
+        assert(v.ColourStrength >= 0.0f && v.ColourStrength <= 4.0f && v.DetailStrength >= 0.0f &&
+               v.DetailStrength <= 2.0f);
+        assert(DlssNr::Looks::Find(v) == static_cast<int>(i));
+        auto nearMiss = v;
+        nearMiss.Intensity += 0.01f;
+        assert(DlssNr::Looks::Find(nearMiss) != static_cast<int>(i));
+    }
+    // Looks (docs/dlssnr/design/looks.md): named from the current values; a pick writes the master settings through the
+    // locked setter and colour/detail directly; anything else reads Custom.
+    simple.DlssNrUseProxy = false;
+    ImGui::Reset();
+    assert(view());
+    assert(ImGui::Saw("Look###nrLook=Default"));
+    ImGui::Reset();
+    ImGui::actions["Look###nrLook/Subtle"] = 1;
+    assert(view());
+    assert(simple.master.LocalStructure == 0.7f && simple.master.LocalTone == 0.3f && !simple.master.AutoMask);
+    ImGui::Reset();
+    assert(view());
+    assert(ImGui::Saw("Look###nrLook=Subtle"));
+    ImGui::Reset();
+    ImGui::actions["Look###nrLook/Gentle"] = 1;
+    assert(view());
+    assert(simple.master.Intensity == 0.5f && simple.master.AutoMask && simple.DlssNrColourStrength.value == 0.5f &&
+           simple.DlssNrTransferStrength.value == 0.85f);
+    simple.master.Intensity = 0.42f;
+    ImGui::Reset();
+    assert(view());
+    assert(ImGui::Saw("Look###nrLook=Custom"));
+    ImGui::Reset();
+    ImGui::actions["Look###nrLook/Cinematic"] = 1;
+    assert(view());
+    assert(simple.master.Style == 2 && simple.master.Intensity == 1.0f && simple.DlssNrColourStrength.value == 1.0f);
+    ImGui::Reset();
+    ImGui::actions["Look###nrLook/Default"] = 1;
+    assert(view());
+    {
+        auto expected = DlssNrResolvedPassSettings {};
+        expected.Preset = simple.master.Preset; // looks never touch the weight set
+        assert(simple.master == expected && simple.DlssNrTransferStrength.value == 1.0f);
+    }
     std::cout << "PASS: simple/full visibility, same Config writes, retained hidden settings, preset and backend "
                  "gates, read-only timing and balanced item widths\n";
     std::cout << "PASS: 33 scripted menu frames: unsupported paths, inheritance, seven fields, clear, retained "
