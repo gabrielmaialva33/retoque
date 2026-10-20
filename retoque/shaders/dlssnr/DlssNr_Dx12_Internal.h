@@ -747,7 +747,9 @@ bool RetiredCapacity();
 // Lifetime/admission policy; callers retain their existing locks. State stays in core.
 uint32_t PostContract(unsigned int nativeWidth, unsigned int nativeHeight, uint32_t format);
 void ChainStatus(const char* reason);
-void PublishCadence(const DlssNr::Cadence::Decision& decision);
+void PublishCadence(const DlssNr::Cadence::Decision& decision,
+                    const DlssNr::Cadence::Adaptive::Sample* feedback = nullptr, uint64_t evaluation = 0,
+                    int64_t nowMs = 0);
 bool FrameGenerationActive();
 bool PausedWithoutFrameGen(const Config& cfg);
 void AdvanceNrClock();

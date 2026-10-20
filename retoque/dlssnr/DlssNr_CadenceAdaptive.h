@@ -64,6 +64,8 @@ class Controller
 
   public:
     void Reset() { *this = {}; }
+    // The newest sample observed, valid or not; for the log only.
+    const Sample& Last() const { return _last; }
     void Observe(const Sample& s, uint64_t present, int64_t ms)
     {
         if (s.present <= _last.present)
