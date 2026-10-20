@@ -6,13 +6,15 @@ import re
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
 
 # Source guards. The decision is only worth testing if production makes it here, so both call sites must go through
 # the header, and the inline conditions they replaced must not come back beside it.
-source = (root / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text(encoding='utf-8-sig')
+source = renderer_source()
 run_present = source[source.index('void RunPresentPass('):]
 run_present = run_present[:run_present.index('\n}\n')]
 failures = []

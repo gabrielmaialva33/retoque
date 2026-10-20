@@ -3,6 +3,9 @@
 from pathlib import Path
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 root = Path(__file__).resolve().parent
 with tempfile.TemporaryDirectory(prefix='optiscaler-nr-chain-') as directory:
     binary = str(Path(directory) / 'test')
@@ -10,7 +13,7 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-nr-chain-') as directory:
                     '-fno-omit-frame-pointer', '-g', str(root / 'test.cpp'), '-o', binary], check=True)
     subprocess.run([binary], check=True)
 
-source = (root.parents[1] / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+source = renderer_source()
 dispatch = source[source.index('bool DlssNr_Dx12::Dispatch('):source.index('namespace DlssNr', source.index('bool DlssNr_Dx12::Dispatch('))]
 assert dispatch.count('g_nr.superDown->Dispatch(cmdList, finalOutput, g_nr.outputNative)') == 1
 assert 'DlssNr::Chain::Routing<ID3D12Resource*> chain(modelInput, g_nr.output, g_nr.passPing)' in dispatch

@@ -8,6 +8,9 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -138,7 +141,7 @@ for r in range(3):
 opti = root / 'OptiScaler'
 pass_h = (retoque / 'shaders/dlssnr/DlssNr_PresentHdr_Dx12.h').read_text()
 pass_cpp = (retoque / 'shaders/dlssnr/DlssNr_PresentHdr_Dx12.cpp').read_text()
-renderer = (retoque / 'shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 host = (retoque / 'dlssnr/DlssNr_PresentHost.cpp').read_text()
 # The bytecode is optional: without it the conversion says it is unavailable rather than failing the build.
 assert '#if __has_include("precompile/DlssNr_PresentHdr_Shader.h")' in pass_cpp and 'DlssNr_PresentHdr_cso' in pass_cpp

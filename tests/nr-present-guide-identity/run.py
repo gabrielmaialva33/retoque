@@ -6,12 +6,15 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
 retoque = root / 'retoque'
 
-renderer = (retoque / 'shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 header = (retoque / 'dlssnr/DlssNr_PresentGuideIdentity.h').read_text()
 feature = (retoque / 'dlssnr/DlssNrFeature_Dx12.h').read_text()
 host = (retoque / 'dlssnr/DlssNr_PresentHost.cpp').read_text()

@@ -6,6 +6,9 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -45,7 +48,7 @@ def code(text):
 
 header = read('retoque/dlssnr/DlssNr_Dx11Guides.h')
 transport = read('retoque/dlssnr/DlssNr_Dx11Guides.cpp')
-renderer = read('retoque/shaders/dlssnr/DlssNr_Dx12.cpp')
+renderer = renderer_source()
 layer = read('retoque/dlssnr/DlssNr_Dx11Upscaler.h')
 dx11 = read('OptiScaler/inputs/NVNGX_DLSS_Dx11.cpp')
 feature = read('retoque/dlssnr/DlssNrFeature_Dx12.h')

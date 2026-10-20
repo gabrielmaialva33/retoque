@@ -2,9 +2,12 @@
 """Source contract for [DlssNr] PauseWithoutFrameGen (docs/dlssnr/design/pause-without-frame-gen.md)."""
 from pathlib import Path
 import re
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 ROOT = Path(__file__).resolve().parents[2]
-renderer = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 config_h = (ROOT / 'OptiScaler/Config.h').read_text()
 config_cpp = (ROOT / 'OptiScaler/Config.cpp').read_text()
 ini = (ROOT / 'OptiScaler.ini').read_text()

@@ -4,6 +4,9 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -21,7 +24,7 @@ for before in ('if (gReversibleMode == 2)', 'if (gReversibleMode == 4)',
                'result = max(result * normScale, 0.0) + signedRest;'):
     assert live.index(before) < gate
 assert gate < live.index('if (showOriginal)', gate)
-renderer = (root / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 vulkan = (root / 'retoque/dlssnr/DlssNrFeature_Vk.cpp').read_text()
 assert 'resolveParams.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());' in renderer
 assert vulkan.count('encode.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());') == 2

@@ -20,6 +20,8 @@ import subprocess
 import sys
 import tempfile
 import zlib
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 root = Path(__file__).resolve().parents[2]
 here = Path(__file__).resolve().parent
@@ -347,7 +349,7 @@ capture_h = (nr / 'dlssnr/DlssNr_PairCapture.h').read_text()
 capture_cpp = (nr / 'dlssnr/DlssNr_PairCapture.cpp').read_text()
 burst_h = (nr / 'dlssnr/DlssNr_Capture.h').read_text()
 readback_h = (nr / 'dlssnr/DlssNr_Readback.h').read_text()
-renderer = (nr / 'shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 before = len(failures)
 
 

@@ -6,11 +6,14 @@ import os
 import shutil
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 DLSSNR = ROOT / 'retoque/dlssnr'
-renderer = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 adapter = (DLSSNR / 'DlssNr_Replay.cpp').read_text()
 
 

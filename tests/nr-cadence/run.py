@@ -5,6 +5,9 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -30,7 +33,7 @@ shader = read_nr('shaders/dlssnr/precompile/dlssnr_cadence.hlsl')
 rule = read_nr('shaders/dlssnr/precompile/dlssnr_cadence_rule.h')
 pass_h = read_nr('shaders/dlssnr/DlssNr_Cadence_Dx12.h')
 pass_cpp = read_nr('shaders/dlssnr/DlssNr_Cadence_Dx12.cpp')
-renderer = read_nr('shaders/dlssnr/DlssNr_Dx12.cpp')
+renderer = renderer_source()
 
 # The constant struct and the cbuffer are one ordered list of 4-byte scalars (DEVELOPMENT.md rule 5, for this
 # pass's own pair), and the struct is a multiple of 256 bytes, the size every constant-buffer view must have.

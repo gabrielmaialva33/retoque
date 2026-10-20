@@ -43,6 +43,9 @@ DEFAULT_VARIANTS = {
     'cadence4': {'Cadence': '4'},
     'adaptive4': {'Cadence': '4', 'CadenceAdaptive': 'true'},
 }
+# A refactor's gate (offline-replay-seam.md): a directory holding runs/<variant>/run.json (and runs/off/control.json)
+# of an earlier build on the same capture. Every variant both have must match it decision for decision and bit for bit.
+BASELINE = os.environ.get('LOOPBACK_REPLAY_BASELINE')
 # Fresh every-frame repeats for the judge's A/A envelope (offline-replay.md: five at least); 0 skips calibration.
 CALIBRATE = int(os.environ.get('LOOPBACK_REPLAY_CALIBRATE', '5'))
 LINE = re.compile(r'^REPLAY frame=(\d+) present=(\d+) gpu_ms=(-?[\d.]+) recorded=(\d) carried=(\d) interval=(\d+) '
@@ -256,6 +259,43 @@ def run_variant(runner, proton, env, root, name, settings, capture, capture_path
     return record
 
 
+def load_baseline(path, capture_sha):
+    """The earlier build's manifests, read before any trial of this run can overwrite them."""
+    base = Path(path).expanduser().resolve()
+    runs = {}
+    for directory in sorted((base / 'runs').iterdir()):
+        for name in ('run.json', 'control.json'):
+            manifest = directory / name
+            if manifest.is_file():
+                data = json.loads(manifest.read_text())
+                if data.get('capture_sha256') != capture_sha:
+                    raise SystemExit(f'baseline {directory.name} replayed another capture; pass its capture.json '
+                                     'as LOOPBACK_REPLAY_CAPTURE')
+                runs[directory.name] = data
+    if not runs:
+        raise SystemExit(f'{base}: no runs/<variant>/run.json to compare against')
+    return runs
+
+
+def baseline_gates(runs, baseline):
+    fields = ('kind', 'interval', 'requested_passes', 'completed_passes', 'model_result', 'skip')
+    results = {}
+    for name, run in runs.items():
+        old = baseline.get(name)
+        if old is None:
+            continue
+        same_length = len(run['frames']) == len(old['frames'])
+        decisions = [x['id'] for x, y in zip(run['frames'], old['frames']) if any(x[k] != y[k] for k in fields)]
+        pixels = [x['id'] for x, y in zip(run['frames'], old['frames'])
+                  if x['output']['sha256'] != y['output']['sha256']]
+        results[f'{name}-identical-to-baseline'] = dict(
+            ok=same_length and not decisions and not pixels,
+            detail=f'frames {len(run["frames"])}/{len(old["frames"])}, decisions differ at {decisions[:8]}, '
+                   f'pixels differ at {pixels[:8]}; baseline DLL {old["producer"]["dll_sha256"][:12]}, '
+                   f'this DLL {run["producer"]["dll_sha256"][:12]}')
+    return results
+
+
 def gates(capture, runs):
     """The seam's own acceptance (offline-replay-seam.md, Validation). Pixel quality is the judge's."""
     scored = [i for i, f in enumerate(capture['frames']) if f['score']]
@@ -366,6 +406,7 @@ def run(runner, proton, env, dll):
     capture_path = Path(supplied).expanduser().resolve() if supplied else make_corpus(runner, proton, env, root,
                                                                                          provenance)
     capture = load_capture(capture_path)
+    baseline = load_baseline(BASELINE, digest(capture_path)) if BASELINE else None
     variants = json.loads(os.environ['LOOPBACK_REPLAY_VARIANTS']) if os.environ.get('LOOPBACK_REPLAY_VARIANTS') \
         else DEFAULT_VARIANTS
     if 'every-a' in variants and CALIBRATE > 0 and (runner.ROOT / 'tools/replay/__main__.py').is_file():
@@ -375,6 +416,8 @@ def run(runner, proton, env, dll):
     runs = {name: run_variant(runner, proton, env, root, name, settings, capture, capture_path, environment,
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)
+    if baseline:
+        results.update(baseline_gates(runs, baseline))
     repeats = [name for name in runs if name.startswith('aa-')]
     calibration, calibration_report = calibrate(runner, root, capture_path, repeats) if repeats else (None, None)
     if repeats:

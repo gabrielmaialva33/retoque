@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -41,7 +43,7 @@ def refuse_if_prefix_busy():
 
 def glue_unit():
     # The same slice tests/nr-present-guide-identity/run.py compiles with g++.
-    renderer = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+    renderer = renderer_source()
     start = 'struct PresentGuideIdentityState\n'
     assert renderer.count(start) == 1, 'production boundary changed'
     begin = renderer.index(start)

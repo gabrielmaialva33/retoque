@@ -2,12 +2,15 @@
 """Exercise production timing metadata/UI with host fakes, and guard marker placement."""
 from pathlib import Path
 import subprocess
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 root = Path(__file__).resolve().parents[2]
 here = Path(__file__).resolve().parent
 out = here / 'artifacts'
 out.mkdir(exist_ok=True)
-renderer = (root / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer = renderer_source()
 menu = (root / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
 
 def between(source, start, end):

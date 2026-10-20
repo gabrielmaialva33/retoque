@@ -21,6 +21,8 @@ import re
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -415,7 +417,7 @@ if len(failures) == before:
 # DLSS temporal inputs" over frames that ran on zero guides (present-real-guides.md, D3). Routing may read it; the
 # status line (HookStatus) names the guides from what the present did in the last second instead.
 before = len(failures)
-renderer_text = (nr / 'shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+renderer_text = renderer_source()
 status_at = renderer_text.find('const char* HookStatus()\n{')
 if status_at < 0:
     fail('HookStatus() not found in DlssNr_Dx12.cpp; the latch check no longer matches the code')

@@ -5,6 +5,9 @@ import subprocess
 import tempfile
 import re
 import xml.etree.ElementTree as ET
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 root = Path(__file__).resolve().parents[2]
 source = (root / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
@@ -27,7 +30,7 @@ for helper in ('RenderDetailStrength(config);', 'RenderModelPreset(config);'):
     assert menu.count(helper) == 1
 assert 'RenderPassControls(config, nativeVulkan);' in menu
 assert 'RenderGpuTiming(config, nativeVulkan);' in menu
-assert 'DlssNrShowAllSettings' not in (root / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+assert 'DlssNrShowAllSettings' not in renderer_source()
 # A control writes a short Config transaction, never a public optional used by snapshots.
 for field in ('Preset', 'Style', 'Intensity', 'LocalStructure', 'LocalTone', 'SkinStructure', 'AutoMask'):
     assert not re.search(r'config->DlssNr' + field + r'\s*=', source), field

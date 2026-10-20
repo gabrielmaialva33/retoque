@@ -2,12 +2,15 @@
 """Compile actual pre-upscale boundary functions with strict host fakes and ASan/UBSan."""
 from pathlib import Path
 import subprocess
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 OUT = HERE / 'artifacts'
 OUT.mkdir(exist_ok=True)
-source = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+source = renderer_source()
 header = (ROOT / 'retoque/dlssnr/DlssNrFeature_Dx12.h').read_text()
 
 

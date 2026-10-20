@@ -4,10 +4,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 import re
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
-source = (root / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+source = renderer_source()
 
 
 def report(name):

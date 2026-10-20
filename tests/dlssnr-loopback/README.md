@@ -530,4 +530,29 @@ Cadence 4 doubles Cadence 2's departure from the every-frame answer, and its pul
 the moving cube. That is the same direction as the light pulses and blur seen in Cyberpunk at Cadence 4 on
 2026-10-20.
 
+### Gating a refactor on a baseline
+
+The model is bitwise deterministic on this corpus, so a change that should not alter the picture is checked by
+replaying the same capture on the old and the new DLL and requiring identical runs:
+1. **Keep a baseline.** Copy a finished replay's `corpus/` and its `runs/*/run.json` and `runs/off/control.json`
+   out of `artifacts/`, which each run overwrites. For example, to `~/.cache/retoque-replay/baselines/<commit>/`.
+2. **Replay the candidate.**
+
+   ```bash
+   LOOPBACK_REPLAY_CALIBRATE=0 \
+   LOOPBACK_REPLAY_CAPTURE=<baseline>/corpus/capture.json \
+   LOOPBACK_REPLAY_BASELINE=<baseline> \
+   python3 tests/dlssnr-loopback/run.py --replay-nr --dll <candidate>/x64/out/OptiScaler.dll
+   ```
+
+   Every variant both runs share gets `<variant>-identical-to-baseline`: same decisions (kind, interval, passes,
+   model result, skip reason) and same output digest on every frame.
+
+Both controls were run on 2026-10-20 against the `b2eed6e3` baseline:
+- **Same renderer code:** all six variants were identical.
+- **`Intensity=0.9`:** failed from frame 62, the first model frame, with no change in decisions.
+
+The gate covers the after-upscale route through the seam. The present route, the pre-upscale route, the D3D11
+bridge and Vulkan are outside it.
+
 Not covered: the upscaler and everything upstream of it, frame generation, swapchain pacing and native Windows.

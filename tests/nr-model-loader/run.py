@@ -9,6 +9,8 @@ import re
 import subprocess
 import sys
 import tempfile
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 root = Path(__file__).resolve().parent
 repo = root.parents[1]
@@ -137,7 +139,7 @@ print(f'PASS: direct runtime matches the forwarder -- {total} parameter writes, 
 
 # --- 3. Wiring -------------------------------------------------------------------------------------
 
-host = strip_comments((repo / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text())
+host = strip_comments(renderer_source())
 ensure = body(host, 'bool EnsureForwarder()', 'DlssNr_Dx12.cpp')
 direct_at = ensure.find('NrModelLoader::Direct')
 load_at = ensure.find('LoadLibraryW(')
