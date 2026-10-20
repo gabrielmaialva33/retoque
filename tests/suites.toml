@@ -661,3 +661,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Shared renderer storage identity across separate translation units; missing/duplicate owner controls."
+
+[nr-replay-v2]
+path = "nr-replay-v2"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "Native DXGI capture decoding, recorded guide geometry, v1/v2 conformance and mutations."

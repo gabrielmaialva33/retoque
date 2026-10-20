@@ -22,7 +22,10 @@ def stored(values):
 
 
 def rgb(image, space, pre_exposure=1.0):
-    values = pixels(image)[..., :3].copy()
+    space = "srgb-rec709" if image.srgb else space
+    source = pixels(image)
+    values = np.zeros((image.height, image.width, 3), dtype=np.float64)
+    values[..., : min(3, image.channels)] = source[..., :3]
     if space == "srgb-rec709":
         low = values <= 0.04045
         values[low] /= 12.92
@@ -64,6 +67,9 @@ def coordinates(capture, frame, previous_frame, motion):
     if capture["color_jitter"] == "present" and not m["includes_jitter"]:
         dx += previous_frame["jitter"][0] - frame["jitter"][0]
         dy += previous_frame["jitter"][1] - frame["jitter"][1]
+    if m.get("_remove_jitter"):
+        dx -= previous_frame["jitter"][0] - frame["jitter"][0]
+        dy -= previous_frame["jitter"][1] - frame["jitter"][1]
     return dx, dy
 
 
@@ -179,9 +185,9 @@ def frame_metrics(capture, frame, source, depth, motion, output, reference, prev
                 (error.max(axis=2) > capture["_pixel_tolerance"]).mean()
             ),
             ghost_mae=float(pixel_error.mean()),
-            disocclusion_mae=(float(rejected.mean()) if rejected.size else 0.0)
-            if paired
-            else None,
+            disocclusion_mae=(
+                (float(rejected.mean()) if rejected.size else 0.0) if paired else None
+            ),
             detail_error=abs(out_gradient - ref_gradient) / max(ref_gradient, 1e-6),
             candidate_gradient=out_gradient,
             reference_gradient=ref_gradient,
