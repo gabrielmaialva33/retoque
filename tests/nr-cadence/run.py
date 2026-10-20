@@ -148,19 +148,28 @@ assert 'g_nr.cadence->ShowFaded(cmdList, cadenceFrame, uiAlpha, cadenceSmooth, f
 # A failed allocation of the smoothing surfaces leaves the carry running: the object still initialises.
 assert 'carrying without smoothing' in pass_cpp
 
-# Adaptive probes own a separate slot. CPU access requires an exact submission certificate; reuse requires that
+# Adaptive probes own four independent slots. CPU access requires an exact submission certificate; reuse requires that
 # certificate or a settled usage (a list Reset unrun, or released), so one uncertifiable probe cannot latch interval 1.
-assert 'Submission::TimingCertificate(_probeUsage)' in pass_cpp
-assert 'if (!certificate.reusable && !DlssNr::Submission::Settled(_probeUsage))' in pass_cpp
-assert 'certificate.accepted && !_probeIgnored' in pass_cpp
-assert 'if (!DlssNr::Submission::Track(cmd, _probeUsage))' in pass_cpp
-assert 'probe ? _probeMapped : _mappedConstants[slot]' in pass_cpp
+assert 'Submission::TimingCertificate(probe.usage)' in pass_cpp
+assert 'if (!certificate.reusable && !DlssNr::Submission::Settled(probe.usage))' in pass_cpp
+assert 'certificate.accepted && !probe.ignored' in pass_cpp
+assert 'if (!DlssNr::Submission::Track(cmd, probe.usage))' in pass_cpp
+assert 'probe ? probe->mapped : _mappedConstants[slot]' in pass_cpp
 assert 'adaptiveRequested && g_tracked && cadenceInputs.surfaces' in renderer
 assert 'if (adaptiveActive)' in renderer and 'g_nr.cadence->Probe(' in renderer
+assert 'kProbeSlots = 4' in pass_h and 'std::array<ProbeSlot, kProbeSlots> _probes' in pass_h
+assert 'std::sort(results.begin(), results.end()' in pass_cpp
+assert 'if (probe.pending)' in pass_h and 'probe.ignored = true;' in pass_h
+assert 'sizeof(Constants) % D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT == 0' in pass_cpp
+assert 'probe.heap.GetCbvCPU(0)' in pass_cpp and 'sizeof(Constants)' in pass_cpp
+assert 'probe ? probe->heap : _frameHeaps[slot]' in pass_cpp
+
+assert 'return !slot.pending && InitProbe(slot);' in pass_cpp
+assert 'for (const auto& sample : g_nr.cadence->PollProbes())' in renderer
 assert 'g_cadenceAdaptive.Reset()' in renderer and 'InvalidateProbe()' in renderer
 # Feedback age counts evaluations, not presents: under frame generation presents run ahead of evaluations.
 assert 'const uint64_t cadenceEvaluation = ++g_cadenceEvaluations;' in renderer
-assert 'g_cadenceAdaptive.Observe(*sample, cadenceEvaluation, cadenceNowMs)' in renderer
+assert 'g_cadenceAdaptive.Observe(sample, cadenceEvaluation, cadenceNowMs)' in renderer
 assert 'g_cadenceAdaptive.Interval(cadenceInputs.requested, cadenceEvaluation, cadenceNowMs)' in renderer
 assert 'cadence.chainStart, cadenceEvaluation, cadenceNowMs)' in renderer
 

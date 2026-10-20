@@ -19,7 +19,6 @@
 
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
 #include <dlssnr/DlssNr_Submission.h>
-#include <optional>
 #include <d3d12.h>
 #include <d3dx/d3dx12.h>
 #include <shaders/Shader_Dx12.h>
@@ -128,20 +127,25 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     ID3D12Resource* _lightGrid = nullptr;  // R32G32F, kLightGrid square: summed light of the shown answer, the proxy
     ID3D12Resource* _lightState = nullptr; // R32F 4x1: shown light, frame light, valid, gain (stops)
 
-    // Adaptive only: separate descriptor/constant storage; never overwrite a pending recording.
-    FrameDescriptorHeap _probeHeap;
-    ID3D12Resource* _probeConstants = nullptr;
-    void* _probeMapped = nullptr;
-    ID3D12Resource* _probeGrid = nullptr;
-    ID3D12Resource* _probeReadback = nullptr;
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT _probeFootprint {};
-    UINT64 _probeBytes = 0;
-    DlssNr::Submission::Usage _probeUsage {};
-    DlssNr::Cadence::Adaptive::Sample _probeSample {};
-    bool _probePending = false;
-    bool _probeIgnored = false;
-    bool _probeTried = false;
-    bool InitProbe();
+    // Adaptive only. Every pending recording owns all resources it can still read/write.
+    static constexpr size_t kProbeSlots = 4;
+    struct ProbeSlot
+    {
+        FrameDescriptorHeap heap;
+        ID3D12Resource* constants = nullptr;
+        void* mapped = nullptr;
+        ID3D12Resource* grid = nullptr;
+        ID3D12Resource* readback = nullptr;
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint {};
+        UINT64 bytes = 0;
+        DlssNr::Submission::Usage usage {};
+        DlssNr::Cadence::Adaptive::Sample sample {};
+        bool pending = false;
+        bool ignored = false;
+        bool tried = false;
+    };
+    std::array<ProbeSlot, kProbeSlots> _probes {};
+    bool InitProbe(ProbeSlot& probe);
 
     UINT _width = 0;
     UINT _height = 0;
@@ -154,7 +158,7 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
 
     // One dispatch. srvs/uavs are slot-indexed; a null entry gets a null descriptor of the slot's type.
     bool Run(ID3D12GraphicsCommandList* cmdList, const Constants& constants, ID3D12Resource* const (&srvs)[kSrvCount],
-             ID3D12Resource* const (&uavs)[kUavCount], UINT groupsX, UINT groupsY, bool probe = false);
+             ID3D12Resource* const (&uavs)[kUavCount], UINT groupsX, UINT groupsY, ProbeSlot* probe = nullptr);
 
     Constants Base(uint32_t mode, const Frame& frame) const;
 
@@ -179,8 +183,14 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
 
     bool Smoothing() const { return _smoothing; }
 
-    std::optional<DlssNr::Cadence::Adaptive::Sample> PollProbe();
-    void InvalidateProbe() { _probeIgnored = true; }
+    // Zero-id entries are empty; Controller::Observe ignores them. Nonempty entries are capture-ordered.
+    std::array<DlssNr::Cadence::Adaptive::Sample, kProbeSlots> PollProbes();
+    void InvalidateProbe()
+    {
+        for (auto& probe : _probes)
+            if (probe.pending)
+                probe.ignored = true;
+    }
     void Probe(ID3D12GraphicsCommandList* cmd, const Frame& frame, ID3D12Resource* ui, bool history, bool chainStart,
                uint64_t present, int64_t ms);
 

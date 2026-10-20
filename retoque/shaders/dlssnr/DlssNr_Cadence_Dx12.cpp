@@ -198,12 +198,15 @@ DlssNr_Cadence_Dx12::~DlssNr_Cadence_Dx12()
     if (State::Instance().isShuttingDown)
         return;
 
-    if (_probeConstants && _probeMapped)
-        _probeConstants->Unmap(0, nullptr);
-    SAFE_RELEASE(_probeConstants);
-    SAFE_RELEASE(_probeGrid);
-    SAFE_RELEASE(_probeReadback);
-    _probeHeap.ReleaseHeaps();
+    for (auto& probe : _probes)
+    {
+        if (probe.constants && probe.mapped)
+            probe.constants->Unmap(0, nullptr);
+        SAFE_RELEASE(probe.constants);
+        SAFE_RELEASE(probe.grid);
+        SAFE_RELEASE(probe.readback);
+        probe.heap.ReleaseHeaps();
+    }
 
     // Shader_Dx12 releases these only for an object that finished initialising.
     if (!_init)
@@ -264,12 +267,12 @@ DlssNr_Cadence_Dx12::Constants DlssNr_Cadence_Dx12::Base(uint32_t mode, const Fr
 
 bool DlssNr_Cadence_Dx12::Run(ID3D12GraphicsCommandList* cmdList, const Constants& constants,
                               ID3D12Resource* const (&srvs)[kSrvCount], ID3D12Resource* const (&uavs)[kUavCount],
-                              UINT groupsX, UINT groupsY, bool probe)
+                              UINT groupsX, UINT groupsY, ProbeSlot* probe)
 {
     const uint32_t slot = _heapIndex;
     if (!probe)
         _heapIndex = (_heapIndex + 1) % DLSSNR_CADENCE_NUM_OF_HEAPS;
-    FrameDescriptorHeap& heap = probe ? _probeHeap : _frameHeaps[slot];
+    FrameDescriptorHeap& heap = probe ? probe->heap : _frameHeaps[slot];
 
     // Every slot gets a view, a null one where the mode reads nothing: an unbound descriptor is not an empty
     // read, it is a read from nothing.
@@ -303,7 +306,7 @@ bool DlssNr_Cadence_Dx12::Run(ID3D12GraphicsCommandList* cmdList, const Constant
         _device->CreateUnorderedAccessView(nullptr, nullptr, &empty, heap.GetUavCPU(i));
     }
 
-    std::memcpy(probe ? _probeMapped : _mappedConstants[slot], &constants, sizeof(constants));
+    std::memcpy(probe ? probe->mapped : _mappedConstants[slot], &constants, sizeof(constants));
 
     ID3D12DescriptorHeap* heaps[] = { heap.GetHeapCSU() };
     cmdList->SetDescriptorHeaps(_countof(heaps), heaps);
@@ -528,79 +531,92 @@ bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame
 
 // The owning NR generation must be tracked before any call to Probe. Retirement then retains
 // these resources with the generation; the local certificate additionally protects readback/reuse.
-bool DlssNr_Cadence_Dx12::InitProbe()
+bool DlssNr_Cadence_Dx12::InitProbe(ProbeSlot& probe)
 {
-    if (_probeTried)
-        return _probeMapped && _probeGrid && _probeReadback && _probeHeap.GetHeapCSU();
-    _probeTried = true;
+    if (probe.tried)
+        return probe.mapped && probe.grid && probe.readback && probe.heap.GetHeapCSU();
+    probe.tried = true;
+    static_assert(sizeof(Constants) % D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT == 0);
     const auto upload = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
     const auto cb = CD3DX12_RESOURCE_DESC::Buffer(sizeof(Constants));
     if (FAILED(_device->CreateCommittedResource(&upload, D3D12_HEAP_FLAG_NONE, &cb, D3D12_RESOURCE_STATE_GENERIC_READ,
-                                                nullptr, IID_PPV_ARGS(&_probeConstants))))
+                                                nullptr, IID_PPV_ARGS(&probe.constants))))
         return false;
     const D3D12_RANGE noRead { 0, 0 };
-    if (FAILED(_probeConstants->Map(0, &noRead, &_probeMapped)) || !InitHeaps(_device, &_probeHeap, 1))
+    if (FAILED(probe.constants->Map(0, &noRead, &probe.mapped)) || !InitHeaps(_device, &probe.heap, 1))
         return false;
-    D3D12_CONSTANT_BUFFER_VIEW_DESC view { _probeConstants->GetGPUVirtualAddress(), sizeof(Constants) };
-    _device->CreateConstantBufferView(&view, _probeHeap.GetCbvCPU(0));
+    D3D12_CONSTANT_BUFFER_VIEW_DESC view { probe.constants->GetGPUVirtualAddress(), sizeof(Constants) };
+    _device->CreateConstantBufferView(&view, probe.heap.GetCbvCPU(0));
     constexpr auto grid = DlssNr::Cadence::Adaptive::Grid;
-    _probeGrid = CreateTexture(_device, DXGI_FORMAT_R32G32B32A32_FLOAT, grid, grid, L"DLSS-NR cadence probe");
-    if (!_probeGrid)
+    probe.grid = CreateTexture(_device, DXGI_FORMAT_R32G32B32A32_FLOAT, grid, grid, L"DLSS-NR cadence probe");
+    if (!probe.grid)
         return false;
-    const auto desc = _probeGrid->GetDesc();
-    _device->GetCopyableFootprints(&desc, 0, 1, 0, &_probeFootprint, nullptr, nullptr, &_probeBytes);
+    const auto desc = probe.grid->GetDesc();
+    _device->GetCopyableFootprints(&desc, 0, 1, 0, &probe.footprint, nullptr, nullptr, &probe.bytes);
     const auto readback = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_READBACK);
-    const auto buffer = CD3DX12_RESOURCE_DESC::Buffer(_probeBytes);
+    const auto buffer = CD3DX12_RESOURCE_DESC::Buffer(probe.bytes);
     return SUCCEEDED(_device->CreateCommittedResource(&readback, D3D12_HEAP_FLAG_NONE, &buffer,
                                                       D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                                                      IID_PPV_ARGS(&_probeReadback)));
+                                                      IID_PPV_ARGS(&probe.readback)));
 }
 
-std::optional<DlssNr::Cadence::Adaptive::Sample> DlssNr_Cadence_Dx12::PollProbe()
+std::array<DlssNr::Cadence::Adaptive::Sample, DlssNr_Cadence_Dx12::kProbeSlots> DlssNr_Cadence_Dx12::PollProbes()
 {
-    if (!_probePending)
-        return std::nullopt;
-    const auto certificate = DlssNr::Submission::TimingCertificate(_probeUsage);
-    // A probe that can never be certified -- its list Reset without running, or released by the game -- is still free
-    // to reuse once settled (docs/dlssnr/design/chain-in-flight.md); its sample is discarded below. Waiting for the
-    // certificate alone would hold adaptive cadence at interval 1 for the rest of the session.
-    if (!certificate.reusable && !DlssNr::Submission::Settled(_probeUsage))
-        return std::nullopt;
-    auto result = _probeSample;
-    result.valid = false;
-    if (certificate.accepted && !_probeIgnored)
+    std::array<DlssNr::Cadence::Adaptive::Sample, kProbeSlots> results {};
+    size_t count = 0;
+    for (auto& probe : _probes)
     {
-        void* data = nullptr;
-        const D3D12_RANGE read { 0, static_cast<SIZE_T>(_probeBytes) };
-        if (SUCCEEDED(_probeReadback->Map(0, &read, &data)) && data)
+        if (!probe.pending)
+            continue;
+        const auto certificate = DlssNr::Submission::TimingCertificate(probe.usage);
+        // A probe that can never be certified -- its list Reset without running, or released by the game -- is still
+        // free to reuse once settled (docs/dlssnr/design/chain-in-flight.md); its sample is discarded below. Waiting
+        // for the certificate alone would hold adaptive cadence at interval 1 for the rest of the session.
+        if (!certificate.reusable && !DlssNr::Submission::Settled(probe.usage))
+            continue;
+        auto result = probe.sample;
+        result.valid = false;
+        if (certificate.accepted && !probe.ignored)
         {
-            using namespace DlssNr::Cadence::Adaptive;
-            std::array<Pixel, Grid * Grid> pixels {};
-            for (uint32_t y = 0; y < Grid; ++y)
-                std::memcpy(pixels.data() + y * Grid,
-                            static_cast<const char*>(data) + _probeFootprint.Offset +
-                                y * _probeFootprint.Footprint.RowPitch,
-                            Grid * sizeof(Pixel));
-            const D3D12_RANGE noWrite { 0, 0 };
-            _probeReadback->Unmap(0, &noWrite);
-            result = Summarize(pixels, result.present, result.ms);
+            void* data = nullptr;
+            const D3D12_RANGE read { 0, static_cast<SIZE_T>(probe.bytes) };
+            if (SUCCEEDED(probe.readback->Map(0, &read, &data)) && data)
+            {
+                using namespace DlssNr::Cadence::Adaptive;
+                std::array<Pixel, Grid * Grid> pixels {};
+                for (uint32_t y = 0; y < Grid; ++y)
+                    std::memcpy(pixels.data() + y * Grid,
+                                static_cast<const char*>(data) + probe.footprint.Offset +
+                                    y * probe.footprint.Footprint.RowPitch,
+                                Grid * sizeof(Pixel));
+                const D3D12_RANGE noWrite { 0, 0 };
+                probe.readback->Unmap(0, &noWrite);
+                result = Summarize(pixels, result.present, result.ms);
+            }
         }
+        probe.pending = false;
+        probe.usage = {};
+        results[count++] = result;
     }
-    _probePending = false;
-    _probeUsage = {};
-    return result;
+    std::sort(results.begin(), results.end(), [](const auto& a, const auto& b) { return a.present < b.present; });
+    return results;
 }
 
 void DlssNr_Cadence_Dx12::Probe(ID3D12GraphicsCommandList* cmd, const Frame& frame, ID3D12Resource* ui, bool history,
                                 bool chainStart, uint64_t present, int64_t ms)
 {
-    if (!_init || !cmd || !frame.proxy || !frame.depth || !frame.motion || _probePending || !InitProbe())
+    if (!_init || !cmd || !frame.proxy || !frame.depth || !frame.motion)
         return;
-    if (!DlssNr::Submission::Track(cmd, _probeUsage))
+    auto available =
+        std::find_if(_probes.begin(), _probes.end(), [this](auto& slot) { return !slot.pending && InitProbe(slot); });
+    if (available == _probes.end())
         return;
-    _probePending = true;
-    _probeIgnored = false;
-    _probeSample = { present, ms };
+    auto& probe = *available;
+    if (!DlssNr::Submission::Track(cmd, probe.usage))
+        return;
+    probe.pending = true;
+    probe.ignored = false;
+    probe.sample = { present, ms };
     auto c = Base(9, frame);
     c.ProbeHistory = history ? 1u : 0u;
     c.ChainStart = chainStart ? 1u : 0u;
@@ -615,16 +631,16 @@ void DlssNr_Cadence_Dx12::Probe(ID3D12GraphicsCommandList* cmd, const Frame& fra
                                               history ? _residual : nullptr,
                                               history ? _residualLow : nullptr,
                                               ui };
-    ID3D12Resource* const uavs[kUavCount] = { _probeGrid };
-    Transition(cmd, _probeGrid, kRest, kWrite);
-    Run(cmd, c, srvs, uavs, 2, 2, true);
-    Transition(cmd, _probeGrid, kWrite, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    ID3D12Resource* const uavs[kUavCount] = { probe.grid };
+    Transition(cmd, probe.grid, kRest, kWrite);
+    Run(cmd, c, srvs, uavs, 2, 2, &probe);
+    Transition(cmd, probe.grid, kWrite, D3D12_RESOURCE_STATE_COPY_SOURCE);
     D3D12_TEXTURE_COPY_LOCATION source {}, target {};
-    source.pResource = _probeGrid;
+    source.pResource = probe.grid;
     source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    target.pResource = _probeReadback;
+    target.pResource = probe.readback;
     target.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-    target.PlacedFootprint = _probeFootprint;
+    target.PlacedFootprint = probe.footprint;
     cmd->CopyTextureRegion(&target, 0, 0, 0, &source, nullptr);
-    Transition(cmd, _probeGrid, D3D12_RESOURCE_STATE_COPY_SOURCE, kRest);
+    Transition(cmd, probe.grid, D3D12_RESOURCE_STATE_COPY_SOURCE, kRest);
 }

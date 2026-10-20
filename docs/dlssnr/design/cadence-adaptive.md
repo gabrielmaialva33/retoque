@@ -78,24 +78,29 @@ presents and refused routes invalidate feedback and restart calm admission.
 
 Adaptive requires the existing tracked-recording path from its first NR recording.
 Enabling it after legacy untracked work cannot safely upgrade resource lifetime:
-keep interval 1 and require restart for adaptive admission. The probe owns a
-separate descriptor heap, 256-byte constant buffer, grid and readback allocation;
-it never consumes another slot in the legacy cadence dispatch ring.
+keep interval 1 and require restart for adaptive admission. Four lazy probe slots
+each own a separate descriptor heap, 256-byte constant buffer, grid and readback
+allocation; they never consume another slot in the legacy cadence dispatch ring.
 
-One pending probe is sufficient: accept/read/reuse only after the exact recording
-is sealed by Reset, executed once, and its queue fence completed, using the existing
-Submission certificate. An occupied or unproven slot is not overwritten. Retirement
-uses the tracked NR generation's usage; device loss abandons pending resources.
-All CPU admission state remains under g_nrMutex. This inherits tracked recording's
-conservative serialization; report any throughput penalty rather than concealing it.
+CPU readback requires the exact recording to be sealed by Reset, executed once,
+and completed on its queue, using the Submission certificate. Slot reuse requires
+that certificate's reusable flag **or Settled**, so cancelled or safely orphaned
+recordings do not strand a slot; uncertified samples are discarded. In non-strict
+mode Settled also permits completed/unsealed recordings after the replay window.
+An occupied, unsettled slot is never overwritten. Retirement uses the tracked NR
+generation's usage; device loss abandons pending resources. All CPU admission state
+remains under g_nrMutex. Admission follows chain-in-flight's bounded overlap once
+one-queue affinity is established, with conservative serial/strict fallbacks;
+it does not wait for every previous list's Reset before admitting another frame.
 
 ## Validation plan
 
 Host tests exercise threshold boundaries, stale/invalid samples, repeated samples,
 calm hysteresis, shrink/recovery, reset and default-off scheduler equivalence.
 Source guards cover config round-trip, cbuffer order and fenced probe ownership.
-Rebuild cadence DXIL, run invariants and all host suites, clang-format 22, Release
-under the shared lock, and diff --check. Repeat the moving fixture with adaptive
+The original shader change rebuilt cadence DXIL. The probe-ring correction changes
+no shader source or cbuffer: run invariants and all host suites, clang-format 22,
+Release under the shared lock, and diff --check. Repeat the moving fixture with adaptive
 and explicitly disabled adaptive; compare default-off captures with baseline.
 No game deployment. Native Windows, real camera cuts, HDR/game quality and FG
 pacing remain unvalidated by this synthetic fixture.
@@ -127,3 +132,37 @@ cadence pass's ordered C++/HLSL constants, whose CBV remains 256 bytes.
 Once enabled, tracked resource lifetime remains in force for the session even if
 adaptive admission is disabled again; protection cannot safely be downgraded.
 Default-off equivalence refers to starting with adaptive disabled.
+
+## Probe pipeline correction (2026-10-20, before implementation)
+
+The single pending probe cannot sustain feedback with a three-evaluation Reset
+latency: each incoming sample is three evaluations old, but the previous one is
+six old. Testing the previous capture against the current evaluation repeatedly
+restarts calm. Four independently owned slots cover delays of 2, 3 and 4 evaluations:
+poll first, then record into a free slot. Each slot owns its grid, readback, 256-byte
+constant buffer, descriptor heap, Usage, sample metadata and ignored/pending flags.
+No busy slot is overwritten; if none is free, skip the probe and retain the normal
+bounded stale-feedback fallback. Allocation remains lazy and adaptive-only.
+
+Polling checks every pending slot. A reusable certificate or Settled usage permits
+slot reuse; only an accepted certificate permits CPU readback. Cancelled, orphaned
+or aged-complete uncertifiable samples are returned invalid, never used as calm
+evidence. Returned samples are sorted by capture evaluation; the controller ignores
+samples at or below the last observed capture, including completions arriving in a
+later poll out of order. Invalidation marks every pending slot ignored without
+releasing any GPU ownership. Retirement still follows the tracked NR generation.
+
+Continuity compares consecutive capture IDs and capture times (positive evaluation
+gap <=4, nonnegative time gap <250 ms), not the previous sample's age at receipt.
+The incoming and newest retained samples must still be fresh at the current
+evaluation/time. Invalid feedback interrupts calm; fresh calm after it can recover.
+A motion/rejection sample shortens immediately on receipt, including within a
+batch of completions. Four slots are a bounded latency allowance, not a guarantee
+against arbitrarily delayed Reset. No cbuffer, shader math or bytecode change is
+needed: every slot uses the existing mode 9 and its existing descriptor layout.
+
+This uses chain-in-flight bounded admission rather than serializing every NR
+recording. Settled allows cancellation and completed orphan reuse in either mode,
+and completed/unsealed reuse after AgeOutTicks only outside replay-strict mode.
+Unknown or outstanding GPU work is never made reusable by age alone. The documented
+late-replay and cross-queue limits of chain-in-flight still apply.

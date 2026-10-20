@@ -75,7 +75,8 @@ class Controller
             _last.valid = false;
             return;
         }
-        if (!Fresh(_last, present, ms))
+        // Continuity belongs to capture time; certification latency is checked separately by Fresh(s).
+        if (!_last.valid || s.present - _last.present > 4 || s.ms < _last.ms || s.ms - _last.ms >= kGapMs)
         {
             _calmSince = -1;
             _interval = 1;

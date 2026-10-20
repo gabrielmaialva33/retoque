@@ -4542,8 +4542,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                 Cadence::Refusal(cadenceInputs) == Cadence::Reason::None;
     if (adaptiveActive)
     {
-        if (auto sample = g_nr.cadence->PollProbe())
-            g_cadenceAdaptive.Observe(*sample, cadenceEvaluation, cadenceNowMs);
+        for (const auto& sample : g_nr.cadence->PollProbes())
+            g_cadenceAdaptive.Observe(sample, cadenceEvaluation, cadenceNowMs);
         cadenceInputs.adaptiveInterval =
             g_cadenceAdaptive.Interval(cadenceInputs.requested, cadenceEvaluation, cadenceNowMs);
     }
