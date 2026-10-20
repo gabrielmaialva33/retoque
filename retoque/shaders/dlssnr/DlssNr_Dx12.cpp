@@ -1125,6 +1125,9 @@ void ChainStatus(const char* reason)
 // Decided once per Dispatch, under the pass's lock.
 DlssNr::Cadence::Scheduler g_cadence;
 DlssNr::Cadence::Adaptive::Controller g_cadenceAdaptive;
+// The adaptive controller's clock: one tick per evaluation that reaches the cadence decision. Presents would not do:
+// under frame generation several go by per evaluation, so feedback a few evaluations old would always read as stale.
+uint64_t g_cadenceEvaluations = 0;
 
 // What the menu shows under the control. Starts as "off", so a session that never turns the cadence on logs
 // nothing about it.
@@ -4533,15 +4536,16 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         cadenceResetPending = cadenceResetPending || g_nr.passReset[i];
 
     const int64_t cadenceNowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    const uint64_t cadenceEvaluation = ++g_cadenceEvaluations;
     const bool adaptiveRequested = cfg.DlssNrCadenceAdaptive.value_or_default() && cadenceInputs.requested > 1;
     const bool adaptiveActive = adaptiveRequested && g_tracked && cadenceInputs.surfaces &&
                                 Cadence::Refusal(cadenceInputs) == Cadence::Reason::None;
     if (adaptiveActive)
     {
         if (auto sample = g_nr.cadence->PollProbe())
-            g_cadenceAdaptive.Observe(*sample, observedFrame, cadenceNowMs);
+            g_cadenceAdaptive.Observe(*sample, cadenceEvaluation, cadenceNowMs);
         cadenceInputs.adaptiveInterval =
-            g_cadenceAdaptive.Interval(cadenceInputs.requested, observedFrame, cadenceNowMs);
+            g_cadenceAdaptive.Interval(cadenceInputs.requested, cadenceEvaluation, cadenceNowMs);
     }
     else
     {
@@ -5286,9 +5290,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     cadenceFrame.scale = Cadence::TapScale(workWidth, width);
 
     if (adaptiveActive)
-        g_nr.cadence->Probe(cmdList, cadenceFrame, uiAlpha,
-                            !Cadence::IsForced(cadence.reason) && !Cadence::IsRefusal(cadence.reason),
-                            cadence.runModel ? !cadence.handChain : cadence.chainStart, observedFrame, cadenceNowMs);
+        g_nr.cadence->Probe(
+            cmdList, cadenceFrame, uiAlpha, !Cadence::IsForced(cadence.reason) && !Cadence::IsRefusal(cadence.reason),
+            cadence.runModel ? !cadence.handChain : cadence.chainStart, cadenceEvaluation, cadenceNowMs);
 
     // The model frame after carried ones: its own history is as old as the last model frame, so it is handed the
     // chain summed back to it -- working pixels, scale 1, off the picture where the chain broke -- rather than

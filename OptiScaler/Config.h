@@ -406,6 +406,9 @@ class Config
     // history stay the model's own. On by default -- it only acts once Cadence is above 1, which is off by default.
     // See docs/dlssnr/design/cadence-smoothing.md.
     CustomOptional<bool> DlssNrCadenceSmoothing { false };
+    // Adaptive cadence: Cadence becomes the longest interval, shortened when sampled motion or rejected carry is high
+    // and lengthened again after 300 ms of calm. D3D12 only; needs tracked recording from startup. Off by default.
+    // See docs/dlssnr/design/cadence-adaptive.md.
     CustomOptional<bool> DlssNrCadenceAdaptive { false };
 
     // The pulse metric: the light step per frame -- the change, in stops, of log2(output light / frame light) from one

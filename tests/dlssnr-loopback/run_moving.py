@@ -130,7 +130,8 @@ def run_trials(runner, proton, env, dll):
         gpu_states[name] = dict(before=gpu_state())
         returncode = execute([proton, 'run', directory / 'dlssnr-loopback.exe',
                               'OptiScaler.dll', '--moving-scene'] +
-                             (['--moving-present'] if os.environ.get('LOOPBACK_MOVING_PRESENT') == '1' else []), cwd=directory,
+                             (['--moving-present'] if os.environ.get('LOOPBACK_MOVING_PRESENT') == '1' else []),
+                             cwd=directory,
                              env=env, log=directory / 'proton.log', timeout=300)
         gpu_states[name]['after'] = gpu_state()
         if returncode:

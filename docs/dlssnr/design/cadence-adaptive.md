@@ -61,7 +61,10 @@ quality limits: at >=1 px/frame or >=15% rejection, interval 1; between 0.25 and
 1 px/frame, at most interval 2; below 0.25 and below the rejection threshold,
 allow the configured interval only after 300 ms of fresh calm samples. Shortening
 is immediate on receipt of a sample; lengthening waits for calm. Missing, stale
-(250 ms or more than four presents old), replayed or unproven samples force 1.
+(250 ms or more than four evaluations old), replayed or unproven samples force 1.
+Age counts the pass's own evaluations, not presents: under frame generation
+several presents go by per evaluation, and a probe answered after the game's
+Reset (often two or three evaluations later) would otherwise always be stale.
 GPU feedback is delayed: a newly exposed object can affect one frame before the
 CPU sees it. No synchronous GPU wait is added to admission.
 

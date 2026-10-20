@@ -561,7 +561,10 @@ std::optional<DlssNr::Cadence::Adaptive::Sample> DlssNr_Cadence_Dx12::PollProbe(
     if (!_probePending)
         return std::nullopt;
     const auto certificate = DlssNr::Submission::TimingCertificate(_probeUsage);
-    if (!certificate.reusable)
+    // A probe that can never be certified -- its list Reset without running, or released by the game -- is still free
+    // to reuse once settled (docs/dlssnr/design/chain-in-flight.md); its sample is discarded below. Waiting for the
+    // certificate alone would hold adaptive cadence at interval 1 for the rest of the session.
+    if (!certificate.reusable && !DlssNr::Submission::Settled(_probeUsage))
         return std::nullopt;
     auto result = _probeSample;
     result.valid = false;
