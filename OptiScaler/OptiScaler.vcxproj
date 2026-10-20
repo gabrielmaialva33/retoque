@@ -1019,6 +1019,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ProcessEnd.h" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_ProcessEnd.cpp" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Internal.h" />
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Model.cpp" />
   </ItemGroup>
   <ItemDefinitionGroup>
     <ClCompile>

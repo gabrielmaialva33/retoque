@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #define __cdecl
+class Config;
 using HMODULE = void*;
 using HANDLE = void*;
 using UINT64 = uint64_t;

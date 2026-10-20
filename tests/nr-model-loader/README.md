@@ -83,3 +83,15 @@ writable-section filter, the minor padding, the default and the proxy guard) eac
   the per-thread alias are Windows-only and reviewed, not executed.
 - The drift check compares source text. It holds the two call sequences equal; it does not prove
   either is what the model wants.
+
+## Renderer model extraction
+
+`model-contract.json` pins the 12 complete definitions moved into
+`DlssNr_Dx12_Model.cpp` to `1081a48d`, including function-local statics and formatting.
+An intentional later behavior change must update that contract with review.
+`ProbeD3D11` is compiled separately from `probe_cases.cpp` against loader/COM fakes.
+Eight fresh-process scenarios exercise null/default-off inertness, the NR mutex,
+one-shot behavior, direct/failed/missing loader paths, game-adapter selection,
+fallback selection and matching releases. Neither the fakes nor the existing PE
+scans initialize NGX on a real D3D11 device; production DLL linking and D3D12 replay
+are separate gates, and live D3D11 probe behavior remains outside their coverage.

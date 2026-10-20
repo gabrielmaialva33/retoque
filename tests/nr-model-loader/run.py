@@ -5,6 +5,8 @@ Runs no model, no NGX and no GPU. See README.md.
 """
 from pathlib import Path
 import os
+import hashlib
+import json
 import re
 import subprocess
 import sys
@@ -140,7 +142,7 @@ print(f'PASS: direct runtime matches the forwarder -- {total} parameter writes, 
 # --- 3. Wiring -------------------------------------------------------------------------------------
 
 host = strip_comments(renderer_source())
-ensure = body(host, 'bool EnsureForwarder()', 'DlssNr_Dx12.cpp')
+ensure = body(host, 'bool EnsureForwarder()', 'DlssNr_Dx12_Model.cpp')
 direct_at = ensure.find('NrModelLoader::Direct')
 load_at = ensure.find('LoadLibraryW(')
 if direct_at < 0 or load_at < 0 or direct_at > load_at:
@@ -148,7 +150,7 @@ if direct_at < 0 or load_at < 0 or direct_at > load_at:
 if host.find('DlssNr::NgxInfo::Describe(*snippet);') < 0 or \
         host.find('DlssNr::NgxInfo::Describe(*snippet);') > host.find('DlssNr::ModelLog::Install(*snippet);'):
     fail('the driver/loader/model line must be logged before the first feature build')
-probe = body(host, 'void ProbeD3D11(', 'DlssNr_Dx12.cpp')
+probe = body(host, 'void ProbeD3D11(', 'DlssNr_Dx12_Model.cpp')
 if probe.find('g_nr.forwarder == nullptr') < 0 or probe.find('g_nr.forwarder == nullptr') > probe.find('GetProcAddress('):
     fail('ProbeD3D11 must not GetProcAddress a null forwarder (that searches the game executable)')
 
@@ -164,3 +166,37 @@ if not re.search(r'CustomOptional<NrModelLoader> DlssNrModelLoader \{ NrModelLoa
 
 print('PASS: wiring -- loader choice precedes the forwarder load, NGX line precedes the build, '
       'probe and proxy guards in place, forwarder is the default')
+
+# --- 4. The extraction keeps whole definitions, local statics and the public probe symbol ---------
+model_path = repo / 'retoque/shaders/dlssnr/DlssNr_Dx12_Model.cpp'
+model = model_path.read_text()
+core = (repo / 'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
+contract = json.loads((root / 'model-contract.json').read_text())
+for signature, digest in contract['definitions'].items():
+    definition = body(model, signature, model_path)
+    if hashlib.sha256(definition.encode()).hexdigest() != digest:
+        fail(f'{signature}: definition changed from the pre-extraction contract; review intentional changes')
+    if signature in core:
+        fail(f'{signature}: duplicate or unmoved definition in the core renderer')
+if model.count('void ProbeD3D11(void* d3d11Device)') != 1:
+    fail('the public D3D11 probe must have exactly one out-of-line definition')
+probe_definition = body(model, 'void ProbeD3D11(void* d3d11Device)', model_path)
+clean_probe = strip_comments(probe_definition)
+if not (clean_probe.index('nrLock(g_nrMutex)') < clean_probe.index('DlssNrProbeD3D11.value_or_default()') <
+        clean_probe.index('done = true;') < clean_probe.index('EnsureForwarder()')):
+    fail('D3D11 probe lock/opt-in/one-shot/loader order changed')
+with tempfile.TemporaryDirectory(prefix='nr-model-probe-') as directory:
+    out = Path(directory)
+    (out / 'probe.cpp').write_text('#include "probe_fakes.h"\nnamespace DlssNr {\n'
+                                   'using namespace Dx12Internal;\n' + probe_definition + '\n}\n')
+    flags = ['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-pthread',
+             '-Wno-unused-variable', '-Wno-unused-but-set-variable', '-I' + str(root)]
+    # Separate compilation retains the probe's real out-of-line/static storage boundaries.
+    subprocess.run(flags + ['-c', str(out / 'probe.cpp'), '-o', str(out / 'probe.o')], check=True)
+    subprocess.run(flags + [str(root / 'probe_cases.cpp'), str(out / 'probe.o'),
+                            '-o', str(out / 'probe')], check=True)
+    for case in ('normal', 'direct', 'ensure-fails', 'no-exports', 'no-snippet', 'query-fails',
+                 'adapter-fails', 'incomplete'):
+        subprocess.run([str(out / 'probe'), case], check=True)
+print('PASS: 12 model definitions verbatim; D3D11 probe null/off, lock, one-shot, direct/failure gates, '
+      'game/fallback adapter identity and releases (8 fresh-process scenarios, no real COM/model)')

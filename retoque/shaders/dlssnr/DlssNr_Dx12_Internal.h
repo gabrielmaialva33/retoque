@@ -597,4 +597,14 @@ extern const char* g_presentHdrReason;
 extern bool g_presentHdrConverted;
 extern float g_presentHdrWhiteNits;
 extern bool g_presentHdrWhiteFromDisplay;
+// Model helpers. Shared state and lock ownership stay with their existing callers.
+const char* NgxResultName(unsigned int r);
+void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList);
+bool EnsureForwarder();
+bool NoteModelFault();
+bool EnsureCapabilityParams(ID3D12Device* device);
+void SetExtras(const Config& cfg, ID3D12Resource* ui, ID3D12Resource* backbuffer, unsigned int uiWidth,
+               unsigned int uiHeight, unsigned int bbWidth, unsigned int bbHeight);
+bool TuningMatchesFeature(const Config& cfg);
+void RecordBuiltTuning(const Config& cfg);
 } // namespace DlssNr::Dx12Internal

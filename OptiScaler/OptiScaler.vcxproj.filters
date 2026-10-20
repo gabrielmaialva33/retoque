@@ -2232,5 +2232,8 @@
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Model.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
