@@ -48,6 +48,9 @@ class FormatTests(unittest.TestCase):
             lambda x: x["frames"][0]["color"].update(width=1000000),
             lambda x: x["frames"][0]["motion"].update(width=4),
             lambda x: x.update(version=True),
+            lambda x: x.pop("color_jitter"),
+            lambda x: x.update(color_jitter="unknown"),
+            lambda x: x.update(color_jitter=True),
         ]
         for mutate in mutations:
             self.capture.write_bytes(original)
@@ -148,12 +151,59 @@ class FormatTests(unittest.TestCase):
             lambda x: x["frames"][1].update(gpu_ms=-1),
             lambda x: x["frames"][1].update(completion="pending"),
             lambda x: x["requirements"].update(min_carried=1),
+            lambda x: x["producer"].pop("trial"),
+            lambda x: x["producer"].update(trial=" "),
+            lambda x: x["producer"].update(trial=3),
         ]
         for mutate in mutations:
             self.result.write_bytes(original)
             change(self.result, mutate)
             with self.assertRaises(ValueError):
                 self.wire.load_run(self.result, c)
+
+    def test_skips_only_unscored_reasoned_and_fenced(self):
+        c = self.wire.load_capture(self.capture)
+        change(
+            self.result,
+            lambda r: r["frames"][0].update(
+                kind="skipped",
+                interval=0,
+                requested_passes=0,
+                completed_passes=0,
+                skip="extent settling",
+            ),
+        )
+        accepted = self.result.read_bytes()
+        r = self.wire.load_run(self.result, c)
+        self.assertEqual(r["_counts"], dict(model=7, carried=0))
+        for changes in (
+            {"skip": None},
+            {"skip": ""},
+            {"skip": " "},
+            {"skip": 12},
+            {"completed_passes": 1},
+            {"requested_passes": 4},
+            {"interval": 5},
+            {"completion": "pending"},
+            {"gpu_ms": None},
+        ):
+            self.result.write_bytes(accepted)
+            change(self.result, lambda r: r["frames"][0].update(changes))
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.wire.load_run(self.result, c)
+        self.result.write_bytes(accepted)
+        change(
+            self.result,
+            lambda r: r["frames"][1].update(
+                kind="skipped",
+                interval=0,
+                requested_passes=0,
+                completed_passes=0,
+                skip="model refused",
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "model refused"):
+            self.wire.load_run(self.result, c)
 
     def test_explicit_registry_paths_and_requirements(self):
         import importlib.util

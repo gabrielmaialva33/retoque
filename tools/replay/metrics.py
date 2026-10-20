@@ -42,13 +42,15 @@ def luma(image):
     )
 
 
-def coordinates(x, y, mv, convention, width, height, current_jitter, previous_jitter):
+def coordinates(
+    x, y, mv, convention, width, height, current_jitter, previous_jitter, color_jitter
+):
     sx, sy = convention["scale"]
     if convention["units"] == "uv":
         sx *= width
         sy *= height
     dx, dy = mv[0] * sx, mv[1] * sy
-    if not convention["includes_jitter"]:
+    if color_jitter == "present" and not convention["includes_jitter"]:
         dx += previous_jitter[0] - current_jitter[0]
         dy += previous_jitter[1] - current_jitter[1]
     return x + dx, y + dy
@@ -131,6 +133,7 @@ def frame_metrics(capture, frame, source, depth, motion, output, reference, prev
                     height,
                     frame["jitter"],
                     old["frame"]["jitter"],
+                    capture["color_jitter"],
                 )
                 old_depth = sample(old["depth"], qx, qy)
                 if old_depth is None or not corresponds(
@@ -223,6 +226,7 @@ def validate_guides(capture, frame, motion, depth, previous_frame, oracle=None):
                 h,
                 frame["jitter"],
                 previous_frame["jitter"],
+                capture["color_jitter"],
             )
             need(
                 abs(qx - x - oracle.data[2 * p]) <= tolerance

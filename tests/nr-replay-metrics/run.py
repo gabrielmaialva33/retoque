@@ -106,11 +106,17 @@ class MetricsTests(unittest.TestCase):
             includes_jitter=False,
         )
         self.assertEqual(
-            coordinates(2, 3, [0.25, 0.5], m, 8, 6, [0.5, 0], [0, 0.25]), (5.5, 0.25)
+            coordinates(2, 3, [0.25, 0.5], m, 8, 6, [0.5, 0], [0, 0.25], "present"),
+            (5.5, 0.25),
+        )
+        self.assertEqual(
+            coordinates(2, 3, [0.25, 0.5], m, 8, 6, [0.5, 0], [0, 0.25], "removed"),
+            (6.0, 0.0),
         )
         m["includes_jitter"] = True
         self.assertEqual(
-            coordinates(2, 3, [0.25, 0.5], m, 8, 6, [0.5, 0], [0, 0.25]), (6.0, 0.0)
+            coordinates(2, 3, [0.25, 0.5], m, 8, 6, [0.5, 0], [0, 0.25], "present"),
+            (6.0, 0.0),
         )
         self.assertFalse(corresponds(0.2, 0.8, dict(kind="device", threshold=0.02)))
         self.assertTrue(corresponds(100, 101, dict(kind="linear", threshold=0.02)))
@@ -119,6 +125,7 @@ class MetricsTests(unittest.TestCase):
         for mutation in ("zero", "swap", "scale", "jitter"):
             clip, pixels = corpus(self.root / mutation, moving=True)
             c = json.loads(clip.read_text())
+            c["color_jitter"] = "present"
             for f in c["frames"]:
                 f["motion_oracle"] = plane(
                     clip.parent, f"{f['id']}.oracle", [-1.0, 0.0] * 48, channels=2
@@ -138,6 +145,100 @@ class MetricsTests(unittest.TestCase):
             ref = run(self.root / (mutation + "ref"), clip, pixels)
             report = self.judge(clip, ref, ref)
             self.assertEqual(report["verdict"], "INVALID", mutation)
+
+    def test_removed_jitter_preserves_warp_and_oracle(self):
+        c = json.loads(self.capture.read_text())
+        for f in c["frames"]:
+            f["jitter"] = [f["id"] * 0.25, 0]
+            f["motion_oracle"] = plane(
+                self.capture.parent, f"{f['id']}.oracle", [-1.0, 0.0] * 48, channels=2
+            )
+        self.capture.write_text(json.dumps(c))
+        ref = run(self.root / "dejittered", self.capture, self.pixels)
+        report = self.judge(self.capture, ref, ref)
+        self.assertEqual(report["verdict"], "INCONCLUSIVE", report)
+        self.assertLess(report["metrics"]["all"]["temporal_mae"], 1e-7)
+
+    def test_warmup_skips_break_pairs_and_allow_aa(self):
+        def skip(r):
+            r["frames"][0].update(
+                kind="skipped",
+                interval=0,
+                requested_passes=0,
+                completed_passes=0,
+                skip="settling",
+            )
+
+        for path in [self.reference, *self.repeats]:
+            change(path, skip)
+        cal = self.calibrate(self.capture, self.reference, self.repeats)
+        candidate = self.trial()
+        change(candidate, skip)
+        report = self.judge(self.capture, self.reference, candidate, cal)
+        self.assertEqual(report["verdict"], "PASS", report)
+        self.assertIsNone(report["frames"][0]["transition"])
+        self.assertEqual(report["counts"], dict(scored=7, model=7, carried=0))
+        change(
+            candidate,
+            lambda r: r["frames"][2].update(
+                kind="skipped",
+                interval=0,
+                requested_passes=0,
+                completed_passes=0,
+                skip="model failed",
+            ),
+        )
+        self.assertEqual(
+            self.judge(self.capture, self.reference, candidate)["verdict"], "INVALID"
+        )
+
+    def test_aa_rejects_reused_trial_with_distinct_manifest(self):
+        # Different path/metadata/hash cannot turn a copy of one process into an independent run.
+        change(self.repeats[0], lambda r: r["producer"].update(trial="trial-0"))
+        with self.assertRaisesRegex(ValueError, "trial"):
+            self.calibrate(self.capture, self.reference, self.repeats)
+        change(self.repeats[0], lambda r: r["producer"].update(trial="trial-2"))
+        with self.assertRaisesRegex(ValueError, "trial"):
+            self.calibrate(self.capture, self.reference, self.repeats)
+
+    def test_calibration_rechecks_trial_ids(self):
+        import copy
+
+        for trial in (None, "", "trial-0", "trial-2"):
+            cal = copy.deepcopy(self.calibration)
+            cal["observations"][0]["trial"] = trial
+            self.assertEqual(
+                self.judge(self.capture, self.reference, self.trial(), cal)["verdict"],
+                "INVALID",
+            )
+
+    def test_present_jitter_warp_tracks_analytic_image(self):
+        c = json.loads(self.capture.read_text())
+        c["color_jitter"] = "present"
+        pixels = []
+        for i, f in enumerate(c["frames"]):
+            jitter = i * 0.25
+            values = [
+                v
+                for y in range(6)
+                for x in range(8)
+                for v in [0.4 + 0.05 * (x - jitter)] * 3
+            ]
+            pixels.append(values)
+            f["color"] = plane(self.capture.parent, f"{i}.jittered", values)
+            f["jitter"] = [jitter, 0]
+            f["motion"] = plane(
+                self.capture.parent, f"{i}.zero", [0, 0] * 48, channels=2
+            )
+        self.capture.write_text(json.dumps(c))
+        ref = run(self.root / "jittered-ref", self.capture, pixels)
+        report = self.judge(self.capture, ref, ref)
+        self.assertLess(report["metrics"]["all"]["temporal_mae"], 1e-7)
+        # Wrong color convention must measurably alter the residual, even without an oracle.
+        change(self.capture, lambda c: c.update(color_jitter="removed"))
+        ref = run(self.root / "wrong-ref", self.capture, pixels)
+        report = self.judge(self.capture, ref, ref)
+        self.assertGreater(report["metrics"]["all"]["temporal_mae"], 0.001)
 
     def test_environment_partial_passes_and_calibration_binding(self):
         candidate = self.trial()

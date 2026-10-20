@@ -59,7 +59,7 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
         "model/driver/GPU/runtime mismatch",
     )
     need(
-        all(f["kind"] == "every" and f["interval"] == 1 for f in reference["frames"]),
+        all(f["kind"] in ("every", "skipped") for f in reference["frames"]),
         "reference must run every frame",
     )
     capture["_pixel_tolerance"] = policy["pixel_tolerance"]
@@ -103,6 +103,12 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
             capture["color_space"],
             source_f["pre_exposure"],
         )
+        # load_run only admits skipped entries during warmup, with a reason and
+        # fenced output. Validate their planes above, but never retain a skipped
+        # answer as history or silently bridge across it in either run.
+        if ref_f["kind"] == "skipped" or cand_f["kind"] == "skipped":
+            previous = None
+            continue
         old = (
             previous
             if previous and previous["frame"]["score"] and source_f["score"]
@@ -212,7 +218,9 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
         frames=rows,
         _visuals=visuals,
         _worst=worst,
-        _candidate_every=all(f["kind"] == "every" for f in candidate["frames"]),
+        _candidate_every=all(
+            f["kind"] in ("every", "skipped") for f in candidate["frames"]
+        ),
     )
 
 
@@ -223,10 +231,17 @@ def calibrate(capture, reference, repeats, policy=None):
     )
     observations = []
     identities = set()
+    trials = set()
     base = None
     for path in repeats:
         report = analyze(capture, reference, path, policy)
         need(report["_candidate_every"], "A/A repeats must run every frame")
+        trial = report["candidate_producer"]["trial"]
+        need(
+            trial != report["reference_producer"]["trial"] and trial not in trials,
+            "duplicate calibration producer.trial",
+        )
+        trials.add(trial)
         need(
             report["candidate_sha256"] != report["reference_sha256"]
             and report["candidate_sha256"] not in identities,
@@ -246,7 +261,11 @@ def calibrate(capture, reference, repeats, policy=None):
                 "calibration metric unavailable",
             )
         observations.append(
-            dict(run_sha256=report["candidate_sha256"], metrics=report["metrics"])
+            dict(
+                run_sha256=report["candidate_sha256"],
+                trial=trial,
+                metrics=report["metrics"],
+            )
         )
         base = report
     bounds = {
@@ -306,6 +325,16 @@ def validate_calibration(calibration, report):
     need(
         len(set(ids)) == len(ids) and report["reference_sha256"] not in ids,
         "duplicate calibration observations",
+    )
+    trials = [o.get("trial") for o in observations]
+    need(
+        all(isinstance(t, str) and t.strip() for t in trials),
+        "calibration observation trial required",
+    )
+    need(
+        len(set(trials)) == len(trials)
+        and report["reference_producer"]["trial"] not in trials,
+        "duplicate calibration trial",
     )
     bounds = calibration.get("bounds")
     need(

@@ -33,6 +33,10 @@ removes previous image artifacts so stale PASS imagery cannot be mistaken for cu
 V1 accepts aligned same-sized planes, raw f16/f32/u8 and PFM, linear or sRGB Rec.709. Other
 formats/conventions require an explicit producer conversion or future schema/profile; they are
 not guessed. Capture/reset/input provenance and exact model/runtime identities are required.
+Captures explicitly declare `color_jitter: "removed"|"present"`; DLAA boundary output uses
+`removed`. Runs require a fresh-process `producer.trial` string. Reasoned `kind: "skipped"`
+entries are accepted only on unscored warmup frames and break temporal pairs; scored skips
+remain INVALID. A/A rejects reused trial IDs even with different paths or manifest hashes.
 Process one frame at a time (plus previous-frame history); pure Python still needs realistic
 profiling before using long full-resolution corpora. Game frames/models stay local, outside Git.
 

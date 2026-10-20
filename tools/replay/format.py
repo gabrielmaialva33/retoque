@@ -185,6 +185,10 @@ def load_capture(path):
         c.get("color_space") in ("linear-rec709", "srgb-rec709"),
         "unsupported color space",
     )
+    need(
+        c.get("color_jitter") in ("removed", "present"),
+        "color_jitter must be removed or present",
+    )
     need(isinstance(c.get("source"), str) and c["source"], "capture source required")
     need(isinstance(c.get("provenance"), dict), "capture provenance required")
     need(isinstance(c["provenance"].get("producer"), str), "producer required")
@@ -298,6 +302,8 @@ def load_run(path, capture):
             isinstance(env.get(name), str) and env[name], "missing environment " + name
         )
     sha(r.get("producer", {}).get("dll_sha256"))
+    trial = r["producer"].get("trial")
+    need(isinstance(trial, str) and trial.strip(), "producer.trial required")
     need(
         isinstance(r["producer"].get("commit"), str)
         and isinstance(r.get("settings"), dict),
@@ -316,16 +322,31 @@ def load_run(path, capture):
             "output frame identity mismatch",
         )
         kind = f.get("kind")
-        need(kind in ("every", "model", "carried"), "invalid frame kind")
-        interval = integer(f.get("interval"), "interval", 1)
+        need(kind in ("every", "model", "carried", "skipped"), "invalid frame kind")
+        skipped = kind == "skipped"
+        if skipped:
+            reason = f.get("skip")
+            need(
+                isinstance(reason, str) and reason.strip(),
+                "skipped frame needs skip reason",
+            )
+            need(not source["score"], f"scored frame {source['id']} skipped: {reason}")
+        interval = integer(f.get("interval"), "interval", 0 if skipped else 1)
         need(
-            interval == 1 if kind == "every" else 2 <= interval <= 4,
+            interval <= 4
+            if skipped
+            else interval == 1
+            if kind == "every"
+            else 2 <= interval <= 4,
             "kind/interval mismatch",
         )
-        requested = integer(f.get("requested_passes"), "requested_passes", 1)
+        requested = integer(
+            f.get("requested_passes"), "requested_passes", 0 if skipped else 1
+        )
         completed = integer(f.get("completed_passes"), "completed_passes")
         need(
-            requested <= 3 and completed == (0 if kind == "carried" else requested),
+            requested <= 3
+            and completed == (0 if kind in ("carried", "skipped") else requested),
             "partial/invalid pass coverage",
         )
         need(f.get("completion") == "fence-complete", "uncertified output")

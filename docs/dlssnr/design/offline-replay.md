@@ -33,7 +33,7 @@ inputs by digest, without copying the input planes.
 {
   "schema": "retoque-replay-capture", "version": 1, "complete": true,
   "mode": "nr-boundary", "source": "loopback-moving-scene",
-  "clock": "recorded-evaluation", "color_space": "linear-rec709",
+  "clock": "recorded-evaluation", "color_space": "linear-rec709", "color_jitter": "removed",
   "depth": {"kind": "device", "inverted": true, "threshold": 0.02},
   "motion": {"direction": "current-to-previous", "units": "pixels",
              "scale": [1.0, 1.0], "includes_jitter": false},
@@ -86,8 +86,15 @@ Supported plane encodings:
 
 Motion samples describe current pixel center → previous pixel center. `pixels` means output
 pixels after multiplying by signed `scale`; `uv` additionally multiplies x/y by color width/height.
-When includes_jitter=false, q = p + scaledMV + previousJitter - currentJitter. When true, no
-jitter delta is added. Forward flow is **not** converted by negation: v1 rejects that direction.
+Required `color_jitter` is `removed` for dejittered boundary color (including the loopback's
+DLAA output), or `present` for jittered color. No implicit default: old manifests must be
+annotated by their producer and runs rebound to the new capture digest.
+When color_jitter=present and includes_jitter=false,
+q = p + scaledMV + previousJitter - currentJitter. Otherwise q = p + scaledMV: removed color
+never receives a jitter delta, and vectors already including it are not adjusted twice.
+Vectors must describe the recorded color grid; the producer normalizes vectors still containing
+raster jitter before declaring color_jitter=removed. Jitter remains recorded for NGX even when
+removed from color. Forward flow is **not** converted by negation: v1 rejects that direction.
 Depth rejection compares current depth with bilinear previous depth at q: absolute difference
 <= threshold for `device`, relative difference <= threshold*max(abs(depths),1e-6) for `linear`.
 Device depth must be in [0,1], linear depth positive; inverted records the convention but does not
@@ -105,7 +112,8 @@ oracle do not receive an invented “guides correct” assertion.
   "capture_sha256": "<capture.json digest>",
   "environment": {"model_sha256": "<64 hex>", "driver": "version",
                   "gpu": "adapter", "runtime": "Proton+vkd3d versions"},
-  "producer": {"dll_sha256": "<64 hex>", "commit": "commit+dirty-diff-sha"},
+  "producer": {"dll_sha256": "<64 hex>", "commit": "commit+dirty-diff-sha",
+               "trial": "fresh-process-uuid"},
   "settings": {"Cadence": 1},
   "requirements": {"min_model": 1, "min_carried": 0},
   "frames": [{"id": 1, "kind": "every", "interval": 1,
@@ -117,11 +125,18 @@ oracle do not receive an invented “guides correct” assertion.
 }
 ```
 Every capture frame, including warmup, has exactly one run entry in the same order. `kind` is
-`every` (interval1), `model` or `carried` (interval2–4). Model/every entries complete all requested
+`every` (interval1), `model` or `carried` (interval2–4), or `skipped` only when the corresponding
+capture frame has score=false. A skipped entry requires a nonempty string `skip` reason,
+completed_passes=0, interval=0–4 and requested_passes=0–3 (zero means the decision was not
+reached). It still requires a fenced output descriptor and finite nonnegative GPU timing;
+it contributes no model/carried coverage and breaks temporal/pulse pairs in either run.
+A scored skip is INVALID with its reason, never silently omitted. Model/every entries complete all requested
 passes (1–3); carried entries complete zero model passes. GPU milliseconds are actual finite
 nonnegative per-evaluation measurements, not a fabricated zero on missing timing. Requirements
 count scored entries; missing requested coverage/partial chains/incomplete fences → INVALID.
-Reference runs must be every-frame (`every`, interval1). Settings may differ by the declared
+Reference runs must be every-frame (`every`, interval1), except reasoned unscored skips.
+The same rule applies to A/A repeats; a carried/model warmup is not an every-frame reference.
+Settings may differ by the declared
 experiment; candidate DLLs may differ. Model/driver/GPU/runtime and capture digests must match.
 Non-reference changes of passes/composition require a matched every-frame reference; the caller
 must select that comparison, not mistake an artistic change for quality against a different look.
@@ -147,9 +162,13 @@ with incomplete status rather than dropping temporal frames. Record scene cuts a
 accepts optional `--calibration FILE` and `--policy FILE`. Calibration command:
 `python3 -m tools.replay calibrate --capture CAPTURE --reference RUN --repeat RUN ... --out FILE`.
 Five independent repeated reference runs minimum for a calibrated envelope. The caller supplies
-fresh-process runs; identical manifest digests are rejected as duplicate repetition. Include
-a distinct optional producer.trial ID in each run, even if a deterministic control produces
-identical pixels. Metadata uniqueness cannot prove process independence; that is the runner's duty.
+fresh-process runs. Every run requires a nonempty string producer.trial ID; use a fresh UUID
+per process, never a variant name reused across launches. Calibration rejects repeated trial IDs
+(including the reference ID) as well as identical manifest digests, even if output paths or
+diagnostic metadata differ. Byte-identical pixels from distinct trials are valid observations.
+Metadata uniqueness cannot prove process independence; that is the runner's duty.
+Calibration observations retain each trial ID alongside its run digest and revalidate uniqueness
+when consumed. Earlier calibration files without these IDs must be regenerated.
 
 Metrics, for whole-frame and each rectangular region [x,y,width,height]:
 - Pulse: e=log2(sum Yout / sum Yin), absolute step in e between consecutive scored frames,

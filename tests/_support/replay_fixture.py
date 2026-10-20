@@ -36,6 +36,7 @@ def corpus(root, moving=False, n=8):
         source="synthetic-test",
         clock="recorded-evaluation",
         color_space="linear-rec709",
+        color_jitter="removed",
         depth=dict(kind="device", inverted=False, threshold=0.02),
         motion=dict(
             direction="current-to-previous",
@@ -106,7 +107,7 @@ def run(root, capture_path, pixels, suffix="ref", transform=None, kinds=None, sa
         environment=dict(
             model_sha256="1" * 64, driver="test", gpu="test", runtime="test"
         ),
-        producer=dict(dll_sha256="2" * 64, commit="test", trial=salt),
+        producer=dict(dll_sha256="2" * 64, commit="test", trial=f"trial-{salt}"),
         settings=dict(Cadence=1),
         requirements=dict(min_model=1, min_carried=0),
         frames=frames,
