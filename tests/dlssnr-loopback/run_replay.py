@@ -780,7 +780,11 @@ def halfres_capture(root, capture_path):
                    color_space=corpus.get('color_space', 'linear-rec709'), color_jitter='removed',
                    depth=corpus.get('depth', {}), motion=dict(direction='current-to-previous', units='pixels',
                                                               scale='per-frame', includes_jitter=False),
-                   regions=corpus.get('regions', {}), provenance=dict(derived_from=str(capture_path)), frames=frames)
+                   regions=corpus.get('regions', {}),
+                   # The corpus's own provenance (producer, shader...) holds for every plane copied from it.
+                   provenance=dict(corpus.get('provenance', {}), derived_from=str(capture_path),
+                                   note='the corpus with half-resolution guides at a base, MVLowRes, MV scale 0.5'),
+                   frames=frames)
     path = directory / 'capture.json'
     path.write_text(json.dumps(capture, indent=1) + '\n')
     return path

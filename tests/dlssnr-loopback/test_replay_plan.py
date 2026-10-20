@@ -155,6 +155,18 @@ class PlanV3(unittest.TestCase):
         # Without MVLowRes the motion plane must cover the output extent from its base; 32x24 does not cover 48x32.
         self.refused(lambda c: [f['params'].update(create_flags=1) for f in c['frames']], 'motion: base (4,4)')
 
+    def test_halfres_capture_keeps_the_corpus_provenance(self):
+        corpus = v1_capture(self.dir, w=64, h=32)
+        capture = json.loads(corpus.read_text())
+        capture['provenance'] = dict(producer='abc+def', shader_sha256='0' * 64)
+        save(self.dir, capture)
+        derived = run_replay.halfres_capture(self.dir / 'root', corpus)
+        loaded = run_replay.load_capture(derived)
+        self.assertEqual(loaded['provenance']['producer'], 'abc+def')
+        self.assertEqual(loaded['provenance']['shader_sha256'], '0' * 64)
+        self.assertEqual(loaded['provenance']['derived_from'], str(corpus))
+        self.assertEqual(loaded['frames'][0]['params']['render_subrect'], [32, 16])
+
     def test_run_output_descriptor(self):
         shape = dict(format=10, width=32, height=16, pixel_bytes=8)
         (self.dir / 'f1.output').write_bytes(bytes(32 * 16 * 8))
