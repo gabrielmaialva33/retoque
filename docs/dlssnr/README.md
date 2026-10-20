@@ -27,6 +27,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 - [descriptor-reuse.md](design/descriptor-reuse.md): keeping each ring slot's SRV/UAV descriptors until their key changes.
 - [bounded-chain.md](design/bounded-chain.md): the one-to-three-pass D3D12 model chain and its contract.
 - [submission-tracking.md](design/submission-tracking.md): submission-ordered retirement of resources used by opt-in D3D12 NR work.
+- [chain-in-flight.md](design/chain-in-flight.md): multi-pass recordings bounded in flight by GPU fences instead of waiting for the game's Reset; the fix for the Cyberpunk pause stall.
 - [working-scale-auto.md](design/working-scale-auto.md): what `WorkingScale=auto` resolves to per GPU, acting on the cross-architecture measurement.
 - [reduced-scale-guides.md](design/reduced-scale-guides.md): resampling guides and scaling motion when the model works below the frame's size.
 - [peripheral-compression.md](design/peripheral-compression.md): packing the model's input denser in the centre than at the edges.

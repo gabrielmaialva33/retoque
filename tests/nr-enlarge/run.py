@@ -98,7 +98,7 @@ enlarge = between(renderer, 'ID3D12Resource* EnlargeEdit(', '\n} // namespace\n'
 assert re.search(r'BuildEnlarger\(cmdList, device, f\);\s*return nullptr;', enlarge)
 
 # Released last, after the list is whole; the bundle is one entry.
-tick = between(renderer, 'void TickNrRetired()', 'bool RetiredCapacity()')
+tick = between(renderer, 'void TickNrRetired(bool shutdown = false)', 'bool RetiredCapacity()')
 assert tick.index('g_nrRetired.pop_back();') < tick.index('delete enlarger;')
 shutdown = between(renderer, 'void Shutdown()\n{', '\n} // namespace DlssNr')
 assert shutdown.index('g_nrRetired.clear();') < shutdown.index('delete enlarger;')

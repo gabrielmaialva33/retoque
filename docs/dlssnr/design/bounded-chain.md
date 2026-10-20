@@ -27,6 +27,11 @@ the original codec/proxy rather than importing either stale shader pipeline.
 
 ## Resource evidence and limits
 
+> **Superseded 2026-10-19** by [chain-in-flight.md](chain-in-flight.md) for admission and tracked
+> retirement: a new recording now needs earlier ones only finished on the GPU (or at most three in
+> flight on one queue), not Reset by the game, and parked objects drain on fence plus age. The text
+> below describes the original rule and why it stalled in game.
+
 Before starting a NEW experimental recording, all preceding NR usage must be Ready:
 successful Reset sealed the epochs against replay and every observed GPU fence completed.
 This CPU admission gate prevents overlapping writes/history use across queues and upload

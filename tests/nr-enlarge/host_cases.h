@@ -512,15 +512,30 @@ void TrackedSubmissions()
     assert(o.sent == 2);
     ++cases;
 
-    // Parked under tracking it goes when its recordings are ready, not on a count.
+    // Parked under tracking it goes once its recordings are settled AND 32 ticks passed (chain-in-flight.md):
+    // aged alone is not enough, nor settled alone.
     DlssNr::Submission::ready = false;
     DlssNr::RetryAfterFailure();
     for (int i = 0; i < 40; ++i)
+    {
+        ++DlssNr::Submission::clock;
         TickNrRetired();
+    }
     assert(g_nrRetired.size() == 1 && Ngx::driver.Count("release") == 0);
     DlssNr::Submission::ready = true;
     TickNrRetired();
     assert(g_nrRetired.empty() && Ngx::driver.Count("release") == 1);
+    {
+        ID3D12Resource parked;
+        ID3D12Resource* p = &parked;
+        ParkNrResource(p);
+        DlssNr::Submission::clock += 31;
+        TickNrRetired();
+        assert(g_nrRetired.size() == 1);
+        ++DlssNr::Submission::clock;
+        TickNrRetired();
+        assert(g_nrRetired.empty());
+    }
     ++cases;
 
     // At the cap on parked objects nothing is built, and that is not a failure.
@@ -534,9 +549,17 @@ void TrackedSubmissions()
     const auto creates = Ngx::driver.Count("create");
     o = Run(Spec {});
     assert(o.plan.build && Ngx::driver.Count("create") == creates && !g_enlarge.failed && g_enlarge.live == nullptr);
-    DlssNr::Submission::ready = true;
+    // Waiting only on recordings no fence will answer, and aged: kept (never freed) but out of the cap.
+    DlssNr::Submission::unanswerable = true;
+    DlssNr::Submission::clock += DlssNr::Submission::Detail::AgeOutTicks;
     o = Run(Spec {});
-    assert(Ngx::driver.Count("create") == creates + 1);
+    assert(Ngx::driver.Count("create") == creates + 1 && g_nrRetired.size() >= 32);
+    assert(std::all_of(g_nrRetired.begin(), g_nrRetired.end(), [](const NrRetired& r) { return r.stuck; }));
+    DlssNr::Submission::unanswerable = false;
+    DlssNr::Submission::ready = true;
+    DlssNr::Submission::clock += 32;
+    TickNrRetired();
+    assert(g_nrRetired.empty());
     g_tracked = false;
     ++cases;
 

@@ -286,9 +286,17 @@ Single pass (master settings)	Passe único (ajustes gerais)
 Restart required: existing NR work has no submission lifetime evidence; single/master retained	Reinício necessário: o trabalho de NR existente não tem prova do ciclo de vida dos envios; mantido passe único com ajustes gerais
 Another NR recording scope owns the resources; new recording refused	Outro escopo de gravação do NR está usando os recursos; nova gravação recusada
 Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may decrease)	Aguardando o Reset da gravação anterior do NR e todas as fences da GPU; nova gravação pulada (o desempenho pode cair)
+More than three earlier NR recordings still on the GPU; new recording skipped this frame	Mais de três gravações anteriores do NR ainda na GPU; nova gravação pulada neste frame
+Earlier NR recordings still running on two GPU queues; new recording skipped until one finishes	Gravações anteriores do NR ainda rodando em duas filas da GPU; nova gravação pulada até uma terminar
+This command list already holds an unsubmitted NR recording; new recording skipped	Esta lista de comandos já tem uma gravação do NR não enviada; nova gravação pulada
+An NR recording is still waiting for the game to submit it; new recordings skipped until it runs or is discarded	Uma gravação do NR ainda espera o jogo enviá-la; novas gravações puladas até ela rodar ou ser descartada
+The GPU is eight NR recordings behind; new recording skipped this frame	A GPU está oito gravações do NR atrasada; nova gravação pulada neste frame
+Waiting for the previous NR recording to finish on the GPU (one queue not yet established, or more than one in use)	Aguardando a gravação anterior do NR terminar na GPU (fila única ainda não confirmada, ou mais de uma em uso)
 Retired resource limit reached: pending/unknown GPU recordings retained; rebuild refused until completion or restart	Limite de recursos descartados atingido: gravações de GPU pendentes/desconhecidas mantidas; recriação recusada até concluírem ou até reiniciar
 Driver proxy uses one pass and master settings; overrides are inactive	O proxy do driver usa um passe e os ajustes gerais; as substituições estão inativas
 chain generation refused: insufficient or unavailable adapter headroom (retry latched)	geração da cadeia recusada: folga do adaptador insuficiente ou indisponível (aguardando "Tentar novamente")
+Chain generation waits for the previous one to be freed (adapter headroom); NR resumes once it is	A nova geração da cadeia espera a anterior ser liberada (folga do adaptador); o NR volta quando ela for
+chain generation waits for the previous one to be freed (adapter headroom)	a nova geração da cadeia espera a anterior ser liberada (folga do adaptador)
 chain scratch initialization failed; retry latched	falha ao inicializar a memória de trabalho da cadeia; aguardando "Tentar novamente"
 nvngx_dlssnr.dll was not found beside OptiScaler or the game	nvngx_dlssnr.dll não foi encontrado ao lado do OptiScaler nem do jogo
 the model would not initialise	o modelo não inicializou

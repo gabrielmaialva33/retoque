@@ -193,7 +193,7 @@ size_t FindQueue(ID3D12CommandQueue* queue)
 bool Active() { return active.load(std::memory_order_acquire); }
 const char* LastRefusal() { return refusal.load(); }
 
-bool Track(ID3D12GraphicsCommandList* list, Usage& usage)
+bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool chain)
 {
     if (!list || list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT)
     {
@@ -212,6 +212,7 @@ bool Track(ID3D12GraphicsCommandList* list, Usage& usage)
             refusal = "recording-capacity-exhausted";
             return false;
         }
+        epoch->chain |= chain;
         if (!epoch->owner)
         {
             list->AddRef();
@@ -234,6 +235,70 @@ bool Ready(const Usage& usage)
         if (e && !Detail::IsReady(*e, FenceValue))
             return false;
     return true;
+}
+
+void Advance(uint64_t now)
+{
+    std::lock_guard lock(stateMutex);
+    model.Advance(now);
+}
+
+uint64_t Clock()
+{
+    std::lock_guard lock(stateMutex);
+    return model.Clock();
+}
+
+bool Strict()
+{
+    std::lock_guard lock(stateMutex);
+    return model.Strict();
+}
+
+bool MultiQueue()
+{
+    std::lock_guard lock(stateMutex);
+    return model.MultiQueue();
+}
+
+namespace
+{
+// Under stateMutex. A list whose only remaining reference is ours was released by the game: nobody can execute it
+// again. Our reference keeps the identity alive, so nothing can take the count back up; once set it stays set.
+void RefreshOrphans(const Usage& usage)
+{
+    for (const auto& e : usage.epochs)
+    {
+        if (!e || e->orphaned || !e->owner)
+            continue;
+        auto* list = static_cast<ID3D12GraphicsCommandList*>(e->owner.get());
+        list->AddRef();
+        e->orphaned = list->Release() == 1;
+    }
+}
+} // namespace
+
+Detail::Admission Admit(Usage& usage, ID3D12GraphicsCommandList* list)
+{
+    const auto key = list ? Key(list) : 0;
+    std::lock_guard lock(stateMutex);
+    RefreshOrphans(usage);
+    Detail::PruneLifetime(usage, FenceValue, model.Clock(), model.Strict());
+    return Detail::Admit(usage, FenceValue, model.Clock(), model.Strict(), model.Overlap(), key);
+}
+
+bool Settled(const Usage& usage)
+{
+    std::lock_guard lock(stateMutex);
+    RefreshOrphans(usage);
+    return Detail::IsSettled(usage, FenceValue, model.Clock(), model.Strict());
+}
+
+bool OnlyUnanswerableLeft(const Usage& usage)
+{
+    std::lock_guard lock(stateMutex);
+    RefreshOrphans(usage);
+    return Detail::IsOnlyUnanswerableLeft(usage, FenceValue, model.Clock(), model.Strict());
 }
 
 void Prune(Usage& usage)
@@ -336,21 +401,46 @@ Batch::Batch(ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* li
         refusal = "submission-allocation-failed";
         return;
     }
-    std::lock_guard lock(stateMutex);
-    impl->queue = FindQueue(queue);
-    for (UINT i = 0; i < count; ++i)
     {
-        auto key = Key(lists[i]);
-        auto e = model.Current(key);
-        if (!e)
-            continue;
-        bool duplicate = false;
+        std::lock_guard lock(stateMutex);
+        impl->queue = FindQueue(queue);
+        for (UINT i = 0; i < count; ++i)
+        {
+            auto key = Key(lists[i]);
+            auto e = model.Current(key);
+            if (!e)
+                continue;
+            bool duplicate = false;
+            for (size_t j = 0; j < impl->count; ++j)
+                duplicate |= impl->epochs[j] == e;
+            if (!duplicate)
+                impl->epochs[impl->count++] = model.BeforeExecute(key);
+            else
+                model.DuplicateInBatch(e); // One batch can contain the same recording more than once.
+        }
+        // Tracked work moving to another queue (docs/dlssnr/design/chain-in-flight.md). Recordings were allowed
+        // to overlap only after AffinityBatches on one queue, so this one may overlap one still running on the
+        // previous queue: nothing is injected to order them (a dependency only the game knows could make that a
+        // cycle). It is logged, and admission is serialized for the rest of the session.
+        bool chain = false;
         for (size_t j = 0; j < impl->count; ++j)
-            duplicate |= impl->epochs[j] == e;
-        if (!duplicate)
-            impl->epochs[impl->count++] = model.BeforeExecute(key);
-        else
-            Detail::Model::CountExecution(e); // One batch can contain the same recording more than once.
+            chain |= impl->epochs[j] && impl->epochs[j]->chain;
+        const size_t previous = chain ? model.NoteQueue(impl->queue) : Detail::MaxQueues;
+        if (previous < queues.size() && queues[previous].fence && queues[previous].next != 0)
+        {
+            const uint64_t reached = queues[previous].fence->GetCompletedValue();
+            static bool said = false;
+            if (!said)
+            {
+                said = true;
+                LOG_WARN("DLSS-NR submission: tracked work moved to another queue ({}); NR recordings are "
+                         "serialized from now on",
+                         reached == UINT64_MAX              ? "the device was removed"
+                         : reached >= queues[previous].next ? "the previous queue had finished"
+                                                            : "the previous queue had not finished: one recording "
+                                                              "may overlap it");
+            }
+        }
     }
 }
 
