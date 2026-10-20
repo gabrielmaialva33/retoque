@@ -10,6 +10,7 @@
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/DlssNr_Replay.h>
 #include <dlssnr/DlssNr_ReplayClock.h>
+#include <dlssnr/DlssNr_ReplayRecorderDx12.h>
 #include <dlssnr/DlssNr_Exposure.h>
 #include <dlssnr/DlssNr_Chain.h>
 #include <dlssnr/DlssNr_Consumers.h>
@@ -5759,6 +5760,49 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
 
 // ReportSpatialContract, GatherGuideFrame and GatherFrame live in DlssNr_Dx12_Inputs.cpp.
 
+// Describes this frame for the replay recorder and hands it the three surfaces in the states the pass will find them
+// in: the after-upscale arrival rules Dispatch applies (OutputState / DepthState / MotionState, else the config's
+// resource barriers, else UNORDERED_ACCESS for the output and NON_PIXEL_SHADER_RESOURCE for the guides).
+static void RecordReplayFrame(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params, ID3D12Resource* target,
+                              ID3D12Resource* depth, ID3D12Resource* motion, const DlssNrFrameInfo& frame,
+                              bool isRayReconstruction)
+{
+    const Config& cfg = *Config::Instance();
+    const auto outputState = frame.OutputState >= 0 ? static_cast<D3D12_RESOURCE_STATES>(frame.OutputState)
+                             : cfg.OutputResourceBarrier.has_value()
+                                 ? static_cast<D3D12_RESOURCE_STATES>(cfg.OutputResourceBarrier.value())
+                                 : D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    const auto depthState =
+        frame.DepthState >= 0 ? static_cast<D3D12_RESOURCE_STATES>(frame.DepthState)
+                              : static_cast<D3D12_RESOURCE_STATES>(
+                                    cfg.DepthResourceBarrier.value_or(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+    const auto motionState = frame.MotionState >= 0 ? static_cast<D3D12_RESOURCE_STATES>(frame.MotionState)
+                                                    : static_cast<D3D12_RESOURCE_STATES>(cfg.MVResourceBarrier.value_or(
+                                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+
+    DlssNr::ReplayRecorder::BoundaryFacts facts;
+    facts.afterUpscaleD3D12 = true;
+    facts.exposureTextureBound = frame.ExposureTexture != nullptr;
+    auto& meta = facts.meta;
+    meta.present = State::Instance().frameCount;
+    meta.rayReconstruction = isRayReconstruction;
+    params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &meta.createFlags);
+    meta.reset = frame.Reset;
+    params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &meta.jitterX);
+    params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &meta.jitterY);
+    params->Get(NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, &meta.frameTimeMs);
+    meta.mvScaleX = frame.MvScaleX;
+    meta.mvScaleY = frame.MvScaleY;
+    meta.preExposure = frame.PreExposure;
+    meta.renderWidth = frame.RenderSubrectWidth;
+    meta.renderHeight = frame.RenderSubrectHeight;
+    meta.depthBaseX = frame.DepthSubrectBaseX;
+    meta.depthBaseY = frame.DepthSubrectBaseY;
+    meta.motionBaseX = frame.MotionSubrectBaseX;
+    meta.motionBaseY = frame.MotionSubrectBaseY;
+    DlssNr::ReplayRecorder::AtBoundary(cmdList, target, outputState, depth, depthState, motion, motionState, facts);
+}
+
 // Reads the game's parameter block and runs the pass on what it finds.
 //
 // This is the call site's job, not the pass's. A caller that has the resources in hand -- a
@@ -5895,6 +5939,12 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
         ReportSkipOnce("the pass could not be created");
         return;
     }
+
+    // The replay recorder (offline-replay-recorder.md): the frame as the pass receives it, copied before it writes.
+    // Inert until a clip is first asked for: Poll and Wanted are one relaxed load each.
+    DlssNr::ReplayRecorder::Poll();
+    if (DlssNr::ReplayRecorder::Wanted())
+        RecordReplayFrame(cmdList, params, target, depth, motion, frame, isRayReconstruction);
 
     const auto desc = target->GetDesc();
     coverage.sample.width = static_cast<uint32_t>(desc.Width);

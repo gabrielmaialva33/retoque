@@ -282,3 +282,6 @@ inline float WorkingScale()
 namespace DlssNr::GpuTiming { inline void SetEnabled(bool) {} }
 // The session guard's Windows layer (DlssNr_Session.cpp) is not part of this harness.
 namespace DlssNr { inline void SessionGuardOff() {} inline void SessionGuardEvaluated() {} }
+// The replay recorder is never asked for here: Poll is the idle relaxed load and the frame is never described.
+namespace DlssNr::ReplayRecorder { inline int polls = 0; inline void Poll() { ++polls; } inline bool Wanted() { return false; } }
+template <class... Args> inline void RecordReplayFrame(Args&&...) { std::abort(); }

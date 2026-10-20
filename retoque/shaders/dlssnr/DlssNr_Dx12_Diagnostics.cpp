@@ -74,6 +74,7 @@
 #include <dlssnr/DlssNr_PresentGuideRing.h>
 #include <menu/menu_overlay_base.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
+#include <dlssnr/DlssNr_ReplayRecorderDx12.h>
 
 namespace DlssNr::Dx12Internal
 {
@@ -263,6 +264,13 @@ void CheckCaptureTrigger()
         {
             DlssNr::RequestCapture(capture::kMaxFrames);
             LOG_INFO("DLSS-NR capture: the raw burst requested by trigger file");
+        }
+        else if (word == "replay")
+        {
+            // A replay clip (offline-replay-recorder.md): the next after-upscale evaluation starts it.
+            const char* why = nullptr;
+            if (!DlssNr::ReplayRecorder::Request(&why))
+                LOG_INFO("DLSS-NR replay recorder: trigger file ignored: {}", why != nullptr ? why : "not taken");
         }
         else if (const char* why = nullptr; !DlssNr::RequestPairCapture(&why))
         {
