@@ -8,6 +8,7 @@ from pathlib import Path
 import hashlib
 import json
 import re
+import os
 import subprocess
 import tempfile
 import sys
@@ -103,9 +104,13 @@ int main() {{
     subprocess.run(flags + objects + ['-o', str(exe)], check=True)
     subprocess.run([str(exe)], check=True)
     # The consumers must not silently own storage: removing the one owner must fail to link.
-    negative = subprocess.run(flags + objects[1:] + ['-o', str(out / 'missing-owner')], capture_output=True)
+    # The linker's diagnostics are localized; the negative controls read them in the C locale.
+    c_locale = dict(os.environ, LC_ALL='C', LANG='C')
+    negative = subprocess.run(flags + objects[1:] + ['-o', str(out / 'missing-owner')], capture_output=True,
+                              env=c_locale)
     assert negative.returncode != 0 and b'undefined reference' in negative.stderr
     # A second owner must likewise be diagnosed, not hidden by internal/inline linkage.
-    negative = subprocess.run(flags + objects + [objects[0], '-o', str(out / 'duplicate-owner')], capture_output=True)
+    negative = subprocess.run(flags + objects + [objects[0], '-o', str(out / 'duplicate-owner')], capture_output=True,
+                              env=c_locale)
     assert negative.returncode != 0 and b'multiple definition' in negative.stderr
 print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls')
