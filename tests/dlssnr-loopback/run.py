@@ -55,29 +55,29 @@ def ancestors():
     return pids
 
 
-def build_running():
-    """Whether build-local.sh or an MSBuild is running -- the program itself, never a command line that mentions it.
+def is_build(proc):
+    """Whether /proc/<pid> is build-local.sh or an MSBuild -- the program itself, never a command line that mentions it.
 
     Matching command text found shells that had merely mentioned the script, this runner's own parent or another
     session's idle wrapper, and refused forever (2026-10-20). Wine names a Windows process after its executable, so
     MSBuild is found by name. build-local.sh runs through env bash, so it is a bash whose script argument is
     build-local.sh -- not a bash -c whose command string happens to contain it.
     """
-    mine = ancestors()
-    for proc in Path('/proc').iterdir():
-        if not proc.name.isdigit() or int(proc.name) in mine:
-            continue
-        try:
-            if (proc / 'comm').read_text().strip().lower() == 'msbuild.exe':
-                return True
-            argv = (proc / 'cmdline').read_bytes().split(b'\0')
-        except OSError:
-            continue
-        names = [Path(a.decode(errors='replace')).name for a in argv[:2]]
-        if names[:1] == ['build-local.sh'] or (len(names) > 1 and names[0] in ('bash', 'sh') and
-                                                names[1] == 'build-local.sh'):
+    try:
+        if (proc / 'comm').read_text().strip().lower() == 'msbuild.exe':
             return True
-    return False
+        argv = (proc / 'cmdline').read_bytes().split(b'\0')
+    except OSError:
+        return False
+    names = [Path(a.decode(errors='replace')).name for a in argv[:2]]
+    return names[:1] == ['build-local.sh'] or (len(names) > 1 and names[0] in ('bash', 'sh') and
+                                               names[1] == 'build-local.sh')
+
+
+def build_running():
+    """Whether any process other than this one and its ancestors is a build (is_build)."""
+    mine = ancestors()
+    return any(is_build(proc) for proc in Path('/proc').iterdir() if proc.name.isdigit() and int(proc.name) not in mine)
 
 
 def run_watched(args, *, env, log, attempts=4):

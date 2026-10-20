@@ -14,11 +14,13 @@ exec(SOURCE[SOURCE.index('def ancestors():'):SOURCE.index('def run_watched(')], 
 
 
 class BusyGuard(unittest.TestCase):
+    # Each case classifies its own child, not the whole machine: a real build running beside the host tier (another
+    # worktree's, or this session's) made the negative cases fail on 2026-10-20.
     def running(self, argv, cwd=None):
         child = subprocess.Popen(argv, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             time.sleep(0.3)
-            return GUARD['build_running']()
+            return GUARD['is_build'](Path('/proc') / str(child.pid))
         finally:
             child.kill()
             child.wait()
@@ -34,6 +36,14 @@ class BusyGuard(unittest.TestCase):
             script.write_text('#!/usr/bin/env bash\nsleep 20\n')  # the real scripts' shebang
             script.chmod(0o755)
             self.assertTrue(self.running([str(script)]))
+            # The whole-machine scan finds it too.
+            child = subprocess.Popen([str(script)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                time.sleep(0.3)
+                self.assertTrue(GUARD['build_running']())
+            finally:
+                child.kill()
+                child.wait()
 
     def test_own_ancestors_are_skipped(self):
         self.assertIn(os.getpid(), GUARD['ancestors']())
