@@ -30,6 +30,7 @@ struct PlanFrame
     unsigned id = 0;
     unsigned long long present = 0;
     double timeMs = 0.0;
+    double deltaMs = 0.0; // the frame time the game passed, recorded
     int reset = 0;
     float jitterX = 0.0f, jitterY = 0.0f, preExposure = 1.0f;
     std::string color, depth, motion;
@@ -50,17 +51,18 @@ static Plan LoadPlan(const char* path)
     Require(fscanf_s(file, "replay-plan %u %u %u %u %u", &version, &plan.width, &plan.height, &plan.createFlags,
                      &count) == 5,
             "replay plan header");
-    Require(version == 1 && plan.width >= 64 && plan.height >= 64 && plan.width <= 16384 && plan.height <= 16384 &&
+    Require(version == 2 && plan.width >= 64 && plan.height >= 64 && plan.width <= 16384 && plan.height <= 16384 &&
                 count > 0 && count <= 100000,
             "replay plan header values");
     for (unsigned i = 0; i < count; ++i)
     {
         PlanFrame f;
         char color[1024] {}, depth[1024] {}, motion[1024] {};
-        Require(fscanf_s(file, "%u %llu %lf %d %f %f %f %1023s %1023s %1023s", &f.id, &f.present, &f.timeMs, &f.reset,
-                         &f.jitterX, &f.jitterY, &f.preExposure, color, (unsigned) sizeof(color), depth,
-                         (unsigned) sizeof(depth), motion, (unsigned) sizeof(motion)) == 10,
+        Require(fscanf_s(file, "%u %llu %lf %lf %d %f %f %f %1023s %1023s %1023s", &f.id, &f.present, &f.timeMs,
+                         &f.deltaMs, &f.reset, &f.jitterX, &f.jitterY, &f.preExposure, color, (unsigned) sizeof(color),
+                         depth, (unsigned) sizeof(depth), motion, (unsigned) sizeof(motion)) == 11,
                 "replay plan frame line");
+        Require(f.deltaMs > 0.0 && f.deltaMs < 1000.0, "replay plan frame time out of range");
         Require(plan.frames.empty() || (f.present > plan.frames.back().present && f.timeMs > plan.frames.back().timeMs),
                 "replay plan presents and times must strictly increase");
         f.color = color;
@@ -87,6 +89,7 @@ struct Host
     PFN_Evaluate evaluate = nullptr;
     PFN_End end = nullptr;
     bool session = false;
+    bool anyRecorded = false; // whether any evaluation recorded the pass (teardown, below)
     const char* stage = "setup";
     unsigned evaluations = 0;
 
@@ -256,8 +259,7 @@ struct Host
         params->Set(NVSDK_NGX_Parameter_Jitter_Offset_Y, f.jitterY);
         params->Set(NVSDK_NGX_Parameter_Reset, f.reset);
         params->Set(NVSDK_NGX_Parameter_DLSS_Pre_Exposure, f.preExposure);
-        const double delta = index == 0 ? 1000.0 / 60.0 : f.timeMs - plan.frames[index - 1].timeMs;
-        params->Set(NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, static_cast<float>(delta));
+        params->Set(NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, static_cast<float>(f.deltaMs));
 
         Frame frame;
         frame.present = f.present;
@@ -280,6 +282,7 @@ struct Host
         Submit();
         Require(entered == 1, "RetoqueReplay_Evaluate refused the frame");
         ++evaluations;
+        anyRecorded = anyRecorded || outcome.recorded != 0;
         Check(device->GetDeviceRemovedReason(), "replay device health");
 
         UINT64* ticks = nullptr;
@@ -317,12 +320,16 @@ struct Host
         if (session)
             end();
         session = false;
-        // No feature was created through the exports -- the seam enters the pass directly -- and OptiScaler's
-        // DestroyParameters answers 0xBAD00000 for a block in that state. Every evaluation is already fenced and
-        // read back by now, so teardown results are reported, not failed on.
-        Say("  replay DestroyParameters -> 0x%08X\n", static_cast<unsigned>(ngx.DestroyParameters(params)));
+        // One known exception, as observed: in a run where the pass never recorded (the NR-off control),
+        // OptiScaler's DestroyParameters answers 0xBAD00000 for this block. Its cause is not established; it is
+        // accepted only there, reported, and every other result must be success.
+        const auto destroyed = ngx.DestroyParameters(params);
         params = nullptr;
-        Say("  replay Shutdown -> 0x%08X\n", static_cast<unsigned>(ngx.Shutdown(device)));
+        const bool known = !anyRecorded && static_cast<unsigned>(destroyed) == 0xBAD00000u;
+        Say("  replay DestroyParameters -> 0x%08X%s\n", static_cast<unsigned>(destroyed),
+            known ? " (known: no evaluation recorded the pass)" : "");
+        Require(destroyed == NVSDK_NGX_Result_Success || known, "replay DestroyParameters");
+        ColdNr::NgxResult("replay Shutdown", ngx.Shutdown(device));
     }
 };
 

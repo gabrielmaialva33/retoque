@@ -21,8 +21,9 @@ import re
 import shutil
 import subprocess
 import sys
+import uuid
 
-from run_moving import digest, execute, gpu_state
+from run_moving import digest, execute
 
 STAGED = ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'nvngx_dlssnr.dll', 'nvngx_dlss.dll', '_nvngx.dll',
           'dlssnr-loopback.exe', 'scene.hlsl')
@@ -47,7 +48,18 @@ LINE = re.compile(r'^REPLAY frame=(\d+) present=(\d+) gpu_ms=(-?[\d.]+) recorded
 
 
 def windows_path(path):
-    return 'Z:' + str(Path(path).resolve()).replace('/', '\\')
+    path = str(Path(path).resolve())
+    if any(c.isspace() for c in path):
+        raise SystemExit(f'replay plan paths cannot contain whitespace: {path}')
+    return 'Z:' + path.replace('/', '\\')
+
+
+def gpu_identity():
+    # Name and driver only: P-state and clocks change between invocations and would fail environment matching.
+    out = subprocess.run(['nvidia-smi', '--query-gpu=name,driver_version', '--format=csv,noheader'],
+                         capture_output=True, text=True).stdout.strip().splitlines()
+    name, _, driver = (out[0] if out else 'unknown, unknown').partition(',')
+    return name.strip() or 'unknown', driver.strip() or 'unknown'
 
 
 def stage(root, directory):
@@ -118,11 +130,14 @@ def make_corpus(runner, proton, env, root, provenance):
             motion=plane(directory, f'f{i}.motion', 'f16', 2, 2)))
     capture = dict(schema='retoque-replay-capture', version=1, complete=True, mode='nr-boundary',
                    source='loopback-moving-scene', clock='recorded-evaluation', color_space='linear-rec709',
+                   # DLAA output is de-jittered; its vectors are unjittered scene motion (scene.hlsl).
+                   color_jitter='removed',
                    depth=dict(kind='device', inverted=False, threshold=0.02),
                    motion=dict(direction='current-to-previous', units='pixels', scale=[1.0, 1.0],
                                includes_jitter=False),
                    regions={'centre': [WIDTH // 4, HEIGHT // 4, WIDTH // 2, HEIGHT // 2]},
-                   provenance=dict(provenance, note='DLAA output of the moving scene with NR off; analytic guides'),
+                   provenance=dict(provenance, shader_sha256=digest(runner.HERE / 'scene.hlsl'),
+                                   note='DLAA output of the moving scene with NR off; analytic guides'),
                    frames=frames)
     path = directory / 'capture.json'
     path.write_text(json.dumps(capture, indent=1) + '\n')
@@ -130,19 +145,39 @@ def make_corpus(runner, proton, env, root, provenance):
 
 
 def load_capture(path):
+    """A capture the seam can replay as recorded, or a refusal naming what it cannot transport (yet)."""
     capture = json.loads(path.read_text())
     if capture.get('schema') != 'retoque-replay-capture' or capture.get('version') != 1 or not capture.get('complete'):
         raise SystemExit(f'{path}: not a complete retoque-replay-capture v1')
-    if capture.get('mode') != 'nr-boundary':
-        raise SystemExit(f'{path}: only nr-boundary captures replay through the seam')
+    supported = dict(mode='nr-boundary', clock='recorded-evaluation', color_jitter='removed')
+    for key, value in supported.items():
+        if capture.get(key) != value:
+            raise SystemExit(f'{path}: the seam replays {key}={value!r} only (got {capture.get(key)!r})')
+    motion = capture.get('motion', {})
+    if (motion.get('direction'), motion.get('units'), motion.get('scale'), motion.get('includes_jitter')) != \
+            ('current-to-previous', 'pixels', [1.0, 1.0], False):
+        raise SystemExit(f'{path}: the seam v1 takes unjittered backward motion in pixels at scale 1')
     base = path.parent
-    for f in capture['frames']:
+    frames = capture['frames']
+    extent = (frames[0]['color']['width'], frames[0]['color']['height'])
+    flags = frames[0].get('params', {}).get('create_flags', CREATE_FLAGS)
+    previous = None
+    for f in frames:
+        if f.get('exposure') is not None:
+            raise SystemExit(f'frame {f["id"]}: exposure textures are not transported by the seam v1')
+        if f.get('params', {}).get('create_flags', CREATE_FLAGS) != flags:
+            raise SystemExit(f'frame {f["id"]}: create flags change within the capture')
+        if previous and (f['present'] <= previous['present'] or f['time_ms'] <= previous['time_ms']):
+            raise SystemExit(f'frame {f["id"]}: presents and times must strictly increase')
+        previous = f
         for key, dtype, channels in (('color', 'f16', 4), ('depth', 'f32', 1), ('motion', 'f16', 2)):
             p = f[key]
             # v1 of the seam uploads these formats as they are; anything else is converted by its producer.
             if (p['encoding'], p['dtype'], p['channels']) != ('raw', dtype, channels) or \
                     p['row_pitch'] != p['width'] * channels * (4 if dtype == 'f32' else 2):
                 raise SystemExit(f'frame {f["id"]} {key}: the seam v1 takes tight raw {dtype}x{channels}')
+            if (p['width'], p['height']) != extent:
+                raise SystemExit(f'frame {f["id"]} {key}: the seam v1 takes one constant extent')
             if digest(base / p['path']) != p['sha256']:
                 raise SystemExit(f'frame {f["id"]} {key}: digest mismatch')
     return capture
@@ -152,13 +187,27 @@ def write_plan(capture, base, path):
     frames = capture['frames']
     width, height = frames[0]['color']['width'], frames[0]['color']['height']
     flags = frames[0].get('params', {}).get('create_flags', CREATE_FLAGS)
-    lines = [f'replay-plan 1 {width} {height} {flags} {len(frames)}']
-    for f in frames:
-        lines.append(' '.join([str(f['id']), str(f['present']), repr(float(f['time_ms'])), str(int(f['reset'])),
-                               repr(float(f['jitter'][0])), repr(float(f['jitter'][1])),
+    lines = [f'replay-plan 2 {width} {height} {flags} {len(frames)}']
+    for i, f in enumerate(frames):
+        # The frame time the game passed when it is recorded, else the step of the recorded clock.
+        delta = f.get('params', {}).get('frame_time_ms')
+        if delta is None:
+            delta = (frames[1]['time_ms'] - f['time_ms']) if i == 0 and len(frames) > 1 else \
+                f['time_ms'] - frames[i - 1]['time_ms'] if i else 1000.0 / 60.0
+        lines.append(' '.join([str(f['id']), str(f['present']), repr(float(f['time_ms'])), repr(float(delta)),
+                               str(int(f['reset'])), repr(float(f['jitter'][0])), repr(float(f['jitter'][1])),
                                repr(float(f['pre_exposure']))] +
                               [windows_path(base / f[key]['path']) for key in ('color', 'depth', 'motion')]))
     path.write_text('\n'.join(lines) + '\n')
+
+
+def requirements(settings, scored):
+    """What a variant must show on scored frames for its run to be about what it claims."""
+    cadence = int((settings or {}).get('Cadence', '1'))
+    adaptive = str((settings or {}).get('CadenceAdaptive', 'false')).lower() == 'true'
+    if cadence <= 1:
+        return dict(min_model=scored, min_carried=0)
+    return dict(min_model=1, min_carried=0 if adaptive else 1)
 
 
 def kind(row):
@@ -194,10 +243,13 @@ def run_variant(runner, proton, env, root, name, settings, capture, capture_path
                             completed_passes=r['completed'], completion='fence-complete',
                             gpu_ms=r['gpu_ms'] if r['gpu_ms'] >= 0 else None, model_result=r['result'],
                             skip=r['skip'] or None, output=out))
+    scored = sum(1 for f in frames if f['score'])
     record = dict(schema='retoque-replay-run', version=1, complete=True,
                   capture_sha256=digest(capture_path), environment=environment,
-                  producer=dict(dll_sha256=digest(root / 'OptiScaler.dll'), commit=producer_id),
-                  settings=dict(settings or {}, Enabled=settings is not None), frames=entries)
+                  producer=dict(dll_sha256=digest(root / 'OptiScaler.dll'), commit=producer_id,
+                                trial=uuid.uuid4().hex),  # one fresh process per run
+                  settings=dict(settings or {}, Enabled=settings is not None),
+                  requirements=requirements(settings, scored), frames=entries)
     (directory / ('control.json' if settings is None else 'run.json')).write_text(json.dumps(record, indent=1) + '\n')
     return record
 
@@ -283,8 +335,8 @@ def run(runner, proton, env, dll):
                       fixture_sources={n: digest(runner.HERE / n) for n in
                                        ('harness.cpp', 'moving_scene.h', 'replay_nr.h', 'scene.hlsl',
                                         'run_replay.py', 'run.py')})
-    environment = dict(model_sha256=provenance['model_sha256'], gpu=gpu_state()['query'], runtime=proton.parent.name,
-                       driver=gpu_state()['query'].split(',')[1].strip() if ',' in gpu_state()['query'] else '')
+    gpu, driver = gpu_identity()
+    environment = dict(model_sha256=provenance['model_sha256'], gpu=gpu, driver=driver, runtime=proton.parent.name)
     supplied = os.environ.get('LOOPBACK_REPLAY_CAPTURE')
     capture_path = Path(supplied).expanduser().resolve() if supplied else make_corpus(runner, proton, env, root,
                                                                                          provenance)
@@ -294,9 +346,14 @@ def run(runner, proton, env, dll):
     runs = {name: run_variant(runner, proton, env, root, name, settings, capture, capture_path, environment,
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)
+    verdicts = judge(runner, root, capture_path, runs)
+    # The judge's strict reader is the compatibility test of everything written above.
+    for name, verdict in verdicts.get('verdicts', {}).items():
+        results[f'{name}-judge-accepts-manifests'] = dict(ok=verdict['verdict'] not in (None, 'INVALID'),
+                                                          detail=f'verdict {verdict["verdict"]}, exit {verdict["exit"]}')
     report = dict(schema='retoque-replay-seam-report', version=1, capture=str(capture_path),
                   capture_sha256=digest(capture_path), provenance=provenance, environment=environment,
-                  gates=results, judge=judge(runner, root, capture_path, runs))
+                  gates=results, judge=verdicts)
     report_path.write_text(json.dumps(report, indent=1) + '\n')
     for name, result in results.items():
         mark = 'PASS' if result['ok'] else 'INFO' if result['ok'] is None else 'FAIL'

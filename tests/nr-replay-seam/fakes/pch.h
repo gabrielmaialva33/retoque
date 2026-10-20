@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
+#include <thread>
 #define __declspec(x)
 using DWORD = unsigned long;
 inline DWORD GetEnvironmentVariableA(const char* name, char* buffer, DWORD size)
@@ -22,4 +24,8 @@ template <size_t N> inline int strncpy_s(char (&dst)[N], const char* src, size_t
     std::strncpy(dst, src, N - 1);
     dst[N - 1] = '\0';
     return 0;
+}
+inline DWORD GetCurrentThreadId()
+{
+    return static_cast<DWORD>(std::hash<std::thread::id> {}(std::this_thread::get_id()));
 }

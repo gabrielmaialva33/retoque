@@ -35,9 +35,9 @@ Streamline, frame generation, the swapchain. An NR-boundary replay says nothing 
 | Export | What it does |
 |---|---|
 | `uint32_t RetoqueReplay_Version()` | ABI version, 1. |
-| `int RetoqueReplay_Begin()` | Starts a session, or refuses with 0 unless the process environment has `RETOQUE_REPLAY=1`. A game never sets it. |
-| `int RetoqueReplay_Evaluate(cmd, params, queue, const Frame*, Outcome*)` | One evaluation: sets the logical clock and present counter from the frame, calls `EvaluateAfterUpscale` on `cmd`, fills the outcome. Returns 0 outside a session or on a version mismatch. |
-| `void RetoqueReplay_End()` | Ends the session; the clock is real again. |
+| `int RetoqueReplay_Begin()` | Starts the process's one session, owned by the calling thread, or refuses with 0: unless the process environment has `RETOQUE_REPLAY=1` (a game never sets it), and always after a session already ran. |
+| `int RetoqueReplay_Evaluate(cmd, params, queue, const Frame*, Outcome*)` | One evaluation: sets the logical clock and present counter from the frame, calls `EvaluateAfterUpscale` on `cmd`, fills the outcome. Returns 0, having changed nothing, outside a session, from another thread, when nested inside another evaluation, on a version mismatch, or for a frame whose present or time does not move strictly forward or whose time is not finite and within 10^9 ms. |
+| `void RetoqueReplay_End()` | Ends the session (owner thread only); the clock is real again. The pass keeps the history the session built, so no second session follows in the same process. |
 
 `Frame` v1 carries:
 - `version`;
@@ -56,7 +56,9 @@ stays with the harness, as it is with a game.
 - the model's result;
 - the first skip reason of the evaluation, if any.
 
-A GPU-side completion or timing claim is not part of it. The harness measures those with its own fences and
+Notes are written only by the thread running the evaluation, during it (`thread_local`), so a skip reported from
+before the pass takes its lock is still this evaluation's, and nothing another thread does lands in it. A GPU-side
+completion or timing claim is not part of it. The harness measures those with its own fences and
 timestamps, which keeps "the pass recorded" separate from "the GPU finished it".
 
 ## The logical clock
@@ -71,9 +73,14 @@ decisions being judged.
 
 The decision-making reads move to it:
 - the Dispatch `now`, which feeds cadence, the settle gates and chain stability;
-- the chain creation spacing;
+- the chain creation spacing, read at each creation as before (a fresh real read outside a session);
 - the UI mask and the stabilizer;
-- the pause gate.
+- the pause gate;
+- the enlargement model's frame time, which is an input to a model.
+
+What the facade does not cover, the offline profile pins: `run_replay.py` writes `HookMethod=1` and
+`WhitePointSource=0`, so the present hook and the exposure scan, both live-machine inputs, are out of the replayed
+route. A capture whose result depends on them is not supported by v1.
 
 These stay on the real clock:
 - GPU fences, timeouts and the GPU timing module;

@@ -28,8 +28,13 @@ def body(source, signature):
 # --- Source contract ------------------------------------------------------------------------------------------
 dispatch = body(renderer, 'bool DlssNr_Dx12::Dispatch(')
 assert 'const auto now = DlssNr::ReplayClock::Now();' in dispatch                # cadence, settle gates, chain
-assert dispatch.count('g_chainSchedule.Create(observedFrame, now)') == 2          # creation spacing on that clock
-assert 'g_chainSchedule.Create(observedFrame)' not in renderer
+# Creation spacing reads the clock at each call, as it did before the facade: outside a replay that is a fresh real
+# read, not the earlier Dispatch-entry instant.
+assert dispatch.count('g_chainSchedule.Create(observedFrame, DlssNr::ReplayClock::Now())') == 2
+assert 'g_chainSchedule.Create(observedFrame)' not in renderer and 'Create(observedFrame, now)' not in renderer
+# The enlargement model's frame time is an input to a model: recorded time under replay.
+enlarge = renderer[renderer.index('DlssNr::PrivateSr::Frame sr;') - 600:renderer.index('DlssNr::PrivateSr::Frame sr;')]
+assert 'const auto now = DlssNr::ReplayClock::Now();' in enlarge
 for gate in ('if (now - g_nr.uiMaskLast > std::chrono::milliseconds(250))',
              'const bool lapsed = now - g_nr.stabilizerLast > std::chrono::milliseconds(250);'):
     head = dispatch[:dispatch.index(gate)]

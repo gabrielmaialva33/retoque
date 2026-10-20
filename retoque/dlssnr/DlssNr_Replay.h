@@ -32,7 +32,8 @@ struct Outcome
     char skip[160] = {};          // the first reason the pass gave for not running, empty when none
 };
 
-// Under the pass's lock, from inside the evaluation. No-ops outside a replay session.
+// From the thread running RetoqueReplay_Evaluate, during that call; no-ops on every other thread and outside a
+// replay session. NoteSkip may come from before the pass takes its lock (EvaluateAfterUpscale's early returns).
 void NoteSkip(const char* reason);
 void NoteDispatch(bool recorded, bool carried, uint32_t interval, uint32_t requested, uint32_t completed,
                   int32_t modelResult);

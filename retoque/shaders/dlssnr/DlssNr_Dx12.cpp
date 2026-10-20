@@ -3241,7 +3241,8 @@ ID3D12Resource* EnlargeEdit(DlssNr_Dx12& pass, ID3D12GraphicsCommandList* cmdLis
     Barrier(cmdList, e.carrier, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     Barrier(cmdList, e.exposure, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-    const auto now = std::chrono::steady_clock::now();
+    // The frame time handed to the enlargement model: recorded time under an offline replay (offline-replay-seam.md).
+    const auto now = DlssNr::ReplayClock::Now();
     const float sinceLast = std::chrono::duration<float, std::milli>(now - e.lastTime).count();
 
     DlssNr::PrivateSr::Frame sr;
@@ -4247,7 +4248,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         if (chainEnabled)
         {
             g_nr.creation[0] = {};
-            if (!g_chainSchedule.Create(observedFrame, now) || !DlssNr::Submission::Track(cmdList, g_nr.creation[0]))
+            if (!g_chainSchedule.Create(observedFrame, DlssNr::ReplayClock::Now()) ||
+                !DlssNr::Submission::Track(cmdList, g_nr.creation[0]))
             {
                 device->Release();
                 return false;
@@ -4353,7 +4355,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     "Additional pass refused: adapter budget/headroom unavailable or insufficient (retry latched)");
                 break;
             }
-            if (!g_chainSchedule.Create(observedFrame, now))
+            if (!g_chainSchedule.Create(observedFrame, DlssNr::ReplayClock::Now()))
                 break;
             if (!g_nr.passPing)
                 g_nr.passPing = CreateScratch(device, desc.Format, workWidth, workHeight);

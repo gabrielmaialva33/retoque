@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <thread>
@@ -34,6 +35,9 @@ struct Script
 {
     const char* skips[2] = { nullptr, nullptr };
     bool dispatch = false, carried = false;
+    bool reenter = false;     // the pass calls RetoqueReplay_Evaluate again from inside
+    bool foreignNote = false; // another thread notes while this evaluation runs
+    int reentered = -1;
     uint32_t interval = 0, requested = 0, completed = 0;
     int32_t result = 0;
 } script;
@@ -55,6 +59,16 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList*, NVSDK_NGX_Parameter*, ID3D
     seen.rayReconstruction = isRayReconstruction;
     seen.frameCount = State::Instance().frameCount;
     seen.now = ReplayClock::Now();
+    if (script.reenter)
+    {
+        Replay::Frame inner;
+        inner.present = State::Instance().frameCount + 1;
+        inner.timeMs = 1.0e6;
+        Replay::Outcome innerOutcome;
+        script.reentered = RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &inner, &innerOutcome);
+    }
+    if (script.foreignNote)
+        std::thread([] { Replay::NoteSkip("noted from another thread"); }).join();
     for (const char* why : script.skips)
         if (why)
             Replay::NoteSkip(why);
@@ -155,6 +169,61 @@ int main()
                std::strlen(outcome.skip) == sizeof(outcome.skip) - 1,
            "long skip reason truncated");
 
+    // Time and presents only move forward, and only finite, bounded times are taken; nothing is written on refusal.
+    const int callsBefore = seen.calls;
+    const auto refuse = [&](uint64_t present, double ms, const char* what)
+    {
+        DlssNr::Replay::Frame bad;
+        bad.present = present;
+        bad.timeMs = ms;
+        Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &bad, &outcome) == 0 && seen.calls == callsBefore &&
+                   State::Instance().frameCount == 16,
+               what);
+    };
+    refuse(16, 70.0, "a repeated present is refused");
+    refuse(15, 70.0, "a decreasing present is refused");
+    refuse(17, 66.0, "a repeated time is refused");
+    refuse(17, 65.0, "a decreasing time is refused");
+    refuse(17, std::nan(""), "a NaN time is refused");
+    refuse(17, INFINITY, "an infinite time is refused");
+    refuse(17, 2.0e9, "a time beyond the bound is refused");
+
+    // A nested evaluation from inside the pass is refused; the outer one completes with its own outcome.
+    script = {};
+    script.reenter = true;
+    script.dispatch = true;
+    script.interval = 2;
+    script.requested = script.completed = 1;
+    script.result = 1;
+    frame.present = 20;
+    frame.timeMs = 80.0;
+    Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &frame, &outcome) == 1 && script.reentered == 0 &&
+               outcome.interval == 2 && seen.frameCount == 20,
+           "nested evaluation refused, outer outcome intact");
+
+    // A note from another thread during an evaluation is not this evaluation's.
+    script = {};
+    script.foreignNote = true;
+    frame.present = 24;
+    frame.timeMs = 90.0;
+    Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &frame, &outcome) == 1 && outcome.skip[0] == '\0',
+           "notes from another thread are ignored");
+
+    // Another thread can neither evaluate nor end the owner's session.
+    int foreignResult = -1;
+    std::thread(
+        [&]
+        {
+            DlssNr::Replay::Frame f;
+            f.present = 100;
+            f.timeMs = 500.0;
+            DlssNr::Replay::Outcome o;
+            foreignResult = RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &f, &o);
+            RetoqueReplay_End();
+        })
+        .join();
+    Expect(foreignResult == 0 && RC::Active(), "a foreign thread cannot evaluate or end the session");
+
     // End: the clock is real again and the adapter refuses.
     RetoqueReplay_End();
     Expect(!RC::Active(), "End deactivates the clock");
@@ -163,13 +232,13 @@ int main()
     const int calls = seen.calls;
     Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &frame, &outcome) == 0 && seen.calls == calls,
            "Evaluate refused after End");
-    // A new session can begin.
-    Expect(RetoqueReplay_Begin() == 1, "a session can begin again after End");
-    RetoqueReplay_End();
+    // One session per process: the pass keeps the history the ended session built.
+    Expect(RetoqueReplay_Begin() == 0, "no second session in one process");
 
     if (failures)
         return 1;
-    std::printf("PASS 24 seam checks: clock inactive/anchored/logical/restored, environment gate, versions, "
-                "outcome per evaluation, first skip kept and truncated\n");
+    std::printf("PASS 34 seam checks: clock inactive/anchored/logical/restored, environment gate, versions, "
+                "outcome per evaluation, first skip kept and truncated, monotonic bounded clock, no nesting, "
+                "owner thread only, one session per process\n");
     return 0;
 }
