@@ -539,7 +539,7 @@ replaying the same capture on the old and the new DLL and requiring identical ru
 2. **Replay the candidate.**
 
    ```bash
-   LOOPBACK_REPLAY_CALIBRATE=0 \
+   LOOPBACK_REPLAY_CALIBRATE=0 LOOPBACK_REPLAY_JUDGE=0 \
    LOOPBACK_REPLAY_CAPTURE=<baseline>/corpus/capture.json \
    LOOPBACK_REPLAY_BASELINE=<baseline> \
    python3 tests/dlssnr-loopback/run.py --replay-nr --dll <candidate>/x64/out/OptiScaler.dll

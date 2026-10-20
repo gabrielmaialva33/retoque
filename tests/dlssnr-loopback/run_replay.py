@@ -371,6 +371,10 @@ def judge(runner, root, capture_path, runs, calibration=None):
     package = runner.ROOT / 'tools/replay'
     if not (package / '__main__.py').is_file():
         return dict(available=False)
+    # A refactor's gate is the bit-exact baseline comparison; judging every candidate adds ~45 s each and decides
+    # nothing there. LOOPBACK_REPLAY_JUDGE=0 skips it.
+    if os.environ.get('LOOPBACK_REPLAY_JUDGE', '1') == '0':
+        return dict(available=True, skipped='LOOPBACK_REPLAY_JUDGE=0')
     verdicts = {}
     reference = root / 'runs' / 'every-a' / 'run.json'
     scored = {f['id'] for f in json.loads(capture_path.read_text())['frames'] if f['score']}
