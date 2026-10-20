@@ -2,9 +2,12 @@
 // (docs/dlssnr/design/offline-replay-seam.md).
 //
 // The plan is a line-oriented rendering of a capture.json (docs/dlssnr/design/offline-replay.md), written by
-// run_replay.py after it validated the capture: the harness parses numbers and paths, not JSON. Every frame is
-// uploaded into real textures, described in a parameter block allocated by the production DLL, handed to
-// RetoqueReplay_Evaluate, executed, fenced and read back. One REPLAY line per frame says what the pass did and how
+// run_replay.py after it validated the capture: the harness parses numbers and paths, not JSON. Plan v3
+// (offline-replay-seam.md, "Plan v3") carries each plane's format, source format, flags and extent, and each frame's
+// guide geometry, so a game recording replays with its own surfaces; a v1 capture is written as the same plan.
+//
+// Every frame is uploaded into real textures, described in a parameter block allocated by the production DLL, handed
+// to RetoqueReplay_Evaluate, executed, fenced and read back. One REPLAY line per frame says what the pass did and how
 // long the GPU took over it; the output is written raw beside the log.
 #pragma once
 
@@ -12,6 +15,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,12 +38,23 @@ struct PlanFrame
     double deltaMs = 0.0; // the frame time the game passed, recorded
     int reset = 0;
     float jitterX = 0.0f, jitterY = 0.0f, preExposure = 1.0f;
+    unsigned createFlags = 0, rayReconstruction = 0;
+    float mvScaleX = 1.0f, mvScaleY = 1.0f;
+    unsigned renderWidth = 0, renderHeight = 0; // 0 when the recording's game did not say
+    unsigned depthBaseX = 0, depthBaseY = 0, motionBaseX = 0, motionBaseY = 0;
     std::string color, depth, motion;
+};
+
+// One plane as recorded: the typed format of its bytes, the game resource's own format and flags, its extent.
+struct PlaneShape
+{
+    unsigned format = 0, sourceFormat = 0, sourceFlags = 0, width = 0, height = 0, pixelBytes = 0;
 };
 
 struct Plan
 {
-    unsigned width = 0, height = 0, createFlags = 0;
+    PlaneShape shapes[3];           // color, depth, motion
+    unsigned width = 0, height = 0; // the colour extent: the output the pass writes in place
     std::vector<PlanFrame> frames;
 };
 
@@ -49,19 +64,32 @@ static Plan LoadPlan(const char* path)
     Require(fopen_s(&file, path, "r") == 0 && file, "replay plan open");
     Plan plan;
     unsigned version = 0, count = 0;
-    Require(fscanf_s(file, "replay-plan %u %u %u %u %u", &version, &plan.width, &plan.height, &plan.createFlags,
-                     &count) == 5,
-            "replay plan header");
-    Require(version == 2 && plan.width >= 64 && plan.height >= 64 && plan.width <= 16384 && plan.height <= 16384 &&
-                count > 0 && count <= 100000,
-            "replay plan header values");
+    Require(fscanf_s(file, "replay-plan %u %u", &version, &count) == 2, "replay plan header");
+    Require(version == 3 && count > 0 && count <= 100000, "replay plan header values");
+    static const char* const names[3] = { "color", "depth", "motion" };
+    for (unsigned i = 0; i < 3; ++i)
+    {
+        auto& p = plan.shapes[i];
+        char name[16] {};
+        Require(fscanf_s(file, " plane %15s %u %u %u %u %u %u", name, (unsigned) sizeof(name), &p.format,
+                         &p.sourceFormat, &p.sourceFlags, &p.width, &p.height, &p.pixelBytes) == 7,
+                "replay plan plane line");
+        Require(strcmp(name, names[i]) == 0 && p.width >= 16 && p.height >= 16 && p.width <= 16384 &&
+                    p.height <= 16384 && p.pixelBytes >= 2 && p.pixelBytes <= 16,
+                "replay plan plane values");
+    }
+    plan.width = plan.shapes[0].width;
+    plan.height = plan.shapes[0].height;
     for (unsigned i = 0; i < count; ++i)
     {
         PlanFrame f;
         char color[1024] {}, depth[1024] {}, motion[1024] {};
-        Require(fscanf_s(file, "%u %llu %lf %lf %d %f %f %f %1023s %1023s %1023s", &f.id, &f.present, &f.timeMs,
-                         &f.deltaMs, &f.reset, &f.jitterX, &f.jitterY, &f.preExposure, color, (unsigned) sizeof(color),
-                         depth, (unsigned) sizeof(depth), motion, (unsigned) sizeof(motion)) == 11,
+        Require(fscanf_s(file, "%u %llu %lf %lf %d %f %f %f %u %u %f %f %u %u %u %u %u %u %1023s %1023s %1023s", &f.id,
+                         &f.present, &f.timeMs, &f.deltaMs, &f.reset, &f.jitterX, &f.jitterY, &f.preExposure,
+                         &f.createFlags, &f.rayReconstruction, &f.mvScaleX, &f.mvScaleY, &f.renderWidth,
+                         &f.renderHeight, &f.depthBaseX, &f.depthBaseY, &f.motionBaseX, &f.motionBaseY, color,
+                         (unsigned) sizeof(color), depth, (unsigned) sizeof(depth), motion,
+                         (unsigned) sizeof(motion)) == 21,
                 "replay plan frame line");
         Require(f.deltaMs > 0.0 && f.deltaMs < 1000.0, "replay plan frame time out of range");
         Require(plan.frames.empty() || (f.present > plan.frames.back().present && f.timeMs > plan.frames.back().timeMs),
@@ -205,17 +233,16 @@ struct Host
         Require(version() == 1, "replay adapter ABI version is not 1");
         ColdNr::NgxResult("replay production Init", ngx.Init(0x1337, L".", device, nullptr, NVSDK_NGX_Version_API));
         ColdNr::NgxResult("replay AllocateParameters", ngx.AllocateParameters(&params));
-        params->Set(NVSDK_NGX_Parameter_Width, plan.width);
-        params->Set(NVSDK_NGX_Parameter_Height, plan.height);
+        // Width and Height are the render size the game created DLSS with: the recorded subrect, or the output when
+        // the recording does not say. The geometry that can move per frame is set in Record.
+        const auto& first = plan.frames.front();
+        params->Set(NVSDK_NGX_Parameter_Width, first.renderWidth ? first.renderWidth : plan.width);
+        params->Set(NVSDK_NGX_Parameter_Height, first.renderHeight ? first.renderHeight : plan.height);
         params->Set(NVSDK_NGX_Parameter_OutWidth, plan.width);
         params->Set(NVSDK_NGX_Parameter_OutHeight, plan.height);
-        params->Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, plan.createFlags);
+        params->Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, first.createFlags);
         params->Set(NVSDK_NGX_Parameter_CreationNodeMask, 1u);
         params->Set(NVSDK_NGX_Parameter_VisibilityNodeMask, 1u);
-        params->Set(NVSDK_NGX_Parameter_MV_Scale_X, 1.f); // v1 planes hold output pixels
-        params->Set(NVSDK_NGX_Parameter_MV_Scale_Y, 1.f);
-        params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, plan.width);
-        params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, plan.height);
 
         MakeSurfaces(plan);
         Require(begin() == 1, "RetoqueReplay_Begin refused: the process needs RETOQUE_REPLAY=1");
@@ -226,12 +253,18 @@ struct Host
     {
         constexpr auto Srv =
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-        Make(ColorIn, DXGI_FORMAT_R16G16B16A16_FLOAT, 8, D3D12_RESOURCE_FLAG_NONE, Srv, plan.width, plan.height);
-        Make(DepthIn, DXGI_FORMAT_R32_FLOAT, 4, D3D12_RESOURCE_FLAG_NONE, Srv, plan.width, plan.height);
-        Make(MotionIn, DXGI_FORMAT_R16G16_FLOAT, 4, D3D12_RESOURCE_FLAG_NONE, Srv, plan.width, plan.height);
+        const auto& [color, depth, motion] = plan.shapes;
+        // The Color key gets the typed colour; the pass reads it only for the spatial-contract log.
+        Make(ColorIn, DXGI_FORMAT(color.format), color.pixelBytes, D3D12_RESOURCE_FLAG_NONE, Srv, color.width,
+             color.height);
+        // The guides and the output are made as the game made them: the pass branches on their format and flags.
+        Make(DepthIn, DXGI_FORMAT(depth.sourceFormat), depth.pixelBytes, D3D12_RESOURCE_FLAGS(depth.sourceFlags), Srv,
+             depth.width, depth.height);
+        Make(MotionIn, DXGI_FORMAT(motion.sourceFormat), motion.pixelBytes, D3D12_RESOURCE_FLAGS(motion.sourceFlags),
+             Srv, motion.width, motion.height);
         // The pass reads and writes the upscaler's output in place; it arrives in UNORDERED_ACCESS, as DLSS leaves it.
-        Make(Output, DXGI_FORMAT_R16G16B16A16_FLOAT, 8, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, plan.width, plan.height);
+        Make(Output, DXGI_FORMAT(color.sourceFormat), color.pixelBytes, D3D12_RESOURCE_FLAGS(color.sourceFlags),
+             D3D12_RESOURCE_STATE_UNORDERED_ACCESS, color.width, color.height);
         Buffer(readback, surfaces[Output].bytes, D3D12_HEAP_TYPE_READBACK);
         D3D12_QUERY_HEAP_DESC qd {};
         qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
@@ -245,9 +278,12 @@ struct Host
     void Inputs(const Plan& plan, size_t index)
     {
         const auto& f = plan.frames[index];
-        Load(ColorIn, f.color, plan.width, plan.height);
-        Load(DepthIn, f.depth, plan.width, plan.height);
-        Load(MotionIn, f.motion, plan.width, plan.height);
+        const auto& [color, depth, motion] = plan.shapes;
+        Load(ColorIn, f.color, color.width, color.height);
+        // The output has its own footprint: its format may be the typeless one the game created.
+        Load(Output, f.color, color.width, color.height);
+        Load(DepthIn, f.depth, depth.width, depth.height);
+        Load(MotionIn, f.motion, motion.width, motion.height);
     }
 
     void UploadInputs()
@@ -255,7 +291,7 @@ struct Host
         Upload(surfaces[ColorIn].texture, surfaces[ColorIn], surfaces[ColorIn].rest);
         Upload(surfaces[DepthIn].texture, surfaces[DepthIn], surfaces[DepthIn].rest);
         Upload(surfaces[MotionIn].texture, surfaces[MotionIn], surfaces[MotionIn].rest);
-        Upload(surfaces[Output].texture, surfaces[ColorIn], surfaces[Output].rest);
+        Upload(surfaces[Output].texture, surfaces[Output], surfaces[Output].rest);
     }
 
     Outcome Record(const Plan& plan, size_t index)
@@ -276,8 +312,21 @@ struct Host
         params->Set(NVSDK_NGX_Parameter_Reset, f.reset);
         params->Set(NVSDK_NGX_Parameter_DLSS_Pre_Exposure, f.preExposure);
         params->Set(NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, static_cast<float>(f.deltaMs));
+        params->Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, f.createFlags);
+        params->Set(NVSDK_NGX_Parameter_MV_Scale_X, f.mvScaleX);
+        params->Set(NVSDK_NGX_Parameter_MV_Scale_Y, f.mvScaleY);
+        if (f.renderWidth && f.renderHeight)
+        {
+            params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, f.renderWidth);
+            params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, f.renderHeight);
+        }
+        params->Set(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, f.depthBaseX);
+        params->Set(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, f.depthBaseY);
+        params->Set(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, f.motionBaseX);
+        params->Set(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, f.motionBaseY);
 
         Frame frame;
+        frame.rayReconstruction = f.rayReconstruction;
         frame.present = f.present;
         frame.timeMs = f.timeMs;
         Outcome outcome;

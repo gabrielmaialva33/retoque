@@ -88,6 +88,8 @@ Plane PlaneOf(ID3D12Resource* resource, bool& usable)
     const D3D12_RESOURCE_DESC desc = resource->GetDesc();
     const DXGI_FORMAT typed = Typed(desc.Format);
     plane.format = static_cast<uint32_t>(typed);
+    plane.sourceFormat = static_cast<uint32_t>(desc.Format);
+    plane.sourceFlags = static_cast<uint32_t>(desc.Flags);
     plane.width = static_cast<uint32_t>(desc.Width);
     plane.height = desc.Height;
     plane.pixelBytes = PixelBytes(typed);
@@ -461,7 +463,10 @@ void AtBoundary(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* color, D3D12
     // A clip keeps the shape it started with; a resize mid-clip ends it at the frames before.
     const char* refusal = nullptr;
     const auto same = [](const Plane& a, const Plane& b)
-    { return a.format == b.format && a.width == b.width && a.height == b.height; };
+    {
+        return a.format == b.format && a.sourceFormat == b.sourceFormat && a.sourceFlags == b.sourceFlags &&
+               a.width == b.width && a.height == b.height;
+    };
     if (!usable)
         refusal = "a plane changed to a format or shape the recorder cannot copy";
     else if (!same(recording.planes[0], g_shape[0]) || !same(recording.planes[1], g_shape[1]) ||

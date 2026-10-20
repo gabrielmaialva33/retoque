@@ -150,7 +150,10 @@ Owners:
   - `python3 -m tools.replay.finalize <capture.json>` checks every plane's byte count, hashes it and rewrites the
     manifest atomically with `"finalized": true`;
   - a finalized capture is refused, so its identity never changes once replays reference it.
-- **Shape:** a clip keeps the shape it started with. A change of size or format mid-clip ends it at the frames
+- **Source format and flags:** each plane also records `source_format` and `source_flags`, the game resource's own
+  format and flags before the typed-for-copy mapping. The pass branches on both, so the replay makes its surfaces
+  from them (offline-replay-seam.md, "Plan v3"). Added the same day, before any game recording.
+- **Shape:** a clip keeps the shape it started with, source format and flags included. A change of size or format mid-clip ends it at the frames
   before.
 - **Loopback verification** (`LOOPBACK_REPLAY_RECORD_CHECK=1`, `tests/dlssnr-loopback/run_replay.py`):
   - the moving scene ran 640 frames with NR on and the trigger file asking for a clip;
@@ -159,6 +162,7 @@ Owners:
   - every recorded depth and motion plane was byte-identical to the scene's own for the same frame (360 of 360);
   - every recorded colour plane that overlaps the NR-off corpus was byte-identical to it (62 of 62).
 - **Not yet:**
-  - replaying a v2 capture: the seam's plan and the judge's reader still take v1 (equal extents, fixed dtypes);
+  - judging a v2 capture: the judge's v2 reader is in progress (replaying one is done, offline-replay-seam.md,
+    "Plan v3");
   - a game recording;
   - native Windows.

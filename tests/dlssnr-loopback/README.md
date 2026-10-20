@@ -601,3 +601,48 @@ comparison enforces identical pixels until the first admission-history differenc
 later differences are reported, while same-mode comparison remains exact throughout.
 This controlled single-queue stress does not cover arbitrary multi-queue engines,
 present/pre-upscale routes, D3D11/Vulkan, or native Windows validation.
+
+### Game recordings (capture v2) and the record check
+
+A capture written by the in-game recorder (`docs/dlssnr/design/offline-replay-recorder.md`) is schema v2:
+- planes in their native format and extent;
+- guides at render resolution;
+- per-frame guide geometry.
+
+Finalize it with `python3 -m tools.replay.finalize <capture.json>`, then pass it as `LOOPBACK_REPLAY_CAPTURE` like
+any other. `run_replay.py` writes plan v3 for both capture versions (`docs/dlssnr/design/offline-replay-seam.md`,
+"Plan v3"):
+- each surface is made in the game resource's own format, with its flags and extent;
+- each frame sets its create flags, Ray Reconstruction placement, MV scale, render subrect and subrect bases.
+
+A capture it cannot transport is refused with the reason. A v2 capture gives v2 run manifests: the outputs are
+raw-dxgi in the colour plane's shape.
+
+`LOOPBACK_REPLAY_RECORD_CHECK=1` adds three things after the variants.
+
+1. **The recorder.** The moving scene runs with NR on and the trigger file asking for a clip. The clip is finalized,
+   and every recorded depth and motion plane must be the scene's own bytes. Colour must match the NR-off corpus
+   wherever the two overlap.
+2. **Replaying the recording.** The clip, a v2 capture, replays through the seam twice at Cadence 1. The model must
+   run on every scored frame, and the two processes must agree on every decision and output byte. The moving scene
+   never presents, so the present counter the recorder took from the production DLL stays 0. The seam takes only
+   presents that move forward, so the replayed manifest, `capture-replay.json` beside the recording's own, numbers
+   them by frame. A game's presents move by themselves.
+3. **Game-shaped guides.** A v2 capture is derived from the corpus:
+   - depth and motion are point-sampled to half resolution;
+   - they are placed at base (16, 12) inside a 336x192 plane;
+   - MVLowRes is set, with an MV scale of 0.5.
+
+   It replays twice with the same two gates. Its pixels against the full-resolution replay are the judge's to
+   score, not a gate here.
+
+```bash
+B=~/.cache/retoque-replay/baselines/b2eed6e3
+LOOPBACK_REPLAY_RECORD_CHECK=1 LOOPBACK_REPLAY_CALIBRATE=0 LOOPBACK_REPLAY_JUDGE=0 \
+LOOPBACK_REPLAY_VARIANTS='{"every-a":{"Cadence":"1"}}' LOOPBACK_REPLAY_CAPTURE=$B/corpus/capture.json \
+python3 tests/dlssnr-loopback/run.py --replay-nr --dll <candidate>/x64/out/OptiScaler.dll
+```
+
+This proves that a recording made by the production DLL replays through it, and that render-resolution guides at a
+base reach the pass. It is not proof that a game's recording replays: a game's formats, flags and states are its
+own. The first Cyberpunk clip is that test.

@@ -15,6 +15,7 @@ every-frame reference, and its exit codes are recorded, not interpreted here.
 """
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -30,6 +31,11 @@ STAGED = ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'nvngx_dlssnr.dll', 'nvngx_d
 WIDTH, HEIGHT = 640, 360                    # moving_scene.h
 FRAME_MS = 1000.0 / 120.0                   # the moving scene's FrameTimeDeltaInMsec
 CREATE_FLAGS = (1 << 0) | (1 << 6)          # IsHDR | AutoExposure, as the moving scene creates DLAA
+MV_LOW_RES = 1 << 1
+# Capture v2's formats (the recorder's PixelBytes whitelist) and their sizes; v1 planes are these three.
+PIXEL_BYTES = {2: 16, 10: 8, 16: 8, 26: 4, 24: 4, 28: 4, 29: 4, 87: 4, 91: 4, 41: 4, 40: 4, 34: 4}
+V1_FORMATS = {'color': 10, 'depth': 41, 'motion': 34}  # R16G16B16A16_FLOAT, R32_FLOAT, R16G16_FLOAT
+ALLOW_UNORDERED_ACCESS, DENY_SHADER_RESOURCE = 0x4, 0x8
 # The warmup must outlast every start-up gate of every variant: tracked recording (multi-pass, adaptive cadence)
 # adds two consecutive 500 ms settle gates, so 160 frames at 120 Hz of logical time (1.33 s) before scoring.
 CORPUS_FRAMES = int(os.environ.get('LOOPBACK_REPLAY_FRAMES', '256'))
@@ -163,6 +169,16 @@ def plane(directory, name, dtype, channels, item):
                 row_pitch=WIDTH * channels * item, sha256=digest(path))
 
 
+def raw_dxgi_plane(directory, name, shape):
+    """A run output of a v2 capture: the colour plane's format and extent, tight rows (offline-replay.md v2)."""
+    path = directory / name
+    row = shape['width'] * shape['pixel_bytes']
+    if path.stat().st_size != row * shape['height']:
+        raise SystemExit(f'{path}: {path.stat().st_size} bytes, expected {row * shape["height"]}')
+    return dict(path=name, encoding='raw-dxgi', dxgi_format=shape['format'], width=shape['width'],
+                height=shape['height'], pixel_bytes=shape['pixel_bytes'], row_pitch=row, sha256=digest(path))
+
+
 def make_corpus(runner, proton, env, root, provenance):
     directory = root / 'corpus'
     stage(root, directory)
@@ -205,56 +221,143 @@ def make_corpus(runner, proton, env, root, provenance):
 def load_capture(path):
     """A capture the seam can replay as recorded, or a refusal naming what it cannot transport (yet)."""
     capture = json.loads(path.read_text())
-    if capture.get('schema') != 'retoque-replay-capture' or capture.get('version') != 1 or not capture.get('complete'):
-        raise SystemExit(f'{path}: not a complete retoque-replay-capture v1')
+    if capture.get('schema') != 'retoque-replay-capture' or capture.get('version') not in (1, 2) or \
+            not capture.get('complete'):
+        raise SystemExit(f'{path}: not a complete retoque-replay-capture v1 or v2')
     supported = dict(mode='nr-boundary', clock='recorded-evaluation', color_jitter='removed')
     for key, value in supported.items():
         if capture.get(key) != value:
             raise SystemExit(f'{path}: the seam replays {key}={value!r} only (got {capture.get(key)!r})')
     motion = capture.get('motion', {})
-    if (motion.get('direction'), motion.get('units'), motion.get('scale'), motion.get('includes_jitter')) != \
-            ('current-to-previous', 'pixels', [1.0, 1.0], False):
-        raise SystemExit(f'{path}: the seam v1 takes unjittered backward motion in pixels at scale 1')
+    scale = [1.0, 1.0] if capture['version'] == 1 else 'per-frame'
+    if (motion.get('direction'), motion.get('units'), motion.get('scale')) != ('current-to-previous', 'pixels', scale):
+        raise SystemExit(f'{path}: the seam takes backward motion in pixels (scale {scale!r})')
+    if capture['version'] == 1 and motion.get('includes_jitter') is not False:
+        raise SystemExit(f'{path}: the seam v1 takes unjittered motion')
+    if capture['version'] == 2 and capture.get('finalized') is not True:
+        raise SystemExit(f'{path}: not finalized; run python3 -m tools.replay.finalize {path} first')
     base = path.parent
     frames = capture['frames']
-    extent = (frames[0]['color']['width'], frames[0]['color']['height'])
-    flags = frames[0].get('params', {}).get('create_flags', CREATE_FLAGS)
+    shapes = plane_shapes(capture)
+    flags = geometry(capture, frames[0])['create_flags']
     previous = None
     for f in frames:
+        g = geometry(capture, f)
         if f.get('exposure') is not None:
-            raise SystemExit(f'frame {f["id"]}: exposure textures are not transported by the seam v1')
-        if f.get('params', {}).get('create_flags', CREATE_FLAGS) != flags:
+            raise SystemExit(f'frame {f["id"]}: exposure textures are not transported by the seam')
+        if g['create_flags'] != flags:
             raise SystemExit(f'frame {f["id"]}: create flags change within the capture')
         if previous and (f['present'] <= previous['present'] or f['time_ms'] <= previous['time_ms']):
             raise SystemExit(f'frame {f["id"]}: presents and times must strictly increase')
+        numbers = [f['time_ms'], f['pre_exposure'], *f['jitter'], *g['mv_scale'], g['frame_time_ms'] or 1.0]
+        if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in numbers) or f['pre_exposure'] <= 0:
+            raise SystemExit(f'frame {f["id"]}: parameters must be finite, pre-exposure positive')
+        check_geometry(f['id'], g, shapes)
         previous = f
-        for key, dtype, channels in (('color', 'f16', 4), ('depth', 'f32', 1), ('motion', 'f16', 2)):
+        for key in ('color', 'depth', 'motion'):
             p = f[key]
-            # v1 of the seam uploads these formats as they are; anything else is converted by its producer.
-            if (p['encoding'], p['dtype'], p['channels']) != ('raw', dtype, channels) or \
-                    p['row_pitch'] != p['width'] * channels * (4 if dtype == 'f32' else 2):
-                raise SystemExit(f'frame {f["id"]} {key}: the seam v1 takes tight raw {dtype}x{channels}')
-            if (p['width'], p['height']) != extent:
-                raise SystemExit(f'frame {f["id"]} {key}: the seam v1 takes one constant extent')
+            if capture['version'] == 1:
+                dtype, channels = {'color': ('f16', 4), 'depth': ('f32', 1), 'motion': ('f16', 2)}[key]
+                # v1 of the seam uploads these formats as they are; anything else is converted by its producer.
+                if (p['encoding'], p['dtype'], p['channels']) != ('raw', dtype, channels) or \
+                        p['row_pitch'] != p['width'] * channels * (4 if dtype == 'f32' else 2):
+                    raise SystemExit(f'frame {f["id"]} {key}: the seam v1 takes tight raw {dtype}x{channels}')
+                if (p['width'], p['height']) != (shapes['color']['width'], shapes['color']['height']):
+                    raise SystemExit(f'frame {f["id"]} {key}: the seam v1 takes one constant extent')
+            else:
+                if p.get('encoding') != 'raw-dxgi' or shape_of(key, p) != shapes[key]:
+                    raise SystemExit(f'frame {f["id"]} {key}: the shape changes within the capture')
+                if p['row_pitch'] != p['width'] * p['pixel_bytes']:
+                    raise SystemExit(f'frame {f["id"]} {key}: rows are not tight')
+            size = (base / p['path']).stat().st_size
+            if size != p['row_pitch'] * p['height']:
+                raise SystemExit(f'frame {f["id"]} {key}: {size} bytes, expected {p["row_pitch"] * p["height"]}')
             if digest(base / p['path']) != p['sha256']:
                 raise SystemExit(f'frame {f["id"]} {key}: digest mismatch')
     return capture
 
 
+def shape_of(key, p):
+    """One recorded plane's shape as the harness makes it (offline-replay-seam.md, Plan v3)."""
+    fmt = p['dxgi_format']
+    default_flags = ALLOW_UNORDERED_ACCESS if key == 'color' else 0
+    return dict(format=fmt, source_format=p.get('source_format', fmt), source_flags=p.get('source_flags', default_flags),
+                width=p['width'], height=p['height'], pixel_bytes=p['pixel_bytes'])
+
+
+def plane_shapes(capture):
+    first = capture['frames'][0]
+    if capture['version'] == 1:
+        w, h = first['color']['width'], first['color']['height']
+        return {key: dict(format=fmt, source_format=fmt, source_flags=ALLOW_UNORDERED_ACCESS if key == 'color' else 0,
+                          width=w, height=h, pixel_bytes=PIXEL_BYTES[fmt]) for key, fmt in V1_FORMATS.items()}
+    shapes = {key: shape_of(key, first[key]) for key in ('color', 'depth', 'motion')}
+    for key, shape in shapes.items():
+        if not all(type(shape[k]) is int and shape[k] >= 0 for k in shape):
+            raise SystemExit(f'{key}: plane fields must be non-negative integers')
+        if PIXEL_BYTES.get(shape['format']) != shape['pixel_bytes']:
+            raise SystemExit(f'{key}: format {shape["format"]} with {shape["pixel_bytes"]} bytes is not one the seam '
+                             'transports')
+        if not (16 <= shape['width'] <= 16384 and 16 <= shape['height'] <= 16384):
+            raise SystemExit(f'{key}: extent {shape["width"]}x{shape["height"]} out of range')
+    # The output arrives in UNORDERED_ACCESS and the guides as shader resources (v1's states); a recording whose
+    # resources cannot be in those states is refused rather than replayed under states the game never used.
+    if not shapes['color']['source_flags'] & ALLOW_UNORDERED_ACCESS:
+        raise SystemExit('color: the output does not allow unordered access; plan v3 replays in-place outputs only')
+    for key in ('depth', 'motion'):
+        if shapes[key]['source_flags'] & DENY_SHADER_RESOURCE:
+            raise SystemExit(f'{key}: the guide denies shader resource views; plan v3 does not replay it')
+    return shapes
+
+
+def geometry(capture, f):
+    """The frame's guide geometry and placement; a v1 frame is full-extent, unscaled, after-upscale."""
+    params = f.get('params', {})
+    if capture['version'] == 1:
+        w, h = f['color']['width'], f['color']['height']
+        return dict(create_flags=params.get('create_flags', CREATE_FLAGS), ray_reconstruction=False,
+                    mv_scale=[1.0, 1.0], frame_time_ms=params.get('frame_time_ms'), render_subrect=[w, h],
+                    depth_base=[0, 0], motion_base=[0, 0])
+    return dict(create_flags=params['create_flags'], ray_reconstruction=params['ray_reconstruction'],
+                mv_scale=params['mv_scale'], frame_time_ms=params.get('frame_time_ms'),
+                render_subrect=params['render_subrect'], depth_base=params['depth_base'],
+                motion_base=params['motion_base'])
+
+
+def check_geometry(frame_id, g, shapes):
+    """Depth at render size; motion at render size with MVLowRes, else at output size. Both inside their planes."""
+    rw, rh = g['render_subrect']
+    if not rw or not rh:
+        return  # the game did not say; the pass decides as it does live
+    motion_extent = (rw, rh) if g['create_flags'] & MV_LOW_RES else \
+        (shapes['color']['width'], shapes['color']['height'])
+    for key, (bx, by), (w, h) in (('depth', g['depth_base'], (rw, rh)), ('motion', g['motion_base'], motion_extent)):
+        if bx + w > shapes[key]['width'] or by + h > shapes[key]['height']:
+            raise SystemExit(f'frame {frame_id} {key}: base ({bx},{by}) plus {w}x{h} lies outside the '
+                             f'{shapes[key]["width"]}x{shapes[key]["height"]} plane')
+
+
 def write_plan(capture, base, path):
     frames = capture['frames']
-    width, height = frames[0]['color']['width'], frames[0]['color']['height']
-    flags = frames[0].get('params', {}).get('create_flags', CREATE_FLAGS)
-    lines = [f'replay-plan 2 {width} {height} {flags} {len(frames)}']
+    shapes = plane_shapes(capture)
+    lines = [f'replay-plan 3 {len(frames)}']
+    for key in ('color', 'depth', 'motion'):
+        p = shapes[key]
+        lines.append(f'plane {key} {p["format"]} {p["source_format"]} {p["source_flags"]} {p["width"]} {p["height"]} '
+                     f'{p["pixel_bytes"]}')
     for i, f in enumerate(frames):
+        g = geometry(capture, f)
         # The frame time the game passed when it is recorded, else the step of the recorded clock.
-        delta = f.get('params', {}).get('frame_time_ms')
+        delta = g['frame_time_ms']
         if delta is None:
             delta = (frames[1]['time_ms'] - f['time_ms']) if i == 0 and len(frames) > 1 else \
                 f['time_ms'] - frames[i - 1]['time_ms'] if i else 1000.0 / 60.0
         lines.append(' '.join([str(f['id']), str(f['present']), repr(float(f['time_ms'])), repr(float(delta)),
                                str(int(f['reset'])), repr(float(f['jitter'][0])), repr(float(f['jitter'][1])),
-                               repr(float(f['pre_exposure']))] +
+                               repr(float(f['pre_exposure'])), str(g['create_flags']),
+                               str(int(bool(g['ray_reconstruction']))), repr(float(g['mv_scale'][0])),
+                               repr(float(g['mv_scale'][1])), *map(str, g['render_subrect']),
+                               *map(str, g['depth_base']), *map(str, g['motion_base'])] +
                               [windows_path(base / f[key]['path']) for key in ('color', 'depth', 'motion')]))
     path.write_text('\n'.join(lines) + '\n')
 
@@ -298,7 +401,8 @@ def run_variant(runner, proton, env, root, name, settings, capture, capture_path
         raise SystemExit(f'replay {name}: one REPLAY line per capture frame expected')
     entries = []
     for f, r in zip(frames, rows):
-        out = plane(directory, f'f{f["id"]}.output', 'f16', 4, 2)
+        out = plane(directory, f'f{f["id"]}.output', 'f16', 4, 2) if capture['version'] == 1 else \
+            raw_dxgi_plane(directory, f'f{f["id"]}.output', plane_shapes(capture)['color'])
         event = flight.get(r['id'], {})
         cancelled = event.get('cancelled', False)
         entries.append(dict(id=r['id'], kind='skipped' if cancelled else kind(r), interval=r['interval'], requested_passes=r['requested'],
@@ -308,7 +412,7 @@ def run_variant(runner, proton, env, root, name, settings, capture, capture_path
                             recorded=bool(r['recorded']), production_skip=r['skip'] or None,
                             flight=event or None, output=out))
     scored = sum(1 for f in frames if f['score'])
-    record = dict(schema='retoque-replay-run', version=1, complete=True,
+    record = dict(schema='retoque-replay-run', version=capture['version'], complete=True,
                   capture_sha256=digest(capture_path), environment=environment,
                   producer=dict(dll_sha256=digest(root / 'OptiScaler.dll'), commit=producer_id,
                                 trial=uuid.uuid4().hex),  # one fresh process per run
@@ -538,7 +642,7 @@ def judge(runner, root, capture_path, runs, calibration=None):
     return dict(available=True, verdicts=verdicts)
 
 
-def record_check(runner, proton, env, root, capture_path):
+def record_check(runner, proton, env, root, capture_path, environment, producer_id):
     """The replay recorder against the moving scene (docs/dlssnr/design/offline-replay-recorder.md, Validation).
 
     The scene runs with NR on and the trigger file asking for a clip. Every recorded frame's depth and motion must be
@@ -599,7 +703,98 @@ def record_check(runner, proton, env, root, capture_path):
         ok=not mismatches and colour_checked > 0,
         detail=f'clip starts at scene frame {k}; depth/motion of {len(ids)} frames and colour of {colour_checked} '
                f'compared; mismatches {mismatches[:6]}')
+    # The recording replays through the seam as a v2 capture (offline-replay-seam.md, Plan v3), twice. The moving
+    # scene never presents, so the production present counter it recorded stays 0, and the seam takes only presents
+    # that move forward: the replayed manifest, a sibling of the recording's own, numbers them by frame.
+    presents = sorted({f['present'] for f in clip['frames']})
+    results['recorder-presents-as-the-scene-left-them'] = dict(ok=None, detail=f'recorded presents {presents[:4]}')
+    renumbered = dict(clip, frames=[dict(f, present=f['id']) for f in clip['frames']])
+    replayed_path = base / 'capture-replay.json'
+    replayed_path.write_text(json.dumps(renumbered, indent=1) + '\n')
+    replayed = load_capture(replayed_path)
+    replays = {name: run_variant(runner, proton, env, root, name, {'Cadence': '1'}, replayed, replayed_path,
+                                 environment, producer_id) for name in ('clip-a', 'clip-b')}
+    results.update(v2_replay_gates('recorded-clip', replayed, replays))
     return results
+
+
+def v2_replay_gates(label, capture, replays):
+    """A v2 capture's every-frame replays: the model on every scored frame, and two fresh processes in agreement."""
+    a, b = replays.values()
+    scored = {f['id'] for f in capture['frames'] if f['score']}
+    bad = [r['id'] for r in a['frames'] if r['id'] in scored and
+           (r['kind'] != 'every' or r['completed_passes'] < 1 or r['model_result'] != 1)]
+    fields = ('kind', 'interval', 'requested_passes', 'completed_passes', 'model_result', 'recorded', 'skip')
+    differ = [x['id'] for x, y in zip(a['frames'], b['frames'])
+              if any(x[k] != y[k] for k in fields) or x['output']['sha256'] != y['output']['sha256']]
+    return {f'{label}-model-every-scored-frame': dict(ok=bool(scored) and not bad,
+                                                      detail=f'{len(scored)} scored, bad {bad[:8]}'),
+            f'{label}-repeat-identical': dict(ok=not differ, detail=f'{len(a["frames"])} frames, differ {differ[:8]}')}
+
+
+def halfres_capture(root, capture_path):
+    """A v2 capture of the corpus with game-shaped guides (offline-replay-seam.md, Plan v3, Validation).
+
+    Depth and motion are point-sampled to half resolution and placed at a nonzero base inside a larger plane, with
+    MVLowRes set. The motion values stay in output pixels and the MV scale is 0.5, so value x scale is render pixels.
+    The colour is the corpus's, linked."""
+    corpus = json.loads(capture_path.read_text())
+    directory = root / 'halfres'
+    shutil.rmtree(directory, ignore_errors=True)
+    directory.mkdir(parents=True)
+    w, h = corpus['frames'][0]['color']['width'], corpus['frames'][0]['color']['height']
+    rw, rh, bx, by = w // 2, h // 2, 16, 12
+    gw, gh = rw + bx, rh + by
+    frames = []
+    for f in corpus['frames']:
+        planes = {}
+        for key, fmt in (('depth', 41), ('motion', 34)):
+            # Both are four-byte pixels: whole pixels are copied, values untouched.
+            source = memoryview((capture_path.parent / f[key]['path']).read_bytes()).cast('I')
+            out = bytearray(gw * gh * 4)
+            view = memoryview(out).cast('I')
+            for y in range(rh):
+                row = source[2 * y * w:(2 * y + 1) * w][::2]
+                view[(by + y) * gw + bx:(by + y) * gw + bx + rw] = row
+            name = f'f{f["id"]}.{key}'
+            (directory / name).write_bytes(out)
+            planes[key] = dict(path=name, encoding='raw-dxgi', dxgi_format=fmt, width=gw, height=gh, pixel_bytes=4,
+                               row_pitch=gw * 4, source_format=fmt, source_flags=0, sha256=digest(directory / name))
+        name = f'f{f["id"]}.color'
+        try:
+            os.link(capture_path.parent / f['color']['path'], directory / name)
+        except OSError:
+            shutil.copyfile(capture_path.parent / f['color']['path'], directory / name)
+        planes['color'] = dict(path=name, encoding='raw-dxgi', dxgi_format=10, width=w, height=h, pixel_bytes=8,
+                               row_pitch=w * 8, source_format=10, source_flags=ALLOW_UNORDERED_ACCESS,
+                               sha256=f['color']['sha256'])
+        frames.append(dict(id=f['id'], present=f['present'], time_ms=f['time_ms'], reset=f['reset'], score=f['score'],
+                           jitter=f['jitter'], pre_exposure=f['pre_exposure'], exposure=None, exposure_value=1,
+                           completion='fence-complete',
+                           params=dict(create_flags=geometry(corpus, f)['create_flags'] | MV_LOW_RES,
+                                       ray_reconstruction=False, mv_scale=[0.5, 0.5],
+                                       frame_time_ms=geometry(corpus, f)['frame_time_ms'], render_subrect=[rw, rh],
+                                       depth_base=[bx, by], motion_base=[bx, by]), **planes))
+    capture = dict(schema='retoque-replay-capture', version=2, complete=True, finalized=True, mode='nr-boundary',
+                   source='derived:' + digest(capture_path), clock='recorded-evaluation',
+                   color_space=corpus.get('color_space', 'linear-rec709'), color_jitter='removed',
+                   depth=corpus.get('depth', {}), motion=dict(direction='current-to-previous', units='pixels',
+                                                              scale='per-frame', includes_jitter=False),
+                   regions=corpus.get('regions', {}), provenance=dict(derived_from=str(capture_path)), frames=frames)
+    path = directory / 'capture.json'
+    path.write_text(json.dumps(capture, indent=1) + '\n')
+    return path
+
+
+def halfres_check(runner, proton, env, root, capture_path, environment, producer_id):
+    path = halfres_capture(root, capture_path)
+    capture = load_capture(path)
+    print(f'  replay half-resolution guides: {len(capture["frames"])} frames, render subrect '
+          f'{capture["frames"][0]["params"]["render_subrect"]} at base {capture["frames"][0]["params"]["depth_base"]}',
+          flush=True)
+    replays = {name: run_variant(runner, proton, env, root, name, {'Cadence': '1'}, capture, path, environment,
+                                 producer_id) for name in ('halfres-a', 'halfres-b')}
+    return v2_replay_gates('halfres-guides', capture, replays)
 
 
 def run(runner, proton, env, dll):
@@ -631,7 +826,8 @@ def run(runner, proton, env, dll):
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)
     if os.environ.get('LOOPBACK_REPLAY_RECORD_CHECK') == '1':
-        results.update(record_check(runner, proton, env, root, capture_path))
+        results.update(record_check(runner, proton, env, root, capture_path, environment, provenance['producer']))
+        results.update(halfres_check(runner, proton, env, root, capture_path, environment, provenance['producer']))
     if baseline:
         results.update(baseline_gates(runs, baseline))
     sync_baseline = os.environ.get('LOOPBACK_REPLAY_SYNC_BASELINE')

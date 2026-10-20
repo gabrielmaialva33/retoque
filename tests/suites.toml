@@ -54,6 +54,14 @@ tier = "host"
 timeout = 120
 summary = "DEVELOPMENT.md section 4 guards: config round-trip, struct == cbuffer, headers == bytecode, retired identifiers."
 
+[nr-replay-plan]
+path = "nr-replay-plan"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "Replay runner: v1 and v2 capture loading, plan v3 surfaces and geometry token for token, refusals."
+
 [nr-replay-recorder]
 path = "nr-replay-recorder"
 domain = "nr"

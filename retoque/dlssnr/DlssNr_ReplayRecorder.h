@@ -33,10 +33,12 @@ constexpr double kFreeSpaceFactor = 1.25;
 // One plane as the game handed it: its DXGI format (made typed for the copy) and extent. Rows are written tight.
 struct Plane
 {
-    uint32_t format = 0;
+    uint32_t format = 0; // the typed format the copy uses, and the bytes on disk
     uint32_t width = 0;
     uint32_t height = 0;
     uint32_t pixelBytes = 0;
+    uint32_t sourceFormat = 0; // the game resource's own format and flags: the pass branches on both
+    uint32_t sourceFlags = 0;
     uint64_t RowBytes() const { return uint64_t(width) * pixelBytes; }
     uint64_t Bytes() const { return RowBytes() * height; }
 };
@@ -304,7 +306,8 @@ inline std::string PlaneJson(const Plane& p, const std::string& path)
     return "{\"path\":\"" + Escape(path) + "\",\"encoding\":\"raw-dxgi\",\"dxgi_format\":" + std::to_string(p.format) +
            ",\"width\":" + std::to_string(p.width) + ",\"height\":" + std::to_string(p.height) +
            ",\"pixel_bytes\":" + std::to_string(p.pixelBytes) + ",\"row_pitch\":" + std::to_string(p.RowBytes()) +
-           ",\"sha256\":null}";
+           ",\"source_format\":" + std::to_string(p.sourceFormat) +
+           ",\"source_flags\":" + std::to_string(p.sourceFlags) + ",\"sha256\":null}";
 }
 
 // The clip's manifest. Frames are the contiguous certified prefix, in order. stopped says why the clip ended.
