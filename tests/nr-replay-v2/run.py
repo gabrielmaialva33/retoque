@@ -264,6 +264,8 @@ class V2(unittest.TestCase):
             lambda c: c["frames"][0]["color"].update(source_flags=-1),
             lambda c: c["frames"][0]["color"].update(source_format=True),
             lambda c: c["frames"][1]["color"].update(width=4, row_pitch=64, height=12),
+            lambda c: c["frames"][1].update(present=c["frames"][0]["present"] - 1),
+            lambda c: c["frames"][1].update(time_ms=c["frames"][0]["time_ms"]),
         ]
         for mutate in mutations:
             d = copy.deepcopy(original)
@@ -385,6 +387,13 @@ class V2(unittest.TestCase):
         save_json(self.cap, c)
         with self.assertRaisesRegex(ValueError, "v1 plane encoding"):
             load_capture(self.cap)
+
+    def test_repeated_present(self):
+        # Two evaluations in one present, as Cyberpunk 2077 did: taken, with time still moving forward.
+        d = json.loads(self.c2.read_text())
+        d["frames"][1]["present"] = d["frames"][0]["present"]
+        save_json(self.c2, d)
+        load_capture(self.c2)
 
     def test_optional_metadata(self):
         d = json.loads(self.c2.read_text())

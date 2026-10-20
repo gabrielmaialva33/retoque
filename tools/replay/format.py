@@ -269,9 +269,10 @@ def load_capture(path):
         )
         need(f.get("completion") == "fence-complete", "uncertified capture")
         if prev:
+            # A present may repeat: a game can evaluate twice within one present (offline-replay-seam.md, "Refusals").
             need(
                 f["id"] == prev["id"] + 1
-                and f["present"] > prev["present"]
+                and f["present"] >= prev["present"]
                 and f["time_ms"] > prev["time_ms"],
                 "nonconsecutive frames or nonmonotonic clocks",
             )
