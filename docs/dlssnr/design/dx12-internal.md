@@ -31,3 +31,20 @@ Release build, and exact per-frame output hashes plus decision projection agains
 the immutable pre-refactor DLL's corpus/runs, including warmup. The same-DLL A/A
 check alone is not the refactor gate. Present/pre-upscale/bridge routes remain
 outside the after-upscale replay's evidence; their bodies are unchanged here.
+
+## Step 7: lifetime/admission unit
+
+`DlssNr_Dx12_Lifetime.cpp` owns the post-contract/status and cadence/pause decisions,
+recording admission/tracking, video-memory query, retirement/parking and alternate
+surface policy. Shared definitions and their initialization order remain in core.
+Bodies, local statics, call sites and release ordering are unchanged. `ParkNrClone`
+joins the private internal namespace so present-guide callers share the same
+retirement policy. `TickNrRetired`'s default argument lives only in the header;
+its body still distinguishes shutdown Ready from ordinary Settled retirement.
+
+Deletion sites include complete scaler/stabilizer/UI-mask/cadence types and the
+shared complete `NrEnlarger` with its out-of-line destructor. `nr-enlarge` assembles
+retirement from its explicit Lifetime owner while retaining core shutdown/retry.
+The function-owner registry guards every moved definition; the state identity
+suite continues to pin the original shared storage/initializers. Acceptance adds
+all four original-DLL in-flight replay modes to the 19 synchronous variants.

@@ -91,6 +91,10 @@ struct PlausibilityLatch
 } // namespace Exposure
 namespace Submission
 {
+namespace Detail
+{
+enum class Admission;
+}
 struct Usage
 {
 };
@@ -98,6 +102,7 @@ inline uint64_t Clock() { return 0; }
 } // namespace Submission
 namespace Chain
 {
+class RecordingLease;
 struct RecordingGate
 {
 };
@@ -107,6 +112,7 @@ struct Schedule
 } // namespace Chain
 namespace Cadence
 {
+struct Decision;
 struct Scheduler
 {
 };

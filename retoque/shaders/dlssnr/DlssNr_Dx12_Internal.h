@@ -29,6 +29,7 @@
 #include <optional>
 #include <vector>
 
+struct DXGI_QUERY_VIDEO_MEMORY_INFO;
 class OS_Dx12;
 class DlssNr_Stabilizer_Dx12;
 class DlssNr_UiMask_Dx12;
@@ -730,10 +731,10 @@ void InvalidateExposureMeter();
 float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,
                         bool scanInverted, float scanTrim);
 void ReportSkipOnce(const char* reason);
-// Lifetime helpers the diagnostics park through (DlssNr_Dx12.cpp).
+// Lifetime helpers the diagnostics park through (DlssNr_Dx12_Lifetime.cpp).
 void ParkNrDetailStats(DlssNr_DetailStats_Dx12*& detailStats);
 void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse);
-// Enlargement behavior lives in DlssNr_Dx12_Enlarge.cpp; storage/retirement stay in core.
+// Enlargement behavior lives in DlssNr_Dx12_Enlarge.cpp; storage stays in core; retirement lives in Lifetime.
 DlssNr::Enlarge::Decision PlanEnlarge(uint32_t configured, bool proxy, bool periphery, uint32_t debugView,
                                       const DlssNrFrameInfo& frame, ID3D12Device* device, bool beforeUpscale,
                                       bool guidesUsable, unsigned int width, unsigned int height,
@@ -743,6 +744,33 @@ ID3D12Resource* EnlargeEdit(DlssNr_Dx12& pass, ID3D12GraphicsCommandList* cmdLis
                             const DlssNr::Enlarge::Decision& plan, const EnlargeFrame& f);
 void ParkNrEnlarger(NrEnlarger*& enlarger);
 bool RetiredCapacity();
+// Lifetime/admission policy; callers retain their existing locks. State stays in core.
+uint32_t PostContract(unsigned int nativeWidth, unsigned int nativeHeight, uint32_t format);
+void ChainStatus(const char* reason);
+void PublishCadence(const DlssNr::Cadence::Decision& decision);
+bool FrameGenerationActive();
+bool PausedWithoutFrameGen(const Config& cfg);
+void AdvanceNrClock();
+const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission);
+bool AdaptiveCadenceRequested();
+bool WantsTrackedRecording(const DlssNrPassSnapshot& requested);
+bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
+                      DlssNr::Chain::RecordingLease* lease);
+bool VideoMemory(ID3D12Device* device, DXGI_QUERY_VIDEO_MEMORY_INFO& memory);
+void ParkNrFeature(void*& feature);
+void ParkNrScaler(OS_Dx12*& scaler);
+void ParkNrStabilizer(DlssNr_Stabilizer_Dx12*& stabilizer);
+void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask);
+void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence);
+void TickNrRetired(bool shutdown = false);
+void ForgetCalibration();
+bool MakeRoomForGeneration();
+void ParkAltSurfaces();
+bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height, unsigned int workWidth,
+                    unsigned int workHeight);
+void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,
+                                    unsigned int workHeight);
+void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked);
 } // namespace DlssNr::Dx12Internal
 
 // Functions one renderer unit defines and another calls, with the unit that defines them. Public entry points keep

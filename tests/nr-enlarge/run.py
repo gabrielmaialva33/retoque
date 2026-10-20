@@ -45,6 +45,7 @@ def once(source, text, what):
 # Assemble exact definitions from their owners. No slice crosses a TU or namespace boundary.
 render_dir = root / 'retoque/shaders/dlssnr'
 core = (render_dir / 'DlssNr_Dx12.cpp').read_text()
+lifetime = (render_dir / 'DlssNr_Dx12_Lifetime.cpp').read_text()
 model = (render_dir / 'DlssNr_Dx12_Model.cpp').read_text()
 enlargement = (render_dir / 'DlssNr_Dx12_Enlarge.cpp').read_text()
 internal = renderer_internal_header()
@@ -133,7 +134,7 @@ enlarge = definition(enlargement, 'ID3D12Resource* EnlargeEdit(')
 assert re.search(r'BuildEnlarger\(cmdList, device, f\);\s*return nullptr;', enlarge)
 
 # Released last, after the list is whole; the bundle is one entry.
-tick = definition(core, 'void TickNrRetired(bool shutdown = false)')
+tick = definition(lifetime, 'void TickNrRetired(bool shutdown)')
 assert tick.index('g_nrRetired.pop_back();') < tick.index('delete enlarger;')
 shutdown = definition(core, 'void Shutdown()\n{')
 assert shutdown.index('g_nrRetired.clear();') < shutdown.index('delete enlarger;')
@@ -163,7 +164,7 @@ for why in whys:
 
 retirement_names = ['void ParkNrFeature(', 'void ParkNrResource(', 'void ParkNrScaler(',
                     'void ParkNrStabilizer(', 'void ParkNrUiMask(', 'void ParkNrCadence(',
-                    'void ParkNrEnlarger(', 'void TickNrRetired(bool shutdown = false)',
+                    'void ParkNrEnlarger(', 'void TickNrRetired(bool shutdown)',
                     'bool RetiredCapacity()\n{']
 enlarge_names = ['void PublishEnlarge(', 'DlssNr::Enlarge::Decision PlanEnlarge(',
                  'void FailEnlarge(', 'void BuildEnlarger(', 'ID3D12Resource* EnlargeEdit(']
@@ -176,7 +177,8 @@ host = ('#include "host_fakes.h"\nnamespace DlssNr::Dx12Internal\n{\n' +
         definition(enlargement, 'DlssNr::PrivateSr::Api PrivateSrApi()') +
         definition(enlargement, 'bool NrEnlarger::CoreGone() const') +
         definition(enlargement, 'NrEnlarger::~NrEnlarger()') +
-        ''.join(definition(core, name) for name in retirement_names) +
+        'void TickNrRetired(bool shutdown = false);\n' +
+        ''.join(definition(lifetime, name) for name in retirement_names) +
         ''.join(definition(enlargement, name) for name in enlarge_names) +
         '\n} // namespace DlssNr::Dx12Internal\nusing namespace DlssNr::Dx12Internal;\n' +
         'namespace DlssNr\n{\nusing namespace Dx12Internal;\n' +
