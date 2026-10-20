@@ -1,8 +1,8 @@
 # Offline replay: recording a game's NR-boundary frames
 
-2026-10-20. Design note written before the code (DEVELOPMENT.md, design-doc-first). This is the producer of
-real-game corpora for [offline-replay.md](offline-replay.md) (format, judge) and
-[offline-replay-seam.md](offline-replay-seam.md) (replay through the production pass). Status: design only.
+2026-10-20. Design note written before the code (DEVELOPMENT.md, design-doc-first); section "As built" at the end
+records where the code differs. This is the producer of real-game corpora for [offline-replay.md](offline-replay.md) (format, judge) and
+[offline-replay-seam.md](offline-replay-seam.md) (replay through the production pass). Status: implemented on D3D12 after-upscale; verified on the loopback moving scene, not yet run in a game.
 
 ## Why
 
@@ -131,3 +131,34 @@ Owners:
   never triggered there).
 - **Game:** one short Cyberpunk session by the user (several clips: city walk, driving, night neon, close-up),
   then local replays only.
+
+## As built (2026-10-20)
+
+- **Trigger:**
+  - the menu button "Record replay clip", under Compare beside the pair capture;
+  - or the existing trigger file `dlssnr-capture.trigger` beside the DLL containing the word `replay` (`burst` and
+    anything else keep their meanings). No new file name.
+  - NR must be enabled: the hook sits after `EvaluateAfterUpscale`'s own early returns.
+- **Writer:**
+  - it writes straight from the mapped readback, without hashing and without an intermediate copy;
+  - a first version that hashed each plane on the writer filled the ring after 14 frames on the loopback, and at
+    3440x1440 (about 57 MB a frame) the hash alone would cost about 190 ms a frame;
+  - a slot is free again only when the writer is done with it, so the ring bounds disk speed as well as GPU
+    completion.
+- **The manifest:**
+  - every `sha256` is null and the capture says `"finalized": false`;
+  - `python3 -m tools.replay.finalize <capture.json>` checks every plane's byte count, hashes it and rewrites the
+    manifest atomically with `"finalized": true`;
+  - a finalized capture is refused, so its identity never changes once replays reference it.
+- **Shape:** a clip keeps the shape it started with. A change of size or format mid-clip ends it at the frames
+  before.
+- **Loopback verification** (`LOOPBACK_REPLAY_RECORD_CHECK=1`, `tests/dlssnr-loopback/run_replay.py`):
+  - the moving scene ran 640 frames with NR on and the trigger file asking for a clip;
+  - the recorder wrote 360 frames, stopping at its length;
+  - finalize hashed them;
+  - every recorded depth and motion plane was byte-identical to the scene's own for the same frame (360 of 360);
+  - every recorded colour plane that overlaps the NR-off corpus was byte-identical to it (62 of 62).
+- **Not yet:**
+  - replaying a v2 capture: the seam's plan and the judge's reader still take v1 (equal extents, fixed dtypes);
+  - a game recording;
+  - native Windows.

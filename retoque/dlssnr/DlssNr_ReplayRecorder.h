@@ -59,11 +59,11 @@ struct FrameMeta
     Plane color, depth, motion;
 };
 
-// Written beside each frame by the writer, for the manifest.
+// What the writer did with each frame, for the manifest: only fully written frames are listed.
 struct WrittenFrame
 {
     FrameMeta meta;
-    std::string colorSha, depthSha, motionSha;
+    bool colorWritten = false, depthWritten = false, motionWritten = false; // the writer put the plane on disk
 };
 
 struct Provenance
@@ -121,6 +121,7 @@ enum class Certificate : uint8_t
 };
 
 // Backend contract (D3D12 in the DLL, fakes in the host test):
+//   bool Available(size_t slot)            the writer is done with the slot's buffers (disk keeps up)
 //   bool Copy(size_t slot, Recording&)       record this frame's copies into the slot on the game's list; false: none
 //   Certificate Certify(size_t slot)
 //   void Hand(size_t slot, const FrameMeta&) read the slot and pass the frame to the writer; the slot is free after
@@ -167,7 +168,7 @@ template <class Backend> class Session
             return Stop("the clip reached its length");
         size_t slot = kSlots;
         for (size_t i = 0; i < kSlots; ++i)
-            if (!_busy[i])
+            if (!_busy[i] && backend.Available(i))
             {
                 slot = i;
                 break;
@@ -296,20 +297,22 @@ inline bool Finite(const FrameMeta& m)
 
 constexpr uint32_t kFlagMvLowRes = 1u << 1, kFlagMvJittered = 1u << 2, kFlagDepthInverted = 1u << 3;
 
-inline std::string PlaneJson(const Plane& p, const std::string& path, const std::string& sha)
+// The recorder writes no hashes (its writer must keep pace with the game): sha256 is null and the capture says
+// "finalized": false until tools/replay/finalize.py hashes every plane.
+inline std::string PlaneJson(const Plane& p, const std::string& path)
 {
     return "{\"path\":\"" + Escape(path) + "\",\"encoding\":\"raw-dxgi\",\"dxgi_format\":" + std::to_string(p.format) +
            ",\"width\":" + std::to_string(p.width) + ",\"height\":" + std::to_string(p.height) +
            ",\"pixel_bytes\":" + std::to_string(p.pixelBytes) + ",\"row_pitch\":" + std::to_string(p.RowBytes()) +
-           ",\"sha256\":\"" + sha + "\"}";
+           ",\"sha256\":null}";
 }
 
 // The clip's manifest. Frames are the contiguous certified prefix, in order. stopped says why the clip ended.
 inline std::string CaptureJson(const std::vector<WrittenFrame>& frames, const Provenance& prov, const char* stopped)
 {
     const uint32_t flags = frames.empty() ? 0u : frames.front().meta.createFlags;
-    std::string s =
-        "{\n\"schema\":\"retoque-replay-capture\",\"version\":2,\"complete\":true,\"mode\":\"nr-boundary\",";
+    std::string s = "{\n\"schema\":\"retoque-replay-capture\",\"version\":2,\"complete\":true,\"finalized\":false,"
+                    "\"mode\":\"nr-boundary\",";
     s += "\"source\":\"game:" + Escape(prov.exe) + "\",\"clock\":\"recorded-evaluation\",";
     s += "\"color_space\":\"" + std::string(frames.empty() || (flags & 1u) ? "linear-rec709" : "srgb-rec709") + "\",";
     s += "\"color_jitter\":\"removed\",";
@@ -340,9 +343,9 @@ inline std::string CaptureJson(const std::vector<WrittenFrame>& frames, const Pr
              ",\"render_subrect\":[" + std::to_string(m.renderWidth) + "," + std::to_string(m.renderHeight) +
              "],\"depth_base\":[" + std::to_string(m.depthBaseX) + "," + std::to_string(m.depthBaseY) +
              "],\"motion_base\":[" + std::to_string(m.motionBaseX) + "," + std::to_string(m.motionBaseY) + "]},";
-        s += "\"color\":" + PlaneJson(m.color, stem + ".color", f.colorSha) + ",";
-        s += "\"depth\":" + PlaneJson(m.depth, stem + ".depth", f.depthSha) + ",";
-        s += "\"motion\":" + PlaneJson(m.motion, stem + ".motion", f.motionSha) + "}";
+        s += "\"color\":" + PlaneJson(m.color, stem + ".color") + ",";
+        s += "\"depth\":" + PlaneJson(m.depth, stem + ".depth") + ",";
+        s += "\"motion\":" + PlaneJson(m.motion, stem + ".motion") + "}";
     }
     s += "\n]\n}\n";
     return s;

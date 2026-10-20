@@ -33,6 +33,8 @@ struct Fake
     std::string stopped;
     std::map<size_t, uint32_t> slotFrame;
 
+    std::map<size_t, bool> writing; // slots the writer still holds
+    bool Available(size_t slot) { return !writing.count(slot) || !writing[slot]; }
     bool Copy(size_t slot, int&)
     {
         if (copyFails)
@@ -159,6 +161,19 @@ int main()
         s.Poll(b);
         Expect(s.Current() == Phase::Done && b.finished == int(kSlots), "the in-flight frames still make the clip");
     }
+    // A writer that falls behind holds its slots; the ring ends the clip the same way the GPU would.
+    {
+        Session<Fake> s;
+        Fake b;
+        int rec = 0;
+        s.Request();
+        for (size_t i = 0; i < kSlots; ++i)
+            b.writing[i] = true;
+        s.AtBoundary(b, rec, Meta(1), 0.0, nullptr);
+        Expect(s.Current() == Phase::Finishing && s.Recorded() == 0, "a writer holding every slot ends the clip");
+        s.Poll(b);
+        Expect(s.Current() == Phase::Failed, "and with nothing recorded the clip fails");
+    }
     // A frame discarded in the middle ends the clip at the frames before it; later ones are released, not read.
     {
         Session<Fake> s;
@@ -243,7 +258,7 @@ int main()
             f.meta.timeMs = (i - 1) * 1000.0;
             f.meta.reset = i == 1;
             f.meta.createFlags = 1u | kFlagMvLowRes;
-            f.colorSha = f.depthSha = f.motionSha = std::string(64, 'a');
+            f.colorWritten = f.depthWritten = f.motionWritten = true;
             frames.push_back(f);
         }
         Provenance p;

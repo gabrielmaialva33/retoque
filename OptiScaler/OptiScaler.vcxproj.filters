@@ -2016,6 +2016,12 @@
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ReplayClock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_ReplayRecorder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_ReplayRecorderDx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Enlarge.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -2107,6 +2113,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Replay.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_ReplayRecorder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Inputs.cpp">

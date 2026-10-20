@@ -28,7 +28,8 @@ assert [f['id'] for f in frames] == [1, 2, 3, 4]
 assert [f['score'] for f in frames] == [False, False, True, True]  # 0, 1000, 2000, 3000 ms against 1500 ms warmup
 assert frames[0]['reset'] is True and not any(f['reset'] for f in frames[1:])
 assert frames[0]['color'] == {'path': 'f1.color', 'encoding': 'raw-dxgi', 'dxgi_format': 10, 'width': 64,
-                              'height': 32, 'pixel_bytes': 8, 'row_pitch': 512, 'sha256': 'a' * 64}
+                              'height': 32, 'pixel_bytes': 8, 'row_pitch': 512, 'sha256': None}
+assert manifest['finalized'] is False  # hashes come from tools/replay/finalize.py, off the game's clock
 assert frames[0]['params']['create_flags'] == 3 and frames[0]['params']['mv_scale'] == [1, 1]
 assert manifest['color_space'] == 'linear-rec709' and manifest['motion']['includes_jitter'] is False
 print('PASS: the manifest parses as capture schema v2 with warmup, reset, planes and params')

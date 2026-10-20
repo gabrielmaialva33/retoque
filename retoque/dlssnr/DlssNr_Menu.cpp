@@ -15,6 +15,7 @@
 #include "DlssNr_PresentBoundary.h"
 #include "DlssNr_PresentHdr.h"
 #include "DlssNr_PairCapture.h"
+#include "DlssNr_ReplayRecorderDx12.h"
 #include "DlssNr_PresentSync.h"
 #include "DlssNr_Session.h"
 #include "DlssNr_WorkingScale.h"
@@ -329,6 +330,34 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
     else if (status.ok && !status.lastStem.empty())
         ImGui::TextDisabled(Localization::Tr("Saved %s (the pair and its .json)"), status.lastStem.c_str());
     else if (status.reason != nullptr && PairCapture::ReasonStillApplies(status.reason, in))
+        ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s", Localization::Tr(status.reason));
+}
+
+// The replay recorder (docs/dlssnr/design/offline-replay-recorder.md): a few seconds of what the pass receives, for
+// offline replay. D3D12 after-upscale only, so absent wherever that route is not running.
+static void RenderReplayRecorder(Config* config, bool nativeVulkan)
+{
+    if (!config->DlssNrEnabled.value_or_default() || nativeVulkan || !DlssNr::IsRunning())
+        return;
+    namespace RR = DlssNr::ReplayRecorder;
+    const auto status = RR::GetStatus();
+    const bool busy = status.phase == RR::Phase::Requested || status.phase == RR::Phase::Recording ||
+                      status.phase == RR::Phase::Finishing;
+    ImGui::BeginDisabled(busy);
+    if (ImGui::Button(Localization::Label("Record replay clip")))
+        RR::Request(nullptr);
+    ImGui::EndDisabled();
+    HelpMarker("Records about six seconds of what the pass receives -- the upscaler's colour, depth and motion"
+               "\nvectors, and the game's parameters -- into the dlssnr-replay folder beside OptiScaler, for the"
+               "\noffline replay harness (tests/dlssnr-loopback --replay-nr). Nothing is recorded until pressed."
+               "\n\nAbout 50-60 MB a frame at 3440x1440: a clip is 1-4 GB. Dropping a file named"
+               "\ndlssnr-capture.trigger containing the word replay asks for the same clip from outside the game.");
+    if (status.phase == RR::Phase::Recording || status.phase == RR::Phase::Finishing)
+        ImGui::TextDisabled(Localization::Tr("Recording: %u frames, %u written"), status.recorded, status.written);
+    else if (status.phase == RR::Phase::Done)
+        ImGui::TextDisabled(Localization::Tr("Clip of %u frames written to %s (%s)"), status.written,
+                            status.folder.c_str(), Localization::Tr(status.reason != nullptr ? status.reason : ""));
+    else if (status.phase == RR::Phase::Failed && status.reason != nullptr)
         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s", Localization::Tr(status.reason));
 }
 
@@ -2299,6 +2328,7 @@ void RenderMenu(Config* config, float menuResScale)
 
         // The comparison capture, beside Hold frame: the A/B tools frame-hold.md gathered here.
         RenderPairCapture(config, nativeVulkan);
+        RenderReplayRecorder(config, nativeVulkan);
 
         // "Measure detail" (D3D12 only, under Compare)
         if (!nativeVulkan)

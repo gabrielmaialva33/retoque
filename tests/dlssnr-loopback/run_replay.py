@@ -538,6 +538,70 @@ def judge(runner, root, capture_path, runs, calibration=None):
     return dict(available=True, verdicts=verdicts)
 
 
+def record_check(runner, proton, env, root, capture_path):
+    """The replay recorder against the moving scene (docs/dlssnr/design/offline-replay-recorder.md, Validation).
+
+    The scene runs with NR on and the trigger file asking for a clip. Every recorded frame's depth and motion must be
+    the scene's own bytes for the same frame, and its colour (the DLAA output before the pass writes it) must be the
+    NR-off corpus's colour for that frame wherever the corpus has one. Returns the gates."""
+    results = {}
+    directory = root / 'record-check'
+    stage(root, directory)
+    write_ini(directory, {'Cadence': '1'})
+    (directory / 'dlssnr-capture.trigger').write_text('replay\n')
+    frames = 640  # enough after the trigger's start for the clip to end at its 360-frame cap
+    print(f'  replay recorder check: moving scene, NR on, {frames} frames, clip requested by trigger file', flush=True)
+    code = execute([proton, 'run', directory / 'dlssnr-loopback.exe', 'OptiScaler.dll', '--moving-corpus',
+                    str(frames)], cwd=directory, env=env, log=directory / 'proton.log', timeout=900)
+    log = (directory / 'dlssnr-loopback.log').read_text(errors='replace')
+    results['recorder-scene-ran'] = dict(ok=code == 0 and f'MOVING-SCENE PASS: evaluations={frames}' in log,
+                                         detail=f'exit {code}')
+    manifests = sorted((directory / 'dlssnr-replay').glob('*/capture.json'))
+    results['recorder-wrote-one-clip'] = dict(ok=len(manifests) == 1, detail=f'{len(manifests)} capture.json')
+    if len(manifests) != 1:
+        return results
+    # The recorder leaves hashing to tools/replay/finalize.py, off the game's clock.
+    finalized = subprocess.run([sys.executable, '-m', 'tools.replay.finalize', str(manifests[0])], cwd=runner.ROOT,
+                               capture_output=True, text=True)
+    results['recorder-clip-finalized'] = dict(ok=finalized.returncode == 0,
+                                              detail=(finalized.stdout + finalized.stderr).strip()[-200:])
+    clip = json.loads(manifests[0].read_text())
+    base = manifests[0].parent
+    ids = [f['id'] for f in clip['frames']]
+    results['recorder-manifest'] = dict(
+        ok=clip['schema'] == 'retoque-replay-capture' and clip['version'] == 2 and clip.get('finalized') is True
+        and ids == list(range(1, len(ids) + 1)) and len(ids) >= 30 and clip['frames'][0]['reset'] is True,
+        detail=f'{len(ids)} frames, stopped: {clip["provenance"]["stopped"]}')
+    scene = {n: (directory / f'f{n}.depth').read_bytes() for n in range(frames)}
+    first = (base / clip['frames'][0]['depth']['path']).read_bytes()
+    starts = [n for n, data in scene.items() if data == first]
+    if len(starts) != 1:
+        results['recorder-planes-match-scene'] = dict(ok=False, detail=f'clip start matches {len(starts)} frames')
+        return results
+    k = starts[0]
+    corpus_dir = capture_path.parent
+    mismatches, colour_checked = [], 0
+    for i, f in enumerate(clip['frames']):
+        n = k + i
+        for key, suffix in (('depth', 'depth'), ('motion', 'motion')):
+            data = (base / f[key]['path']).read_bytes()
+            if hashlib.sha256(data).hexdigest() != f[key]['sha256'] or data != (directory / f'f{n}.{suffix}').read_bytes():
+                mismatches.append((f['id'], key))
+        colour = base / f['color']['path']
+        if hashlib.sha256(colour.read_bytes()).hexdigest() != f['color']['sha256']:
+            mismatches.append((f['id'], 'color-hash'))
+        corpus_colour = corpus_dir / f'f{n}.output'
+        if corpus_colour.is_file():
+            colour_checked += 1
+            if colour.read_bytes() != corpus_colour.read_bytes():
+                mismatches.append((f['id'], 'color'))
+    results['recorder-planes-match-scene'] = dict(
+        ok=not mismatches and colour_checked > 0,
+        detail=f'clip starts at scene frame {k}; depth/motion of {len(ids)} frames and colour of {colour_checked} '
+               f'compared; mismatches {mismatches[:6]}')
+    return results
+
+
 def run(runner, proton, env, dll):
     mode = replay_mode()
     if mode['ring'] and (CALIBRATE != 0 or os.environ.get('LOOPBACK_REPLAY_JUDGE', '1') != '0'):
@@ -566,6 +630,8 @@ def run(runner, proton, env, dll):
     runs = {name: run_variant(runner, proton, env, root, name, settings, capture, capture_path, environment,
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)
+    if os.environ.get('LOOPBACK_REPLAY_RECORD_CHECK') == '1':
+        results.update(record_check(runner, proton, env, root, capture_path))
     if baseline:
         results.update(baseline_gates(runs, baseline))
     sync_baseline = os.environ.get('LOOPBACK_REPLAY_SYNC_BASELINE')
