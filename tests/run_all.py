@@ -91,12 +91,13 @@ def check_registry(manifest: dict[str, dict]) -> list[str]:
         if child.is_dir() and not child.name.startswith(("_", ".")):
             if not any(p == child.resolve() or p.is_relative_to(child.resolve()) for p in directories):
                 problems.append(f"{child.name}/ is not registered in suites.toml")
-    for runner in TESTS.rglob("run.py"):
-        relative = runner.relative_to(TESTS)
-        if any(p.startswith(("_", ".")) or p == "artifacts" for p in relative.parts):
-            continue
-        if runner.parent.resolve() not in directories:
-            problems.append(f"{relative}: unregistered runner")
+    for root, children, files in os.walk(TESTS):
+        children[:] = [name for name in children
+                       if not name.startswith(("_", ".")) and name != "artifacts"]
+        if "run.py" in files:
+            runner = pathlib.Path(root) / "run.py"
+            if runner.parent.resolve() not in directories:
+                problems.append(f"{runner.relative_to(TESTS)}: unregistered runner")
     return problems
 
 
