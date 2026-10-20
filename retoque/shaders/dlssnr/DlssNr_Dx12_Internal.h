@@ -7,6 +7,7 @@
 #include <dlssnr/DlssNr.h>
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_Exposure.h>
+#include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_Submission.h>
 #include <dlssnr/DlssNr_Cadence.h>
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
@@ -638,6 +639,43 @@ struct ReadResourceScope
     RestoreResourceState restore;
     ReadResourceScope(ID3D12GraphicsCommandList* cmd, ID3D12Resource* resource, D3D12_RESOURCE_STATES arrival);
 };
+
+// The meter's grid is R32_FLOAT, which makes a row exactly 64 * 4 = 256 bytes -- the alignment a
+// texture-to-buffer copy demands, met without padding, so the readback is a flat array of floats.
+inline constexpr unsigned int kMeterRowBytes = kDlssNrMeterGrid * sizeof(float);
+inline constexpr unsigned int kMeterBytes = kMeterRowBytes * kDlssNrMeterGrid;
+
+// Diagnostics helpers (DlssNr_Dx12_Diagnostics.cpp). State stays defined in DlssNr_Dx12.cpp.
+std::string TimingContract(const Config& cfg, const DlssNrPassSnapshot& passes, const char* stage, unsigned renderWidth,
+                           unsigned renderHeight, unsigned width, unsigned height, unsigned workWidth,
+                           unsigned workHeight, float workScale, bool linearHdr, unsigned format, unsigned cadence,
+                           uint32_t effectiveTransfer, const char* enlarge);
+DlssNr::GpuTiming::Metadata TimingMetadata(const Config& cfg, const DlssNrPassSnapshot& passes, uint64_t evaluation,
+                                           uint64_t present, const char* stage, unsigned renderWidth,
+                                           unsigned renderHeight, unsigned width, unsigned height, unsigned workWidth,
+                                           unsigned workHeight, float workScale, bool reset, bool captureActive,
+                                           bool linearHdr, unsigned format, unsigned cadence, bool carried,
+                                           uint32_t effectiveTransfer, const char* enlarge);
+void ClearCaptureDirectory();
+void CheckCaptureTrigger();
+void ParkDetailMeasureLocked();
+void DetailMeasureCopy(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource*& copy, bool& readable,
+                       ID3D12Resource* from, D3D12_RESOURCE_STATES fromState);
+void NotePulsePresent(uint64_t present);
+void PublishPulse(bool running, bool failed);
+void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, ID3D12Resource* target,
+                 ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height, uint32_t format,
+                 uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
+                 uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs);
+void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound);
+void ConsumeMeterReadback();
+void InvalidateExposureMeter();
+float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,
+                        bool scanInverted, float scanTrim);
+void ReportSkipOnce(const char* reason);
+// Lifetime helpers the diagnostics park through (DlssNr_Dx12.cpp).
+void ParkNrDetailStats(DlssNr_DetailStats_Dx12*& detailStats);
+void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse);
 } // namespace DlssNr::Dx12Internal
 
 // Functions one renderer unit defines and another calls, with the unit that defines them. Public entry points keep

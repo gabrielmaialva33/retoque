@@ -58,7 +58,7 @@ assert '-T cs_6_0 -E CSMain' in shader
 
 # Off builds and records nothing: the pass is made in one place, inside UpdatePulse, after the early return that the
 # key and the bytecode decide; and the menu offers the key only where the bytecode is.
-update = renderer[renderer.index('static void UpdatePulse('):]
+update = renderer[renderer.index('void UpdatePulse('):]
 update = update[:update.index('\n}\n')]
 assert renderer.count('new DlssNr_Pulse_Dx12(') == 1 and 'new DlssNr_Pulse_Dx12(' in update
 off = update.index('if (!enabled || !DlssNr_Pulse_Dx12::Available())')

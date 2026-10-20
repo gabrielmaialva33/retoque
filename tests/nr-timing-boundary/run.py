@@ -18,7 +18,8 @@ def between(source, start, end):
     begin = source.index(start)
     return source[begin:source.index(end, begin)]
 
-metadata = between(renderer, 'std::string TimingContract(', '// Writes matched before/after frames')
+# TimingContract and TimingMetadata, now in DlssNr_Dx12_Diagnostics.cpp (split step 6), up to the next helper there.
+metadata = between(renderer, 'std::string TimingContract(', '// Cleared once per run, so a session')
 controls = between(menu, 'static void RenderGpuTimingReadout(', '// A slider that only writes')
 dispatch = between(renderer, 'bool DlssNr_Dx12::Dispatch(', '\nnamespace DlssNr\n{')
 assert 'GpuTime_Dx12' not in renderer

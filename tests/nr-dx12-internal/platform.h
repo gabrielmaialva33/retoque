@@ -4,6 +4,13 @@
 #include <cstddef>
 #define __cdecl
 class Config;
+// Declared only: the diagnostics helpers (split step 6) take and return these by reference or value.
+struct DlssNrPassSnapshot;
+constexpr uint32_t kDlssNrMeterGrid = 64; // DlssNr_Common.h, for the meter sizes the header defines
+namespace DlssNr::GpuTiming
+{
+struct Metadata;
+}
 using HMODULE = void*;
 using HANDLE = void*;
 using UINT64 = uint64_t;

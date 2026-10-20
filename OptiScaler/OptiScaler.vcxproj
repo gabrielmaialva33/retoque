@@ -894,6 +894,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\dlssnr\DlssNr_GameProfiles.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Replay.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Inputs.cpp" />
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Diagnostics.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_NgxInfo.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Session.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Dred.cpp" />

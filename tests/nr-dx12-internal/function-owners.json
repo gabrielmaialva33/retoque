@@ -36,6 +36,27 @@
       "void RestoreResourceState::Restore()\n{",
       "RestoreResourceState::~RestoreResourceState() {",
       "ReadResourceScope::ReadResourceScope("
+    ],
+    "DlssNr_Dx12_Diagnostics.cpp": [
+      "const std::string& TimingModelIdentity()\n{",
+      "std::string TimingContract(const Config& cfg, const DlssNrPassSnapshot& passes, const char* stage, unsigned renderWidth,\n                           unsigned renderHeight, unsigned width, unsigned height, unsigned workWidth,\n                           unsigned workHeight, float workScale, bool linearHdr, unsigned format, unsigned cadence,\n                           uint32_t effectiveTransfer, const char* enlarge)\n{",
+      "DlssNr::GpuTiming::Metadata TimingMetadata(const Config& cfg, const DlssNrPassSnapshot& passes, uint64_t evaluation,\n                                           uint64_t present, const char* stage, unsigned renderWidth,\n                                           unsigned renderHeight, unsigned width, unsigned height, unsigned workWidth,\n                                           unsigned workHeight, float workScale, bool reset, bool captureActive,\n                                           bool linearHdr, unsigned format, unsigned cadence, bool carried,\n                                           uint32_t effectiveTransfer, const char* enlarge)\n{",
+      "void ClearCaptureDirectory()\n{",
+      "void CheckCaptureTrigger()\n{",
+      "float WhitePointForMean(float meanLuma)\n{",
+      "void ParkDetailMeasureLocked()\n{",
+      "void DetailMeasureCopy(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource*& copy, bool& readable,\n                       ID3D12Resource* from, D3D12_RESOURCE_STATES fromState)\n{",
+      "void NotePulsePresent(uint64_t present)\n{",
+      "void PublishPulse(bool running, bool failed)\n{",
+      "static void StopPulseLocked()\n{",
+      "void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, ID3D12Resource* target,\n                 ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height, uint32_t format,\n                 uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,\n                 uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs)\n{",
+      "void CopyCalibrationToReadback(ID3D12GraphicsCommandList* cmdList)\n{",
+      "void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound)\n{",
+      "void ConsumeCalibrationReadback()\n{",
+      "void ConsumeMeterReadback()\n{",
+      "void InvalidateExposureMeter()\n{",
+      "float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,\n                        bool scanInverted, float scanTrim)\n{",
+      "void ReportSkipOnce(const char* reason)\n{"
     ]
   }
 }
