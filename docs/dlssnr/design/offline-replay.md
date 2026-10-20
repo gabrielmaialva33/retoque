@@ -255,3 +255,78 @@ missing exposure, dropped/duplicate frames, wrong model/runtime, partial passes,
 fences; zero/swapped/scaled MV or wrong jitter against an analytic oracle; induced pulse,
 stale output/trails, blur and golden deviations; low correspondence → INCONCLUSIVE. Bright
 input exposure transitions with an unchanged relative edit must not create artificial pulse.
+
+## Capture/run schema v2: native recorder planes
+
+V1 remains supported without reinterpretation. V2 captures require `complete:true`,
+`finalized:true`, and every plane digest. An unfinished recorder capture is INVALID;
+run `python3 -m tools.replay.finalize capture.json` first. The reader verifies the
+hash, exact byte count, tight pitch, positive bounded extent and constant format/extent
+per named plane across the clip. IDs start at 1 and are consecutive; present/time
+strictly increase. V2 runs use `version:2`, the finalized capture digest and native
+output descriptors matching that frame's colour format/extent. V1 runs remain v1.
+
+A native descriptor contains `path`, `encoding:"raw-dxgi"`, `dxgi_format`, `width`,
+`height`, `pixel_bytes`, `row_pitch` and `sha256`. Optional `source_format` and
+`source_flags` are nonnegative integers (not booleans); they describe the original
+resource and do not affect decoding or metrics. Paths obey the existing containment
+rules. Supported DXGI formats are 2 (RGBA32F), 10 (RGBA16F), 16 (RG32F), 26
+(R11G11B10 unsigned float), 24 (RGB10A2 UNORM), 28/29 (RGBA8 UNORM/sRGB), 87/91
+(BGRA8 UNORM/sRGB), 41/40 (R32F/D32F), and 34 (RG16F). Other formats are INVALID.
+Packed floats include subnormals; NaN/Inf pixels are INVALID. UNORM divides by the
+channel's full integer range; BGRA is reordered to RGBA. Decoded storage is float32
+in both scalar and optional NumPy backends, matching v1's existing storage boundary.
+
+Metrics consume linear Rec.709 RGB: native float and ordinary UNORM colour use the
+recorded `color_space`. `linear-rec709` divides by `pre_exposure`; `srgb-rec709`
+applies the piecewise sRGB inverse transfer. Formats 29/91 explicitly mean sRGB and
+force that inverse transfer exactly once, even with a linear top-level label.
+Typed-load missing RGB components are zero; depth consumes `.r` and motion `.xy`
+(including RGBA guide allocations). Alpha is ignored; depth and motion are never gamma transformed. No tonemap, gamut
+conversion or HDR display transform is inferred. IsHDR and the top-level colour
+space must agree as in the recorder; unusual game use of an sRGB-typed HDR resource
+is interpreted by its explicit format. This is a metric-domain convention, not a
+claim that every engine's colour metadata is accurate.
+
+Each frame requires finite `params.mv_scale`, nonnegative `frame_time_ms`, integer
+`create_flags`, boolean `ray_reconstruction`, positive integer `render_subrect:[w,h]`,
+and nonnegative integer `depth_base`/`motion_base`. The depth rectangle is render-sized;
+the motion rectangle is render-sized with MVLowRes (bit 1), otherwise output-sized.
+Each complete rectangle must fit its allocation; unlike the production pass's defensive
+clamping, malformed captures are refused. MVJittered (bit 2) and DepthInverted (bit 3)
+must agree with the top-level conventions. Top-level motion is current-to-previous,
+`units:"pixels", scale:"per-frame"`. Recorded jitter is in render pixels.
+
+### Recorded guide mapping
+
+For output coordinate `x`, destination width `W`, guide region base `b` and extent `r`:
+`guide_x = b + min(((2*x + 1)*r) // (2*W), r-1)` (likewise y).
+This is the integer point-centre mapping in `precompile/dlssnr_cadence.hlsl`
+(`PointSource`, `DepthNowAt`, `MotionAt`), with the independent guide regions chosen
+by `DlssNr_Dx12.cpp` (`wantedMotionWidth`, depth/motion base clamping). The encode and
+resolve pass in `precompile/dlssnr.hlsl` operates in the colour/working grid; it does
+not establish a different motion convention. Guide matching's `MotionReference`
+(`DlssNr_GuideMatch.h`) likewise selects render versus native motion reference size.
+
+Raw motion is multiplied by per-frame `mv_scale`; MVLowRes additionally multiplies
+x/y by output/render size. This produces backward displacement in output pixels.
+The optional analytic `motion_oracle` remains output-sized XY displacement in output pixels;
+a smaller oracle is refused, not broadcast. Each frame's own geometry maps its depth snapshot before previous-depth sampling,
+so per-frame rectangle/base changes do not reuse the preceding geometry. The judge
+retains its v1 bilinear previous-image/depth sampling and depth rejection threshold;
+it does not claim to reproduce the cadence shader's full rejection kernel.
+
+Jitter is converted from render to output pixels per frame. For jitter-present colour
+and unjittered motion, add `previous_jitter - current_jitter`; for jitter-removed colour
+and jittered motion subtract that delta. Otherwise no correction. V1's historical
+jitter convention is unchanged. NGX's MVJittered flag describes jitter-containing
+vectors; the cadence shader's `MotionAt` itself only scales raw vectors and has no
+jitter subtraction. The judge explicitly normalizes correspondence for its recorded
+colour domain rather than silently claiming that missing shader correction exists.
+
+The conformance fixture re-describes compatible aligned v1 bytes as native v2 with
+full rectangles, zero bases and unit scale. It requires exactly equal per-frame and
+summary metrics and verdicts within each backend, not a numerical tolerance. Scalar
+versus NumPy retains the existing 1e-6 cross-backend metric tolerance. Real frozen
+baseline conformance uses the same rule and independently verifies recovered output
+files against frozen hashes. No A/A envelope is widened by the schema change.

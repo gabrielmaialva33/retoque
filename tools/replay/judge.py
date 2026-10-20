@@ -1,6 +1,7 @@
 """Streaming paired-run analysis and explicitly calibrated, per-region acceptance."""
 
 import json
+from .geometry import prepare
 from pathlib import Path
 from .format import load_capture, load_run, read_plane, need, number, integer, sha
 from .metrics import mean, percentile
@@ -87,8 +88,11 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
             if "motion_oracle" in source_f
             else None
         )
+        metric_capture, source_f, depth, motion = prepare(
+            capture, source_f, depth, motion
+        )
         backend.validate_guides(
-            capture,
+            metric_capture,
             source_f,
             motion,
             depth,
@@ -123,7 +127,7 @@ def analyze(capture_path, reference_path, candidate_path, policy=None):
         )
         old = previous
         metrics, retained = backend.frame_metrics(
-            capture, source_f, source, depth, motion, output, ref_image, old
+            metric_capture, source_f, source, depth, motion, output, ref_image, old
         )
         old_kind = previous["kind"] if previous else None
         previous = dict(retained, kind=cand_f["kind"])

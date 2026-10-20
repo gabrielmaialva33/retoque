@@ -19,9 +19,11 @@ def mean(values):
 
 
 def rgb(image, space, pre_exposure=1.0):
+    space = "srgb-rec709" if image.srgb else space
     data = array("f")
     for i in range(0, len(image.data), image.channels):
-        for v in image.data[i : i + 3]:
+        values = list(image.data[i : i + min(3, image.channels)])
+        for v in values + [0.0] * (3 - len(values)):
             if space == "srgb-rec709":
                 v = v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
             else:
@@ -53,6 +55,9 @@ def coordinates(
     if color_jitter == "present" and not convention["includes_jitter"]:
         dx += previous_jitter[0] - current_jitter[0]
         dy += previous_jitter[1] - current_jitter[1]
+    if convention.get("_remove_jitter"):
+        dx -= previous_jitter[0] - current_jitter[0]
+        dy -= previous_jitter[1] - current_jitter[1]
     return x + dx, y + dy
 
 
@@ -194,9 +199,9 @@ def frame_metrics(capture, frame, source, depth, motion, output, reference, prev
             )
             / len(indices),
             ghost_mae=mean(pixel_error),
-            disocclusion_mae=(mean(disoccluded) if disoccluded else 0.0)
-            if paired
-            else None,
+            disocclusion_mae=(
+                (mean(disoccluded) if disoccluded else 0.0) if paired else None
+            ),
             detail_error=abs(out_gradient - ref_gradient) / max(ref_gradient, 1e-6),
             candidate_gradient=out_gradient,
             reference_gradient=ref_gradient,
@@ -218,9 +223,11 @@ def frame_metrics(capture, frame, source, depth, motion, output, reference, prev
 
 def validate_guides(capture, frame, motion, depth, previous_frame, oracle=None):
     need(
-        all(0 <= d <= 1 for d in depth.data)
-        if capture["depth"]["kind"] == "device"
-        else all(d > 0 for d in depth.data),
+        (
+            all(0 <= d <= 1 for d in depth.data)
+            if capture["depth"]["kind"] == "device"
+            else all(d > 0 for d in depth.data)
+        ),
         "depth outside recorded convention",
     )
     if oracle is None or previous_frame is None or frame["reset"]:

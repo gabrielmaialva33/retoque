@@ -1,4 +1,4 @@
-"""Strict v1 wire reader. See docs/dlssnr/design/offline-replay.md."""
+"""Strict v1/v2 wire reader. See docs/dlssnr/design/offline-replay.md."""
 
 from array import array
 from dataclasses import dataclass
@@ -8,6 +8,8 @@ import math
 from pathlib import Path, PurePosixPath
 import re
 import struct
+
+from .dxgi import FORMATS, decode, use_numpy
 
 MAX_PIXELS = 16_777_216
 MAX_BYTES = 536_870_912
@@ -19,6 +21,7 @@ class Image:
     height: int
     channels: int
     data: object
+    srgb: bool = False
 
 
 def need(condition, reason):
@@ -108,6 +111,25 @@ def descriptor(root, desc):
     need(isinstance(desc, dict), "plane descriptor required")
     w = integer(desc.get("width"), "width", 1)
     h = integer(desc.get("height"), "height", 1)
+    if desc.get("encoding") == "raw-dxgi":
+        fmt = integer(desc.get("dxgi_format"), "dxgi_format")
+        need(fmt in FORMATS, "unsupported DXGI format")
+        size, c, _ = FORMATS[fmt]
+        need(
+            type(desc.get("pixel_bytes")) is int and desc["pixel_bytes"] == size,
+            "DXGI pixel_bytes mismatch",
+        )
+        for field in ("source_format", "source_flags"):
+            if field in desc:
+                integer(desc[field], field)
+        pitch = integer(desc.get("row_pitch"), "row_pitch")
+        need(pitch == w * size, "DXGI requires tight row_pitch")
+        need(
+            w * h <= MAX_PIXELS and pitch * h <= MAX_BYTES,
+            "plane extent/bytes exceeds limit",
+        )
+        sha(desc.get("sha256"))
+        return child(root, desc.get("path")), w, h, c, pitch
     c = integer(desc.get("channels"), "channels", 1)
     need(w * h <= MAX_PIXELS and c <= 4, "plane extent/channels exceeds limit")
     need(desc.get("dtype") in ("f16", "f32", "u8"), "unsupported plane dtype")
@@ -130,7 +152,10 @@ def read_plane(root, desc):
     need(digest(path) == desc["sha256"], "plane checksum mismatch")
     data = array("f")
     with path.open("rb") as stream:
-        if desc["encoding"] == "raw":
+        if desc["encoding"] == "raw-dxgi":
+            need(path.stat().st_size == pitch * h, "raw-dxgi byte count mismatch")
+            data = decode(stream.read(), desc["dxgi_format"], use_numpy())
+        elif desc["encoding"] == "raw":
             need(path.stat().st_size == pitch * h, "raw byte count mismatch")
             code = {"f16": "e", "f32": "f", "u8": "B"}[desc["dtype"]]
             count = w * c
@@ -138,8 +163,10 @@ def read_plane(root, desc):
             for _ in range(h):
                 row = stream.read(pitch)
                 values = struct.unpack("<" + str(count) + code, row[: count * size])
-                data.extend(v / 255 for v in values) if code == "B" else data.extend(
-                    values
+                (
+                    data.extend(v / 255 for v in values)
+                    if code == "B"
+                    else data.extend(values)
                 )
         else:
             magic = stream.readline(16).strip()
@@ -159,7 +186,7 @@ def read_plane(root, desc):
                 )
                 data.extend(v * abs(scale) for v in values)
     need(all(math.isfinite(v) for v in data), "nonfinite plane pixels")
-    return Image(w, h, c, data)
+    return Image(w, h, c, data, desc.get("dxgi_format") in (29, 91))
 
 
 def vector(value, name):
@@ -173,10 +200,16 @@ def load_capture(path):
     need(
         c.get("schema") == "retoque-replay-capture"
         and type(c.get("version")) is int
-        and c["version"] == 1,
+        and c["version"] in (1, 2),
         "unsupported capture schema/version",
     )
     need(c.get("complete") is True, "incomplete capture")
+    v2 = c["version"] == 2
+    if v2:
+        need(
+            c.get("finalized") is True,
+            "capture not finalized: run tools/replay/finalize.py",
+        )
     need(
         c.get("mode") == "nr-boundary" and c.get("clock") == "recorded-evaluation",
         "unsupported replay mode/clock",
@@ -205,7 +238,13 @@ def load_capture(path):
         motion.get("direction") == "current-to-previous", "unsupported motion direction"
     )
     need(motion.get("units") in ("pixels", "uv"), "unsupported motion units")
-    vector(motion.get("scale"), "motion scale")
+    if v2:
+        need(
+            motion.get("scale") == "per-frame" and motion.get("units") == "pixels",
+            "v2 motion requires per-frame pixel scale",
+        )
+    else:
+        vector(motion.get("scale"), "motion scale")
     boolean(motion.get("includes_jitter"), "motion jitter flag")
     frames = c.get("frames")
     need(isinstance(frames, list) and 1 <= len(frames) <= 10000, "invalid frame count")
@@ -213,6 +252,7 @@ def load_capture(path):
     prev = None
     scoring = False
     shape = None
+    shapes = {}
     for f in frames:
         need(isinstance(f, dict), "frame object required")
         integer(f.get("id"), "frame id", 1)
@@ -237,6 +277,8 @@ def load_capture(path):
             )
         else:
             need(f["reset"], "capture needs reset-prefixed history")
+            if v2:
+                need(f["id"] == 1, "v2 frame IDs must start at 1")
         need(not scoring or f["score"], "warmup after scoring")
         scoring = scoring or f["score"]
         for name, channels in (
@@ -247,15 +289,38 @@ def load_capture(path):
         ):
             if name == "motion_oracle" and name not in f:
                 continue
+            if not v2:
+                need(
+                    isinstance(f.get(name), dict)
+                    and f[name].get("encoding") in ("raw", "pfm"),
+                    "v1 plane encoding must be raw or pfm",
+                )
             _, w, h, ch, _ = descriptor(root, f.get(name))
-            need(ch in channels, f"{name}: invalid channels")
+            if not v2:
+                need(ch in channels, f"{name}: invalid channels")
+            elif name == "motion_oracle":
+                need(
+                    ch == 2 and (w, h) == shape, "motion_oracle must be output-sized XY"
+                )
             if shape is None:
                 shape = (w, h)
-            need((w, h) == shape, "v1 requires aligned constant-sized planes")
+            if v2:
+                desc = f[name]
+                need(desc.get("encoding") == "raw-dxgi", "v2 requires raw-dxgi planes")
+                key = (w, h, desc["dxgi_format"])
+                need(
+                    name not in shapes or shapes[name] == key, "v2 plane shape changed"
+                )
+                shapes[name] = key
+                verify_plane(root, desc)
+            else:
+                need((w, h) == shape, "v1 requires aligned constant-sized planes")
         if f["exposure"] is not None:
             need(
                 descriptor(root, f["exposure"])[3] == 1, "exposure must be scalar plane"
             )
+        if v2:
+            geometry(f, c)
         number(f.get("motion_tolerance_px", 0.05), "motion tolerance", 0)
         prev = f
     regions = c.get("regions")
@@ -284,7 +349,7 @@ def load_run(path, capture):
     need(
         r.get("schema") == "retoque-replay-run"
         and type(r.get("version")) is int
-        and r["version"] == 1,
+        and r["version"] == capture["version"],
         "unsupported run schema/version",
     )
     need(
@@ -333,11 +398,11 @@ def load_run(path, capture):
             need(not source["score"], f"scored frame {source['id']} skipped: {reason}")
         interval = integer(f.get("interval"), "interval", 0 if skipped else 1)
         need(
-            interval <= 4
-            if skipped
-            else interval == 1
-            if kind == "every"
-            else 2 <= interval <= 4,
+            (
+                interval <= 4
+                if skipped
+                else interval == 1 if kind == "every" else 2 <= interval <= 4
+            ),
             "kind/interval mismatch",
         )
         requested = integer(
@@ -351,8 +416,25 @@ def load_run(path, capture):
         )
         need(f.get("completion") == "fence-complete", "uncertified output")
         number(f.get("gpu_ms"), "gpu_ms", 0)
+        if r["version"] == 1:
+            need(
+                isinstance(f.get("output"), dict)
+                and f["output"].get("encoding") in ("raw", "pfm"),
+                "v1 output encoding must be raw or pfm",
+            )
         _, w, h, ch, _ = descriptor(path.parent, f.get("output"))
-        need((w, h) == capture["_shape"] and ch in (3, 4), "output shape mismatch")
+        need(
+            (w, h) == capture["_shape"] and (r["version"] == 2 or ch in (3, 4)),
+            "output shape mismatch",
+        )
+        if r["version"] == 2:
+            desc = f["output"]
+            need(
+                desc.get("encoding") == "raw-dxgi"
+                and desc.get("dxgi_format") == source["color"]["dxgi_format"],
+                "v2 output format mismatch",
+            )
+            verify_plane(path.parent, desc)
         if source["score"]:
             counts["carried" if kind == "carried" else "model"] += 1
     requirements = r.get("requirements", {})
@@ -362,3 +444,45 @@ def load_run(path, capture):
         need(counts[name] >= minimum, "missing requested " + name + " coverage")
     r.update(_root=path.resolve().parent, _sha256=digest(path), _counts=counts)
     return r
+
+
+def verify_plane(root, desc):
+    path, _, h, _, pitch = descriptor(root, desc)
+    need(path.stat().st_size == pitch * h, "raw-dxgi byte count mismatch")
+    need(digest(path) == desc["sha256"], "plane checksum mismatch")
+
+
+def geometry(frame, capture):
+    p = frame["params"]
+    flags = integer(p.get("create_flags"), "create_flags")
+    boolean(p.get("ray_reconstruction"), "ray_reconstruction")
+    vector(p.get("mv_scale"), "mv_scale")
+    number(p.get("frame_time_ms"), "frame_time_ms", 0)
+    rw, rh = vector(p.get("render_subrect"), "render_subrect")
+    integer(rw, "render width", 1)
+    integer(rh, "render height", 1)
+    for name in ("depth", "motion"):
+        x, y = vector(p.get(name + "_base"), name + "_base")
+        integer(x, name + " base x")
+        integer(y, name + " base y")
+        w, h = (
+            (rw, rh)
+            if name == "depth" or flags & 2
+            else (frame["color"]["width"], frame["color"]["height"])
+        )
+        need(
+            x + w <= frame[name]["width"] and y + h <= frame[name]["height"],
+            name + " subrect out of bounds",
+        )
+    need(
+        bool(flags & 4) == capture["motion"]["includes_jitter"],
+        "MVJittered flag/convention mismatch",
+    )
+    need(
+        bool(flags & 8) == capture["depth"]["inverted"],
+        "DepthInverted flag/convention mismatch",
+    )
+    need(
+        bool(flags & 1) == (capture["color_space"] == "linear-rec709"),
+        "IsHDR flag/color_space mismatch",
+    )

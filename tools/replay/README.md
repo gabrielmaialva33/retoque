@@ -42,9 +42,13 @@ PNG Description metadata carries frame IDs, kinds, times and fixed visualization
 Preview pixels are not the measurements; raw scene-linear planes are. A new INVALID run
 removes previous image artifacts so stale PASS imagery cannot be mistaken for current evidence.
 
-V1 accepts aligned same-sized planes, raw f16/f32/u8 and PFM, linear or sRGB Rec.709. Other
-formats/conventions require an explicit producer conversion or future schema/profile; they are
-not guessed. Capture/reset/input provenance and exact model/runtime identities are required.
+V1 accepts aligned same-sized planes, raw f16/f32/u8 and PFM, linear or sRGB Rec.709.
+V2 accepts finalized native-DXGI recorder captures and matching v2 runs, including
+render-sized guides, recorded subrectangles/bases and per-frame motion scale. Run
+`python3 -m tools.replay.finalize capture.json` on an unfinished recorder clip first.
+The strict whitelist, typed-component and colour rules are documented in the schema.
+Optional `source_format`/`source_flags` describe provenance only. Unknown formats
+or out-of-bounds geometry are INVALID; conventions are never guessed. Capture/reset/input provenance and exact model/runtime identities are required.
 Captures explicitly declare `color_jitter: "removed"|"present"`; DLAA boundary output uses
 `removed`. Runs require a fresh-process `producer.trial` string. Reasoned `kind: "skipped"`
 entries are accepted only on unscored warmup frames and break temporal pairs; scored skips
