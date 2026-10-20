@@ -637,3 +637,11 @@ requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "Analytic motion/pulse/ghost/blur controls, calibrated verdicts and stdlib PNG/report artifacts."
+
+[nr-dx12-internal]
+path = "nr-dx12-internal"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Shared renderer storage identity across separate translation units; missing/duplicate owner controls."

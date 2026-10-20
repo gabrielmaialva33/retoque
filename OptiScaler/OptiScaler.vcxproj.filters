@@ -2229,5 +2229,8 @@
     <ClCompile Include="..\retoque\dlssnr\DlssNr_ProcessEnd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

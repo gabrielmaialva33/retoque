@@ -1,5 +1,7 @@
 #include "pch.h"
 
+#include "DlssNr_Dx12_Internal.h"
+
 #include <dlssnr/DlssNr.h>
 
 #include <dlssnr/DlssNr_Capture.h>
@@ -75,7 +77,7 @@
 #include <menu/menu_overlay_base.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 
-namespace
+namespace DlssNr::Dx12Internal
 {
 // Coverage belongs to an upscaler boundary, not to an arbitrary Dispatch call. Keep fallback
 // separate from Stage 0, and do not count the normal Stage 1 post-path stand-down as another skip.
@@ -266,283 +268,11 @@ void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList)
 // Everything the model is reached through. The snippet refuses callers whose module path does not
 // contain "nvngx.dll", so the calls are made from a small library named for exactly that reason and
 // shipped beside OptiScaler; see nvngx.dll_dlssnr.dll.
-using PFN_NrCreate = void*(__cdecl*) (const wchar_t*, const wchar_t*, ID3D12Device*, ID3D12GraphicsCommandList*, void*,
-                                      unsigned int, unsigned int, int, float, int, float, float, float, int, int);
-using PFN_NrEvaluate = int(__cdecl*)(ID3D12GraphicsCommandList*, void*, void*, ID3D12Resource*, ID3D12Resource*,
-                                     ID3D12Resource*, ID3D12Resource*, unsigned int, unsigned int, unsigned int,
-                                     unsigned int, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int,
-                                     unsigned int, int, int, float, int, float, float, float, int, float, float);
-using PFN_NrRelease = void(__cdecl*)(void*);
-using PFN_NrSetExtras = void(__cdecl*)(void*, float, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, unsigned int,
-                                       unsigned int, unsigned int, unsigned int);
-using PFN_NrSetFloatSlot = void(__cdecl*)(int);
-using PFN_NrProbeFloat = void(__cdecl*)(void*, const char*, float, int);
+// Model entry-point aliases are declared in DlssNr_Dx12_Internal.h.
 
 // One per back buffer, so an allocator is never reset while its frame is still in flight.
 
-struct NrState
-{
-    HMODULE forwarder = nullptr;
-    // [DlssNr] ModelLoader=direct: the function pointers below point into DlssNr_DirectRuntime rather
-    // than into the forwarder, and forwarder stays null.
-    bool directRuntime = false;
-    PFN_NrCreate create = nullptr;
-    PFN_NrEvaluate evaluate = nullptr;
-    PFN_NrRelease release = nullptr;
-    PFN_NrSetExtras setExtras = nullptr;
-    PFN_NrSetFloatSlot setFloatSlot = nullptr;
-    PFN_NrProbeFloat probeFloat = nullptr;
-    bool floatSlotKnown = false;
-
-    // The scaling-ratio probe, resolved alongside the other forwarder entry points.
-    int (*queryRatio)(const wchar_t*, void*, unsigned int, float*) = nullptr;
-    const int* lastRatioStage = nullptr;
-    int* lastInit = nullptr;
-    int* lastCreate = nullptr;
-
-    // The forwarder's record of a fault caught inside the model. Null on a forwarder that predates it.
-    int (*faultState)(unsigned long*, void**) = nullptr;
-
-    NVSDK_NGX_Parameter* capabilityParams = nullptr;
-    void* feature = nullptr;
-
-    // A feature per extra pass, each with its own temporal history.
-    //
-    // One feature run three times in a frame is told three frames passed with nothing moving between
-    // them, so its history fights every pass after the first -- which is what "loses detail on later
-    // passes" was. Separate features each see one frame per frame, which is the contract they were
-    // built for.
-    //
-    // It is also the only reading that fits the one clue we have about how this is done elsewhere:
-    // that implementation's memory grows with the pass count, and reusing a single feature cannot do
-    // that. A feature apiece can, because each carries its own history.
-    //
-    // Indexed by pass, so [0] is unused and the first extra pass is [1]. Wasting one pointer keeps
-    // every index here equal to the pass number it belongs to.
-    void* passFeature[3] = {};
-    ID3D12Resource* passPing = nullptr;
-    DlssNrResolvedPassSettings passBuilt[3] {};
-    bool passReset[3] { true, true, true };
-    bool passFailed[3] {};
-    DlssNr::Submission::Usage creation[3];
-    uint64_t creationFrame[3] {};
-    uint64_t measuredModelBytes = 0;
-
-    // The model cannot read and write one resource, so the frame is staged through these.
-    ID3D12Resource* colorCopy = nullptr;
-    ID3D12Resource* output = nullptr;
-
-    // The frame as the upscaler wrote it. The resolve adds the model's edit to this rather than
-    // reconstructing it by inverting the tone curve, which is what turned every light in the frame into
-    // a string of coloured cells.
-    ID3D12Resource* hdrCopy = nullptr;
-
-    // The frame shrunk for the model, when it is working below full resolution.
-    ID3D12Resource* colorSmall = nullptr;
-
-    // Supersampling (working scale > 1): the Output Scaling upsampler used to enlarge the proxy to the
-    // model's larger-than-native working size with a real filter instead of the box minifier. Created
-    // lazily on the first super-native frame, released in Shutdown; sizes from the resources each call,
-    // so a resolution change needs no rebuild.
-    OS_Dx12* superUp = nullptr;
-
-    // Supersampling down-leg: the native-sized buffer the Nx model answer is averaged into, and the
-    // downscaler that does it. With superUp this lands the super-native answer at native for a 1:1
-    // composite (no aliased minify). nrScaler is the filter both were built with, so a changed
-    // DlssNrScalingDownscaler rebuilds them.
-    ID3D12Resource* outputNative = nullptr;
-    OS_Dx12* superDown = nullptr;
-    Scaler nrScaler = Scaler::Count;
-
-    // The format-bound surfaces of the colour format the frame is not in right now, kept aside for a game
-    // that alternates between two (FF7 Rebirth: R11G11B10 in play, RGBA16F on cutscene camera cuts) and
-    // swapped back when the format returns at the same extent. See ReleaseSurfacesIfFormatChanged.
-    struct AltSurfaces
-    {
-        DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-        unsigned int width = 0;
-        unsigned int height = 0;
-        unsigned int workWidth = 0;
-        unsigned int workHeight = 0;
-        ID3D12Resource* output = nullptr;
-        ID3D12Resource* colorCopy = nullptr;
-        ID3D12Resource* hdrCopy = nullptr;
-        ID3D12Resource* colorSmall = nullptr;
-        ID3D12Resource* outputNative = nullptr;
-        ID3D12Resource* passPing = nullptr;
-    } alt;
-
-    // Frame hold (docs/dlssnr/design/frame-hold.md): a persistent copy of the output taken on hold-on and restored
-    // over the live output before the encode reads it while held, so a setting change re-renders the
-    // same frame. heldWhitePoint is the snapshot used while held -- measurement is suspended.
-    ID3D12Resource* heldColor = nullptr;
-    bool heldActive = false;
-    unsigned int heldWidth = 0;
-    unsigned int heldHeight = 0;
-    DXGI_FORMAT heldFormat = DXGI_FORMAT_UNKNOWN;
-    float heldWhitePoint = 1.0f;
-
-    // The output stabilizer (docs/dlssnr/design/output-stabilizer.md). Built for one output size and format, parked
-    // like the downscalers when that changes or when it is switched off. stabilizerLast is when it last
-    // ran, so a gap -- NR toggled, the stabilizer toggled, a stretch on the before-upscale stage --
-    // drops history that no longer describes the screen.
-    DlssNr_Stabilizer_Dx12* stabilizer = nullptr;
-    std::chrono::steady_clock::time_point stabilizerLast {};
-
-    // The static-overlay mask for UI protection (docs/dlssnr/design/hud-protection.md). Built for one working size,
-    // parked like the stabilizer when that changes or when it is switched off. uiMaskLast is when it last
-    // ran, so a gap drops a previous frame that no longer describes the screen.
-    DlssNr_UiMask_Dx12* uiMask = nullptr;
-    std::chrono::steady_clock::time_point uiMaskLast {};
-
-    // Model cadence (docs/dlssnr/design/model-cadence.md): the surfaces that carry the model's last edit onto the
-    // frames it does not run on. Built for one working size, parked like the stabilizer when that changes or when the
-    // cadence is switched off or cannot run on the route. featureGeneration counts feature creations, so a
-    // rebuilt model never inherits an edit made by the one before it; cadencePasses is what the last model
-    // frame completed, which the menu keeps showing through carried frames.
-    DlssNr_Cadence_Dx12* cadence = nullptr;
-    uint64_t featureGeneration = 0;
-    unsigned int cadencePasses = 0;
-
-    unsigned int workWidth = 0;
-    unsigned int workHeight = 0;
-
-    // The white point meter.
-    //
-    // A 64x64 grid of tile luminances, copied to a readback buffer and looked at a few frames later.
-    // Four buffers deep rather than one: the copy is recorded into the game's own command list and
-    // there is no fence here to wait on, so the only thing making a read safe is that the frame it
-    // came from is long retired. Three frames of distance is what the meter this replaces used.
-    //
-    // A stale read costs a slightly wrong float that the average below absorbs. A read of a buffer
-    // still being written would cost the same, which is why the value is smoothed rather than used
-    // raw.
-    ID3D12Resource* meter = nullptr;
-    ID3D12Resource* meterReadback[4] = {};
-
-    // The calibration grid: what scale the game's buffer is on, measured from the untouched copy.
-    // Its own surface and ring rather than sharing the meter's, because the two run at different
-    // sizes -- the meter fetches one texel and this reads the whole frame.
-    ID3D12Resource* calib = nullptr;
-    ID3D12Resource* calibReadback[4] = {};
-    unsigned long long calibFrames = 0;
-
-    // The last few answers, so the menu can say how settled the number is. A suggestion taken during
-    // a fade or a loading screen is worth less than one taken while standing still, and the spread
-    // across recent frames is what tells them apart.
-    static constexpr unsigned int kCalibHistory = 32;
-    float calibHistory[kCalibHistory] = {};
-    unsigned int calibCount = 0;
-    float calibSuggestion = 0.0f;
-    float calibSteadiness = 0.0f;
-    bool calibUsable = false;
-    const char* calibWhy = "measuring...";
-    bool calibPassthrough = false;
-
-    // Whether the frame that filled each readback slot actually had an exposure texture bound.
-    //
-    // The meter writes tile 0 from whatever sits in the exposure slot, and DispatchPass substitutes
-    // the source picture when nothing is bound -- so without this the "exposure" read back is the red
-    // channel of the frame's top-left pixel. In Cyberpunk, which supplies no exposure texture, that
-    // pixel is scene content: it moved by up to 272x between consecutive frames and drove the white
-    // point from 0.18 to 74. That is the whole frame flashing in luminance.
-    //
-    // The grid is read three frames after it is written, so the flag has to travel with the slot
-    // rather than being asked of the current frame.
-    bool meterExposureValid[4] = {};
-    unsigned int meterSlot = 0;
-    unsigned long long meterFrames = 0;
-
-    // Whether the setting was on last frame, so the off->on edge can be caught.
-    //
-    // Deliberately the SETTING and not `wantExposure`: the texture itself comes and goes between
-    // frames and holding the last good value across those gaps is the whole point of the field below.
-    // Only the user turning the option back on means "anything held is from an unknown time ago".
-    bool exposureSettingWasOn = false;
-
-    // The game's exposure, as last read back, and the pre-exposure that goes with it. Held rather
-    // than defaulted: the texture comes and goes between frames and a fallback to 1.0 on the gaps
-    // would be a flicker source.
-    float gameExposure = 0.0f;
-    float gamePreExposure = 1.0f;
-    DlssNr::Exposure::PlausibilityLatch exposureLatch;
-
-    // What the game OFFERS, as opposed to what has been read. Recorded from the parameter block every
-    // frame whether or not the setting is on, and deliberately so: the menu has to be able to answer
-    // "would this do anything here?" before the user turns it on, and reading a pointer for null costs
-    // nothing. Whether it was ever offered is kept separately from whether it was offered this frame,
-    // because games drop it on transitions -- GTA V dropped it three times in one session -- and one
-    // absent frame is not the same answer as never.
-    bool exposureOfferedNow = false;
-    bool exposureEverOffered = false;
-    unsigned long long exposureFrames = 0;
-
-    // Cloned unconditionally when running at present, and only for typeless formats otherwise.
-    ID3D12Resource* depthClone = nullptr;
-    ID3D12Resource* motionClone = nullptr;
-
-    // The constant-depth probe's surface. Separate from depthClone on purpose: it is defined by
-    // never having been written, and sharing a surface with a mode that writes would destroy that.
-    ID3D12Resource* depthConstant = nullptr;
-
-    // Depth and motion at the model's working size, below the frame's (reduced-scale-guides.md). Sized
-    // with the output, parked with it, and resting in UNORDERED_ACCESS between frames. guideMatch is the
-    // pass that fills them, built on first use and only when its bytecode is in the build.
-    ID3D12Resource* depthMatched = nullptr;
-    ID3D12Resource* motionMatched = nullptr;
-    DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
-
-    // Peripheral compression (peripheral-compression.md). While it runs, the working size above is the
-    // packed extent and depthMatched/motionMatched hold the packed guides. periphery is the pass that packs
-    // and unpacks, built on first use, only when its bytecode is in the build, and kept until shutdown like
-    // guideMatch. The unpacked pair is the packed proxy and answer brought back onto the uniform grid for the
-    // resolve: sized to that grid, resting in UNORDERED_ACCESS, parked when the grid moves or the feature
-    // stops. peripheryFailed latches a pass that could not be built or run; Retry clears it.
-    DlssNr_Periphery_Dx12* periphery = nullptr;
-    ID3D12Resource* unpackedProxy = nullptr;
-    ID3D12Resource* unpackedAnswer = nullptr;
-    bool peripheryFailed = false;
-
-    unsigned int width = 0;
-    unsigned int height = 0;
-    bool afterRayReconstruction = false;
-    bool reset = true;
-
-    // Dimensions of the guides as the upscaler handed them over, kept for the present path, which runs
-    // long after that call has returned.
-    unsigned int guideWidth = 0;
-    unsigned int guideHeight = 0;
-
-    // How the game encodes its guides, as the game itself reports it. Captured with the guides, since
-    // the finished-frame path runs long after the upscaler's call has returned.
-    bool guideDepthInverted = false;
-    float guideMvScaleX = 1.0f;
-    float guideMvScaleY = 1.0f;
-
-    // The values the live feature was created with, and when a difference from them was first seen.
-    unsigned int builtPreset = 0;
-    float builtIntensity = 0.0f;
-    unsigned int builtStyle = 0;
-    float builtLocalStructure = 0.0f;
-    float builtLocalTone = 0.0f;
-    float builtSkinStructure = 0.0f;
-    bool builtAutoMask = false;
-    unsigned long long settledAt = 0;
-
-    // Once something fails there is no recovering it mid-session, and retrying every frame turns a
-    // failure into a crash. It stays off and says why.
-    bool failed = false;
-    const char* reason = "";
-
-    // A size the model said no to, which is a different thing from a failure.
-    //
-    // FAIL_InvalidParameter answers the request, not the session: the model will take a smaller one.
-    // Keeping the size rather than a flag means the refusal expires on its own -- the next frame at
-    // any other extent is not the refused one and simply runs.
-    bool rejectedWork = false;
-    unsigned int rejectedWorkWidth = 0;
-    unsigned int rejectedWorkHeight = 0;
-};
+// Internal type: NrState (DlssNr_Dx12_Internal.h)
 
 NrState g_nr;
 std::unique_ptr<DlssNr_Dx12> g_compose;
@@ -550,13 +280,7 @@ std::unique_ptr<DlssNr_Dx12> g_compose;
 // The before-upscale path's own surface: the copy of the game's colour that carries the model's edit
 // into the upscaler. Sized to the render subrect and reallocated when that moves, which in a
 // dynamic-resolution game is often -- see the design note for what that costs and what to do about it.
-struct PreUpscaleState
-{
-    ID3D12Resource* scratch = nullptr;
-    unsigned int width = 0;
-    unsigned int height = 0;
-    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-};
+// Internal type: PreUpscaleState (DlssNr_Dx12_Internal.h)
 
 PreUpscaleState g_pre;
 std::mutex g_preMutex;
@@ -1383,26 +1107,7 @@ struct NrEnlarger
 // Releasing them immediately was the device hang: with frame generation the GPU runs several frames
 // behind, this work rides the game's own queue that no module fence covers, and an NGX feature or
 // scratch texture freed under in-flight work kills the device.
-struct NrRetired
-{
-    void* feature = nullptr;
-    ID3D12Resource* resource = nullptr;
-    int framesLeft = 32;
-    bool tracked = false;
-    DlssNr::Submission::Usage usage;
-    // Tracked objects (chain-in-flight.md): freed once every epoch in usage is finished AND framesLeft ticks
-    // passed, which covers work NGX may keep on queues of its own that no fence of ours sees.
-    uint64_t parkedAt = DlssNr::Submission::Clock();
-    // Waiting only on epochs no fence will ever answer: retained for good unless they finish, and out of the cap.
-    bool stuck = false;
-    OS_Dx12* scaler = nullptr;
-    DlssNr_Stabilizer_Dx12* stabilizer = nullptr;
-    DlssNr_UiMask_Dx12* uiMask = nullptr;
-    DlssNr_Cadence_Dx12* cadence = nullptr;
-    NrEnlarger* enlarger = nullptr;
-    DlssNr_DetailStats_Dx12* detailStats = nullptr;
-    DlssNr_Pulse_Dx12* pulse = nullptr;
-};
+// Internal type: NrRetired (DlssNr_Dx12_Internal.h)
 
 std::vector<NrRetired> g_nrRetired;
 
@@ -1641,44 +1346,9 @@ void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse)
 void Barrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* res, D3D12_RESOURCE_STATES from,
              D3D12_RESOURCE_STATES to);
 
-struct DetailMeasureSession
-{
-    std::mutex mutex;
-    bool wanted = false;
-    bool cancelRequested = false;
-    bool running = false;
-    static constexpr unsigned kTarget = 60;
-    uint32_t currentCopy = 0;
-    bool hasPreviousFrame = false;
-    float frozenWhitePoint = 1.0f;
+// Internal type: DetailMeasureSession (DlssNr_Dx12_Internal.h)
 
-    uint32_t width = 0;
-    uint32_t height = 0;
-    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
-
-    DlssNr_DetailStats_Dx12* pass = nullptr;
-    ID3D12Resource* outputs[2] = {};
-    ID3D12Resource* inputs[2] = {};
-    bool outputReadable[2] = {};
-    bool inputReadable[2] = {};
-
-    // A run ends at kTarget still frames, or after kMaxAttempts readbacks (moving frames are dropped), or when
-    // no sample has completed for kStallEvaluates evaluates. Fewer than kMinKept still frames is no result.
-    static constexpr unsigned kMaxAttempts = 120;
-    static constexpr unsigned kMinKept = 30;
-    static constexpr unsigned kStallEvaluates = 240;
-    unsigned attempts = 0;
-    unsigned evaluatesWithoutSample = 0;
-
-    uint32_t slot = 0;
-    DlssNr::Submission::Usage slotUsage[DLSSNR_DETAIL_STATS_SLOTS] {};
-    bool slotPending[DLSSNR_DETAIL_STATS_SLOTS] {};
-
-    DlssNr::DetailStats::Accumulator accumulator;
-    DlssNr::DetailMeasureStatus status;
-};
-
-static DetailMeasureSession g_detailMeasure;
+DetailMeasureSession g_detailMeasure;
 
 // Parks the pass and the frame copies through the retirement list. Caller holds g_nrMutex and the session mutex.
 static void ParkDetailMeasureLocked()
@@ -1735,54 +1405,9 @@ static void DetailMeasureCopy(ID3D12GraphicsCommandList* cmdList, ID3D12Device* 
 // The pulse metric ([DlssNr] PulseMetric, docs/dlssnr/design/pulse-metric.md): one small reduction a frame while it
 // is on, read back a few frames later and paired into light steps by the tracker. Everything but the published status
 // is touched under g_nrMutex only; the menu reads the status under the session's own mutex.
-struct PulseSession
-{
-    // What changes the meaning of a step: the frame's size and format, the cadence as configured and its smoothing,
-    // the residual limit and final luminance floor. A change starts the window over, so no step spans it.
-    struct Shape
-    {
-        uint32_t width = 0;
-        uint32_t height = 0;
-        uint32_t format = 0;
-        uint32_t cadence = 1;
-        bool smoothing = false;
-        float residualLimit = 0.0f;
-        float minRatio = 0.0f;
+// Internal type: PulseSession (DlssNr_Dx12_Internal.h)
 
-        bool operator==(const Shape&) const = default;
-    };
-
-    struct Slot
-    {
-        bool pending = false;
-        bool stale = false; // recorded before the shape changed: collected, never counted
-        uint64_t seq = 0;
-        int64_t ms = 0;
-        DlssNr::Pulse::Kind kind = DlssNr::Pulse::Kind::Every;
-        uint32_t cadence = 1;
-        DlssNr::Submission::Usage usage {};
-    };
-
-    DlssNr_Pulse_Dx12* pass = nullptr;
-    Slot slots[DLSSNR_PULSE_SLOTS] {};
-    uint32_t next = 0;
-    // Presents at which the pass was asked to run, whether it then ran, skipped or failed: a measurement's sequence
-    // number. Counted whether or not the metric is on (one comparison a call), so the first measurement after it goes
-    // on has a number to pair with.
-    uint64_t entered = 0;
-    uint64_t lastEntered = 0;
-    uint64_t lastPresent = 0; // the present last measured
-    bool active = false;
-    bool saidFailure = false;
-    std::optional<Shape> shape;
-    DlssNr::Pulse::Tracker tracker;
-    DlssNr::Pulse::LogGate logGate;
-
-    std::mutex statusMutex;
-    DlssNr::PulseStatus status;
-};
-
-static PulseSession g_pulse;
+PulseSession g_pulse;
 
 // At the top of every Dispatch that got as far as reading the present counter. A second call in one present is the
 // same present; where presents are not counted (the counter stays 0) every call is a new one.
@@ -2954,14 +2579,7 @@ DlssNr::Periphery::Layout PeripheryLayoutFor(const Config& cfg, ID3D12Device* de
 
 // The live bundle, whether it failed this session, and what the menu reads. Everything but the two atomics is
 // touched only under g_nrMutex.
-struct EnlargeSession
-{
-    NrEnlarger* live = nullptr;
-    bool failed = false;
-    bool lastHold = false;
-    std::atomic<uint32_t> transfer { DlssNr::Enlarge::kTransferMatched };
-    std::atomic<uint32_t> why { static_cast<uint32_t>(DlssNr::Enlarge::Why::NotYet) };
-};
+// Internal type: EnlargeSession (DlssNr_Dx12_Internal.h)
 
 EnlargeSession g_enlarge;
 
@@ -3298,7 +2916,9 @@ ID3D12Resource* EnlargeEdit(DlssNr_Dx12& pass, ID3D12GraphicsCommandList* cmdLis
     return e.enlarged;
 }
 
-} // namespace
+} // namespace DlssNr::Dx12Internal
+
+using namespace DlssNr::Dx12Internal;
 
 // ---------------------------------------------------------------------------------------------
 // The pass itself. Everything above is what it is made of; everything below is the shape the rest
@@ -6243,45 +5863,13 @@ Enlarge::Status EnlargeStatus()
     return status;
 }
 
-struct PresentGuideClone
-{
-    ID3D12Resource* depth = nullptr;
-    ID3D12Resource* motion = nullptr;
-    const void* deviceIdentity = nullptr;
-    DlssNrFrameInfo frame {};
-    DlssNr::Submission::Usage writeUsage {};        // accumulated for resource retirement / shutdown
-    DlssNr::Submission::Usage captureWriteUsage {}; // single capture write usage for eligibility
-    DlssNr::Submission::Usage readUsage {};         // accumulated for resource retirement / shutdown
-    DlssNr::Submission::Usage presentReadUsage {};  // single present read usage for in-flight check
-    bool tracked = false;
-    bool readTracked = false;
-    uint32_t width = 0;
-    uint32_t height = 0;
+// Internal type: PresentGuideClone (DlssNr_Dx12_Internal.h)
 
-    DXGI_FORMAT sourceDepthFormat = DXGI_FORMAT_UNKNOWN;
-    uint64_t sourceDepthWidth = 0;
-    uint32_t sourceDepthHeight = 0;
-    D3D12_RESOURCE_FLAGS sourceDepthFlags = D3D12_RESOURCE_FLAG_NONE;
-
-    DXGI_FORMAT sourceMotionFormat = DXGI_FORMAT_UNKNOWN;
-    uint64_t sourceMotionWidth = 0;
-    uint32_t sourceMotionHeight = 0;
-    D3D12_RESOURCE_FLAGS sourceMotionFlags = D3D12_RESOURCE_FLAG_NONE;
-};
-
-static PresentGuideClone g_presentGuideClones[DlssNr::PresentGuides::kRingSize];
+PresentGuideClone Dx12Internal::g_presentGuideClones[DlssNr::PresentGuides::kRingSize];
 // The bridge's last captured-guides read, until its recording executes or is abandoned.
-struct BridgeGuideRead
-{
-    bool valid = false;
-    size_t slot = 0;
-    ID3D12GraphicsCommandList* list = nullptr; // compared and passed to Abandon, not held
-    DlssNr::Submission::Usage usage {};
-    DlssNr::Submission::Usage presentUsage {};
-    bool tracked = false;
-};
-static BridgeGuideRead g_bridgeRead;
-static DlssNr::PresentGuides::Ring g_presentGuideRing;
+// Internal type: BridgeGuideRead (DlssNr_Dx12_Internal.h)
+BridgeGuideRead Dx12Internal::g_bridgeRead;
+DlssNr::PresentGuides::Ring Dx12Internal::g_presentGuideRing;
 
 // Creates a dedicated guide clone for the present snapshot ring matching the donor description
 // (present_path.hpp:1018-1035): exact source format and flags preserved, Alignment = 0, MipLevels = 1, DepthOrArraySize
@@ -6320,14 +5908,14 @@ static ID3D12Resource* CreatePresentGuideClone(ID3D12Device* device, ID3D12Resou
     return nullptr;
 }
 
-static std::atomic<bool> g_temporalValid { false };
+std::atomic<bool> Dx12Internal::g_temporalValid { false };
 
 // When the D3D12 present hook last ran, for Auto. Auto hands the pass to the present hook once the
 // upscaler has handed over its guides -- but only a D3D12 swapchain has that hook. The D3D11 bridge
 // (wrapped_swapchain skips it) and every Vulkan route never reach RunPresentPass, so deferring there
 // ran nothing at all: Auto was a silent off switch on the bridges. Auto now resolves to present only
 // while the hook is demonstrably running.
-static std::atomic<long long> g_presentHookAtMs { 0 };
+std::atomic<long long> Dx12Internal::g_presentHookAtMs { 0 };
 
 static long long NowMs()
 {
@@ -6343,11 +5931,11 @@ static bool PresentHookLive()
 
 // The pass at the game's own Present, ahead of its DLSS-G (RunPresentPass's boundary entry), ran within the last half
 // second. While it is live the entries below it stand down.
-static std::atomic<long long> g_boundaryAtMs { 0 };
+std::atomic<long long> Dx12Internal::g_boundaryAtMs { 0 };
 
 // A present entry chose to run the pass (past the placement and the interim refusal) within the last half second: the
 // present route is the one in use, whether or not its guides have been decided on yet. For HookStatus.
-static std::atomic<long long> g_presentRouteAtMs { 0 };
+std::atomic<long long> Dx12Internal::g_presentRouteAtMs { 0 };
 static bool PresentRouteLive()
 {
     const long long at = g_presentRouteAtMs.load();
@@ -6380,14 +5968,14 @@ static DlssNr::PresentBoundary::Inputs BoundaryInputs(uint32_t hookMethod, bool 
 
     return in;
 }
-static unsigned long long g_renderSeq = 0;
-static unsigned long long g_nrLastEnhancedSeq = 0;
-static unsigned long long g_nrLastEnhancedRecordedSeq = 0;
-static unsigned long long g_presentRuns = 0;
-static unsigned long long g_presentSkips = 0;
-static ID3D12Resource* g_lastEnhancedBb = nullptr;
-static unsigned int g_lastEnhancedBbIdx = 0xFFFFFFFF;
-static unsigned int g_sameBbStreak = 0, g_maxSameBbStreak = 0;
+unsigned long long Dx12Internal::g_renderSeq = 0;
+unsigned long long Dx12Internal::g_nrLastEnhancedSeq = 0;
+unsigned long long Dx12Internal::g_nrLastEnhancedRecordedSeq = 0;
+unsigned long long Dx12Internal::g_presentRuns = 0;
+unsigned long long Dx12Internal::g_presentSkips = 0;
+ID3D12Resource* Dx12Internal::g_lastEnhancedBb = nullptr;
+unsigned int Dx12Internal::g_lastEnhancedBbIdx = 0xFFFFFFFF;
+unsigned int Dx12Internal::g_sameBbStreak = 0, Dx12Internal::g_maxSameBbStreak = 0;
 
 static void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked)
 {
@@ -6409,23 +5997,16 @@ static void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& u
 // here runs at HookMethod=1, and with a ring that never recorded (a title with no upscaler) nothing but the status.
 // Guarded by g_nrMutex, which every user already holds: the capture, both consumers' presents, and shutdown. The
 // status goes out through atomics and is read without it.
-struct PresentGuideIdentityState
-{
-    DlssNr::PresentGuideIdentity::Tracker tracker;
-    DlssNr::PresentGuideIdentity::Consumer present { "D3D12 present" };
-    DlssNr::PresentGuideIdentity::Consumer bridge { "D3D11 bridge" };
-    DlssNr::PresentGuideIdentity::SourceHistory presentSource;
-    DlssNr::PresentGuideIdentity::SourceHistory bridgeSource;
-    DlssNr::PresentGuideIdentity::StatusWindow status;
-};
-static PresentGuideIdentityState g_guideIdentity;
+// Internal type: PresentGuideIdentityState (DlssNr_Dx12_Internal.h)
+PresentGuideIdentityState Dx12Internal::g_guideIdentity;
 
 // The last second of guide outcomes, from whichever present host ran, and when it was published; and what that host
 // did with its last frame that had no guides of the game's (PresentGuideIdentity::Fallback). For HookStatus and the
 // menu.
-static std::atomic<uint64_t> g_guideStatus { 0 };
-static std::atomic<long long> g_guideStatusAtMs { 0 };
-static std::atomic<uint8_t> g_guideFallback { static_cast<uint8_t>(DlssNr::PresentGuideIdentity::Fallback::Zero) };
+std::atomic<uint64_t> Dx12Internal::g_guideStatus { 0 };
+std::atomic<long long> Dx12Internal::g_guideStatusAtMs { 0 };
+std::atomic<uint8_t> Dx12Internal::g_guideFallback { static_cast<uint8_t>(
+    DlssNr::PresentGuideIdentity::Fallback::Zero) };
 
 // What an evaluate says about the picture its guides belong to: the device their copies live on, and the output's
 // extent and base. The extent is the caller's, read from the output resource of whichever API made it (a D3D12
@@ -6472,7 +6053,7 @@ static void StampPresentGuide(size_t slot, DlssNr::PresentGuideIdentity::Stamp s
 
 // The size of the frame the D3D11 bridge's present host last ran on, packed width << 32 | height; zero before its
 // first. The native D3D11 guide transport leaves out an evaluate whose output is another size (DlssNr_Dx11Guides.h).
-static std::atomic<uint64_t> g_bridgePresentedExtent { 0 };
+std::atomic<uint64_t> Dx12Internal::g_bridgePresentedExtent { 0 };
 
 static void NoteBridgePresentedExtent(unsigned int width, unsigned int height)
 {
@@ -6964,46 +6545,37 @@ static void EnsureCompose(ID3D12Device* device)
         g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering", device);
 }
 
-struct PresentList
-{
-    static constexpr unsigned int kSlots = 4;
-    ID3D12CommandAllocator* allocator[kSlots] = {};
-    ID3D12GraphicsCommandList* list[kSlots] = {};
-    UINT64 fenceValue[kSlots] = {};
-    bool dirty[kSlots] = {};
-    ID3D12Fence* fence = nullptr;
-    HANDLE fenceEvent = nullptr;
-};
+// Internal type: PresentList (DlssNr_Dx12_Internal.h)
 
-static PresentList g_presentList;
-static UINT64 g_presentFenceValue = 0;
-static unsigned long long g_presentFlip = 0;
-static unsigned long long g_lastFgFlip = 0;
+PresentList Dx12Internal::g_presentList;
+UINT64 Dx12Internal::g_presentFenceValue = 0;
+unsigned long long Dx12Internal::g_presentFlip = 0;
+unsigned long long Dx12Internal::g_lastFgFlip = 0;
 static constexpr unsigned long long kFgHookTimeout = 16;
 // The upscaled route (HookMethod 1, and 0 until the upscaler hands over temporal inputs) never
 // enters the present-time body, so it keeps its own render count and last outcome here.
 // ReportRuntimeStatus reads both; that is what makes the status line route-agnostic.
-static unsigned long long g_upscaleRenders = 0;
+unsigned long long Dx12Internal::g_upscaleRenders = 0;
 // Written on the render thread, read on the present thread, so atomic. The last outcome alone is not
 // the window's: an evaluate clears it before it dispatches, and a present that reads it in that gap
 // reported "no pass this window" over windows where every frame ran (STALKER 2, Starfield, Cyberpunk).
 // The window's answer is g_passesRecorded, which only ever counts up; the flag stays for the reason.
-static std::atomic<bool> g_upscaleApplied { false };
-static std::atomic<const char*> g_upscaleReason { nullptr };
-static std::atomic<unsigned long long> g_passesRecorded { 0 };
+std::atomic<bool> Dx12Internal::g_upscaleApplied { false };
+std::atomic<const char*> Dx12Internal::g_upscaleReason { nullptr };
+std::atomic<unsigned long long> Dx12Internal::g_passesRecorded { 0 };
 // Which route the model's history belongs to. Switching routes owes a reset, requested through
 // g_resetOnReturn because neither route holds the lock at the point it notices.
-static std::atomic<bool> g_sourceIsPresent { false };
-static ID3D12Resource* g_bbCopy = nullptr;
-static unsigned int g_bbCopyWidth = 0;
-static unsigned int g_bbCopyHeight = 0;
-static DXGI_FORMAT g_bbCopyFormat = DXGI_FORMAT_UNKNOWN;
+std::atomic<bool> Dx12Internal::g_sourceIsPresent { false };
+ID3D12Resource* Dx12Internal::g_bbCopy = nullptr;
+unsigned int Dx12Internal::g_bbCopyWidth = 0;
+unsigned int Dx12Internal::g_bbCopyHeight = 0;
+DXGI_FORMAT Dx12Internal::g_bbCopyFormat = DXGI_FORMAT_UNKNOWN;
 
 // The D3D12 present route's synthesized motion ([DlssNr] SynthMotion). One, like the backbuffer copy
 // it reads: this route runs one swapchain's presents. Heap-allocated on first use and never destroyed
 // by a static destructor, which would release D3D12 objects at process exit after the device; Shutdown
 // releases what it holds once the present lists have finished.
-static DlssNr::SynthMotionGuide* g_presentMotion = nullptr;
+DlssNr::SynthMotionGuide* Dx12Internal::g_presentMotion = nullptr;
 
 static void ResetPresentList()
 {
@@ -7220,22 +6792,19 @@ static bool EnsureBbCopy(ID3D12Device* device, unsigned int width, unsigned int 
 // whose pass declined still decoded into the work texture, and a switch back to SDR comes with no resize and so no GPU
 // idle wait. Every list that used a texture was submitted before it was retired, so it is released once the fence has
 // passed the last value submitted then -- never under the GPU, and without a CPU wait.
-static DlssNr_PresentHdr_Dx12* g_presentHdr = nullptr;
-struct PresentHdrRetired
-{
-    ID3D12Resource* resource = nullptr;
-    UINT64 fenceValue = 0;
-};
-static std::vector<PresentHdrRetired> g_hdrRetired;
-static ID3D12Resource* g_hdrWork = nullptr; // FP16, linear Rec.709 in scRGB units; rests in UNORDERED_ACCESS
-static ID3D12Resource* g_hdrOut = nullptr; // the backbuffer's format, what the encode writes; rests in UNORDERED_ACCESS
-static unsigned int g_hdrWidth = 0;
-static unsigned int g_hdrHeight = 0;
-static DXGI_FORMAT g_hdrFormat = DXGI_FORMAT_UNKNOWN;
+DlssNr_PresentHdr_Dx12* Dx12Internal::g_presentHdr = nullptr;
+// Internal type: PresentHdrRetired (DlssNr_Dx12_Internal.h)
+std::vector<PresentHdrRetired> Dx12Internal::g_hdrRetired;
+ID3D12Resource* Dx12Internal::g_hdrWork = nullptr; // FP16, linear Rec.709 in scRGB units; rests in UNORDERED_ACCESS
+ID3D12Resource* Dx12Internal::g_hdrOut =
+    nullptr; // the backbuffer's format, what the encode writes; rests in UNORDERED_ACCESS
+unsigned int Dx12Internal::g_hdrWidth = 0;
+unsigned int Dx12Internal::g_hdrHeight = 0;
+DXGI_FORMAT Dx12Internal::g_hdrFormat = DXGI_FORMAT_UNKNOWN;
 // The size and format the textures last failed to allocate at: not retried every frame.
-static unsigned int g_hdrFailedWidth = 0;
-static unsigned int g_hdrFailedHeight = 0;
-static DXGI_FORMAT g_hdrFailedFormat = DXGI_FORMAT_UNKNOWN;
+unsigned int Dx12Internal::g_hdrFailedWidth = 0;
+unsigned int Dx12Internal::g_hdrFailedHeight = 0;
+DXGI_FORMAT Dx12Internal::g_hdrFailedFormat = DXGI_FORMAT_UNKNOWN;
 
 // Under g_nrMutex. Released once every present list submitted so far has completed (see above).
 static void RetirePresentHdrTexture(ID3D12Resource*& resource)
@@ -9659,13 +9228,13 @@ bool CadenceAvailable() { return DlssNr_Cadence_Dx12::Available(); }
 bool BufferIsLinearHdr() { return g_lastLinearHdr.load(); }
 
 // HDR at present, for the menu. Written by the present hosts on their threads, read by the menu on its own.
-static std::mutex g_presentHdrStatusMutex;
-static std::chrono::steady_clock::time_point g_presentHdrAt {};
-static PresentColour g_presentHdrProfile = PresentColour::Declined;
-static const char* g_presentHdrReason = nullptr;
-static bool g_presentHdrConverted = false;
-static float g_presentHdrWhiteNits = 203.0f;
-static bool g_presentHdrWhiteFromDisplay = false;
+std::mutex Dx12Internal::g_presentHdrStatusMutex;
+std::chrono::steady_clock::time_point Dx12Internal::g_presentHdrAt {};
+PresentColour Dx12Internal::g_presentHdrProfile = PresentColour::Declined;
+const char* Dx12Internal::g_presentHdrReason = nullptr;
+bool Dx12Internal::g_presentHdrConverted = false;
+float Dx12Internal::g_presentHdrWhiteNits = 203.0f;
+bool Dx12Internal::g_presentHdrWhiteFromDisplay = false;
 
 void NotePresentHdr(PresentColour profile, const char* reason, bool converted, float whiteNits, bool whiteFromDisplay)
 {

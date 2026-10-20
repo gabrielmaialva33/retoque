@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -97,7 +97,7 @@ assert resolve_at < restore
 assert dispatch.count('timing.ModelBegin();') == 2 and dispatch.count('g_nr.evaluate(') == 2
 
 # The creation frame never evaluates.
-enlarge = between(renderer, 'ID3D12Resource* EnlargeEdit(', '\n} // namespace\n')
+enlarge = between(renderer, 'ID3D12Resource* EnlargeEdit(', '\n} // namespace DlssNr::Dx12Internal\n')
 assert re.search(r'BuildEnlarger\(cmdList, device, f\);\s*return nullptr;', enlarge)
 
 # Released last, after the list is whole; the bundle is one entry.
@@ -132,7 +132,7 @@ for why in whys:
 ngx_name = between(renderer, 'const char* NgxResultName(unsigned int r)', "// Does the driver's own nvngx.dll")
 retirement = between(renderer, 'DlssNr::PrivateSr::Api PrivateSrApi()', '// The inject point decides which buffer')
 section = between(renderer, '// The live bundle, whether it failed this session',
-                  '\n} // namespace\n\n// ---------------------------------------------------------------------------------------------\n// The pass itself.')
+                  '\n} // namespace DlssNr::Dx12Internal\n\nusing namespace DlssNr::Dx12Internal;\n\n// ---------------------------------------------------------------------------------------------\n// The pass itself.')
 retry_status = between(renderer, 'void RetryAfterFailure()', 'struct PresentGuideClone')
 
 host = ('#include "host_fakes.h"\n'
