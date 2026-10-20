@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -47,7 +47,7 @@ def glue_unit():
     start = 'struct PresentGuideIdentityState\n'
     assert renderer.count(start) == 1, 'production boundary changed'
     begin = renderer.index(start)
-    glue = renderer[begin:renderer.index('static void ReleasePresentTemporal()', begin)]
+    glue = renderer[begin:renderer.index('static void ReleasePresentTemporal()', begin)].replace('Dx12Internal::', '')
     unit = OUT / 'glue.cpp'
     unit.write_text((CASES / 'glue_fakes.h').read_text() + '\nnamespace DlssNr\n{\n' + glue + '\n} // namespace DlssNr\n' +
                     (CASES / 'glue_cases.h').read_text())

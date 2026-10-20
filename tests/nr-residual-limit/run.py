@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -49,7 +49,7 @@ compose = renderer[renderer.index('struct ComposeReport\n'):]
 compose = compose[:compose.index('};')]
 assert 'float residualLimit;' in compose and 'residualLimit == other.residualLimit' in compose
 assert 'residual limit {}' in renderer
-assert 'float residualLimit = 0.0f;' in renderer[renderer.index('struct PulseSession'):renderer.index('static PulseSession g_pulse;')]
+assert 'float residualLimit = 0.0f;' in renderer[renderer.index('struct PulseSession'):renderer.index('PulseSession g_pulse;')]
 # No control where nothing composes: the replace curves, and the D3D12 driver proxy (rule 2).
 assert 'reversibleNow != 2 && reversibleNow != 4 && (vulkan || !config->DlssNrUseProxy.value_or_default())' in menu
 assert 'kDlssNrResidualLimitMax' in menu

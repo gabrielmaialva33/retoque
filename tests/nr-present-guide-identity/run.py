@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -62,7 +62,7 @@ assert includes == sorted(['#include "DlssNr_PresentGuideRing.h"', '#include <ar
                            '#include <cstddef>', '#include <cstdint>', '#include <string>']), includes
 assert '#include <dlssnr/DlssNr_PresentGuideIdentity.h>' in renderer
 
-glue = between(renderer, 'struct PresentGuideIdentityState\n', 'static void ReleasePresentTemporal()')
+glue = between(renderer, 'struct PresentGuideIdentityState\n', 'static void ReleasePresentTemporal()').replace('Dx12Internal::', '')
 
 # The glue reads the ring and never changes it: it never picks, records, invalidates or tracks a slot, never touches a
 # clone's read bookkeeping, and never writes a flag the pass decides on. Its one write outside its own state is the
