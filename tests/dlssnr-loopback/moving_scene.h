@@ -35,6 +35,9 @@ struct Host
     FILE* manifest = nullptr;
     unsigned evaluations = 0;
     const char* stage = "setup";
+    // --moving-corpus: every frame captured from the first, no settling sleeps (offline-replay-seam.md).
+    unsigned total = Count, captureFrom = Warmup;
+    bool settleSleep = true;
 
     void Begin()
     {
@@ -224,7 +227,7 @@ struct Host
         }
         Require(fopen_s(&manifest, "moving.json", "w") == 0 && manifest, "moving manifest open");
         fprintf(manifest, "{\"width\":%u,\"height\":%u,\"frames\":%u,\"measured\":%u,\"samples\":[\n", Width, Height,
-                Count, Count - Warmup);
+                total, total - captureFrom);
     }
 
     void Copy(unsigned slot, ID3D12Resource* resource, D3D12_RESOURCE_STATES state)
@@ -332,7 +335,7 @@ struct Host
         const auto result = ngx.EvaluateFeature(list, feature, params, nullptr);
         list->EndQuery(queries, D3D12_QUERY_TYPE_TIMESTAMP, 1);
         list->ResolveQueryData(queries, D3D12_QUERY_TYPE_TIMESTAMP, 0, 2, timing, 0);
-        if (frame >= Warmup)
+        if (frame >= captureFrom)
         {
             Copy(0, colour, Srv);
             Copy(1, motion, Srv);
@@ -343,7 +346,7 @@ struct Host
         ColdNr::NgxResult("moving production EvaluateFeature", result);
         ++evaluations;
         Check(device->GetDeviceRemovedReason(), "moving device health");
-        if (frame >= Warmup)
+        if (frame >= captureFrom)
         {
             UINT64* ticks = nullptr;
             const D3D12_RANGE read { 0, sizeof(UINT64) * 2 };
@@ -352,9 +355,8 @@ struct Host
             const double ms = static_cast<double>(ticks[1] - ticks[0]) * 1000. / static_cast<double>(hz);
             const D3D12_RANGE noWrite { 0, 0 };
             timing->Unmap(0, &noWrite);
-            fprintf(manifest,
-                    "%s{\"frame\":%u,\"gpu_ms\":%.9g,\"jitter\":[%.9g,%.9g],\"inverse\":", frame == Warmup ? "" : ",\n",
-                    frame, ms, jitter.x, jitter.y);
+            fprintf(manifest, "%s{\"frame\":%u,\"gpu_ms\":%.9g,\"jitter\":[%.9g,%.9g],\"inverse\":",
+                    frame == captureFrom ? "" : ",\n", frame, ms, jitter.x, jitter.y);
             Matrix(XMMatrixInverse(nullptr, current.model * current.view * current.proj));
             fprintf(manifest, ",\"previous\":");
             Matrix(previous.model * previous.view * previous.proj);
@@ -366,7 +368,7 @@ struct Host
             Save(3, frame, "output");
             Say("MOVING frame=%u gpu_ms=%.6f\n", frame, ms);
         }
-        else
+        else if (settleSleep)
             Sleep(20); // Allow the production 500ms settling gates to expire during warmup only.
         PumpMessages();
     }
@@ -381,15 +383,23 @@ struct Host
         ColdNr::NgxResult("moving Shutdown", ngx.Shutdown(device));
         Require(fprintf(manifest, "\n]}\n") > 0 && fclose(manifest) == 0, "moving manifest close");
         manifest = nullptr;
-        Say("MOVING-SCENE PASS: evaluations=%u captures=%u\n", evaluations, Count - Warmup);
+        Say("MOVING-SCENE PASS: evaluations=%u captures=%u\n", evaluations, total - captureFrom);
     }
 };
 
+// corpusFrames > 0 is --moving-corpus N: N frames, all captured, for offline replay's first corpus.
 static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* queue, ID3D12CommandAllocator* alloc,
-                ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event, HWND window, bool present)
+                ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event, HWND window, bool present,
+                unsigned corpusFrames = 0)
 {
     // Keep all GPU-owned objects outside the try block. A failed/unknown fence cannot unwind them.
     Host host { device, queue, alloc, list, fence, event };
+    if (corpusFrames > 0)
+    {
+        host.total = corpusFrames;
+        host.captureFrom = 0;
+        host.settleSleep = false;
+    }
     Com<IDXGISwapChain1> swapchain;
     Com<IDXGIFactory4> presentFactory;
     try
@@ -415,7 +425,7 @@ static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* q
             Check(presentFactory->CreateSwapChainForHwnd(queue, window, &desc, nullptr, nullptr, &swapchain),
                   "moving cadence swapchain");
         }
-        for (unsigned frame = 0; frame < Count; ++frame)
+        for (unsigned frame = 0; frame < host.total; ++frame)
         {
             host.Frame(frame);
             if (present)

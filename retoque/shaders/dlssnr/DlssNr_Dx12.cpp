@@ -6,6 +6,8 @@
 #include <dlssnr/DlssNr_PairCaptureDx12.h>
 #include <dlssnr/DlssNr_Proxy.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
+#include <dlssnr/DlssNr_Replay.h>
+#include <dlssnr/DlssNr_ReplayClock.h>
 #include <dlssnr/DlssNr_Exposure.h>
 #include <dlssnr/DlssNr_Chain.h>
 #include <dlssnr/DlssNr_Consumers.h>
@@ -1180,8 +1182,8 @@ bool PausedWithoutFrameGen(const Config& cfg)
     if (!candidate)
         offSince.reset();
     else if (!offSince)
-        offSince = Clock::now();
-    const bool now = offSince && Clock::now() - *offSince >= std::chrono::milliseconds(500);
+        offSince = DlssNr::ReplayClock::Now();
+    const bool now = offSince && DlssNr::ReplayClock::Now() - *offSince >= std::chrono::milliseconds(500);
     if (now)
         g_resetOnReturn = true;
     if (now != paused)
@@ -2786,6 +2788,7 @@ void ReportSkipOnce(const char* reason)
 
     if (reason == nullptr)
         reason = "(null reason)";
+    DlssNr::Replay::NoteSkip(reason);
 
     for (const char* logged : seen)
     {
@@ -3238,7 +3241,8 @@ ID3D12Resource* EnlargeEdit(DlssNr_Dx12& pass, ID3D12GraphicsCommandList* cmdLis
     Barrier(cmdList, e.carrier, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     Barrier(cmdList, e.exposure, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-    const auto now = std::chrono::steady_clock::now();
+    // The frame time handed to the enlargement model: recorded time under an offline replay (offline-replay-seam.md).
+    const auto now = DlssNr::ReplayClock::Now();
     const float sinceLast = std::chrono::duration<float, std::milli>(now - e.lastTime).count();
 
     DlssNr::PrivateSr::Frame sr;
@@ -3628,7 +3632,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                 : !chainEnabled              ? "after"
                                                              : (dlssNrStage == 1 ? "after-fallback" : "after");
     const uint64_t observedFrame = State::Instance().frameCount;
-    const auto now = std::chrono::steady_clock::now();
+    // Decisions read the replay clock: the steady clock outside an offline replay (offline-replay-seam.md).
+    const auto now = DlssNr::ReplayClock::Now();
 
     const bool chainStable = !chainEnabled || g_chainSchedule.Stable(passSnapshot, now);
     if (chainEnabled && (!chainStable || !g_chainSchedule.Evaluate(observedFrame)))
@@ -4243,7 +4248,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         if (chainEnabled)
         {
             g_nr.creation[0] = {};
-            if (!g_chainSchedule.Create(observedFrame) || !DlssNr::Submission::Track(cmdList, g_nr.creation[0]))
+            if (!g_chainSchedule.Create(observedFrame, DlssNr::ReplayClock::Now()) ||
+                !DlssNr::Submission::Track(cmdList, g_nr.creation[0]))
             {
                 device->Release();
                 return false;
@@ -4349,7 +4355,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     "Additional pass refused: adapter budget/headroom unavailable or insufficient (retry latched)");
                 break;
             }
-            if (!g_chainSchedule.Create(observedFrame))
+            if (!g_chainSchedule.Create(observedFrame, DlssNr::ReplayClock::Now()))
                 break;
             if (!g_nr.passPing)
                 g_nr.passPing = CreateScratch(device, desc.Format, workWidth, workHeight);
@@ -5230,7 +5236,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Not on the model's resets: ZeroGuideReset asks for one every frame, and a mask that forgot the
         // interface every frame would never protect anything. A gap is different -- last frame's input no
         // longer describes the screen.
-        const auto now = std::chrono::steady_clock::now();
+        const auto now = DlssNr::ReplayClock::Now();
         if (now - g_nr.uiMaskLast > std::chrono::milliseconds(250))
             g_nr.uiMask->Invalidate();
         g_nr.uiMaskLast = now;
@@ -5874,7 +5880,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                          stabilizerPasses.Individual != passSnapshot.Individual ||
                                          stabilizerPasses.Settings != passSnapshot.Settings ||
                                          stabilizerExtras != extrasNow;
-            const auto now = std::chrono::steady_clock::now();
+            const auto now = DlssNr::ReplayClock::Now();
             const bool lapsed = now - g_nr.stabilizerLast > std::chrono::milliseconds(250);
 
             if (stabilizerReset || settingsChanged || lapsed)
@@ -6192,6 +6198,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         carried ? timingMetadataReady && wrote && result == 1
                 : timingMetadataReady && wrote && result == 1 && chain.completed == passSnapshot.Count;
     timing.FinishOnScopeExit(carried ? 0u : chain.completed, timingComplete);
+    DlssNr::Replay::NoteDispatch(wrote, carried, cadence.cadence, passSnapshot.Count, carried ? 0u : chain.completed,
+                                 result);
 
     // restoreOutput hands the output back in its arrival state on every exit.
     device->Release();

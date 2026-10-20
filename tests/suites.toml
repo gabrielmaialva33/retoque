@@ -54,6 +54,14 @@ tier = "host"
 timeout = 120
 summary = "DEVELOPMENT.md section 4 guards: config round-trip, struct == cbuffer, headers == bytecode, retired identifiers."
 
+[nr-replay-seam]
+path = "nr-replay-seam"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Offline replay seam: logical clock, adapter gate/versions/outcome, decision clocks and exports."
+
 [nr-zero-guides]
 path = "nr-zero-guides"
 domain = "nr"

@@ -106,4 +106,5 @@ Related, outside that sequence:
 
 - [Final darkening floor](design/darken-limit.md): independent MinRatio bound, applied once after composition.
 
-- [Offline replay and pixel judge](design/offline-replay.md): v1 capture/run contract, recorded clocks, local A/A calibration and host-only judge; production seam/recorder follow separately.
+- [Offline replay and pixel judge](design/offline-replay.md): v1 capture/run contract, recorded clocks, local A/A calibration and host-only judge; the recorder follows separately.
+- [Offline replay: the production seam](design/offline-replay-seam.md): `RetoqueReplay_*` exports into `EvaluateAfterUpscale`, the logical decision clock, one owner per process; `tests/dlssnr-loopback --replay-nr`.

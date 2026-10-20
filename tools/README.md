@@ -21,8 +21,9 @@ Do not pipe its output; redirect it to a file (see `CLAUDE.md`, "Build").
 ## test-rendering.sh
 
 Runs the host tier with four workers, builds Release, then runs D3D12 camera/texture
-regressions, the moving-scene production NR A/B fixture and the complete production
-DLSS-G provider fixture, in that order. Wine/GPU work is serial. Any failed check stops
+regressions, the moving-scene production NR A/B fixture, the offline replay through the
+production seam (`--replay-nr`: NR off/every/cadence/adaptive variants on one corpus) and the
+complete production DLSS-G provider fixture, in that order. Wine/GPU work is serial. Any failed check stops
 the command; missing DLSS-G prerequisites fail the combined run too.
 
 ```bash
