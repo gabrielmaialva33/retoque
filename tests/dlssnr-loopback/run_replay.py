@@ -373,8 +373,19 @@ def judge(runner, root, capture_path, runs, calibration=None):
         return dict(available=False)
     verdicts = {}
     reference = root / 'runs' / 'every-a' / 'run.json'
+    scored = {f['id'] for f in json.loads(capture_path.read_text())['frames'] if f['score']}
     for name in runs:
         if name in ('off', 'every-a') or name.startswith('aa-'):
+            continue
+        # Extra passes come up one at a time, 500 ms of logical time apart (the chain's creation spacing). A
+        # chain still growing on scored frames is a partial chain to the judge; such a run is compared bit for
+        # bit against a baseline, but judging it needs a corpus whose warmup outlasts the growth.
+        growing = [e['id'] for e in runs[name]['frames'] if e['id'] in scored and e['kind'] in ('every', 'model')
+                   and e['completed_passes'] != e['requested_passes']]
+        if growing:
+            verdicts[name] = dict(exit=None, verdict='NOT-JUDGED', reasons=[
+                f'chain still growing on {len(growing)} scored frames (first {growing[0]}); lengthen the warmup'],
+                backend=None, stderr='')
             continue
         out = root / 'judge' / name
         if out.exists():
@@ -427,8 +438,10 @@ def run(runner, proton, env, dll):
     verdicts = judge(runner, root, capture_path, runs, calibration)
     # The judge's strict reader is the compatibility test of everything written above.
     for name, verdict in verdicts.get('verdicts', {}).items():
-        results[f'{name}-judge-accepts-manifests'] = dict(ok=verdict['verdict'] not in (None, 'INVALID'),
-                                                          detail=f'verdict {verdict["verdict"]}, exit {verdict["exit"]}')
+        results[f'{name}-judge-accepts-manifests'] = dict(
+            ok=None if verdict['verdict'] == 'NOT-JUDGED' else verdict['verdict'] not in (None, 'INVALID'),
+            detail=f'verdict {verdict["verdict"]}, exit {verdict["exit"]}' +
+                   (f' ({verdict["reasons"][0]})' if verdict['verdict'] == 'NOT-JUDGED' else ''))
     # The control: an every-frame repeat in the candidate's place must pass its own calibrated envelope.
     if calibration and 'every-b' in verdicts.get('verdicts', {}):
         verdict = verdicts['verdicts']['every-b']

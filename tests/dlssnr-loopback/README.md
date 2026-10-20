@@ -552,6 +552,12 @@ Both controls were run on 2026-10-20 against the `b2eed6e3` baseline:
 - **Same renderer code:** all six variants were identical.
 - **`Intensity=0.9`:** failed from frame 62, the first model frame, with no change in decisions.
 
+For a refactor, run the 17-variant set the baseline was extended with: off, every-frame x2, Cadence 2/3/4,
+adaptive, smoothing at 2 and 4, Passes 2 and 3, MinRatio, MaxRatio, WorkingScale 0.5 with Transfer 1 and 2, the
+direct model loader and ReversibleMode 2. On 2026-10-20 the original DLL replayed all 17 identical to themselves.
+Passes 2 and 3 grow one pass per 500 ms of logical time, so on this corpus their chains are still growing on
+scored frames: they are compared bit for bit, growth included, but the judge does not score them (NOT-JUDGED).
+
 The gate covers the after-upscale route through the seam. The present route, the pre-upscale route, the D3D11
 bridge and Vulkan are outside it.
 
