@@ -418,8 +418,12 @@ def main():
         # LoadLibrary can find them; nothing calls into them, which is also true in production.
         names += ['nvngx_dlss.dll', 'nvngx_dlssd.dll', 'nvngx_dlssg.dll']
 
+    # LOOPBACK_MODEL: another nvngx_dlssnr.dll instead of the kit's. Linked, never copied or modified.
+    model_override = os.environ.get('LOOPBACK_MODEL')
     for name in names:
         src = kit / name
+        if name == 'nvngx_dlssnr.dll' and model_override:
+            src = Path(model_override).expanduser().resolve()
         # Cold bring-up should test the installed driver, not a possibly stale kit copy.
         # Leave the legacy sweep's dependency selection unchanged.
         installed_core = Path('/usr/lib/nvidia/wine/_nvngx.dll')

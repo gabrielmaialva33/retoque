@@ -1121,6 +1121,7 @@ void ChainStatus(const char* reason)
 // Model cadence (docs/dlssnr/design/model-cadence.md): which frames run the model and which carry its last edit.
 // Decided once per Dispatch, under the pass's lock.
 DlssNr::Cadence::Scheduler g_cadence;
+DlssNr::Cadence::Adaptive::Controller g_cadenceAdaptive;
 
 // What the menu shows under the control. Starts as "off", so a session that never turns the cadence on logs
 // nothing about it.
@@ -1155,15 +1156,23 @@ bool FrameGenerationActive()
 
 bool RetiredCapacity();
 
+bool AdaptiveCadenceRequested()
+{
+    const auto& config = *Config::Instance();
+    return config.DlssNrCadenceAdaptive.value_or_default() &&
+           DlssNr::Cadence::Requested(config.DlssNrCadence.value_or_default()) > 1;
+}
+
 bool WantsTrackedRecording(const DlssNrPassSnapshot& requested)
 {
-    return g_tracked || (!g_legacyRecorded && (requested.Count > 1 || requested.Individual));
+    return g_tracked ||
+           (!g_legacyRecorded && (requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested()));
 }
 
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
                       DlssNr::Chain::RecordingLease* lease)
 {
-    const bool optIn = requested.Count > 1 || requested.Individual;
+    const bool optIn = requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested();
     if (!g_tracked && optIn && !g_legacyRecorded)
         g_tracked = true;
     if (!g_tracked)
@@ -4356,9 +4365,35 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     for (unsigned i = 1; chainEnabled && i < passSnapshot.Count && i < 3; ++i)
         cadenceResetPending = cadenceResetPending || g_nr.passReset[i];
 
+    const int64_t cadenceNowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    const bool adaptiveRequested = cfg.DlssNrCadenceAdaptive.value_or_default() && cadenceInputs.requested > 1;
+    const bool adaptiveActive = adaptiveRequested && g_tracked && cadenceInputs.surfaces &&
+                                Cadence::Refusal(cadenceInputs) == Cadence::Reason::None;
+    if (adaptiveActive)
+    {
+        if (auto sample = g_nr.cadence->PollProbe())
+            g_cadenceAdaptive.Observe(*sample, observedFrame, cadenceNowMs);
+        cadenceInputs.adaptiveInterval =
+            g_cadenceAdaptive.Interval(cadenceInputs.requested, observedFrame, cadenceNowMs);
+    }
+    else
+    {
+        g_cadenceAdaptive.Reset();
+        if (adaptiveRequested)
+            cadenceInputs.adaptiveInterval = 1;
+        if (g_nr.cadence)
+            g_nr.cadence->InvalidateProbe();
+    }
+
     const auto cadence = g_cadence.Decide(
         cadenceInputs, cadenceSignature, observedFrame,
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(), cadenceResetPending);
+    if (Cadence::IsForced(cadence.reason) || Cadence::IsRefusal(cadence.reason))
+    {
+        g_cadenceAdaptive.Reset();
+        if (g_nr.cadence)
+            g_nr.cadence->InvalidateProbe();
+    }
     const bool carried = !cadence.runModel;
     PublishCadence(cadence);
 
@@ -5082,6 +5117,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         guidesPacked ? 1.0f
                      : DlssNr::GuideMatch::ModelMotionScale(g_nr.guideMvScaleY, workHeight, motionReferenceHeight);
     cadenceFrame.scale = Cadence::TapScale(workWidth, width);
+
+    if (adaptiveActive)
+        g_nr.cadence->Probe(cmdList, cadenceFrame, uiAlpha,
+                            !Cadence::IsForced(cadence.reason) && !Cadence::IsRefusal(cadence.reason),
+                            cadence.runModel ? !cadence.handChain : cadence.chainStart, observedFrame, cadenceNowMs);
 
     // The model frame after carried ones: its own history is as old as the last model frame, so it is handed the
     // chain summed back to it -- working pixels, scale 1, off the picture where the chain broke -- rather than

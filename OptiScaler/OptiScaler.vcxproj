@@ -966,6 +966,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Exposure.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Chain.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Cadence.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_CadenceAdaptive.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Enlarge.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PrivateSr.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Readback.h" />

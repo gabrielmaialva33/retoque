@@ -86,3 +86,9 @@ frames (BeliyG3 measured a brightness lag), and how a game looks in motion are a
 half-float residual the GPU stores is a float here, so "exact" on the GPU means to half-float
 rounding of the edit. The wine tier and an in-game run are the evidence for those; see the design
 note's measurement plan.
+
+The adaptive cases exercise the production feedback reducer/controller: finite
+and insufficient coverage, threshold boundaries, calm recovery, stale/duplicate
+feedback, suspension with chained model motion and smoothing disabled at interval
+1. Source guards require the separate probe slot and exact submission certificate.
+These are host policy tests, not evidence of GPU image quality.

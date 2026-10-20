@@ -494,7 +494,8 @@ int main(int argc, char** argv)
 
         if (hasFlag("--moving-scene"))
         {
-            MovingScene::Run(dllPath, device, queue, alloc, list, fence, fenceEvent);
+            MovingScene::Run(dllPath, device, queue, alloc, list, fence, fenceEvent, window,
+                             hasFlag("--moving-present"));
             DestroyWindow(window);
             CloseHandle(fenceEvent);
             return 0;

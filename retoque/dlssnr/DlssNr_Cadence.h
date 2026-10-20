@@ -136,6 +136,7 @@ struct Inputs
     bool surfaces = true;           // the cadence's surfaces exist
     bool reversibleReplace = false; // ReversibleMode 2 or 4 (replace curves flash under carried edits)
     bool smoothing = false;         // [DlssNr] CadenceSmoothing: the spread and the light limiter
+    uint32_t adaptiveInterval = 0;  // 0 preserves fixed cadence; otherwise 1..requested admission interval
 };
 
 // Why the cadence cannot run, or None. When several hold, the first one a user can do least about is named.
@@ -197,7 +198,8 @@ constexpr const char* Describe(Reason reason, uint32_t cadence)
     case Reason::Scheduled:
         return cadence >= 4   ? "Running the model every 4th frame; the frames between carry its last edit."
                : cadence == 3 ? "Running the model every 3rd frame; the frames between carry its last edit."
-                              : "Running the model every 2nd frame; the frame between carries its last edit.";
+               : cadence == 2 ? "Running the model every 2nd frame; the frame between carries its last edit."
+                              : "Adaptive cadence: running the model every frame until feedback permits reuse.";
     case Reason::NoEdit:
         return "The model runs this frame: no edit is stored to carry.";
     case Reason::Reset:
@@ -327,7 +329,9 @@ class Scheduler
         _signature = signature;
 
         Decision d;
-        d.cadence = in.requested;
+        d.cadence = in.adaptiveInterval == 0
+                        ? in.requested
+                        : (in.adaptiveInterval < in.requested ? in.adaptiveInterval : in.requested);
 
         const Reason refusal = Refusal(in);
         if (refusal != Reason::None)
@@ -359,8 +363,8 @@ class Scheduler
         }
 
         d.age = _carried + 1;
-        const uint32_t spread = SpreadFor(in.requested);
-        if (d.age >= in.requested)
+        const uint32_t spread = SpreadFor(d.cadence);
+        if (d.age >= d.cadence)
         {
             d.reason = Reason::Scheduled;
             d.handChain = _carried > 0;
@@ -368,7 +372,7 @@ class Scheduler
             d.staleHistory = !d.handChain && _framesSinceModel > 0;
             // The model frame after carried ones fades in from the carried edit: what was on screen a frame ago, moved
             // here, is what the new answer is walked to from.
-            d.fade = in.smoothing && d.handChain;
+            d.fade = in.smoothing && d.handChain && d.cadence > 1;
             d.fadeWeight = d.fade ? FadeWeight(0, spread) : 0.0f;
             _spread = spread;
             d.limit = d.fade;

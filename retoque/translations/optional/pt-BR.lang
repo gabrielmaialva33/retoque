@@ -541,3 +541,7 @@ HDR present conversion is inactive; the game's original frame is shown.	A conver
 
 Show all settings	Mostrar todas as configurações
 Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Mostrar o painel completo de Neural Rendering. As configurações ocultas continuam ativas e inalteradas.
+
+Adapt cadence to motion	Adaptar cadência ao movimento
+Adaptive cadence: running the model every frame until feedback permits reuse.	Cadência adaptativa: executando o modelo em cada quadro até as leituras permitirem reutilização.
+Shortens the interval when motion or rejected carry coverage is high; lengthens after 300 ms of calm.\nCadence above is the maximum. Delayed GPU feedback cannot catch a cut on its first frame.\nRequires a restart when enabled after NR has already run. Missing feedback runs the model every frame.\nExperimental: measured in the moving fixture, not validated in games. Off adds no probe work.	Reduz o intervalo quando há muito movimento ou rejeição da edição reutilizada; aumenta após 300 ms de calma.\nA cadência acima é o máximo. As leituras atrasadas da GPU não detectam um corte no primeiro quadro.\nReinicie ao ativar depois que o NR já executou. Sem leituras válidas, o modelo executa em cada quadro.\nExperimental: medido no cenário de teste em movimento, não validado em jogos. Desligado não adiciona sondagem.

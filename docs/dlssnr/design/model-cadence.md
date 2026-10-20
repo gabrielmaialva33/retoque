@@ -1,6 +1,6 @@
 # Model cadence — run the model every Nth frame and carry its edit in between
 
-Status: implemented on D3D12, **off by default**, **not yet measured in this fork**. Native Vulkan has
+Status: implemented on D3D12, **off by default**, **measured in the synthetic moving fixture on 2026-10-20** ([results](cadence-adaptive.md)); not game-validated. Native Vulkan has
 no implementation and the menu does not offer it there. The carry is a subset port of BeliyG3's
 `optimizer-fps-dlss5` (MIT, `Licenses/OptimizerFps_LICENSE.txt`); what was taken and what was left is
 listed below.
@@ -266,14 +266,16 @@ scheduler header in a review simulation; the figures are that simulation's, not 
 A future gate needs a signal the gate itself does not change, a timed retry rather than a resume threshold,
 a reset when the cadence is off, and a key to disable it.
 
-## Addendum C: a fast-motion gate, not built
+## Addendum C: the original fast-motion gate constraint
 
 janblade's `0df40796` holds detail reuse off while more than 10 % of the picture has no detail to move, until
 readings stay calm for 0.3 s. The equivalent signal here is `1 - w`, the carry's acceptance
 (`dlssnr_cadence_rule.h`). It only exists where `Carry` runs, which is on carried frames: once a gate forced
 model frames, nothing new would be measured and the held reading would keep it closed -- Addendum B's latch
 again. A design needs a measure taken on model frames too (the motion vectors' magnitude, say) before any
-counter, readback or threshold is worth building.
+counter, readback or threshold is worth building. The opt-in implementation in
+[cadence-adaptive.md](cadence-adaptive.md) probes model frames too and requires
+submission-fence proof before consuming a reading.
 
 ## Attribution
 

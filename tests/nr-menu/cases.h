@@ -118,6 +118,7 @@ int main()
     // hand-edited out-of-range value reads as off.
     const std::string combo = "Model cadence###nrCadence", optIn = "Allow with frame generation###nrCadenceFrameGen";
     const std::string smooth = "Smooth the model's frames###nrCadenceSmoothing";
+    const std::string adaptive = "Adapt cadence to motion###nrCadenceAdaptive";
     auto cadence = [&](bool vulkan = false)
     {
         DlssNr::RenderCadenceControls(&c, vulkan);
@@ -132,7 +133,8 @@ int main()
     c.DlssNrCadence.value = 2;
     ImGui::Reset();
     cadence(true);
-    assert(!ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && ImGui::texts.empty());
+    assert(!ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive) &&
+           ImGui::texts.empty());
     c.DlssNrUseProxy.value = true;
     c.DlssNrCadence.value = 1;
     ImGui::Reset();
@@ -141,8 +143,8 @@ int main()
     c.DlssNrCadence.value = 2;
     ImGui::Reset();
     cadence();
-    assert(!ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && ImGui::texts.size() == 1 &&
-           said("driver proxy"));
+    assert(!ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive) &&
+           ImGui::texts.size() == 1 && said("driver proxy"));
     c.DlssNrUseProxy.value = false;
     DlssNr::cadenceAvailable = false;
     ImGui::Reset();
@@ -152,7 +154,7 @@ int main()
     c.DlssNrCadence.value = 1;
     ImGui::Reset();
     cadence();
-    assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth));
+    assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive));
     ImGui::Reset();
     ImGui::actions[combo] = 1;
     cadence();
@@ -160,6 +162,10 @@ int main()
     ImGui::Reset();
     cadence();
     assert(ImGui::Saw(combo) && ImGui::Saw(optIn) && ImGui::Saw(smooth) && !c.DlssNrCadenceWithFrameGen.value);
+    ImGui::Reset();
+    ImGui::actions[adaptive] = true;
+    cadence();
+    assert(c.DlssNrCadenceAdaptive.value);
     ImGui::Reset();
     ImGui::actions[optIn] = true;
     cadence();
@@ -186,7 +192,7 @@ int main()
     c.DlssNrCadence.value = 9;
     ImGui::Reset();
     cadence();
-    assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth));
+    assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive));
     // Simple view uses the production gate and the exact helpers used by the full panel.
     Config simple;
     DlssNr::ModelLog::configCount = 2;
