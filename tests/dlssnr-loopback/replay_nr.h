@@ -315,11 +315,10 @@ struct Host
         params->Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, f.createFlags);
         params->Set(NVSDK_NGX_Parameter_MV_Scale_X, f.mvScaleX);
         params->Set(NVSDK_NGX_Parameter_MV_Scale_Y, f.mvScaleY);
-        if (f.renderWidth && f.renderHeight)
-        {
-            params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, f.renderWidth);
-            params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, f.renderHeight);
-        }
+        // Always set, 0x0 included: that is how GetRenderSize reads a game that did not say, and a key left from an
+        // earlier frame would say something the recording did not.
+        params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, f.renderWidth);
+        params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, f.renderHeight);
         params->Set(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, f.depthBaseX);
         params->Set(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, f.depthBaseY);
         params->Set(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, f.motionBaseX);

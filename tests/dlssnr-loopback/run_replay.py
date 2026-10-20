@@ -325,16 +325,15 @@ def geometry(capture, f):
 
 
 def check_geometry(frame_id, g, shapes):
-    """Depth at render size; motion at render size with MVLowRes, else at output size. Both inside their planes."""
-    rw, rh = g['render_subrect']
-    if not rw or not rh:
-        return  # the game did not say; the pass decides as it does live
-    motion_extent = (rw, rh) if g['create_flags'] & MV_LOW_RES else \
-        (shapes['color']['width'], shapes['color']['height'])
-    for key, (bx, by), (w, h) in (('depth', g['depth_base'], (rw, rh)), ('motion', g['motion_base'], motion_extent)):
-        if bx + w > shapes[key]['width'] or by + h > shapes[key]['height']:
-            raise SystemExit(f'frame {frame_id} {key}: base ({bx},{by}) plus {w}x{h} lies outside the '
-                             f'{shapes[key]["width"]}x{shapes[key]["height"]} plane')
+    """The geometry is handed to the pass as the game gave it: the pass bounds a base by the allocation and the size
+    by what is left after it (DlssNr_Dx12.cpp, "Where in the allocation the picture starts"), so a base or subrect
+    past the plane is the pass's to clamp, not the harness's to refuse. Only what the plan cannot carry is refused:
+    non-integers, negatives, and half a subrect (the pass reads 0x0 as "the game did not say", one zero as neither)."""
+    values = [*g['render_subrect'], *g['depth_base'], *g['motion_base']]
+    if not all(type(v) is int and 0 <= v <= 65535 for v in values):
+        raise SystemExit(f'frame {frame_id}: render subrect and bases must be integers in 0..65535')
+    if (g['render_subrect'][0] == 0) != (g['render_subrect'][1] == 0):
+        raise SystemExit(f'frame {frame_id}: half a render subrect {g["render_subrect"]}')
 
 
 def write_plan(capture, base, path):

@@ -186,8 +186,13 @@ A capture the harness cannot transport is refused with the reason, never approxi
 - an output without unordered access;
 - a guide that denies shader resource views;
 - nonfinite parameters;
-- a subrect plus base outside the guide's extent;
+- half a render subrect (one dimension zero);
 - presents that do not move forward.
+
+A base or subrect that runs past its plane is not refused. The pass bounds a base by the allocation and the size by
+what is left after it (`DlssNr_Dx12.cpp`, "Where in the allocation the picture starts"), so the plan carries the
+geometry as the game gave it and the pass clamps it as it does live. A render subrect of 0x0 is the game not saying,
+and the pass then takes the depth texture's extent (`PresentGuideIdentity::RenderExtent`).
 
 The last refusal is the adapter's own rule: it sets the present counter from the frame. Two things would hit it:
 - **A source that never presents.** The loopback moving scene is one: its recorded present counter stays 0. The

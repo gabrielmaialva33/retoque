@@ -9,12 +9,13 @@ Host checks for `tests/dlssnr-loopback/run_replay.py`'s capture loading and the 
 - A v2 capture carries each plane's format, source format, flags and extent, and each frame's create flags, Ray
   Reconstruction placement, MV scale, render subrect and subrect bases. Each frame line has the token count
   `replay_nr.h`'s `fscanf` expects.
+- Geometry the pass clamps (a base or subrect past its plane, a 0x0 subrect) is carried as recorded, not refused.
 - Refusals, each with its reason:
   - a capture that is not finalized;
   - an output without unordered access;
   - a guide that denies shader resource views;
   - a shape that changes mid-capture;
-  - a base and subrect outside the plane;
+  - half a render subrect (one dimension zero);
   - create flags that change;
   - a digest mismatch;
   - a format outside the recorder's whitelist, or the wrong pixel size for it;

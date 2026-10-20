@@ -136,7 +136,8 @@ class PlanV3(unittest.TestCase):
             (lambda c: [f['color'].update(source_flags=0) for f in c['frames']], 'unordered access'),
             (lambda c: [f['depth'].update(source_flags=8) for f in c['frames']], 'denies shader resource'),
             (lambda c: c['frames'][1]['depth'].update(width=40, row_pitch=160), 'shape changes'),
-            (lambda c: [f['params'].update(depth_base=[10, 10]) for f in c['frames']], 'outside'),
+            (lambda c: [f['params'].update(render_subrect=[24, 0]) for f in c['frames']], 'half a render subrect'),
+            (lambda c: [f['params'].update(depth_base=[-1, 0]) for f in c['frames']], 'integers'),
             (lambda c: c['frames'][2]['params'].update(create_flags=1), 'create flags change'),
             (lambda c: c['frames'][0]['motion'].update(sha256='0' * 64), 'digest mismatch'),
             (lambda c: [f['color'].update(pixel_bytes=4, row_pitch=192) for f in c['frames']],
@@ -151,9 +152,18 @@ class PlanV3(unittest.TestCase):
             with self.subTest(reason=reason):
                 self.refused(mutate, reason)
 
-    def test_motion_at_output_size_without_low_res_flag(self):
-        # Without MVLowRes the motion plane must cover the output extent from its base; 32x24 does not cover 48x32.
-        self.refused(lambda c: [f['params'].update(create_flags=1) for f in c['frames']], 'motion: base (4,4)')
+    def test_geometry_the_pass_clamps_is_carried_as_recorded(self):
+        # A base or subrect past the plane, a missing subrect, and output-size motion without MVLowRes in a smaller
+        # plane: the pass bounds them all against the allocation, so the plan carries them unchanged.
+        path = v2_capture(self.dir)
+        capture = json.loads(path.read_text())
+        for f in capture['frames']:
+            f['params'].update(create_flags=1, depth_base=[30, 30])
+        capture['frames'][1]['params']['render_subrect'] = [0, 0]
+        save(self.dir, capture)
+        _, lines = plan_of(path)
+        self.assertEqual(lines[4].split()[8:18], ['1', '1', '0.5', '0.5', '24', '16', '30', '30', '4', '4'])
+        self.assertEqual(lines[5].split()[12:14], ['0', '0'])
 
     def test_halfres_capture_keeps_the_corpus_provenance(self):
         corpus = v1_capture(self.dir, w=64, h=32)
