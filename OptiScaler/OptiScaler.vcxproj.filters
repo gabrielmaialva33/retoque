@@ -2124,6 +2124,9 @@
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Diagnostics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Lifetime.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_NgxInfo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

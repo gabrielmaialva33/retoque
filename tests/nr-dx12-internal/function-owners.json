@@ -67,6 +67,36 @@
       "void RestoreResourceState::Restore()\n{",
       "RestoreResourceState::~RestoreResourceState() {",
       "ReadResourceScope::ReadResourceScope("
+    ],
+    "DlssNr_Dx12_Lifetime.cpp": [
+      "uint32_t PostContract(unsigned int nativeWidth, unsigned int nativeHeight, uint32_t format)\n{",
+      "void ChainStatus(const char* reason)\n{",
+      "void PublishCadence(const DlssNr::Cadence::Decision& decision)\n{",
+      "bool FrameGenerationActive()\n{",
+      "bool PausedWithoutFrameGen(const Config& cfg)\n{",
+      "void AdvanceNrClock() {",
+      "const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission)\n{",
+      "bool AdaptiveCadenceRequested()\n{",
+      "bool WantsTrackedRecording(const DlssNrPassSnapshot& requested)\n{",
+      "bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,\n                      DlssNr::Chain::RecordingLease* lease)\n{",
+      "bool VideoMemory(ID3D12Device* device, DXGI_QUERY_VIDEO_MEMORY_INFO& memory)\n{",
+      "void ParkNrFeature(void*& feature)\n{",
+      "void ParkNrResource(ID3D12Resource*& res)\n{",
+      "void ParkNrScaler(OS_Dx12*& scaler)\n{",
+      "void ParkNrStabilizer(DlssNr_Stabilizer_Dx12*& stabilizer)\n{",
+      "void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask)\n{",
+      "void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence)\n{",
+      "void ParkNrEnlarger(NrEnlarger*& enlarger)\n{",
+      "void TickNrRetired(bool shutdown)\n{",
+      "bool RetiredCapacity()\n{",
+      "void ForgetCalibration()\n{",
+      "void ParkNrDetailStats(DlssNr_DetailStats_Dx12*& detailStats)\n{",
+      "void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse)\n{",
+      "bool MakeRoomForGeneration()\n{",
+      "void ParkAltSurfaces()\n{",
+      "bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height, unsigned int workWidth,\n                    unsigned int workHeight)\n{",
+      "void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,\n                                    unsigned int workHeight)\n{",
+      "void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked)\n{"
     ]
   }
 }
