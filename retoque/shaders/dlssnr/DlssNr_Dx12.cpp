@@ -4311,6 +4311,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Creating and evaluating a feature in the same command list is the dice-roll that hung the
         // GPU (every crash died on a creation frame). The creation goes through the game's own submit
         // first; the first evaluate happens next frame. One frame without the model is invisible.
+        DlssNr::Replay::NoteSkip("the model was created on this frame; it first runs on the next");
         device->Release();
         return false;
     }

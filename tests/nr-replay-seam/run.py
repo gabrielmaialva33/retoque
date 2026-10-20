@@ -42,6 +42,8 @@ for gate in ('if (now - g_nr.uiMaskLast > std::chrono::milliseconds(250))',
 pause = body(renderer, 'bool PausedWithoutFrameGen(const Config& cfg)')
 assert 'Clock::now()' not in pause and pause.count('DlssNr::ReplayClock::Now()') == 2
 # The outcome: every skip reason, before the once-only log filter; the dispatch summary on the full path.
+# The creation frame records nothing by design and logs no skip; replay still says why.
+assert 'DlssNr::Replay::NoteSkip("the model was created on this frame; it first runs on the next");' in dispatch
 skip = body(renderer, 'void ReportSkipOnce(const char* reason)')
 assert skip.index('DlssNr::Replay::NoteSkip(reason);') < skip.index('for (const char* logged : seen)')
 tail = dispatch[dispatch.index('timing.FinishOnScopeExit(carried ? 0u : chain.completed, timingComplete);'):]
@@ -75,6 +77,9 @@ with tempfile.TemporaryDirectory() as scratch:
                     '-I', str(work), str(work / 'DlssNr_Replay.cpp'), str(HERE / 'cases.cpp'), '-o', str(exe)],
                    check=True)
     env = {k: v for k, v in os.environ.items() if k != 'RETOQUE_REPLAY'}
-    out = subprocess.run([str(exe)], env=env, check=True, capture_output=True, text=True).stdout
-    print(out, end='')
+    run = subprocess.run([str(exe)], env=env, capture_output=True, text=True)
+    print(run.stdout, end='')
+    print(run.stderr, end='')
+    if run.returncode:
+        raise SystemExit(f'seam cases failed ({run.returncode})')
 print('PASS: replay clock and adapter; decision clocks, outcome notes and exports wired as designed')
