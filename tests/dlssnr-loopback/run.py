@@ -43,6 +43,18 @@ def _wine_build_pids():
     return [int(x) for x in out.stdout.split()]
 
 
+def ancestors():
+    """This process and every parent up to init, read from /proc."""
+    pids, pid = set(), os.getpid()
+    while pid > 1 and pid not in pids:
+        pids.add(pid)
+        try:
+            pid = int(Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            break
+    return pids
+
+
 def run_watched(args, *, env, log, attempts=4):
     """Run a wine-side compiler command, recovering from the msvc-wine stall.
 
@@ -393,8 +405,10 @@ def main():
       # Compiling goes through the same msvc-wine prefix that build-local.sh uses. Two clients on
       # one wineserver is the condition under which the build has stalled; refuse rather than race.
       # Running the built harness does not touch that prefix, so --skip-build is exempt.
-      busy = subprocess.run(['pgrep', '-f', r'[M]SBuild\.exe|[b]uild-local\.sh'], capture_output=True)
-      if busy.returncode == 0:
+      # Not this process's own ancestors: a shell that ran build-local.sh and then this runner matches the pattern
+      # by its command line, and refusing on it made such a shell retry forever (2026-10-20).
+      busy = subprocess.run(['pgrep', '-f', r'[M]SBuild\.exe|[b]uild-local\.sh'], capture_output=True, text=True)
+      if any(int(pid) not in ancestors() for pid in busy.stdout.split()):
           raise SystemExit('a solution build is using the msvc-wine prefix; compile after it finishes, or --skip-build')
       run_watched([MSVC / 'cl', '/nologo', '/std:c++20', '/EHsc', '/MD', '/W4',
          '/I' + str(ROOT / 'external/nvngx_dlss_sdk'), HERE / 'harness.cpp',

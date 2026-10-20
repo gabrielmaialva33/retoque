@@ -598,3 +598,13 @@ extern bool g_presentHdrConverted;
 extern float g_presentHdrWhiteNits;
 extern bool g_presentHdrWhiteFromDisplay;
 } // namespace DlssNr::Dx12Internal
+
+// Functions one renderer unit defines and another calls, with the unit that defines them. Public entry points keep
+// their declarations in DlssNrFeature_Dx12.h; these are the renderer's own.
+namespace DlssNr
+{
+// DlssNr_Dx12_Inputs.cpp
+void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, ID3D12Resource* output, bool before,
+                           unsigned int inputWidth, unsigned int inputHeight);
+DlssNrFrameInfo GatherFrame(NVSDK_NGX_Parameter* params);
+} // namespace DlssNr

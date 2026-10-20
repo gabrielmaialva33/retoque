@@ -113,4 +113,17 @@ int main() {{
     negative = subprocess.run(flags + objects + [objects[0], '-o', str(out / 'duplicate-owner')], capture_output=True,
                               env=c_locale)
     assert negative.returncode != 0 and b'multiple definition' in negative.stderr
-print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls')
+
+# Functions moved out of the main unit: one definition each, in the unit that owns it (function-owners.json).
+from nr_sources import renderer_paths  # noqa: E402
+units = {p.name: p.read_text(encoding='utf-8-sig') for p in renderer_paths()}
+owners = json.loads((HERE / 'function-owners.json').read_text())['owners']
+moved = 0
+for unit, signatures in owners.items():
+    assert unit in units, f'{unit} is listed as an owner but is not a renderer unit'
+    for signature in signatures:
+        homes = [name for name, text in units.items() if signature in text]
+        assert homes == [unit] and units[unit].count(signature) == 1, f'{signature!r} defined in {homes}, not once in {unit}'
+        moved += 1
+print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls; '
+      f'{moved} moved functions defined once in their owning unit')
