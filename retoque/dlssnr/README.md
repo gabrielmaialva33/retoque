@@ -189,9 +189,13 @@ part of the solution, and builds with everything else.
   so only the format-bound surfaces follow it, and the set for the format being left is kept aside and
   swapped back when it returns (FF7 Rebirth alternates R11G11B10 and RGBA16F on cutscene cuts and paid
   a feature creation on each; hhkbble's `f55d655a`). History is reset on the flip.
-- **Never free under the GPU.** Every retired feature or surface is parked and freed 32 evaluates
-  later; every internal feature is created on a private queue and fenced before use. Both rules were
-  paid for with device hangs.
+- **Never free under the GPU.** Retirement retains each generation and its recorded uses. The tracked
+  D3D12 path requires Submission settlement in addition to its minimum retention; cancellation,
+  completed orphans and bounded replay aging have distinct rules. The legacy untracked path still
+  uses an evaluation-delay heuristic, not a completion certificate. Internal feature creation uses
+  its existing queue/fence discipline. See [chain-in-flight](../../docs/dlssnr/design/chain-in-flight.md)
+  and [submission tracking](../../docs/dlssnr/design/submission-tracking.md); elapsed frames alone
+  must not be treated as proof that tracked GPU work is done.
 - **One lock.** Every caller is on the game's render thread now, but the D3D11-on-D3D12 bridge
   enters from its own call site, and the lock is CPU-side on a path that already records command
   lists. It was added after a period of crashes that looked random and were not.

@@ -105,3 +105,5 @@ Related, outside that sequence:
 - [../history/FORWARDER_INVESTIGATION.md](../history/FORWARDER_INVESTIGATION.md) and [retoque/dlssnr/forwarder/README.md](../../retoque/dlssnr/forwarder/README.md) (linked, not design notes).
 
 - [Final darkening floor](design/darken-limit.md): independent MinRatio bound, applied once after composition.
+
+- [Offline replay and pixel judge](design/offline-replay.md): v1 capture/run contract, recorded clocks, local A/A calibration and host-only judge; production seam/recorder follow separately.

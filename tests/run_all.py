@@ -61,20 +61,75 @@ def load_manifest() -> dict[str, dict]:
 
 def check_registry(manifest: dict[str, dict]) -> list[str]:
     """Registry and filesystem must agree. Returns human-readable problems."""
-    on_disk = {p.name for p in TESTS.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))}
     problems = []
-    for missing in sorted(on_disk - manifest.keys()):
-        problems.append(f"tests/{missing}/ exists but is not registered in tests/suites.toml")
-    for stale in sorted(manifest.keys() - on_disk):
-        problems.append(f"tests/suites.toml lists {stale} but tests/{stale}/ does not exist")
+    directories = set()
     for name, entry in sorted(manifest.items()):
-        runner = TESTS / name / "run.py"
+        try:
+            directory = suite_directory(name, entry)
+            if directory in directories:
+                problems.append(f"{name}: duplicate suite path")
+            directories.add(directory)
+            domain = entry.get("domain", "legacy")
+            if not isinstance(domain, str) or not domain:
+                problems.append(f"{name}: domain must be a nonempty string")
+            requirements = entry.get("requires", default_requirements(entry["tier"]))
+            if (not isinstance(requirements, list) or
+                    any(r not in ("python", "cxx", "wine-toolchain") for r in requirements)):
+                problems.append(f"{name}: unknown/invalid requires")
+        except ValueError as error:
+            problems.append(f"{name}: {error}")
+            continue
+        runner = directory / "run.py"
+        if not directory.is_dir():
+            problems.append(f"{name}: suite directory does not exist")
         if entry["tier"] == "wip":
             if runner.exists():
-                problems.append(f"{name} is tier wip but tests/{name}/run.py exists; promote it")
+                problems.append(f"{name} is tier wip but has a runner; promote it")
         elif not runner.exists():
-            problems.append(f"{name} is tier {entry['tier']} but has no tests/{name}/run.py")
+            problems.append(f"{name} is tier {entry['tier']} but has no run.py")
+    for child in TESTS.iterdir():
+        if child.is_dir() and not child.name.startswith(("_", ".")):
+            if not any(p == child.resolve() or p.is_relative_to(child.resolve()) for p in directories):
+                problems.append(f"{child.name}/ is not registered in suites.toml")
+    for runner in TESTS.rglob("run.py"):
+        relative = runner.relative_to(TESTS)
+        if any(p.startswith(("_", ".")) or p == "artifacts" for p in relative.parts):
+            continue
+        if runner.parent.resolve() not in directories:
+            problems.append(f"{relative}: unregistered runner")
     return problems
+
+
+def suite_directory(name: str, entry: dict) -> pathlib.Path:
+    value = entry.get("path", name)
+    if (not isinstance(value, str) or not value or "\\" in value or ":" in value or
+            pathlib.PurePosixPath(value).is_absolute() or ".." in pathlib.PurePosixPath(value).parts):
+        raise ValueError("unsafe suite path")
+    path = (TESTS / value).resolve()
+    if path == TESTS.resolve() or not path.is_relative_to(TESTS.resolve()):
+        raise ValueError("suite path escapes tests/")
+    return path
+
+
+def default_requirements(tier: str) -> list[str]:
+    return ["python", "cxx"] if tier == "host" else ["python", "wine-toolchain"]
+
+
+def entry_blocker(entry: dict) -> str:
+    if entry["tier"] == "wip":
+        return "no runner yet"
+    for requirement in entry.get("requires", default_requirements(entry["tier"])):
+        if requirement == "cxx":
+            reason = tier_blocker("host")
+        elif requirement == "wine-toolchain":
+            reason = tier_blocker("wine")
+        elif requirement == "python":
+            reason = ""  # This runner is already executing under Python.
+        else:
+            reason = f"unknown prerequisite: {requirement}"
+        if reason:
+            return reason
+    return ""
 
 
 def tier_blocker(tier: str) -> str:
@@ -98,7 +153,7 @@ def tier_blocker(tier: str) -> str:
 
 def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool) -> Result:
     tier = entry["tier"]
-    blocker = tier_blocker(tier)
+    blocker = entry_blocker(entry)
     if blocker:
         return Result(name, tier, "SKIP", 0.0, blocker)
 
@@ -107,7 +162,7 @@ def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool) -> Re
     try:
         with log_path.open("wb") as log:
             completed = subprocess.run(
-                [sys.executable, str(TESTS / name / "run.py")],
+                [sys.executable, str(suite_directory(name, entry) / "run.py")],
                 cwd=ROOT,
                 stdout=None if stream else log,
                 stderr=subprocess.STDOUT if not stream else None,
@@ -163,7 +218,7 @@ def main() -> int:
     if args.list:
         for name in sorted(manifest, key=lambda n: (TIERS.index(manifest[n]["tier"]), n)):
             entry = manifest[name]
-            blocker = tier_blocker(entry["tier"])
+            blocker = entry_blocker(entry)
             state = "ready" if not blocker else f"unavailable: {blocker}"
             print(f"{name:<22} {entry['tier']:<5} {state}")
             print(f"{'':<22} {'':<5} {entry['summary']}")

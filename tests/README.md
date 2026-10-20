@@ -1,9 +1,9 @@
 # Tests
 
 Every suite is a self-contained directory with its own `run.py` and `README.md`.
-The host suites are not a unit-test framework: each host `run.py` slices production source out
-of `OptiScaler/`, compiles that slice against local fakes, runs it under
-sanitizers, and asserts. That is deliberate, and it is also the reason the suites
+The host suites are not a unit-test framework: many host runners compile production headers or source slices from
+`OptiScaler/` and `retoque/` against local fakes under sanitizers; other suites
+exercise Python readers, analysis and tooling directly. That is deliberate, and it is also the reason the suites
 are honest about what they do not prove.
 
 ## Running them
@@ -19,6 +19,11 @@ python3 tests/<name>/run.py         # one suite, unchanged, no driver involved
 `run_all.py` never replaces a suite. It reads `suites.toml`, decides what can run
 on this machine, runs the host tier in parallel and the wine tier serially, and
 prints one summary. A missing toolchain is a skip with a reason, not a failure.
+
+`suites.toml` keeps stable IDs plus explicit `path`, `domain` and `requires` fields.
+Paths are relative to `tests/`; no suite directories have moved. Requirements distinguish
+Python-only, C++ host and Wine-toolchain availability; individual GPU fixtures still
+check their hardware/model prerequisites. `--only` continues to use stable IDs.
 
 `suites.toml` is also a drift guard. A directory with no registry entry, or a
 registry entry with no directory, fails the run. Add a suite and you add its
@@ -58,12 +63,16 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** Sixty suites. All but `nr-invariants`, `nr-ab-compare`, `nr-moving-evidence`, `fg-provider-evidence`, `repo-privacy`, `deploy-safety` and `windows-installer` build real production
-code with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
+**Host tier.** 65 suites (77 total: 65 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
 
 - `nr-moving-evidence` — independent moving-scene analyzer against known geometric motion, rejected zero/nonfinite guides, processing/repeatability checks and timing percentiles. No GPU.
+
+- `nr-replay-format` — v1 capture/run schema, bounded raw/PFM readers, unsafe paths, hashes, clocks, completion and coverage rejection; explicit registry paths. No GPU.
+
+- `nr-replay-metrics` — analytic motion/jitter, pulse/regions, temporal coverage, ghost/blur/golden mutations, A/A calibration, verdicts and stdlib PNG/report artifacts. See [offline replay](../docs/dlssnr/design/offline-replay.md). No production replay or GPU quality claim.
 
 - `nr-ab-compare` — stdlib offline Stage 0/1 capture analysis: synthetic PNG/PFM/raw pairs, detail/noise/colour/temporal controls, provenance and invalid-input rejection. No GPU or image-quality claim.
 

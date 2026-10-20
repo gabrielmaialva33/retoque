@@ -1,7 +1,8 @@
 # Test suite registry for tests/run_all.py.
 #
-# One entry per directory under tests/. Adding a suite means adding its entry
-# here as well, otherwise run_all.py reports it as unregistered and fails.
+# Stable suite IDs map to explicit paths relative to tests/. No directories moved.
+# domain is organizational; requires controls toolchain availability. Hardware/model
+# prerequisites remain enforced by individual GPU fixtures. Missing entries fail.
 #
 # tier
 #   host   Self-contained: a Linux C++ toolchain and Python are enough.
@@ -14,376 +15,617 @@
 # timeout is in seconds and is a ceiling, not an expectation.
 
 [nr-before-upscale]
+path = "nr-before-upscale"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Pre-upscale boundary functions against strict host fakes, under ASan/UBSan."
 
 [nr-render-size]
+path = "nr-render-size"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "Render size resolution: subrect handling and Width/Height fallback when subrect is absent."
 
 [nr-exposure-latch]
+path = "nr-exposure-latch"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "Exposure plausibility latch (WhitePointSource=1): out-of-range readings, swinging window, reset, and white-point fallback."
 
 [nr-game-profiles]
+path = "nr-game-profiles"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Game profiles (DlssNr_GameProfiles.h): exe match, table integrity, apply rules where the ini leaves keys unset, the Proton nvapi64.dll search, and the wiring (gated on NR, volatile values, one call after ApplyGameConfigs)."
 
 [nr-invariants]
+path = "nr-invariants"
+domain = "nr"
+requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "DEVELOPMENT.md section 4 guards: config round-trip, struct == cbuffer, headers == bytecode, retired identifiers."
 
 [nr-zero-guides]
+path = "nr-zero-guides"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Zero depth/motion for a caller with no engine buffers, and the two-heap clear contract."
 
 [nr-present-host]
+path = "nr-present-host"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "What the present host builds and when: tiny frames, resizes, the pass switched off; HDR swapchains declined, or with HdrPresent converted (the decision table, the D3D12 route's per-window colour record, the bridge's decode and encode with every resource state tracked)."
 
 [nr-session-guard]
+path = "nr-session-guard"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "Session guard: the policy table by how the last session ended (normal quit, exit code, exception, device lost, no end seen) and for how long, marker ownership and the probe, unreadable, other-format and read-only cases, the end of the process (fixed buffer, lock tries, nothing after it), config-off, the exact texts, plus guards on the call sites, the exit hook and the project."
 
 [nr-dx11-route]
+path = "nr-dx11-route"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "D3D11 DLSS with NR on: dlss_12 chosen when Dx11Upscaler is unset, native D3D11 DLSS reported once and shown while it runs."
 
 [nr-dx11-native-guides]
+path = "nr-dx11-native-guides"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Native D3D11 DLSS's depth and motion carried to the present pass on the D3D11 bridge (option (c), step 3): every gate and refusal of the transport's decision header, the slot rotation against a simulated GPU, the window and its line, and source guards on the transport, its call site, the capture core and shutdown."
 
 [nr-present-boundary]
+path = "nr-present-boundary"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "The present pass under the game's own DLSS-G (DlssNr_PresentBoundary.h): HookMethod=2 declines on the entry below DLSS-G, Auto stays upscaled for the session, HookMethod=1 and OptiScaler's own FG untouched; source guards that both routes decide through it."
 
 [nr-present-sync]
+path = "nr-present-sync"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "PresentSync=auto: the D3D12 present pass waits for its write-back only when frame generation could be involved."
 
 [nr-uimask-rule]
+path = "nr-uimask-rule"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The HUD-protection mask's per-pixel rule, the header the shader runs, over synthetic sequences: a glyph over a pan is protected, still scenery beside a moving silhouette is not."
 
 [nr-periphery]
+path = "nr-periphery"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Peripheral compression's layout and mapping, the header the shader runs: extents and refusals, inverse, monotone, no kink at either join, whole-texel centre at 100, the uniform path (guide reads and mode 2), the colour pack's weights and conservation, motion in frame pixels; the constant block held to the cbuffer."
 
 [nr-gpu-timing]
+path = "nr-gpu-timing"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Portable timing validation plus the duplicate-execution guard at the submission boundary; the HDR present conversion's own sample."
 
 [nr-dispatch]
+path = "nr-dispatch"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Production composition dispatch, constant-buffer ring isolation and partial initialization cleanup."
 
 [nr-gpu-timing-config]
+path = "nr-gpu-timing-config"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Config GPU-timing transactions and the INI expressions that back them."
 
 [nr-log-rate]
+path = "nr-log-rate"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Production NR log rate limiter against injected time points, and the four drift call sites that gate on it."
 
 [nr-localization]
+path = "nr-localization"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 600
 summary = "The real portable .lang parser and the repository ImGui hash."
 
 [nr-menu]
+path = "nr-menu"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Pass-menu control flow driven by scripted ImGui events."
 
 [nr-multipass]
+path = "nr-multipass"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Portable multi-pass chain helpers."
 
 [nr-pause-frame-gen]
+path = "nr-pause-frame-gen"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "PauseWithoutFrameGen config, arm/debounce/menu-exclusion rule and placement."
 
 [nr-pass-config]
+path = "nr-pass-config"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Pass-settings codec and the four-point Config round trip for the master keys."
 
 [nr-submission]
+path = "nr-submission"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Command-list submission lifetime model that gates resource release."
 
 [nr-vk-extensions]
+path = "nr-vk-extensions"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The NR Vulkan device-extension merge, compiled against the real Vulkan headers: KHR and EXT buffer_device_address never leave it together."
 
 [nr-vk-present-host]
+path = "nr-vk-present-host"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The Vulkan present host, stages 1 to 3: the registry, transport and cold-NR headers (records with ids of their own, reused handles, devices side by side, the lines; the usage plan, the route, the ring, the counters; the colour plan, the device extensions and bufferDeviceAddress, the model's counters) and the one-owner arbiter under ASan/UBSan, plus source guards: one gated call site ahead of the marker check; only a swapchain's usage, a present's waits and a device's extensions edited; no refusal after a wait is spent; locks in order; a model frame counted on submit, seen complete on a fence, freed only idle; drains before frees."
 
 [nr-shutdown]
+path = "nr-shutdown"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Production NGX core shutdown ABI adapter, output storage, result propagation and null-device routing."
 
 [nr-timing-boundary]
+path = "nr-timing-boundary"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Timing metadata and UI boundary, plus placement of the timing markers."
 
 [nr-cadence]
+path = "nr-cadence"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Model cadence: the production scheduler (age in presents the pass ran at, held reset, forced model frames, every refusal and its reason, off allocates nothing, smoothing's decisions) and the production per-pixel rules over synthetic sequences (still scene exact, pans, an occluder restarting the chain, no match no fill, the smoothing walk and light limiter), plus source guards on the pass."
 
 [nr-enlarge]
+path = "nr-enlarge"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Transfer 2 (private DLSS SR enlargement): the decision table, the carrier through FP16, the NGX adapter against a recording core, and production's plan/enlarge/retire/retry sliced out of DlssNr_Dx12.cpp against D3D12 fakes that chain every barrier. No GPU or NGX."
 
 [nr-capture]
+path = "nr-capture"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The comparison capture's pure half: PNG (stored deflate, CRC, Adler, tEXt) and PFM decoded with Python's zlib and checked pixel by pixel against the readback-shaped source, every half and small float, the request/record/ticket/hand-off state machine over a fake backend (nothing read before completion, never freed unproven), the menu button table, names and the 64-pair cap, the record and the privacy patterns, plus source guards on the pass."
 
 [nr-gpu-timing-d3d12]
+path = "nr-gpu-timing-d3d12"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1800
 summary = "Real D3D12 timestamp queries in an isolated Wine prefix. Never loads NGX or a game."
 
 [vulkan-overlay]
+path = "vulkan-overlay"
+domain = "transport"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1800
 summary = "Builds a real DLL and drives real Vulkan to exercise overlay lifetime under Wine."
 
 [vulkan-present-host]
+path = "vulkan-present-host"
+domain = "transport"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1800
 summary = "The production DLL (x64/out) under a Win32 Vulkan application and Wine, synchronization validation on with zero errors: with [DlssNr] VulkanPresentHost on, under the marker, SkipHooks, and beside the bundle with the Vulkan menu off and on, the round trip's lines are held against the application's own facts (same-queue and cross-family routes, 0/1/2 waits, a ring overfilled behind GPU work, usage edits, recreation, resize, device teardown) and every presented image reads back unchanged; a surface hiding TRANSFER_SRC keeps it observe-only; with the key or the master off, no host line and, under the marker, vulkan-1.dll's exports byte-identical. A D3D11 and a D3D12 title through a local Proton's DXVK and vkd3d-proton: every present carried. Stage 3 under Proton with the real model: cold NR on every SDR present (BGRA8 UNORM and sRGB, cross-family, an unaligned extent, working scale 0.5), exact read-backs with ApplyModel off and changed ones with it on; refused for a device without the NVX extensions, an old forwarder, no model (SKIP without the kit or a local Proton)."
 
 [dlssnr-loopback]
+path = "dlssnr-loopback"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 600
 summary = "Drives the production NGX exports on a real D3D12 device and exercises the post-stage settling gate by sweeping the output extent. Runs under the local Proton (--runtime proton); bare wine reaches NR but its feature create returns FAIL_PlatformError. Includes successful shutdown and rejects runs without NR composition."
 
 [nr-session-exit]
+path = "nr-session-exit"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 900
 summary = "The session guard's exit hook (DlssNr_ProcessEnd.cpp, as shipped) in a real process under the system Wine and the newest GE-Proton's: ExitProcess, exit(), return from main, TerminateProcess on itself (pseudo and real handle), an unhandled access violation (with and without the AeDebug debugger attaching first), a crash filter's own exit code, and terminating another process each reach the hook once with the expected status and the other threads still running; a process killed from outside, and abort()'s fail-fast, record nothing. Never loads OptiScaler.dll, NGX or a game."
 
 [nr-present-guide-identity-msvc]
+path = "nr-present-guide-identity-msvc"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 900
 summary = "nr-present-guide-identity's decision cases and glue slice compiled by MSVC (private prefix copy) and run under Wine. No D3D12, no GPU."
 
 [dx11-guides-transport]
+path = "dx11-guides-transport"
+domain = "transport"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1500
 summary = "The native D3D11 guide transport's API sequence on real devices under a local Proton (DXVK and vkd3d-proton): depth and motion formats a game uses cross through shared textures and a shared fence into clones made as the present guide ring makes them, six frames each, read back byte for byte; the depth-stencil hazard the transport avoids is reported. SKIP without a local Proton."
 
 [synth-motion-d3d12]
+path = "synth-motion-d3d12"
+domain = "fg"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1800
 summary = "The synthesized-motion estimator (FidelityFX optical flow port) on a real D3D12 device under Wine: endpoint error against known pans, a moving object, static and cut frames, abandon semantics, the axis signs and GPU time; synthesized FG's HUD mask and the UI layer's own mask on the same frames (no scenery marked, precision and recall per element and part, the band around the overlay and the smear set it covers, depth and layer exact, GPU time with the layer off and on); --source nvofa runs the NVIDIA Optical Flow source the same way (SKIP when unavailable). Never loads NGX or a game."
 
 [synth-motion-vk]
+path = "synth-motion-vk"
+domain = "fg"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1800
 summary = "The Vulkan synthesized-motion estimator (SynthMotion_Vk, the same FidelityFX port compiled to SPIR-V) on a real Vulkan device under Wine with the validation layer's core and synchronization checks: the D3D12 suite's sequences, scores and thresholds (pans and axis signs, a moving object, static, a cut, an abandoned recording, the static overlay), GPU time, and zero validation errors. SKIP when the device cannot run it. Never loads NGX or a game."
 
 [bridge-lifetime]
+path = "bridge-lifetime"
+domain = "transport"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Production D3D11/D3D12 swapchain and upscaler fence waits, initialization, failed submissions, resize preflight, a refused presenter resize and its recovery, the arguments and overlay release a flip-model presenter needs on native Windows, the D3D12 overlay's render-target release, ownership and retirement, and a second swapchain taking the window over (the surrender, Present, resizes, fullscreen and release after it), under scripted COM/Win32 fakes."
 
 [bridge-window]
+path = "bridge-window"
+domain = "transport"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The bridge's window takeover header: live bridges by window (newest first, never a count at zero, the lock acquire runs under), the presenter gate against its race, and the takeover sequence (only on E_ACCESSDENIED, one release, one retry)."
 
 [vulkan-query-readiness]
+path = "vulkan-query-readiness"
+domain = "transport"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Production Vulkan GPU timer (GpuTime_Vk, owned by every Shader_Vk since upstream e199fac4 replaced UpscalerTime_Vk): three-pair ring, nonblocking NOT_READY retry, no publication on error, single consumption, pool lifetime, under scripted API fakes. No frame-identity or GPU synchronization coverage."
 
 [fg-synth-policy]
+path = "fg-synth-policy"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Synthesized FG's policy (fast-motion response on incoherent motion and its cap, low-fps floor, duplicate-present advice, the HUD keys), its motion statistics, and the NR/FG motion handoff, from the production headers; the HUD mask's thresholds held equal to DLSS-NR's; the UI layer's own mask on the CPU over fixtures (a HUD over a pan taken whole; a swaying silhouette, a moving patch, rain and an edge along the motion not)."
 
 [mfg-pattern]
+path = "mfg-pattern"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The real MFG byte signatures and the real scanner matcher against synthetic cmp/mov buffers: each architecture signature matches its cmp-against-0x1b0 site and rejects a mov of the same immediate; both wrapper clamp shapes (r8d, and the edx one of Streamline 2.7.3 to 2.14) match; a gate rewritten to another constant falls through to the foreign patterns. Runs no patcher and touches no DLL."
 
 [mfg-patch-plan]
+path = "mfg-patch-plan"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The MFG unlock's write half (MfgPatchPlan.h) over a fake module with injected failures: a patch group commits whole or rolls back whole, a half-written site is restored, a wrong read-back rolls back, a site changed since planning writes nothing, a failed restore is reported and does not stop the others."
 
 [mfg-probe]
+path = "mfg-probe"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The step-0 MFG-below-Ada probe logic (MfgProbe.h): the gate exits before the claim, foreign-loader check, census, facts or emit off [Turing, Ada) -- Ada, Blackwell, NVIDIA with an unread arch 0, Volta, non-NVIDIA -- counted through an injected environment, and the production gate memo (GateCache); the fatbin/cubin census over synthetic containers (SASS sm_86, sm_89/sm_120-only, PTX-only, bare cubins, an ELF inside a container, truncated and 2^64-wrapping lengths); CUDA sm_86 loadability; the exact text of the module and admission lines and each NGX skip reason; foreign-loader detection; and, when Crimson Desert's nvngx_dlssg.dll is present, the census against the offline inventory (70 containers, frame 0/31, 39 sm_86 cubins). Writes nothing and runs no patcher or DLL."
 
 [nr-model-loader]
+path = "nr-model-loader"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "The NR model loaders' byte-level decisions against synthetic PE64 images (the model's GetModuleFileNameW/A import slots, the NGX loader's feature-18 table), the 616.64 faulting-pairing predicate and driver numbering; the direct runtime held to the forwarder's parameter writes, model calls and fault filter; and, when present on the machine, the real wine _nvngx.dll and nvngx_dlssnr.dll. Runs no model and no NGX."
 
 [sl-log-repeat]
+path = "sl-log-repeat"
+domain = "platform"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The Streamline log repeat filter against the real setDynamicMFGParams line on a fake clock: one line per 10 s with the folded count, new sites at once, a bounded table that fails open."
 
 [nr-kernel-profile]
+path = "nr-kernel-profile"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "DLSS-NR NvAPI CUDA kernel classification by prefix, FP8 variant detection, and timing aggregation."
 
 [nr-detail-measure]
+path = "nr-detail-measure"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The Measure detail CPU tile reduction and statistical aggregation (flicker, detail, saturation, shadows)."
 
 [nr-residual-limit]
+path = "nr-residual-limit"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The residual limit, the composition's own bound sliced out of dlssnr.hlsl and held against the guard alone (off is the guard to the bit; on bounds both ways in stops, only narrows, stays inside the guard), the host's clamp, and where the constant is read, set, logged and shown."
 
 [nr-pulse-metric]
+path = "nr-pulse-metric"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The pulse metric's CPU half (edit light from the grid, consecutive frames paired into light steps by kind, windows, reset, words, log rate, a synthetic cadence's pulse) and source guards on its pass: off builds and records nothing, one sample per present."
 
 [nr-hdr-math]
+path = "nr-hdr-math"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "The HDR present conversion's maths, the shader's own block sliced out of dlssnr_present_hdr.hlsl and held to a float64 reference: every PQ code round-trips, untouched HDR10 and scRGB texels come back bit for bit through FP16 and the composition, an edit within one code, constants and matrices against the BT.709/BT.2020 primaries, plus source guards on the pass and both hosts."
 
 [nr-present-guides]
+path = "nr-present-guides"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Present-time guide snapshot ring selection, completion tracking, and cross-queue deadlock avoidance."
 
 [nr-present-guide-identity]
+path = "nr-present-guide-identity"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Present-guide identity, step 1: every rule alone and in order, rule 6 enforced at the boundary only, narrowing only, ring scenarios, a long run that reads only accepted captures, the window and its line, the source-change reset, the status and the menu line, the glue sliced from the renderer, and guards that both consumers read only the decision's slot."
 
 [repo-privacy]
+path = "repo-privacy"
+domain = "platform"
+requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "No home path, LAN or tailnet address, or token in any tracked file outside vendored code; every pattern self-tested."
 
 [deploy-safety]
+path = "deploy-safety"
+domain = "platform"
+requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "tools/deploy-to-game.sh on fake game directories: refuses while a process maps the directory, on a foreign or case-variant DLL, and on a second OptiScaler proxy; Keep-ReShade with the ini key replaced, never duplicated; receipt, partial receipt, dry run, and uninstall back to the prior state."
 
 [windows-installer]
+path = "windows-installer"
+domain = "platform"
+requires = ["python"]
 tier = "host"
 timeout = 900
 summary = "tools/install-windows.ps1 on fake game folders in a pinned PowerShell 7.4 container (or a local pwsh): the deploy-safety refusals, receipt, partial receipt, dry run and uninstall, receipts crossing to and from deploy-to-game.sh, the model never touched; static ASCII/CRLF/packager checks always. SKIP for the cases without docker or pwsh."
 
 [lsfg-shader-library]
+path = "lsfg-shader-library"
+domain = "lsfg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "Runtime LSFG shader library: DLL discovery (Steam VDF, Wine Z:, override), PE RT_RCDATA SPIR-V extraction, and hash-keyed cache; convert.py Float16 detection (ids 51..98 on the real DLL)."
 
 [lsfg-integration]
+path = "lsfg-integration"
+domain = "lsfg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "LSFG as FSR-FG's interpolator (study branch): DXIL PSV0 reader, LSFG 3.1 pass graph, cbuffer table, frame refusals, history schedule, [LSFG] four-point round trip, FSRFG_Dx12 call sites as a set; the user's own 99 modules when LSFG_DXIL_DIR is set."
 
 [lsfg-presenter]
+path = "lsfg-presenter"
+domain = "lsfg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "LSFG at x3/x4 through the fork of FFX's swapchain (study branch): MfgPacing.h arithmetic under ASan/UBSan (x2 delta equals FFX's, output sets, steady-state schedule, summary), and source guards on the FSRFG routing, the router's forwarding, no FFX interface on the fork, drain-before-free, MIT notices, verbatim bytecode."
 
 [nr-hdr-d3d12]
+path = "nr-hdr-d3d12"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 900
 summary = "Production D3D12 HDR conversion: exact HDR10/scRGB GPU identity, known edits, resource refusals and a real ten-bit swapchain/PQ-support probe; no NGX."
 
 [nr-ab-compare]
+path = "nr-ab-compare"
+domain = "nr"
+requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "Offline Stage 0/1 capture metrics on synthetic PNG/PFM/raw pairs, temporal controls, provenance validation and CLI refusals; stdlib only."
 
 [fork-compat]
+path = "fork-compat"
+domain = "platform"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Actual NGX signature hooks and independent XeSS/XeFG/XeLL library config read/save behavior."
 
 [fg-locks]
+path = "fg-locks"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Production resize/release FG lock pairing through mutable settings, FG replacement, null inputs and exceptions."
 
 [fg-tag-extents]
+path = "fg-tag-extents"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Streamline D3D12 tag origins, full-texture fallback and overflow-safe bounds; Vulkan unchanged."
 
 [fg-game-camera]
+path = "fg-game-camera"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Streamline camera validation and exact-frame lifetime through production input and DLSS-G dispatch slices."
 
 [fg-inputs-d3d12]
+path = "fg-inputs-d3d12"
+domain = "fg"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1200
 summary = "MSVC/DirectXMath camera preservation and temporal projection; real D3D12 texture-tag crop/readback; three required failing mutation controls. No game or DLSS-G inference."
 
 [fg-dlssg-options]
+path = "fg-dlssg-options"
+domain = "fg"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Production common DLSS-G option caching, failed-write retries, generation invalidation, MFG restart and menu interlock with real SDK types."
 
 [fg-provider-d3d12]
+path = "fg-provider-d3d12"
+domain = "fg"
+requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1200
 summary = "Synthetic D3D12 application through the production OptiScaler DLL and real DLSS-G plugin, requiring actual interpolated presentation counters."
 
 [nr-moving-evidence]
+path = "nr-moving-evidence"
+domain = "nr"
+requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "Moving-scene evidence analyzer: independent depth/projection motion oracle, processing coverage, repeatability and timing percentiles. No GPU."
 
 [fg-provider-evidence]
+path = "fg-provider-evidence"
+domain = "fg"
+requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "Real DLSS-G evidence judge rejects missing interpolation, incomplete phase/frame records and unverified plugin coverage. No GPU."
 
 [deferred-release]
+path = "deferred-release"
+domain = "transport"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
 summary = "Production deferred queue: owner retirement before NR Vulkan device destruction, lost-device abandonment, handle reuse and detached-collector race. No GPU."
 
 [nr-darken-limit]
+path = "nr-darken-limit"
+domain = "nr"
+requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Actual final composition floor: luminance semantics, HDR, passthrough, black and off-path float32 identity. No GPU."
+
+[nr-replay-format]
+path = "nr-replay-format"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "Versioned replay manifests, bounded raw/PFM readers, provenance rejection and explicit suite paths."
+
+[nr-replay-metrics]
+path = "nr-replay-metrics"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "Analytic motion/pulse/ghost/blur controls, calibrated verdicts and stdlib PNG/report artifacts."
