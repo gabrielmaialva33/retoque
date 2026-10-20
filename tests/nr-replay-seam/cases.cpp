@@ -206,8 +206,9 @@ int main()
     script.foreignNote = true;
     frame.present = 24;
     frame.timeMs = 90.0;
-    Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &frame, &outcome) == 1 && outcome.skip[0] == '\0',
-           "notes from another thread are ignored");
+    Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &frame, &outcome) == 1 &&
+               std::string(outcome.skip) == "the pass returned without recording and gave no reason",
+           "notes from another thread are ignored; a silent unrecorded evaluation still gets a reason");
 
     // Another thread can neither evaluate nor end the owner's session.
     int foreignResult = -1;

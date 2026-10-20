@@ -17,6 +17,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <dlssnr/DlssNr_ReplayClock.h> // the real facade: inactive, it is the steady clock
 
 // The log lines are checked as formats: std::format refuses a pattern that does not fit its arguments at
 // compile time, which is the mistake a fmt call in production would only make at run time.

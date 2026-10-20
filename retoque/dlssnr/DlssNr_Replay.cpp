@@ -104,6 +104,10 @@ extern "C" __declspec(dllexport) int RetoqueReplay_Evaluate(ID3D12GraphicsComman
     t_noting = true;
     DlssNr::EvaluateAfterUpscale(cmdList, params, queue, false, frame->rayReconstruction != 0);
     t_noting = false;
+    // Every path out of the pass that records nothing should say why; one that does not still gets a reason, so a
+    // run never carries an unexplained skip.
+    if (g_outcome.recorded == 0 && g_outcome.skip[0] == '\0')
+        strncpy_s(g_outcome.skip, "the pass returned without recording and gave no reason", _TRUNCATE);
     *outcome = g_outcome;
     g_evaluating.store(false);
     return 1;
