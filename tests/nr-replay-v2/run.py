@@ -215,6 +215,40 @@ class V2(unittest.TestCase):
                 )
                 self.assertEqual(report["metrics"]["all"]["golden_max"], 0)
 
+    def test_effective_subrect(self):
+        original = json.loads(self.c2.read_text())
+        for backend in BACKENDS:
+            os.environ["RETOQUE_REPLAY_BACKEND"] = backend
+            for requested in ([0, 0], [99, 99]):
+                for low in (False, True):
+                    c = copy.deepcopy(original)
+                    for f in c["frames"]:
+                        f["params"].update(
+                            render_subrect=requested,
+                            depth_base=[2, 1],
+                            motion_base=[3, 2],
+                            create_flags=3 if low else 1,
+                        )
+                    save_json(self.c2, c)
+                    load_capture(self.c2)
+                    f = c["frames"][0]
+                    d = read_plane(self.c2.parent, f["depth"])
+                    m = read_plane(self.c2.parent, f["motion"])
+                    cc, ff, dd, mm = prepare(c, f, d, m)
+                    self.assertEqual(dd.data, aligned(d, 8, 6, [2, 1], [6, 5]).data)
+                    self.assertEqual(mm.data, aligned(m, 8, 6, [3, 2], [5, 4]).data)
+                    self.assertEqual(
+                        cc["motion"]["scale"], [8 / 6, 6 / 5] if low else [1, 1]
+                    )
+                    for path in (self.r2, self.t2):
+                        r = json.loads(path.read_text())
+                        r["capture_sha256"] = digest(self.c2)
+                        save_json(path, r)
+                    result = judge(self.c2, self.r2, self.t2)
+                    self.assertNotEqual(
+                        result["verdict"], "INVALID", result.get("reasons")
+                    )
+
     def test_mutations(self):
         original = json.loads(self.c2.read_text())
         mutations = [
@@ -224,9 +258,9 @@ class V2(unittest.TestCase):
             lambda c: c["frames"][0]["color"].update(pixel_bytes=8),
             lambda c: c["frames"][0]["color"].update(dxgi_format=999),
             lambda c: c["frames"][0]["params"].update(mv_scale=[float("nan"), 1]),
-            lambda c: c["frames"][0]["params"].update(render_subrect=[9, 6]),
-            lambda c: c["frames"][0]["params"].update(depth_base=[1, 0]),
-            lambda c: c["frames"][0]["params"].update(motion_base=[1, 0]),
+            lambda c: c["frames"][0]["params"].update(render_subrect=[0, 6]),
+            lambda c: c["frames"][0]["params"].update(depth_base=[8, 0]),
+            lambda c: c["frames"][0]["params"].update(motion_base=[9, 0]),
             lambda c: c["frames"][0]["color"].update(source_flags=-1),
             lambda c: c["frames"][0]["color"].update(source_format=True),
             lambda c: c["frames"][1]["color"].update(width=4, row_pitch=64, height=12),

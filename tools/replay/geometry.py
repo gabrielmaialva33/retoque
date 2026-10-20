@@ -1,7 +1,7 @@
 """Output-grid guide snapshots using the renderer's integer PointSource mapping."""
 
 from array import array
-from .format import Image
+from .format import Image, geometry
 from .dxgi import use_numpy
 
 
@@ -52,10 +52,12 @@ def prepare(capture, frame, depth, motion):
     motion = components(motion, 2)
     p = frame["params"]
     w, h = frame["color"]["width"], frame["color"]["height"]
-    render = p["render_subrect"]
+    regions = geometry(frame, capture)
+    depth_base, render = regions["depth"]
+    motion_base, motion_extent = regions["motion"]
     low = bool(p["create_flags"] & 2)
-    depth = aligned(depth, w, h, p["depth_base"], render)
-    motion = aligned(motion, w, h, p["motion_base"], render if low else [w, h])
+    depth = aligned(depth, w, h, depth_base, render)
+    motion = aligned(motion, w, h, motion_base, motion_extent)
     scale = [
         p["mv_scale"][0] * (w / render[0] if low else 1),
         p["mv_scale"][1] * (h / render[1] if low else 1),

@@ -289,11 +289,21 @@ is interpreted by its explicit format. This is a metric-domain convention, not a
 claim that every engine's colour metadata is accurate.
 
 Each frame requires finite `params.mv_scale`, nonnegative `frame_time_ms`, integer
-`create_flags`, boolean `ray_reconstruction`, positive integer `render_subrect:[w,h]`,
+`create_flags`, boolean `ray_reconstruction`, nonnegative integer `render_subrect:[w,h]`,
 and nonnegative integer `depth_base`/`motion_base`. The depth rectangle is render-sized;
 the motion rectangle is render-sized with MVLowRes (bit 1), otherwise output-sized.
-Each complete rectangle must fit its allocation; unlike the production pass's defensive
-clamping, malformed captures are refused. MVJittered (bit 2) and DepthInverted (bit 3)
+`[0,0]` means unspecified: use the depth texture extent, as in
+`DlssNr_PresentGuideIdentity.h::RenderExtent` (DLAA may produce this via `GetRenderSize`).
+Exactly one zero is INVALID. Mirror `DlssNr_Dx12.cpp` guide setup: clamp the requested
+render extent to the depth allocation, clamp each depth base to its allocation dimension,
+then clamp the extent to the remaining allocation after that base. This **effective depth
+extent** is the render size used for MVLowRes scaling and jitter conversion. For motion,
+start from that extent when MVLowRes, otherwise output extent; independently clamp the
+motion base to its allocation and its extent to the remaining space. Raw recorded params
+are preserved. A base at/beyond an allocation edge leaves an empty effective region;
+the judge refuses this as INVALID (no sampleable guide), rather than dividing by zero.
+Raw `base + subrect > allocation` is therefore not itself malformed; the effective
+region is what determines sampling bounds. MVJittered (bit 2) and DepthInverted (bit 3)
 must agree with the top-level conventions. Top-level motion is current-to-previous,
 `units:"pixels", scale:"per-frame"`. Recorded jitter is in render pixels.
 
