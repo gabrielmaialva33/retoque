@@ -161,6 +161,21 @@ Owners:
   - finalize hashed them;
   - every recorded depth and motion plane was byte-identical to the scene's own for the same frame (360 of 360);
   - every recorded colour plane that overlaps the NR-off corpus was byte-identical to it (62 of 62).
+- **First game clips** (Cyberpunk 2077, 2026-10-20, Ray Reconstruction, MFG 4x, about 30 real frames a second):
+  - colour R16G16B16A16_FLOAT and depth R32_TYPELESS at 3440x1440, and motion R16G16B16A16_FLOAT at 3440x1440
+    too: four channels where two carry the vectors, so a frame is about 100 MB, not the 57 MB estimated above;
+  - the game makes about 3 GB/s; one writer thread writing the planes in turn kept about 2 GB/s, the six slots
+    filled, and the four clips ended after 33, 22, 14 and 15 frames (0.4 to 1.2 s) with "every readback slot was
+    still in flight";
+  - the writer now writes the three planes at once (colour and motion on two helper threads, depth on its own) and
+    logs its throughput at the end of each clip, so the next game session measures the change;
+  - the steam library is btrfs with zstd compression; a 6 s clip writes about 18 GB, past the kernel's dirty-page
+    limit, where compression in writeback sets the pace. The clip folder in the game directory has compression off
+    (`chattr +m`, which new clip folders inherit). That is the local machine's setting, not the DLL's;
+  - Cyberpunk passes no frame time (recorded as 0), an MV scale of 3440 x 1440 (vectors in UV units) and one
+    present with two evaluations in it, all three now replayed as recorded (offline-replay-seam.md, Plan v3).
+  - Clips shorter than the 1.5 s warmup score nothing as recorded; `python3 -m tools.replay.hold` gives one a held
+    warmup (its first frame still, zero motion) so every recorded frame is scored.
 - **Not yet:**
   - judging a v2 capture: the judge's v2 reader is in progress (replaying one is done, offline-replay-seam.md,
     "Plan v3");

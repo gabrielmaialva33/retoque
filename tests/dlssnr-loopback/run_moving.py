@@ -12,6 +12,20 @@ import sys
 import time
 
 
+def unreadable_may_be_game(proc):
+    """Whether a process of ours whose maps cannot be read might still map a game.
+
+    A process that makes itself non-dumpable hides its maps from its own user: gpg-agent and ssh-agent do, and a
+    gpg-agent of another project refused every GPU fixture on 2026-10-22. A game under Wine or Proton does not do that,
+    and its command line, which its owner can always read, names Wine, Proton or an .exe. A command line that cannot
+    be read either counts as a possible game."""
+    try:
+        argv = (proc / 'cmdline').read_bytes().lower()
+    except OSError:
+        return True
+    return not argv or any(marker in argv for marker in (b'wine', b'proton', b'.exe', b'/steamapps/'))
+
+
 @contextmanager
 def lease(work):
     lock_path = Path.home() / '.cache/retoque-wt/msvc-prefix.lock'
@@ -41,7 +55,8 @@ def lease(work):
             except (FileNotFoundError, ProcessLookupError):
                 continue
             except PermissionError:
-                if proc.exists() and proc.stat().st_uid == os.getuid() and comm not in ('systemd', '(sd-pam)'):
+                if proc.exists() and proc.stat().st_uid == os.getuid() and comm not in ('systemd', '(sd-pam)') and \
+                        unreadable_may_be_game(proc):
                     raise RuntimeError('cannot inspect an owned process for active game mappings')
         yield
 

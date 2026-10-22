@@ -187,18 +187,20 @@ A capture the harness cannot transport is refused with the reason, never approxi
 - a guide that denies shader resource views;
 - nonfinite parameters;
 - half a render subrect (one dimension zero);
-- presents that do not move forward.
+- presents that go back, or times that do not move forward.
 
 A base or subrect that runs past its plane is not refused. The pass bounds a base by the allocation and the size by
 what is left after it (`DlssNr_Dx12.cpp`, "Where in the allocation the picture starts"), so the plan carries the
 geometry as the game gave it and the pass clamps it as it does live. A render subrect of 0x0 is the game not saying,
 and the pass then takes the depth texture's extent (`PresentGuideIdentity::RenderExtent`).
 
-The last refusal is the adapter's own rule: it sets the present counter from the frame. Two things would hit it:
-- **A source that never presents.** The loopback moving scene is one: its recorded present counter stays 0. The
-  record check numbers its presents by frame in a sibling manifest.
-- **A game that evaluates twice per present.** None has been seen. Supporting one would take an adapter that
-  accepts presents that do not decrease, an ABI change made only when a recording needs it.
+Presents may repeat. The adapter sets the present counter from the frame, and a game can evaluate twice within one
+present: the first Cyberpunk 2077 clips did (2026-10-20, present 28941 twice). The pass has its own answer for that
+(`Cadence::Reason::SamePresent`), so the adapter takes a repeated present with a later time, and the replay reaches
+that answer as the game did. The structs did not change, so the ABI stays version 1; an adapter from before refuses
+such a frame and the harness stops on it. The loopback moving scene never presents, so its counter stays 0; the
+record check still numbers that clip's presents by frame in a sibling manifest, which keeps its gates about the
+recorder rather than about SamePresent.
 
 ### The run manifest
 

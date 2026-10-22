@@ -145,7 +145,8 @@ class PlanV3(unittest.TestCase):
             (lambda c: [f['depth'].update(dxgi_format=99) for f in c['frames']], 'not one the seam transports'),
             (lambda c: c['frames'][1].update(exposure='f2.exposure'), 'exposure textures'),
             (lambda c: c['frames'][1]['params'].update(mv_scale=[math.nan, 1.0]), 'finite'),
-            (lambda c: c['frames'][1].update(present=1), 'strictly increase'),
+            (lambda c: c['frames'][1].update(present=1), 'must not go back'),
+            (lambda c: c['frames'][1].update(time_ms=c['frames'][0]['time_ms']), 'must move forward'),
             (lambda c: c.update(color_jitter='present'), 'color_jitter'),
         ]
         for mutate, reason in cases:
