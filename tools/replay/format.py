@@ -269,9 +269,10 @@ def load_capture(path):
         )
         need(f.get("completion") == "fence-complete", "uncertified capture")
         if prev:
+            # A present may repeat: a game can evaluate twice within one present (offline-replay-seam.md, "Refusals").
             need(
                 f["id"] == prev["id"] + 1
-                and f["present"] > prev["present"]
+                and f["present"] >= prev["present"]
                 and f["time_ms"] > prev["time_ms"],
                 "nonconsecutive frames or nonmonotonic clocks",
             )
@@ -459,21 +460,28 @@ def geometry(frame, capture):
     vector(p.get("mv_scale"), "mv_scale")
     number(p.get("frame_time_ms"), "frame_time_ms", 0)
     rw, rh = vector(p.get("render_subrect"), "render_subrect")
-    integer(rw, "render width", 1)
-    integer(rh, "render height", 1)
+    integer(rw, "render width")
+    integer(rh, "render height")
+    need((rw == 0) == (rh == 0), "incomplete render subrect")
+    if rw == 0:
+        rw, rh = frame["depth"]["width"], frame["depth"]["height"]
+    regions = {}
     for name in ("depth", "motion"):
         x, y = vector(p.get(name + "_base"), name + "_base")
         integer(x, name + " base x")
         integer(y, name + " base y")
+        aw, ah = frame[name]["width"], frame[name]["height"]
+        x, y = min(x, aw), min(y, ah)
         w, h = (
             (rw, rh)
             if name == "depth" or flags & 2
             else (frame["color"]["width"], frame["color"]["height"])
         )
-        need(
-            x + w <= frame[name]["width"] and y + h <= frame[name]["height"],
-            name + " subrect out of bounds",
-        )
+        w, h = min(w, aw - x), min(h, ah - y)
+        need(w > 0 and h > 0, name + " effective subrect is empty")
+        regions[name] = ([x, y], [w, h])
+        if name == "depth":
+            rw, rh = w, h
     need(
         bool(flags & 4) == capture["motion"]["includes_jitter"],
         "MVJittered flag/convention mismatch",
@@ -486,3 +494,4 @@ def geometry(frame, capture):
         bool(flags & 1) == (capture["color_space"] == "linear-rec709"),
         "IsHDR flag/color_space mismatch",
     )
+    return regions
