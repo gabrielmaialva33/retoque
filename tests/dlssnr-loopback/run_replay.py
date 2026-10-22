@@ -247,8 +247,9 @@ def load_capture(path):
             raise SystemExit(f'frame {f["id"]}: exposure textures are not transported by the seam')
         if g['create_flags'] != flags:
             raise SystemExit(f'frame {f["id"]}: create flags change within the capture')
-        if previous and (f['present'] <= previous['present'] or f['time_ms'] <= previous['time_ms']):
-            raise SystemExit(f'frame {f["id"]}: presents and times must strictly increase')
+        # A present may repeat (two evaluations in one present, as a game can do); it never goes back.
+        if previous and (f['present'] < previous['present'] or f['time_ms'] <= previous['time_ms']):
+            raise SystemExit(f'frame {f["id"]}: presents must not go back and times must move forward')
         numbers = [f['time_ms'], f['pre_exposure'], *f['jitter'], *g['mv_scale'], g['frame_time_ms'] or 1.0]
         if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in numbers) or f['pre_exposure'] <= 0:
             raise SystemExit(f'frame {f["id"]}: parameters must be finite, pre-exposure positive')
@@ -318,8 +319,10 @@ def geometry(capture, f):
         return dict(create_flags=params.get('create_flags', CREATE_FLAGS), ray_reconstruction=False,
                     mv_scale=[1.0, 1.0], frame_time_ms=params.get('frame_time_ms'), render_subrect=[w, h],
                     depth_base=[0, 0], motion_base=[0, 0])
+    # A game that passes no frame time is recorded as 0 (Cyberpunk 2077 does): the plan then takes the recorded
+    # clock's step, as it does for a capture that has none.
     return dict(create_flags=params['create_flags'], ray_reconstruction=params['ray_reconstruction'],
-                mv_scale=params['mv_scale'], frame_time_ms=params.get('frame_time_ms'),
+                mv_scale=params['mv_scale'], frame_time_ms=params.get('frame_time_ms') or None,
                 render_subrect=params['render_subrect'], depth_base=params['depth_base'],
                 motion_base=params['motion_base'])
 
@@ -821,10 +824,16 @@ def run(runner, proton, env, dll):
     baseline = load_baseline(BASELINE, digest(capture_path)) if BASELINE else None
     variants = json.loads(os.environ['LOOPBACK_REPLAY_VARIANTS']) if os.environ.get('LOOPBACK_REPLAY_VARIANTS') \
         else DEFAULT_VARIANTS
+    # A clip recorded at the Ray Reconstruction placement replays there, which the pass enters only with ApplyAfterRR
+    # (default off); a variant that sets it keeps its own value.
+    if any(geometry(capture, f)['ray_reconstruction'] for f in capture['frames']):
+        variants = {name: None if settings is None else {'ApplyAfterRR': 'true', **settings}
+                    for name, settings in variants.items()}
+        print('  the capture was recorded after Ray Reconstruction: NR variants run with ApplyAfterRR=true', flush=True)
     if 'every-a' in variants and CALIBRATE > 0 and (runner.ROOT / 'tools/replay/__main__.py').is_file():
         if CALIBRATE < 5:
             raise SystemExit('LOOPBACK_REPLAY_CALIBRATE needs at least five repeats (offline-replay.md)')
-        variants = dict(variants, **{f'aa-{i}': {'Cadence': '1'} for i in range(1, CALIBRATE + 1)})
+        variants = dict(variants, **{f'aa-{i}': dict(variants['every-a']) for i in range(1, CALIBRATE + 1)})
     runs = {name: run_variant(runner, proton, env, root, name, settings, capture, capture_path, environment,
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)

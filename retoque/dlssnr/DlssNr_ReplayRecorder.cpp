@@ -160,6 +160,8 @@ class Writer
     std::deque<Job> jobs_;
     bool started_ = false;
     std::vector<WrittenFrame> frames_;
+    uint64_t bytes_ = 0;                          // this clip's, for the log
+    std::chrono::steady_clock::duration busy_ {}; // time spent writing this clip's frames
 };
 
 Writer& TheWriter()
@@ -229,18 +231,48 @@ void Writer::Run()
                 LOG_ERROR("DLSS-NR replay recorder: the clip's manifest could not be written in {}",
                           job.folder.string());
             else
-                LOG_INFO("DLSS-NR replay recorder: clip of {} frames written to {} ({})", frames.size(),
-                         job.folder.string(), job.stopped);
+                LOG_INFO("DLSS-NR replay recorder: clip of {} frames written to {} ({}); the writer wrote {:.0f} MB "
+                         "at {:.2f} GB/s while busy",
+                         frames.size(), job.folder.string(), job.stopped, bytes_ / 1.0e6,
+                         busy_.count() > 0 ? bytes_ / 1.0e9 / std::chrono::duration<double>(busy_).count() : 0.0);
             frames_.clear();
+            bytes_ = 0;
+            busy_ = {};
             continue;
         }
         Slot& slot = g_slots[job.slot];
         WrittenFrame written;
         written.meta = job.meta;
         const std::string stem = "f" + std::to_string(job.meta.id);
-        written.colorWritten = WritePlane(job.folder / (stem + ".color"), slot.shots[0], slot.planes[0]);
-        written.depthWritten = WritePlane(job.folder / (stem + ".depth"), slot.shots[1], slot.planes[1]);
-        written.motionWritten = WritePlane(job.folder / (stem + ".motion"), slot.shots[2], slot.planes[2]);
+        // The three planes go to disk at once. One thread writing them in turn kept about 2 GB/s in Cyberpunk 2077
+        // at 3440x1440, where a frame is about 100 MB and the game makes 3 GB/s, so every clip ended in under a second
+        // (2026-10-20). A plane whose thread cannot be started is written here, in turn, as before.
+        const auto started = std::chrono::steady_clock::now();
+        bool ok[3] = {};
+        std::thread helpers[2];
+        for (size_t i = 0; i < 2; ++i)
+        {
+            const size_t plane = i == 0 ? 0 : 2; // colour and motion beside, depth (the smallest) here
+            const auto path = job.folder / (stem + (plane == 0 ? ".color" : ".motion"));
+            try
+            {
+                helpers[i] = std::thread([&, plane, path]
+                                         { ok[plane] = WritePlane(path, slot.shots[plane], slot.planes[plane]); });
+            }
+            catch (...)
+            {
+                ok[plane] = WritePlane(path, slot.shots[plane], slot.planes[plane]);
+            }
+        }
+        ok[1] = WritePlane(job.folder / (stem + ".depth"), slot.shots[1], slot.planes[1]);
+        for (auto& helper : helpers)
+            if (helper.joinable())
+                helper.join();
+        written.colorWritten = ok[0];
+        written.depthWritten = ok[1];
+        written.motionWritten = ok[2];
+        bytes_ += slot.planes[0].Bytes() + slot.planes[1].Bytes() + slot.planes[2].Bytes();
+        busy_ += std::chrono::steady_clock::now() - started;
         frames_.push_back(std::move(written));
         g_written.fetch_add(1, std::memory_order_relaxed);
         g_writing[job.slot].store(false, std::memory_order_release);

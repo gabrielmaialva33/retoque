@@ -92,8 +92,9 @@ static Plan LoadPlan(const char* path)
                          (unsigned) sizeof(motion)) == 21,
                 "replay plan frame line");
         Require(f.deltaMs > 0.0 && f.deltaMs < 1000.0, "replay plan frame time out of range");
-        Require(plan.frames.empty() || (f.present > plan.frames.back().present && f.timeMs > plan.frames.back().timeMs),
-                "replay plan presents and times must strictly increase");
+        Require(plan.frames.empty() ||
+                    (f.present >= plan.frames.back().present && f.timeMs > plan.frames.back().timeMs),
+                "replay plan presents must not go back and times must move forward");
         f.color = color;
         f.depth = depth;
         f.motion = motion;

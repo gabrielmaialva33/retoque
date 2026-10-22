@@ -59,3 +59,20 @@ Game frames/models stay local, outside Git.
 
 The complete producer contract, clocks, completion rules and limitations live in
 [offline-replay.md](../../docs/dlssnr/design/offline-replay.md).
+
+## Short game clips: a held warmup
+
+The replay scores only frames after the pass's start-up gates, so a recorded clip shorter than its 1.5 s warmup has
+nothing to score. A game can force that on the recorder by outrunning its writer (the first Cyberpunk 2077 clips
+ran 0.4 to 1.2 s). `hold` writes a new finalized capture that opens on the clip's first frame held still, with zero
+motion, for 1.6 s of logical time at the clip's own frame interval. The clip follows, its first frame reset, and
+every one of its frames is scored. The planes are linked, not copied, and the source capture is left as it was.
+
+```sh
+python3 -m tools.replay.finalize /local/clip/capture.json
+python3 -m tools.replay.hold /local/clip/capture.json /local/clip-held [--ms 1600]
+```
+
+The held frames reach the gates; they are never judged. The clip's first frame is reset, so the model's history
+starts on the game's frames, as at the start of any recording, and a cadence variant's first frames after it are
+model frames. Those first few scored frames are therefore alike across variants by construction.

@@ -88,9 +88,11 @@ extern "C" __declspec(dllexport) int RetoqueReplay_Evaluate(ID3D12GraphicsComman
 {
     if (!IsOwner() || frame == nullptr || outcome == nullptr || frame->version != 1 || outcome->version != 1)
         return 0;
-    // Recorded time and presents only move forward; anything else is refused before it touches any state.
+    // Recorded time moves forward and presents never go back; anything else is refused before it touches any state.
+    // A present may repeat: a game can evaluate twice within one (Cyberpunk 2077 did, 2026-10-20), and the pass has
+    // its own answer for that (Cadence::Reason::SamePresent), which a replay must reach as the game did.
     if (!std::isfinite(frame->timeMs) || frame->timeMs < 0.0 || frame->timeMs > kMaxLogicalMs ||
-        frame->timeMs <= g_lastTimeMs || frame->present <= g_lastPresent)
+        frame->timeMs <= g_lastTimeMs || frame->present < g_lastPresent)
         return 0;
     bool idle = false;
     if (!g_evaluating.compare_exchange_strong(idle, true))

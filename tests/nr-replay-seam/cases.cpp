@@ -180,13 +180,20 @@ int main()
                    State::Instance().frameCount == 16,
                what);
     };
-    refuse(16, 70.0, "a repeated present is refused");
     refuse(15, 70.0, "a decreasing present is refused");
     refuse(17, 66.0, "a repeated time is refused");
     refuse(17, 65.0, "a decreasing time is refused");
     refuse(17, std::nan(""), "a NaN time is refused");
     refuse(17, INFINITY, "an infinite time is refused");
     refuse(17, 2.0e9, "a time beyond the bound is refused");
+
+    // A repeated present with a later time is a game evaluating twice in one present: taken, as the pass saw it.
+    script = {};
+    frame.present = 16;
+    frame.timeMs = 70.0;
+    Expect(RetoqueReplay_Evaluate(nullptr, nullptr, nullptr, &frame, &outcome) == 1 && seen.calls == callsBefore + 1 &&
+               State::Instance().frameCount == 16,
+           "a repeated present with a later time is taken");
 
     // A nested evaluation from inside the pass is refused; the outer one completes with its own outcome.
     script = {};
