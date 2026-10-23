@@ -38,6 +38,8 @@ native hardware to be found. The audit behind it is docs/dlssnr/design/native-ap
 8. Zero-guide clears are settled. Every object a file calls RecordClear on (a one-way UNORDERED_ACCESS -> rest
    transition recorded once), the same file answers with ConfirmExecuted and AbandonRecording, so a dropped list
    does not leave the guides believed to be in a state they never reached.
+9. Shader module words. VkShaderModuleCreateInfo::pCode is an array of uint32_t; a create_header.py array is
+   unsigned char, so pCode is never one of them cast (VUID-VkShaderModuleCreateInfo-pCode-parameter).
 
 Each check fails on a seeded violation, so a pattern that stops matching the code is not a pass.
 Pure Python: no compiler, no Wine prefix, no GPU. It reads source and bytecode; it does not prove a pass correct.
@@ -475,6 +477,26 @@ def check_settled_recordings(sources, fail):
     return sites
 
 
+def check_module_words(sources, fail):
+    """9. VkShaderModuleCreateInfo::pCode is an array of uint32_t (VUID-VkShaderModuleCreateInfo-pCode-parameter);
+    create_header.py's arrays are unsigned char, aligned to one byte, so pCode is never one of them cast."""
+    sites = 0
+    for path, raw in sources.items():
+        text = strip_comments(raw)
+        arrays = set(re.findall(r'\bunsigned\s+char\s+(\w+)\s*\[', text))
+        for m in re.finditer(r'\bpCode\s*=\s*([^;]+);', text):
+            sites += 1
+            value = m.group(1)
+            cast = re.fullmatch(r'\s*reinterpret_cast<\s*const\s+uint32_t\s*\*\s*>\s*\((.+)\)\s*', value)
+            if not cast:
+                continue
+            inner = cast.group(1).strip()
+            if re.search(r'_spv\b|\.data\b(?!\(\))', inner) or inner in arrays:
+                fail(f'{rel(path)}:{line_of(text, m.start())}: pCode casts {inner}, a byte array, to uint32_t*; copy '
+                     'it into uint32_t storage first')
+    return sites
+
+
 # --- SPIR-V ---------------------------------------------------------------------------------------------------------
 
 OP_NAME, OP_MEMBER_DECORATE, OP_DECORATE = 5, 72, 71
@@ -650,6 +672,13 @@ def run_tree():
     elif len(failures) == before:
         print(f'PASS 8: {settled} zero-guide clear recordings are each settled both ways by their caller')
 
+    before = len(failures)
+    words = check_module_words(host, fail)
+    if words < 2:
+        fail(f'only {words} pCode sites read; the scan no longer matches the code')
+    elif len(failures) == before:
+        print(f'PASS 9: {words} shader modules are created from uint32_t storage')
+
     modules = {p: p.read_bytes() for base in PASS_DIRS for p in sorted((base / 'precompile').glob('*.spv'))}
     blocks = check_spirv(modules, host, fail)
     validated = check_spirv_val(modules, fail, notes)
@@ -733,6 +762,14 @@ def self_test():
     check_settled_recordings({host_cpp: host_cpp.read_text()}, found.append)
     if found:
         problems.append(f'the present host\'s settled clear fails: {found}')
+    # 9. The estimator's modules cast straight from their byte arrays, as before 2026-10-23.
+    vk = nr / 'shaders/synth_motion/SynthMotion_Vk.cpp'
+    found = []
+    check_module_words({vk: vk.read_text().replace('moduleInfo.pCode = code.data();',
+                                                   'moduleInfo.pCode = reinterpret_cast<const uint32_t*>(kBlobs[pass].data);')},
+                       found.append)
+    if not any('a byte array' in f for f in found):
+        problems.append(f'byte-aligned pCode: expected a failure, got {found or "none"}')
     # 6. SPIR-V: an oversized push-constant block, and a format-less storage write nobody checks.
     pc = root / 'retoque/shaders/synth_motion/precompile/SynthMotion_Expand_Shader_Vk.spv'
     blob = bytearray(pc.read_bytes())

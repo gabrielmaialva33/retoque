@@ -413,9 +413,14 @@ bool CreateVkPipelines(VkDevice device, VkPipelines& out, std::string& why)
 
     for (uint32_t pass = 0; pass < PassCount; ++pass)
     {
+        // The generated arrays are unsigned char, aligned to one byte; pCode is an array of uint32_t
+        // (VUID-VkShaderModuleCreateInfo-pCode-parameter), so the words are copied into storage that is.
+        std::vector<uint32_t> code((kBlobs[pass].size + sizeof(uint32_t) - 1) / sizeof(uint32_t));
+        std::memcpy(code.data(), kBlobs[pass].data, kBlobs[pass].size);
+
         VkShaderModuleCreateInfo moduleInfo { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
         moduleInfo.codeSize = kBlobs[pass].size;
-        moduleInfo.pCode = reinterpret_cast<const uint32_t*>(kBlobs[pass].data);
+        moduleInfo.pCode = code.data();
 
         VkShaderModule module = VK_NULL_HANDLE;
         if (vkCreateShaderModule(device, &moduleInfo, nullptr, &module) != VK_SUCCESS)
