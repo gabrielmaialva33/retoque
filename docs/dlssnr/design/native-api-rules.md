@@ -113,6 +113,10 @@ source and the committed bytecode:
 
 Each check fails on a violation seeded into a copy of a real pass first.
 
+Two open findings are also mechanical and are held as known exceptions with their reasons (checks 10 and 11): the
+`R10G10B10A2_TYPELESS` integer view, and the two Vulkan modules' `Rgba32f` storage declarations. A new instance fails,
+and so does a fixed one until it is taken off the list.
+
 The open findings above are not mechanical, since they depend on runtime values, and stay with review
 ([DEVELOPMENT.md](DEVELOPMENT.md) §3). A native-Windows run is still the only evidence for any of them, the fixed
 ones included.

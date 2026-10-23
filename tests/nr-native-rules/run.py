@@ -38,6 +38,11 @@ native hardware to be found. The audit behind it is docs/dlssnr/design/native-ap
 8. Zero-guide clears are settled. Every object a file calls RecordClear on (a one-way UNORDERED_ACCESS -> rest
    transition recorded once), the same file answers with ConfirmExecuted and AbandonRecording, so a dropped list
    does not leave the guides believed to be in a state they never reached.
+10-11. Open findings, held where the audit left them. Two findings are mechanical but not fixed (the fix changes
+   pixels or needs a shader rebuild): upstream's TranslateTypelessFormats maps R10G10B10A2_TYPELESS to an integer view
+   that the NR passes read through float declarations, and the NR and HDR Vulkan modules declare their storage images
+   Rgba32f while their slots take views of other formats. Each is listed with its reason; a new instance fails, and a
+   listed one that is gone fails until the list and native-api-rules.md are updated.
 9. Shader module words. VkShaderModuleCreateInfo::pCode is an array of uint32_t; a create_header.py array is
    unsigned char, so pCode is never one of them cast (VUID-VkShaderModuleCreateInfo-pCode-parameter).
 
@@ -497,6 +502,64 @@ def check_module_words(sources, fail):
     return sites
 
 
+# --- Open findings, held where they are -----------------------------------------------------------------------------
+# Two findings of the audit (native-api-rules.md, "Open, for review") are mechanical but not fixed here, because the
+# fix changes pixels or needs a shader rebuild. They are listed with their reason, so a new instance fails, and a
+# listed one that is gone fails too until the list (and the note) are updated.
+
+# 10. Typeless views that change the component type. Every NR pass views with translateTypeless (kViewTranslateTypeless)
+# through float4 declarations; a typeless family mapped to a UINT/SINT view hands a float shader integer texels.
+KNOWN_INTEGER_VIEWS = {
+    'DXGI_FORMAT_R10G10B10A2_TYPELESS': 'upstream maps it to R10G10B10A2_UINT; an NR-owned UNORM mapping changes pixels '
+                                        'where it applies (native-api-rules.md, open)',
+}
+
+# 11. Vulkan storage images declared with a format in modules whose slots take views of several formats. The NR and HDR
+# modules write the proxy, the meter, the game's output and the HDR targets through one declaration each.
+KNOWN_DECLARED_STORAGE = {
+    'DlssNr_Shader_Vk.spv': 'gTarget/gKeep declared Rgba32f, bound to RGBA16F, R32_SFLOAT and the game\'s format; fix is '
+                            'a rebuild with -fspv-use-unknown-image-format (native-api-rules.md, open)',
+    'DlssNr_PresentHdr_Shader_Vk.spv': 'gOut declared Rgba32f, bound to RGBA16F and A2B10G10R10 (same fix)',
+}
+MULTI_FORMAT_MODULES = ('DlssNr_Shader_Vk.spv', 'DlssNr_PresentHdr_Shader_Vk.spv')
+
+
+def check_integer_views(table_text, fail):
+    found = {}
+    pending = []
+    for line in strip_comments(table_text).splitlines():
+        case = re.match(r'\s*case\s+(DXGI_FORMAT_\w+)\s*:', line)
+        if case:
+            pending.append(case.group(1))
+            continue
+        ret = re.match(r'\s*return\s+(DXGI_FORMAT_\w+)\s*;', line)
+        if ret:
+            for name in pending:
+                found[name] = ret.group(1)
+            pending = []
+    integer = {k: v for k, v in found.items() if k.endswith('_TYPELESS') and re.search(r'_(UINT|SINT)$', v)}
+    for name, view in integer.items():
+        if name not in KNOWN_INTEGER_VIEWS:
+            fail(f'TranslateTypelessFormats maps {name} to {view}: an integer view for float shaders')
+    for name in KNOWN_INTEGER_VIEWS:
+        if name not in integer:
+            fail(f'{name} no longer maps to an integer view: take it off KNOWN_INTEGER_VIEWS and native-api-rules.md')
+    return len(found)
+
+
+def check_declared_storage(modules, fail):
+    for path, blob in modules.items():
+        if path.name not in MULTI_FORMAT_MODULES:
+            continue
+        ins = spirv(blob)
+        declared = [w for op, w in ins if op == OP_TYPE_IMAGE and w[6] == 2 and w[7] != 0]  # Sampled 2, a format
+        if declared and path.name not in KNOWN_DECLARED_STORAGE:
+            fail(f'{rel(path)}: a storage image declared with a format, in a module whose slots take several formats')
+        if not declared and path.name in KNOWN_DECLARED_STORAGE:
+            fail(f'{rel(path)}: no storage image declares a format any more: take it off KNOWN_DECLARED_STORAGE and '
+                 'native-api-rules.md')
+
+
 # --- SPIR-V ---------------------------------------------------------------------------------------------------------
 
 OP_NAME, OP_MEMBER_DECORATE, OP_DECORATE = 5, 72, 71
@@ -680,6 +743,14 @@ def run_tree():
         print(f'PASS 9: {words} shader modules are created from uint32_t storage')
 
     modules = {p: p.read_bytes() for base in PASS_DIRS for p in sorted((base / 'precompile').glob('*.spv'))}
+    before = len(failures)
+    mapped = check_integer_views((root / 'OptiScaler/shaders/Shader_Dx12.cpp').read_text(errors='replace'), fail)
+    check_declared_storage(modules, fail)
+    if mapped < 10:
+        fail(f'only {mapped} TranslateTypelessFormats entries read; the parser no longer matches the code')
+    elif len(failures) == before:
+        print(f'PASS 10-11: the open findings are where the audit left them ({len(KNOWN_INTEGER_VIEWS)} integer view '
+              f'mapping, {len(KNOWN_DECLARED_STORAGE)} modules with declared storage formats), and no new one')
     blocks = check_spirv(modules, host, fail)
     validated = check_spirv_val(modules, fail, notes)
     if len(modules) < 10:
@@ -770,6 +841,17 @@ def self_test():
                        found.append)
     if not any('a byte array' in f for f in found):
         problems.append(f'byte-aligned pCode: expected a failure, got {found or "none"}')
+    # 10. A second integer view, and the known one fixed.
+    table = (root / 'OptiScaler/shaders/Shader_Dx12.cpp').read_text()
+    found = []
+    check_integer_views(table.replace('return DXGI_FORMAT_R16G16_FLOAT;', 'return DXGI_FORMAT_R16G16_UINT;'), found.append)
+    if not any('R16G16_TYPELESS to DXGI_FORMAT_R16G16_UINT' in f for f in found):
+        problems.append(f'new integer view: expected a failure, got {found or "none"}')
+    found = []
+    check_integer_views(table.replace('return DXGI_FORMAT_R10G10B10A2_UINT;', 'return DXGI_FORMAT_R10G10B10A2_UNORM;'),
+                        found.append)
+    if not any('no longer maps' in f for f in found):
+        problems.append(f'fixed integer view: expected a failure, got {found or "none"}')
     # 6. SPIR-V: an oversized push-constant block, and a format-less storage write nobody checks.
     pc = root / 'retoque/shaders/synth_motion/precompile/SynthMotion_Expand_Shader_Vk.spv'
     blob = bytearray(pc.read_bytes())
@@ -803,6 +885,11 @@ def self_test():
     check_spirv({Path('DlssNr_Shader_Vk.spv'): seeded}, {Path('loader.cpp'): 'DlssNr_Shader_Vk_spv'}, found.append)
     if not any('never checks the feature' in f for f in found):
         problems.append(f'unchecked feature: expected a failure, got {found or "none"}')
+    # 11. The NR module with its storage images made format-less: the list must be updated.
+    found = []
+    check_declared_storage({Path('DlssNr_Shader_Vk.spv'): seeded}, found.append)
+    if not any('no storage image declares a format' in f for f in found):
+        problems.append(f'fixed declared storage: expected a failure, got {found or "none"}')
     return problems
 
 
