@@ -63,7 +63,7 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** 74 suites (86 total: 74 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 75 suites (87 total: 75 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -229,6 +229,13 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-invariants` — the `DEVELOPMENT.md` §4 guards against the live tree: config
   round-trip for every `DlssNr` key, struct equals cbuffer, precompiled headers equal
   the committed bytecode, retired identifiers. Pure Python, no compiler.
+- `nr-native-rules` — native D3D12/Vulkan rules over the fork's passes, read off the source and the
+  committed bytecode: every DXIL binding (PSV0, decoded from the header the build embeds) inside the
+  root signature its pass creates, root-signature cost, root-constant and table writes against their
+  parameter, upload/readback heaps in their fixed state, no same-state transition, CBVs at their
+  buffer's own address, SPIR-V push-constant blocks within 128 bytes and format-less storage images
+  only where the feature is checked. Each check fails on a seeded violation. Pure Python; the audit it
+  came from is `docs/dlssnr/design/native-api-rules.md`.
 - `nr-localization` — the real portable `.lang` parser and the repository ImGui
   hash; label identities and collisions under translation, and a drift guard that every
   menu string routed through the translator has a pt-BR entry. Slowest suite, around 45 seconds.
