@@ -33,6 +33,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 - [chain-in-flight.md](design/chain-in-flight.md): multi-pass recordings bounded in flight by GPU fences instead of waiting for the game's Reset; the fix for the Cyberpunk pause stall.
 - [working-scale-auto.md](design/working-scale-auto.md): what `WorkingScale=auto` resolves to per GPU, acting on the cross-architecture measurement.
 - [reduced-scale-guides.md](design/reduced-scale-guides.md): resampling guides and scaling motion when the model works below the frame's size.
+- [reduced-scale-guides-vk.md](design/reduced-scale-guides-vk.md): the same guide resample on the Vulkan after-upscale route, its Vulkan interface, and the refusal that replaces frame-size guides.
 - [peripheral-compression.md](design/peripheral-compression.md): packing the model's input denser in the centre than at the edges.
 - [dlssnr-async-compute.md](design/dlssnr-async-compute.md): why the Reshade addon's async compute queue was not ported, and which micro-optimizations were taken instead.
 
