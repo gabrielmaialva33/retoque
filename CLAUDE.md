@@ -271,11 +271,11 @@ before committing C++, because nothing local enforces it and it had drifted by 5
 
 ### Tests
 
-`tests/README.md` is the index; read it before adding or changing a suite. Eighty-nine directories under
+`tests/README.md` is the index; read it before adding or changing a suite. Ninety-three directories under
 `tests/`, each self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
 
 ```bash
-python3 tests/run_all.py            # host tier, the default; 76 suites
+python3 tests/run_all.py            # host tier, the default; 80 suites
 python3 tests/run_all.py --list     # registry, tiers, and what is runnable here
 python3 tests/run_all.py --tier all # adds the thirteen wine suites
 python3 tests/<name>/run.py         # one suite, unchanged
