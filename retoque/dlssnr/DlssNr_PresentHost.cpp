@@ -193,12 +193,19 @@ bool PresentHost::_QueueIdle()
         if (!idle)
         {
             HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-            idle = event != nullptr && !FAILED(fence->SetEventOnCompletion(1, event)) &&
-                   WaitForSingleObject(event, 5000) == WAIT_OBJECT_0;
-            if (event != nullptr)
+            const bool registered = event != nullptr && !FAILED(fence->SetEventOnCompletion(1, event));
+            idle = registered && WaitForSingleObject(event, 5000) == WAIT_OBJECT_0;
+            // A registration the fence has not fired yet still names this event, and closing it would let the late
+            // signal land on a closed or reused handle: it stays open, leaked with the fence.
+            if (event != nullptr && (idle || !registered))
                 CloseHandle(event);
         }
     }
+
+    // A removed device reads every fence complete (UINT64_MAX) and wakes its waiters without the queue having run
+    // anything: that proves nothing about the lists still reading what this host built.
+    if (idle && FAILED(_queueDevice->GetDeviceRemovedReason()))
+        idle = false;
 
     // A fence the queue still owes a signal stays alive: leaked, rather than released under that signal.
     if (idle)
