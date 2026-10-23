@@ -794,3 +794,26 @@ class XeFG_DynamicCount
     double _waitShare = 0.0;
     Reason _reason = Reason::None;
 };
+
+// The presented frame rate Dynamic MFG follows, for XeFG_DynamicCount and XeFG_DynamicCap alike
+// (XeFG_Dx12::DynamicTargetFps). setFps: FramerateTargetDMFG, 0 for auto; limitFps: OptiScaler's FPS limit, 0 for
+// none; refreshFps: the display refresh rate, 0 if unknown; vsync: frame generation's last present waited for V-Sync.
+inline float XeFG_DynamicTargetFps(float setFps, float limitFps, float refreshFps, bool vsync)
+{
+    float target = 0.0f;
+
+    // OptiScaler's FPS limit counts the presented frames, a target above it can't be reached
+    if (setFps > 0.0f)
+        target = limitFps > 0.0f ? std::min(setFps, limitFps) : setFps;
+    else if (limitFps > 0.0f)
+        target = limitFps;
+    else if (refreshFps > 0.0f) // Just under the refresh rate (116 at 120 Hz), where a VRR display's frame cap sits
+        target = std::floor(refreshFps - refreshFps * refreshFps / 3600.0f);
+
+    // Nor can one above the refresh rate with V-Sync. XeFG drops the generated frames that don't fit instead of
+    // holding the game, so the count kept climbing for frames that are never shown.
+    if (vsync && refreshFps > 0.0f)
+        target = std::min(target, refreshFps);
+
+    return target;
+}

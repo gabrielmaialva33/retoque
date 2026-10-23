@@ -4919,7 +4919,8 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                     config->FGXeFGFramerateTargetDMFG = xefgFpsTarget;
             }
 
-            ShowTooltip("Presented FPS to aim for, never above the FPS limit.\n"
+            ShowTooltip("Presented FPS to aim for, never above the FPS limit\n"
+                        "(or the refresh rate with V-Sync).\n"
                         "Auto: the FPS limit, or just under the refresh rate.");
 
             // The cap picks from 2X up, it needs a higher Frame Gen setting

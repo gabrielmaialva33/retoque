@@ -1137,18 +1137,9 @@ float XeFG_Dx12::DisplayRefreshFps(double nowMs)
 
 float XeFG_Dx12::DynamicTargetFps(double nowMs)
 {
-    // OptiScaler's FPS limit counts the presented frames, a target above it can't be reached
-    const auto limit = Config::Instance()->FramerateLimit.value_or_default();
-
-    if (auto target = Config::Instance()->FGXeFGFramerateTargetDMFG.value_or_default(); target > 0.0f)
-        return limit > 0.0f ? std::min(target, limit) : target;
-
-    if (limit > 0.0f)
-        return limit;
-
-    // Just under the refresh rate (116 at 120 Hz), where a VRR display's frame cap sits
-    const auto refresh = DisplayRefreshFps(nowMs);
-    return refresh > 0.0f ? std::floor(refresh - refresh * refresh / 3600.0f) : 0.0f;
+    return XeFG_DynamicTargetFps(Config::Instance()->FGXeFGFramerateTargetDMFG.value_or_default(),
+                                 Config::Instance()->FramerateLimit.value_or_default(), DisplayRefreshFps(nowMs),
+                                 State::Instance().fgPresentVsync.load(std::memory_order_relaxed));
 }
 
 void XeFG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)

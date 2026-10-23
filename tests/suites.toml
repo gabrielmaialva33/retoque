@@ -693,3 +693,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Production SL hooks refresh provider capacity and clamp only the effective count, preserving the INI preference."
+
+[xefg-dynamic-target]
+path = "xefg-dynamic-target"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "XeFG Dynamic MFG's target at or under the refresh rate with V-Sync, FGPresent's final sync interval as the signal, and both controllers on it."

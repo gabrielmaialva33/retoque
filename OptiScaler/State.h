@@ -314,6 +314,10 @@ class State
     // XeFG Dynamic MFG with "Use target as cap": its target while it runs (0 = no cap), the FPS limit when lower
     float xefgDynamicCapFps = 0.0f;
 
+    // Frame generation's last present waited for V-Sync (its sync interval after ForceVsync): Dynamic MFG's target
+    // then stays at or under the refresh rate
+    std::atomic<bool> fgPresentVsync { false };
+
     bool dlssgGameDMFGSupported = false;
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
     // DLSS-NR (docs/dlssnr/design/pause-without-frame-gen.md): whether the game itself asked Streamline for DLSS-G,

@@ -63,7 +63,7 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** 66 suites (78 total: 66 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 74 suites (86 total: 74 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -187,6 +187,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
   process started from the folder, a `flock`-emulated exclusive handle). Static checks (ASCII, the `.cmd`'s CRLF,
   the packager's allow-list) run always; without docker or `pwsh` the cases print `SKIP` and the suite passes on
   those. Nothing here runs Windows, Windows PowerShell 5.1 or the `.cmd`.
+- `xefg-dynamic-target` — XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, through the production
+  `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
+  60/120/165 Hz and an unknown refresh rate; FGPresent's final sync interval as the V-Sync signal; both
+  controllers settling on a simulated game whose generated frames over the refresh are dropped. No XeFG or DXGI.
 - `fg-synth-policy` — synthesized FG's decisions (fast-motion response on incoherent motion
   and its cap, low-fps floor, duplicate-present advice, which HUD fix runs for which output), the
   motion statistics they are made from, and the NR/FG motion handoff, from the production headers,

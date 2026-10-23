@@ -1451,6 +1451,9 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         LOG_DEBUG("Final SyncInterval: {}", SyncInterval);
     }
 
+    if (willPresent)
+        state.fgPresentVsync.store(SyncInterval > 0, std::memory_order_relaxed);
+
     // The DLSS-NR present hook: the frame is finished at this point, and it still is the frame
     // frame generation will interpolate FROM, so enhancing it here enhances the generated frames
     // with it. It runs before the original present, which is where the SL interposer captures the
