@@ -33,7 +33,7 @@ entry, or the next run tells you.
 
 | Tier | Needs | Suites |
 |---|---|---|
-| `host` | Python, `g++`, `clang++` | the `nr-*` suites, `deferred-release`, `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `mfg-pattern`, `mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy`, `deploy-safety`, `windows-installer`, `lsfg-shader-library`, `lsfg-integration` and `lsfg-presenter` |
+| `host` | Python, `g++`, `clang++` | the `nr-*` suites, `deferred-release`, `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `vk-create-contract`, `mfg-pattern`, `mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy`, `deploy-safety`, `windows-installer`, `lsfg-shader-library`, `lsfg-integration` and `lsfg-presenter` |
 | `wine` | msvc-wine prefix; `vulkan-overlay` and `vulkan-present-host` also need a graphical session, and they and `synth-motion-vk` a working Vulkan loader | `nr-gpu-timing-d3d12`, `nr-session-exit`, `synth-motion-d3d12`, `synth-motion-vk`, `vulkan-overlay`, `vulkan-present-host`, `dlssnr-loopback`, `nr-present-guide-identity-msvc`, `nr-hdr-d3d12`, `dx11-guides-transport`, `fg-inputs-d3d12` and `fg-provider-d3d12` |
 | `wip` | registered, no runner yet | — |
 
@@ -151,6 +151,12 @@ production headers or source slices with local fakes under AddressSanitizer and 
   every `Shader_Vk`, NR's included, in place of the deleted `UpscalerTime_Vk`): its three-pair ring,
   nonblocking readiness retry, no publication on error, single consumption. No frame-identity or GPU
   synchronization coverage.
+- `vk-create-contract` — the production `vkCreateDevice` path, `hkvkCreateDevice` through the Vulkan spoofing's
+  device create and feature state and the NR extension block, against a fake driver that deep-copies the exact
+  request it receives. The game's request unchanged, every pointer alive until the driver returns (ASan), two
+  creates interleaved on two threads receiving what each receives alone (A-01; a control with the lists
+  function-static again must fail), no capability the device lacks requested, over API 1.0-1.4, failing or
+  incomplete extension enumeration, NR, skip scopes, extension spoofing and dxvk/vkd3d-proton's create. No Vulkan.
 - `mfg-pattern` — the real MFG byte signatures and scanner matcher against synthetic
   buffers, both wrapper clamp shapes (`r8d`, and the `edx` one of Streamline 2.7.3 to 2.14), and the
   foreign-gate patterns that recognise another unlocker's rewrite. Runs no patcher and touches no DLL.
