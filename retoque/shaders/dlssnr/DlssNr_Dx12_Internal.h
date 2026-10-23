@@ -16,6 +16,7 @@
 #include <dlssnr/DlssNr_PresentGuideRing.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 #include <dlssnr/DlssNr_Enlarge.h>
+#include <dlssnr/DlssNr_FormatTwin.h>
 #include <dlssnr/DlssNr_PrivateSr.h>
 #include "DlssNr_DetailStats_Dx12.h"
 #include "DlssNr_Pulse_Dx12.h"
@@ -201,6 +202,10 @@ struct NrState
         ID3D12Resource* outputNative = nullptr;
         ID3D12Resource* passPing = nullptr;
     } alt;
+
+    // The transfer of the frame the surfaces last served (docs/dlssnr/design/format-swap-history.md): an RGBA8/BGRA8
+    // swap keeps the model's history only when the frame after it arrives through the same one.
+    DlssNr::FormatTwin::Transfer surfaceTransfer {};
 
     // Frame hold (docs/dlssnr/design/frame-hold.md): a persistent copy of the output taken on hold-on and restored
     // over the live output before the encode reads it while held, so a setting change re-renders the
@@ -771,7 +776,7 @@ void ParkAltSurfaces();
 bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height, unsigned int workWidth,
                     unsigned int workHeight);
 void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,
-                                    unsigned int workHeight);
+                                    unsigned int workHeight, const DlssNr::FormatTwin::Transfer& transfer);
 void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked);
 } // namespace DlssNr::Dx12Internal
 

@@ -62,6 +62,7 @@ These are records, not designs.
 - [dlss-enlargement.md](design/dlss-enlargement.md): Transfer 2, the model's edit enlarged by a private DLSS Super Resolution.
 - [sharp-residual.md](design/sharp-residual.md): Transfer 3, matched residual with a sharp enlargement.
 - [frame-hold.md](design/frame-hold.md): freezing the NR input so settings can be A/B'd on one frame.
+- [format-swap-history.md](design/format-swap-history.md): an RGBA8/BGRA8 swap keeps the model's history and the calibration; every other format change still resets.
 
 ## Present and routes
 

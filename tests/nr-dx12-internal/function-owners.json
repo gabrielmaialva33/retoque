@@ -95,7 +95,7 @@
       "bool MakeRoomForGeneration()\n{",
       "void ParkAltSurfaces()\n{",
       "bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height, unsigned int workWidth,\n                    unsigned int workHeight)\n{",
-      "void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,\n                                    unsigned int workHeight)\n{",
+      "void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,\n                                    unsigned int workHeight, const DlssNr::FormatTwin::Transfer& transfer)\n{",
       "void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked)\n{"
     ]
   }
