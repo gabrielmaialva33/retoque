@@ -202,7 +202,7 @@ production headers or source slices with local fakes under AddressSanitizer and 
   sentinel margins; MV units with a compensating scale; MVLowRes against display vectors; BGRA colour. Pushed through
   the production GatherGuideFrame, Dispatch's geometry/reference/scale blocks, the Vulkan route's plan and the guide
   resample's own HLSL on a CPU shim. Exact relations bit for bit, lossy ones under a stated half-texel bound, an
-  analytic check, D3D12 against Vulkan, motion bounded by its own allocation, and 14 mutants (margin reads, unit
+  analytic check, D3D12 against Vulkan, motion bounded by its own allocation, and 15 mutants (margin reads, unit
   changes without the scale) that must fail. No GPU or model.
 - `xefg-dynamic-target` — XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, through the production
   `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at

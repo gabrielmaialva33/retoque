@@ -77,7 +77,10 @@ MUTANTS = [
     ('d3d12 render reference from the allocation', '@GEOMETRY@',
      'frame.RenderSubrectWidth ? frame.RenderSubrectWidth : guideAllocWidth', 'guideAllocWidth'),
     ('vulkan reference ignores MVLowRes', '@VULKAN@',
-     'MotionReference(lowResolutionMotion, guideWidth, width)', 'MotionReference(false, guideWidth, width)'),
+     'MotionReference(lowResolutionMotion, renderReferenceWidth, width)',
+     'MotionReference(false, renderReferenceWidth, width)'),
+    ('vulkan motion region from depth\'s clipped width', '@VULKAN@',
+     'lowResolutionMotion ? renderReferenceWidth : width', 'lowResolutionMotion ? guideWidth : width'),
     ('vulkan drops the game MV scale', '@VULKAN@', 'params->Get(NVSDK_NGX_Parameter_MV_Scale_X, &mvScaleX);', ''),
 ]
 

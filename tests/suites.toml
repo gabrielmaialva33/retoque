@@ -764,4 +764,4 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
-summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan plan and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan, and 14 mutants that must fail."
+summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan plan and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan, and 15 mutants that must fail."
