@@ -40,6 +40,15 @@ bool g_removed = false; // the device reports itself removed
 auto completedValue = [](size_t q) { return g_completed[q]; };
 
 std::vector<std::string> g_violations;
+unsigned long long g_listProbes = 0; // epochs visited by tracker calls that refresh orphan flags (cost, E-01 review)
+
+size_t Epochs(const DlssNr::Submission::Usage& usage)
+{
+    size_t n = 0;
+    for (const auto& e : usage.epochs)
+        n += e != nullptr;
+    return n;
+}
 std::vector<std::string> g_failures;
 unsigned g_copiesRecorded = 0;
 
@@ -212,10 +221,24 @@ HRESULT Resource::GetDevice(int, void** out)
 
 uintptr_t Key(List& list) { return reinterpret_cast<uintptr_t>(static_cast<ID3D12GraphicsCommandList*>(&list)); }
 
-// The GPU runs the list at once; whether anyone is told depends on the fence.
-void Execute(List& list, size_t queue = 0, bool signalled = true)
+// An execution the GPU has been handed: the list's commands as they were when it was executed, run when its fence
+// completes. A list keeps its commands until Reset, so executing it again runs them again (a replay).
+struct Pending
 {
-    for (const Copy& c : list.copies)
+    std::vector<Copy> copies;
+    size_t queue;
+    uint64_t fence;
+};
+
+std::vector<Pending>& InFlight()
+{
+    static std::vector<Pending> pending;
+    return pending;
+}
+
+void RunCopies(const std::vector<Copy>& copies)
+{
+    for (const Copy& c : copies)
     {
         if (c.src->destroyed)
             Violation(c.src->name + ": the GPU read it after it was destroyed");
@@ -224,13 +247,31 @@ void Execute(List& list, size_t queue = 0, bool signalled = true)
         else if (!c.dst->destroyed && c.offset + c.bytes <= c.dst->memory.size())
             std::memcpy(c.dst->memory.data() + c.offset, c.src->contents, std::min<size_t>(c.bytes, 16));
     }
-    list.copies.clear();
-
-    auto epoch = g_model.BeforeExecute(Key(list));
-    Model::AfterExecute(epoch, queue, ++g_signalled[queue], signalled);
 }
 
-void Complete(size_t queue = 0) { g_completed[queue] = g_signalled[queue]; }
+void Execute(List& list, size_t queue = 0, bool signalled = true)
+{
+    auto epoch = g_model.BeforeExecute(Key(list));
+    Model::AfterExecute(epoch, queue, ++g_signalled[queue], signalled);
+    InFlight().push_back({ list.copies, queue, g_signalled[queue] });
+}
+
+// The GPU reaches the queue's last signalled value: everything handed to it up to there runs, in order.
+void Complete(size_t queue = 0)
+{
+    g_completed[queue] = g_signalled[queue];
+    auto& pending = InFlight();
+    for (auto it = pending.begin(); it != pending.end();)
+    {
+        if (it->queue != queue || it->fence > g_completed[queue])
+        {
+            ++it;
+            continue;
+        }
+        RunCopies(it->copies);
+        it = pending.erase(it);
+    }
+}
 
 // Reset without execution: those commands can never run.
 void Discard(List& list)
@@ -239,7 +280,11 @@ void Discard(List& list)
     Model::AfterReset(g_model.Current(Key(list)), true);
 }
 
-void Reset(List& list) { Model::AfterReset(g_model.Current(Key(list)), true); }
+void Reset(List& list)
+{
+    list.copies.clear();
+    Model::AfterReset(g_model.Current(Key(list)), true);
+}
 
 void Advance() { g_model.Advance(++g_clock); }
 
@@ -754,6 +799,224 @@ void FreshLists()
     Expect(FoundExposure(Best(), 0.5f), "found on lists that are never reset");
 }
 
+// Review E-01: a candidate's usage must not forget a recording that can still run. A quiet candidate (discovery: a
+// sweep every frame) is copied into 58 lists the game keeps and never resets; the game then executes the first one
+// again, resets the rest and lets the candidate go. Its release has to wait for that replay.
+void ReplayAfterPrune()
+{
+    Begin();
+    Resource* q = Create("quiet", 1.0f);
+    std::deque<List> lists;
+    for (int i = 0; i < 58; ++i)
+    {
+        List& l = lists.emplace_back();
+        Scan::Tick(&g_device, &l);
+        Execute(l);
+        Complete();
+        Advance();
+    }
+    Execute(lists[0]); // a replay, in flight
+    for (size_t i = 1; i < lists.size(); ++i)
+        Reset(lists[i]);
+    GameRelease(q);
+    for (int f = 0; f < 3; ++f)
+    {
+        List& l = lists.emplace_back();
+        Scan::Tick(&g_device, &l);
+        Discard(l);
+        Advance();
+    }
+    Expect(!q->destroyed, "not released while a list that copied it is executing again");
+    Complete(); // the replay runs
+    Reset(lists[0]);
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    Expect(q->destroyed, "released once that list was reset");
+}
+
+// Review E-04: a readback slot is not rewritten while the recording that last wrote it can still run. `a` copies x
+// into a slot and completes but is kept; four sweeps later the ring comes back to that slot. The game then runs `a`
+// again after that frame's work, which writes x's value into the slot again.
+void ReplaySlot()
+{
+    Begin();
+    Resource* x = Create("x", 6.0f);
+    for (int f = 0; f < 8; ++f)
+        Frame();
+    List a;
+    Scan::Tick(&g_device, &a);
+    Execute(a);
+    Complete();
+    Advance();
+    GameRelease(x);
+    Resource* y = Create("y", 1.5f);
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    Scan::Tick(&g_device, &g_list);
+    Execute(g_list);
+    Execute(a); // the replay, after this frame's work
+    Complete();
+    Reset(g_list);
+    Advance();
+    for (int f = 0; f < 6; ++f)
+        Frame();
+    bool clean = false;
+    for (const auto& c : Scan::Report())
+        if (c.reads > 0 && c.latest == 1.5f)
+            clean = c.lowest == 1.5f && c.highest == 1.5f;
+    Expect(clean, "y is never credited with what a replay of an older recording wrote");
+    Expect(!x->destroyed, "x is held while a list that copied it can still run");
+    Reset(a);
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    Expect(x->destroyed, "and released once that list is reset");
+    (void) y;
+}
+
+// Review E-02: turning the scan off lets go of what it holds, whatever is released later and whether or not a
+// frame of the pass runs. Off, on, off again.
+void OffAfterOn()
+{
+    Begin();
+    Resource* copied = Create("copied", 1.0f);
+    std::vector<Resource*> fill;
+    for (int i = 0; i < 63; ++i)
+        fill.push_back(Create("fill" + std::to_string(i), 1.0f + 0.01f * i));
+    Resource* waiting = Create("waiting", 2.0f); // the 65th: never copied
+    for (int f = 0; f < 5; ++f)
+        Frame();
+    Expect(copied->ScanRefs() == 1 && waiting->ScanRefs() == 1, "held while wanted");
+
+    Config::Instance()->DlssNrWhitePointSource = 0;
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    Scan::ReleaseTrackedResources();
+    GameRelease(copied);
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    Expect(copied->destroyed, "a copied candidate is released once the scan is off and its copies settled");
+    Expect(waiting->ScanRefs() == 0, "a waiting candidate is released once the scan is off");
+    unsigned held = 0;
+    for (Resource* r : fill)
+        held += r->ScanRefs();
+    Expect(held == 0, "nothing is held while the scan is off (" + std::to_string(held) + ")");
+
+    Config::Instance()->DlssNrWhitePointSource = 2;
+    Resource* again = Create("again", 3.0f);
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    Expect(again->ScanRefs() == 1, "on again: a new candidate is held");
+
+    // Off, with NR itself disabled: no frame of the pass runs, only a feature release.
+    Config::Instance()->DlssNrWhitePointSource = 0;
+    Config::Instance()->DlssNrEnabled = false;
+    Scan::ReleaseTrackedResources();
+    Expect(again->ScanRefs() == 0, "off with no frame of the pass: released at the next feature release");
+}
+
+// Review E-03: what the scan cannot certify about a placed resource -- aliasing, residency -- is not carried across a
+// feature release: placed candidates are released there, as the wipe did; committed ones are kept.
+void PlacedAtBoundary()
+{
+    Begin();
+    Heap& heap = Heaps().emplace_back();
+    heap.name = "heap";
+    Resource* p = CreatePlaced("placed", 1.0f, &heap);
+    Resource* c = Create("committed", 2.0f);
+    for (int f = 0; f < 5; ++f)
+        Frame();
+    Scan::ReleaseTrackedResources();
+    Expect(p->ScanRefs() == 0 && heap.refs == 1, "a placed candidate and its heap are released at the boundary");
+    Expect(c->ScanRefs() == 1, "a committed one is kept");
+}
+
+// Review cost note: how many list probes the tracker calls of one Tick can make, with 64 candidates read every frame
+// into lists the game keeps and never resets (the worst case for a usage's size) and into lists it resets.
+void Cost()
+{
+    Begin();
+    for (int i = 0; i < 64; ++i)
+        Create("quiet" + std::to_string(i), 1.0f + 0.01f * i);
+    std::deque<List> lists;
+    unsigned long long worst = 0;
+    for (int f = 0; f < 200; ++f)
+    {
+        List& l = lists.emplace_back();
+        const unsigned long long before = g_listProbes;
+        Scan::Tick(&g_device, &l);
+        worst = std::max(worst, g_listProbes - before);
+        Execute(l);
+        Complete();
+        Advance();
+    }
+    unsigned long long steady = 0;
+    for (int f = 0; f < 200; ++f)
+    {
+        const unsigned long long before = g_listProbes;
+        Frame();
+        steady = std::max(steady, g_listProbes - before);
+    }
+    std::printf("  cost: at most %llu list probes in one Tick on kept lists, %llu on reset lists (64 candidates)\n",
+                worst, steady);
+    Expect(worst <= 64 * 6 + 64,
+           "list probes per Tick stay within 64 candidates x a few recordings (" + std::to_string(worst) + ")");
+    Expect(steady <= 64 * 2 + 16, "and stay small when lists are reset (" + std::to_string(steady) + ")");
+}
+
+#ifdef DLSSNR_EXPOSURE_SCAN_COPY_BUDGET
+// Review E-05, against a budget of DLSSNR_EXPOSURE_SCAN_COPY_BUDGET (run.py builds this case with 8): held candidates
+// that may still have GPU work -- copied and active or waiting, plus retiring -- never exceed it, so the retiring set
+// cannot either.
+void Budget()
+{
+    Begin();
+    std::vector<Resource*> first;
+    for (int i = 0; i < 20; ++i)
+        first.push_back(Create("first" + std::to_string(i), 1.0f + 0.01f * i));
+    const unsigned before = g_copiesRecorded;
+    Scan::Tick(&g_device, &g_list);
+    Expect(g_copiesRecorded - before <= 8,
+           "no more first copies than the budget (" + std::to_string(g_copiesRecorded - before) + ")");
+    Execute(g_list, 1); // held: these copies stay unconfirmed
+    Reset(g_list);
+    Advance();
+    for (Resource* r : first)
+        GameRelease(r);
+    std::vector<Resource*> second;
+    for (int i = 0; i < 20; ++i)
+        second.push_back(Create("second" + std::to_string(i), 2.0f + 0.01f * i));
+    for (int f = 0; f < 3; ++f)
+    {
+        const unsigned at = g_copiesRecorded;
+        Scan::Tick(&g_device, &g_list);
+        Expect(g_copiesRecorded == at, "no first copy while the budget is held by unconfirmed copies");
+        Execute(g_list);
+        Complete();
+        Reset(g_list);
+        Advance();
+    }
+    unsigned held = 0;
+    for (Resource* r : first)
+        held += r->ScanRefs();
+    Expect(held <= 8,
+           "let-go candidates retained for unconfirmed copies stay within the budget (" + std::to_string(held) + ")");
+    Complete(1);
+    for (int f = 0; f < 3; ++f)
+        Frame();
+    held = 0;
+    for (Resource* r : first)
+        held += r->ScanRefs();
+    Expect(held == 0, "released once confirmed");
+    unsigned copiedNow = 0;
+    for (Resource* r : second)
+        copiedNow += r->ScanRefs();
+    Expect(copiedNow == 20, "the second set is held");
+    const unsigned at = g_copiesRecorded;
+    Frame();
+    Expect(g_copiesRecorded > at, "and copied again once the budget is free");
+}
+#endif
+
 // Section 6: inert when NR is off or the scan is not wanted; nothing copied on an untracked list.
 void Inert(const char* how)
 {
@@ -821,9 +1084,19 @@ bool Completed(const Usage& usage)
     return any;
 }
 
-bool Settled(const Usage& usage) { return Detail::IsSettled(usage, completedValue, g_model.Clock(), g_model.Strict()); }
+// Settled refreshes orphan flags in production: one AddRef/Release pair per held list of each epoch it visits.
+bool Settled(const Usage& usage)
+{
+    g_listProbes += Epochs(usage);
+    return Detail::IsSettled(usage, completedValue, g_model.Clock(), g_model.Strict());
+}
 
-void PruneFinished(Usage& usage) { Detail::PruneLifetime(usage, completedValue, g_model.Clock(), g_model.Strict()); }
+// Mirrors the production PruneFinished (retoque/dlssnr/DlssNr_Submission.cpp; run.py guards the match).
+void PruneFinished(Usage& usage)
+{
+    g_listProbes += Epochs(usage);
+    Detail::PruneLifetime(usage, completedValue, g_model.Clock(), g_model.Strict());
+}
 
 const char* LastRefusal() { return "injected-refusal"; }
 } // namespace DlssNr::Submission
@@ -847,6 +1120,14 @@ int main(int argc, char** argv)
         { "view", View },
         { "removed-boundary", RemovedAtBoundary },
         { "fresh-lists", FreshLists },
+        { "replay-prune", ReplayAfterPrune },
+        { "replay-slot", ReplaySlot },
+        { "off-after-on", OffAfterOn },
+        { "placed-boundary", PlacedAtBoundary },
+        { "cost", Cost },
+#ifdef DLSSNR_EXPOSURE_SCAN_COPY_BUDGET
+        { "budget", Budget },
+#endif
         { "inert-off", [] { Inert("off"); } },
         { "inert-unwanted", [] { Inert("unwanted"); } },
         { "untracked", [] { Inert("untracked"); } },

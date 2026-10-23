@@ -42,23 +42,32 @@ def function(text, signature):
 failures = []
 
 with tempfile.TemporaryDirectory(prefix='nr-exposure-scan-') as directory:
-    binary = Path(directory) / 'cases'
     flags = ['g++', '-std=c++20', '-O1', '-g', '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-Wall',
              '-Wextra', '-Werror', '-I', str(here / 'stubs'), '-I', str(root), '-I', str(root / 'retoque')]
-    # The production unit has an unused parameter MSVC does not warn about (NoteUav's view description).
-    subprocess.run(flags + ['-Wno-unused-parameter', '-c', str(root / 'retoque/dlssnr/DlssNr_ExposureScan.cpp'),
-                            '-o', str(Path(directory) / 'scan.o')], check=True)
-    subprocess.run(flags + ['-c', str(here / 'cases.cpp'), '-o', str(Path(directory) / 'cases.o')], check=True)
-    subprocess.run(flags + [str(Path(directory) / 'cases.o'), str(Path(directory) / 'scan.o'), '-o', str(binary)],
-                   check=True)
+
+    def build(name, extra):
+        out = Path(directory) / name
+        # The production unit has an unused parameter MSVC does not warn about (NoteUav's view description).
+        subprocess.run(flags + extra + ['-Wno-unused-parameter', '-c',
+                                        str(root / 'retoque/dlssnr/DlssNr_ExposureScan.cpp'),
+                                        '-o', str(out) + '-scan.o'], check=True)
+        subprocess.run(flags + extra + ['-c', str(here / 'cases.cpp'), '-o', str(out) + '-cases.o'], check=True)
+        subprocess.run(flags + [str(out) + '-cases.o', str(out) + '-scan.o', '-o', str(out)], check=True)
+        return out
+
+    binary = build('cases', [])
+    # Review E-05: the copy budget, made small enough to reach in a few frames.
+    budget = build('cases-budget', ['-DDLSSNR_EXPOSURE_SCAN_COPY_BUDGET=8'])
     names = subprocess.run([str(binary), '--list'], check=True, capture_output=True, text=True).stdout.split()
-    assert len(names) >= 18, names
-    for name in names:
-        result = subprocess.run([str(binary), name], capture_output=True, text=True)
+    assert len(names) >= 24, names
+    runs = [(binary, name) for name in names] + [(budget, 'budget')]
+    for exe, name in runs:
+        result = subprocess.run([str(exe), name], capture_output=True, text=True)
         sys.stdout.write(result.stdout)
         if result.returncode != 0:
             sys.stdout.write(result.stderr[-4000:])
             failures.append(name)
+    names.append('budget')
 
 # --- Source guards --------------------------------------------------------------------------------------------------
 
