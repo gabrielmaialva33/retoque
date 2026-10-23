@@ -320,3 +320,27 @@ DLSS-NR Vulkan guides: larger than the 1720x720 model and the resample cannot ru
   The route's output is never presented, so the model's edit on it is not read back.
 - **Not covered: the picture.** Whether the shimmer goes on DOOM Eternal at 0.5 is the in-game check: arm A the
   defaults, arm B `MatchGuides=false`, the same spot, a pan and a stop.
+
+## Open after the second review (2026-10-23)
+
+Codex re-read the fixes for its first review (V-01 to V-05) on the integration that took them. V-01 is closed for
+this pass (push descriptors, no sets of its own) and V-05 for a known render size. Still open, and both older than
+this pass:
+
+- **V-02, P1: a generation's lifetime.** The resize drain's result is checked now and the guide pair outlives one
+  resize through `DeferredRelease`, but that is a time margin, not a proof. An evaluate recorded and not yet
+  submitted when a later evaluate resizes still references the old feature and surfaces, which the resize frees
+  (`ShutdownVk`'s route objects, the proxy and native outputs); `DeferredRelease` frees the retained guides after
+  presents and time, without knowing whether a kept command buffer is submitted again. Closing it needs the whole
+  generation kept while any recording of it can still be submitted, or a refusal that holds the generation until
+  a boundary that proves it.
+- **V-06, P1: the composition pass's ring.** `DlssNr_Vk` cycles 18 descriptor sets and 18 slices of its mapped
+  constant buffer with no tie to the command buffers that recorded them; with encode, reduction, meter and resolve
+  (four dispatches) the 19th dispatch arrives in the fifth evaluate of one command buffer. Moving the sets to push
+  descriptors is not enough on its own: the constants must be versioned with them (push constants, or a slice
+  owned per recording).
+- **V-03, V-04, P2.** Some transient failures are still classed as stable, and below native a `Missing` geometry
+  still resamples the whole allocation (only `Incomplete` and `Stale` refuse).
+
+None of these is exercised by today's GPU suites, which reset each command buffer and resize only after the GPU is
+done; each needs a case with a recording kept across the event.
