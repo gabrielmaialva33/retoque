@@ -867,6 +867,9 @@ void Enumeration(FakeGpu::Enumerate mode, bool d3d)
                         {
                             auto gpu = make(VK_API_VERSION_1_4);
                             gpu->enumerate = mode;
+                            // The one that appears late is one the game asks for
+                            if (mode == FakeGpu::Enumerate::IncompleteOnce)
+                                std::ranges::rotate(gpu->extensions, gpu->extensions.begin() + 1);
                             Setup setup;
                             setup.instanceApi = api;
                             setup.spoofing = spoofing;
