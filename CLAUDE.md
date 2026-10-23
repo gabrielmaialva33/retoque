@@ -480,6 +480,9 @@ says which rows to drop from this table then. #1138 is the exception: upstream m
 | `a51df1c5`, 2026-10-23 | `menu/menu_overlay_vk.cpp` (`CreateSwapchain`) | Upstream's `OnOtherWindow` filter (`b543eb15`) stays where upstream put it, before the locks, and is **asked again once both locks are held**: two first creates on two windows could both pass the unlocked read, and the second then drained the device, tore the first's generation down and moved the ImGui context to its own window. The window-change block's `ImGui_ImplVulkan_Shutdown` is gated on `_vulkanBackendInited`, because our `DestroyVulkanObjectsLocked` (`47138ca0`) has already shut the backend down by then; the second call dereferenced a null backend in `ImGui_ImplVulkan_DestroyDeviceObjects` on every window migration. Held by `tests/vulkan-menu-lifecycle`, which also records two undecided cases: a hidden splash keeps the menu, and the surface hook's own read-then-destroy race in `Vulkan_Hooks.cpp` is not fixed | none (ours) |
 | `d391a944`, `68b5a0e5`, `e35f1c76`, `c397eb1d`, `80a1ab0f`, `77495b8b`, 2026-10-23 | `spoofing/Vulkan_Spoofing.cpp`, `menu/menu_overlay_vk.cpp`, `hooks/FG_Hooks.cpp`, `hooks/Streamline_Hooks.cpp` | Found while taking the sixth merge, all fixes to upstream code: the spoofing's extension lists are `static thread_local` (a second thread's create could rewrite the list another thread had not yet handed to the driver); `vulkanMemoryModelDeviceScope` is enabled wherever #1161 enables `vulkanMemoryModel`; the Vulkan menu's render area is the swapchain extent, not ImGui's client-area `DisplaySize`; the DLSS-G resize hooks keep the frame-latency waitable bit the chain was created with; the MFG clamp limits the count sent to the provider, never the saved `OverrideInterpolationCount`, and re-reads the provider's maximum per provider generation. See `docs/linux-proton/upstream-20261023.md` | none yet; candidates for upstream PRs |
 | `03e7fda3`, 2026-10-23 | `framegen/xefg/XeFG_DynamicCount.h`, `framegen/xefg/XeFG_Dx12.cpp`, `hooks/FG_Hooks.cpp`, `State.h`, `menu/menu_common.cpp`, `OptiScaler.ini` | XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, a pure function appended to `XeFG_DynamicCount.h`) is at most the refresh rate while frame generation presents with V-Sync (`State::fgPresentVsync`, FGPresent's final sync interval): an explicit target or FPS cap above the refresh had both controllers adding frames XeFG drops. janblade `15c1f959`'s rule, re-done on upstream's own header instead of a new file. `tests/xefg-dynamic-target` | none yet; candidate for an upstream PR |
+| `a8f4cacf`, 2026-10-23 | `hooks/FG_Hooks.cpp` (`hkGetFullscreenState`, `hkGetFullscreenDesc`) | The XeFG `GetFullscreenState` detour wrote `*pFullscreen` unchecked, though DXGI declares both arguments `_Out_opt_`, and answered TRUE with a NULL `*ppTarget`. Both arguments reach the original as given, only the ones passed are rewritten, and a reported fullscreen comes with the window's output (`GetContainingOutput`, AddRef'd) unless the chain returned one; `hkGetFullscreenDesc` checks `pDesc`. `tests/fg-fullscreen-hooks` | none yet; candidate for an upstream PR |
+| `675d73a8`, 2026-10-23 | `hooks/FG_Hooks.cpp` (`hkSetFullscreenState`, `hkResizeTarget`, the window cover after both resize hooks) | `[XeFG] ForceBorderless` reaches these for XeFG only, as creation, the resize flags, the menu and the game configs already did. With the key left true (the menu saves it from the XeFG card, hidden for other outputs) an FSR-FG, DLSS-G or Reprojection chain created exclusive never got the game's `SetFullscreenState(FALSE)`, and the D3D11 bridge's presenter take-back was swallowed with its borderless window restyled. The key is now inert for those outputs. `tests/fg-fullscreen-hooks` | none yet; candidate for an upstream PR |
+| `e0dddf0c`, 2026-10-23 | `hooks/FG_Hooks.cpp` (`FGPresent`) | Injected DLSS-G: `GetCurrentBackBufferIndex` on the DLSS-G swapchain on every DLSS-G present, ahead of the frame token, not only on the branch that sends OptiScaler's own Reflex markers; DLSS-G refuses a frame without it (`eFailGetCurrentBackBufferIndexNotCalled`), and a game that sends its own markers and tracks the index itself (RDR2) never makes it. Skynizz v1.3.0 `de1c009d`'s change. `tests/fg-dlssg-backbuffer-index` | none yet; candidate for an upstream PR |
 
 Not taken from #1138: its `menu_overlay_vk.cpp` drops `_vkCleanMutex` across
 `MenuOverlayBase::RenderMenu` because `RenderMenu` could re-enter `DestroyVulkanObjects` through
@@ -491,13 +494,23 @@ revision is the fix to port.
 
 Not taken from janblade `ccce7963` (2026-10-21): it widens `HookFGSwapchain`'s `GetFullscreenState` and
 `GetFullscreenDesc` detours from XeFG to FSR-FG, so a game whose FSR-FG chain is kept borderless is told it is
-fullscreen. Here only `hkSetFullscreenState` keeps an FSR-FG chain borderless, and only with `[XeFG]
-ForceBorderless=true` left in the ini: the menu, the game configs and swapchain creation scope that key to XeFG,
-and his other trigger, HDR output's windowed chain, is not in this tree. The D3D11 bridge, meanwhile, asks its
+fullscreen. Here only `hkSetFullscreenState` kept an FSR-FG chain borderless, and only with `[XeFG]
+ForceBorderless=true` left in the ini; since `675d73a8` that key reaches the fullscreen hooks for XeFG only, as the
+menu, the game configs and swapchain creation already scoped it, so no FSR-FG chain is kept borderless. His other
+trigger, HDR output's windowed chain, is not in this tree. The D3D11 bridge, meanwhile, asks its
 FSR-FG presenter `GetFullscreenState` to find a real exclusive fullscreen behind its own emulation, which sets
 `SCExclusiveFullscreen`; with the detour and that key, a windowed presenter would read as fullscreen and the bridge
 would send it `SetFullscreenState(FALSE)`, which `hkSetFullscreenState` answers by pausing FG and restyling the
 window. Widening the detour needs the bridge's probes to get the real answer first.
+
+Not needed from Skynizz `de1c009d` (v1.3.0): its other injected-DLSS-G fix, OptiScaler's own `slInit` losing
+DLSS-G to `hkslInit`'s strip (`Streamline_Hooks.cpp:325-334`), cannot happen here. That hook is only attached to an
+interposer that is not OptiScaler's: the loader hook skips any `sl.interposer.dll` under `<MainDllPath>/streamline`
+(`LibraryLoad_Hooks.cpp:168-177`), and `CheckModulesInMemory`, which runs inside every load, including the nested ones
+while `LoadStreamline` is still loading the interposer and has not yet set `optiSlInterposer`
+(`Streamline_Proxy.h:93-99`), skips it by path too (`LibraryLoad_Hooks.cpp:1111-1113`, upstream `d14b6303`,
+2026-10-10). His tree predates that commit and has only the `optiSlInterposer` check, which that window defeats. The
+one exception, `FGInput=nvngx`, forces the FG output to none (`dllmain.cpp:1687-1688`).
 
 Wine detection (`wine_get_version` → `State::isRunningOnLinux`) is upstream. The upstream fix for
 issue #1101 (dxvk-nvapi recursion in `misc/IdentifyGpu.cpp`) is already in the tree; do not re-apply

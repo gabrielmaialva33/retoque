@@ -609,7 +609,11 @@ HRESULT FGHooks::hkSetFullscreenState(IDXGISwapChain* This, BOOL Fullscreen, IDX
 
     bool modeChanged = false;
     bool orgFS = Fullscreen;
-    if (Config::Instance()->FGXeFGForceBorderless.value_or_default())
+
+    // ForceBorderless is XeFG's, as at swapchain creation: another output's chain can be truly exclusive
+    const bool forceBorderless = State::Instance().activeFgOutput == FGOutput::XeFG &&
+                                 Config::Instance()->FGXeFGForceBorderless.value_or_default();
+    if (forceBorderless)
     {
         if (Fullscreen)
         {
@@ -640,7 +644,7 @@ HRESULT FGHooks::hkSetFullscreenState(IDXGISwapChain* This, BOOL Fullscreen, IDX
 
     auto result = S_OK;
 
-    if (!Config::Instance()->FGXeFGForceBorderless.value_or_default())
+    if (!forceBorderless)
     {
         result = o_FGSCSetFullscreenState(This, Fullscreen, pTarget);
         LOG_DEBUG("Fullscreen: {}, pTarget: {:X}, Result: {:X}", Fullscreen, (size_t) pTarget, (UINT) result);
@@ -710,7 +714,7 @@ HRESULT FGHooks::hkGetFullscreenDesc(IDXGISwapChain1* This, DXGI_SWAP_CHAIN_FULL
 {
     auto result = o_FGSCGetFullscreenDesc(This, pDesc);
 
-    if (result == S_OK && State::Instance().SCExclusiveFullscreen &&
+    if (result == S_OK && pDesc != nullptr && State::Instance().SCExclusiveFullscreen &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
         pDesc->Windowed = false;
@@ -721,12 +725,22 @@ HRESULT FGHooks::hkGetFullscreenDesc(IDXGISwapChain1* This, DXGI_SWAP_CHAIN_FULL
 
 HRESULT FGHooks::hkGetFullscreenState(IDXGISwapChain* This, BOOL* pFullscreen, IDXGIOutput** ppTarget)
 {
+    // Both arguments are optional in DXGI, so they reach the original as given and only what was asked is rewritten
     auto result = o_FGSCGetFullscreenState(This, pFullscreen, ppTarget);
 
     if (result == S_OK && State::Instance().SCExclusiveFullscreen &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
-        *pFullscreen = true;
+        if (pFullscreen != nullptr)
+            *pFullscreen = true;
+
+        // Fullscreen comes with its output; the borderless chain has none, so it is the one holding the window
+        if (ppTarget != nullptr && *ppTarget == nullptr)
+        {
+            IDXGIOutput* output = nullptr;
+            if (This->GetContainingOutput(&output) == S_OK)
+                *ppTarget = output;
+        }
     }
 
     return result;
@@ -931,8 +945,8 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
     }
 
     // Resize window to cover the screen
-    if (result == S_OK && Config::Instance()->FGXeFGForceBorderless.value_or_default() &&
-        State::Instance().SCExclusiveFullscreen)
+    if (result == S_OK && State::Instance().activeFgOutput == FGOutput::XeFG &&
+        Config::Instance()->FGXeFGForceBorderless.value_or_default() && State::Instance().SCExclusiveFullscreen)
     {
         SetWindowLongPtr(_hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
         SetWindowLongPtr(_hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
@@ -951,7 +965,8 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
 
 HRESULT FGHooks::hkResizeTarget(IDXGISwapChain* This, const DXGI_MODE_DESC* pNewTargetParameters)
 {
-    if (Config::Instance()->FGXeFGForceBorderless.value_or_default())
+    if (State::Instance().activeFgOutput == FGOutput::XeFG &&
+        Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
         LOG_DEBUG("Skipping resize target.");
         return S_OK;
@@ -1173,8 +1188,8 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
     }
 
     // Resize window to cover the screen
-    if (result == S_OK && Config::Instance()->FGXeFGForceBorderless.value_or_default() &&
-        State::Instance().SCExclusiveFullscreen)
+    if (result == S_OK && State::Instance().activeFgOutput == FGOutput::XeFG &&
+        Config::Instance()->FGXeFGForceBorderless.value_or_default() && State::Instance().SCExclusiveFullscreen)
     {
         SetWindowLongPtr(_hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
         SetWindowLongPtr(_hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
@@ -1384,11 +1399,15 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
 
     if (willPresent && fgFeatureActive && state.activeFgOutput == FGOutput::DLSSG)
     {
+        // DLSS-G generates nothing in a frame without a GetCurrentBackBufferIndex call on its swapchain
+        // (eFailGetCurrentBackBufferIndexNotCalled), and a game may track the index itself; the game's own
+        // Reflex markers do not make that call, so it is made on every present
+        ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
+
         if ((!ReflexHooks::gameIsSendingMarkers() || !config->FGDLSSGUseGamesReflexMarkers.value_or_default()))
         {
             if (StreamlineProxy::PCLSetMarker() != nullptr)
             {
-                ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
                 const uint32_t frameId = (uint32_t) fg->FrameCount();
                 tokenResult = StreamlineProxy::GetNewFrameToken()(localToken, &frameId);
 
