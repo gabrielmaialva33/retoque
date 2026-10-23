@@ -765,3 +765,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan plan and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan, and 15 mutants that must fail."
+
+[nr-replay-transform]
+path = "nr-replay-transform"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "tools/replay/transform.py: padded guides at a base with sentinel margins, compensated MV units, MVLowRes at 1:1, RGBA8/BGRA8/alternating colour with resets on swaps, and the channel-order-aware run comparison, on a synthetic capture the seam's own validator accepts."

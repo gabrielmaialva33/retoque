@@ -69,7 +69,7 @@ suite READMEs for artifact paths and limits.
   non-menu presents pass through untouched. The hidden-splash policy and the surface-hook race are recorded
   expectations. No GPU.
 
-**Host tier.** 81 suites (94 total: 81 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 82 suites (95 total: 82 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -204,6 +204,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
   resample's own HLSL on a CPU shim. Exact relations bit for bit, lossy ones under a stated half-texel bound, an
   analytic check, D3D12 against Vulkan, motion bounded by its own allocation, and 15 mutants (margin reads, unit
   changes without the scale) that must fail. No GPU or model.
+- `nr-replay-transform` — `tools/replay/transform.py`, the metamorphic replay captures: guides re-packed at a base
+  in padded planes with sentinel margins, MV units with a compensating scale, MVLowRes at 1:1, colour as RGBA8, BGRA8
+  or alternating with resets on swap frames, and the run comparison that reads each output in its own channel order.
+  On a synthetic capture that `run_replay.load_capture` accepts. No GPU.
 - `xefg-dynamic-target` — XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, through the production
   `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
   60/120/165 Hz and an unknown refresh rate; FGPresent's final sync interval as the V-Sync signal; both

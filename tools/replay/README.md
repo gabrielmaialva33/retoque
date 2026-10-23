@@ -76,3 +76,43 @@ python3 -m tools.replay.hold /local/clip/capture.json /local/clip-held [--ms 160
 The held frames reach the gates; they are never judged. The clip's first frame is reset, so the model's history
 starts on the game's frames, as at the start of any recording, and a cadence variant's first frames after it are
 model frames. Those first few scored frames are therefore alike across variants by construction.
+
+## Metamorphic captures (`transform.py`)
+
+`python3 -m tools.replay.transform` derives a schema-v2 capture that shows the same scene as its source in another
+representation (Codex N-03; W3-B01 for the colour order). An exact transformation must replay with the same decisions
+and output bytes; a difference is a finding about the seam, the pass or the model, not a quality verdict.
+
+- `pad CAPTURE --out DIR [--depth-base X Y] [--motion-base X Y] [--pad X Y] [--sentinel extreme|nan] [--units K]
+  [--mv-low-res keep|on|off]`: depth and motion re-packed at their bases inside larger planes whose margin is a
+  sentinel (depth 3e38 or NaN, motion 65504 or NaN in R16G16_FLOAT), the render subrect and bases set; the vectors
+  x K and the MV scale / K (K a power of two; refused unless it is exact in the plane's format); MVLowRes toggled only
+  where render and display extents agree. Colour is linked unchanged. With `--depth-base 0 0 --motion-base 0 0 --pad
+  0 0` it is the identity v2 rendition of a v1 corpus, the reference the others are compared against.
+- `colour8 CAPTURE --out DIR --order rgba|bgra|alternate [--gain R G B] [--alpha pattern|source] [--clear-hdr]
+  [--swap-every N] [--swap-start I] [--reset-on-swap K ...]`: the float colour quantised once to UNORM8 after a
+  per-channel gain (default 8, 3, 0.5, which puts R about 60 steps from B on the loopback corpus), alpha a pattern by
+  default; written as R8G8B8A8_UNORM (28), B8G8R8A8_UNORM (87, bytes 0 and 2 swapped) or alternating on the swap
+  schedule. `--reset-on-swap K` sets Reset on the K-th scored swap frame in every order, so the all-RGBA reference and
+  the alternating capture are one logical sequence. `transform.json` beside the capture lists swap, BGRA and reset
+  frames and the measured mean |R - B|.
+- `compare RUN_DIR_A RUN_DIR_B`: two `runs/<variant>` directories, decisions (kind, interval, passes, model result,
+  skip) and each output read in its own channel order; exit 0 when identical.
+
+`tools/replay/metamorphic_seam.sh <OptiScaler.dll> [corpus capture.json] [out]` derives the captures from a corpus,
+replays each through `tests/dlssnr-loopback/run.py --replay-nr` with `variants-metamorphic.json` (off, every-frame
+twice, Cadence 2 and 4, adaptive 4, Passes 2 and 3, WorkingScale 0.5, the last running the guide resample over the
+padded planes), moves each capture's runs out of `artifacts/`, and compares identity against each geometry
+transformation and RGBA8 against BGRA8, variant by variant, plus every-a against every-b as the A/A floor.
+
+**What the seam cannot express yet: a colour format that changes within a capture.** `run_replay.load_capture` refuses
+a v2 capture whose colour shape differs between frames ("the shape changes within the capture"); plan v3 carries one
+`plane color <format> <source format> ...` line for the whole run; and `replay_nr.h` creates ColorIn and Output once,
+in that format, uploads every frame into them and reads the output back from them. A real swap needs, at least: the
+validator to accept a per-frame colour format when it is a channel-order twin of the first frame's (same extent, pixel
+size and flags); a per-frame colour-format column in the plan (a plan v4); a second ColorIn/Output pair in the twin
+format in the harness, chosen per frame for the upload, the parameter block and the readback; the run manifest to
+record each output's own format (`compare` already reads them that way); and the in-flight slots to do the same or to
+refuse such a plan. `colour8 --order alternate` writes that capture already, so the replay is one command once the seam
+takes it. Until then the RGBA8 and BGRA8 sessions are compared whole, which exercises BGRA views, the encode and the
+model but not a swap with history kept.

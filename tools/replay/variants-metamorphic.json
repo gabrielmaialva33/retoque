@@ -1,0 +1,11 @@
+{
+ "off": null,
+ "every-a": {"Cadence": "1"},
+ "every-b": {"Cadence": "1"},
+ "cadence2": {"Cadence": "2"},
+ "cadence4": {"Cadence": "4"},
+ "adaptive4": {"Cadence": "4", "CadenceAdaptive": "true"},
+ "passes2": {"Passes": "2"},
+ "passes3": {"Passes": "3"},
+ "scale-half": {"WorkingScale": "0.5"}
+}
