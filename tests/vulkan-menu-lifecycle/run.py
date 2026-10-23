@@ -14,14 +14,16 @@ overlay = (ROOT / 'OptiScaler/menu/menu_overlay_vk.cpp').read_text()
 hooks = (ROOT / 'OptiScaler/hooks/Vulkan_Hooks.cpp').read_text()
 
 # The surface hook's menu block, verbatim from hkvkCreateWin32SurfaceKHR: read-then-act on the
-# menu's window. Sliced from its opening `if` to the brace that closes it.
-anchor = '        if (!MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd))\n'
+# menu's window, the act re-checking under the overlay's locks. Sliced from its opening `if` to the
+# brace that closes it.
+anchor = '        if (!MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd) &&\n'
 if hooks.count(anchor) != 1:
     sys.exit('FAIL: the surface hook no longer filters with MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd) once')
 start = hooks.index(anchor)
 end = hooks.index('\n        }\n', start) + len('\n        }\n')
 surface = hooks[start:end]
-if 'MenuOverlayVk::DestroyVulkanObjects(false);' not in surface or '_hwnd = pCreateInfo->hwnd;' not in surface:
+if 'MenuOverlayVk::DestroyVulkanObjects(false, pCreateInfo->hwnd))' not in surface or \
+        '_hwnd = pCreateInfo->hwnd;' not in surface:
     sys.exit('FAIL: the surface hook block changed shape: ' + surface)
 
 # The swapchain hook reaches the overlay only after a successful driver create. cases.cpp's

@@ -378,10 +378,10 @@ static VkResult hkvkCreateWin32SurfaceKHR(VkInstance instance, const VkWin32Surf
         State::Instance().VulkanInstance = instance;
         LOG_DEBUG("_instance captured: {0:X}", (UINT64) _instance);
 
-        if (!MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd))
+        // Asked again under the overlay's locks, by DestroyVulkanObjects
+        if (!MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd) &&
+            MenuOverlayVk::DestroyVulkanObjects(false, pCreateInfo->hwnd))
         {
-            MenuOverlayVk::DestroyVulkanObjects(false);
-
             _hwnd = pCreateInfo->hwnd;
             LOG_DEBUG("_hwnd captured: {0:X}", (UINT64) _hwnd);
         }

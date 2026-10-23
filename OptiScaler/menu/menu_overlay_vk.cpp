@@ -1051,11 +1051,22 @@ static bool DestroyVulkanObjectsLocked(bool shutdown)
     return !_vulkanDeviceLost;
 }
 
-void MenuOverlayVk::DestroyVulkanObjects(bool shutdown)
+bool MenuOverlayVk::DestroyVulkanObjects(bool shutdown, HWND hwnd)
 {
     std::scoped_lock presentLock(_vkPresentMutex);
     std::scoped_lock cleanLock(_vkCleanMutex);
+
+    // As in CreateSwapchain: another thread's first create may have put the menu on its own window since
+    // the caller's check
+    if (hwnd != nullptr && OnOtherWindow(hwnd))
+    {
+        LOG_DEBUG("Menu moved to window {:X} meanwhile, keeping it for {:X}", (UINT64) MenuOverlayBase::Handle(),
+                  (UINT64) hwnd);
+        return false;
+    }
+
     DestroyVulkanObjectsLocked(shutdown);
+    return true;
 }
 
 bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
