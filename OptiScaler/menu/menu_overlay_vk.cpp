@@ -1475,6 +1475,16 @@ void MenuOverlayVk::CreateSwapchain(VkDevice device, VkPhysicalDevice pd, VkInst
     std::scoped_lock presentLock(_vkPresentMutex);
     std::scoped_lock cleanLock(_vkCleanMutex);
 
+    // Asked again under the locks: the check above ran before them, and another thread's first create
+    // may have put the menu on its own window since. This overlay's Init and Shutdown run only under
+    // these locks, so the answer cannot change before the drain and the re-init below act on it.
+    if (OnOtherWindow(hwnd))
+    {
+        LOG_DEBUG("Menu moved to window {:X} meanwhile, skipping swapchain of {:X}", (UINT64) MenuOverlayBase::Handle(),
+                  (UINT64) hwnd);
+        return;
+    }
+
     if (_vulkanDeviceLost)
         return;
 
@@ -1495,7 +1505,15 @@ void MenuOverlayVk::CreateSwapchain(VkDevice device, VkPhysicalDevice pd, VkInst
                 vkDeviceWaitIdle(_ImVulkan_Info.Device);
 
             DestroyMenuBlur();
-            ImGui_ImplVulkan_Shutdown(false);
+
+            // The drain above normally shut the backend down already. A second ImGui_ImplVulkan_Shutdown
+            // finds no backend data and dereferences it in ImGui_ImplVulkan_DestroyDeviceObjects.
+            if (_vulkanBackendInited)
+            {
+                ImGui_ImplVulkan_Shutdown(false);
+                _vulkanBackendInited = false;
+            }
+
             LOG_DEBUG("MenuOverlayBase::Shutdown();");
             MenuOverlayBase::Shutdown();
         }

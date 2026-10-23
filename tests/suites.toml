@@ -654,6 +654,14 @@ tier = "host"
 timeout = 60
 summary = "Production deferred queue: owner retirement before NR Vulkan device destruction, lost-device abandonment, handle reuse and detached-collector race. No GPU."
 
+[vulkan-menu-lifecycle]
+path = "vulkan-menu-lifecycle"
+domain = "transport"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "The production Vulkan menu overlay against fake Vulkan/ImGui/Win32 with an ordered event log: second windows, same-window recreate, concurrent first attach, failing creates and drains, destroyed-window re-bind, non-menu present passthrough; hidden-splash and surface-hook race recorded as expectations. No GPU."
+
 [nr-darken-limit]
 path = "nr-darken-limit"
 domain = "nr"
