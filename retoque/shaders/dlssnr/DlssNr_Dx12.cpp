@@ -4967,6 +4967,19 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     nrLock.unlock();
 
     static ZeroGuides s_dummyGuides;
+    // The clear below is a one-way UNORDERED_ACCESS -> NON_PIXEL_SHADER_RESOURCE transition recorded once; the guides
+    // believe it happened only when told, and a list dropped without telling them leaves every later frame handing
+    // NGX guides it calls NON_PIXEL_SHADER_RESOURCE that are still in UNORDERED_ACCESS.
+    bool dummyClearRecorded = false;
+    const auto settleDummyGuides = [&](bool executed)
+    {
+        if (!dummyClearRecorded)
+            return;
+        if (executed)
+            s_dummyGuides.ConfirmExecuted();
+        else
+            s_dummyGuides.AbandonRecording();
+    };
 
     if (!temporalValid && cfg.DlssNrRequireDlss.value_or_default())
     {
@@ -5004,7 +5017,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             LOG_ERROR("DLSS-NR present: {}", g_nr.reason);
             return;
         }
-        s_dummyGuides.RecordClear(list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        dummyClearRecorded = s_dummyGuides.RecordClear(list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         depth = s_dummyGuides.Depth();
         motion = s_dummyGuides.Motion();
         frame = DlssNrFrameInfo {};
@@ -5137,6 +5150,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         hdrTiming.reset(); // resolves on the list while it is still open
         DropPresentList(slot);
         SettlePresentMotion(false);
+        settleDummyGuides(false);
         backbuffer->Release();
         device->Release();
         return;
@@ -5201,6 +5215,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         LOG_INFO("DLSS-NR present: HDR conversion off, the swapchain is SDR");
     }
     SettlePresentMotion(executed);
+    settleDummyGuides(executed);
     if (!executed && trackedSlot < DlssNr::PresentGuides::kRingSize)
     {
         std::lock_guard<std::mutex> lock(g_nrMutex);

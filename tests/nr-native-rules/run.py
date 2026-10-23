@@ -25,7 +25,7 @@ native hardware to be found. The audit behind it is docs/dlssnr/design/native-ap
    holds the size of `SizeInBytes = sizeof(T)`; the aggregate `D3D12_CONSTANT_BUFFER_VIEW_DESC v { address, size }`
    it never saw is held here: sizeof an alignas(256) struct, or a literal multiple of 256.
 6. SPIR-V. Every committed .spv's push-constant block fits 128 bytes (maxPushConstantsSize's guaranteed minimum,
-   VUID-VkPipelineLayoutCreateInfo-pPushConstantRanges-00292 via VkPushConstantRange size), with 4-byte offsets.
+   VUID-VkPushConstantRange-size-00298), with 4-byte offsets (VUID-VkPushConstantRange-offset-00295).
    A storage image written or read with format Unknown needs shaderStorageImageWriteWithoutFormat /
    ReadWithoutFormat (VUID-RuntimeSpirv-apiVersion-07955 / -07954), which the code that dispatches it must check:
    the module and the .cpp that loads it are named together. With spirv-val installed, each module also validates
@@ -35,6 +35,9 @@ native hardware to be found. The audit behind it is docs/dlssnr/design/native-ap
    more than one 32-bit component; formats past the guaranteed set (R16G16_*, R11G11B10_FLOAT, R10G10B10A2_UNORM,
    ...) are each optional ("Typed unordered access view loads", D3D12 docs), so the pass must ask
    CheckFeatureSupport for D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD before it dispatches.
+8. Zero-guide clears are settled. Every object a file calls RecordClear on (a one-way UNORDERED_ACCESS -> rest
+   transition recorded once), the same file answers with ConfirmExecuted and AbandonRecording, so a dropped list
+   does not leave the guides believed to be in a state they never reached.
 
 Each check fails on a seeded violation, so a pattern that stops matching the code is not a pass.
 Pure Python: no compiler, no Wine prefix, no GPU. It reads source and bytecode; it does not prove a pass correct.
@@ -450,6 +453,28 @@ def check_heaps_and_barriers(sources, fail):
     return creations, transitions, cbvs
 
 
+# --- Recorded one-way transitions are settled ------------------------------------------------------------------------
+
+def check_settled_recordings(sources, fail):
+    """8. ZeroGuides::RecordClear records a one-way UNORDERED_ACCESS -> rest-state transition once, and believes it
+    happened only when told: ConfirmExecuted when the list ran, AbandonRecording when it was dropped. A caller that
+    never says either leaves it believing a clear that never ran, and every later frame hands the guides on as being
+    in the rest state while they are still in UNORDERED_ACCESS -- a StateBefore that is not the resource's state
+    (D3D12_RESOURCE_TRANSITION_BARRIER), which the runtime trusts. So every object a file calls RecordClear on, the
+    same file settles both ways."""
+    sites = 0
+    for path, raw in sources.items():
+        text = strip_comments(raw)
+        for m in re.finditer(r'\b(\w+)\s*(\.|->)\s*RecordClear\s*\(', text):
+            sites += 1
+            name = m.group(1)
+            for settle in ('ConfirmExecuted', 'AbandonRecording'):
+                if not re.search(rf'\b{name}\s*(\.|->)\s*{settle}\s*\(', text):
+                    fail(f'{rel(path)}:{line_of(text, m.start())}: {name}.RecordClear is never answered with '
+                         f'{name}.{settle}(); the guides\' state then describes a recording nobody ran')
+    return sites
+
+
 # --- SPIR-V ---------------------------------------------------------------------------------------------------------
 
 OP_NAME, OP_MEMBER_DECORATE, OP_DECORATE = 5, 72, 71
@@ -618,6 +643,13 @@ def run_tree():
         print(f'PASS 3-5: {creations} upload/readback resources in their fixed state, {transitions} transitions '
               f'between two states, {cbvs} CBVs at their buffer\'s own address')
 
+    before = len(failures)
+    settled = check_settled_recordings(host, fail)
+    if settled < 2:
+        fail(f'only {settled} RecordClear sites read; the scan no longer matches the code')
+    elif len(failures) == before:
+        print(f'PASS 8: {settled} zero-guide clear recordings are each settled both ways by their caller')
+
     modules = {p: p.read_bytes() for base in PASS_DIRS for p in sorted((base / 'precompile').glob('*.spv'))}
     blocks = check_spirv(modules, host, fail)
     validated = check_spirv_val(modules, fail, notes)
@@ -690,6 +722,17 @@ def self_test():
     header_text = cadence_header.read_text()
     expect('cbv aggregate size', {cadence: cadence_text, cadence_header: header_text.replace(
         'struct alignas(256) Constants', 'struct Constants')}, 'which is not declared alignas(256)')
+    # 8. The present host's clear, never abandoned.
+    host_cpp = nr / 'dlssnr/DlssNr_PresentHost.cpp'
+    found = []
+    check_settled_recordings({host_cpp: host_cpp.read_text().replace('_guides.AbandonRecording()', '_guides.Forget()')},
+                             found.append)
+    if not any('never answered with _guides.AbandonRecording' in f for f in found):
+        problems.append(f'unsettled clear: expected a failure, got {found or "none"}')
+    found = []
+    check_settled_recordings({host_cpp: host_cpp.read_text()}, found.append)
+    if found:
+        problems.append(f'the present host\'s settled clear fails: {found}')
     # 6. SPIR-V: an oversized push-constant block, and a format-less storage write nobody checks.
     pc = root / 'retoque/shaders/synth_motion/precompile/SynthMotion_Expand_Shader_Vk.spv'
     blob = bytearray(pc.read_bytes())
