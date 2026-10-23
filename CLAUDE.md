@@ -44,6 +44,10 @@ URLs redirect), which adds Linux/Proton overlay patches on top.
     header (SPIRV-Reflect's `spirv.h`) was fetched file by file. After moving `external/vulkan`, rebuild with
     `/t:Rebuild`: the incremental build kept a `pch` made with the old headers. Decisions and validation:
     `docs/linux-proton/upstream-20261023.md`.
+  - The seventh is on `merge/optiscaler-20261023b` (5 commits, to `12fd52d8`, same day), without conflicts: the
+    Enshrouded DLSS-G crash (NGX's Vulkan extension-requirement arrays copied before Streamline's reload frees
+    them), amdxc64 hooked twice, FfxApi pinning a game's own `amd_fidelityfx_vk.dll`, the Textures tab hidden on
+    Vulkan, and fixed status colours.
   - Conflicts resolve as upstream's structure first, with our changes re-applied on top. Where one
     of our commits was a port of upstream work that later landed there (reprojection, the
     FGPreserveSwapChain factoring), take upstream's.
