@@ -428,7 +428,9 @@ VkResult VulkanSpoofing::hkvkCreateInstance(VkInstanceCreateInfo* pCreateInfo, c
         LOG_DEBUG("ApplicationName: {}", pCreateInfo->pApplicationInfo->pApplicationName);
     }
 
-    static std::vector<const char*> newExtensionList;
+    // Per thread: the caller hands this storage to the driver after the spoofing has returned, so a create on
+    // another thread must not clear or reallocate it in between.
+    static thread_local std::vector<const char*> newExtensionList;
     newExtensionList.clear();
 
     LOG_DEBUG("Extensions ({}):", pCreateInfo->enabledExtensionCount);
@@ -481,7 +483,7 @@ VkResult VulkanSpoofing::hkvkCreateInstance(VkInstanceCreateInfo* pCreateInfo, c
 
     debugCreateInfo.pfnUserCallback = &VulkanDebugCallback;
 
-    static std::vector<const char*> newLayerList;
+    static thread_local std::vector<const char*> newLayerList;
     newLayerList.clear();
     newLayerList.push_back("VK_LAYER_KHRONOS_validation");
 
@@ -913,7 +915,8 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
             std::vector<VkExtensionProperties> supported(count);
             o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, supported.data());
 
-            static std::vector<const char*> filteredExtensions;
+            // Per thread, like newExtensionList below: read by the driver after this returns.
+            static thread_local std::vector<const char*> filteredExtensions;
             filteredExtensions.clear();
 
             for (uint32_t i = 0; i < pCreateInfo->enabledExtensionCount; i++)
@@ -1008,7 +1011,9 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
     if (!requestedApiVersionKnown)
         LOG_WARN("Using conservative Vulkan 1.0 capability path because the instance API version is unknown");
 
-    static std::vector<const char*> newExtensionList;
+    // Per thread: the caller hands this storage to the driver after the spoofing has returned, so a create on
+    // another thread must not clear or reallocate it in between.
+    static thread_local std::vector<const char*> newExtensionList;
     newExtensionList.clear();
 
     LOG_DEBUG("Checking extensions and removing Streamline ones");
