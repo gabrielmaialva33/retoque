@@ -37,6 +37,13 @@ URLs redirect), which adds Linux/Proton overlay patches on top.
   - The fifth is on `merge/optiscaler-20261019` (28 commits, to `c2e44a8b`): Vulkan reprojection/resource
     flipping, reprojection cache, XeFG Dynamic MFG, FSR4 driver/model handling and deferred resource release.
     Resolution decisions and validation boundaries: `docs/linux-proton/upstream-20261019.md`.
+  - The sixth is on `merge/optiscaler-20261023` (38 commits, to `83e18f1a`): the Cyberpunk launch deadlock and
+    XeLL fixes, the D3D12 menu past eight buffers, Vulkan device extensions from the real list (#1161), FSR4 on
+    Vulkan, the fakenvapi low-latency removal and the menu reform. The DLSS-G frame-latency waitable stays on for
+    every title (upstream made it a KCD2 quirk). Vulkan headers move to `8864cdc8`, and one more FidelityFX-SDK
+    header (SPIRV-Reflect's `spirv.h`) was fetched file by file. After moving `external/vulkan`, rebuild with
+    `/t:Rebuild`: the incremental build kept a `pch` made with the old headers. Decisions and validation:
+    `docs/linux-proton/upstream-20261023.md`.
   - Conflicts resolve as upstream's structure first, with our changes re-applied on top. Where one
     of our commits was a port of upstream work that later landed there (reprojection, the
     FGPreserveSwapChain factoring), take upstream's.
@@ -192,6 +199,10 @@ WINEPREFIX=~/.local/opt/msvc-wineprefix WINEDEBUG=-all ~/.local/opt/msvc/bin/x64
 - **Never pipe the script** (`./build-local.sh ... | tail`). `wineserver` daemonises and inherits
   stdout, so the pipe never reaches EOF and the output stays hidden even after the build finished —
   a success looks exactly like a hang. Redirect to a file instead.
+- **Serialise with `flock -o ~/.cache/retoque-wt/msvc-prefix.lock`**, the lock the wine suites and
+  `run_moving.lease` take. The `-o` matters for the same reason as the pipe: without it `wineserver`
+  inherits the lock descriptor and holds the lock after the build has finished, and the next build
+  waits on it forever (2026-10-23).
 - The Visual Studio pre/post-build events are PowerShell and are disabled
   (`PreBuildEventUseInBuild=false`). The script writes `resource_build_date.h` and
   `resource_build_commit.h` itself. The in-game menu title shows this build id and timestamp; use it
@@ -461,6 +472,7 @@ says which rows to drop from this table then. #1138 is the exception: upstream m
 | `7fe23f4`, 2026-09-27, **retired 2026-10-12** | `wrapped/wrapped_swapchain.cpp` | **Retired by upstream `1cc9d5a1`, which deletes the whole shortcut: every DXGI present now reaches `MenuOverlayDx`, which is what our clause was for. Drop this row.** Was: DXVK direct-present shortcut limited to D3D11 (**text of PR #1163**, jackra1n; #1138 carries the same condition in its own words, none of which are in the tree), plus our `&& !vulkanHooksSkipped` so a D3D11 title with the hooks skipped reaches `MenuOverlayDx` too | moot: the code is gone upstream |
 | `10c6760`, `8e021bff`, `47138ca0`, `4d2c8078`, 2026-09-19 | `menu/menu_overlay_vk.cpp`, `hooks/VulkanwDx12_Hooks.cpp` | Bounded fence wait; submit on the queue that presents; no leaks across swapchain recreation; no D3D12 probe in a native Vulkan overlay's `Init`; non-graphics present family (id Tech 7) drawn on the graphics queue with ownership transfers and a three-submit semaphore chain; per-`VkQueue` recursive lock in the `vkQueueSubmit` hooks. Upstream's menu blur (`f72e47b9`) was ported in by hand on 2026-10-12 and is **off on the cross-family path** (its first barrier does not chain after our acquire); `DxOverlayOwnsBackend` reads `dxgiIsDxvk` (`ac7a0111`'s name for `usesDxvk`). Diverged beyond #1138's version of this file, so kept whole; #1138's release of `_vkCleanMutex` across `RenderMenu` was not taken (see below)  Upstream's `ImGui_ImplVulkan_SetQueue` (`01195e9b`, `70f9939f`) is ported on 2026-10-13: ImGui's own texture uploads go to the presenting queue when it is of ImGui's init family, else the init queue; our `NoteDeviceQueues` took upstream's name, `DeviceCreated` | none |
 | `be19e645`, `285bd7a7`, `f462f3ef`, 2026-10-19 | `misc/DeferredRelease.*`, `hooks/Vulkan_Hooks.cpp`, `menu/menu_overlay_vk.cpp`, `retoque/dlssnr/DlssNr_VkPresentHost.cpp` | Retire device-owned deferred callbacks before NR device destruction, synchronized with detached collectors; abandon on loss or an unproven drain; reopen reused device handles; flush queued Vulkan shaders after the menu's successful device-wide idle, preserving its failed-drain retry and cross-family fences. See `docs/linux-proton/upstream-20261019.md` | none (ours) |
+| `d391a944`, `68b5a0e5`, `e35f1c76`, `c397eb1d`, `80a1ab0f`, `77495b8b`, 2026-10-23 | `spoofing/Vulkan_Spoofing.cpp`, `menu/menu_overlay_vk.cpp`, `hooks/FG_Hooks.cpp`, `hooks/Streamline_Hooks.cpp` | Found while taking the sixth merge, all fixes to upstream code: the spoofing's extension lists are `static thread_local` (a second thread's create could rewrite the list another thread had not yet handed to the driver); `vulkanMemoryModelDeviceScope` is enabled wherever #1161 enables `vulkanMemoryModel`; the Vulkan menu's render area is the swapchain extent, not ImGui's client-area `DisplaySize`; the DLSS-G resize hooks keep the frame-latency waitable bit the chain was created with; the MFG clamp limits the count sent to the provider, never the saved `OverrideInterpolationCount`, and re-reads the provider's maximum per provider generation. See `docs/linux-proton/upstream-20261023.md` | none yet; candidates for upstream PRs |
 
 Not taken from #1138: its `menu_overlay_vk.cpp` drops `_vkCleanMutex` across
 `MenuOverlayBase::RenderMenu` because `RenderMenu` could re-enter `DestroyVulkanObjects` through
