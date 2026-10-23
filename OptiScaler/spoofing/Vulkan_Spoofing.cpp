@@ -86,6 +86,24 @@ template <typename T> static const T* FindFeatureStruct(const void* pNext, VkStr
     return nullptr;
 }
 
+// A VkPhysicalDeviceVulkan12Features or 13Features is only valid from its version on, so a request with one is from an
+// instance of at least that version, whatever was recorded for it (unknown, or the game's own below the 1.2 an FG
+// output raises it to). Below it, the features would go in the promoted structs beside it, which the spec forbids
+// (VUID-VkDeviceCreateInfo-pNext-02830, -06532).
+static uint32_t ApiVersionOfFeatureChain(const void* pNext)
+{
+    uint32_t version = VK_API_VERSION_1_0;
+    for (auto* next = static_cast<const VkBaseInStructure*>(pNext); next != nullptr; next = next->pNext)
+    {
+        if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
+            version = std::max(version, VK_API_VERSION_1_2);
+        else if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
+            version = std::max(version, VK_API_VERSION_1_3);
+    }
+
+    return version;
+}
+
 template <typename... Features> static const void* CopyFeatureChain(const void* pNext, Features&... features)
 {
     if (pNext == nullptr)
@@ -919,9 +937,18 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
             o_vkEnumerateDeviceExtensionProperties != nullptr)
         {
             uint32_t count = 0;
-            o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+            auto result = o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
             std::vector<VkExtensionProperties> supported(count);
-            o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, supported.data());
+            if (result == VK_SUCCESS)
+                result = o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, supported.data());
+
+            // Without the whole list a spoofed name cannot be told from a real one: keep the request as it is, as the
+            // native path below does, rather than drop extensions the device has
+            if (result != VK_SUCCESS)
+            {
+                LOG_WARN("Unable to obtain a complete Vulkan device extension list, preserving requested extensions");
+                return VK_SUCCESS;
+            }
 
             // Per thread, like newExtensionList below: read by the driver after this returns.
             static thread_local std::vector<const char*> filteredExtensions;
@@ -1012,12 +1039,13 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
 
     const bool requestedApiVersionKnown = requestedApiVersion != 0;
     const uint32_t effectiveApiVersion =
-        requestedApiVersionKnown
-            ? (requestedApiVersion < properties.apiVersion ? requestedApiVersion : properties.apiVersion)
-            : VK_API_VERSION_1_0;
+        std::min(std::max(requestedApiVersionKnown ? requestedApiVersion : VK_API_VERSION_1_0,
+                          ApiVersionOfFeatureChain(pCreateInfo->pNext)),
+                 properties.apiVersion);
 
     if (!requestedApiVersionKnown)
-        LOG_WARN("Using conservative Vulkan 1.0 capability path because the instance API version is unknown");
+        LOG_WARN("Using conservative Vulkan {}.{} capability path because the instance API version is unknown",
+                 VK_API_VERSION_MAJOR(effectiveApiVersion), VK_API_VERSION_MINOR(effectiveApiVersion));
 
     // Per thread: the caller hands this storage to the driver after the spoofing has returned, so a create on
     // another thread must not clear or reallocate it in between.

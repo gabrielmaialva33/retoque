@@ -398,6 +398,14 @@ tier = "host"
 timeout = 120
 summary = "The bridge's window takeover header: live bridges by window (newest first, never a count at zero, the lock acquire runs under), the presenter gate against its race, and the takeover sequence (only on E_ACCESSDENIED, one release, one retry)."
 
+[vk-create-contract]
+path = "vk-create-contract"
+domain = "transport"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 600
+summary = "Production vkCreateDevice path (hkvkCreateDevice, the spoofing's device create and feature state, the NR extension block) against a fake driver that records the exact request: the game's request unchanged, every pointer alive until the driver returns, two creates interleaved on two threads (A-01, with a function-static control that must fail), no capability the device lacks requested, over API 1.0-1.4, failing or incomplete enumeration, NR, skip scopes, extension spoofing and the dxvk/vkd3d-proton path. No Vulkan runs."
+
 [vulkan-query-readiness]
 path = "vulkan-query-readiness"
 domain = "transport"
