@@ -101,6 +101,11 @@ class PresentHost
     // host's own resources at the same size; the estimator settles its own abandon and keeps going.
     void _ReleaseBuilt();
 
+    // Whether every list already submitted to the last Record's queue has finished: a fence signalled behind them
+    // and seen to complete. An abandoned list never ran, but the frames before it went to the same queue and read
+    // what _ReleaseBuilt frees; freeing under them is undefined, and on native Windows a device removal.
+    bool _QueueIdle();
+
     // Build the model once, on lists of this host's own, before any frame work exists to sit in
     // front of it.
     //
@@ -183,6 +188,10 @@ class PresentHost
     bool _motionResetOwed = true;
     bool _motionRecorded = false; // this frame's list carries an estimator recording
     bool _failed = false;
+
+    // The device and queue of the last Record, not owned: the caller's, for the one use _QueueIdle makes of them.
+    ID3D12Device* _queueDevice = nullptr;
+    ID3D12CommandQueue* _queue = nullptr;
 };
 
 } // namespace DlssNr

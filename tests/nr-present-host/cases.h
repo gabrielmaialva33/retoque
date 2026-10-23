@@ -61,6 +61,10 @@ void Fresh(bool enabled = true)
     g_formatQueries = 0;
     g_committedMade = 0;
     g_hdrResourcesValid = true;
+    g_gpuBusy = false;
+    g_gpuHung = false;
+    g_fenceWaits = 0;
+    g_waitedFence = nullptr;
     Config::Instance()->DlssNrEnabled.value = enabled;
     Config::Instance()->DlssNrZeroGuideReset.value = false;
     Config::Instance()->DlssNrSynthMotion.value = false;
@@ -643,15 +647,45 @@ int main()
 
         // A list the caller could not close: everything is rebuilt, the stage included, and the next frame's
         // transitions start from where the rebuilt objects really are (the fakes hold every StateBefore to it).
+        // The frames before it were submitted to the same queue and may still be running: what the rebuild frees,
+        // they read (the fake asserts on a release while the GPU is busy).
+        g_gpuBusy = true;
         r.frameLists.push_back(std::make_unique<ID3D12GraphicsCommandList>());
         r.source.state = D3D12_RESOURCE_STATE_COPY_SOURCE;
         assert(r.host.Record(&r.device, r.frameLists.back().get(), &r.source, D3D12_RESOURCE_STATE_COPY_SOURCE,
                              &r.queue));
         r.host.AbandonRecording();
+        assert(!g_gpuBusy && r.queue.signals == 1 && g_fenceWaits == 1);
         assert(r.device.LiveResources() == 0);
         assert(r.Frame());
         assert(g_committedMade == 2 && r.device.LiveResources() == 1);
-        CASE("an abandoned recording releases the stage with everything else, and the next frame rebuilds it");
+        CASE("an abandoned recording waits for the queue's earlier lists, then releases the stage with everything "
+             "else, and the next frame rebuilds it");
+    }
+
+    {
+        Fresh();
+        Rig r;
+        r.Size(1920, 1080, DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+        assert(r.Frame());
+
+        // The same abandon on a queue whose earlier lists never finish (a hung or removed device).
+        g_gpuBusy = true;
+        g_gpuHung = true;
+        r.frameLists.push_back(std::make_unique<ID3D12GraphicsCommandList>());
+        r.source.state = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        assert(r.host.Record(&r.device, r.frameLists.back().get(), &r.source, D3D12_RESOURCE_STATE_COPY_SOURCE,
+                             &r.queue));
+        r.host.AbandonRecording();
+        assert(r.device.LiveResources() == 1 && g_committedMade == 1);
+        assert(LogCount("could not be shown idle") == 1);
+        assert(!r.Frame() && !r.Frame());
+        assert(g_committedMade == 1 && LogCount("could not be shown idle") == 1);
+        CASE("an abandon on a queue that cannot be shown idle frees nothing and declines for the session");
+
+        // What the bridge's teardown does before Release: drain, then free.
+        g_gpuHung = false;
+        g_gpuBusy = false;
     }
 
     {
