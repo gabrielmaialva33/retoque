@@ -1,6 +1,6 @@
 # Render geometry: creation fallback and pre-upscale display motion
 
-2026-10-23. Scope: D3D12 NGX evaluates (including callers routed through that input),
+2026-10-23. Scope: D3D12, D3D11 and Vulkan NGX input evaluates (including their D3D12 bridges),
 CPU geometry contracts only. No new setting, shader math or cbuffer change.
 
 ## Problem and decisions
@@ -11,7 +11,7 @@ back through parameter dimensions to the current feature. We retain that priorit
 never infer identity/freshness from the global currentFeature pointer: pre-upscale is
 entered before the selected backend updates that pointer, and RenderWidth is mutable.
 
-Record the successful upscaler creation's render/display dimensions by NGX handle,
+Record the successful upscaler creation's render/display dimensions by (input API, NGX handle),
 using a snapshot taken before backend initialization can alter the creation parameters.
 Release erases the record; a new successful creation at the same handle replaces it.
 A scoped binding around the matching evaluate carries a value snapshot, restores the
@@ -40,9 +40,34 @@ This is an explicit limit, not a freshness guarantee based on allocation size or
 
 Frame gathering carries whether render geometry is known and its source. Unknown or
 incomplete real-game guides are refused before recording NR. Zero/synthesized guides
-remain governed by their existing non-game-guide contract. Native Vulkan creation and
-D3D11-native creation are not registered by this D3D12 input change; they keep explicit
-metadata resolution, and do not borrow another API's creation fallback.
+remain governed by their existing non-game-guide contract.
+
+### Follow-up: D3D11 and Vulkan bridge lifetime
+
+The D3D11/Vulkan NGX inputs must register creation and bind evaluate too: their
+IFeature_Dx11wDx12/IFeature_VkwDx12 bridges call the D3D12 NR path with that same parameter
+block. A D3D12-input-only registry would now refuse valid bridge frames without dimensions.
+Pack an explicit input API tag in the high 32 bits of a uint64_t key and the complete
+32-bit NGX handle in the low bits. A single synchronized map then preserves the existing
+record/scope lifecycle without cross-API collisions, erasure or DRS invalidation.
+
+Snapshot before GetFeature/Init can normalize the parameters. Register only when the input
+returns success with a published handle; D3D11's accepted handle with deferred backend
+recovery also returns success and needs the same snapshot. Vulkan CreateFeature delegates
+SR/RR to CreateFeature1, so registration belongs only in the latter. Forget on ReleaseFeature
+also cleans records created while NR was on if it is off at release. Creation with NR off
+only removes a previous epoch; it does not read dimensions or allocate a record.
+
+Scope the entire input evaluate (including backend changes, bridge callbacks and native
+post-upscale offers), using the API-qualified key and the same parameter pointer. A nested
+evaluate from another API restores the previous binding on unwind. Without a creation in
+that API, missing dimensions remain unknown even if another API has the same handle.
+
+Do not modify retoque/dlssnr/DlssNrFeature_Vk.cpp in this follow-up: another agent owns it.
+The input scope reaches native Vulkan's existing GetRenderSize call with the same parameter
+block as well. Any native caller bypassing these NGX input hooks still requires explicit
+metadata or a future binding at its own lifetime boundary; it cannot borrow a global feature.
+
 
 ## Bounds and pre-upscale motion
 
@@ -81,3 +106,8 @@ swap and invalid geometry leaves the game's parameters/resources untouched.
 Run affected suites, clang-format22, a Release build under the shared flock -o lease,
 and all host suites with two workers. Build is compile/link evidence; host controls do
 not establish NGX/GPU image quality or DRS compatibility in MSFS. No game/deploy/push.
+
+Follow-up controls execute the real input snapshot/registration/scope/release statements and
+GatherGuideFrame against fakes: missing evaluate dimensions after each API's valid creation,
+no creation, identical numeric handles, isolated release/DRS/recreation and NR off. These are
+CPU controls, not execution of the complete graphics input functions or either bridge on GPU.
