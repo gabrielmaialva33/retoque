@@ -282,7 +282,8 @@ bool DescriptorReuseAvailable() { return g_nrScratchGeneration != UINT64_MAX; }
 // DispatchPass never reuses.
 // {6E1F3C2A-8B54-4D7E-9A61-2C5D0B7F4E93}
 constexpr GUID kBindTokenGuid = { 0x6e1f3c2a, 0x8b54, 0x4d7e, { 0x9a, 0x61, 0x2c, 0x5d, 0x0b, 0x7f, 0x4e, 0x93 } };
-uint64_t g_nextBindToken = 1;
+// Atomic: the present route dispatches with g_nrMutex released.
+std::atomic<uint64_t> g_nextBindToken { 1 };
 
 uint64_t BindToken(ID3D12Resource* resource)
 {
@@ -291,7 +292,7 @@ uint64_t BindToken(ID3D12Resource* resource)
     if (SUCCEEDED(resource->GetPrivateData(kBindTokenGuid, &size, &token)) && size == sizeof(token) && token != 0)
         return token;
 
-    token = g_nextBindToken++;
+    token = g_nextBindToken.fetch_add(1, std::memory_order_relaxed);
     if (FAILED(resource->SetPrivateData(kBindTokenGuid, sizeof(token), &token)))
         return 0;
 

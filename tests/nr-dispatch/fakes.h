@@ -5,6 +5,7 @@
 constexpr unsigned kRing = 64;
 #include <array>
 #include <cassert>
+#include <atomic>
 #include <cstring>
 #include <iostream>
 #include <memory>
