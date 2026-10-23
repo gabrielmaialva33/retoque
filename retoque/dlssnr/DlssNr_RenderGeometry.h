@@ -6,9 +6,18 @@
 #include <mutex>
 #include <unordered_map>
 
-// D3D12 NGX handle lifetime and evaluate binding. See design/render-geometry.md.
+// NGX input handle lifetime and evaluate binding. See design/render-geometry.md.
 namespace DlssNr::RenderGeometry
 {
+enum class Api : uint32_t
+{
+    D3D12 = 1,
+    D3D11 = 2,
+    Vulkan = 3
+};
+// NGX IDs are 32-bit and only identify a feature inside its input API.
+constexpr uint64_t Key(Api api, uint32_t handle) { return (uint64_t(api) << 32) | handle; }
+
 struct Creation
 {
     RenderSize render, display;
@@ -34,18 +43,18 @@ struct Record
 };
 inline std::mutex recordsMutex;
 inline std::unordered_map<uint64_t, std::shared_ptr<Record>> records;
-inline void Remember(uint64_t handle, Creation creation)
+inline void Remember(uint64_t key, Creation creation)
 {
     std::lock_guard lock(recordsMutex);
-    records.erase(handle);
+    records.erase(key);
     if (creation.render.width && creation.render.height && creation.display.width && creation.display.height &&
         creation.render.width <= creation.display.width && creation.render.height <= creation.display.height)
-        records.emplace(handle, std::make_shared<Record>(creation));
+        records.emplace(key, std::make_shared<Record>(creation));
 }
-inline void Forget(uint64_t handle)
+inline void Forget(uint64_t key)
 {
     std::lock_guard lock(recordsMutex);
-    records.erase(handle);
+    records.erase(key);
 }
 class Scope
 {
@@ -69,7 +78,7 @@ class Scope
     }
 
   public:
-    Scope(bool enabled, uint64_t handle, const NVSDK_NGX_Parameter* params) : previous(active)
+    Scope(bool enabled, uint64_t key, const NVSDK_NGX_Parameter* params) : previous(active)
     {
         // Even a disabled nested call must not inherit an outer evaluate's binding.
         active = nullptr;
@@ -77,7 +86,7 @@ class Scope
             return;
         {
             std::lock_guard lock(recordsMutex);
-            const auto it = records.find(handle);
+            const auto it = records.find(key);
             if (it != records.end())
                 record = it->second;
         }

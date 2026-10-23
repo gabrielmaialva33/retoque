@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_RenderGeometry.h>
 #include <dlssnr/DlssNrFeature_Vk.h>
 #include "Util.h"
 #include "Config.h"
@@ -840,6 +841,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
         }
     }
 
+    const bool rememberGeometry = Config::Instance()->DlssNrEnabled.value_or_default();
+    const auto creation =
+        rememberGeometry ? DlssNr::RenderGeometry::ReadCreation(InParameters) : DlssNr::RenderGeometry::Creation {};
+
     // Create feature
     auto handleId = IFeature::GetNextHandleId();
     LOG_INFO("HandleId: {0}", handleId);
@@ -896,6 +901,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             evalCounter = 0;
 
+            DlssNr::RenderGeometry::Remember(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::Vulkan, handleId),
+                                             creation);
             return NVSDK_NGX_Result_Success;
         }
     }
@@ -938,6 +945,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
         return NVSDK_NGX_Result_Success;
 
     auto handleId = InHandle->Id;
+    DlssNr::RenderGeometry::Forget(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::Vulkan, handleId));
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_ReleaseFeature() != nullptr)
@@ -1006,6 +1014,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     }
 
     auto handleId = InFeatureHandle->Id;
+    DlssNr::RenderGeometry::Scope geometry(Config::Instance()->DlssNrEnabled.value_or_default(),
+                                           DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::Vulkan, handleId),
+                                           InParameters);
 
     // Same as D3D12, the DLSSG state shown in the menu comes from the game's own FG evaluations.
     // Replacements are handled below, so this has to be done before that

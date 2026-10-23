@@ -853,7 +853,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
     if (tryResult == NVSDK_NGX_Result_Success)
     {
         HandleToFeature[(*OutHandle)->Id] = InFeatureID;
-        DlssNr::RenderGeometry::Remember((*OutHandle)->Id, creation);
+        DlssNr::RenderGeometry::Remember(
+            DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D12, (*OutHandle)->Id), creation);
     }
 
     return tryResult;
@@ -874,7 +875,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     DlssNr::ExposureScan::ReleaseTrackedResources();
 
     auto handleId = InHandle->Id;
-    DlssNr::RenderGeometry::Forget(handleId);
+    DlssNr::RenderGeometry::Forget(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D12, handleId));
 
     bool skipFgCleanup = State::Instance().thumbnailSaveActive;
     if (!skipFgCleanup)
@@ -1199,7 +1200,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     DlssNr::RenderGeometry::Scope geometry(
         cfg.DlssNrEnabled.value_or_default() &&
             (feature == NVSDK_NGX_Feature_SuperSampling || feature == NVSDK_NGX_Feature_RayReconstruction),
-        handleId, InParameters);
+        DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D12, handleId), InParameters);
     static size_t evalWithoutFG = 0;
     bool fgCreated = std::any_of(HandleToFeature.begin(), HandleToFeature.end(),
                                  [](const auto& pair) { return pair.second == NVSDK_NGX_Feature_FrameGeneration; });

@@ -3,6 +3,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+import re
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[1]
 with tempfile.TemporaryDirectory(prefix="nr-render-geometry-") as folder:
@@ -30,17 +31,63 @@ with tempfile.TemporaryDirectory(prefix="nr-render-geometry-") as folder:
                     "-I",str(ROOT/"external/nvngx_dlss_sdk"),str(unit),"-o",str(binary)],check=True)
     subprocess.run([str(binary)],check=True)
 
-# Pin the upstream integration: immutable snapshot before Init, success-only handle registration,
-# release cleanup, and the same evaluate's scope before either NR stage.
-hook=(ROOT/"OptiScaler/inputs/NVNGX_DLSS_Dx12.cpp").read_text()
-create=hook[hook.index("NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature("):hook.index("NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(")]
-assert create.index("RenderGeometry::ReadCreation(InParameters)") < create.index("auto tryResult = TryCreateOptiFeature")
-assert create.index("if (tryResult == NVSDK_NGX_Result_Success)") < create.index("RenderGeometry::Remember((*OutHandle)->Id, creation)")
-assert "rememberGeometry ? DlssNr::RenderGeometry::ReadCreation" in create
-release=hook[hook.index("NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature("):hook.index("NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(")]
-assert "RenderGeometry::Forget(handleId)" in release
-evaluate=hook[hook.index("NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature("):]
-assert evaluate.index("RenderGeometry::Scope geometry(") < evaluate.index("DlssNr::ScopedPreUpscale")
-assert "feature == NVSDK_NGX_Feature_SuperSampling ||" in evaluate
-assert "feature == NVSDK_NGX_Feature_RayReconstruction" in evaluate
-print("PASS: creation/evaluate/release integration guards")
+    # Compile the production lifetime statements, retaining their position relative to backend Init.
+    # Absent hooks on the baseline are no-ops; the real resolver/Gather/Dispatch refusal still runs.
+    def body(text, signature):
+        start = text.index(signature)
+        begin = text.index("{", start)
+        clean = re.sub(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/',
+                       lambda match: " " * len(match[0]), text)
+        depth = 1
+        end = begin + 1
+        while depth:
+            depth += (clean[end] == "{") - (clean[end] == "}")
+            end += 1
+        return text[start:end]
+
+    functions = []
+    for api, filename, symbol, create_name, factory in (
+        ("D3D12", "Dx12", "D3D12", "CreateFeature", "auto tryResult = TryCreateOptiFeature"),
+        ("D3D11", "Dx11", "D3D11", "CreateFeature", "FeatureProvider_Dx11::GetFeature("),
+        ("Vulkan", "Vk", "VULKAN", "CreateFeature1", "FeatureProvider_Vk::GetFeature("),
+    ):
+        text = (ROOT / f"OptiScaler/inputs/NVNGX_DLSS_{filename}.cpp").read_text()
+        create = body(text, f"NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_{symbol}_{create_name}(")
+        evaluate = body(text, f"NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_{symbol}_EvaluateFeature(")
+        release = body(text, f"NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_{symbol}_ReleaseFeature(")
+        statements = []
+        for pattern in (r"const bool rememberGeometry\s*=[\s\S]*?;",
+                        r"const auto creation\s*=[\s\S]*?;",
+                        r"DlssNr::RenderGeometry::Remember\([\s\S]*?;"):
+            match = re.search(pattern, create)
+            if match:
+                statements.append((match.start(), match[0]))
+        statements.append((create.index(factory), "NormalizeBackend(InParameters);"))
+        statements.sort()
+        snapshot = "\n".join(statement for _, statement in statements)
+        scope = re.search(r"DlssNr::RenderGeometry::Scope geometry\([\s\S]*?;", evaluate)
+        forget = re.search(r"DlssNr::RenderGeometry::Forget\([\s\S]*?;", release)
+        functions.append(f"""
+void Create{api}(FakeParams* InParameters, [[maybe_unused]] unsigned handleId) {{
+    [[maybe_unused]] const auto& cfg = *Config::Instance();
+    NVSDK_NGX_Handle handle {{ handleId }};
+    auto* output = &handle;
+    [[maybe_unused]] auto** OutHandle = &output;
+    {snapshot}
+}}
+DlssNrFrameInfo Evaluate{api}(NVSDK_NGX_Parameter* InParameters, [[maybe_unused]] unsigned handleId) {{
+    [[maybe_unused]] const auto& cfg = *Config::Instance();
+    [[maybe_unused]] auto feature = NVSDK_NGX_Feature_SuperSampling;
+    {scope[0] if scope else ""}
+    return GatherGuideFrame(InParameters);
+}}
+void Release{api}([[maybe_unused]] unsigned handleId) {{ {forget[0] if forget else ""} }}
+""")
+    guard = body(source, "    if (frame.GameGuides && (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight))")
+    unit.write_text((HERE/"inputs.cpp.in").read_text().replace("@GATHER@", gather)
+                    .replace("@INPUTS@", "\n".join(functions)).replace("@GUARD@", guard))
+    subprocess.run(["g++","-std=c++20","-O1","-g","-Wall","-Wextra","-Werror",
+                    "-fsanitize=address,undefined","-I",str(ROOT/"retoque"),"-I",str(HERE),
+                    "-I",str(ROOT/"external/nvngx_dlss_sdk"),str(unit),"-o",str(binary)],check=True)
+    results = [subprocess.run([str(binary), api]).returncode for api in ("D3D11", "Vulkan", "all")]
+    assert results == [0, 0, 0], f"input lifetime controls failed (D3D11/Vulkan/isolation): {results}"

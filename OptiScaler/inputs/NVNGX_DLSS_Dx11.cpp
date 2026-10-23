@@ -18,6 +18,7 @@
 #include <imgui/ImGuiNotify.hpp>
 #include <misc/IdentifyGpu.h>
 #include <dlssnr/DlssNr_Dx11Upscaler.h>
+#include <dlssnr/DlssNr_RenderGeometry.h>
 
 static ID3D11Device* D3D11Device = nullptr;
 static ankerl::unordered_dense::map<unsigned int, ContextData<IFeature_Dx11>> Dx11Contexts;
@@ -584,6 +585,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
         }
     }
 
+    const bool rememberGeometry = Config::Instance()->DlssNrEnabled.value_or_default();
+    const auto creation =
+        rememberGeometry ? DlssNr::RenderGeometry::ReadCreation(InParameters) : DlssNr::RenderGeometry::Creation {};
+
     // CreateFeature
     auto handleId = IFeature::GetNextHandleId();
     LOG_INFO("HandleId: {0}", handleId);
@@ -646,6 +651,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
     {
         State::Instance().currentFeature = deviceContext;
         UpscalerInputsDx11wDx12::Reset();
+        DlssNr::RenderGeometry::Remember(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D11, handleId),
+                                         creation);
         return NVSDK_NGX_Result_Success;
     }
 
@@ -654,6 +661,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
     State::Instance().newBackend = Upscaler::FSR22;
     State::Instance().changeBackend[handleId] = true;
 
+    DlssNr::RenderGeometry::Remember(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D11, handleId),
+                                     creation);
     return NVSDK_NGX_Result_Success;
 }
 
@@ -663,6 +672,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_ReleaseFeature(NVSDK_NGX_Handle* 
         return NVSDK_NGX_Result_Success;
 
     auto handleId = InHandle->Id;
+    DlssNr::RenderGeometry::Forget(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D11, handleId));
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::D3D11_ReleaseFeature() != nullptr)
@@ -776,6 +786,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_EvaluateFeature(ID3D11DeviceConte
 
     State& state = State::Instance();
     auto handleId = InFeatureHandle->Id;
+    DlssNr::RenderGeometry::Scope geometry(Config::Instance()->DlssNrEnabled.value_or_default(),
+                                           DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D11, handleId),
+                                           InParameters);
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::D3D11_EvaluateFeature() != nullptr)
