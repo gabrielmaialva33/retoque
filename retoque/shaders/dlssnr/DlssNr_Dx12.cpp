@@ -273,6 +273,31 @@ uint64_t g_nrScratchGeneration = 1;
 // Reuse is only sound while the generation can still advance.
 bool DescriptorReuseAvailable() { return g_nrScratchGeneration != UINT64_MAX; }
 
+// Which object a cached descriptor names, as opposed to which address. The generation retires NR's own textures,
+// but a game's resource has no generation: released and re-created at the same address with the same description
+// -- a resize back to a size it had before can do exactly that -- it matches pointer and shape, and the descriptor
+// left in the slot names freed memory. On native Windows that is a page fault and a removed device. So every
+// resource a key names carries a token of ours as private data, set the first time it is bound: a new object at an
+// old address has none, is given a new one, and no key made for the old object matches it. 0 is "no token", which
+// DispatchPass never reuses.
+// {6E1F3C2A-8B54-4D7E-9A61-2C5D0B7F4E93}
+constexpr GUID kBindTokenGuid = { 0x6e1f3c2a, 0x8b54, 0x4d7e, { 0x9a, 0x61, 0x2c, 0x5d, 0x0b, 0x7f, 0x4e, 0x93 } };
+uint64_t g_nextBindToken = 1;
+
+uint64_t BindToken(ID3D12Resource* resource)
+{
+    uint64_t token = 0;
+    UINT size = sizeof(token);
+    if (SUCCEEDED(resource->GetPrivateData(kBindTokenGuid, &size, &token)) && size == sizeof(token) && token != 0)
+        return token;
+
+    token = g_nextBindToken++;
+    if (FAILED(resource->SetPrivateData(kBindTokenGuid, sizeof(token), &token)))
+        return 0;
+
+    return token;
+}
+
 // A change has to hold still before it is acted on: a slider being dragged reports a new value every
 // frame, and each one would otherwise mean a new model.
 constexpr unsigned long long kSettleFrames = 30;
@@ -587,12 +612,11 @@ bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssN
     for (uint32_t i = 0; i < kSrvCount; ++i)
     {
         const auto desc = srvs[i]->GetDesc();
-        const BindKey key { srvs[i],        g_nrScratchGeneration, desc.Width,
-                            desc.Height,    desc.DepthOrArraySize, desc.MipLevels,
-                            desc.Dimension, desc.Format,           kViewFormat,
-                            kViewMipLevel,  kViewTranslateTypeless };
+        const BindKey key { srvs[i],     BindToken(srvs[i]),    g_nrScratchGeneration, desc.Width,
+                            desc.Height, desc.DepthOrArraySize, desc.MipLevels,        desc.Dimension,
+                            desc.Format, kViewFormat,           kViewMipLevel,         kViewTranslateTypeless };
 
-        if (reuse && _srvKey[slot][i] == key)
+        if (reuse && key.token != 0 && _srvKey[slot][i] == key)
             continue;
 
         CreateShaderResourceView(_device, srvs[i], currentHeap.GetSrvCPU(i), kViewFormat, kViewTranslateTypeless);
@@ -607,12 +631,11 @@ bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssN
     for (uint32_t i = 0; i < kUavCount; ++i)
     {
         const auto desc = uavs[i]->GetDesc();
-        const BindKey key { uavs[i],        g_nrScratchGeneration, desc.Width,
-                            desc.Height,    desc.DepthOrArraySize, desc.MipLevels,
-                            desc.Dimension, desc.Format,           kViewFormat,
-                            kViewMipLevel,  kViewTranslateTypeless };
+        const BindKey key { uavs[i],     BindToken(uavs[i]),    g_nrScratchGeneration, desc.Width,
+                            desc.Height, desc.DepthOrArraySize, desc.MipLevels,        desc.Dimension,
+                            desc.Format, kViewFormat,           kViewMipLevel,         kViewTranslateTypeless };
 
-        if (reuse && _uavKey[slot][i] == key)
+        if (reuse && key.token != 0 && _uavKey[slot][i] == key)
             continue;
 
         CreateUnorderedAccessView(_device, uavs[i], currentHeap.GetUavCPU(i), kViewMipLevel, kViewTranslateTypeless);

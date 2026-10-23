@@ -100,6 +100,36 @@ void ScratchAllocationRetiresDescriptors()
     assert(Revisit(shader, device, cmd, source, target).srv == 0);
 }
 
+// A game's resource released and re-created at the same address with the same description.
+//
+// Nothing NR allocates advances the generation then, and pointer and shape are unchanged, so a key without the
+// object's own identity matches and leaves a descriptor that names the freed memory: on native Windows a page
+// fault and a removed device. The token each bound resource carries as private data is that identity.
+void ReplacedGameResourceRetiresDescriptors()
+{
+    ID3D12Device device;
+    ID3D12GraphicsCommandList cmd;
+    ID3D12Resource source, target;
+    DlssNr_Dx12 shader("replaced", &device);
+    assert(shader.IsInit());
+
+    PrimeRing(shader, cmd, source, target);
+    assert(Revisit(shader, device, cmd, source, target).srv == 0);
+
+    source.Reincarnate();
+    const auto after = Revisit(shader, device, cmd, source, target);
+    assert(after.srv == kRing * 5 && after.uav == 0);
+
+    target.Reincarnate();
+    assert(Revisit(shader, device, cmd, source, target).uav == kRing * 2);
+
+    // A resource whose token cannot be set is never reused.
+    source.Reincarnate();
+    source.refusePrivateData = true;
+    assert(Revisit(shader, device, cmd, source, target).srv == kRing * 5);
+    assert(Revisit(shader, device, cmd, source, target).srv == kRing * 5);
+}
+
 // A saturated generation can no longer retire anything, so it must stop reusing instead.
 void SaturatedGenerationStopsReuse()
 {
@@ -226,9 +256,10 @@ int main()
     assert(!noDevice.IsInit());
     ReshapingRetiresDescriptors();
     ScratchAllocationRetiresDescriptors();
+    ReplacedGameResourceRetiresDescriptors();
     SaturatedGenerationStopsReuse();
 
     std::cout << "PASS: production dispatch, 145 passes over a " << kRing << "-slot ring, isolated ring slots, fixed "
                  "CBVs, " << 3 * kRing + 4 << " initialization failures, descriptor reuse retired by 6 reshapes, by "
-                 "allocation and by saturation\n";
+                 "allocation, by a replaced game resource and by saturation\n";
 }
