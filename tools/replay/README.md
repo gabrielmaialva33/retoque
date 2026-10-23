@@ -104,6 +104,10 @@ replays each through `tests/dlssnr-loopback/run.py --replay-nr` with `variants-m
 twice, Cadence 2 and 4, adaptive 4, Passes 2 and 3, WorkingScale 0.5, the last running the guide resample over the
 padded planes), moves each capture's runs out of `artifacts/`, and compares identity against each geometry
 transformation and RGBA8 against BGRA8, variant by variant, plus every-a against every-b as the A/A floor.
+`METAMORPHIC_VARIANTS=tools/replay/variants-metamorphic-quick.json` runs five variants instead of nine,
+`METAMORPHIC_SETS=colour` only the RGBA8/BGRA8 pair, `METAMORPHIC_DRY=1` only derives and validates. Byte identity is
+the right test only while every-a = every-b on that capture (the model was bitwise repeatable on the loopback corpus);
+if the A/A line says they differ, judge the pair with a calibrated envelope instead.
 
 **What the seam cannot express yet: a colour format that changes within a capture.** `run_replay.load_capture` refuses
 a v2 capture whose colour shape differs between frames ("the shape changes within the capture"); plan v3 carries one
