@@ -119,7 +119,11 @@ A candidate stops being copied and moves to retiring when:
 
 A retiring candidate keeps its reference (and its heap's) until the submission tracker says every recording
 that copied it has **settled** (`Submission::Settled` on the candidate's own usage, which every copy of it
-was tracked into). A candidate that was never copied has nothing to wait for and is released at once. The
+was tracked into). A candidate that was never copied has nothing to wait for and is released at once. Because
+the usage gains a recording every sweep, the ones retirement no longer waits for are dropped before each new one
+(`Submission::PruneFinished`: the tracker's own lifetime rule, as `Admit` applies it). Without that, a game that
+records each frame into a new list and never resets the old ones fills the usage's 64 places, and the candidate
+silently stops being copied. The
 retiring set is bounded at 256: above that nothing new is promoted to active (nothing new is copied, so
 nothing new can need settling), until it drains.
 
@@ -130,6 +134,13 @@ release, which in a game that never changes its settings is never.
 A candidate whose copies never settle (a failed fence, a list the game never submits) is **retained**, as the
 module's rule for unproven GPU work requires; it is never copied again, its heap stays pinned so the eventual
 release is still safe, and the bound above stops more of them from accumulating.
+
+The one exception is a **removed device**. Its fences never answer (`GetCompletedValue` reads `UINT64_MAX`), so
+nothing on it would ever settle, and waiting would hold the removed device's objects, with the heaps under them,
+for the rest of the session -- where the wipe used to let them go at the next feature release. Nothing recorded on
+a removed device can run again, and releasing its objects is what recovering from a removal is. So a retiring
+candidate whose own device (`GetDevice`, then `GetDeviceRemovedReason`) reports removed is released without
+waiting.
 
 ### 3.4 Certification
 
@@ -190,7 +201,8 @@ read 1800 times; while anything untried waits, it is Watching, and the sweep kee
 **boundary** rather than a wipe:
 
 - **view** candidates, in any state, are released there and then, exactly as before. The scan cannot pin
-  their memory, so for them the old guarantee is kept by the old means (P1-P3 as in section 2).
+  their memory, so for them the old guarantee is kept by the old means (P1-P3 as in section 2). So is any
+  candidate whose device was removed (section 3.3).
 - **committed** and **placed** candidates are kept, with their readings. None of them is copied again until a
   sweep after the boundary has probed it, and every sweep probes before it records (3.4). A candidate the
   teardown freed -- the documented Streamline/DLSS-D case -- is therefore found let go at the next sweep,
@@ -228,8 +240,8 @@ exposure. Probing after the teardown keeps exactly what still has an owner, when
 
 ## 6. Cost
 
-When wanted: one `AddRef`/`Release` pair per held candidate per sweep (up to 256), one `Submission::Track`
-per copied candidate plus one per slot, and the copies as before (at most 64 a sweep, the same throttles).
+When wanted: one `AddRef`/`Release` pair per held candidate per frame (up to 256), one `Submission::PruneFinished`
+and one `Submission::Track` per copied candidate plus one `Track` per slot, and the copies as before (at most 64 a sweep, the same throttles).
 The readback ring is unchanged (four 32 KB buffers). Not wanted, or NR off: nothing new runs.
 
 ## 7. What is logged
@@ -264,8 +276,16 @@ decides when (and whether) each fence completes. Cases:
 - **A long-lived exposure across a release** is still watched after it, with its readings.
 - **False candidate and attribution**: a newcomer at a position a different buffer had does not receive that
   buffer's value; an integer buffer is never used and is the first to give way.
+- **Quiet candidates**: 64 plausible buffers that never move are not retired as false; once watched past the
+  patience one is moved aside, still held, for the exposure waiting behind them, and the verdict stays Watching
+  until then.
+- **Waiting overflow**: with 64 read and 192 waiting, a newcomer takes the place of the oldest never-copied
+  waiting candidate, and only that one is let go.
+- **Lists never reset**: a new list every frame, none reset; the exposure is still copied after 300 frames and
+  found.
 - **Failed fence**: a recording whose Signal fails, or whose fence never completes, is never read, its slot
-  is never rewritten, and a candidate copied in it is not released.
+  is never rewritten, and a candidate copied in it is not released. On a removed device the same holds for the
+  reading, and the candidate is released once the game lets it go, as it is at a boundary.
 - **Freed, address reused**: a resource let go, released after settlement and destroyed, and a new one
   created at the same address: a new id, and a late completion of the old copy is not credited to it.
 - **Placed heap**: the game releases a placed candidate and its heap; nothing is destroyed out of order and
@@ -277,6 +297,7 @@ decides when (and whether) each fence completes. Cases:
   probes before it records.
 
 The cases run first against the code before this change and are expected to fail there, all but the inert
-ones. A green suite says the bookkeeping does what this note says against fakes. It says nothing about a
+ones. Not covered by a case: the refusal when every waiting candidate has been copied before, and the retiring
+bound (256) stopping promotions; both are reached only through hundreds of unsettled or moved-aside candidates. A green suite says the bookkeeping does what this note says against fakes. It says nothing about a
 real driver, real reference counts under vkd3d-proton or Windows, or whether the scan finds Cyberpunk's
 exposure: that needs the game, or the replay gates.
