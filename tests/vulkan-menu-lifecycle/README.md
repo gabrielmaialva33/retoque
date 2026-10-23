@@ -22,6 +22,13 @@ The faults it knows:
 Every case ends with the production teardown. All overlay objects and `IM_ALLOC` arrays must be released
 then.
 
+The fake menu base keeps `MenuCommon`'s storage type, a plain `HWND` and `bool`, and reads it with the
+production getters' own `std::atomic_ref` expressions, which `run.py` cuts from `menu_common.h`; it also requires
+`MenuCommon::Init` and `Shutdown` to store both through `std::atomic_ref` (Codex review FM-01, `8feb116f`). Its
+earlier `std::atomic` fields hid the data race of `OnOtherWindow`'s unlocked read. A ThreadSanitizer build of
+this unit reports nothing even with the plain reads put back, because the fake's event log takes one mutex on
+every call and so orders the two threads: this suite cannot show that race, only hold the source to the fix.
+
 `run.py` also checks two things in the source of `Vulkan_Hooks.cpp`. First, `MenuOverlayVk::CreateSwapchain` is
 called once, inside the driver-success block of `hkvkCreateSwapchainKHR`, which is what the
 cases' `GameCreateSwapchain` models. Second, the surface hook's block still has the shape that gets sliced.
