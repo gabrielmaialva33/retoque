@@ -11,6 +11,12 @@ namespace DlssNr::GpuTiming
 {
 struct Metadata;
 }
+namespace DlssNr::FormatTwin
+{
+struct Transfer // DlssNr_FormatTwin.h; g_nr holds one by value
+{
+};
+} // namespace DlssNr::FormatTwin
 using HMODULE = void*;
 using HANDLE = void*;
 using UINT64 = uint64_t;

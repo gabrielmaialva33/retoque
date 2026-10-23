@@ -175,16 +175,26 @@ def guard(ok, what):
     failed = failed or not ok
 
 
+# The canonical format, inline or through one named value defined from it.
+canonical = re.search(r'const auto (\w+) = static_cast<uint32_t>\(DlssNr::FormatTwin::ChannelOrderCanonical\(\(int\) '
+                      r'desc\.Format\)\);', dispatch)
+names = ['ChannelOrderCanonical'] + ([canonical.group(1)] if canonical else [])
+
+
+def watches_canonical(text):
+    return text is not None and any(n in text for n in names) and 'desc.Format' not in text
+
+
 chain_gate = re.search(r'g_chainExtent\.Observe\(workWidth, workHeight, now,[^;]*;', dispatch, re.S)
-guard(chain_gate is not None and 'ChannelOrderCanonical' in chain_gate.group(0),
-      'the chain settling gate watches the canonical format')
+guard(watches_canonical(chain_gate and chain_gate.group(0)), 'the chain settling gate watches the canonical format')
 post_gate = re.search(r'g_postExtent\.Observe\(workWidth, workHeight, now,[^;]*;', dispatch, re.S)
-guard(post_gate is not None and 'ChannelOrderCanonical' in post_gate.group(0),
+guard(watches_canonical(post_gate and post_gate.group(0)),
       'the after-upscale settling gate watches the canonical format')
 signature = dispatch[dispatch.index('const Cadence::Signature cadenceSignature {'):]
 signature = signature[:signature.index('};')]
-guard('ChannelOrderCanonical' in signature and 'static_cast<uint32_t>(desc.Format),' not in signature,
-      'the cadence signature carries the canonical format')
+guard(watches_canonical(signature), 'the cadence signature carries the canonical format')
+if canonical is not None:
+    guard(canonical.start() < chain_gate.start(), 'the canonical format is defined before the first gate reads it')
 
 call_site = re.search(r'ReleaseSurfacesIfFormatChanged\(desc\.Format, width, height, workWidth, workHeight, '
                       r'(\w+)\);', dispatch)

@@ -515,9 +515,17 @@ bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height,
 // The surfaces of the format being left are kept aside rather than parked, and swapped back in when that
 // format returns at the same extent, so an alternating game allocates both sets once. A swap frees nothing;
 // what the slot held before, if it does not fit, is parked like any retired surface.
+//
+// An RGBA8/BGRA8 swap (docs/dlssnr/design/format-swap-history.md) is the same picture with two bytes swapped, read
+// through views of each surface's own format, so at the same extent and through the same transfer it keeps the
+// model's history and the calibration as well. Every other change resets both, as it always did. transfer is the
+// frame's; the one the surfaces last served is kept beside them.
 void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,
-                                    unsigned int workHeight)
+                                    unsigned int workHeight, const DlssNr::FormatTwin::Transfer& transfer)
 {
+    const DlssNr::FormatTwin::Transfer servedTransfer = g_nr.surfaceTransfer;
+    g_nr.surfaceTransfer = transfer;
+
     if (g_nr.output == nullptr || g_nr.output->GetDesc().Format == needed)
         return;
 
@@ -525,10 +533,43 @@ void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsi
     const auto frameDesc = g_nr.colorCopy != nullptr ? g_nr.colorCopy->GetDesc() : outputDesc;
     const bool reuse = AltSurfacesFit(needed, width, height, workWidth, workHeight);
 
-    LOG_INFO("DLSS-NR surfaces: format {} -> {} ({}); the model is kept", (int) outputDesc.Format, (int) needed,
-             reuse ? "the set kept for it is swapped back in" : "a set is built for it, the old one kept aside");
+    DlssNr::FormatTwin::Contract served;
+    served.format = (int) outputDesc.Format;
+    served.width = (unsigned int) frameDesc.Width;
+    served.height = frameDesc.Height;
+    served.workWidth = (unsigned int) outputDesc.Width;
+    served.workHeight = outputDesc.Height;
+    served.transfer = servedTransfer;
 
-    ForgetCalibration();
+    DlssNr::FormatTwin::Contract wanted;
+    wanted.format = (int) needed;
+    wanted.width = width;
+    wanted.height = height;
+    wanted.workWidth = workWidth;
+    wanted.workHeight = workHeight;
+    wanted.transfer = transfer;
+
+    const bool keepHistory = DlssNr::FormatTwin::KeepsHistory(served, wanted);
+
+    if (keepHistory)
+    {
+        // A game that swaps every frame would write this every frame.
+        static unsigned long long twinSwaps = 0;
+        ++twinSwaps;
+        if (twinSwaps <= 3 || twinSwaps % 1000 == 0)
+            LOG_INFO("DLSS-NR surfaces: format {} -> {}, channel order only ({}); the model, its history and the "
+                     "calibration are kept (swap {})",
+                     (int) outputDesc.Format, (int) needed,
+                     reuse ? "the set kept for it is swapped back in" : "a set is built for it, the old one kept aside",
+                     twinSwaps);
+    }
+    else
+    {
+        LOG_INFO("DLSS-NR surfaces: format {} -> {} ({}); the model is kept", (int) outputDesc.Format, (int) needed,
+                 reuse ? "the set kept for it is swapped back in" : "a set is built for it, the old one kept aside");
+
+        ForgetCalibration();
+    }
 
     if (!reuse)
         ParkAltSurfaces();
@@ -545,6 +586,9 @@ void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsi
     alt.height = frameDesc.Height;
     alt.workWidth = (unsigned int) outputDesc.Width;
     alt.workHeight = outputDesc.Height;
+
+    if (keepHistory)
+        return;
 
     // A different picture in a different encoding: no history carries over, for the first pass or the rest.
     g_nr.reset = true;

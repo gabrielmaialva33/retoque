@@ -39,8 +39,8 @@ static Contract At(int format, Transfer t = {})
 int main()
 {
     // Only BGRA8 moves, each to its own RGBA8 member; everything else is its own canonical form.
-    const int others[] = { 0,          kRgba32F,       kRgba16F, kRgb10A2,       kR11G11B10, kRgba8Typeless,
-                           kRgba8,     kRgba8Srgb,     kBgrx8,   kBgrx8Typeless, kBgrx8Srgb };
+    const int others[] = { 0,      kRgba32F,   kRgba16F, kRgb10A2,       kR11G11B10, kRgba8Typeless,
+                           kRgba8, kRgba8Srgb, kBgrx8,   kBgrx8Typeless, kBgrx8Srgb };
     bool fixed = true;
     for (const int f : others)
         fixed = fixed && ChannelOrderCanonical(f) == f;

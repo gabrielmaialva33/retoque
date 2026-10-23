@@ -1169,7 +1169,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return false;
     }
 
-    if (chainEnabled && !g_chainExtent.Observe(workWidth, workHeight, now, static_cast<uint32_t>(desc.Format)))
+    // The settling gates and the cadence signature watch the format with BGRA8 folded onto its RGBA8 twin: a game that
+    // swaps the two (docs/dlssnr/design/format-swap-history.md) shows the pass one picture, and a gate that saw the
+    // swap stood the model down for 500 ms each time -- forever, for a game that swaps every frame.
+    const auto watchedFormat = static_cast<uint32_t>(DlssNr::FormatTwin::ChannelOrderCanonical((int) desc.Format));
+
+    if (chainEnabled && !g_chainExtent.Observe(workWidth, workHeight, now, watchedFormat))
     {
         reportSkip("chain working resolution is settling (500 ms); no model reconstruction");
         device->Release();
@@ -1199,8 +1204,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // the tracker's state stays coherent for callers that do alternate. Only the standing down is
     // skipped, and only for a caller that has said its extent cannot alternate.
     if (sourceIsTarget && !chainEnabled &&
-        !g_postExtent.Observe(workWidth, workHeight, now,
-                              PostContract(width, (unsigned int) height, static_cast<uint32_t>(desc.Format))) &&
+        !g_postExtent.Observe(workWidth, workHeight, now, PostContract(width, (unsigned int) height, watchedFormat)) &&
         !frame.ExtentIsStable)
     {
         reportSkip("working resolution is settling (500 ms); no model reconstruction");
@@ -1239,7 +1243,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
     }
 
-    ReleaseSurfacesIfFormatChanged(desc.Format, width, height, workWidth, workHeight);
+    // What the pass does to the colour beyond reading it: an RGBA8/BGRA8 swap keeps the model's history only through
+    // the same one (DlssNr_FormatTwin.h).
+    const DlssNr::FormatTwin::Transfer frameTransfer { frame.ColourIsLinearHdr, frame.PresentWhite,
+                                                       frame.PresentQuantRel };
+    ReleaseSurfacesIfFormatChanged(desc.Format, width, height, workWidth, workHeight, frameTransfer);
 
     const bool beforeUpscale = !sourceIsTarget;
     if (g_lastBeforeUpscale != beforeUpscale || g_lastAfterRayReconstruction != frame.AfterRayReconstruction)
@@ -1705,7 +1713,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         static_cast<uint32_t>(height),
         workWidth,
         workHeight,
-        static_cast<uint32_t>(desc.Format),
+        watchedFormat, // BGRA8 as its RGBA8 twin: a swap is the same picture, and the stored edit still describes it
         Cadence::Route(beforeUpscale, frame.AfterRayReconstruction, frame.PresentSource),
         cadenceSettings,
         g_nr.featureGeneration,
