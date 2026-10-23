@@ -1,0 +1,60 @@
+#include <algorithm>
+#include <cassert>
+#include <cstdio>
+#include <cmath>
+#include <vector>
+#include <shaders/dlssnr/DlssNr_GuideMatch.h>
+#define LOG_INFO(...) ((void)0)
+struct D3D12_RESOURCE_DESC { unsigned Width,Height; };
+struct Resource { D3D12_RESOURCE_DESC desc; auto GetDesc() const {return desc;} };
+struct Frame {
+    unsigned RenderSubrectWidth=32,RenderSubrectHeight=18;
+    unsigned DisplayWidth=64,DisplayHeight=36;
+    unsigned DepthSubrectBaseX=0,DepthSubrectBaseY=0,MotionSubrectBaseX=0,MotionSubrectBaseY=0;
+    bool MotionVectorsLowResolution=false;
+    bool GameGuides=true;
+};
+struct Region { unsigned depthWidth,depthHeight,motionWidth,motionHeight,referenceWidth,referenceHeight; };
+Region geometry(Resource* depth,Resource* motion,Frame frame,unsigned width=32,unsigned height=18) {
+@GEOMETRY@
+@REFERENCES@
+    return {guideWidth,guideHeight,motionWidth,motionHeight,motionReferenceWidth,motionReferenceHeight};
+}
+int main() {
+    Resource depth{{96,72}},motion{{96,72}};
+    Frame f;
+    auto r=geometry(&depth,&motion,f);
+    assert(r.motionWidth==64 && r.motionHeight==36); // Stage 1: scratch colour is 32x18, display MVs are 64x36.
+    assert(r.referenceWidth==64 && r.referenceHeight==36);
+    assert(DlssNr::GuideMatch::ModelMotionScale(1.0f,32,r.referenceWidth)==0.5f);
+    assert(r.depthWidth==32 && r.depthHeight==18);
+    std::vector<int> pixels(96*72,-9999);
+    for(unsigned y=0;y<36;++y) for(unsigned x=0;x<64;++x) pixels[y*96+x]=1;
+    int sum=0;
+    for(unsigned y=0;y<r.motionHeight;++y) for(unsigned x=0;x<r.motionWidth;++x) sum+=pixels[y*96+x];
+    assert(sum==64*36);
+    f.MotionVectorsLowResolution=true;
+    r=geometry(&depth,&motion,f);
+    assert(r.motionWidth==32 && r.motionHeight==18 && r.referenceWidth==32);
+    f.DepthSubrectBaseX=90; f.DepthSubrectBaseY=70;
+    r=geometry(&depth,&motion,f);
+    assert(r.depthWidth==6 && r.depthHeight==2);
+    assert(r.motionWidth==32 && r.motionHeight==18 && r.referenceWidth==32);
+    f.MotionVectorsLowResolution=false;
+    f.MotionSubrectBaseX=80; f.MotionSubrectBaseY=60;
+    r=geometry(&depth,&motion,f);
+    assert(r.motionWidth==16 && r.motionHeight==12 && r.referenceWidth==64 && r.referenceHeight==36);
+    f.MotionSubrectBaseX=100; f.MotionSubrectBaseY=100;
+    r=geometry(&depth,&motion,f);
+    assert(r.motionWidth==0 && r.motionHeight==0 && r.referenceWidth==64);
+    f={}; f.DisplayWidth=0; f.DisplayHeight=0;
+    r=geometry(&depth,&motion,f,64,36); // Legacy after-upscale host uses its output as display reference.
+    assert(r.motionWidth==64 && r.motionHeight==36 && r.referenceWidth==64);
+    f={}; f.DisplayHeight=0;
+    r=geometry(&depth,&motion,f,96,72);
+    assert(r.referenceWidth==96 && r.referenceHeight==72); // Never splice a partial display pair with output.
+    f={}; depth.desc={0,0}; motion.desc={0,0};
+    r=geometry(&depth,&motion,f);
+    assert(r.depthWidth==0 && r.depthHeight==0 && r.motionWidth==0 && r.motionHeight==0);
+    std::puts("PASS: 8 production dispatch geometry controls (Stage 1, MVLowRes, bounds/reference)");
+}

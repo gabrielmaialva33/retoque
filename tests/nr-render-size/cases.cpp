@@ -77,7 +77,7 @@ int main()
         ++checks;
     }
 
-    // Case 3: subrect absent and Width == OutWidth: returns 0/0
+    // Case 3: subrect absent and Width == OutWidth: valid 1:1 render extent
     {
         FakeParams p;
         p.Set(NVSDK_NGX_Parameter_Width, 1920u);
@@ -85,7 +85,7 @@ int main()
         p.Set(NVSDK_NGX_Parameter_OutWidth, 1920u);
         p.Set(NVSDK_NGX_Parameter_OutHeight, 1080u);
         const auto res = DlssNr::GetRenderSize(&p);
-        assert(res.width == 0 && res.height == 0);
+        assert(res.width == 1920 && res.height == 1080);
         ++checks;
     }
 

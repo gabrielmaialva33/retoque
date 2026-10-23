@@ -63,7 +63,7 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** 74 suites (86 total: 74 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 75 suites (87 total: 75 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -187,6 +187,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
   process started from the folder, a `flock`-emulated exclusive handle). Static checks (ASCII, the `.cmd`'s CRLF,
   the packager's allow-list) run always; without docker or `pwsh` the cases print `SKIP` and the suite passes on
   those. Nothing here runs Windows, Windows PowerShell 5.1 or the `.cmd`.
+- `nr-render-geometry` — the render size's fallback to the feature's creation (D3D12, D3D11 and Vulkan NGX
+  inputs, bound to the evaluated handle), its retirement after DRS or malformed dimensions, poisoned margins, and
+  display-resolution motion before the upscaler, from the production resolver, Dispatch's geometry block and
+  GatherGuideFrame against fake NGX parameters. No GPU.
 - `xefg-dynamic-target` — XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, through the production
   `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
   60/120/165 Hz and an unknown refresh rate; FGPresent's final sync interval as the V-Sync signal; both

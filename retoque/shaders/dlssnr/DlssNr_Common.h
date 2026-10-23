@@ -143,8 +143,8 @@ struct DlssNrFrameInfo
     // DLSS.Render.Subrect.Dimensions. Sizing the guides from the resource instead means handing the
     // model whatever was left in the margin -- stale depth and stale vectors -- and calling it scene.
     //
-    // Zero means the game did not say, in which case the resource's own size is the best answer
-    // available and is what gets used.
+    // Zero means no valid geometry was resolved. Real game guides are refused then; synthetic/zero
+    // guides keep their host-owned resource extent. Creation fallback is scoped to the matching evaluate.
     unsigned int RenderSubrectWidth = 0;
     unsigned int RenderSubrectHeight = 0;
 
@@ -222,6 +222,11 @@ struct DlssNrFrameInfo
     // The relative size of one code of the format the frame goes back out in, when that is not the colour texture's
     // own (HDR10: a PQ code, not an FP16 ulp), for the output stabilizer's minimum step. 0: the colour's own format.
     float PresentQuantRel = 0.0f;
+
+    // Original display coordinate system, independent of Stage 1's render-sized colour scratch.
+    // Zero is allowed for host-owned after-upscale frames, whose output supplies the reference.
+    unsigned int DisplayWidth = 0;
+    unsigned int DisplayHeight = 0;
 };
 
 struct alignas(256) DlssNrConstants

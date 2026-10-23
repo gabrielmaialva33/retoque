@@ -1,0 +1,30 @@
+#define main original_render_size_cases
+#include "../nr-render-size/cases.cpp"
+#undef main
+#include <dlssnr/DlssNr_RenderGeometry.h>
+#include <shaders/dlssnr/DlssNr_Common.h>
+@GATHER@
+int main() {
+    FakeParams p;
+    p.Put(NVSDK_NGX_Parameter_Width, 32);
+    p.Put(NVSDK_NGX_Parameter_Height, 18);
+    p.Put(NVSDK_NGX_Parameter_OutWidth, 64);
+    p.Put(NVSDK_NGX_Parameter_OutHeight, 36);
+    const auto creation=DlssNr::RenderGeometry::ReadCreation(&p);
+    DlssNr::RenderGeometry::Remember(41,creation);
+    for (bool low : {false,true}) {
+        p.values.clear();
+        p.Put(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, low ? NVSDK_NGX_DLSS_Feature_Flags_MVLowRes : 0);
+        DlssNr::RenderGeometry::Scope scope(true,41,&p);
+        const auto frame=GatherGuideFrame(&p);
+        assert(frame.GameGuides && frame.RenderSubrectWidth==32 && frame.RenderSubrectHeight==18);
+        assert(frame.DisplayWidth==64 && frame.DisplayHeight==36);
+        assert(frame.MotionVectorsLowResolution==low);
+    }
+    p.Put(NVSDK_NGX_Parameter_OutWidth,80);
+    p.Put(NVSDK_NGX_Parameter_OutHeight,45);
+    auto frame=GatherGuideFrame(&p);
+    assert(frame.DisplayWidth==80 && frame.DisplayHeight==45);
+    assert(frame.RenderSubrectWidth==0 && frame.RenderSubrectHeight==0);
+    std::puts("PASS: 3 production gather controls (creation display, flags, current display priority)");
+}

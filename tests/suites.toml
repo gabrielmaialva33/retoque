@@ -701,3 +701,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "XeFG Dynamic MFG's target at or under the refresh rate with V-Sync, FGPresent's final sync interval as the signal, and both controllers on it."
+
+[nr-render-geometry]
+path = "nr-render-geometry"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Feature-scoped creation fallback, DRS freshness, poisoned margins and render/display geometry."

@@ -1,0 +1,137 @@
+#define main original_render_size_cases
+#include "../nr-render-size/cases.cpp"
+#undef main
+#include <dlssnr/DlssNr_RenderGeometry.h>
+#include <shaders/dlssnr/DlssNr_Common.h>
+#include <string_view>
+
+struct Config
+{
+    struct Flag
+    {
+        bool value = true;
+        bool value_or_default() const { return value; }
+    } DlssNrEnabled;
+    static Config* Instance()
+    {
+        static Config config;
+        return &config;
+    }
+};
+static void NormalizeBackend(FakeParams* params)
+{
+    if (!params)
+        return;
+    params->Put(NVSDK_NGX_Parameter_Width, 1);
+    params->Put(NVSDK_NGX_Parameter_Height, 1);
+}
+@GATHER@
+@INPUTS@
+static bool CanDispatch(const DlssNrFrameInfo& frame)
+{
+    [[maybe_unused]] const auto reportSkip = [](const char*) {};
+    @GUARD@
+    return true;
+}
+static void Dimensions(FakeParams& params, unsigned width, unsigned height, unsigned displayWidth,
+                       unsigned displayHeight)
+{
+    params.Put(NVSDK_NGX_Parameter_Width, width);
+    params.Put(NVSDK_NGX_Parameter_Height, height);
+    params.Put(NVSDK_NGX_Parameter_OutWidth, displayWidth);
+    params.Put(NVSDK_NGX_Parameter_OutHeight, displayHeight);
+}
+static void Check(DlssNrFrameInfo frame, unsigned width, unsigned height)
+{
+    assert(frame.GameGuides);
+    assert(frame.RenderSubrectWidth == width && frame.RenderSubrectHeight == height);
+    assert(CanDispatch(frame) == (width != 0 && height != 0));
+}
+int main(int argc, char** argv)
+{
+    FakeParams creation, empty;
+    Dimensions(creation, 32, 18, 64, 36);
+    if (argc == 2 && std::string_view(argv[1]) == "D3D11")
+    {
+        CreateD3D11(&creation, 77);
+        auto frame = EvaluateD3D11(&empty, 77);
+        Check(frame, 32, 18);
+        assert(frame.DisplayWidth == 64 && frame.DisplayHeight == 36);
+        Check(EvaluateD3D11(&empty, 78), 0, 0);
+        std::puts("PASS: D3D11 bridge creation fallback / absent creation refusal");
+        return 0;
+    }
+    if (argc == 2 && std::string_view(argv[1]) == "Vulkan")
+    {
+        CreateVulkan(&creation, 77);
+        auto frame = EvaluateVulkan(&empty, 77);
+        Check(frame, 32, 18);
+        assert(frame.DisplayWidth == 64 && frame.DisplayHeight == 36);
+        Check(EvaluateVulkan(&empty, 78), 0, 0);
+        std::puts("PASS: Vulkan bridge creation fallback / absent creation refusal");
+        return 0;
+    }
+    // Identical numeric handles from three inputs describe different valid areas.
+    FakeParams dx11, vk;
+    CreateD3D12(&creation, 77);
+    Dimensions(dx11, 40, 20, 80, 40);
+    CreateD3D11(&dx11, 77);
+    Dimensions(vk, 48, 24, 96, 48);
+    CreateVulkan(&vk, 77);
+    Check(EvaluateD3D12(&empty, 77), 32, 18);
+    Check(EvaluateD3D11(&empty, 77), 40, 20);
+    Check(EvaluateVulkan(&empty, 77), 48, 24);
+
+    // A creation in one API is not a fallback for an unknown feature in either other API.
+    Dimensions(creation, 32, 18, 64, 36);
+    CreateD3D12(&creation, 88);
+    Check(EvaluateD3D11(&empty, 88), 0, 0);
+    Check(EvaluateVulkan(&empty, 88), 0, 0);
+    Check(EvaluateD3D12(&empty, 88), 32, 18);
+
+    ReleaseD3D11(77);
+    Check(EvaluateD3D11(&empty, 77), 0, 0);
+    Check(EvaluateD3D12(&empty, 77), 32, 18);
+    Check(EvaluateVulkan(&empty, 77), 48, 24);
+    Dimensions(dx11, 40, 20, 80, 40);
+    CreateD3D11(&dx11, 77);
+
+    // The accepted handle also needs registration when Init schedules backend recovery.
+    Dimensions(dx11, 40, 20, 80, 40);
+    CreateDeferredD3D11(&dx11, 99);
+    Check(EvaluateD3D11(&empty, 99), 40, 20);
+    ReleaseD3D11(99);
+    Check(EvaluateD3D11(&empty, 99), 0, 0);
+
+    // DRS stales only the evaluated API's epoch.
+    FakeParams drs;
+    drs.Put(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, 36);
+    drs.Put(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, 18);
+    Check(EvaluateD3D11(&drs, 77), 36, 18);
+    Check(EvaluateD3D11(&empty, 77), 0, 0);
+    Check(EvaluateVulkan(&empty, 77), 48, 24);
+    Check(EvaluateD3D12(&empty, 77), 32, 18);
+
+    ReleaseVulkan(77);
+    Check(EvaluateVulkan(&empty, 77), 0, 0);
+    Check(EvaluateD3D12(&empty, 77), 32, 18);
+    Dimensions(vk, 48, 24, 96, 48);
+    CreateVulkan(&vk, 77);
+
+    // API tagging retains every bit of the NGX handle.
+    Dimensions(creation, 32, 18, 64, 36);
+    CreateD3D11(&creation, 0xffffffffu);
+    Check(EvaluateD3D11(&empty, 0xffffffffu), 32, 18);
+    Check(EvaluateVulkan(&empty, 0xffffffffu), 0, 0);
+
+    // Disabled creation never reads a null parameter block; release still removes an old epoch.
+    Config::Instance()->DlssNrEnabled.value = false;
+    CreateVulkan(nullptr, 77);
+    Check(EvaluateD3D12(&empty, 77), 0, 0);
+    ReleaseD3D12(77);
+    Config::Instance()->DlssNrEnabled.value = true;
+    Check(EvaluateVulkan(&empty, 77), 0, 0);
+    Check(EvaluateD3D12(&empty, 77), 0, 0);
+    Check(EvaluateD3D11(&empty, 0xffffffffu), 32, 18);
+    std::puts("PASS: input API isolation (same handle, snapshot, release, DRS, recreation, off, full uint32, deferred Init)");
+}

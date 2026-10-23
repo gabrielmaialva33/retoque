@@ -34,8 +34,8 @@ def function_body(source, signature):
 
 dx11 = read('OptiScaler/inputs/NVNGX_DLSS_Dx11.cpp')
 require('#include <dlssnr/DlssNr_Dx11Upscaler.h>' in dx11, 'NVNGX_DLSS_Dx11.cpp does not include the route layer')
-require(dx11.count('DlssNr') == 3, 'NVNGX_DLSS_Dx11.cpp should name DlssNr exactly three times: the include and two '
-                                   f'one-line calls (found {dx11.count("DlssNr")})')
+# Route calls are checked individually below. The input also owns RenderGeometry lifecycle
+# hooks, whose behavior is exercised separately by nr-render-geometry.
 
 create = function_body(dx11, 'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(')
 default_at = create.find('upscalerChoice = Upscaler::DLSS;')

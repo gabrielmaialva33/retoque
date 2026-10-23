@@ -74,6 +74,8 @@ constexpr auto NVSDK_NGX_Parameter_Width = "NVSDK_Width";
 constexpr auto NVSDK_NGX_Parameter_Height = "NVSDK_Height";
 constexpr auto NVSDK_NGX_Parameter_OutWidth = "OutWidth";
 constexpr auto NVSDK_NGX_Parameter_OutHeight = "OutHeight";
+constexpr auto NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags = "Flags";
+constexpr unsigned NVSDK_NGX_DLSS_Feature_Flags_MVLowRes = 1;
 struct D3D12_RESOURCE_DESC
 {
     int Dimension = 2;
@@ -176,19 +178,25 @@ struct Config
     DlssNrPassSnapshot GetDlssNrPassSnapshot() const { return {}; }
     static Config* Instance() { static Config cfg; return &cfg; }
 };
-struct DlssNrFrameInfo { int OutputState = -1; void* ExposureTexture = nullptr; bool AfterRayReconstruction = false; };
+struct DlssNrFrameInfo {
+    int OutputState = -1; void* ExposureTexture = nullptr; bool AfterRayReconstruction = false;
+    unsigned DisplayWidth = 0, DisplayHeight = 0;
+    bool MotionVectorsLowResolution = false;
+};
 struct DlssNr_Dx12
 {
     static inline bool writes = true;
     static inline bool modelCalled = true;
     static inline int modelResult = 1;
     static inline unsigned calls = 0;
+    static inline DlssNrFrameInfo lastFrame;
     DlssNr_Dx12(const char*, ID3D12Device*) {}
     bool Dispatch(ID3D12GraphicsCommandList*, ID3D12Resource* color, ID3D12Resource* depth,
                   ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
                   ID3D12CommandQueue*, DlssNr::Detail::CoverageSample* coverage = nullptr, DlssNr::Chain::RecordingLease* = nullptr)
     {
         ++calls;
+        lastFrame = frame;
         if (coverage && modelCalled) coverage->ModelResult(modelResult, 1280, 720);
         if (color != output)
         {
@@ -240,6 +248,10 @@ DlssNrFrameInfo GatherFrame(NVSDK_NGX_Parameter* p)
 {
     DlssNrFrameInfo f;
     p->Get("Exposure", &f.ExposureTexture);
+    const auto display = DlssNr::GetDisplaySize(p);
+    f.DisplayWidth = display.width; f.DisplayHeight = display.height;
+    unsigned flags = 0; p->Get("Flags", &flags);
+    f.MotionVectorsLowResolution = (flags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
     return f;
 }
 

@@ -44,3 +44,7 @@ No D3D11 or D3D12 device, NGX or DLSS is involved. Whether `dlss_12` creates and
 costs against native DLSS, and whether the pass then runs on the game's depth and motion are step 3 of the design
 note, and need a D3D11 title that calls NGX directly. The panel is not rendered; `nr-menu` drives the panel's
 control flow, not this line.
+
+The input also binds feature-scoped render geometry for bridge NR. Route call sites are
+checked individually; a total count of all `DlssNr` identifiers is not a route invariant.
+Geometry creation/evaluate/release behavior belongs to `nr-render-geometry`.

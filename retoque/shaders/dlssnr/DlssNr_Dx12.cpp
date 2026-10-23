@@ -168,10 +168,6 @@ unsigned long long g_frames = 0;
 // waits until this frame count, by which point the GPU is certainly past the copies.
 unsigned long long g_captureWriteAtFrame = 0;
 
-// How fast the derived value follows the scene. Readings arrive a few times a second, and an exposure
-// that lunges at every cut is worse than one that arrives a moment late.
-constexpr float kWhitePointBlend = 0.25f;
-
 std::filesystem::path g_dllDir;
 
 // Switching inject points changes the surface format underneath the scratch set: the finished frame
@@ -697,6 +693,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return false;
     }
 
+    if (frame.GameGuides && (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight))
+    {
+        reportSkip("the game's render geometry is unknown or incomplete");
+        return false;
+    }
+
     // Different configured arrival states cannot both describe the same resource. Reject before
     // the first transition; guessing would issue a barrier from a state that never existed.
     if (depth == motion || depth == colour || depth == output || motion == colour || motion == output)
@@ -931,18 +933,23 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const D3D12_RESOURCE_DESC guideDesc = depth->GetDesc();
     const D3D12_RESOURCE_DESC motionDesc = motion->GetDesc();
 
-    // How big the allocation is, kept apart from how much of it holds this frame. Every bound below
-    // is taken against this rather than against guideDesc directly, because the fallback for a
-    // description that says nothing has to survive them: clamping to the raw description afterwards
-    // would put the zero back and hand the model an empty subrect.
+    // Allocation bounds are independent of the valid picture. Only host-owned zero/synthetic guides
+    // may use the host extent when no allocation is described; real game guides must stay bounded.
     unsigned int guideAllocWidth = (unsigned int) guideDesc.Width;
     unsigned int guideAllocHeight = guideDesc.Height;
 
-    if (guideAllocWidth == 0 || guideAllocHeight == 0)
+    if ((guideAllocWidth == 0 || guideAllocHeight == 0) && !frame.GameGuides)
     {
         guideAllocWidth = width;
         guideAllocHeight = height;
     }
+
+    // References describe the game's coordinate system, not the bounded resource region below.
+    const unsigned int renderReferenceWidth = frame.RenderSubrectWidth ? frame.RenderSubrectWidth : guideAllocWidth;
+    const unsigned int renderReferenceHeight = frame.RenderSubrectHeight ? frame.RenderSubrectHeight : guideAllocHeight;
+    const bool haveDisplayReference = frame.DisplayWidth && frame.DisplayHeight;
+    const unsigned int displayReferenceWidth = haveDisplayReference ? frame.DisplayWidth : width;
+    const unsigned int displayReferenceHeight = haveDisplayReference ? frame.DisplayHeight : height;
 
     unsigned int guideWidth = guideAllocWidth;
     unsigned int guideHeight = guideAllocHeight;
@@ -990,13 +997,15 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // Motion vectors are the one guide that is not always render resolution -- MVLowRes says which --
     // so the valid region is derived from the flag rather than shared with depth.
-    const unsigned int wantedMotionWidth = frame.MotionVectorsLowResolution ? guideWidth : width;
-    const unsigned int wantedMotionHeight = frame.MotionVectorsLowResolution ? guideHeight : height;
+    const unsigned int wantedMotionWidth = DlssNr::GuideMatch::MotionReference(
+        frame.MotionVectorsLowResolution, renderReferenceWidth, displayReferenceWidth);
+    const unsigned int wantedMotionHeight = DlssNr::GuideMatch::MotionReference(
+        frame.MotionVectorsLowResolution, renderReferenceHeight, displayReferenceHeight);
 
     unsigned int motionAllocWidth = (unsigned int) motionDesc.Width;
     unsigned int motionAllocHeight = motionDesc.Height;
 
-    if (motionAllocWidth == 0 || motionAllocHeight == 0)
+    if ((motionAllocWidth == 0 || motionAllocHeight == 0) && !frame.GameGuides)
     {
         motionAllocWidth = wantedMotionWidth;
         motionAllocHeight = wantedMotionHeight;
@@ -1025,6 +1034,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                      motionBaseY, motionAllocWidth, motionAllocHeight,
                      frame.MotionVectorsLowResolution ? "render resolution" : "display resolution");
         }
+    }
+
+    if (!guideWidth || !guideHeight || !motionWidth || !motionHeight)
+    {
+        reportSkip("a bounded depth or motion region is empty");
+        return false;
     }
 
     g_nr.guideWidth = guideWidth;
@@ -2210,12 +2225,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // pixels, so `guidesPacked` replaces the resample below and the model is handed a scale of 1.
     bool guidesPacked = false;
 
-    // The size the game's scale is measured against: the render size for low-resolution vectors (the
-    // depth region is the render region), the frame's otherwise.
-    const unsigned int motionReferenceWidth =
-        DlssNr::GuideMatch::MotionReference(frame.MotionVectorsLowResolution, guideWidth, width);
-    const unsigned int motionReferenceHeight =
-        DlssNr::GuideMatch::MotionReference(frame.MotionVectorsLowResolution, guideHeight, height);
+    // The game's scale is measured in original render/display pixels, even when a guide is clipped.
+    const unsigned int motionReferenceWidth = DlssNr::GuideMatch::MotionReference(
+        frame.MotionVectorsLowResolution, renderReferenceWidth, displayReferenceWidth);
+    const unsigned int motionReferenceHeight = DlssNr::GuideMatch::MotionReference(
+        frame.MotionVectorsLowResolution, renderReferenceHeight, displayReferenceHeight);
 
     if (peripheryActive)
     {
@@ -6092,6 +6106,15 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         return;
     }
 
+    const auto displaySize = DlssNr::GetDisplaySize(params);
+    unsigned int createFlags = 0;
+    params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &createFlags);
+    if (!(createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) && (!displaySize.width || !displaySize.height))
+    {
+        decline("before the upscaler: display-resolution motion has no known display reference");
+        return;
+    }
+
     // What was drawn, as opposed to how big the texture is. A dynamic-resolution game renders into
     // the corner of a buffer allocated once at its largest, and the upscaler is told the drawn size
     // through the render subrect. The copy is that size: the model then works on the picture and
@@ -6107,6 +6130,11 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         if ((subW == 0) != (subH == 0))
         {
             decline("before the upscaler: incomplete render subrect dimensions");
+            return;
+        }
+        if (subW == 0 || subH == 0)
+        {
+            decline("before the upscaler: unknown or stale render geometry");
             return;
         }
         if (subW != 0 && subH != 0)
