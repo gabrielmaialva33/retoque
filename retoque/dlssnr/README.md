@@ -24,7 +24,7 @@ what keeps it honest (last taken 2026-09-23).
 
 | File | What the calls do |
 |---|---|
-| `inputs/NVNGX_DLSS_Dx12.cpp` | the pass after an upscale on each evaluate route, the pre-upscale scope, an exposure-scan note |
+| `inputs/NVNGX_DLSS_Dx12.cpp` | the pass after an upscale on each evaluate route, the pre-upscale scope, the exposure scan's feature-release boundary (`docs/dlssnr/design/exposure-scan-capacity.md`) |
 | `inputs/NVNGX_DLSS_Vk.cpp` | the Vulkan pass after an upscale |
 | `inputs/NVNGX_DLSS_Dx11.cpp` | `dlss_12` as the D3D11 DLSS default while NR is on and `Dx11Upscaler` is unset (`Dx11DefaultUpscaler`), and the note at each evaluate (`NoteDx11Evaluate`, with the evaluate's context, parameters and result): native D3D11 DLSS reported where it leaves the pass inert, and at HookMethod 2 its depth and motion handed to the native guide transport for the bridge's present host |
 | `upscalers/IFeature_Dx11wDx12.cpp` | the pass and pre-upscale scope inside the D3D11-on-D3D12 bridge, the D3D11 probe |
@@ -32,7 +32,7 @@ what keeps it honest (last taken 2026-09-23).
 | `wrapped/wrapped_swapchain.cpp` | the present-time pass (`RunPresentPass`), and each swapchain's colour space for its HDR decision (`DlssNr::SwapchainColour`: creation, `SetColorSpace1`, ForceHDR's own two, resizes) |
 | `hooks/FG_Hooks.cpp` | the present-time pass from OptiScaler's frame-generation present |
 | `with_dx12/dx11_with_dx12_sc.{h,cpp}` | the D3D11 bridge's present host (`PresentHost`), and the colour space it is told on `SetColorSpace1`, in both of its branches |
-| `hooks/D3D12_Hooks.cpp` | exposure-scan resource notes |
+| `hooks/D3D12_Hooks.cpp` | exposure-scan resource notes (a placed resource's with its heap) |
 | `resource_tracking/ResTrack_dx12.cpp` | exposure-scan resource notes and submission tracking |
 | `nvapi/NvApiHooks.cpp` | CUDA kernel wrapper hook for `[DlssNr] KernelProfile` (`DlssNr::KernelProfile::WrapNvapi`) |
 | `hooks/Vulkan_Hooks.cpp` | the device extensions the Vulkan route needs (`VkExt`) |

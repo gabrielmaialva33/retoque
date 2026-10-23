@@ -37,6 +37,7 @@
 #include <vector>
 
 struct ID3D12Device;
+struct ID3D12Heap;
 struct ID3D12Resource;
 struct ID3D12GraphicsCommandList;
 struct D3D12_UNORDERED_ACCESS_VIEW_DESC;
@@ -49,6 +50,8 @@ namespace ExposureScan
 // One thing that looks like it could be an exposure, and what it has been seen doing.
 struct Candidate
 {
+    // "candidate N": its adoption number, never reused (docs/dlssnr/design/exposure-scan-capacity.md).
+    unsigned int id = 0;
     std::string shape; // "1x1 R32_FLOAT" and the like, for the readout
     float latest = 0.0f;
     float lowest = 0.0f;
@@ -68,7 +71,11 @@ void NoteUav(ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* d
 // which is why the first version of this found nothing anywhere. Creation is also the better place:
 // the description is right there, it happens before anything else, and it catches a resource whose
 // view is made through a descriptor copy rather than through CreateUnorderedAccessView.
-void NoteResource(const D3D12_RESOURCE_DESC* desc, ID3D12Resource* resource);
+//
+// `heap` is a placed resource's heap (CreatePlacedResource), null for a committed one. The scan holds a reference on
+// it for as long as it holds the resource, so its own release of the resource never runs on freed memory
+// (docs/dlssnr/design/exposure-scan-capacity.md, section 3.1).
+void NoteResource(const D3D12_RESOURCE_DESC* desc, ID3D12Resource* resource, ID3D12Heap* heap = nullptr);
 
 // How many resources have been looked at. The number that distinguishes "this game has no exposure
 // buffer" from "the hook is not running", which are the same empty list and very different problems.
@@ -80,8 +87,9 @@ unsigned int Examined();
 // right buffer or merely a moving one.
 float BestValue(int* outIndex = nullptr, float* outLowest = nullptr, float* outHighest = nullptr);
 
-// Called once per frame from the Neural Rendering pass, on its command list. Copies one value out of
-// each candidate and reads back the copies taken a few frames ago.
+// Called once per frame from the Neural Rendering pass, on its command list. Checks that the game still holds each
+// candidate, reads back the copies whose recordings the GPU has completed, and copies one value out of each certified
+// candidate (docs/dlssnr/design/exposure-scan-capacity.md, section 3).
 void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList);
 
 // Whether D3D12 resource creation detours were attached at device creation.
@@ -104,7 +112,7 @@ Verdict Where();
 // Fills a short line describing the state. Null-terminated, safe to draw every frame.
 const char* Headline();
 
-// For the menu.
+// For the menu: the candidates being read, not the ones waiting for a place.
 std::vector<Candidate> Report();
 const char* Status();
 bool Scanning();
@@ -147,7 +155,9 @@ float AnchoredWhitePoint(float scanNow, bool inverted, float trim);
 void LoadAnchors(const std::string& serialized);
 std::string SerializeAnchors();
 
-// Release the scan's references to captured resources (call at feature teardown -- see the .cpp).
+// A feature is being released (the top of NVSDK_NGX_D3D12_ReleaseFeature). Only committed candidates on a live device
+// are kept, and re-checked before anything copies them again; the rest are released now, as the scan always did, and
+// with the scan or NR off nothing is kept (docs/dlssnr/design/exposure-scan-capacity.md, section 5).
 void ReleaseTrackedResources();
 
 void Shutdown();

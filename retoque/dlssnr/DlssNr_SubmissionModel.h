@@ -144,6 +144,16 @@ bool IsOnlyUnanswerableLeft(const Usage& usage, Completed completed, uint64_t cl
     return any;
 }
 
+// Drops only the epochs IsSettled no longer waits for, one by one: never one that is merely admission-done, whatever
+// the usage's free space. For a usage that protects a resource's lifetime (the exposure scan's candidates): a full
+// usage then refuses new recordings rather than forgetting a list that can still execute again.
+template <typename Completed> void PruneFinished(Usage& usage, Completed completed, uint64_t clock, bool strict)
+{
+    for (auto& e : usage.epochs)
+        if (e && IsFinished(*e, completed, clock, strict))
+            e.reset();
+}
+
 // The lifetime set keeps what a retirement snapshot or a replay could still need. Drops what is finished; then,
 // outside strict mode and only when fewer than MinFreeUses slots are left, the oldest admission-done epochs (their
 // replay window is cut short, rather than refusing every later recording for want of a slot).

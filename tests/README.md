@@ -69,7 +69,7 @@ suite READMEs for artifact paths and limits.
   non-menu presents pass through untouched, and a surface hook that lost the race with another window's first
   create leaves that menu alone. The hidden-splash policy is a recorded expectation. No GPU.
 
-**Host tier.** 84 suites (97 total: 84 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 85 suites (98 total: 85 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -116,6 +116,12 @@ production headers or source slices with local fakes under AddressSanitizer and 
   late and non-finite readbacks breaking the pair, two-second windows, reset, the menu's words, the log line and
   its rate, and a synthetic cadence's pulse. Source guards on the pass and the renderer: off builds and records
   nothing, one sample per present. No GPU, no shader.
+- `nr-exposure-scan` — the exposure scan's candidate lifetime and capacity (`docs/dlssnr/design/exposure-scan-capacity.md`): the production `DlssNr_ExposureScan.cpp` against fake D3D12
+  objects that keep destroyed ones for checking and the production submission model. A full list with a late
+  exposure, recreation before a feature release, an exposure kept across one, attribution by id after a list
+  change and a late completion, integer and quiet candidates giving way, waiting overflow, failed, unanswered,
+  device-removed and discarded recordings, a freed address reused, a placed resource whose heap the game frees,
+  view candidates at the boundary, and the inert paths; source guards on the call sites. No D3D12 runtime or GPU.
 - `nr-present-boundary` — the present pass under the game's own DLSS-G (`DlssNr_PresentBoundary.h`):
   `HookMethod=2` declines on the wrapped entry below DLSS-G, Auto stays upscaled for the session once it has seen
   it, `HookMethod=1` and OptiScaler's own frame generation are untouched; source guards that `RunPresentPass` and
