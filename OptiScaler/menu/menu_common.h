@@ -5,6 +5,8 @@
 
 #include <imgui/imgui.h>
 
+#include <atomic>
+
 class ScopedIndent
 {
   public:
@@ -270,9 +272,10 @@ class MenuCommon
     static void Dx11Inited() { _dx11Ready = true; }
     static void Dx12Inited() { _dx12Ready = true; }
     static void VulkanInited() { _vulkanReady = true; }
-    static bool IsInited() { return _isInited; }
+    // Atomic: read without the menu's locks (MenuOverlayVk::OnOtherWindow), written by Init and Shutdown
+    static bool IsInited() { return std::atomic_ref<bool>(_isInited).load(); }
     static bool IsVisible() { return _isVisible; }
-    static HWND Handle() { return _handle; }
+    static HWND Handle() { return std::atomic_ref<HWND>(_handle).load(); }
 
     // Texture should cover the whole display, uvScale is the part of it matching the display
     static void SetBackgroundBlur(ImTextureID texture, ImVec2 uvScale = ImVec2(1.0f, 1.0f))
