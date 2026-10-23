@@ -86,6 +86,26 @@ template <typename T> static const T* FindFeatureStruct(const void* pNext, VkStr
     return nullptr;
 }
 
+// A VkPhysicalDeviceVulkanXXFeatures is only valid from its version on, so a request with one is from an instance of at
+// least that version, whatever was recorded for it (unknown, or the game's own below the 1.2 an FG output raises it
+// to). The 1.0 and 1.1 paths would add the promoted structs beside it, which the spec forbids (02830, 06532).
+static uint32_t ApiVersionOfFeatureChain(const void* pNext)
+{
+    uint32_t version = VK_API_VERSION_1_0;
+    for (auto* next = static_cast<const VkBaseInStructure*>(pNext); next != nullptr; next = next->pNext)
+    {
+        if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES ||
+            next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES)
+            version = std::max(version, VK_API_VERSION_1_2);
+        else if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
+            version = std::max(version, VK_API_VERSION_1_3);
+        else if (next->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES)
+            version = std::max(version, VK_API_VERSION_1_4);
+    }
+
+    return version;
+}
+
 template <typename... Features> static const void* CopyFeatureChain(const void* pNext, Features&... features)
 {
     if (pNext == nullptr)
@@ -1021,12 +1041,13 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
 
     const bool requestedApiVersionKnown = requestedApiVersion != 0;
     const uint32_t effectiveApiVersion =
-        requestedApiVersionKnown
-            ? (requestedApiVersion < properties.apiVersion ? requestedApiVersion : properties.apiVersion)
-            : VK_API_VERSION_1_0;
+        std::min(std::max(requestedApiVersionKnown ? requestedApiVersion : VK_API_VERSION_1_0,
+                          ApiVersionOfFeatureChain(pCreateInfo->pNext)),
+                 properties.apiVersion);
 
     if (!requestedApiVersionKnown)
-        LOG_WARN("Using conservative Vulkan 1.0 capability path because the instance API version is unknown");
+        LOG_WARN("Using conservative Vulkan {}.{} capability path because the instance API version is unknown",
+                 VK_API_VERSION_MAJOR(effectiveApiVersion), VK_API_VERSION_MINOR(effectiveApiVersion));
 
     // Per thread: the caller hands this storage to the driver after the spoofing has returned, so a create on
     // another thread must not clear or reallocate it in between.
