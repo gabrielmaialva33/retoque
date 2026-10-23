@@ -1,0 +1,960 @@
+// Metamorphic controls of the NR input geometry (Codex N-03, docs/dlssnr/design/render-geometry.md).
+//
+// One analytic scene, written into the game's guides in several equivalent ways -- the render size published through
+// different keys, the guides inside larger allocations at a base with a sentinel margin, the vectors in different
+// units with the scale compensating, low-resolution against display-resolution vectors -- and pushed through the
+// production code that prepares what the model is handed: GatherGuideFrame, Dispatch's geometry, reference and scale
+// blocks (D3D12), the Vulkan route's geometry and plan, and the guide resample shader itself, its HLSL compiled as
+// C++ against a CPU shim. The oracle is the representations against each other, never an opinion of the model.
+//
+// Exact relations must give bit-identical model inputs. Lossy ones (a different sampling grid) carry a stated bound.
+// No device, no NGX, no model: run.py pastes the production text in, see README.md.
+#include <dlssnr/DlssNr_RenderGeometry.h>
+#include <dlssnr/DlssNr_FormatTwin.h>
+#include <shaders/dlssnr/DlssNr_Common.h>
+#include <shaders/dlssnr/DlssNr_GuideMatch.h>
+#include <shaders/dlssnr/DlssNr_GuideMatch_Vk.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#define LOG_INFO(...) ((void) 0)
+
+static int failures = 0;
+static int checks = 0;
+
+#define CHECK(cond, ...)                                                                                               \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        ++checks;                                                                                                      \
+        if (!(cond))                                                                                                   \
+        {                                                                                                              \
+            ++failures;                                                                                                \
+            std::printf("FAIL %s:%d: %s -- ", __FILE__, __LINE__, #cond);                                              \
+            std::printf(__VA_ARGS__);                                                                                  \
+            std::printf("\n");                                                                                         \
+        }                                                                                                              \
+    } while (0)
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The NGX parameter block, with the float keys GatherGuideFrame and the Vulkan route read for the MV scale.
+// ---------------------------------------------------------------------------------------------------------------------
+struct FakeParams final : NVSDK_NGX_Parameter
+{
+    std::unordered_map<std::string, unsigned int> u;
+    std::unordered_map<std::string, float> f;
+
+    void Set(const char* n, unsigned int v) override { u[n] = v; }
+    void Set(const char* n, int v) override { u[n] = static_cast<unsigned int>(v); }
+    void Set(const char* n, unsigned long long v) override { u[n] = static_cast<unsigned int>(v); }
+    void Set(const char* n, float v) override { f[n] = v; }
+    void Set(const char* n, double v) override { f[n] = static_cast<float>(v); }
+    void Set(const char*, ID3D11Resource*) override {}
+    void Set(const char*, ID3D12Resource*) override {}
+    void Set(const char*, void*) override {}
+
+    NVSDK_NGX_Result Get(const char* n, unsigned int* out) const override
+    {
+        const auto it = u.find(n);
+        if (it == u.end())
+            return NVSDK_NGX_Result_Fail;
+        *out = it->second;
+        return NVSDK_NGX_Result_Success;
+    }
+    NVSDK_NGX_Result Get(const char* n, int* out) const override
+    {
+        const auto it = u.find(n);
+        if (it == u.end())
+            return NVSDK_NGX_Result_Fail;
+        *out = static_cast<int>(it->second);
+        return NVSDK_NGX_Result_Success;
+    }
+    NVSDK_NGX_Result Get(const char* n, float* out) const override
+    {
+        const auto it = f.find(n);
+        if (it == f.end())
+            return NVSDK_NGX_Result_Fail;
+        *out = it->second;
+        return NVSDK_NGX_Result_Success;
+    }
+    NVSDK_NGX_Result Get(const char* n, double* out) const override
+    {
+        const auto it = f.find(n);
+        if (it == f.end())
+            return NVSDK_NGX_Result_Fail;
+        *out = it->second;
+        return NVSDK_NGX_Result_Success;
+    }
+    NVSDK_NGX_Result Get(const char*, unsigned long long*) const override { return NVSDK_NGX_Result_Fail; }
+    NVSDK_NGX_Result Get(const char*, ID3D11Resource**) const override { return NVSDK_NGX_Result_Fail; }
+    NVSDK_NGX_Result Get(const char*, ID3D12Resource**) const override { return NVSDK_NGX_Result_Fail; }
+    NVSDK_NGX_Result Get(const char*, void**) const override { return NVSDK_NGX_Result_Fail; }
+    void Reset() override
+    {
+        u.clear();
+        f.clear();
+    }
+};
+
+struct ModelScale
+{
+    float x, y;
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Guide textures: an allocation, the valid region inside it, and a count of every read outside that region. The
+// margin holds sentinels, so a read of it also shows in the values.
+// ---------------------------------------------------------------------------------------------------------------------
+constexpr float kDepthSentinel = 4096.0f;
+constexpr float kMotionSentinel = -8192.0f;
+
+template <class T> struct Tex
+{
+    uint32_t w = 0, h = 0;
+    DlssNr::GuideMatch::Region valid;
+    std::vector<T> px;
+    mutable unsigned outside = 0;
+
+    T At(uint32_t x, uint32_t y) const
+    {
+        if (x < valid.baseX || y < valid.baseY || x >= valid.baseX + valid.width || y >= valid.baseY + valid.height)
+            ++outside;
+        if (x >= w || y >= h)
+        {
+            ++outside;
+            return T {};
+        }
+        return px[size_t(y) * w + x];
+    }
+};
+using Float2 = std::array<float, 2>;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The guide resample, dlssnr_guides.hlsl's PointSource and CSMain as they are, on a CPU shim.
+// ---------------------------------------------------------------------------------------------------------------------
+namespace shader
+{
+using uint = uint32_t;
+struct uint2
+{
+    uint x, y;
+};
+struct uint3
+{
+    uint x, y, z;
+    uint2 xy;
+};
+struct int3
+{
+    int x, y, z;
+    int3(uint2 v, int l) : x(int(v.x)), y(int(v.y)), z(l) {}
+};
+inline uint min(uint a, uint b) { return a < b ? a : b; }
+using float2 = Float2;
+
+template <class T> struct Texture2D
+{
+    const Tex<T>* tex = nullptr;
+    T Load(int3 at) const { return tex->At(uint(at.x), uint(at.y)); }
+};
+template <class T> struct RWTexture2D
+{
+    std::vector<T>* out = nullptr;
+    uint width = 0;
+    T& operator[](uint2 at) { return (*out)[size_t(at.y) * width + at.x]; }
+};
+
+uint gDepthBaseX, gDepthBaseY, gDepthWidth, gDepthHeight, gMotionBaseX, gMotionBaseY, gMotionWidth, gMotionHeight,
+    gOutWidth, gOutHeight;
+Texture2D<float> gDepth;
+Texture2D<float2> gMotion;
+RWTexture2D<float> gDepthOut;
+RWTexture2D<float2> gMotionOut;
+
+// clang-format off
+@SHADER@
+// clang-format on
+} // namespace shader
+
+struct Constants
+{
+    uint32_t depthBaseX, depthBaseY, depthWidth, depthHeight, motionBaseX, motionBaseY, motionWidth, motionHeight,
+        outWidth, outHeight;
+};
+
+// Every thread of every 8x8 group the dispatch launches, as the GPU would.
+static void RunResample(const Constants& c, const Tex<float>& depth, const Tex<Float2>& motion, std::vector<float>& d,
+                        std::vector<Float2>& m)
+{
+    d.assign(size_t(c.outWidth) * c.outHeight, -1.0f);
+    m.assign(size_t(c.outWidth) * c.outHeight, Float2 { -1.0f, -1.0f });
+    shader::gDepthBaseX = c.depthBaseX;
+    shader::gDepthBaseY = c.depthBaseY;
+    shader::gDepthWidth = c.depthWidth;
+    shader::gDepthHeight = c.depthHeight;
+    shader::gMotionBaseX = c.motionBaseX;
+    shader::gMotionBaseY = c.motionBaseY;
+    shader::gMotionWidth = c.motionWidth;
+    shader::gMotionHeight = c.motionHeight;
+    shader::gOutWidth = c.outWidth;
+    shader::gOutHeight = c.outHeight;
+    shader::gDepth.tex = &depth;
+    shader::gMotion.tex = &motion;
+    shader::gDepthOut = { &d, c.outWidth };
+    shader::gMotionOut = { &m, c.outWidth };
+    const uint32_t gx = (c.outWidth + 7) / 8, gy = (c.outHeight + 7) / 8;
+    for (uint32_t y = 0; y < gy * 8; ++y)
+        for (uint32_t x = 0; x < gx * 8; ++x)
+            shader::CSMain(shader::uint3 { x, y, 0, { x, y } });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// D3D12: GatherGuideFrame, then Dispatch's geometry, reference and scale blocks, verbatim.
+// ---------------------------------------------------------------------------------------------------------------------
+@GATHER@
+
+struct D3D12_RESOURCE_DESC
+{
+    uint64_t Width;
+    unsigned int Height;
+    int Format;
+};
+struct FakeResource
+{
+    D3D12_RESOURCE_DESC desc;
+    D3D12_RESOURCE_DESC GetDesc() const { return desc; }
+};
+
+struct Dx12Geometry
+{
+    unsigned depthBaseX, depthBaseY, guideWidth, guideHeight, motionBaseX, motionBaseY, motionWidth, motionHeight,
+        referenceWidth, referenceHeight;
+};
+
+static Dx12Geometry D3d12Geometry(FakeResource* depth, FakeResource* motion, const DlssNrFrameInfo& frame,
+                                  unsigned int width, unsigned int height)
+{
+@GEOMETRY@
+@REFERENCES@
+    return { depthBaseX,  depthBaseY,   guideWidth,           guideHeight,          motionBaseX,
+             motionBaseY, motionWidth, motionHeight, motionReferenceWidth, motionReferenceHeight };
+}
+
+struct Option
+{
+    bool value = true;
+    bool value_or_default() const { return value; }
+};
+struct FakeConfig
+{
+    Option DlssNrRenderMotionScale;
+    Option DlssNrMatchGuides;
+};
+static FakeConfig g_config;
+
+static ModelScale D3d12Scale(float gameScaleX, float gameScaleY, unsigned int modelMotionWidth,
+                             unsigned int modelMotionHeight, unsigned int motionReferenceWidth,
+                             unsigned int motionReferenceHeight, unsigned int workWidth, unsigned int workHeight,
+                             unsigned int width, unsigned int height)
+{
+    const FakeConfig& cfg = g_config;
+    struct
+    {
+        float guideMvScaleX, guideMvScaleY;
+        bool guideDepthInverted;
+    } g_nr { gameScaleX, gameScaleY, false };
+    const bool guidesPacked = false;
+@SCALE@
+    return { guideMvScaleXToWork, guideMvScaleYToWork };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Vulkan: EvaluateAfterUpscaleVk's geometry and plan, verbatim, from the create flags to the Handed plan.
+// ---------------------------------------------------------------------------------------------------------------------
+struct FakeVkResource
+{
+};
+static bool g_vkResampleReady = true;
+
+static unsigned int GameCreateFlags(NVSDK_NGX_Parameter* params)
+{
+    unsigned int flags = 0;
+    if (params != nullptr)
+        params->Get(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, &flags);
+    return flags;
+}
+
+static const char* PrepareGuideMatch(const FakeVkResource&, const FakeVkResource&, DlssNr::GuideMatch::Region depth,
+                                     DlssNr::GuideMatch::Region motion, uint32_t, uint32_t)
+{
+    if (!depth.width || !depth.height || !motion.width || !motion.height)
+        return "empty region";
+    return g_vkResampleReady ? nullptr : "the resample cannot run";
+}
+static void SayGuideRefusal(const char*, uint32_t, uint32_t) {}
+
+struct VkPlanResult
+{
+    bool ran = false;
+    DlssNr::GuideMatch::Guides guides = DlssNr::GuideMatch::Guides::Refused;
+    DlssNr::GuideMatch::Region depthRegion, motionRegion;
+    DlssNr::GuideMatch::Handed handed;
+};
+
+static void VulkanPlan(VkPlanResult& out, NVSDK_NGX_Parameter* params, const uint32_t width, const uint32_t height,
+                       uint32_t guideWidth, uint32_t guideHeight, const uint32_t motionAllocationWidth,
+                       const uint32_t motionAllocationHeight, const uint32_t workWidth, const uint32_t workHeight)
+{
+    const FakeConfig& cfg = g_config;
+    struct
+    {
+        bool reset = false;
+    } g_vk;
+    FakeVkResource depthView, motionView;
+    const FakeVkResource* depth = &depthView;
+    const FakeVkResource* motion = &motionView;
+    out = {};
+@VULKAN@
+    out = { true, guides, depthRegion, motionRegion, handed };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The scene and its representations.
+// ---------------------------------------------------------------------------------------------------------------------
+struct Shape
+{
+    const char* name;
+    uint32_t renderW, renderH, displayW, displayH, workW, workH;
+};
+
+// A depth and a motion field over normalised screen positions; motion is a displacement in screen fractions.
+struct Field
+{
+    const char* name;
+    double d0, du, dv;                          // depth = d0 + du*u + dv*v
+    double mx0, mxu, mxv, my0, myu, myv;        // motion, affine
+    double GradX() const { return std::fabs(mxu) + std::fabs(mxv); }
+    double GradY() const { return std::fabs(myu) + std::fabs(myv); }
+};
+
+enum class Keys
+{
+    Dimensions, // Width/Height and OutWidth/OutHeight
+    Subrect,    // DLSS_Render_Subrect_Dimensions and OutWidth/OutHeight
+    Creation    // nothing at evaluate: the feature's creation record, through the scoped binding
+};
+
+struct Repr
+{
+    std::string name;
+    Keys keys = Keys::Dimensions;
+    bool lowRes = true;                                       // MVLowRes: vectors at render resolution
+    uint32_t depthBaseX = 0, depthBaseY = 0, depthPadX = 0, depthPadY = 0; // allocation = base + extent + pad
+    uint32_t motionBaseX = 0, motionBaseY = 0, motionPadX = 0, motionPadY = 0;
+    float unit = 1.0f;          // stored vector = pixels x unit
+    bool publishScale = false;  // MV scale keys present
+    bool compensate = true;     // the scale undoes the unit; false only for the oracle's own sensitivity check
+    int targetFormat = 28;      // the colour's DXGI format: R8G8B8A8_UNORM, or a twin
+    uint32_t depthCutX = 0;     // the depth allocation this much narrower than base + extent: a clipped guide
+};
+
+struct Guides
+{
+    Tex<float> depth;
+    Tex<Float2> motion;
+    FakeParams params;
+};
+
+static Guides Make(const Shape& s, const Field& f, const Repr& r)
+{
+    Guides g;
+    g.depth.w = r.depthBaseX + s.renderW + r.depthPadX - r.depthCutX;
+    g.depth.valid = { r.depthBaseX, r.depthBaseY, std::min(s.renderW, g.depth.w - r.depthBaseX), s.renderH };
+    g.depth.h = r.depthBaseY + s.renderH + r.depthPadY;
+    g.depth.px.assign(size_t(g.depth.w) * g.depth.h, kDepthSentinel);
+    for (uint32_t y = 0; y < s.renderH; ++y)
+        for (uint32_t x = 0; x < g.depth.valid.width; ++x)
+        {
+            const double u = (x + 0.5) / s.renderW, v = (y + 0.5) / s.renderH;
+            g.depth.px[size_t(r.depthBaseY + y) * g.depth.w + r.depthBaseX + x] = float(f.d0 + f.du * u + f.dv * v);
+        }
+
+    const uint32_t mw = r.lowRes ? s.renderW : s.displayW, mh = r.lowRes ? s.renderH : s.displayH;
+    g.motion.valid = { r.motionBaseX, r.motionBaseY, mw, mh };
+    g.motion.w = r.motionBaseX + mw + r.motionPadX;
+    g.motion.h = r.motionBaseY + mh + r.motionPadY;
+    g.motion.px.assign(size_t(g.motion.w) * g.motion.h, Float2 { kMotionSentinel, kMotionSentinel });
+    for (uint32_t y = 0; y < mh; ++y)
+        for (uint32_t x = 0; x < mw; ++x)
+        {
+            const double u = (x + 0.5) / mw, v = (y + 0.5) / mh;
+            // Pixels of the extent the vectors are measured in, rounded once to float, then the unit applied in
+            // float: a power-of-two unit is then exact.
+            const float px = float((f.mx0 + f.mxu * u + f.mxv * v) * mw);
+            const float py = float((f.my0 + f.myu * u + f.myv * v) * mh);
+            g.motion.px[size_t(r.motionBaseY + y) * g.motion.w + r.motionBaseX + x] = { px * r.unit, py * r.unit };
+        }
+
+    auto& p = g.params;
+    p.Set(NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags, r.lowRes ? unsigned(NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) : 0u);
+    if (r.keys == Keys::Subrect)
+    {
+        p.Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, s.renderW);
+        p.Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, s.renderH);
+    }
+    if (r.keys == Keys::Dimensions)
+    {
+        p.Set(NVSDK_NGX_Parameter_Width, s.renderW);
+        p.Set(NVSDK_NGX_Parameter_Height, s.renderH);
+    }
+    if (r.keys != Keys::Creation)
+    {
+        p.Set(NVSDK_NGX_Parameter_OutWidth, s.displayW);
+        p.Set(NVSDK_NGX_Parameter_OutHeight, s.displayH);
+    }
+    if (r.depthBaseX || r.depthBaseY)
+    {
+        p.Set(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, r.depthBaseX);
+        p.Set(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, r.depthBaseY);
+    }
+    if (r.motionBaseX || r.motionBaseY)
+    {
+        p.Set(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, r.motionBaseX);
+        p.Set(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, r.motionBaseY);
+    }
+    if (r.publishScale || r.unit != 1.0f)
+    {
+#ifdef MUTATE_UNCOMPENSATED
+        const float scale = 1.0f;
+#else
+        const float scale = r.compensate ? 1.0f / r.unit : 1.0f;
+#endif
+        p.Set(NVSDK_NGX_Parameter_MV_Scale_X, scale);
+        p.Set(NVSDK_NGX_Parameter_MV_Scale_Y, scale);
+    }
+    return g;
+}
+
+// What the model is handed, as values: the depth image, and each motion texel as the displacement the model reads
+// from it -- stored vector x the scale it is given, over the motion texture's extent -- in screen fractions.
+struct ModelView
+{
+    bool ran = false;
+    bool matched = false;
+    uint32_t depthW = 0, depthH = 0, motionW = 0, motionH = 0;
+    std::vector<float> depth;
+    std::vector<Float2> motion;   // stored x scale, in pixels of the motion texture handed
+    std::vector<Float2> fraction; // the same over the handed motion extent
+    unsigned outside = 0;         // reads outside the valid regions
+    unsigned sentinels = 0;       // sentinel values that reached the model
+    DlssNr::GuideMatch::Region gameDepth, gameMotion; // the game's regions the route settled on
+    ModelScale scale { 0.0f, 0.0f };
+};
+
+static void Finish(ModelView& v, ModelScale scale)
+{
+    v.scale = scale;
+    v.fraction.resize(v.motion.size());
+    for (size_t i = 0; i < v.motion.size(); ++i)
+    {
+        v.motion[i] = { v.motion[i][0] * scale.x, v.motion[i][1] * scale.y };
+        v.fraction[i] = { v.motion[i][0] / float(v.motionW), v.motion[i][1] / float(v.motionH) };
+    }
+    for (const float d : v.depth)
+        v.sentinels += d == kDepthSentinel;
+}
+
+// The model reading the game's region as handed: texel for texel, through the same counted reads.
+static void ReadRegion(const Tex<float>& depth, const Tex<Float2>& motion, DlssNr::GuideMatch::Region dr,
+                       DlssNr::GuideMatch::Region mr, ModelView& v)
+{
+    v.depthW = dr.width;
+    v.depthH = dr.height;
+    v.motionW = mr.width;
+    v.motionH = mr.height;
+    v.depth.resize(size_t(dr.width) * dr.height);
+    v.motion.resize(size_t(mr.width) * mr.height);
+    for (uint32_t y = 0; y < dr.height; ++y)
+        for (uint32_t x = 0; x < dr.width; ++x)
+            v.depth[size_t(y) * dr.width + x] = depth.At(dr.baseX + x, dr.baseY + y);
+    for (uint32_t y = 0; y < mr.height; ++y)
+        for (uint32_t x = 0; x < mr.width; ++x)
+        {
+            const Float2 m = motion.At(mr.baseX + x, mr.baseY + y);
+            v.sentinels += m[0] == kMotionSentinel;
+            v.motion[size_t(y) * mr.width + x] = m;
+        }
+}
+
+static void CountMotionSentinels(ModelView& v)
+{
+    for (const auto& m : v.motion)
+        v.sentinels += m[0] == kMotionSentinel;
+}
+
+static ModelView ViaD3d12(const Shape& s, const Field& f, const Repr& r)
+{
+    Guides g = Make(s, f, r);
+    ModelView v;
+
+    DlssNrFrameInfo frame;
+    if (r.keys == Keys::Creation)
+    {
+        DlssNr::RenderGeometry::Creation creation;
+        creation.render = { s.renderW, s.renderH };
+        creation.display = { s.displayW, s.displayH };
+        const uint64_t key = DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::D3D12, 7);
+        DlssNr::RenderGeometry::Remember(key, creation);
+        DlssNr::RenderGeometry::Scope scope(true, key, &g.params);
+        frame = GatherGuideFrame(&g.params);
+    }
+    else
+        frame = GatherGuideFrame(&g.params);
+
+    FakeResource depthRes { { g.depth.w, g.depth.h, 41 } }, motionRes { { g.motion.w, g.motion.h, 34 } };
+    FakeResource target { { s.displayW, s.displayH, r.targetFormat } };
+    const D3D12_RESOURCE_DESC desc = target.GetDesc();
+    const auto width = (unsigned int) desc.Width;
+    const auto height = desc.Height;
+    const Dx12Geometry geo = D3d12Geometry(&depthRes, &motionRes, frame, width, height);
+
+    // Dispatch's branch: resample when wanted and the pass accepts the regions, else the game's regions.
+    const bool wanted = DlssNr::GuideMatch::Wanted(g_config.DlssNrMatchGuides.value_or_default(), true, s.workW,
+                                                   s.workH, geo.guideWidth, geo.guideHeight, geo.motionWidth,
+                                                   geo.motionHeight);
+    const bool matched = wanted && geo.guideWidth && geo.guideHeight && geo.motionWidth && geo.motionHeight;
+    v.gameDepth = { geo.depthBaseX, geo.depthBaseY, geo.guideWidth, geo.guideHeight };
+    v.gameMotion = { geo.motionBaseX, geo.motionBaseY, geo.motionWidth, geo.motionHeight };
+    v.ran = geo.guideWidth && geo.guideHeight && geo.motionWidth && geo.motionHeight;
+    v.matched = matched;
+    unsigned modelMotionWidth = geo.motionWidth, modelMotionHeight = geo.motionHeight;
+    if (matched)
+    {
+        RunResample({ geo.depthBaseX, geo.depthBaseY, geo.guideWidth, geo.guideHeight, geo.motionBaseX, geo.motionBaseY,
+                      geo.motionWidth, geo.motionHeight, s.workW, s.workH },
+                    g.depth, g.motion, v.depth, v.motion);
+        v.depthW = v.motionW = modelMotionWidth = s.workW;
+        v.depthH = v.motionH = modelMotionHeight = s.workH;
+        CountMotionSentinels(v);
+    }
+    else
+        ReadRegion(g.depth, g.motion, { geo.depthBaseX, geo.depthBaseY, geo.guideWidth, geo.guideHeight },
+                   { geo.motionBaseX, geo.motionBaseY, geo.motionWidth, geo.motionHeight }, v);
+    Finish(v, D3d12Scale(frame.MvScaleX, frame.MvScaleY, modelMotionWidth, modelMotionHeight, geo.referenceWidth,
+                         geo.referenceHeight, s.workW, s.workH, width, height));
+    v.outside = g.depth.outside + g.motion.outside;
+    return v;
+}
+
+static ModelView ViaVulkan(const Shape& s, const Field& f, const Repr& r)
+{
+    Guides g = Make(s, f, r);
+    ModelView v;
+    VkPlanResult plan;
+    const uint64_t key = DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::Vulkan, 7);
+    if (r.keys == Keys::Creation)
+    {
+        DlssNr::RenderGeometry::Creation creation;
+        creation.render = { s.renderW, s.renderH };
+        creation.display = { s.displayW, s.displayH };
+        DlssNr::RenderGeometry::Remember(key, creation);
+    }
+    {
+        DlssNr::RenderGeometry::Scope scope(r.keys == Keys::Creation, key, &g.params);
+        VulkanPlan(plan, &g.params, s.displayW, s.displayH, g.depth.w, g.depth.h, g.motion.w, g.motion.h, s.workW,
+                   s.workH);
+    }
+    if (!plan.ran)
+        return v;
+    v.ran = true;
+    v.matched = plan.handed.matched;
+    v.gameDepth = plan.depthRegion;
+    v.gameMotion = plan.motionRegion;
+    if (plan.handed.matched)
+    {
+        const auto push =
+            DlssNr::GuideMatch::Vk::MakePush(plan.depthRegion, plan.motionRegion, plan.handed.depth.width,
+                                             plan.handed.depth.height);
+        RunResample({ push.DepthBaseX, push.DepthBaseY, push.DepthWidth, push.DepthHeight, push.MotionBaseX,
+                      push.MotionBaseY, push.MotionWidth, push.MotionHeight, push.OutWidth, push.OutHeight },
+                    g.depth, g.motion, v.depth, v.motion);
+        v.depthW = v.motionW = push.OutWidth;
+        v.depthH = v.motionH = push.OutHeight;
+        CountMotionSentinels(v);
+    }
+    else
+        ReadRegion(g.depth, g.motion, plan.handed.depth, plan.handed.motion, v);
+    Finish(v, { plan.handed.scaleX, plan.handed.scaleY });
+    v.outside = g.depth.outside + g.motion.outside;
+    return v;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The relations.
+// ---------------------------------------------------------------------------------------------------------------------
+static bool BitsEqual(const void* a, const void* b, size_t n) { return n == 0 || std::memcmp(a, b, n) == 0; }
+
+static void Clean(const ModelView& v, const std::string& what)
+{
+    CHECK(v.ran, "%s: the model was not run", what.c_str());
+    CHECK(v.outside == 0, "%s: %u reads outside the valid regions (the margin)", what.c_str(), v.outside);
+    CHECK(v.sentinels == 0, "%s: %u sentinel values reached the model", what.c_str(), v.sentinels);
+}
+
+// Exact: same sizes, same path, and every value bit for bit.
+static void Identical(const ModelView& a, const ModelView& b, const std::string& what)
+{
+    Clean(a, what + " [canonical]");
+    Clean(b, what);
+    CHECK(a.matched == b.matched, "%s: matched %d against %d", what.c_str(), a.matched, b.matched);
+    const bool sizes = a.depthW == b.depthW && a.depthH == b.depthH && a.motionW == b.motionW && a.motionH == b.motionH;
+    CHECK(sizes, "%s: depth %ux%u motion %ux%u against %ux%u %ux%u", what.c_str(), b.depthW, b.depthH, b.motionW,
+          b.motionH, a.depthW, a.depthH, a.motionW, a.motionH);
+    if (!sizes)
+        return;
+    CHECK(BitsEqual(a.depth.data(), b.depth.data(), a.depth.size() * sizeof(float)), "%s: depth differs",
+          what.c_str());
+    size_t first = a.motion.size();
+    for (size_t i = 0; i < a.motion.size() && first == a.motion.size(); ++i)
+        if (!BitsEqual(&a.motion[i], &b.motion[i], sizeof(Float2)))
+            first = i;
+    CHECK(first == a.motion.size(), "%s: motion x scale differs at texel %zu: %.9g,%.9g against %.9g,%.9g", what.c_str(),
+          first, first < b.motion.size() ? b.motion[first][0] : 0.0, first < b.motion.size() ? b.motion[first][1] : 0.0,
+          first < a.motion.size() ? a.motion[first][0] : 0.0, first < a.motion.size() ? a.motion[first][1] : 0.0);
+}
+
+// Near: the same, but motion within a relative bound -- a unit whose reciprocal is not a power of two rounds.
+static void Near(const ModelView& a, const ModelView& b, double relative, const std::string& what)
+{
+    Clean(b, what);
+    const bool sizes = a.motionW == b.motionW && a.motionH == b.motionH && a.depth.size() == b.depth.size();
+    CHECK(sizes && a.matched == b.matched, "%s: shapes differ", what.c_str());
+    if (!sizes)
+        return;
+    CHECK(BitsEqual(a.depth.data(), b.depth.data(), a.depth.size() * sizeof(float)), "%s: depth differs",
+          what.c_str());
+    double worst = 0.0;
+    for (size_t i = 0; i < a.motion.size(); ++i)
+        for (int c = 0; c < 2; ++c)
+        {
+            const double scale = std::max(1e-3, (double) std::fabs(a.motion[i][c]));
+            worst = std::max(worst, std::fabs((double) a.motion[i][c] - b.motion[i][c]) / scale);
+        }
+    CHECK(worst <= relative, "%s: motion relative error %.3g above %.3g", what.c_str(), worst, relative);
+}
+
+// Lossy: the motion fields in screen fractions, compared on the finer grid through the coarser one's nearest texel.
+// Bound: two point samples of the same affine field, each within half a texel of the shared position, differ by at
+// most the gradient times the sum of the two half-texels, plus float rounding.
+static double FractionError(const ModelView& a, const ModelView& b, int axis)
+{
+    const ModelView& fine = a.motionW * a.motionH >= b.motionW * b.motionH ? a : b;
+    const ModelView& coarse = &fine == &a ? b : a;
+    double worst = 0.0;
+    for (uint32_t y = 0; y < fine.motionH; ++y)
+        for (uint32_t x = 0; x < fine.motionW; ++x)
+        {
+            const uint32_t cx = std::min(coarse.motionW - 1, uint32_t((x + 0.5) * coarse.motionW / fine.motionW));
+            const uint32_t cy = std::min(coarse.motionH - 1, uint32_t((y + 0.5) * coarse.motionH / fine.motionH));
+            worst = std::max(worst, std::fabs((double) fine.fraction[size_t(y) * fine.motionW + x][axis] -
+                                              coarse.fraction[size_t(cy) * coarse.motionW + cx][axis]));
+        }
+    return worst;
+}
+
+static void Lossy(const ModelView& a, const ModelView& b, const Field& f, double texelX, double texelY,
+                  const std::string& what)
+{
+    Clean(b, what);
+    CHECK(a.ran && b.ran && !a.motion.empty() && !b.motion.empty(), "%s: nothing to compare", what.c_str());
+    if (a.motion.empty() || b.motion.empty())
+        return;
+    const double boundX = f.GradX() * texelX + 1e-6, boundY = f.GradY() * texelY + 1e-6;
+    const double ex = FractionError(a, b, 0), ey = FractionError(a, b, 1);
+    CHECK(ex <= boundX && ey <= boundY, "%s: screen-fraction error %.3g,%.3g above the bound %.3g,%.3g", what.c_str(),
+          ex, ey, boundX, boundY);
+}
+
+// Analytic: the canonical representation against the field itself, at each model texel's centre. Catches a fault
+// every representation shares, which the relations cannot. Bound: the model texel's centre and the game texel it was
+// sampled from are within half a texel of each other on each grid.
+static void Analytic(const ModelView& v, const Field& f, uint32_t sourceDepthW, uint32_t sourceDepthH,
+                     uint32_t sourceMotionW, uint32_t sourceMotionH, const std::string& what)
+{
+    if (!v.ran || v.depth.empty() || v.motion.empty())
+        return;
+    double depthWorst = 0.0, motionWorst[2] = { 0.0, 0.0 };
+    for (uint32_t y = 0; y < v.depthH; ++y)
+        for (uint32_t x = 0; x < v.depthW; ++x)
+        {
+            const double u = (x + 0.5) / v.depthW, w = (y + 0.5) / v.depthH;
+            depthWorst = std::max(depthWorst, std::fabs(v.depth[size_t(y) * v.depthW + x] - (f.d0 + f.du * u + f.dv * w)));
+        }
+    for (uint32_t y = 0; y < v.motionH; ++y)
+        for (uint32_t x = 0; x < v.motionW; ++x)
+        {
+            const double u = (x + 0.5) / v.motionW, w = (y + 0.5) / v.motionH;
+            const Float2 got = v.fraction[size_t(y) * v.motionW + x];
+            motionWorst[0] = std::max(motionWorst[0], std::fabs(got[0] - (f.mx0 + f.mxu * u + f.mxv * w)));
+            motionWorst[1] = std::max(motionWorst[1], std::fabs(got[1] - (f.my0 + f.myu * u + f.myv * w)));
+        }
+    const double depthBound = (std::fabs(f.du) * (0.5 / sourceDepthW + 0.5 / v.depthW) +
+                               std::fabs(f.dv) * (0.5 / sourceDepthH + 0.5 / v.depthH)) + 1e-6;
+    const double boundX = f.GradX() * std::max(0.5 / sourceMotionW + 0.5 / v.motionW, 0.5 / sourceMotionH + 0.5 / v.motionH) + 1e-6;
+    const double boundY = f.GradY() * std::max(0.5 / sourceMotionW + 0.5 / v.motionW, 0.5 / sourceMotionH + 0.5 / v.motionH) + 1e-6;
+    CHECK(depthWorst <= depthBound, "%s: depth %.3g from the field, bound %.3g", what.c_str(), depthWorst, depthBound);
+    CHECK(motionWorst[0] <= boundX && motionWorst[1] <= boundY,
+          "%s: motion %.3g,%.3g screen fractions from the field, bound %.3g,%.3g", what.c_str(), motionWorst[0],
+          motionWorst[1], boundX, boundY);
+}
+
+using Route = ModelView (*)(const Shape&, const Field&, const Repr&);
+
+int main()
+{
+    const Shape shapes[] = {
+        { "2x below, resampled", 96, 54, 192, 108, 64, 36 },
+        { "render under a larger model, display vectors resampled", 96, 54, 192, 108, 128, 72 },
+        { "native", 96, 54, 192, 108, 192, 108 },
+        { "1:1, resampled", 128, 72, 128, 72, 64, 36 },
+        { "odd sizes, resampled", 77, 43, 160, 90, 53, 30 },
+    };
+    const Field fields[] = {
+        { "affine", 0.1, 0.6, 0.3, 0.01, 0.02, -0.005, -0.004, 0.003, 0.01 },
+        { "constant", 0.5, 0.0, 0.0, 0.015625, 0.0, 0.0, -0.0078125, 0.0, 0.0 },
+    };
+    const struct
+    {
+        const char* name;
+        Route route;
+    } routes[] = { { "D3D12", ViaD3d12 }, { "Vulkan", ViaVulkan } };
+
+    unsigned exact = 0, near = 0, lossy = 0;
+    for (const bool renderMotionScale : { true, false })
+        for (const bool matchGuides : { true, false })
+        {
+            g_config.DlssNrRenderMotionScale.value = renderMotionScale;
+            g_config.DlssNrMatchGuides.value = matchGuides;
+            for (const auto& route : routes)
+                for (const Shape& s : shapes)
+                    for (const Field& f : fields)
+                        for (const bool lowRes : { true, false })
+                        {
+                            const std::string at = std::string(route.name) + " " + s.name + ", " + f.name +
+                                                   (lowRes ? ", MVLowRes" : ", display vectors") +
+                                                   (matchGuides ? "" : ", MatchGuides off") +
+                                                   (renderMotionScale ? "" : ", legacy scale") + ": ";
+                            Repr canonical;
+                            canonical.name = "canonical";
+                            canonical.lowRes = lowRes;
+                            const ModelView base = route.route(s, f, canonical);
+                            Clean(base, at + "canonical");
+                            if (renderMotionScale)
+                                Analytic(base, f, s.renderW, s.renderH, lowRes ? s.renderW : s.displayW,
+                                         lowRes ? s.renderH : s.displayH, at + "canonical against the field");
+
+                            std::vector<Repr> same;
+                            auto add = [&](std::string name, auto edit)
+                            {
+                                Repr r = canonical;
+                                r.name = std::move(name);
+                                edit(r);
+                                same.push_back(r);
+                            };
+                            add("render size through the subrect keys", [](Repr& r) { r.keys = Keys::Subrect; });
+                            add("render size from the feature's creation", [](Repr& r) { r.keys = Keys::Creation; });
+                            add("MV scale 1 published", [](Repr& r) { r.publishScale = true; });
+                            add("guides at a base inside padded allocations, sentinel margin",
+                                [](Repr& r)
+                                {
+                                    r.depthBaseX = 5, r.depthBaseY = 3, r.depthPadX = 7, r.depthPadY = 2;
+                                    r.motionBaseX = 11, r.motionBaseY = 4, r.motionPadX = 3, r.motionPadY = 9;
+                                });
+                            add("padded allocations at base zero",
+                                [](Repr& r) { r.depthPadX = 19, r.depthPadY = 6, r.motionPadX = 2, r.motionPadY = 13; });
+                            add("padded, at a base, render size through the subrect keys",
+                                [](Repr& r)
+                                {
+                                    r.keys = Keys::Subrect;
+                                    r.depthBaseX = 16, r.depthBaseY = 12, r.depthPadX = 1, r.depthPadY = 1;
+                                    r.motionBaseX = 16, r.motionBaseY = 12, r.motionPadX = 1, r.motionPadY = 1;
+                                });
+                            add("padded, at a base, from creation",
+                                [](Repr& r)
+                                {
+                                    r.keys = Keys::Creation;
+                                    r.depthBaseX = 2, r.depthBaseY = 9, r.depthPadX = 4, r.depthPadY = 4;
+                                    r.motionBaseX = 6, r.motionBaseY = 1, r.motionPadX = 8, r.motionPadY = 0;
+                                });
+                            add("vectors x 1/8, MV scale 8", [](Repr& r) { r.unit = 0.125f; });
+                            add("vectors x 4, MV scale 1/4", [](Repr& r) { r.unit = 4.0f; });
+                            add("vectors negated, MV scale -1", [](Repr& r) { r.unit = -1.0f; });
+                            add("padded, at a base, vectors x 1/2, MV scale 2",
+                                [](Repr& r)
+                                {
+                                    r.unit = 0.5f;
+                                    r.depthBaseX = 3, r.depthBaseY = 3, r.depthPadX = 3, r.depthPadY = 3;
+                                    r.motionBaseX = 1, r.motionBaseY = 7, r.motionPadX = 5, r.motionPadY = 2;
+                                });
+                            add("BGRA colour (the RGBA twin)", [](Repr& r) { r.targetFormat = 87; });
+                            for (const Repr& r : same)
+                            {
+                                Identical(base, route.route(s, f, r), at + r.name);
+                                ++exact;
+                            }
+
+                            // Normalised vectors, the commonest game convention: a scale of the extent they are in.
+                            Repr normalised = canonical;
+                            const uint32_t extent = lowRes ? s.renderW : s.displayW;
+                            normalised.unit = 1.0f / float(extent);
+                            Near(base, route.route(s, f, normalised), 1e-5, at + "normalised vectors, MV scale = extent");
+                            ++near;
+                        }
+
+            // MVLowRes against display-resolution vectors of the same field, display reference: a different sampling
+            // grid, so a stated bound rather than identity. Depth is the same texture both ways and must be identical.
+            for (const auto& route : routes)
+                for (const Shape& s : shapes)
+                    for (const Field& f : fields)
+                    {
+                        const std::string at = std::string(route.name) + " " + s.name + ", " + f.name +
+                                               (matchGuides ? "" : ", MatchGuides off") +
+                                               (renderMotionScale ? "" : ", legacy scale") +
+                                               ": MVLowRes against display vectors";
+                        Repr low, high;
+                        low.lowRes = true;
+                        high.lowRes = false;
+                        const ModelView a = route.route(s, f, low), b = route.route(s, f, high);
+                        Clean(a, at + " [MVLowRes]");
+                        const double texelX = 0.5 / s.renderW + 0.5 / s.displayW;
+                        const double texelY = 0.5 / s.renderH + 0.5 / s.displayH;
+                        if (renderMotionScale)
+                        {
+                            Lossy(a, b, f, texelX, texelY, at);
+                            ++lossy;
+                        }
+                        else if (matchGuides && s.renderW != s.displayW && s.workW < s.renderW)
+                        {
+                            // The legacy working/frame conversion is the fault fix 2 corrected (reduced-scale-guides.md):
+                            // with both guides resampled it shrinks only the low-resolution vectors, so the relation
+                            // must catch it. Elsewhere it can be wrong the same way in both representations, which
+                            // only the analytic check of the canonical one sees.
+                            const double ex = FractionError(a, b, 0);
+                            CHECK(ex > f.GradX() * texelX + 1e-6, "%s: the legacy scale escaped the relation (%.3g)",
+                                  at.c_str(), ex);
+                            ++lossy;
+                        }
+                        if (a.depthW == b.depthW && a.depthH == b.depthH)
+                            CHECK(BitsEqual(a.depth.data(), b.depth.data(), a.depth.size() * sizeof(float)),
+                                  "%s: depth differs", at.c_str());
+                    }
+        }
+    g_config = {};
+
+    // The two routes are one behaviour: below native, with the resample wanted, both hand the model the same values.
+    unsigned crossApi = 0;
+    for (const Shape& s : shapes)
+        for (const Field& f : fields)
+            for (const bool lowRes : { true, false })
+            {
+                Repr r;
+                r.lowRes = lowRes;
+                r.depthBaseX = 4, r.depthBaseY = 2, r.depthPadX = 6, r.depthPadY = 6;
+                r.motionBaseX = 9, r.motionBaseY = 5, r.motionPadX = 1, r.motionPadY = 3;
+                r.unit = 0.25f;
+                const ModelView d = ViaD3d12(s, f, r), v = ViaVulkan(s, f, r);
+                Identical(d, v, std::string("D3D12 against Vulkan, ") + s.name + ", " + f.name +
+                                    (lowRes ? ", MVLowRes" : ", display vectors"));
+                ++crossApi;
+            }
+
+    // A guide is bounded by its own allocation and base, never the other's (render-geometry.md, "Bounds and pre-upscale
+    // motion"): cutting depth's allocation short clips depth and changes nothing about the motion the model is handed --
+    // the motion texture is the same bytes. Depth itself is then not an equivalent representation of anything (the
+    // colour covers more than it), so only the motion is compared.
+    unsigned motionOwnBounds = 0;
+    for (const bool matchGuides : { true, false })
+        for (const auto& route : routes)
+            for (const Shape& s : shapes)
+                for (const bool lowRes : { true, false })
+                {
+                    g_config.DlssNrMatchGuides.value = matchGuides;
+                    Repr whole, cut;
+                    whole.lowRes = cut.lowRes = lowRes;
+                    whole.depthBaseX = cut.depthBaseX = 8;
+                    cut.depthCutX = 24; // depth's allocation ends 16 texels before base + render
+                    const ModelView a = route.route(s, fields[0], whole), b = route.route(s, fields[0], cut);
+                    const std::string at = std::string(route.name) + " " + s.name +
+                                           (lowRes ? ", MVLowRes" : ", display vectors") +
+                                           (matchGuides ? "" : ", MatchGuides off") +
+                                           ": depth's allocation cut short, motion untouched";
+                    CHECK(b.outside == 0, "%s: %u reads outside the valid regions", at.c_str(), b.outside);
+                    CHECK(a.gameMotion.width == b.gameMotion.width && a.gameMotion.height == b.gameMotion.height &&
+                              a.gameMotion.baseX == b.gameMotion.baseX && a.gameMotion.baseY == b.gameMotion.baseY,
+                          "%s: the game's motion region %ux%u at %u became %ux%u at %u", at.c_str(), a.gameMotion.width,
+                          a.gameMotion.height, a.gameMotion.baseX, b.gameMotion.width, b.gameMotion.height,
+                          b.gameMotion.baseX);
+                    const bool matchedBoth = a.matched == b.matched;
+                    if (matchedBoth)
+                    {
+                        CHECK(a.motionW == b.motionW && a.motionH == b.motionH &&
+                                  BitsEqual(&a.scale, &b.scale, sizeof(ModelScale)) &&
+                                  BitsEqual(a.motion.data(), b.motion.data(),
+                                            std::min(a.motion.size(), b.motion.size()) * sizeof(Float2)),
+                              "%s: the model's motion %ux%u at scale %.6g,%.6g became %ux%u at scale %.6g,%.6g",
+                              at.c_str(), a.motionW, a.motionH, a.scale.x, a.scale.y, b.motionW, b.motionH, b.scale.x,
+                              b.scale.y);
+                    }
+                    ++motionOwnBounds;
+                }
+    g_config = {};
+
+    // The colour's channel order is not geometry: a session in BGRA makes the decisions RGBA makes, and a swap between
+    // the twins keeps history exactly where staying on one format would (format-swap-history.md).
+    unsigned formatChecks = 0;
+    {
+        using namespace DlssNr::FormatTwin;
+        const int rgba[] = { kR8G8B8A8Unorm, kR8G8B8A8Typeless, kR8G8B8A8UnormSrgb };
+        const int bgra[] = { kB8G8R8A8Unorm, kB8G8R8A8Typeless, kB8G8R8A8UnormSrgb };
+        const unsigned sizes[][4] = { { 192, 108, 64, 36 }, { 192, 108, 64, 36 }, { 192, 108, 96, 54 }, { 160, 90, 53, 30 } };
+        for (int i = 0; i < 3; ++i)
+        {
+            CHECK(ChannelOrderCanonical(rgba[i]) == ChannelOrderCanonical(bgra[i]), "cadence signature: %d against %d",
+                  rgba[i], bgra[i]);
+            for (const auto& was : sizes)
+                for (const auto& now : sizes)
+                {
+                    Contract a { rgba[i], was[0], was[1], was[2], was[3], {} };
+                    Contract b { rgba[i], now[0], now[1], now[2], now[3], {} };
+                    const bool geometryKept = was[0] == now[0] && was[1] == now[1] && was[2] == now[2] &&
+                                              was[3] == now[3];
+                    // RGBA -> BGRA keeps history exactly when the geometry is unchanged: as if no swap happened.
+                    b.format = bgra[i];
+                    CHECK(KeepsHistory(a, b) == geometryKept, "twin swap %d -> %d", rgba[i], bgra[i]);
+                    a.format = bgra[i];
+                    b.format = rgba[i];
+                    CHECK(KeepsHistory(a, b) == geometryKept, "twin swap %d -> %d", bgra[i], rgba[i]);
+                    ++formatChecks;
+                }
+        }
+    }
+
+    std::printf("%d checks: %u exact relations, %u near (normalised units, 1e-5 relative), %u lossy (MVLowRes "
+                "against display vectors, half-texel bound), %u D3D12 = Vulkan, %u motion bounded by its own allocation, "
+                "%u channel-order decisions\n",
+                checks, exact, near, lossy, crossApi, motionOwnBounds, formatChecks);
+    if (failures)
+    {
+        std::printf("FAIL: %d of %d checks\n", failures, checks);
+        return 1;
+    }
+    std::puts("PASS: the prepared geometry and the resampled fields are the same scene in every representation");
+    return 0;
+}

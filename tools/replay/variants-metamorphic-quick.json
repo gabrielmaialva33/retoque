@@ -1,0 +1,7 @@
+{
+ "every-a": {"Cadence": "1"},
+ "every-b": {"Cadence": "1"},
+ "cadence2": {"Cadence": "2"},
+ "passes2": {"Passes": "2"},
+ "scale-half": {"WorkingScale": "0.5"}
+}

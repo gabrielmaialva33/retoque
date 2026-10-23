@@ -88,6 +88,11 @@ motion reads the full display motion area and rescales by 1280/1920 when matched
 A Stage=1 evaluate without known display dimensions and with display-resolution vectors
 is refused, rather than assuming its scratch colour describes the display field.
 
+The native Vulkan after-upscale route follows the same rule (2026-10-23, found by
+tests/nr-geometry-metamorphic): its low-resolution motion region and motion reference are the
+resolved render size when it is known, not depth's region after depth's own allocation clipped it.
+Without a render size it keeps its earlier depth-derived extent.
+
 After-upscale/host callers without an explicit display extent retain their output extent
 as the display reference; present/bridge snapshots copy the CPU frame metadata normally.
 No size is appended to DlssNrConstants or HLSL and neither shader target changes.
