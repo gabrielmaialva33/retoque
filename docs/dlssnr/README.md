@@ -34,6 +34,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 - [working-scale-auto.md](design/working-scale-auto.md): what `WorkingScale=auto` resolves to per GPU, acting on the cross-architecture measurement.
 - [reduced-scale-guides.md](design/reduced-scale-guides.md): resampling guides and scaling motion when the model works below the frame's size.
 - [render-geometry.md](design/render-geometry.md): feature-scoped creation fallback, DRS freshness, per-resource bounds and display-resolution motion before upscale.
+- [reduced-scale-guides-vk.md](design/reduced-scale-guides-vk.md): the same guide resample on the Vulkan after-upscale route, its Vulkan interface, and the refusal that replaces frame-size guides.
 - [peripheral-compression.md](design/peripheral-compression.md): packing the model's input denser in the centre than at the edges.
 - [dlssnr-async-compute.md](design/dlssnr-async-compute.md): why the Reshade addon's async compute queue was not ported, and which micro-optimizations were taken instead.
 

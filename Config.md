@@ -503,6 +503,8 @@ UiProtection=auto
 ; model's working size, so the guides and the colour it reprojects agree pixel for pixel. Off hands the
 ; model frame-size guides for a smaller colour, which flickers and keeps "settling" after the camera
 ; stops. Needs the guide resample shader in the build; the log says once which guides the model got.
+; On Vulkan, a frame whose guides cannot be resampled is left as the upscaler wrote it rather than given
+; mismatched guides; WorkingScale=1 or this switch off runs the model there.
 ; true or false - Default (auto) is true
 MatchGuides=auto
 

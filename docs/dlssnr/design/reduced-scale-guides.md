@@ -22,8 +22,8 @@ which is v0.8.91 plus those changes, offered upstream as a pull request.
   model actually reads. That second rule is the one taken here.
   - His Onimusha: Way of the Sword numbers: 4K, DLSS Performance, game scale 1920. The old conversion
     gave the model 1344.
-- **Vulkan.** v0.8.92 also ported both fixes to his Vulkan path (`57aa64e0`). Here only fix 2 is on
-  Vulkan so far.
+- **Vulkan.** v0.8.92 also ported both fixes to his Vulkan path (`57aa64e0`). Here both are on the Vulkan route
+  since 2026-10-23, with a failure rule of its own: [reduced-scale-guides-vk.md](reduced-scale-guides-vk.md).
 
 His code touches files this tree does not have (`DlssNr_Dx12_Run.cpp`, `DlssNr_Dx12_Models.cpp`), so
 nothing was copied. The rules are re-derived and pinned by our own tests. The comments at each site
@@ -84,8 +84,8 @@ pins them with the numbers of the cases they were written for.
    - Unmatched, the handed texture is the game's region, so the scale is the game's own. Matched, the
      handed texture is at the working size.
    - `false` restores working / frame, for an A/B on one build.
-   - The native Vulkan path has fix 2 only. Fix 1 needs a Vulkan resample shader, which it does not
-     have yet, and the log says so once.
+   - The native Vulkan path has both since 2026-10-23: the same shader built as SPIR-V, and, where D3D12 falls
+     back to frame-size guides, a refused frame instead ([reduced-scale-guides-vk.md](reduced-scale-guides-vk.md)).
 
 **A pass of its own, with optional bytecode.**
 - The resample is `DlssNr_GuideMatch_Dx12` over `precompile/dlssnr_guides.hlsl`. It is not a new mode
@@ -143,10 +143,11 @@ read from the ini only, so restart the game between arms. Use the same save and 
    - Then expect guides matched to 1147x480: the model is render x 0.5.
    - The same A/B applies. Here only `MatchGuides` should change the picture: with matched guides both
      scale formulas agree.
-3. **DOOM Eternal (Vulkan)**, DLSS Quality, `WorkingScale=0.5`. This checks fix 2 only.
-   - Expect `DLSS-NR Vulkan model motion scale ...` with the game's scale passed through for the
-     2293x960 region.
-   - `Vulkan guides: larger than the 1720x720 model and not resampled` is the known gap.
+3. **DOOM Eternal (Vulkan)**, DLSS Quality, `WorkingScale=0.5`. Both fixes, since 2026-10-23.
+   - Expect `DLSS-NR Vulkan guides matched to the working size: depth and motion 1720x720` and
+     `DLSS-NR Vulkan model motion scale 1720.0 x 720.0 ... motion texture 1720x720 (matched to the working size)`.
+   - Arm B is `MatchGuides=false`: `not resampled (MatchGuides is off)`, scale 2293.0 x 960.0 for the game's region.
+     The same pan and stop as item 1.
 4. **PCSX2 present route** (`~/Games/pcsx2-nr-test/run-state.sh`), `SynthMotion=true`,
    `WorkingScale=0.5`.
    - The backbuffer-sized field is resampled to half size, and the scale stays 0.5.

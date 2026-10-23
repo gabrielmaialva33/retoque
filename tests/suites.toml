@@ -238,6 +238,14 @@ tier = "host"
 timeout = 300
 summary = "The NR Vulkan device-extension merge, compiled against the real Vulkan headers: KHR and EXT buffer_device_address never leave it together."
 
+[nr-vk-guides]
+path = "nr-vk-guides"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "The Vulkan route's guides below the frame's size (reduced-scale-guides-vk.md): DlssNr_GuideMatch.h's plan (matched, the game's regions, or the frame refused) against the D3D12 route's arithmetic, and DlssNr_GuideMatch_Vk.h's rules for the game's views, the outputs, the push block and dispatch, compiled against the real Vulkan headers under ASan/UBSan; source guards on the route (decided before any recording, the evaluate handed the plan, frees after a drain, abandon with a lost device), the pass, the shader and the project. No Vulkan device."
+
 [nr-vk-present-host]
 path = "nr-vk-present-host"
 domain = "nr"
@@ -349,6 +357,14 @@ requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1800
 summary = "The synthesized-motion estimator (FidelityFX optical flow port) on a real D3D12 device under Wine: endpoint error against known pans, a moving object, static and cut frames, abandon semantics, the axis signs and GPU time; synthesized FG's HUD mask and the UI layer's own mask on the same frames (no scenery marked, precision and recall per element and part, the band around the overlay and the smear set it covers, depth and layer exact, GPU time with the layer off and on); --source nvofa runs the NVIDIA Optical Flow source the same way (SKIP when unavailable). Never loads NGX or a game."
+
+[guide-match-vk]
+path = "guide-match-vk"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
+tier = "wine"
+timeout = 1800
+summary = "The Vulkan guide resample (DlssNr_GuideMatch_Vk and its SPIR-V) on a real Vulkan device under Wine with the validation layer's core and synchronization checks proved active: analytic depth (D32_SFLOAT, a depth view of D32_SFLOAT_S8_UINT, R32_SFLOAT) and motion (R16G16_SFLOAT, R32G32_SFLOAT) in SHADER_READ_ONLY_OPTIMAL with subrect bases, DOOM Eternal's 2293x960 under a 1720x720 model and four other shapes, one 20 frames deep with three in flight; every texel bit-exact to PointSource and zero validation errors. SKIP when the device cannot hold the outputs. Never loads NGX or a game."
 
 [synth-motion-vk]
 path = "synth-motion-vk"

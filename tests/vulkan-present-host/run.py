@@ -1594,7 +1594,10 @@ def check_nr(name, facts, log):
 # after-upscale route running the model on its output; then the feature released and nothing evaluated until 14 s after
 # the last evaluate, longer than the present host waits (kAfterUpscaleIdleMs); twice. The phases' read-backs say who
 # ran the model when: until 9 s after the last evaluate the route (frames unedited), from 12 s the present host.
-ROUTE_CASES = {'nr-route-quiet', 'nr-route-quiet-wdx12', 'nr-route-toggle-wdx12'}
+ROUTE_CASES = {'nr-route-quiet', 'nr-route-quiet-wdx12', 'nr-route-toggle-wdx12', 'nr-route-guides'}
+# nr-route-guides: nr-route-quiet with the game rendering 960x540 under a 0.5 working scale, so the route's 640x360
+# model has guides larger than it and the route resamples them (docs/dlssnr/design/reduced-scale-guides-vk.md).
+ROUTE_GUIDES_RENDER = '960x540'
 ROUTE_IDLE_S = 10  # retoque/dlssnr/DlssNr_VkModelOwner.h, kAfterUpscaleIdleMs
 
 
@@ -1624,7 +1627,12 @@ def execute_route(name, dll, redist, files):
     if toggle:
         ini = ini.replace('VulkanPresentHost=true\n', 'VulkanPresentHost=true\nToggleKey=0x76\n')
         (work / 'OptiScaler.ini').write_text(ini)
-    args = ['--route'] + (['--wdx12'] if wdx12 else []) + (['--nr-toggle'] if toggle else [])
+    guides = name == 'nr-route-guides'
+    if guides:
+        ini = ini.replace('VulkanPresentHost=true\n', 'VulkanPresentHost=true\nWorkingScale=0.5\n')
+        (work / 'OptiScaler.ini').write_text(ini)
+    args = ['--route'] + (['--wdx12'] if wdx12 else []) + (['--nr-toggle'] if toggle else []) + \
+        (['--route-render', ROUTE_GUIDES_RENDER] if guides else [])
     with (OUT / f'{name}.log').open('w') as log:
         no_game()
         process = subprocess.run([str(files['proton']), 'run', str(work / NR_EXE), *args], cwd=work,
@@ -1754,14 +1762,31 @@ def check_route(name, facts, log):
     gone = [l for l in lines if host in l and 'destroyed;' in l]
     need(len(gone) == 1 and 'the model' not in gone[0], f'device destruction: {gone}')
 
+    guides = name == 'nr-route-guides'
     builds = sum(1 for l in lines if "the model's feature is up at" in l)
-    route_builds = sum(1 for l in lines if 'DLSS-NR Vulkan: feature up at 1280x720' in l)
+    route_feature = 'DLSS-NR Vulkan: feature up at ' + ('640x360 (frame 1280x720)' if guides else '1280x720')
+    route_builds = sum(1 for l in lines if route_feature in l)
     need(builds == 3 and route_builds == 3, f'feature builds: {builds} of the present host\'s, {route_builds} of the '
                                             'route\'s')
     vuids = set(v for v in facts.get('model_vuids', '').split(',') if v)
     need(vuids <= MODEL_VUIDS, f'validation reports of the model\'s own objects beyond those known: {sorted(vuids)}')
     need(facts.get('model_messages', 0) <= builds + route_builds,
          f'{facts.get("model_messages")} reports of the model\'s own objects for {builds + route_builds} feature builds')
+
+    # Guides larger than the model (reduced-scale-guides-vk.md): resampled to its 640x360 on every run of the route --
+    # the pass made each time the route has the model, after the hand-back freed it -- with the scale for that
+    # texture; never refused, never handed over as they are. The route's evaluates all succeeded (a refusal would
+    # have failed the application), and validation saw the resample's commands on the game's images.
+    if guides:
+        matched = ("DLSS-NR Vulkan guides matched to the working size: depth and motion 640x360 for a 640x360 model "
+                   "(the frame's guides are 960x540 and 960x540)")
+        scale = ('DLSS-NR Vulkan model motion scale 0.7 x 0.7: game scale 1.0 x 1.0 measured against 960x540 (render '
+                 'size, low-resolution vectors), motion texture 640x360 (matched to the working size), model 640x360')
+        up = 'DLSS-NR Vulkan: the guide resample is up (push constants 48 bytes, 16 descriptor sets)'
+        for text, times in ((matched, 1), (scale, 1), (up, 3)):
+            need(count(text) == times, f'expected {times} line(s) with {text!r}, found {count(text)}')
+        for text in ('the resample cannot run', 'not resampled', "motion texture 960x540 (the game's region)"):
+            need(count(text) == 0, f'a line with {text!r}: ' + next((l for l in lines if text in l), ''))
 
     drains = [re.search(r'the drain took (\d+) ms', l) for l in lines if again in l]
     handback_when = ('after F7 re-enabled NR (one due NR-off blocker per cycle, start within 2 s)' if toggle else

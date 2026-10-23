@@ -34,7 +34,7 @@ entry, or the next run tells you.
 | Tier | Needs | Suites |
 |---|---|---|
 | `host` | Python, `g++`, `clang++` | the `nr-*` suites, `deferred-release`, `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `mfg-pattern`, `mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy`, `deploy-safety`, `windows-installer`, `lsfg-shader-library`, `lsfg-integration` and `lsfg-presenter` |
-| `wine` | msvc-wine prefix; `vulkan-overlay` and `vulkan-present-host` also need a graphical session, and they and `synth-motion-vk` a working Vulkan loader | `nr-gpu-timing-d3d12`, `nr-session-exit`, `synth-motion-d3d12`, `synth-motion-vk`, `vulkan-overlay`, `vulkan-present-host`, `dlssnr-loopback`, `nr-present-guide-identity-msvc`, `nr-hdr-d3d12`, `dx11-guides-transport`, `fg-inputs-d3d12` and `fg-provider-d3d12` |
+| `wine` | msvc-wine prefix; `vulkan-overlay` and `vulkan-present-host` also need a graphical session, and they, `synth-motion-vk` and `guide-match-vk` a working Vulkan loader | `nr-gpu-timing-d3d12`, `nr-session-exit`, `synth-motion-d3d12`, `synth-motion-vk`, `guide-match-vk`, `vulkan-overlay`, `vulkan-present-host`, `dlssnr-loopback`, `nr-present-guide-identity-msvc`, `nr-hdr-d3d12`, `dx11-guides-transport`, `fg-inputs-d3d12` and `fg-provider-d3d12` |
 | `wip` | registered, no runner yet | — |
 
 The wine tier is serial on purpose. These suites compile through the single msvc-wine
@@ -63,7 +63,7 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** 75 suites (87 total: 75 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 76 suites (89 total: 76 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -277,6 +277,12 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-vk-extensions` — the Vulkan device-extension merge the NR hook hands `vkCreateDevice`,
   compiled against the real Vulkan headers: `VK_KHR_` and `VK_EXT_buffer_device_address` never
   leave it together, and the one the game asked for is the one kept.
+- `nr-vk-guides` — the Vulkan after-upscale route's guides below the frame's size
+  (`docs/dlssnr/design/reduced-scale-guides-vk.md`). `DlssNr_GuideMatch.h`'s plan (matched, the game's regions, or the
+  frame refused rather than handed frame-size guides) is held against the D3D12 route's arithmetic, and
+  `DlssNr_GuideMatch_Vk.h`'s rules for the game's views, the outputs, the push block and dispatch, compiled against the
+  real Vulkan headers. Source guards cover the route: decided before any recording, the evaluate handed the plan, freed
+  after a drain, abandoned with a lost device. No Vulkan device.
 - `nr-vk-present-host` — the Vulkan present host's stages 1 to 5 (`docs/dlssnr/design/nr-vulkan-present-host.md`):
   the registry header (`DlssNr_VkPresentRegistry.h`) through its state machine -- records with ids of their own, a
   reused handle as a new record, two devices with the same swapchain handle value, destroys taking their children,
@@ -330,6 +336,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   device under Wine, with core and synchronization validation on (each proved active) and zero errors required: the
   D3D12 suite's frames, sequences and scores (`synth-motion-d3d12/sequences.h`), judged by its `judge()`, a pan and the
   cut also three frames in flight, and GPU time. SKIP when the device cannot run it. No NGX, no game.
+- `guide-match-vk` — the Vulkan guide resample (`DlssNr_GuideMatch_Vk`, its SPIR-V from the D3D12 pass's HLSL under
+  `VK_MODE`) on a real device under Wine, with core and synchronization validation on (each proved active) and zero
+  errors required. Analytic depth and motion in the game's formats are read in `SHADER_READ_ONLY_OPTIMAL` with subrect
+  bases: DOOM Eternal's 2293x960 under a 1720x720 model and four other shapes, one 20 frames deep with three in flight.
+  Every texel must be bit-exact to `PointSource`. SKIP when the device cannot hold the outputs. No NGX, no game.
 - `vulkan-overlay` — builds a real DLL and drives real Vulkan to exercise overlay
   lifetime.
 - `vulkan-present-host` — the production DLL from `build-local.sh`, uninstrumented, under a Win32 Vulkan application,

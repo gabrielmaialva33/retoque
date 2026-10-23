@@ -345,6 +345,8 @@ struct App
     bool route = false;
     bool wdx12 = false;
     bool nrToggle = false;
+    // --route-render WxH: the game's render size behind the 1280x720 output (default 640x360).
+    uint32_t routeRenderW = 640, routeRenderH = 360;
     bool slowBuild = false;
     bool fg = false; // --fg: a Vulkan 1.2 device with timeline semaphores, for OptiScaler's Vulkan FSR-FG output
     bool hdr = false;
@@ -1052,9 +1054,11 @@ struct App
         Require(capabilities(&params) == NVSDK_NGX_Result_Success && params != nullptr,
                 "NVSDK_NGX_VULKAN_GetCapabilityParameters through OptiScaler failed");
 
-        // A game's buffers: half-resolution colour, depth and motion, and the upscaler's output, which the route
-        // runs the model over.
-        constexpr uint32_t renderW = 640, renderH = 360, outW = 1280, outH = 720;
+        // A game's buffers: render-resolution colour, depth and motion (half the output's by default; 960x540 under a
+        // 0.5 working scale makes guides larger than the model, which the route resamples, reduced-scale-guides-vk.md),
+        // and the upscaler's output, which the route runs the model over.
+        const uint32_t renderW = routeRenderW, renderH = routeRenderH;
+        constexpr uint32_t outW = 1280, outH = 720;
         const VkImageUsageFlags input = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         Image colour = MakeImage(VK_FORMAT_R16G16B16A16_SFLOAT, renderW, renderH, input, false);
         Image depth = MakeImage(VK_FORMAT_R32_SFLOAT, renderW, renderH, input, false);
@@ -1468,6 +1472,9 @@ int main(int argc, char** argv)
                 app.wdx12 = true;
             else if (!strcmp(argv[i], "--nr-toggle"))
                 app.nrToggle = true;
+            else if (!strcmp(argv[i], "--route-render") && i + 1 < argc &&
+                     std::sscanf(argv[i + 1], "%ux%u", &app.routeRenderW, &app.routeRenderH) == 2)
+                ++i;
             else if (!strcmp(argv[i], "--hdr"))
                 app.hdr = true;
             else if (!strcmp(argv[i], "--slow-build"))

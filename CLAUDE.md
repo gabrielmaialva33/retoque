@@ -267,13 +267,13 @@ before committing C++, because nothing local enforces it and it had drifted by 5
 
 ### Tests
 
-`tests/README.md` is the index; read it before adding or changing a suite. Seventy-three directories under
+`tests/README.md` is the index; read it before adding or changing a suite. Eighty-nine directories under
 `tests/`, each self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
 
 ```bash
-python3 tests/run_all.py            # host tier, the default; 61 suites
+python3 tests/run_all.py            # host tier, the default; 76 suites
 python3 tests/run_all.py --list     # registry, tiers, and what is runnable here
-python3 tests/run_all.py --tier all # adds the twelve wine suites
+python3 tests/run_all.py --tier all # adds the thirteen wine suites
 python3 tests/<name>/run.py         # one suite, unchanged
 ```
 
@@ -294,7 +294,8 @@ it is pure Python and the one to run after touching `Config.*`, `OptiScaler.ini`
 same prefix `build-local.sh` uses: `nr-gpu-timing-d3d12`, `nr-session-exit` (the session guard's exit hook in a
 real process, under the system Wine and GE-Proton's), `nr-hdr-d3d12` (the HDR present conversion on a real D3D12
 device), `nr-present-guide-identity-msvc` (the present guides' identity cases compiled by MSVC), `synth-motion-d3d12`,
-`synth-motion-vk` (the same estimator on Vulkan), `vulkan-overlay` (which also needs a graphical session and a working
+`synth-motion-vk` (the same estimator on Vulkan), `guide-match-vk` (the Vulkan guide resample read back texel by
+texel on a real device, validation and synchronization checks on), `vulkan-overlay` (which also needs a graphical session and a working
 Vulkan loader), `vulkan-present-host` (the production DLL's Vulkan present host, the round trip and, under a local
 Proton with the model kit, cold NR, HDR and synthesized motion), `dx11-guides-transport` (a D3D11 game's depth and
 motion crossing to the D3D12 bridge under GE-Proton), `fg-inputs-d3d12` (camera and GPU crop regression),

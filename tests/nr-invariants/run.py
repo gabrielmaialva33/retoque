@@ -173,6 +173,32 @@ if hdr_vk_fields != hdr_cb:
 else:
     print('PASS: 4 ordered 4-byte Vulkan HDR constants match the shared cbuffer')
 
+# The Vulkan guide resample (reduced-scale-guides-vk.md): its push-constant block DlssNr::GuideMatch::Vk::Push and the
+# shader's GuideParams under VK_MODE are one ordered list, the same scalars as the D3D12 cbuffer, within the 128 bytes
+# maxPushConstantsSize guarantees and a multiple of 4 (a push-constant range's size must be).
+before = len(failures)
+guides_vk = (nr / 'shaders/dlssnr/DlssNr_GuideMatch_Vk.h').read_text()
+guides_hlsl = (nr / 'shaders/dlssnr/precompile/dlssnr_guides.hlsl').read_text()
+push_cpp = [(t.replace('uint32_t', 'uint'), n.lower()) for t, n in
+            re.findall(r'\b(uint32_t|float)\s+(\w+)\s*;', re.sub(r'//[^\n]*', '', body(guides_vk, 'struct Push')))]
+push_hlsl = [(t, n.lower()) for t, n in
+             re.findall(r'\b(uint|float)\s+(\w+)\s*;', re.sub(r'//[^\n]*', '', body(guides_hlsl, 'struct GuideParams')))]
+guides_cb = [(t, n[1:].lower()) for t, n in
+             re.findall(r'\b(uint|float)\s+(\w+)\s*;', re.sub(r'//[^\n]*', '', body(guides_hlsl, 'cbuffer Params')))]
+if not push_cpp:
+    fail('no fields parsed from DlssNr::GuideMatch::Vk::Push')
+elif push_cpp != push_hlsl:
+    fail(f'DlssNr::GuideMatch::Vk::Push {push_cpp} and GuideParams in dlssnr_guides.hlsl {push_hlsl} differ')
+elif push_hlsl != guides_cb:
+    fail(f'GuideParams {push_hlsl} and the D3D12 cbuffer of dlssnr_guides.hlsl {guides_cb} differ')
+elif len(push_cpp) * 4 > 128:
+    fail(f'the guide resample\'s push constants are {len(push_cpp) * 4} bytes, over the guaranteed 128')
+if '[[vk::push_constant]] GuideParams gParams;' not in guides_hlsl:
+    fail('dlssnr_guides.hlsl declares no [[vk::push_constant]] GuideParams block')
+if len(failures) == before:
+    print(f'PASS: {len(push_cpp)} ordered 4-byte push constants ({len(push_cpp) * 4} bytes) match between '
+          'DlssNr::GuideMatch::Vk::Push, GuideParams and the D3D12 cbuffer of dlssnr_guides.hlsl')
+
 # --- 3. Headers are the committed bytecode --------------------------------------------------------
 
 before = len(failures)
@@ -194,6 +220,12 @@ if (precompile / 'DlssNr_UiMask_Shader.cso').exists():
     targets.append(('DlssNr_UiMask_Shader.cso', 'DlssNr_UiMask_Shader.h', 'DlssNr_UiMask_cso', b'DXBC'))
 if (precompile / 'DlssNr_Guides_Shader.cso').exists():
     targets.append(('DlssNr_Guides_Shader.cso', 'DlssNr_Guides_Shader.h', 'DlssNr_Guides_cso', b'DXBC'))
+# The Vulkan route's guide resample includes its header unconditionally (DlssNr_GuideMatch_Vk.cpp): required.
+if not (precompile / 'DlssNr_Guides_Shader_Vk.spv').exists():
+    fail('the Vulkan guide resample\'s SPIR-V (DlssNr_Guides_Shader_Vk.spv) is missing')
+else:
+    targets.append(('DlssNr_Guides_Shader_Vk.spv', 'DlssNr_Guides_Shader_Vk.h', 'dlssnr_guides_spv',
+                    bytes.fromhex('03022307')))
 # Model cadence (model-cadence.md). Its header is optional (__has_include): without the bytecode the build
 # reports the cadence unavailable, so the pair is checked once committed, and a header without its .cso fails.
 if (precompile / 'DlssNr_Cadence_Shader.cso').exists():
