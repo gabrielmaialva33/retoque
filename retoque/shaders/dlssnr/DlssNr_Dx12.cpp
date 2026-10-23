@@ -168,10 +168,6 @@ unsigned long long g_frames = 0;
 // waits until this frame count, by which point the GPU is certainly past the copies.
 unsigned long long g_captureWriteAtFrame = 0;
 
-// How fast the derived value follows the scene. Readings arrive a few times a second, and an exposure
-// that lunges at every cut is worse than one that arrives a moment late.
-constexpr float kWhitePointBlend = 0.25f;
-
 std::filesystem::path g_dllDir;
 
 // Switching inject points changes the surface format underneath the scratch set: the finished frame
