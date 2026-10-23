@@ -5,3 +5,14 @@ The provider boundary is scripted: limited provider then a patched response at t
 No DLL is loaded or patched here; real provider/kernel acceptance, native ABI and pacing require the separate Wine/GPU gate.
 
 Menu Default and hotkey off/on after the cap are covered. `--baseline 43d842f8` reruns the same cases against the original hooks using read-only git show, without changing any checkout.
+
+The generation cache cases count provider/patcher calls: 64 stable setters issue one query,
+a new generation issues one more, and game-owned GetState replies update the cache without TryApply.
+Generation changes during patching/querying are covered. A separate host unit compiles the production
+publisher/accessor and checks first/repeated provider identities, completed patch invalidation and wrapper updates.
+Only valid replies acknowledge the generation captured before querying; failed/invalid replies can retry.
+The publisher unit does not execute the loader or patcher; real DLL mapping/patch completion stays a native gate.
+
+A wrapper-only getter rebind invalidates the cache even without a snippet generation change.
+Fake hook entry points are private class members, matching production, so a global cache helper
+cannot accidentally access them without receiving the selected getter explicitly.

@@ -53,8 +53,9 @@ int main(int argc, char** argv)
         require(state.dlssgMfgMax == 1, "first provider capacity missing");
         // The original 4x preference must recover without another user/config write.
         Provider::max = 3;
+        ++MfgUnlock::generation; // Load/patch event, including patching at the same entry point.
         if (name == "getter-refresh")
-            o_slDLSSGGetState = Provider::NewGet;
+            StreamlineHooks::RebindGetter(Provider::NewGet);
         if (name == "setter-refresh")
             set();
         else
@@ -69,6 +70,7 @@ int main(int argc, char** argv)
         Provider::max = 3;
         set();
         Provider::max = 1;
+        ++MfgUnlock::generation;
         set();
         require(state.dlssgMfgMax == 1 && Provider::sent.numFramesToGenerate == 1, "provider downgrade ignored");
         roundTrip();
@@ -119,6 +121,59 @@ int main(int argc, char** argv)
         set();
         require(!ratio.has_value() && !ratio.value_for_config().has_value(), "Default revived the old override");
         require(Provider::sent.numFramesToGenerate == 1, "Default did not use the game's count");
+    }
+    else if (name == "stable-queries")
+    {
+        for (unsigned i = 0; i < 64; ++i)
+            set();
+        require(Provider::gets == 1, "stable SetOptions queried the provider more than once");
+        require(MfgUnlock::tries == 1, "stable SetOptions retried the patcher");
+        Provider::max = 3;
+        ++MfgUnlock::generation;
+        for (unsigned i = 0; i < 64; ++i)
+            set();
+        require(Provider::gets == 2 && MfgUnlock::tries == 2, "new generation did not query exactly once");
+        require(Provider::sent.numFramesToGenerate == 3, "new generation did not recover 4x");
+        roundTrip();
+    }
+    else if (name == "setter-rebind")
+    {
+        set();
+        Provider::max = 3;
+        StreamlineHooks::RebindGetter(Provider::NewGet); // Wrapper-only rebind, no snippet generation event.
+        for (unsigned i = 0; i < 64; ++i)
+            set();
+        require(Provider::gets == 2 && MfgUnlock::tries == 2, "getter rebind did not query exactly once");
+        require(Provider::sent.numFramesToGenerate == 3, "getter rebind kept the previous wrapper's cap");
+        roundTrip();
+    }
+    else if (name == "game-get-free")
+    {
+        for (unsigned i = 0; i < 16; ++i)
+            get();
+        require(Provider::gets == 16 && MfgUnlock::tries == 0, "game GetState invoked the patcher or extra queries");
+        for (unsigned i = 0; i < 16; ++i)
+            set();
+        require(Provider::gets == 16 && MfgUnlock::tries == 0, "setter ignored the game's cached response");
+        ++MfgUnlock::generation;
+        Provider::max = 3;
+        get();
+        set();
+        require(Provider::gets == 17 && MfgUnlock::tries == 0, "new game response did not refresh the generation");
+        require(Provider::sent.numFramesToGenerate == 3, "game response did not recover 4x");
+    }
+    else if (name == "patch-during-probe")
+    {
+        MfgUnlock::patchOnTry = true;
+        set();
+        set();
+        require(Provider::gets == 1 && MfgUnlock::tries == 1, "patcher's own generation caused a second query");
+        ++MfgUnlock::generation;
+        Provider::duringGet = [] { ++MfgUnlock::generation; };
+        set();
+        set();
+        set();
+        require(Provider::gets == 3 && MfgUnlock::tries == 3, "generation arriving during a query was lost");
     }
     else if (name == "auto-off")
     {

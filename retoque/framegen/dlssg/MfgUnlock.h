@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <cstdint>
 
 // Multi Frame Generation on Ada.
 //
@@ -47,6 +48,10 @@ namespace MfgUnlock
 // looked up by name -- which cannot find the driver's own copy, a <hash>.bin under
 // ProgramData\NVIDIA\NGX\models\dlssg\, so the load hook hands that one over itself.
 void TryApply(HMODULE provider = nullptr);
+
+// Cheap invalidation token: changes after a different provider is observed or a module is handled.
+// No module lookup, patcher lock or capability query. Load hooks publish after patching completes.
+uint64_t ProviderGeneration();
 
 // Read-only gate census for the step-0 MFG probe (MfgProbe). Runs the same advertise/validate signature
 // search TryApply does, but through the plan-only path that records bytes and never writes, so it reports

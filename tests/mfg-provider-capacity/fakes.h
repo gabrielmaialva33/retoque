@@ -78,9 +78,16 @@ struct Provider
     static inline unsigned max = 1, gets = 0;
     static inline sl::Result result = sl::Result::eOk;
     static inline sl::DLSSGOptions sent {};
+    static inline void (*duringGet)() = nullptr;
     static sl::Result Get(const sl::ViewportHandle&, sl::DLSSGState& out, const sl::DLSSGOptions*)
     {
         ++gets;
+        if (duringGet)
+        {
+            auto event = duringGet;
+            duringGet = nullptr;
+            event();
+        }
         out.numFramesToGenerateMax = max;
         out.bIsDynamicMFGSupported = sl::Boolean::eTrue;
         return result;
@@ -95,11 +102,20 @@ struct Provider
         return sl::Result::eOk;
     }
 };
-static PFun_slDLSSGGetState* o_slDLSSGGetState = Provider::Get;
-static PFun_slDLSSGSetOptions* o_slDLSSGSetOptions = Provider::Set;
 struct MfgUnlock
 {
-    static void TryApply() {}
+    static inline uint64_t generation = 0, tries = 0;
+    static inline bool patchOnTry = false;
+    static uint64_t ProviderGeneration() { return generation; }
+    static void TryApply()
+    {
+        ++tries;
+        if (patchOnTry)
+        {
+            ++generation;
+            patchOnTry = false;
+        }
+    }
 };
 static std::atomic<unsigned> g_dlssgOptionsGeneration { 0 };
 static sl::ViewportHandle lastDlssgViewport { 0 };
@@ -107,6 +123,12 @@ static sl::DLSSGOptions lastDlssgOptions {};
 void FillDlssgInputState(sl::DLSSGState&) {}
 struct StreamlineHooks
 {
+  private:
+    inline static PFun_slDLSSGGetState* o_slDLSSGGetState = Provider::Get;
+    inline static PFun_slDLSSGSetOptions* o_slDLSSGSetOptions = Provider::Set;
+
+  public:
+    static void RebindGetter(PFun_slDLSSGGetState* getter) { o_slDLSSGGetState = getter; }
     static void applyMenuDlssgInterlock(sl::DLSSGOptions&, bool) {}
     static sl::Result hkslDLSSGSetOptions(const sl::ViewportHandle&, const sl::DLSSGOptions&);
     static sl::Result hkslDLSSGGetState(const sl::ViewportHandle&, sl::DLSSGState&, const sl::DLSSGOptions*);
