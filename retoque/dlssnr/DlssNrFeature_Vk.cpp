@@ -17,6 +17,7 @@
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_Session.h>
 #include <dlssnr/DlssNr_RenderSize.h>
+#include <misc/DeferredRelease.h>
 #include <dlssnr/DlssNr_WorkingScale.h>
 
 #include <shaders/dlssnr/DlssNr_Vk.h>
@@ -150,10 +151,42 @@ struct VkState
     OwnedImage depthMatched;
     OwnedImage motionMatched;
 
+    // The pair of the working size before the last resize, kept alive across one resize: an evaluate recorded at that
+    // size and not yet submitted still names it (V-02). The next resize hands it to DeferredRelease.
+    OwnedImage depthRetired;
+    OwnedImage motionRetired;
+
     // Why the resample cannot run: on this device (tried again after a device change or a hand-back), and at this
     // working size (tried again after the next resize). Empty when nothing stops it.
     std::string guideMatchDeviceFailure;
     std::string guideMatchSizeFailure;
+
+    // A failure that trying again may cure (an allocation, a pass not made for want of memory): its reason, the time
+    // it is tried again from (OwnerNowMs), and how many times it has failed in a row, which doubles the wait up to
+    // kGuideRetryMaxMs (V-03). Empty when nothing transient stops the resample.
+    std::string guideMatchTransient;
+    uint64_t guideMatchRetryMs = 0;
+    uint32_t guideMatchFailures = 0;
+
+    // The frames the route last refused its guides for, by what is known before it asks for the model: while frames of
+    // that shape keep coming and the refusal stands (a transient one until its retry is due), the route does not ask
+    // for the model, so it stops renewing its hold and the Vulkan present host can take the model back after
+    // kAfterUpscaleIdleMs through the ordinary hand-back (V-03). Survives a hand-back: it is the frames' record, not
+    // the device's objects.
+    struct GuideRefusal
+    {
+        bool active = false;
+        bool transient = false;
+        uint64_t retryMs = 0;
+        VkDevice device = VK_NULL_HANDLE;
+        uint32_t shape[8] = {};
+        VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+        VkFormat motionFormat = VK_FORMAT_UNDEFINED;
+    } guideRefusal;
+
+    // Refusals in a row for a reason of the frame's own (its geometry, a region, a view): each waits twice as long
+    // before the route asks again, from kGuideRetryFirstMs to kGuideRetryMaxMs.
+    uint32_t frameRefusals = 0;
 
     std::unique_ptr<DlssNr_Vk> pass;
 
@@ -725,15 +758,71 @@ unsigned int GameCreateFlags(NVSDK_NGX_Parameter* params)
 // on the device, its two images at the working size, and the game's views ones the shader may read. nullptr if so,
 // otherwise why not. Records nothing: called before the frame's first command, so a refusal leaves the command buffer
 // as the route found it.
+// The first wait after a transient failure, and the longest: one second doubling to a minute, so memory pressure that
+// passes is tried again without a resize, and one that does not costs a try a minute (V-03).
+constexpr uint64_t kGuideRetryFirstMs = 1000;
+constexpr uint64_t kGuideRetryMaxMs = 60000;
+
+// A transient failure: said by the caller, tried again once the backoff has passed.
+const char* GuideMatchTransient(std::string why)
+{
+    const uint64_t wait =
+        std::min<uint64_t>(kGuideRetryMaxMs, kGuideRetryFirstMs << std::min(g_vk.guideMatchFailures, 6u));
+    ++g_vk.guideMatchFailures;
+    g_vk.guideMatchTransient = std::move(why) + " (tried again in " + std::to_string(wait / 1000) + " s)";
+    g_vk.guideMatchRetryMs = OwnerNowMs() + wait;
+    return g_vk.guideMatchTransient.c_str();
+}
+
+// Hands an image of the route's to DeferredRelease (misc/DeferredRelease.h), the module's retirement: destroyed once
+// enough presents and wall time have passed for a recording that names it to have been submitted and run, finished
+// with the device's own retirement when it goes (the Vulkan present host retires the device's entries before
+// vkDestroyDevice), or dropped without a call when a new device replaces it. The handles are forgotten here at once.
+void RetireImage(OwnedImage& img)
+{
+    const VkDevice device = g_vk.device;
+
+    if (device != VK_NULL_HANDLE &&
+        (img.image != VK_NULL_HANDLE || img.view != VK_NULL_HANDLE || img.memory != VK_NULL_HANDLE))
+    {
+        DeferredRelease::Enqueue(
+            [device, view = img.view, image = img.image, memory = img.memory]()
+            {
+                if (view != VK_NULL_HANDLE)
+                    vkDestroyImageView(device, view, nullptr);
+                if (image != VK_NULL_HANDLE)
+                    vkDestroyImage(device, image, nullptr);
+                if (memory != VK_NULL_HANDLE)
+                    vkFreeMemory(device, memory, nullptr);
+            },
+            (uint64_t) device);
+    }
+
+    img = OwnedImage {};
+}
+
 const char* PrepareGuideMatch(const NVSDK_NGX_Resource_VK& depth, const NVSDK_NGX_Resource_VK& motion,
-                              const DlssNr::GuideMatch::Region& depthRegion,
+                              DlssNr::RenderSizeSource geometry, const DlssNr::GuideMatch::Region& depthRegion,
                               const DlssNr::GuideMatch::Region& motionRegion, uint32_t workWidth, uint32_t workHeight)
 {
     if (const char* why = DlssNr::GuideMatch::Vk::RegionRefusal(depthRegion, motionRegion))
         return why;
 
+    if (const char* why = DlssNr::GuideMatch::GeometryRefusal(geometry == DlssNr::RenderSizeSource::Incomplete,
+                                                              geometry == DlssNr::RenderSizeSource::Stale))
+        return why;
+
     if (!g_vk.guideMatchDeviceFailure.empty())
         return g_vk.guideMatchDeviceFailure.c_str();
+
+    // A transient failure waits out its backoff, then is tried again from scratch.
+    if (!g_vk.guideMatchTransient.empty())
+    {
+        if (OwnerNowMs() < g_vk.guideMatchRetryMs)
+            return g_vk.guideMatchTransient.c_str();
+
+        g_vk.guideMatchTransient.clear();
+    }
 
     // The outputs' support depends on the working size too (an image's largest extent), so a refusal here is tried
     // again after the next resize, as an allocation failure is.
@@ -749,29 +838,48 @@ const char* PrepareGuideMatch(const NVSDK_NGX_Resource_VK& depth, const NVSDK_NG
     if (!g_vk.guideMatch.Ready())
     {
         std::string why;
-        if (!g_vk.guideMatch.Create(g_vk.device, g_vk.physicalDevice, why))
+        bool stable = false;
+        if (!g_vk.guideMatch.Create(g_vk.device, g_vk.physicalDevice, why, &stable))
         {
+            // Lost, or a device without push descriptors: nothing to try again on this device. Otherwise an
+            // allocation, which may pass.
+            if (!stable && !g_vk.guideMatch.Lost())
+                return GuideMatchTransient("the pass could not be made: " + why);
+
             g_vk.guideMatchDeviceFailure =
                 "the pass could not be made: " + why + (g_vk.guideMatch.Lost() ? " (the device is lost)" : "");
             return g_vk.guideMatchDeviceFailure.c_str();
         }
 
-        LOG_INFO("DLSS-NR Vulkan: the guide resample is up (push constants {} bytes, {} descriptor sets)",
-                 sizeof(DlssNr::GuideMatch::Vk::Push), DlssNr::GuideMatch::Vk::kSets);
+        LOG_INFO("DLSS-NR Vulkan: the guide resample is up (push constants {} bytes, {} push descriptors)",
+                 sizeof(DlssNr::GuideMatch::Vk::Push), DlssNr::GuideMatch::Vk::kPushDescriptors);
     }
 
     if (!g_vk.depthMatched.Valid() || !g_vk.motionMatched.Valid())
     {
-        // Created readable only: they are the model's inputs. Never recorded yet, so a half-made pair is freed at once.
-        if (!CreateImage(g_vk.depthMatched, workWidth, workHeight, DlssNr::GuideMatch::Vk::kDepthFormat, false) ||
-            !CreateImage(g_vk.motionMatched, workWidth, workHeight, DlssNr::GuideMatch::Vk::kMotionFormat, false))
+        // Created readable only: they are the model's inputs. Never recorded yet, so a half-made pair is freed at once
+        // -- unless the device was lost on the way, which abandons it as every other object of a lost device is.
+        bool lost = false;
+        if (!CreateImageOn(g_vk.device, g_vk.physicalDevice, g_vk.depthMatched, workWidth, workHeight,
+                           DlssNr::GuideMatch::Vk::kDepthFormat, false, &lost) ||
+            !CreateImageOn(g_vk.device, g_vk.physicalDevice, g_vk.motionMatched, workWidth, workHeight,
+                           DlssNr::GuideMatch::Vk::kMotionFormat, false, &lost))
         {
+            if (lost)
+            {
+                g_vk.depthMatched = OwnedImage {};
+                g_vk.motionMatched = OwnedImage {};
+                g_vk.guideMatchDeviceFailure = "the device was lost while the working-size guides were allocated";
+                return g_vk.guideMatchDeviceFailure.c_str();
+            }
+
             DestroyImage(g_vk.depthMatched);
             DestroyImage(g_vk.motionMatched);
-            g_vk.guideMatchSizeFailure = "its working-size images could not be allocated";
-            return g_vk.guideMatchSizeFailure.c_str();
+            return GuideMatchTransient("its working-size images could not be allocated");
         }
     }
+
+    g_vk.guideMatchFailures = 0;
 
     if (depth.Type != NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW ||
         motion.Type != NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW ||
@@ -782,6 +890,75 @@ const char* PrepareGuideMatch(const NVSDK_NGX_Resource_VK& depth, const NVSDK_NG
     return g_vk.guideMatch.InputRefusal(
         depth.Resource.ImageViewInfo.Format, depth.Resource.ImageViewInfo.SubresourceRange,
         motion.Resource.ImageViewInfo.Format, motion.Resource.ImageViewInfo.SubresourceRange);
+}
+
+// When a refusal for a reason of the frame's own is looked at again: soon at first, then less and less often, so a
+// condition that lasts lets the present host have the model in between (the gaps grow past kAfterUpscaleIdleMs).
+uint64_t FrameRefusalRetryMs()
+{
+    const uint64_t wait = std::min<uint64_t>(kGuideRetryMaxMs, kGuideRetryFirstMs << std::min(g_vk.frameRefusals, 6u));
+    ++g_vk.frameRefusals;
+    return OwnerNowMs() + wait;
+}
+
+// What identifies the frames a refusal was for, before the route asks for the model: the device, the frame and
+// working sizes, the game's guide images and their formats.
+void GuideRefusalShape(uint32_t (&shape)[8], uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight,
+                       const NVSDK_NGX_Resource_VK& depth, const NVSDK_NGX_Resource_VK& motion)
+{
+    const uint32_t values[8] = { width,
+                                 height,
+                                 workWidth,
+                                 workHeight,
+                                 depth.Resource.ImageViewInfo.Width,
+                                 depth.Resource.ImageViewInfo.Height,
+                                 motion.Resource.ImageViewInfo.Width,
+                                 motion.Resource.ImageViewInfo.Height };
+    std::copy(std::begin(values), std::end(values), std::begin(shape));
+}
+
+void NoteGuideRefusal(VkDevice device, uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight,
+                      const NVSDK_NGX_Resource_VK& depth, const NVSDK_NGX_Resource_VK& motion, bool transient,
+                      uint64_t retryMs)
+{
+    auto& r = g_vk.guideRefusal;
+    r.active = true;
+    r.transient = transient;
+    r.retryMs = retryMs;
+    r.device = device;
+    GuideRefusalShape(r.shape, width, height, workWidth, workHeight, depth, motion);
+    r.depthFormat = depth.Resource.ImageViewInfo.Format;
+    r.motionFormat = motion.Resource.ImageViewInfo.Format;
+}
+
+// Whether a refusal is looked at again by itself (an allocation, or a reason of the frame's own) or stands until the
+// frames change (a device without push descriptors, outputs the device cannot hold at this size).
+bool GuideRefusalRetries(const char* why)
+{
+    return why != g_vk.guideMatchDeviceFailure.c_str() && why != g_vk.guideMatchSizeFailure.c_str();
+}
+
+uint64_t GuideRefusalRetryMs(const char* why)
+{
+    return why == g_vk.guideMatchTransient.c_str() ? g_vk.guideMatchRetryMs : FrameRefusalRetryMs();
+}
+
+// Whether this evaluate is one more frame of a refusal that stands: then the route returns before asking for the
+// model. A changed shape, MatchGuides switched off, or a transient refusal's retry falling due asks again.
+bool GuideRefusalStandsDown(VkDevice device, uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight,
+                            const NVSDK_NGX_Resource_VK& depth, const NVSDK_NGX_Resource_VK& motion)
+{
+    const auto& r = g_vk.guideRefusal;
+    if (!r.active || !Config::Instance()->DlssNrMatchGuides.value_or_default())
+        return false;
+
+    uint32_t shape[8] {};
+    GuideRefusalShape(shape, width, height, workWidth, workHeight, depth, motion);
+    if (r.device != device || !std::equal(std::begin(shape), std::end(shape), std::begin(r.shape)) ||
+        r.depthFormat != depth.Resource.ImageViewInfo.Format || r.motionFormat != motion.Resource.ImageViewInfo.Format)
+        return false;
+
+    return !r.transient || OwnerNowMs() < r.retryMs;
 }
 
 // Said once per reason for the session, not per frame: a refusal can hold for the whole session, and two reasons can
@@ -1033,6 +1210,23 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // One owner of the model in the process (DlssNr_VkModelOwner.h): this route wins, but not on a frame the Vulkan
     // present host may still have in flight; asking is what makes it stand down at its next present. Never refused
     // when the present host is off, so the route is what it was.
+    // A route that keeps refusing its guides does not keep the model (V-03, reduced-scale-guides-vk.md "When it cannot
+    // run"): the frames of a refusal that stands return before asking, so its hold lapses and the present host can take
+    // the model back. Nothing is recorded or freed here.
+    if (GuideRefusalStandsDown(device, width, height, workWidth, workHeight, *depth, *motion))
+    {
+        static bool said = false;
+        if (!said)
+        {
+            said = true;
+            LOG_INFO("DLSS-NR Vulkan: this route stands down while its guides are refused; it stops asking for the "
+                     "model until the frames change or a transient failure is tried again");
+        }
+
+        g_vk.reset = true;
+        return;
+    }
+
     if (!ClaimModelForAfterUpscale(device))
         return;
 
@@ -1169,8 +1363,35 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         // resource that in-flight GPU work still touches is device removal (ERR_GFX_STATE, reproduced
         // on RDR2 and Enshrouded by dragging the model-resolution slider). Drain the device first.
         // Only the rare resize path reaches here, so the CPU stall is a one-off hitch, not per-frame.
+        //
+        // Only a drain that succeeded proves the submitted work done (V-02): a lost device abandons everything, as a
+        // device change does; any other failure frees nothing and the resize is tried again at the next evaluate.
         if (g_vk.device != VK_NULL_HANDLE)
-            vkDeviceWaitIdle(g_vk.device);
+        {
+            const VkResult idle = vkDeviceWaitIdle(g_vk.device);
+
+            if (idle == VK_ERROR_DEVICE_LOST)
+            {
+                LOG_ERROR("DLSS-NR Vulkan: the device was lost while draining it for a resize; its objects are "
+                          "abandoned");
+                ShutdownVk(false);
+                Fail("the device was lost");
+                return;
+            }
+
+            if (idle != VK_SUCCESS)
+            {
+                static bool said = false;
+                if (!said)
+                {
+                    said = true;
+                    LOG_WARN("DLSS-NR Vulkan: the drain before a resize failed (VkResult {}); nothing is freed and the "
+                             "resize is tried again at the next evaluate",
+                             (int) idle);
+                }
+                return;
+            }
+        }
 
         if (g_vk.feature != nullptr && g_fwd.release != nullptr)
         {
@@ -1192,11 +1413,19 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         DestroyImage(g_vk.proxySmall);
         DestroyImage(g_vk.outputNative);
 
-        // The matched guides are per working size; the drain above is what makes freeing them safe. Made again by the
-        // first frame that wants them.
-        DestroyImage(g_vk.depthMatched);
-        DestroyImage(g_vk.motionMatched);
+        // The matched guides are per working size. The drain above covers what was submitted, not an evaluate the game
+        // recorded at the old size and has not submitted yet, which still names them (V-02): so the pair is kept
+        // alive until the next resize, and the one before it goes to DeferredRelease. Made again by the first frame
+        // that wants them.
+        RetireImage(g_vk.depthRetired);
+        RetireImage(g_vk.motionRetired);
+        g_vk.depthRetired = g_vk.depthMatched;
+        g_vk.motionRetired = g_vk.motionMatched;
+        g_vk.depthMatched = OwnedImage {};
+        g_vk.motionMatched = OwnedImage {};
         g_vk.guideMatchSizeFailure.clear();
+        g_vk.guideMatchTransient.clear();
+        g_vk.guideMatchFailures = 0;
 
         // output is the model's target, so it is the working size. proxy and keep are full: proxy is
         // the source the downsample reads, keep is the untouched frame the resolve composites onto.
@@ -1263,7 +1492,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     guideWidth = guideAllocWidth;
     guideHeight = guideAllocHeight;
 
-    const auto [renderWidth, renderHeight] = DlssNr::GetRenderSize(params);
+    const DlssNr::RenderSizeResult geometry = DlssNr::ResolveRenderSize(params);
+    const auto [renderWidth, renderHeight] = geometry.size;
 
     uint32_t depthBaseX = 0, depthBaseY = 0, motionBaseX = 0, motionBaseY = 0;
     params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, &depthBaseX);
@@ -1369,15 +1599,21 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         belowNative && DlssNr::GuideMatch::Wanted(cfg.DlssNrMatchGuides.value_or_default(), true, workWidth, workHeight,
                                                   guideWidth, guideHeight, motionWidth, motionHeight);
     const char* cannotResample =
-        wanted ? PrepareGuideMatch(*depth, *motion, depthRegion, motionRegion, workWidth, workHeight) : nullptr;
+        wanted ? PrepareGuideMatch(*depth, *motion, geometry.source, depthRegion, motionRegion, workWidth, workHeight)
+               : nullptr;
     const DlssNr::GuideMatch::Guides guides = DlssNr::GuideMatch::Choose(wanted, cannotResample == nullptr);
 
     if (guides == DlssNr::GuideMatch::Guides::Refused)
     {
         SayGuideRefusal(cannotResample, workWidth, workHeight);
+        NoteGuideRefusal(device, width, height, workWidth, workHeight, *depth, *motion,
+                         GuideRefusalRetries(cannotResample), GuideRefusalRetryMs(cannotResample));
         g_vk.reset = true;
         return;
     }
+
+    g_vk.guideRefusal.active = false;
+    g_vk.frameRefusals = 0;
 
     const uint32_t motionReferenceWidth = DlssNr::GuideMatch::MotionReference(lowResolutionMotion, guideWidth, width);
     const uint32_t motionReferenceHeight =
@@ -1515,11 +1751,14 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
                 // submitted command buffers still bind these pipelines. Freeing them under in-flight GPU
                 // work is device removal (the same hazard the resize path drains for). Drain first. A
                 // filter change is rare, so the one-off stall is a hitch, not a per-frame cost.
-                if (g_vk.device != VK_NULL_HANDLE)
-                    vkDeviceWaitIdle(g_vk.device);
-                g_vk.superUp.reset();
-                g_vk.superDown.reset();
-                g_vk.nrScaler = wantScaler;
+                // Only after a drain that succeeded; otherwise the old filter stays for this frame and the rebuild is
+                // tried again at the next one.
+                if (g_vk.device == VK_NULL_HANDLE || vkDeviceWaitIdle(g_vk.device) == VK_SUCCESS)
+                {
+                    g_vk.superUp.reset();
+                    g_vk.superDown.reset();
+                    g_vk.nrScaler = wantScaler;
+                }
             }
             if (!g_vk.superUp)
                 g_vk.superUp =
@@ -1820,11 +2059,23 @@ void FreeRouteObjects()
     DestroyImage(g_vk.keep);
     DestroyImage(g_vk.meter);
     DestroyMeterReadback();
-    DestroyImage(g_vk.depthMatched);
-    DestroyImage(g_vk.motionMatched);
-    g_vk.guideMatch.Destroy();
+    // The guide resample's objects through DeferredRelease, not destroyed here: the drain that proved the submitted
+    // work done says nothing of an evaluate recorded and not yet submitted (V-02). The pass is a plain handle bundle,
+    // copied into its release.
+    RetireImage(g_vk.depthMatched);
+    RetireImage(g_vk.motionMatched);
+    RetireImage(g_vk.depthRetired);
+    RetireImage(g_vk.motionRetired);
+    if (g_vk.guideMatch.Ready() && g_vk.guideMatch.Device() != VK_NULL_HANDLE)
+    {
+        const VkDevice owner = g_vk.guideMatch.Device();
+        DeferredRelease::Enqueue([retired = g_vk.guideMatch]() mutable { retired.Destroy(); }, (uint64_t) owner);
+    }
+    g_vk.guideMatch.Abandon();
     g_vk.guideMatchDeviceFailure.clear();
     g_vk.guideMatchSizeFailure.clear();
+    g_vk.guideMatchTransient.clear();
+    g_vk.guideMatchFailures = 0;
 
     g_vk.pass.reset();
     g_vk.superUp.reset();
@@ -1884,9 +2135,13 @@ void ShutdownVk(bool deviceAlive)
         g_vk.meter = OwnedImage {};
         g_vk.depthMatched = OwnedImage {};
         g_vk.motionMatched = OwnedImage {};
+        g_vk.depthRetired = OwnedImage {};
+        g_vk.motionRetired = OwnedImage {};
         g_vk.guideMatch.Abandon();
         g_vk.guideMatchDeviceFailure.clear();
         g_vk.guideMatchSizeFailure.clear();
+        g_vk.guideMatchTransient.clear();
+        g_vk.guideMatchFailures = 0;
 
         for (int i = 0; i < 4; ++i)
         {
@@ -1910,9 +2165,12 @@ void ShutdownVk(bool deviceAlive)
     }
 
     // The device is alive (real teardown): drain before freeing so nothing the GPU is still using is
-    // destroyed under it, the same rule as the resize path.
-    if (g_vk.device != VK_NULL_HANDLE)
-        vkDeviceWaitIdle(g_vk.device);
+    // destroyed under it, the same rule as the resize path. A drain that did not succeed proves nothing: abandon.
+    if (g_vk.device != VK_NULL_HANDLE && vkDeviceWaitIdle(g_vk.device) != VK_SUCCESS)
+    {
+        ShutdownVk(false);
+        return;
+    }
 
     FreeRouteObjects();
 }

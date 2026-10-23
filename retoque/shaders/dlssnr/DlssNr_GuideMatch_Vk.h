@@ -32,9 +32,11 @@ constexpr uint32_t kGroup = 8;
 
 constexpr uint32_t Groups(uint32_t extent) { return (extent + kGroup - 1) / kGroup; }
 
-// Descriptor sets, one a dispatch and one dispatch a frame, reused round-robin without a fence: a set is rewritten
-// sixteen frames after it was recorded, which is the composition pass's assumption (DlssNr_Vk) with more margin.
-constexpr uint32_t kSets = 16;
+// The descriptors are pushed into the command buffer (VK_KHR_push_descriptor), not written into sets the pass keeps:
+// what a recording binds is in the recording, however many evaluates one command buffer holds and however often a
+// game submits it again. Its four descriptors are under the 32 the extension guarantees (maxPushDescriptors).
+// Without the extension on the device the pass is not made: a stable refusal (reduced-scale-guides-vk.md, V-01).
+constexpr uint32_t kPushDescriptors = 4;
 
 // The push-constant block: dlssnr_guides.hlsl's GuideParams, the D3D12 cbuffer's twelve scalars in the same order
 // (tests/nr-invariants holds the two equal). 48 bytes, within the 128 maxPushConstantsSize guarantees; recorded into
@@ -248,9 +250,7 @@ class DlssNr_GuideMatch_Vk
     VkDescriptorSetLayout _setLayout = VK_NULL_HANDLE;
     VkPipelineLayout _layout = VK_NULL_HANDLE;
     VkPipeline _pipeline = VK_NULL_HANDLE;
-    VkDescriptorPool _pool = VK_NULL_HANDLE;
-    VkDescriptorSet _sets[DlssNr::GuideMatch::Vk::kSets] {};
-    uint32_t _next = 0;
+    PFN_vkCmdPushDescriptorSetKHR _push = nullptr;
     bool _lost = false;
 
     // The last format asked about for each input and its optimal-tiling features: the game's views keep one format.
@@ -263,9 +263,11 @@ class DlssNr_GuideMatch_Vk
     // nullptr when this device can hold the outputs at width x height; otherwise why not.
     static const char* Unsupported(VkPhysicalDevice physical, uint32_t width, uint32_t height);
 
-    // The pipeline, its layouts, the pool and the sets, on `device`. False with `why` set, everything made so far
-    // freed -- unless the device was lost on the way (Lost()), in which case it is only forgotten.
-    bool Create(VkDevice device, VkPhysicalDevice physical, std::string& why);
+    // The pipeline and its layouts, on `device`, which must have VK_KHR_push_descriptor enabled. False with `why` set,
+    // everything made so far freed -- unless the device was lost on the way (Lost()), in which case it is only
+    // forgotten. `stable`, when given, says whether the failure is one that trying again will not change (the
+    // extension not enabled), as opposed to one that might (an allocation).
+    bool Create(VkDevice device, VkPhysicalDevice physical, std::string& why, bool* stable = nullptr);
 
     bool Ready() const { return _pipeline != VK_NULL_HANDLE; }
     bool Lost() const { return _lost; }

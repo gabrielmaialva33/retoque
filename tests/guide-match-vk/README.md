@@ -19,8 +19,8 @@ The production `DlssNr_GuideMatch_Vk` (`retoque/shaders/dlssnr/DlssNr_GuideMatch
 `precompile/dlssnr_guides.hlsl` under `VK_MODE`), compiled by MSVC with a `pch.h` shim in a private copy of the
 compiler prefix. It runs in an isolated Wine prefix on winevulkan, which forwards to the machine's driver.
 
-- The instance asks for Vulkan 1.1, the floor of DLSS's Vulkan path. The device enables no extension and no feature,
-  because the pass needs none. No NGX, no OptiScaler.dll, no game.
+- The instance asks for Vulkan 1.1, the floor of DLSS's Vulkan path. The device enables `VK_KHR_push_descriptor`, one
+  of the model's device extensions, and no feature; SKIP if the device does not offer it. No NGX, no OptiScaler.dll, no game.
 - It is called the way the Vulkan after-upscale route calls it (`DlssNrFeature_Vk.cpp`):
   - the pass is made once on the device, and its refusal rule is asked about the views first;
   - the game's depth and motion are uploaded into images of their own formats and left in `SHADER_READ_ONLY_OPTIMAL`,
@@ -41,10 +41,21 @@ compiler prefix. It runs in an isolated Wine prefix on winevulkan, which forward
 | `half_d32s8` | a depth view of `D32_SFLOAT_S8_UINT` 1280x720 (exact 2:1) | `R16G16_SFLOAT` 960x720 at (7,9) | 640x360 | 1 |
 | `unaligned` | `R32_SFLOAT` 1031x775 at (1,2) | `R32G32_SFLOAT` the same | 517x389 | 1 |
 | `doom_inflight` | as `doom_quality_half` | as `doom_quality_half` | 1720x720 | 20, three in flight |
+| `one_buffer_x20` | `R32_SFLOAT` 960x540 | `R16G16_SFLOAT` 960x540 | 640x360 | 20 in one command buffer |
+| `resubmit_after_17` | `D32_SFLOAT` 960x540 at (10,12) of 980x560 | `R16G16_SFLOAT` 960x540 at (4,6) | 640x360 | 1, then 17, then the first again |
 
 **`doom_inflight`** changes the inputs every frame and shares the outputs, as the route does. Each frame's read-back is
 judged when its slot comes round again. So the pass's own barriers are what order one frame's write after the last
-one's read, and its ring of 16 descriptor sets wraps.
+one's read.
+
+**`one_buffer_x20` and `resubmit_after_17`** (V-01) keep a recording alive the way a game may.
+- `one_buffer_x20` records 20 evaluates, each with inputs and outputs of its own, into one command buffer before its
+  single submit.
+- `resubmit_after_17` submits a buffer kept executable (no `ONE_TIME_SUBMIT`), runs 17 other evaluates, then submits
+  the first buffer again unchanged and judges its read-backs once more.
+- With the first version's ring of 16 descriptor sets both failed: 49 validation errors, among them
+  `vkCmd*-commandBuffer-recording` (the buffer invalidated while it was being recorded) and
+  `VUID-vkQueueSubmit-pCommandBuffers-00070` (an invalidated buffer submitted). With push descriptors they pass.
 
 **Validation** is the Khronos layer's core and synchronization checks.
 

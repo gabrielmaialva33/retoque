@@ -239,6 +239,24 @@ static void RegionCases()
     CHECK(std::strcmp(Vkr::RegionRefusal(Region {}, full), Vkr::RegionRefusal(full, Region {})) != 0);
 }
 
+static void GeometryCases()
+{
+    // V-04: below native a partial or stale render geometry is refused, not turned into the whole allocation.
+    CHECK(GeometryRefusal(false, false) == nullptr);
+    CHECK(GeometryRefusal(true, false) != nullptr);
+    CHECK(GeometryRefusal(false, true) != nullptr);
+    CHECK(std::strcmp(GeometryRefusal(true, false), GeometryRefusal(false, true)) != 0);
+
+    // V-05: the low-resolution vectors' scale is measured against the render size, not the depth's clipped region.
+    // Render 1280x720, a 960x540 model, depth clipped to 1024 texels by its resource and base, motion's own region
+    // 1280: matched, the model's scale is 960 / 1280, not 960 / 1024.
+    const uint32_t refW = MotionReference(true, 1280, 2560), refH = MotionReference(true, 720, 1440);
+    const Handed h =
+        ForModel(true, true, Region { 256, 0, 1024, 720 }, Region { 0, 0, 1280, 720 }, 960, 540, 2560, 1440, refW,
+                 refH, 1.0f, 1.0f);
+    CHECK(Near(h.scaleX, 0.75f) && Near(h.scaleY, 0.75f));
+}
+
 static void OutputCases()
 {
     // The outputs: D3D12's formats, stored and sampled, with the usage every route image is created with.
@@ -275,8 +293,9 @@ static void InterfaceCases()
     CHECK(Vkr::Groups(1720) == 215 && Vkr::Groups(720) == 90 && Vkr::Groups(721) == 91 && Vkr::Groups(1) == 1);
     CHECK(Vkr::Groups(0) == 0);
 
-    // The descriptor ring: one set a dispatch, one dispatch a frame; reuse is the composition pass's assumption.
-    CHECK(Vkr::kSets == 16);
+    // No descriptor sets of the pass's own (V-01): four descriptors pushed into each command buffer, under the 32
+    // VK_KHR_push_descriptor guarantees.
+    CHECK(Vkr::kPushDescriptors == 4 && Vkr::kPushDescriptors <= 32);
 }
 
 int main()
@@ -284,6 +303,7 @@ int main()
     PlanCases();
     ViewCases();
     RegionCases();
+    GeometryCases();
     OutputCases();
     InterfaceCases();
 

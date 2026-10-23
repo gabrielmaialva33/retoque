@@ -129,18 +129,53 @@ check('VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL' in rc[record:record + 400] if r
 # only in FreeRouteObjects; abandoned with a lost device.
 resize = rc[rc.find('if (g_vk.width != width || g_vk.height != height'):]
 resize = resize[:resize.find('g_vk.reset = true; }') + 1]
-drain = resize.find('vkDeviceWaitIdle(g_vk.device);')
-check(drain >= 0 and drain < resize.find('DestroyImage(g_vk.depthMatched);') and
-      drain < resize.find('DestroyImage(g_vk.motionMatched);'),
-      'the matched images are not destroyed in the resize block after its drain')
+# V-02: the drain's result decides (lost: abandon; any other failure: free nothing), and the guides are never destroyed
+# there: the pair of the last size is kept across this resize, the one before it goes to DeferredRelease.
+drain = resize.find('const VkResult idle = vkDeviceWaitIdle(g_vk.device);')
+check(drain >= 0 and re.search(r'if \(idle == VK_ERROR_DEVICE_LOST\) \{[^}]*ShutdownVk\(false\);[^}]*return; \}',
+                               resize) is not None and
+      re.search(r'if \(idle != VK_SUCCESS\) \{.*?return; \}', resize) is not None,
+      'the resize block does not act on its drain\'s result (abandon when lost, free nothing on another failure)')
+check(drain >= 0 and drain < resize.find('RetireImage(g_vk.depthRetired);') <
+      resize.find('g_vk.depthRetired = g_vk.depthMatched;') and 'DestroyImage(g_vk.depthMatched)' not in resize and
+      'DestroyImage(g_vk.motionMatched)' not in resize,
+      'the resize does not keep the last size\'s guides alive and retire the older pair through DeferredRelease')
+retire = flat(function(feature, 'void RetireImage(OwnedImage& img)'))
+check('DeferredRelease::Enqueue(' in retire and '(uint64_t) device' in retire and 'img = OwnedImage {};' in retire,
+      'RetireImage does not hand the image to DeferredRelease, owned by its device')
 free_route = flat(function(feature, 'void FreeRouteObjects()'))
-check('DestroyImage(g_vk.depthMatched);' in free_route and 'DestroyImage(g_vk.motionMatched);' in free_route and
-      'g_vk.guideMatch.Destroy();' in free_route, 'FreeRouteObjects does not free the guide resample')
+check(all(f'RetireImage(g_vk.{n});' in free_route for n in ('depthMatched', 'motionMatched', 'depthRetired',
+                                                             'motionRetired')) and
+      'retired.Destroy();' in free_route and 'g_vk.guideMatch.Abandon();' in free_route,
+      'FreeRouteObjects does not retire the guide resample through DeferredRelease')
 shutdown = flat(function(feature, 'void ShutdownVk(bool deviceAlive)'))
 lost = shutdown[:shutdown.find('return; }')]
-check('g_vk.guideMatch.Abandon();' in lost and 'g_vk.depthMatched = OwnedImage {};' in lost and
-      'g_vk.motionMatched = OwnedImage {};' in lost, 'ShutdownVk(false) does not abandon the guide resample')
-check(code(feature).count('g_vk.guideMatch.Destroy()') == 1, 'the guide pass is destroyed outside FreeRouteObjects')
+check('g_vk.guideMatch.Abandon();' in lost and all(f'g_vk.{n} = OwnedImage {{}};' in lost for n in (
+      'depthMatched', 'motionMatched', 'depthRetired', 'motionRetired')),
+      'ShutdownVk(false) does not abandon the guide resample')
+check(re.search(r'vkDeviceWaitIdle\(g_vk.device\) != VK_SUCCESS\) \{ ShutdownVk\(false\); return; \}', shutdown)
+      is not None, 'ShutdownVk(true) frees after a drain that did not succeed')
+check('g_vk.guideMatch.Destroy()' not in code(feature), 'the route destroys the guide pass directly')
+prepare_fn = flat(function(feature, 'const char* PrepareGuideMatch('))
+check(prepare_fn.count('&lost)') == 2 and 'CreateImage(g_vk.depthMatched' not in prepare_fn,
+      'PrepareGuideMatch does not tell CreateImageOn to report a lost device (abandon, not destroy)')
+
+# V-03: a transient failure is tried again after a backoff, and a refusal that stands stops asking for the model.
+check('GuideMatchTransient(' in prepare_fn and 'g_vk.guideMatchRetryMs' in prepare_fn,
+      'a transient failure is not retried with a backoff')
+stand = rc.find('GuideRefusalStandsDown(device, width, height, workWidth, workHeight, *depth, *motion)')
+check(0 <= stand < rc.find('ClaimModelForAfterUpscale(device)'),
+      'a refusing route asks for the model before it stands down')
+check('NoteGuideRefusal(' in (refused.group(1) if refused else ''), 'a refusal is not recorded for the stand-down')
+
+# V-04 and V-05: the geometry's state reaches the resample; the vectors' reference is the render size.
+check('ResolveRenderSize(params)' in rc and 'geometry.source' in rc, 'the route ignores the geometry\'s state')
+check('DlssNr::GuideMatch::GeometryRefusal(' in prepare_fn, 'PrepareGuideMatch does not refuse partial or stale geometry')
+# V-05 is 242f1a05's (cherry-picked from claude/nr-metamorphic-geometry-20261023, pinned by tests/nr-geometry-metamorphic):
+# the render size, when known, is the low-resolution vectors' region and their scale's reference.
+check('lowResolutionMotion ? renderReferenceWidth : width' in rc and
+      'MotionReference(lowResolutionMotion, renderReferenceWidth, width)' in rc,
+      'the low-resolution vectors\' region and scale are not measured against the render size (V-05)')
 
 # Nothing new at or above native: everything of the resample's is behind the wanted test.
 prepare = rc.find('PrepareGuideMatch(')
@@ -161,9 +196,15 @@ if pass_cpp:
     check('~DlssNr_GuideMatch_Vk' not in pc, 'the pass has a destructor; freeing is Destroy()\'s, after a drain')
     check('LOG_' not in pc, 'the pass logs; it returns its reasons and the route says them')
     destroy = flat(function(pass_cpp, 'void DlssNr_GuideMatch_Vk::Destroy()'))
-    for call in ('vkDestroyPipeline(', 'vkDestroyPipelineLayout(', 'vkDestroyDescriptorSetLayout(',
-                 'vkDestroyDescriptorPool('):
+    for call in ('vkDestroyPipeline(', 'vkDestroyPipelineLayout(', 'vkDestroyDescriptorSetLayout('):
         check(call in destroy, f'Destroy() does not call {call}')
+    # V-01: descriptors pushed into the command buffer; no set of the pass's own to outlive a recording.
+    for gone in ('vkUpdateDescriptorSets(', 'vkAllocateDescriptorSets(', 'vkCreateDescriptorPool(',
+                 'vkCmdBindDescriptorSets('):
+        check(gone not in pc, f'the pass still calls {gone}')
+    check('vkGetDeviceProcAddr(device, "vkCmdPushDescriptorSetKHR")' in pass_cpp and
+          'VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR' in pass_cpp,
+          'the pass does not push its descriptors (VK_KHR_push_descriptor, a push-descriptor set layout)')
     abandon = flat(function(pass_cpp, 'void DlssNr_GuideMatch_Vk::Abandon()'))
     check(abandon and 'vk' not in abandon.replace('Vk', ''), 'Abandon() calls Vulkan')
     check('range.size = sizeof(DlssNr::GuideMatch::Vk::Push);' in flat(pass_cpp) and
@@ -173,6 +214,8 @@ if pass_cpp:
         check(f'{{ {binding}, VK_DESCRIPTOR_TYPE_{kind}, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr }}' in flat(pass_cpp),
               f'binding {binding} is not a {kind}')
     rec = flat(function(pass_cpp, 'void DlssNr_GuideMatch_Vk::Record('))
+    check('_push(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _layout, 0, DlssNr::GuideMatch::Vk::kPushDescriptors, writes);'
+          in rec, 'Record does not push its four descriptors')
     check('vkCmdPushConstants(' in rec and 'vkCmdDispatch(cmd, DlssNr::GuideMatch::Vk::Groups(outWidth), '
           'DlssNr::GuideMatch::Vk::Groups(outHeight), 1);' in rec, 'Record does not push its block and dispatch '
           'ceil(work / 8) groups')

@@ -26,7 +26,7 @@ are, against the real Vulkan headers in `external/vulkan`, with g++ and clang++,
 - **The outputs**: `R32_SFLOAT` and `R32G32_SFLOAT`, the route's usage, and the refusal when the device lacks storage
   or sampling or the image of that usage.
 - **The interface**: the push block is 48 bytes, within the 128 bytes every device guarantees, in the D3D12 cbuffer's
-  order. Groups are 8x8, and the descriptor ring has 16 sets.
+  order. Groups are 8x8. The four descriptors are pushed into the command buffer; the pass has no set of its own.
 
 `run.py` then guards the sources:
 
