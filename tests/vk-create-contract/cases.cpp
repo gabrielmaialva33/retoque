@@ -830,12 +830,10 @@ void ApiVersions()
         setup.fg = fg;
         runs +=
             Matrix(setup, "api",
-                   [](const Setup& setup, FakeGpu& gpu, Shape, const Outcome& outcome)
+                   [](const Setup&, FakeGpu& gpu, Shape, const Outcome& outcome)
                    {
-                       // Unknown instance version: the hook takes the 1.0 path and adds no 1.2+ structs
-                       const uint32_t api =
-                           setup.instanceApi == 0 ? VK_API_VERSION_1_0 : std::min(setup.instanceApi, gpu.apiVersion);
-                       if (api < VK_API_VERSION_1_2)
+                       // Below 1.2 at the driver, a promoted struct needs its extension
+                       if (EffectiveApi(gpu) < VK_API_VERSION_1_2)
                        {
                            for (const auto& [sType, bits] : outcome.got.chain)
                            {
