@@ -4,8 +4,10 @@ create and feature state, the NR extension block -- against a fake driver that r
 is handed, and check the create contract: the game's request unchanged, every pointer alive until the driver
 returns, no cross-talk between two creates on two threads, no capability the device lacks requested.
 
-The mutation control (default on; --no-mutations skips it) puts back the function-static extension lists that
-d391a944 made per thread, and requires the interleaving cases to fail with them."""
+The mutation controls (default on; --no-mutations skips them) put back the function-static extension lists that
+d391a944 made per thread, drop the hook's per-call copy of the extension array, and hand the feature state the
+game's own chain, and require the interleaving, nested and in-place cases to fail with each. The chain copy's size
+table, generated from the Vulkan registry, must match it (tools/gen-vk-device-chain-types.py --check)."""
 from pathlib import Path
 import argparse
 import os
@@ -54,6 +56,12 @@ def without_includes(text):
     return '\n'.join(l for l in text.splitlines() if not l.startswith(('#include ', '#pragma once'))) + '\n'
 
 
+generated = subprocess.run([sys.executable, str(ROOT / 'tools/gen-vk-device-chain-types.py'), '--check'],
+                           capture_output=True, text=True)
+print(('PASS ' if generated.returncode == 0 else 'FAIL ') + (generated.stdout + generated.stderr).strip(), flush=True)
+if generated.returncode:
+    raise SystemExit('Failed: the device create chain table is stale')
+
 spoofing = (ROOT / 'OptiScaler/spoofing/Vulkan_Spoofing.cpp').read_text()
 spoofing_h = (ROOT / 'OptiScaler/spoofing/Vulkan_Spoofing.h').read_text()
 hooks = (ROOT / 'OptiScaler/hooks/Vulkan_Hooks.cpp').read_text()
@@ -98,7 +106,8 @@ production.append(block(hooks, 'static VkResult hkvkCreateDevice('))
 production = '\n'.join(production) + '\n'
 
 # The production code reads the NR helpers through its own include root.
-unit = fakes + '#include <dlssnr/DlssNr_VkExtensions.h>\n' + production + (HERE / 'cases.cpp').read_text()
+unit = (fakes + '#include <dlssnr/DlssNr_VkExtensions.h>\n#include <hooks/Vulkan_OwnedDeviceRequest.h>\n' + production +
+        (HERE / 'cases.cpp').read_text())
 
 CASES = [
     'game-request-unchanged',
@@ -124,15 +133,17 @@ CASES = [
     'skip-scopes-nested',
     'extension-spoofing-off-on',
     'd3d-path',
+    'nested-create-in-driver',
 ]
-# Probes: run and reported, never failing the suite. nested-create-in-driver shows the boundary of the per-thread
-# lists (a create nested on the same thread inside the driver call reuses the outer call's storage); see README.
-PROBES = ['nested-create-in-driver']
-# The cases that must fail once the extension lists are function-static again (A-01).
+# The cases that must fail once the extension lists are function-static again and the hook stops copying the array
+# they build (A-01), once only that copy is gone (a create nested on the same thread inside the driver call), and
+# once the hook hands the driver the game's own chain again.
 INTERLEAVED = ['interleaved-native', 'interleaved-d3d', 'interleaved-mixed']
+NESTED = ['nested-create-in-driver']
+IN_PLACE = ['game-chain-read-only', 'game-request-unchanged', 'game-request-unchanged-fg']
 
 selected = args.case or CASES
-unknown = [c for c in selected if c not in CASES + PROBES]
+unknown = [c for c in selected if c not in CASES]
 if unknown:
     raise SystemExit('unknown case(s): ' + ', '.join(unknown))
 
@@ -163,27 +174,34 @@ with tempfile.TemporaryDirectory(prefix='vk-create-contract-') as folder:
         if result.returncode:
             failed.append(case)
 
-    if not args.case:
-        for probe in PROBES:
-            result = subprocess.run([str(binary), probe], env=env, capture_output=True, text=True)
-            print(f'PROBE {probe}: ' + ('reproduced (the outer request changed under the driver)' if result.returncode
-                                        else 'no longer reproduces -- update the README'), flush=True)
-
     if not args.no_mutations and not args.case:
-        # A-01 control: the lists back to function-static, as before d391a944.
-        # The device create holds two of them: filteredExtensions (dxvk/vkd3d-proton) and newExtensionList.
+        def control(name, mutated, cases, what):
+            binary = build(name, mutated)
+            for case in cases:
+                result = subprocess.run([str(binary), case], env=env, capture_output=True, text=True)
+                red = result.returncode != 0
+                why = next((l.strip() for l in result.stderr.splitlines() if l.startswith(('FAIL:', '==')) and
+                            ('FAIL:' in l or 'ERROR: AddressSanitizer' in l)), '')
+                print(f'{"PASS" if red else "FAIL"} control: {case} fails {what}' + (f' ({why[:160]})' if why else ''),
+                      flush=True)
+                if not red:
+                    failed.append('control ' + case)
+
+        # The device create holds two per-thread lists: filteredExtensions (dxvk/vkd3d-proton) and newExtensionList.
         assert unit.count('static thread_local std::vector<const char*>') == 2, 'the per-thread lists moved'
-        mutated = unit.replace('static thread_local std::vector<const char*>', 'static std::vector<const char*>')
-        control = build('control-static-lists', mutated)
-        for case in INTERLEAVED:
-            result = subprocess.run([str(control), case], env=env, capture_output=True, text=True)
-            red = result.returncode != 0
-            why = next((l.strip() for l in result.stderr.splitlines() if l.startswith(('FAIL:', '==')) and
-                        ('FAIL:' in l or 'ERROR: AddressSanitizer' in l)), '')
-            print(f'{"PASS" if red else "FAIL"} control: {case} fails with function-static lists'
-                  + (f' ({why[:160]})' if why else ''), flush=True)
-            if not red:
-                failed.append('control ' + case)
+        own_extensions = 'ownedRequest.OwnExtensions(localCreateInfo);'
+        own_chain = 'VulkanOwnedDeviceRequest ownedRequest(localCreateInfo);'
+        assert unit.count(own_extensions) == 1 and unit.count(own_chain) == 1, 'the per-call copies moved'
+        no_array_copy = unit.replace(own_extensions, '(void) 0;')
+        # A-01: the lists back to function-static, as before d391a944, and the array handed over as it is built
+        control('control-static-lists',
+                no_array_copy.replace('static thread_local std::vector<const char*>', 'static std::vector<const char*>'),
+                INTERLEAVED, 'with function-static lists and no per-call copy')
+        control('control-no-array-copy', no_array_copy, NESTED, 'without the per-call extension array')
+        control('control-game-chain',
+                unit.replace(own_chain, 'VkDeviceCreateInfo gameChain = localCreateInfo;\n'
+                             '    VulkanOwnedDeviceRequest ownedRequest(gameChain);'),
+                IN_PLACE, "with the game's own chain handed to the feature state")
 
 if failed:
     raise SystemExit('Failed: ' + ', '.join(failed))

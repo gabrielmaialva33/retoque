@@ -26,6 +26,7 @@
 
 #include <dlssnr/DlssNr_VkExtensions.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
+#include <hooks/Vulkan_OwnedDeviceRequest.h>
 #include <unordered_map>
 
 #include <detours/detours.h>
@@ -591,6 +592,12 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
     VkDeviceCreateInfo localCreateInfo {};
     memcpy(&localCreateInfo, pCreateInfo, sizeof(VkDeviceCreateInfo));
 
+    // The game's chain copied into storage this call owns: the features enabled below land in the copy, never in
+    // the game's own structs (which may be read-only, or read by another thread meanwhile)
+    VulkanOwnedDeviceRequest ownedRequest(localCreateInfo);
+    if (ownedRequest.LastUncopied() != VK_STRUCTURE_TYPE_MAX_ENUM)
+        LOG_DEBUG("Device create chain copied up to unknown sType {}", (int) ownedRequest.LastUncopied());
+
     VkInstance physicalDeviceInstance = VK_NULL_HANDLE;
     const uint32_t requestedApiVersion = GetPhysicalDeviceApiVersion(physicalDevice, &physicalDeviceInstance);
 
@@ -652,6 +659,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
         VulkanSpoofing::hkvkCreateDevice(physicalDevice, &localCreateInfo, pAllocator, pDevice, featureState,
                                          requestedApiVersion);
+        ownedRequest.OwnExtensions(localCreateInfo); // the spoofing's list is per thread, not per call
 
         timelineSemaphoresEnabled = TimelineSemaphoresEnabled(&localCreateInfo);
 
