@@ -63,7 +63,7 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** 74 suites (86 total: 74 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 75 suites (87 total: 75 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -232,6 +232,9 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-localization` — the real portable `.lang` parser and the repository ImGui
   hash; label identities and collisions under translation, and a drift guard that every
   menu string routed through the translator has a pt-BR entry. Slowest suite, around 45 seconds.
+- `nr-format-swap` — the production format-change lifetime code against fake resources: an RGBA8/BGRA8 swap
+  (27/90, 28/87, 29/91) keeps the model's history and the calibration; a size or transfer change with it, every
+  other format change and a game Reset still reset. Text guards on the settling gates and the cadence signature.
 - `nr-log-rate` — the log rate limiter against injected time points, a recorded
   session replay, and the four real report classifications/initializers extracted
   from the renderer, including manual configuration changes and reversals.
