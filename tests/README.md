@@ -233,9 +233,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   committed bytecode: every DXIL binding (PSV0, decoded from the header the build embeds) inside the
   root signature its pass creates, root-signature cost, root-constant and table writes against their
   parameter, upload/readback heaps in their fixed state, no same-state transition, CBVs at their
-  buffer's own address, SPIR-V push-constant blocks within 128 bytes and format-less storage images
-  only where the feature is checked. Each check fails on a seeded violation. Pure Python; the audit it
-  came from is `docs/dlssnr/design/native-api-rules.md`.
+  buffer's own address (the aggregate form too), SPIR-V push-constant blocks within 128 bytes and
+  format-less storage images only where the feature is checked, typed UAV loads beyond R32 only behind
+  a format-support check, every zero-guide clear settled both ways, and no byte array cast to `pCode`.
+  Each check fails on a seeded violation. Pure Python; the audit it came from is
+  `docs/dlssnr/design/native-api-rules.md`.
 - `nr-localization` — the real portable `.lang` parser and the repository ImGui
   hash; label identities and collisions under translation, and a drift guard that every
   menu string routed through the translator has a pt-BR entry. Slowest suite, around 45 seconds.
