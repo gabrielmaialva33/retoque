@@ -664,7 +664,9 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
         //
         // Only appended when the feature is switched on, and only what the physical device already
         // offers -- asking for an extension a driver does not have makes vkCreateDevice fail and the game
-        // not start.
+        // not start. Since upstream c4668477 the spoofing just above appends the two NVX extensions and
+        // push_descriptor itself wherever the device has them, so this mostly finds them in the list; the
+        // KHR buffer_device_address the model names is still appended here.
         DlssNr::VkExt::Merged nrExtensions;
 
         if (Config::Instance()->DlssNrEnabled.value_or_default())
@@ -686,6 +688,10 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
                     present += std::string(present.empty() ? "" : ", ") + want;
                 else if (!DlssNr::VkExt::Contains(supported, want))
                     missing += std::string(missing.empty() ? "" : ", ") + want;
+                else if (std::string(want) == VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME &&
+                         DlssNr::VkExt::PushDescriptorFeatureOff(localCreateInfo.pNext))
+                    missing += std::string(missing.empty() ? "" : ", ") + want +
+                               " (VkPhysicalDeviceVulkan14Features::pushDescriptor is off)";
                 else
                 {
                     nrExtensions.names.push_back(want);
@@ -693,7 +699,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
                 }
             }
 
-            LOG_INFO("DLSS-NR Vulkan: device offers {} extensions. game already enabled: [{}]. added here: "
+            LOG_INFO("DLSS-NR Vulkan: device offers {} extensions. already in the list: [{}]. added here: "
                      "[{}]. NOT AVAILABLE: [{}]",
                      supported.size(), present.empty() ? "none" : present, added.empty() ? "none" : added,
                      missing.empty() ? "none" : missing);

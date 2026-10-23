@@ -130,4 +130,19 @@ inline bool DropConflictingBufferDeviceAddress(std::vector<const char*>& names, 
     return names.size() != before;
 }
 
+// With a VkPhysicalDeviceVulkan14Features in the create chain whose pushDescriptor is off,
+// VK_KHR_push_descriptor may not be enabled beside it -- the rule the present host's plan already
+// applies. OptiScaler's spoofing turns the feature on where the device supports it before this is read,
+// so a feature still off here is one the device cannot give, and the extension is not appended.
+inline bool PushDescriptorFeatureOff(const void* pNext)
+{
+    for (auto* node = static_cast<const VkBaseInStructure*>(pNext); node != nullptr; node = node->pNext)
+    {
+        if (node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES)
+            return reinterpret_cast<const VkPhysicalDeviceVulkan14Features*>(node)->pushDescriptor != VK_TRUE;
+    }
+
+    return false;
+}
+
 } // namespace DlssNr::VkExt

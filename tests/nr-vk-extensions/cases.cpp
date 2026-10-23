@@ -78,6 +78,21 @@ int main()
         assert(!Drop(neither, game) && neither.size() == 1);
         CASE("one of them, or neither: nothing changes");
     }
+    {
+        VkPhysicalDeviceVulkan14Features vulkan14 {};
+        vulkan14.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES;
+        VkPhysicalDeviceVulkan12Features vulkan12 {};
+        vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+        vulkan12.pNext = &vulkan14;
+
+        assert(!DlssNr::VkExt::PushDescriptorFeatureOff(nullptr));
+        assert(DlssNr::VkExt::PushDescriptorFeatureOff(&vulkan12));
+        vulkan14.pushDescriptor = VK_TRUE;
+        assert(!DlssNr::VkExt::PushDescriptorFeatureOff(&vulkan12));
+        vulkan12.pNext = nullptr;
+        assert(!DlssNr::VkExt::PushDescriptorFeatureOff(&vulkan12));
+        CASE("push_descriptor: refused only behind a Vulkan 1.4 feature struct that has it off");
+    }
 
     std::cout << "vk extensions: " << cases << " cases passed\n";
     return 0;
