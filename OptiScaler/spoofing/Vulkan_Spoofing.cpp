@@ -677,6 +677,10 @@ struct VulkanDeviceFeatureState::Impl
                 EnableExistingFeature(modifiedFeatures, features, vulkan12Features,
                                       &VkPhysicalDeviceVulkan12Features::vulkanMemoryModel,
                                       supported.vulkanMemoryModel);
+                // With the memory model on, a shader using Device-scope atomics needs this as well
+                EnableExistingFeature(modifiedFeatures, features, vulkan12Features,
+                                      &VkPhysicalDeviceVulkan12Features::vulkanMemoryModelDeviceScope,
+                                      supported.vulkanMemoryModelDeviceScope);
                 if (!HasExtension(pCreateInfo, VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
                     EnableExistingFeature(modifiedFeatures, features, vulkan12Features,
                                           &VkPhysicalDeviceVulkan12Features::bufferDeviceAddress,
@@ -719,6 +723,9 @@ struct VulkanDeviceFeatureState::Impl
             EnableSupportedFeature(pCreateInfo, modifiedFeatures, vulkanMemoryModel,
                                    &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModel,
                                    supported.vulkanMemoryModel);
+            EnableSupportedFeature(pCreateInfo, modifiedFeatures, vulkanMemoryModel,
+                                   &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModelDeviceScope,
+                                   supported.vulkanMemoryModelDeviceScope);
             return;
         }
 
@@ -747,7 +754,8 @@ struct VulkanDeviceFeatureState::Impl
 
         if (HasExtension(pCreateInfo, VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME))
             EnableFeatureStruct(pCreateInfo, getFeatures2, physicalDevice, modifiedFeatures, vulkanMemoryModel,
-                                &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModel);
+                                &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModel,
+                                &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModelDeviceScope);
     }
 
     void EnableVulkan13Features(VkPhysicalDevice physicalDevice)
