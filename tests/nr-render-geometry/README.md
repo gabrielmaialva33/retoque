@@ -10,3 +10,7 @@ on/off, independent offsets and allocation clipping, empty regions, poisoned mot
 original units for motion scale, and creation/current display metadata. The boundary suite
 `nr-before-upscale` separately checks that missing display metadata declines before allocation
 for display MVs while low-resolution MVs remain usable. Host fakes do not prove GPU sampling.
+
+Incomplete/invalid Width/Height must retire the fallback for the next evaluate too, and the DRS
+control starts from a fresh epoch rather than inheriting an earlier partial-subrect invalidation.
+Display reference axes are accepted as a pair, including on host/output fallback paths.

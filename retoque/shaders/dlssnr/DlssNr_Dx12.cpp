@@ -947,8 +947,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // References describe the game's coordinate system, not the bounded resource region below.
     const unsigned int renderReferenceWidth = frame.RenderSubrectWidth ? frame.RenderSubrectWidth : guideAllocWidth;
     const unsigned int renderReferenceHeight = frame.RenderSubrectHeight ? frame.RenderSubrectHeight : guideAllocHeight;
-    const unsigned int displayReferenceWidth = frame.DisplayWidth ? frame.DisplayWidth : width;
-    const unsigned int displayReferenceHeight = frame.DisplayHeight ? frame.DisplayHeight : height;
+    const bool haveDisplayReference = frame.DisplayWidth && frame.DisplayHeight;
+    const unsigned int displayReferenceWidth = haveDisplayReference ? frame.DisplayWidth : width;
+    const unsigned int displayReferenceHeight = haveDisplayReference ? frame.DisplayHeight : height;
 
     unsigned int guideWidth = guideAllocWidth;
     unsigned int guideHeight = guideAllocHeight;

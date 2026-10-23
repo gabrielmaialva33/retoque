@@ -60,7 +60,8 @@ class Scope
         const auto current = ReadRenderSize(binding.params);
         const auto& initial = record->creation;
         const auto display = ReadDisplaySize(binding.params);
-        if ((current.size.width && current.size.width != initial.render.width) ||
+        if (current.source == RenderSizeSource::Incomplete ||
+            (current.size.width && current.size.width != initial.render.width) ||
             (current.size.height && current.size.height != initial.render.height) ||
             (display.width && display.width != initial.display.width) ||
             (display.height && display.height != initial.display.height))

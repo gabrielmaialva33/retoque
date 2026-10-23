@@ -73,6 +73,7 @@ int main()
         same(DlssNr::GetRenderSize(&incomplete), 24, 0);
     }
     ++checks;
+    Remember(17, initial); // DRS invalidation starts with a fresh, compatible epoch.
     FakeParams drs;
     drs.Put(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, 24);
     drs.Put(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, 14);
@@ -169,5 +170,26 @@ int main()
         same(DlssNr::GetRenderSize(&empty), 0, 0);
     }
     ++checks;
+    for (bool partial : { true, false })
+    {
+        Remember(17, initial);
+        FakeParams invalidDimensions;
+        invalidDimensions.Put(NVSDK_NGX_Parameter_Width, partial ? 24 : 80);
+        if (!partial)
+        {
+            invalidDimensions.Put(NVSDK_NGX_Parameter_Height, 18);
+            invalidDimensions.Put(NVSDK_NGX_Parameter_OutWidth, 64);
+            invalidDimensions.Put(NVSDK_NGX_Parameter_OutHeight, 36);
+        }
+        {
+            Scope evaluation(true, 17, &invalidDimensions);
+            same(DlssNr::GetRenderSize(&invalidDimensions), 0, 0);
+        }
+        {
+            Scope evaluation(true, 17, &empty);
+            same(DlssNr::GetRenderSize(&empty), 0, 0);
+        }
+        ++checks;
+    }
     std::printf("PASS: %u feature-scoped render geometry cases\n", checks);
 }

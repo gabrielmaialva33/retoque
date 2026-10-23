@@ -28,7 +28,9 @@ Resolution priority:
 4. Unknown/refused: never the whole allocation as guessed valid content.
 
 A half-specified nonzero subrect is invalid, not permission to mix current and creation
-axes. Once an explicit render size differs from creation (DRS), missing dimensions in
+axes. Incomplete/invalid Width/Height metadata also disarms the creation epoch: refusing
+the malformed evaluate must not erase evidence and permit a stale fallback on the next one.
+Once an explicit render size differs from creation (DRS), missing dimensions in
 that epoch cannot fall back to creation again, even after the current size returns to
 the original. A new creation re-arms the fallback. A display-size change also makes the
 old creation fallback stale. Complete current metadata remains usable after either event.
@@ -54,6 +56,7 @@ Stage=1 writes render-sized colour but may receive display-resolution vectors.
 Carry display dimensions separately in DlssNrFrameInfo (CPU-only, not shader constants).
 Use current OutWidth/Height, or the compatible creation display extent, as the reference
 for display vectors. Low-resolution vectors use the original resolved render extent.
+Use display dimensions as a complete pair; a partial pair never borrows an axis from output.
 Choose the motion region from that flag/reference, then clamp it against its own resource
 and base, never against the depth allocation. Thus render colour 1280x720 plus 1920x1080
 motion reads the full display motion area and rescales by 1280/1920 when matched to colour.

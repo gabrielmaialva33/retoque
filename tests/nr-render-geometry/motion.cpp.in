@@ -50,8 +50,11 @@ int main() {
     f={}; f.DisplayWidth=0; f.DisplayHeight=0;
     r=geometry(&depth,&motion,f,64,36); // Legacy after-upscale host uses its output as display reference.
     assert(r.motionWidth==64 && r.motionHeight==36 && r.referenceWidth==64);
+    f={}; f.DisplayHeight=0;
+    r=geometry(&depth,&motion,f,96,72);
+    assert(r.referenceWidth==96 && r.referenceHeight==72); // Never splice a partial display pair with output.
     f={}; depth.desc={0,0}; motion.desc={0,0};
     r=geometry(&depth,&motion,f);
     assert(r.depthWidth==0 && r.depthHeight==0 && r.motionWidth==0 && r.motionHeight==0);
-    std::puts("PASS: 7 production dispatch geometry controls (Stage 1, MVLowRes, bounds/reference)");
+    std::puts("PASS: 8 production dispatch geometry controls (Stage 1, MVLowRes, bounds/reference)");
 }
