@@ -26,6 +26,7 @@
 
 #include <dlssnr/DlssNr_VkExtensions.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
+#include <hooks/Vulkan_OwnedDeviceRequest.h>
 #include <unordered_map>
 
 #include <detours/detours.h>
@@ -377,10 +378,10 @@ static VkResult hkvkCreateWin32SurfaceKHR(VkInstance instance, const VkWin32Surf
         State::Instance().VulkanInstance = instance;
         LOG_DEBUG("_instance captured: {0:X}", (UINT64) _instance);
 
-        if (!MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd))
+        // Asked again under the overlay's locks, by DestroyVulkanObjects
+        if (!MenuOverlayVk::OnOtherWindow(pCreateInfo->hwnd) &&
+            MenuOverlayVk::DestroyVulkanObjects(false, pCreateInfo->hwnd))
         {
-            MenuOverlayVk::DestroyVulkanObjects(false);
-
             _hwnd = pCreateInfo->hwnd;
             LOG_DEBUG("_hwnd captured: {0:X}", (UINT64) _hwnd);
         }
@@ -591,6 +592,12 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
     VkDeviceCreateInfo localCreateInfo {};
     memcpy(&localCreateInfo, pCreateInfo, sizeof(VkDeviceCreateInfo));
 
+    // The game's chain copied into storage this call owns: the features enabled below land in the copy, never in
+    // the game's own structs (which may be read-only, or read by another thread meanwhile)
+    VulkanOwnedDeviceRequest ownedRequest(localCreateInfo);
+    if (ownedRequest.LastUncopied() != VK_STRUCTURE_TYPE_MAX_ENUM)
+        LOG_DEBUG("Device create chain copied up to unknown sType {}", (int) ownedRequest.LastUncopied());
+
     VkInstance physicalDeviceInstance = VK_NULL_HANDLE;
     const uint32_t requestedApiVersion = GetPhysicalDeviceApiVersion(physicalDevice, &physicalDeviceInstance);
 
@@ -616,11 +623,15 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
     features2.pNext = &antiLagFeatures;
 
+    // Per call: an overlapping create on another GPU must neither cost this one VK_AMD_anti_lag nor clear
+    // vkAntiLagUpdateAMD after it. State's copy is per thread, for the spoofing below.
+    State::Instance().vkAntiLagSupported = false;
     if (getPhysicalDeviceFeatures2)
     {
         getPhysicalDeviceFeatures2(physicalDevice, &features2);
         State::Instance().vkAntiLagSupported = antiLagFeatures.antiLag != 0;
     }
+    const bool antiLagSupported = State::Instance().vkAntiLagSupported;
 
     IFGFeature_Vk* fg = nullptr;
     VulkanDeviceFeatureState fgFeatures(&localCreateInfo, getPhysicalDeviceFeatures2);
@@ -652,6 +663,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
         VulkanSpoofing::hkvkCreateDevice(physicalDevice, &localCreateInfo, pAllocator, pDevice, featureState,
                                          requestedApiVersion);
+        ownedRequest.OwnExtensions(localCreateInfo); // the spoofing's list is per thread, not per call
 
         timelineSemaphoresEnabled = TimelineSemaphoresEnabled(&localCreateInfo);
 
@@ -776,7 +788,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
         }
     }
 
-    if (State::Instance().vkAntiLagSupported)
+    if (antiLagSupported)
     {
         if (result == VK_SUCCESS && o_vkGetDeviceProcAddr)
         {

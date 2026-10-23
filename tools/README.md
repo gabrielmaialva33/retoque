@@ -164,6 +164,14 @@ draft manually before retrying. Publication is a separate human action; the work
 pwsh tools\package_release.ps1 [-Version <tag>] [-SkipBuild]
 ```
 
+## gen-vk-device-chain-types.py
+
+`python3 tools/gen-vk-device-chain-types.py` writes `retoque/hooks/Vulkan_DeviceCreateChainTypes.h`: every
+structure `external/vulkan/include/vulkan/vulkan_core.h` defines that `external/vulkan/registry/vk.xml` allows in a
+`VkDeviceCreateInfo` chain, with its size. The `vkCreateDevice` hook uses it to copy a game's whole chain into
+storage the call owns (`retoque/hooks/Vulkan_OwnedDeviceRequest.h`). Rerun it after `external/vulkan` moves;
+`--check` exits 1 while the committed header is stale, and `tests/vk-create-contract` runs that check.
+
 ## nrlog_summary.py
 
 Summarises an `OptiScaler.log` from a DLSS-NR run (build, NR coverage, composition changes,

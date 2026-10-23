@@ -36,6 +36,9 @@
 #include <utility>
 #include <vector>
 
+#include <sys/mman.h>
+#include <unistd.h>
+
 // ---- Windows ----------------------------------------------------------------------------------------------
 
 using HMODULE = void*;
@@ -87,7 +90,7 @@ struct Config
 struct State
 {
     // @creatingD3DDevice@ (the production declaration from State.h, put here by run.py)
-    bool vkAntiLagSupported = false;
+    // @vkAntiLagSupported@ (the production declaration from State.h, put here by run.py)
     VkInstance VulkanInstance = VK_NULL_HANDLE;
 
     static State& Instance()
@@ -295,10 +298,12 @@ struct FakeGpu
 
     // onEntry runs at vkCreateDevice entry, before the driver reads anything; inCreate after it copied the request,
     // before it reads the request again and returns. A case uses them to hold one thread's create while another
-    // thread creates, or to create again from inside the driver. inFeatures runs after a features query answered.
+    // thread creates, or to create again from inside the driver. inFeatures runs after a features query answered,
+    // inEnumerate after an extension enumeration answered.
     std::function<void()> onEntry;
     std::function<void()> inCreate;
     std::function<void()> inFeatures;
+    std::function<void()> inEnumerate;
 
     bool Has(const std::string& extension) const
     {
@@ -367,6 +372,9 @@ static VKAPI_ATTR VkResult VKAPI_CALL FakeEnumerateDeviceExtensionProperties(VkP
         if (gpu.dataQueries == 0)
             list.pop_back();
     }
+
+    if (gpu.inEnumerate)
+        gpu.inEnumerate();
 
     if (gpu.enumerate == FakeGpu::Enumerate::CountFails)
         return VK_ERROR_OUT_OF_HOST_MEMORY;
@@ -636,7 +644,15 @@ static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL FakeGetInstanceProcAddr(VkInstan
     return nullptr;
 }
 
-static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL FakeGetDeviceProcAddr(VkDevice, const char*) { return nullptr; }
+static VKAPI_ATTR void VKAPI_CALL FakeAntiLagUpdate(VkDevice, const VkAntiLagDataAMD*) {}
+
+// Only vkAntiLagUpdateAMD, and only from a device created with VK_AMD_anti_lag.
+static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL FakeGetDeviceProcAddr(VkDevice device, const char* pName)
+{
+    if (std::strcmp(pName, "vkAntiLagUpdateAMD") == 0 && ReceivedBy(device).Has(VK_AMD_ANTI_LAG_EXTENSION_NAME))
+        return reinterpret_cast<PFN_vkVoidFunction>(&FakeAntiLagUpdate);
+    return nullptr;
+}
 
 // The loader's exports, which the production code falls back to.
 extern "C"

@@ -9766,7 +9766,7 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP, bool nativeVulkan)
                   (size_t) ImGui::GetMainViewport()->PlatformHandleRaw);
     }
 
-    _handle = InHwnd;
+    std::atomic_ref<HWND>(_handle).store(InHwnd); // read unlocked through Handle()
     _isVisible = false;
     _isUWP = isUWP;
     lastPosition = { -1000.0f, -1000.0f };
@@ -9860,7 +9860,7 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP, bool nativeVulkan)
     OptiInput::Initialize(_handle, isUWP);
 
     ApplyThemeStyle();
-    _isInited = true;
+    std::atomic_ref<bool>(_isInited).store(true);
 }
 
 void MenuCommon::Shutdown()
@@ -9890,8 +9890,8 @@ void MenuCommon::Shutdown()
 
     ImGui::DestroyContext();
 
-    _handle = nullptr;
-    _isInited = false;
+    std::atomic_ref<HWND>(_handle).store(nullptr);
+    std::atomic_ref<bool>(_isInited).store(false);
     _isVisible = false;
 }
 

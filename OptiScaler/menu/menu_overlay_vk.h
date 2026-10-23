@@ -12,7 +12,9 @@ void CreateSwapchain(VkDevice device, VkPhysicalDevice pd, VkInstance instance, 
 // device never created is undefined behaviour, and vkCreateDevice is the only place that knows.
 void DeviceCreated(VkDevice device, const VkDeviceCreateInfo* pCreateInfo);
 bool QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo);
-void DestroyVulkanObjects(bool shutdown);
+// With a window, asks OnOtherWindow(hwnd) again under the overlay's locks and keeps the menu (returns
+// false) when it is on another window by then: the caller's own check ran before them
+bool DestroyVulkanObjects(bool shutdown, HWND hwnd = nullptr);
 
 // The menu stays on its window while that exists, games can have more than one
 bool OnOtherWindow(HWND hwnd);

@@ -66,8 +66,8 @@ suite READMEs for artifact paths and limits.
   against fake Vulkan, ImGui and Win32 with an ordered event log: a second window never drains or tears down
   the menu, same-window recreation hands over, a concurrent first attach from two threads ends with one owner,
   failing creates and drains stay consistent, a destroyed menu window re-binds with one backend shutdown, and
-  non-menu presents pass through untouched. The hidden-splash policy and the surface-hook race are recorded
-  expectations. No GPU.
+  non-menu presents pass through untouched, and a surface hook that lost the race with another window's first
+  create leaves that menu alone. The hidden-splash policy is a recorded expectation. No GPU.
 
 **Host tier.** 84 suites (97 total: 84 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -159,10 +159,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   synchronization coverage.
 - `vk-create-contract` — the production `vkCreateDevice` path, `hkvkCreateDevice` through the Vulkan spoofing's
   device create and feature state and the NR extension block, against a fake driver that deep-copies the exact
-  request it receives. The game's request unchanged, every pointer alive until the driver returns (ASan), two
-  creates interleaved on two threads receiving what each receives alone (A-01; a control with the lists
-  function-static again must fail), no capability the device lacks requested, over API 1.0-1.4, failing or
-  incomplete extension enumeration, NR, skip scopes, extension spoofing and dxvk/vkd3d-proton's create. No Vulkan.
+  request it receives. The game's request unchanged after and during the call, also from read-only pages, every
+  pointer alive until the driver returns (ASan), two creates interleaved on two threads and one nested on the same
+  thread receiving what each receives alone (mutation controls must fail), Anti-Lag per device, no capability the
+  device lacks requested, over API 1.0-1.4, failing or incomplete extension enumeration, NR, skip scopes, extension
+  spoofing and dxvk/vkd3d-proton's create. No Vulkan.
 - `mfg-pattern` — the real MFG byte signatures and scanner matcher against synthetic
   buffers, both wrapper clamp shapes (`r8d`, and the `edx` one of Streamline 2.7.3 to 2.14), and the
   foreign-gate patterns that recognise another unlocker's rewrite. Runs no patcher and touches no DLL.

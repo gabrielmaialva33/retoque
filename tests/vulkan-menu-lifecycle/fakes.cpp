@@ -405,8 +405,11 @@ void ImGui_ImplVulkan_SetQueue(VkQueue) {}
 
 // ---- MenuOverlayBase (MenuCommon's ImGui context and window) ------------------------------------
 
-static std::atomic<HWND> g_menuHandle { nullptr };
-static std::atomic<bool> g_menuInited { false };
+// MenuCommon's own storage (menu_common.h): a plain HWND and bool, read and written through
+// std::atomic_ref. run.py puts the production getters' expressions in place of the @...@ markers and
+// checks that MenuCommon::Init and Shutdown store through std::atomic_ref, as the fake below does.
+static HWND g_menuHandle = nullptr;
+static bool g_menuInited = false;
 static int g_menuInits = 0;
 static int g_menuShutdowns = 0;
 
@@ -414,11 +417,11 @@ static int g_menuShutdowns = 0;
 // the deterministic interleaving point between OnOtherWindow's read and the locks.
 thread_local std::function<void()> t_afterIsInitedRead;
 
-HWND MenuOverlayBase::Handle() { return g_menuHandle.load(); }
+HWND MenuOverlayBase::Handle() { return @HANDLE_READ@; }
 
 bool MenuOverlayBase::IsInited()
 {
-    bool value = g_menuInited.load();
+    bool value = @INITED_READ@;
     if (t_afterIsInitedRead)
     {
         auto hook = std::move(t_afterIsInitedRead);
@@ -430,25 +433,25 @@ bool MenuOverlayBase::IsInited()
 
 void MenuOverlayBase::Init(HWND hwnd, bool, bool)
 {
-    if (g_menuInited.load())
+    if (@INITED_READ@)
         Fault("MenuOverlayBase::Init over a live context (ImGui::CreateContext leaks the old one)");
     Ev("MenuOverlayBase::Init " + N(hwnd));
     g_menuInits++;
-    g_menuHandle = hwnd;
-    g_menuInited = true;
+    std::atomic_ref<HWND>(g_menuHandle).store(hwnd);
+    std::atomic_ref<bool>(g_menuInited).store(true);
 }
 
 void MenuOverlayBase::Shutdown()
 {
-    if (!g_menuInited.load())
+    if (!@INITED_READ@)
         return;
     // MenuCommon::Shutdown destroys the ImGui context; a renderer backend still attached leaks with it.
     if (ImGui::GetIO().BackendRendererUserData != nullptr)
         Fault("MenuOverlayBase::Shutdown with the Vulkan renderer backend still attached");
     Ev("MenuOverlayBase::Shutdown");
     g_menuShutdowns++;
-    g_menuHandle = nullptr;
-    g_menuInited = false;
+    std::atomic_ref<HWND>(g_menuHandle).store(nullptr);
+    std::atomic_ref<bool>(g_menuInited).store(false);
 }
 
 void MenuOverlayBase::VulkanReady() { Ev("MenuOverlayBase::VulkanReady"); }

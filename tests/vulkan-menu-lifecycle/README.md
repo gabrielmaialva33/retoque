@@ -22,6 +22,13 @@ The faults it knows:
 Every case ends with the production teardown. All overlay objects and `IM_ALLOC` arrays must be released
 then.
 
+The fake menu base keeps `MenuCommon`'s storage type, a plain `HWND` and `bool`, and reads it with the
+production getters' own `std::atomic_ref` expressions, which `run.py` cuts from `menu_common.h`; it also requires
+`MenuCommon::Init` and `Shutdown` to store both through `std::atomic_ref` (Codex review FM-01, `8feb116f`). Its
+earlier `std::atomic` fields hid the data race of `OnOtherWindow`'s unlocked read. A ThreadSanitizer build of
+this unit reports nothing even with the plain reads put back, because the fake's event log takes one mutex on
+every call and so orders the two threads: this suite cannot show that race, only hold the source to the fix.
+
 `run.py` also checks two things in the source of `Vulkan_Hooks.cpp`. First, `MenuOverlayVk::CreateSwapchain` is
 called once, inside the driver-success block of `hkvkCreateSwapchainKHR`, which is what the
 cases' `GameCreateSwapchain` models. Second, the surface hook's block still has the shape that gets sliced.
@@ -37,6 +44,7 @@ cases' `GameCreateSwapchain` models. Second, the surface hook's block still has 
 | failing vkCreateSwapchainKHR leaves the menu consistent | A driver failure never reaches the overlay, and the old chain keeps its menu (a retired chain can still present). An overlay-side failure (the second `vkCreateFramebuffer`) publishes nothing, releases the partial generation and its arrays, and leaves no backend. Presents pass through, and the next create recovers. |
 | failed drain keeps the old generation | A failed `vkDeviceWaitIdle` before a recreate releases nothing and builds nothing, and the menu stops drawing. The next successful drain releases the old generation and recovers. |
 | destroyed menu window, create re-binds | The menu's window is destroyed, then a chain is created on window B. The renderer backend shuts down exactly once, the context moves to B once, and B owns and draws the menu. This is run with and without the surface hook first. |
+| surface hook that lost the race leaves the menu alone | Two real threads. The surface hook for window B is held right after its pre-lock `IsInited()` read until window A's first create finishes. The hook then makes no drain, release or context change, A's objects stay alive and drawn, `_hwnd` does not move to B, B's chain stays filtered, and A's next chain keeps the menu. The window is asked again under the overlay's locks (`DestroyVulkanObjects(false, hwnd)`, `1dca628b`). |
 | present of a non-menu swapchain passes through | A present whose first swapchain is not the menu's (with the menu's chain second) is passed on unchanged, and no Vulkan or ImGui call is made. |
 
 ## Documented expectations: recorded, not decided here
@@ -48,12 +56,6 @@ someone makes, not an accident.
   a window. The menu stays on a splash the game hid but did not destroy, and the main window's presents
   carry no menu until the splash is destroyed. No policy decides what should move it (visibility, size,
   recency).
-- **The surface hook race is not fixed.** `hkvkCreateWin32SurfaceKHR` reads `OnOtherWindow` and then calls
-  `DestroyVulkanObjects(false)` without a re-check under the overlay's locks. A surface for window B whose
-  check ran before window A's first create finished tears A's objects down. A's menu then stays dark
-  until A's chain is recreated, and B's chain is filtered. The case asserts that the state stays
-  consistent (all objects alive or all released, no fault) and that A's next chain brings the menu back.
-  Fixing it means changing upstream's hook text in `Vulkan_Hooks.cpp`.
 
 ## RED before the fix
 
@@ -68,6 +70,13 @@ At `294d1749` this suite fails 13 checks:
 
 The fix re-checks `OnOtherWindow` under the locks and guards that second shutdown with
 `_vulkanBackendInited`. Removing either one turns the suite red again.
+
+## RED before the surface hook fix
+
+At `2dcbbf40` the surface race case fails 4 checks: the losing surface hook drains the device, releases A's
+whole generation and captures window B, and A's menu is dark until A's chain is recreated. The fix asks
+`OnOtherWindow` again once `DestroyVulkanObjects` holds both locks; making that re-check `false` turns the
+same 4 checks red again.
 
 ## What it does not cover
 
