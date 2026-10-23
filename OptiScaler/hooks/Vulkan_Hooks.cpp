@@ -623,11 +623,15 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
     features2.pNext = &antiLagFeatures;
 
+    // Per call: an overlapping create on another GPU must neither cost this one VK_AMD_anti_lag nor clear
+    // vkAntiLagUpdateAMD after it. State's copy is per thread, for the spoofing below.
+    State::Instance().vkAntiLagSupported = false;
     if (getPhysicalDeviceFeatures2)
     {
         getPhysicalDeviceFeatures2(physicalDevice, &features2);
         State::Instance().vkAntiLagSupported = antiLagFeatures.antiLag != 0;
     }
+    const bool antiLagSupported = State::Instance().vkAntiLagSupported;
 
     IFGFeature_Vk* fg = nullptr;
     VulkanDeviceFeatureState fgFeatures(&localCreateInfo, getPhysicalDeviceFeatures2);
@@ -784,7 +788,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
         }
     }
 
-    if (State::Instance().vkAntiLagSupported)
+    if (antiLagSupported)
     {
         if (result == VK_SUCCESS && o_vkGetDeviceProcAddr)
         {

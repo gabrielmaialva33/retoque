@@ -698,10 +698,13 @@ void InterleavedMixed()
     Interleave(skip, native, Hold::BeforeRead, "skip scope on A only");
 }
 
-// The per-thread lists are per thread, not per call: a create made on the same thread while the driver is
-// still reading the outer request reuses the outer call's storage. Run as a probe; see the README.
+// A create made on the same thread while the driver is still reading the outer request. The spoofing's lists are
+// per thread, not per call, so the hook hands the driver its own copy of the array; Create fails if the outer
+// request changed under the driver. The nested device has Anti-Lag and the outer one not: the outer create must not
+// clear the nested one's vkAntiLagUpdateAMD on the way out (the per-thread answer is the nested create's by then).
 void NestedCreateInDriver()
 {
+    VulkanHooks::o_vkAntiLagUpdateAMD = nullptr;
     auto gpuA = NvidiaGpu(VK_API_VERSION_1_3);
     auto gpuB = AmdGpu(VK_API_VERSION_1_3);
     Setup setup;
@@ -720,6 +723,10 @@ void NestedCreateInDriver()
     };
     Create(setup, *gpuA, requestA, "outer A");
     gpuA->inCreate = nullptr;
+    Check(once, "the nested create ran");
+    Check(VulkanHooks::o_vkAntiLagUpdateAMD == &FakeAntiLagUpdate,
+          "the nested device's vkAntiLagUpdateAMD survives the outer create's return");
+    VulkanHooks::o_vkAntiLagUpdateAMD = nullptr;
 }
 
 void AntiLagCrosstalk()

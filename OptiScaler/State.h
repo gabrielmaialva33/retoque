@@ -293,7 +293,8 @@ class State
     bool rtssReflexInjection = false;
     UINT64 reflexFrameId = 0;
     UINT64 frameCount = 0;
-    bool vkAntiLagSupported = false;
+    // Per thread, like creatingD3DDevice: the answer of the device being created on this thread
+    inline static thread_local bool vkAntiLagSupported = false;
 
     // AMD driver flip metering
     bool amdFlipMeterCreated = false;
