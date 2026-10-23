@@ -241,6 +241,23 @@ bool Estimator_Dx12::_EnsureDevice(ID3D12Device* device)
 
     _device = device;
 
+    // The search, filter, scale and expand passes read FFX's R16G16_SINT flow and R8_UINT luma back through typed
+    // UAVs. Past R32_FLOAT/UINT/SINT a typed UAV load is optional, and R16G16_SINT is one a device reports per format
+    // ("Typed unordered access view loads"), so ask before the first dispatch rather than read undefined values.
+    for (const DXGI_FORMAT format : { DXGI_FORMAT_R16G16_SINT, DXGI_FORMAT_R8_UINT })
+    {
+        constexpr auto need = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
+        D3D12_FEATURE_DATA_FORMAT_SUPPORT support { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
+        if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) ||
+            (support.Support2 & need) != need)
+        {
+            LOG_ERROR("synthesized motion: the device cannot load and store format {} through a typed UAV; no motion "
+                      "field for this session",
+                      (UINT) format);
+            return false;
+        }
+    }
+
     // u0..u7 per dispatch, the colour at t0, FFX's two constant buffers as root constants.
     CD3DX12_DESCRIPTOR_RANGE1 uavRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, kTableSize, 0, 0,
                                        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
