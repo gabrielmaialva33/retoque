@@ -1282,8 +1282,11 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = _vkRenderPass;
         info.framebuffer = fd->Framebuffer;
-        info.renderArea.extent.width = static_cast<uint32_t>(ImGui::GetIO().DisplaySize.x);
-        info.renderArea.extent.height = static_cast<uint32_t>(ImGui::GetIO().DisplaySize.y);
+        // The framebuffer's own size. ImGui's Win32 backend sets DisplaySize from the window's client area
+        // every frame, and a window resized before its swapchain is recreated (a tiling compositor does it
+        // right after the first present) has a client area larger than the framebuffer, which a render
+        // area may not exceed (VUID-VkRenderPassBeginInfo-pNext-02852/02853).
+        info.renderArea.extent = _scExtent;
         vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
 
