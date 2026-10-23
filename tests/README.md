@@ -69,7 +69,7 @@ suite READMEs for artifact paths and limits.
   non-menu presents pass through untouched. The hidden-splash policy and the surface-hook race are recorded
   expectations. No GPU.
 
-**Host tier.** 81 suites (94 total: 81 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 84 suites (97 total: 84 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
