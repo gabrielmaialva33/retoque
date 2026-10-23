@@ -249,7 +249,7 @@ Writes which side is which onto the frame itself, so a screenshot still\nsays so
 Puts the edited frame on the other side.\n\nWorth doing once you have decided which you prefer: the eye is not\neven-handed about left and right, and a difference can read as an\nimprovement purely from where it sits. If the same side still wins after\nswapping, it is the pass you are seeing and not the placement.	Coloca o quadro modificado do outro lado.\n\nVale fazer depois de decidir qual você prefere: o olho não\né imparcial entre esquerda e direita, e uma diferença pode parecer uma\nmelhora só pelo lugar em que está. Se o mesmo lado ainda ganhar depois de\ntrocar, é o passe que você está vendo, e não a posição.
 How much of the frame each half shows.\n\nA half is half as wide as the frame and just as tall, so the frame\ncannot fill it and keep its shape.\n\nAt 1 the whole frame is there at its right proportions, with bars above\nand below. At 2 the half is filled and the sides are cropped away\ninstead. Anything between trades one for the other.	Quanto do quadro cada metade mostra.\n\nUma metade tem metade da largura do quadro e a mesma altura, então o quadro\nnão consegue preenchê-la mantendo a proporção.\n\nEm 1 o quadro inteiro aparece na proporção certa, com faixas em cima\ne embaixo. Em 2 a metade fica preenchida e as laterais são cortadas\nno lugar. Valores entre os dois trocam uma coisa pela outra.
 FSR 3 Upscaler Manual Tuning	Ajuste manual do upscaler FSR 3
-Extended FSR FG Settings	Configurações estendidas do FSR FG
+Advanced FSR FG Settings	Configurações avançadas do FSR FG
 Extended XeFG Settings	Configurações estendidas do XeFG
 Advanced OptiFG Settings	Configurações avançadas do OptiFG
 Active DispatchFlags	DispatchFlags ativas
@@ -341,9 +341,15 @@ Custom	Personalizada
 Upscaling	Upscaling
 Neural Rendering	Renderização neural
 Frame Gen	Geração de quadros
-Latency & FPS	Latência e FPS
+Latency	Latência
+Status	Status
 Textures	Texturas
 Compatibility	Compatibilidade
+# 2026-10-23: upstream 76219dd4/c220ad9e split the Compatibility tab into these cards; the technical names stay.
+Startup	Inicialização
+Hooks	Hooks
+Spoofing	Spoofing
+Shaders	Shaders
 Menu	Menu
 Help / Status	Ajuda / Status
 Accent Colour	Cor de destaque
@@ -455,7 +461,7 @@ Quirks	Ajustes do jogo
 Quirks / ASI	Ajustes do jogo / ASI
 Loaded ASI Plugins	Plugins ASI carregados
 Open Wiki	Abrir Wiki
-Click to open the OptiScaler Wiki page\nin your default browser\n\nCompatibility list with known game issues\nand workarounds, FG options explained\nand other useful info	Clique para abrir a página da Wiki do OptiScaler\nno seu navegador padrão\n\nLista de compatibilidade com problemas conhecidos\ne soluções, opções de FG explicadas\ne outras informações úteis
+Compatibility list, known issues and FG options explained	Lista de compatibilidade, problemas conhecidos e opções de FG explicadas
 # 2026-10-13: the session guard (docs/dlssnr/design/session-guard.md).
 Enable anyway	Ativar mesmo assim
 Neural Rendering is off for this session. Your settings are unchanged.	O Neural Rendering está desligado nesta sessão. Suas configurações não foram alteradas.

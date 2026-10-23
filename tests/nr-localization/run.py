@@ -23,8 +23,9 @@ with tempfile.TemporaryDirectory(prefix="nr-localization-") as temp:
 
     # The redesigned menu translates in a few central places instead of at each call site: every
     # section and card title (SectionTitle, ScopedCard, SeparatorWithHelpMarker) and every card name in
-    # the Custom tab picker go through Label; the sidebar's tab and group names, and the picker's tab
-    # headings, through Tr. Their literals are collected here so a title added upstream cannot stay in
+    # the Custom tab picker go through Label; the sidebar's tab names, and the picker's tab headings,
+    # through Tr. Since upstream 76219dd4 the sidebar groups are lowercase keys split by a line, never
+    # shown, so only the tab names are text. Their literals are collected here so a title added upstream cannot stay in
     # English unnoticed.
     menu_source = (ROOT / "OptiScaler/menu/menu_common.cpp").read_text()
     literal = r'("(?:\\.|[^"\\])*")'
@@ -33,11 +34,11 @@ with tempfile.TemporaryDirectory(prefix="nr-localization-") as temp:
                     r'\bSeparatorWithHelpMarker\(\s*' + literal):
         central_labels.extend(re.findall(pattern, menu_source))
     menu_boxes = re.findall(r'\{ "[a-z_0-9]+", ' + literal + r', ' + literal, menu_source)
-    menu_tabs = re.findall(r'\{ ("(?:MAIN|SYSTEM|ADVANCED)"), ' + literal, menu_source)
+    menu_tabs = re.findall(r'\{ "(?:main|system|advanced)", ' + literal, menu_source)
     assert len(central_labels) >= 30 and len(menu_boxes) >= 30 and len(menu_tabs) >= 8, \
         "ZERO/LOW COVERAGE: the menu's central title, card and tab tables were not found"
     labels.extend(central_labels + [name for _, name in menu_boxes])
-    central_text = [tab for tab, _ in menu_boxes] + [part for pair in menu_tabs for part in pair]
+    central_text = [tab for tab, _ in menu_boxes] + menu_tabs
 
     # Drift guard for display text: every literal the two menus send through Tr, or through the NR
     # menu's HelpMarker (which calls Tr), has an entry. Labels are checked in cases.cpp.
