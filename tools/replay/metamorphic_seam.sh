@@ -8,7 +8,7 @@
 #   tools/replay/metamorphic_seam.sh <OptiScaler.dll> [corpus capture.json] [out dir]
 #
 # METAMORPHIC_VARIANTS (default tools/replay/variants-metamorphic.json) and METAMORPHIC_SETS (default
-# "geometry colour") select what runs. Needs the loopback prerequisites of tests/dlssnr-loopback/README.md.
+# "geometry colour") select what runs; METAMORPHIC_DRY=1 only derives and validates the captures. Needs the loopback prerequisites of tests/dlssnr-loopback/README.md.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -24,6 +24,7 @@ transform() { python3 -m tools.replay.transform "$@" > /dev/null; }
 
 captures=()
 pairs=()
+status=0
 if [[ " $sets " == *" geometry "* ]]; then
     # The reference: the corpus as a v2 capture with nothing moved. The others must replay identically to it.
     [[ -d $out/identity ]] || transform pad "$corpus" --out "$out/identity" --depth-base 0 0 --motion-base 0 0 --pad 0 0
@@ -50,27 +51,45 @@ if [[ " $sets " == *" colour "* ]]; then
     pairs+=("rgba8 bgra8")
 fi
 
+# METAMORPHIC_DRY=1: derive the captures and check each with the seam's own validator, without replaying anything.
+if [[ ${METAMORPHIC_DRY:-0} == 1 ]]; then
+    for c in "${captures[@]}" $([[ -d $out/alternate8 ]] && echo alternate8); do
+        (cd tests/dlssnr-loopback && python3 -c 'import sys, run_replay; from pathlib import Path
+try:
+    run_replay.load_capture(Path(sys.argv[1])); print("accepted", sys.argv[2])
+except SystemExit as e:
+    print("refused", sys.argv[2] + ":", e)' "$out/$c/capture.json" "$c")
+    done
+    exit 0
+fi
+
 for c in "${captures[@]}"; do
     if [[ -d $out/$c/runs ]]; then
         echo "== $c: runs already present, not replayed again"
         continue
     fi
     echo "== replay $c"
-    LOOPBACK_REPLAY_CALIBRATE=0 LOOPBACK_REPLAY_JUDGE=0 \
-    LOOPBACK_REPLAY_VARIANTS="$(cat "$variants_file")" \
-    LOOPBACK_REPLAY_CAPTURE="$out/$c/capture.json" \
-        python3 tests/dlssnr-loopback/run.py --replay-nr --dll "$dll" > "$out/$c/replay.log" 2>&1 || {
-        echo "replay of $c failed; see $out/$c/replay.log"
-        exit 2
-    }
-    cp tests/dlssnr-loopback/artifacts/replay-run/replay-report.json "$out/$c/"
-    mv tests/dlssnr-loopback/artifacts/replay-run/runs "$out/$c/runs"
+    if ! LOOPBACK_REPLAY_CALIBRATE=0 LOOPBACK_REPLAY_JUDGE=0 \
+        LOOPBACK_REPLAY_VARIANTS="$(cat "$variants_file")" \
+        LOOPBACK_REPLAY_CAPTURE="$out/$c/capture.json" \
+        python3 tests/dlssnr-loopback/run.py --replay-nr --dll "$dll" > "$out/$c/replay.log" 2>&1; then
+        # A seam gate that fails is a result too: keep what ran and compare it.
+        echo "SEAM FAIL $c: see $out/$c/replay.log (the lease held, a gate, or the run)"
+        status=1
+    fi
+    report=tests/dlssnr-loopback/artifacts/replay-run/replay-report.json
+    [[ -f $report ]] && cp "$report" "$out/$c/"
+    [[ -d tests/dlssnr-loopback/artifacts/replay-run/runs ]] && mv tests/dlssnr-loopback/artifacts/replay-run/runs "$out/$c/runs"
 done
 
-status=0
 for pair in "${pairs[@]}"; do
     read -r a b <<< "$pair"
     for v in $(python3 -c 'import json,sys; print(" ".join(json.load(open(sys.argv[1]))))' "$variants_file"); do
+        if [[ ! -d $out/$a/runs/$v || ! -d $out/$b/runs/$v ]]; then
+            echo "MISSING $a vs $b, $v: a run is absent"
+            status=1
+            continue
+        fi
         result=$(python3 -m tools.replay.transform compare "$out/$a/runs/$v" "$out/$b/runs/$v") && verdict=IDENTICAL ||
             { verdict=DIFFERS; status=1; }
         echo "$verdict $a vs $b, $v: $(python3 -c 'import json,sys; r=json.loads(sys.stdin.read()); print(
