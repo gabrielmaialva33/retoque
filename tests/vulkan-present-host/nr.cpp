@@ -531,13 +531,14 @@ struct App
         vkGetDeviceQueue(device, graphicsFamily, 0, &graphicsQueue);
         if (wdx12)
         {
-            // Characterise the real wDx12 hook, not a test double: Vulkan accepts this zero-batch call, but
-            // hk_vkQueueSubmit rejects its null array. Exactly this one rejection must appear in the log;
-            // the host's hand-back and destroy drains must then get through it with empty, non-null batches.
+            // The real wDx12 hook, not a test double. It is a Detours patch on the export, so the address
+            // proves nothing; run.py takes the hook's own attach line from the log. Until upstream 737a21d5
+            // the hook rejected this Vulkan-valid zero-batch call, and that rejection was the probe; it now
+            // passes it through, so the call must succeed and no rejection may reach the log.
             auto submit = reinterpret_cast<PFN_vkQueueSubmit>(vkGetDeviceProcAddr(device, "vkQueueSubmit"));
             Require(submit != nullptr, "no vkQueueSubmit for the wDx12 chain probe");
-            Require(submit(graphicsQueue, 0, nullptr, VK_NULL_HANDLE) == VK_ERROR_INITIALIZATION_FAILED,
-                    "the wDx12 null-submit rejection is absent: the required hook chain is not active");
+            Require(submit(graphicsQueue, 0, nullptr, VK_NULL_HANDLE) == VK_SUCCESS,
+                    "the wDx12 hook refused Vulkan's zero-batch submit");
             wdx12Probed = true;
         }
         if (computeFamily != UINT32_MAX)

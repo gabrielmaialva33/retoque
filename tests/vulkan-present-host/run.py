@@ -598,12 +598,15 @@ def check_host_on(name, facts, log, *, marker_off_bundle):
         if not m:
             problems.append(f'device line unparsed: {line}')
             continue
-        # The model's extensions: the host adds them under the marker; beside the bundle, the bundle's own device hook
-        # (NR on) has added them before the call reaches the host.
+        # The model's extensions: the host adds them under the marker. Beside the bundle, the bundle's own device hook
+        # has run first, and since upstream c4668477 its spoofing appends the model's extensions and turns on
+        # bufferDeviceAddress and shaderStorageImageWriteWithoutFormat wherever the device offers them, so the host
+        # finds everything in place and needs no VK_KHR_format_feature_flags2.
         added, already = ', '.join(NR_EXTENSIONS + [FORMAT_FLAGS2]), 'none'
+        address = 'none; bufferDeviceAddress enabled by the host'
         if marker_off_bundle:
-            added, already = FORMAT_FLAGS2, ', '.join(NR_EXTENSIONS)
-        need((m.group(8), m.group(9), m.group(10)) == (added, already, 'none; bufferDeviceAddress enabled by the host'),
+            added, already, address = 'none', ', '.join(NR_EXTENSIONS), 'none; bufferDeviceAddress already enabled'
+        need((m.group(8), m.group(9), m.group(10)) == (added, already, address),
              f'{device["name"]}: NR extensions added {m.group(8)!r}, already {m.group(9)!r}, not possible '
              f'{m.group(10)!r}')
         requested = ''.join(f' family {f} x{c}' for f, c in device['requested'])
@@ -1653,10 +1656,11 @@ def check_route(name, facts, log):
     wdx12 = name.endswith('-wdx12')
     toggle = name == 'nr-route-toggle-wdx12'
     need(facts.get('wdx12_probed') is wdx12, 'wDx12 chain probe did not match the case')
-    # One rejection is the application's deliberate, Vulkan-valid zero-batch probe. No host drain may add one.
-    need(log.count('Invalid parameters to hk_vkQueueSubmit') == int(wdx12),
-         'unexpected wDx12 submit rejections (only the chain probe may be rejected)')
+    # Since upstream 737a21d5 the wDx12 hook passes a zero-batch submit through, the probe's included, and no host
+    # drain may be rejected either.
+    need(log.count('Invalid parameters to hk_vkQueueSubmit') == 0, 'unexpected wDx12 submit rejections')
     if wdx12:
+        need('Vulkan_wDx12::Hook Attaching Vulkan vkQueueSubmit hook' in log, 'the wDx12 submit hook was not attached')
         need('Skipping vulkan-1.dll hooks' not in log, 'the Vulkan bundle was skipped')
         need('Skipping Vulkan_wDx12 hooks' not in log, 'wDx12 was disabled')
     lines = log.splitlines()
