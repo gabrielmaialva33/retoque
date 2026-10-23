@@ -54,6 +54,14 @@ tier = "host"
 timeout = 120
 summary = "DEVELOPMENT.md section 4 guards: config round-trip, struct == cbuffer, headers == bytecode, retired identifiers."
 
+[nr-native-rules]
+path = "nr-native-rules"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "Native D3D12/Vulkan rules read off the source and committed bytecode: DXIL bindings inside root signatures, root cost and constant writes, upload/readback states, same-state transitions, CBV placement, SPIR-V push constants and format-less storage images; each fails on a seeded violation."
+
 [nr-replay-plan]
 path = "nr-replay-plan"
 domain = "nr"

@@ -173,6 +173,12 @@ inline int TypelessGroup(DXGI_FORMAT format)
     }
 }
 
+// The GPU behind the queue. Busy: lists submitted before now may still be running, and read what this host built;
+// nothing may be freed until a fence signalled behind them is seen to complete. Hung: that never happens.
+inline bool g_gpuBusy = false;
+inline bool g_gpuHung = false;
+inline unsigned g_fenceWaits = 0;
+
 struct ID3D12Resource
 {
     D3D12_RESOURCE_DESC desc {};
@@ -184,9 +190,53 @@ struct ID3D12Resource
     void Release()
     {
         assert(refs > 0 && "resource released twice");
+        assert(!g_gpuBusy && "released while a submitted list may still read it");
         --refs;
     }
 };
+
+using HANDLE = void*;
+using DWORD = unsigned long;
+using BOOL = int;
+constexpr BOOL FALSE = 0;
+constexpr DWORD WAIT_OBJECT_0 = 0;
+constexpr DWORD WAIT_TIMEOUT = 258;
+enum D3D12_FENCE_FLAGS
+{
+    D3D12_FENCE_FLAG_NONE = 0
+};
+
+struct ID3D12Fence
+{
+    UINT64 completed = 0;
+    UINT64 pending = 0; // signalled by a queue whose GPU had not got there yet
+    int refs = 1;
+    UINT64 GetCompletedValue() const { return completed; }
+    HRESULT SetEventOnCompletion(UINT64 value, HANDLE)
+    {
+        pending = std::max(pending, value);
+        return S_OK;
+    }
+    void Release() { --refs; }
+};
+inline ID3D12Fence* g_waitedFence = nullptr;
+
+inline HANDLE CreateEventW(void*, BOOL, BOOL, const wchar_t*)
+{
+    static int token;
+    return &token;
+}
+inline BOOL CloseHandle(HANDLE) { return 1; }
+// The one event the host waits on is its fence's: a GPU that is not hung gets there, and is then idle.
+inline DWORD WaitForSingleObject(HANDLE, DWORD)
+{
+    ++g_fenceWaits;
+    if (g_gpuHung || g_waitedFence == nullptr)
+        return WAIT_TIMEOUT;
+    g_waitedFence->completed = g_waitedFence->pending;
+    g_gpuBusy = false;
+    return WAIT_OBJECT_0;
+}
 
 // What the frame's list carried, in order: copies ('c', destination then source) and transfer dispatches ('t', input
 // then output). A case reads it to see what the conversion in read, and what was copied before it.
@@ -327,6 +377,15 @@ struct ID3D12Device
         return live;
     }
 
+    std::vector<std::unique_ptr<ID3D12Fence>> fences;
+    HRESULT CreateFence(UINT64 initial, D3D12_FENCE_FLAGS, ID3D12Fence** out)
+    {
+        fences.push_back(std::make_unique<ID3D12Fence>());
+        fences.back()->completed = initial;
+        *out = fences.back().get();
+        return S_OK;
+    }
+
     HRESULT CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE, ID3D12CommandAllocator** out)
     {
         allocators.push_back(std::make_unique<ID3D12CommandAllocator>());
@@ -346,6 +405,21 @@ struct ID3D12Device
 struct ID3D12CommandQueue
 {
     unsigned executions = 0;
+    unsigned signals = 0;
+    HRESULT Signal(ID3D12Fence* fence, UINT64 value)
+    {
+        ++signals;
+        if (g_gpuBusy)
+        {
+            fence->pending = std::max(fence->pending, value);
+            g_waitedFence = fence;
+        }
+        else
+        {
+            fence->completed = value;
+        }
+        return S_OK;
+    }
     void ExecuteCommandLists(UINT count, ID3D12CommandList* const* lists)
     {
         for (UINT i = 0; i < count; ++i)

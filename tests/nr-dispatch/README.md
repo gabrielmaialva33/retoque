@@ -20,8 +20,10 @@ carries what each slot was given, `translateTypeless` included, and the fake vie
 real `Shader_Dx12` signatures so a production call that stops passing an argument is recorded as the
 default it actually got.
 
-Three cases cover retirement: six reshapes (one per description field the key carries), an advanced
-generation, and a saturated one. Two guards in `run.py` cover what no behavioural test can see while
+Four cases cover retirement: six reshapes (one per description field the key carries), an advanced
+generation, a saturated one, and a game resource re-created at the same address with the same description
+(a new object, so no private-data token: its views must be written again, and a resource that refuses the
+token is never reused). Two guards in `run.py` cover what no behavioural test can see while
 the view arguments are constants — that every argument a call site passes is also in the key, and
 that every member of `BindKey` appears in its own `operator==`.
 

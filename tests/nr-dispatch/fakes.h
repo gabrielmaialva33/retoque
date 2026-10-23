@@ -5,6 +5,7 @@
 constexpr unsigned kRing = 64;
 #include <array>
 #include <cassert>
+#include <atomic>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -32,6 +33,15 @@ enum D3D12_RESOURCE_DIMENSION
 };
 constexpr HRESULT S_OK = 0;
 constexpr bool FAILED(HRESULT result) { return result < 0; }
+constexpr bool SUCCEEDED(HRESULT result) { return result >= 0; }
+constexpr HRESULT DXGI_ERROR_NOT_FOUND = static_cast<HRESULT>(0x887A0002u);
+struct GUID
+{
+    unsigned long Data1;
+    unsigned short Data2, Data3;
+    unsigned char Data4[8];
+    bool operator==(const GUID& o) const { return std::memcmp(this, &o, sizeof(GUID)) == 0; }
+};
 #define LOG_ERROR(...) ((void) 0)
 #define LOG_DEBUG(...) ((void) 0)
 #define IID_PPV_ARGS(value) value
@@ -118,6 +128,42 @@ struct ID3D12Resource
         assert(!mapped && releases == 0);
         ++releases;
     }
+
+    // Private data, as the runtime keeps it: per object. Reincarnate() is the game releasing this resource and
+    // the allocator handing the same address, at the same description, to a new one -- which starts with none.
+    std::vector<std::pair<GUID, std::vector<unsigned char>>> privateData;
+    HRESULT GetPrivateData(const GUID& guid, UINT* size, void* data)
+    {
+        for (const auto& [key, bytes] : privateData)
+        {
+            if (key == guid)
+            {
+                assert(size != nullptr && *size >= bytes.size());
+                *size = static_cast<UINT>(bytes.size());
+                std::memcpy(data, bytes.data(), bytes.size());
+                return S_OK;
+            }
+        }
+        return DXGI_ERROR_NOT_FOUND;
+    }
+    bool refusePrivateData = false;
+    HRESULT SetPrivateData(const GUID& guid, UINT size, const void* data)
+    {
+        if (refusePrivateData)
+            return -1;
+        const auto* first = static_cast<const unsigned char*>(data);
+        for (auto& [key, bytes] : privateData)
+        {
+            if (key == guid)
+            {
+                bytes.assign(first, first + size);
+                return S_OK;
+            }
+        }
+        privateData.emplace_back(guid, std::vector<unsigned char>(first, first + size));
+        return S_OK;
+    }
+    void Reincarnate() { privateData.clear(); }
 };
 
 // What a descriptor slot holds after a view was written into it.

@@ -103,11 +103,13 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     // bytes would be written the same, not that they still name the same GPU allocation, and an NR
     // scratch texture freed and re-created at the same size -- a feature rebuild does exactly that --
     // can land at the same pointer over different memory. Every CreateScratch advances the
-    // generation, which retires every cached key at once. Game-owned resources have no such token and
-    // rest on pointer and shape, as any cache of someone else's resources must.
+    // generation, which retires every cached key at once. A game-owned resource re-created at the same
+    // address and size advances nothing of ours, so the key also carries the object's own token, kept
+    // on it as private data (BindToken in DlssNr_Dx12.cpp): a new object at an old address has none.
     struct BindKey
     {
         ID3D12Resource* res = nullptr;
+        uint64_t token = 0;
         uint64_t generation = 0;
         UINT64 width = 0;
         UINT height = 0;
@@ -121,10 +123,10 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
 
         bool operator==(const BindKey& o) const
         {
-            return res == o.res && generation == o.generation && width == o.width && height == o.height &&
-                   depthOrArraySize == o.depthOrArraySize && mipLevels == o.mipLevels && dimension == o.dimension &&
-                   format == o.format && viewFormat == o.viewFormat && mipLevel == o.mipLevel &&
-                   translateTypeless == o.translateTypeless;
+            return res == o.res && token == o.token && generation == o.generation && width == o.width &&
+                   height == o.height && depthOrArraySize == o.depthOrArraySize && mipLevels == o.mipLevels &&
+                   dimension == o.dimension && format == o.format && viewFormat == o.viewFormat &&
+                   mipLevel == o.mipLevel && translateTypeless == o.translateTypeless;
         }
     };
 

@@ -59,12 +59,19 @@ makes a stale key look fresh — and since a saturated counter can no longer ret
 `DescriptorReuseAvailable()` turns reuse off entirely at that point rather than leaving keys nothing
 can invalidate.
 
-## What this does not cover
+## A game's resource at an old address (closed 2026-10-23)
 
-A **game-owned** resource released and replaced at the same address with an identical description.
-Those have no lifetime token we can read, and pointer plus shape is all any cache of someone else's
-resources can key on. This is the residual risk, and it is the same one the upstream design
-(`scottmudge` `708f1dd8`) carries; the shape fields narrow it, they do not close it.
+This section used to say a **game-owned** resource released and replaced at the same address with an
+identical description was the residual risk, because such resources "have no lifetime token we can
+read". They have one we can write: private data is kept per object, not per address. `BindToken`
+(`DlssNr_Dx12.cpp`) puts a 64-bit token of ours on every resource the first time `DispatchPass` binds
+it (`SetPrivateData` under a GUID of this module), and the key carries it. A new object at an old
+address carries none, is given a new one, and no key made for the old object matches it; a resource
+that refuses the token is never reused. The descriptor left in the slot would otherwise name freed
+memory -- on native Windows a page fault and a removed device -- so this closes it rather than narrows
+it. The cost is one `GetPrivateData` per binding where the view creation used to be skipped. Found by
+the native-rules audit (`native-api-rules.md`), held by `tests/nr-dispatch`'s replaced-resource case,
+which fails without the token.
 
 ## What is proven, and what is not
 

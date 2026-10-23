@@ -177,6 +177,36 @@ void PresentHost::_ReleaseBuilt()
     _motionResetOwed = true;
 }
 
+bool PresentHost::_QueueIdle()
+{
+    if (_queueDevice == nullptr || _queue == nullptr)
+        return false;
+
+    ID3D12Fence* fence = nullptr;
+    if (FAILED(_queueDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))) || fence == nullptr)
+        return false;
+
+    bool idle = false;
+    if (!FAILED(_queue->Signal(fence, 1)))
+    {
+        idle = fence->GetCompletedValue() >= 1;
+        if (!idle)
+        {
+            HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+            idle = event != nullptr && !FAILED(fence->SetEventOnCompletion(1, event)) &&
+                   WaitForSingleObject(event, 5000) == WAIT_OBJECT_0;
+            if (event != nullptr)
+                CloseHandle(event);
+        }
+    }
+
+    // A fence the queue still owes a signal stays alive: leaked, rather than released under that signal.
+    if (idle)
+        fence->Release();
+
+    return idle;
+}
+
 ID3D12Resource* PresentHost::Output() const
 {
     if (!_recorded || !_recordedPass || _fromWorking == nullptr)
@@ -439,6 +469,8 @@ bool PresentHost::Record(ID3D12Device* device, ID3D12GraphicsCommandList* cmdLis
     _recordedPass = false;
     _hdrRecordedProfile = 0;
     _motionRecorded = false;
+    _queueDevice = device;
+    _queue = queue;
 
     if (_failed || device == nullptr || cmdList == nullptr || source == nullptr)
         return false;
@@ -823,6 +855,21 @@ void PresentHost::AbandonRecording()
     // where its resources are is now a description of a recording nobody ran. Everything is rebuilt
     // rather than reasoned about: a wrong StateBefore is a barrier the runtime rejects, and the
     // cheapest way to be sure is to have nothing left to be wrong about.
+    //
+    // Rebuilt behind the queue, not under it: the abandoned list never ran, but the frames before it did, on the
+    // same queue, and may still be reading what is about to be freed. A queue that cannot be shown idle keeps
+    // everything, and this host declines for the session; Release frees it after the caller's own teardown drain.
+    if (!_QueueIdle())
+    {
+        LOG_ERROR("DLSS-NR present host: a recording was abandoned and the queue could not be shown idle; keeping its "
+                  "resources and declining for the session");
+        _failed = true;
+        _recorded = false;
+        _recordedPass = false;
+        _hdrRecordedProfile = 0;
+        return;
+    }
+
     LOG_WARN("DLSS-NR present host: a recording was abandoned, rebuilding its resources");
     _ReleaseBuilt();
 
