@@ -53,6 +53,59 @@ constexpr bool Wanted(bool enabled, bool available, uint32_t workWidth, uint32_t
     return depthWidth > workWidth || depthHeight > workHeight || motionWidth > workWidth || motionHeight > workHeight;
 }
 
+// A guide region as the model is handed it: where it starts in its texture, and its size.
+struct Region
+{
+    uint32_t baseX = 0;
+    uint32_t baseY = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+};
+
+// What the model is handed for depth and motion, and the motion-vector scale that goes with it.
+struct Handed
+{
+    bool matched = false; // the working-size pair the resample wrote, rather than the game's regions
+    Region depth;
+    Region motion;
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+};
+
+// Which guides a route that cannot fall back to frame-size guides hands over (the Vulkan route,
+// docs/dlssnr/design/reduced-scale-guides-vk.md): the game's regions when no resample is wanted, the matched pair when
+// it is wanted and can run, and otherwise none -- the frame is not run, rather than handed guides that describe some
+// other place than its colour.
+enum class Guides
+{
+    Game,
+    Matched,
+    Refused,
+};
+
+constexpr Guides Choose(bool wanted, bool resampleReady)
+{
+    return !wanted ? Guides::Game : resampleReady ? Guides::Matched : Guides::Refused;
+}
+
+// The plan the model gets. Matched: both guides a full zero-origin region at the working size. Otherwise the game's
+// regions as they are. The scale is fix 2 for the motion texture handed over, or the legacy working / frame conversion
+// with renderMotionScale off: the D3D12 route's arithmetic, in one place.
+constexpr Handed ForModel(bool matched, bool renderMotionScale, Region depth, Region motion, uint32_t workWidth,
+                          uint32_t workHeight, uint32_t frameWidth, uint32_t frameHeight, uint32_t referenceWidth,
+                          uint32_t referenceHeight, float gameScaleX, float gameScaleY)
+{
+    Handed handed;
+    handed.matched = matched;
+    handed.depth = matched ? Region { 0, 0, workWidth, workHeight } : depth;
+    handed.motion = matched ? Region { 0, 0, workWidth, workHeight } : motion;
+    handed.scaleX = renderMotionScale ? ModelMotionScale(gameScaleX, handed.motion.width, referenceWidth)
+                                      : LegacyMotionScale(gameScaleX, workWidth, frameWidth);
+    handed.scaleY = renderMotionScale ? ModelMotionScale(gameScaleY, handed.motion.height, referenceHeight)
+                                      : LegacyMotionScale(gameScaleY, workHeight, frameHeight);
+    return handed;
+}
+
 // The texel of a guide region a working-size texel reads: its centre mapped into the region, floored.
 // The shader computes the same thing; this is the one the tests hold it to.
 constexpr uint32_t PointSource(uint32_t destination, uint32_t destinationExtent, uint32_t regionBase,
