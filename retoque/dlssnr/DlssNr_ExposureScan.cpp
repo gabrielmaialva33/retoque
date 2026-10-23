@@ -40,9 +40,15 @@ constexpr size_t kMaxCandidates = 64;
 // is made; the ones after it wait here. When this is full, the oldest one that was never copied gives way.
 constexpr size_t kMaxWaiting = 192;
 
-// Retiring candidates are held until their copies settle. Past this many, nothing new is promoted to active -- so
-// nothing new is copied, so nothing new can need settling -- until the GPU answers for the ones held.
-constexpr size_t kMaxRetiring = 256;
+// The copy budget: how many held candidates may still have GPU work the scan recorded -- copied and active, copied and
+// waiting with copies not yet settled, and retiring. A candidate's FIRST copy is admitted only below it, so the
+// retiring set, which is made only of such candidates, can never exceed it (review E-05). It bounds a count of
+// references, not bytes: a placed candidate also holds its heap.
+#ifdef DLSSNR_EXPOSURE_SCAN_COPY_BUDGET
+constexpr size_t kCopyBudget = DLSSNR_EXPOSURE_SCAN_COPY_BUDGET; // tests/nr-exposure-scan builds one case with 8
+#else
+constexpr size_t kCopyBudget = 256;
+#endif
 
 // Ring depth for the readbacks. A slot is rewritten only once its recording completed, so four is how many sweeps
 // can be in flight, not how far behind a read is assumed to be retired.
@@ -141,7 +147,7 @@ struct Tracked
     bool moves = false;
 
     bool alive = false;              // the last probe saw a holder besides the scan
-    bool copied = false;             // a copy of it was ever recorded
+    bool copied = false;             // a copy of it was recorded and has not been proven settled since
     DlssNr::Submission::Usage usage; // every recording that copied it
 };
 
@@ -179,7 +185,7 @@ struct ScanState
     bool barrenLogged = false; // once per transition into the barren cadence
     bool saidUntracked = false;
     bool saidUnconfirmed = false;
-    bool saidRetiringFull = false;
+    bool saidBudget = false;
     unsigned int nearMissLogged = 0; // bounded diagnostic; see NoteResource
     unsigned int passedOver = 0;     // candidates seen while the scan was not wanted, and not kept (Adopt)
     unsigned int eventLines = 0;
@@ -188,6 +194,17 @@ struct ScanState
 
 ScanState g_scan;
 std::mutex g_scanMutex;
+
+// Whether the scan holds anything at all, so a Tick with the scan off can skip the lock when there is nothing to let go
+// of (every NR frame of every session that never chose the scan).
+std::atomic<bool> g_holding { false };
+
+// Under g_scanMutex.
+void NoteHoldingLocked()
+{
+    g_holding.store(!g_scan.active.empty() || !g_scan.waiting.empty() || !g_scan.retiring.empty(),
+                    std::memory_order_relaxed);
+}
 
 // Whether the resource-creation detours went in when the device was hooked. They are attached only if
 // Neural Rendering was on at that moment, so a session that turns it on later has a scan that can
@@ -470,6 +487,16 @@ void ProbeLocked()
     probe(g_scan.active);
     probe(g_scan.waiting);
 
+    // A candidate moved aside stops being copied; once its copies settle it holds no GPU work and leaves the budget.
+    for (Tracked& t : g_scan.waiting)
+    {
+        if (t.copied && DlssNr::Submission::Settled(t.usage))
+        {
+            t.copied = false;
+            t.usage = {};
+        }
+    }
+
     for (auto it = g_scan.retiring.begin(); it != g_scan.retiring.end();)
     {
         if (!DlssNr::Submission::Settled(it->usage) && !DeviceRemoved(it->resource))
@@ -482,6 +509,62 @@ void ProbeLocked()
         g_scan.since.released++;
         it = g_scan.retiring.erase(it);
     }
+}
+
+// What a feature release may carry: a committed candidate on a live device. A placed one is released there, as the
+// wipe did: holding its heap keeps memory allocated, but nothing tells the scan the resource is still the one active
+// in that memory, or resident (review E-03), so it is not carried past a point where the game reorganises.
+bool CarriedAcrossRelease(const Tracked& t) { return t.origin == Origin::Committed && !DeviceRemoved(t.resource); }
+
+// Under g_scanMutex. The scan is no longer wanted, or NR is off (review E-02): nothing is copied again and nothing is
+// kept for later. Each candidate goes as soon as nothing on the GPU can still use it (RetireLocked); at a feature
+// release (`boundary`), one that may not be carried across it goes there and then.
+void LetGoLocked(bool boundary)
+{
+    unsigned int count = (unsigned int) (g_scan.active.size() + g_scan.waiting.size());
+
+    auto all = [boundary](auto& list)
+    {
+        for (Tracked& t : list)
+        {
+            if (boundary && !CarriedAcrossRelease(t))
+            {
+                ReleaseNow(t);
+                g_scan.since.released++;
+                continue;
+            }
+
+            RetireLocked(std::move(t));
+        }
+
+        list.clear();
+    };
+
+    all(g_scan.active);
+    all(g_scan.waiting);
+
+    for (auto it = g_scan.retiring.begin(); it != g_scan.retiring.end();)
+    {
+        const bool now = (boundary && !CarriedAcrossRelease(*it)) || DlssNr::Submission::Settled(it->usage) ||
+                         DeviceRemoved(it->resource);
+
+        if (!now)
+        {
+            ++it;
+            continue;
+        }
+
+        ReleaseNow(*it);
+        g_scan.since.released++;
+        it = g_scan.retiring.erase(it);
+    }
+
+    if (count != 0)
+        LOG_INFO("DLSS-NR exposure scan: the scan is off; {} candidate(s) let go, {} kept only until the GPU is done "
+                 "with the scan's copies of them",
+                 count, (unsigned int) g_scan.retiring.size());
+
+    NoteHoldingLocked();
 }
 
 // Under g_scanMutex. One certified reading for `t`.
@@ -608,19 +691,6 @@ void PromoteOneLocked()
 // moves is ever moved aside or retired here.
 void RebalanceLocked()
 {
-    if (g_scan.retiring.size() >= kMaxRetiring)
-    {
-        if (!g_scan.saidRetiringFull)
-        {
-            g_scan.saidRetiringFull = true;
-            LOG_WARN("DLSS-NR exposure scan: {} let-go candidates are still waiting for the GPU to confirm their "
-                     "copies; nothing new is read until it does",
-                     g_scan.retiring.size());
-        }
-
-        return;
-    }
-
     auto fill = []
     {
         while (g_scan.active.size() < kMaxCandidates && !g_scan.waiting.empty())
@@ -687,7 +757,9 @@ const char* SweepLocked(ID3D12GraphicsCommandList* cmdList)
     {
         const unsigned int s = (g_scan.nextSlot + k) % kSlots;
 
-        if (!g_scan.slots[s].pending)
+        // Read (or discarded) is not enough: the recording that last wrote the slot must also be one that cannot run
+        // again, or a replay of it could overwrite what the next recording writes there (review E-04).
+        if (!g_scan.slots[s].pending && DlssNr::Submission::Settled(g_scan.slots[s].usage))
         {
             chosen = s;
             break;
@@ -711,7 +783,7 @@ const char* SweepLocked(ID3D12GraphicsCommandList* cmdList)
     if (dst == nullptr)
         return nullptr;
 
-    // The previous recording into this slot completed (and was read) or was discarded: none of it is needed now.
+    // The previous recording into this slot was read or discarded, and has settled: none of it is needed now.
     slot.usage = {};
 
     if (!DlssNr::Submission::Track(cmdList, slot.usage))
@@ -727,6 +799,15 @@ const char* SweepLocked(ID3D12GraphicsCommandList* cmdList)
 
     slot.ids.fill(0);
 
+    // Held candidates that may still have GPU work the scan recorded (kCopyBudget).
+    size_t inBudget = g_scan.retiring.size();
+
+    for (const Tracked& t : g_scan.active)
+        inBudget += t.copied;
+
+    for (const Tracked& t : g_scan.waiting)
+        inBudget += t.copied;
+
     // The state a candidate is in is the game's business and nothing here has a contract about it.
     //
     // UNORDERED_ACCESS is the assumption, and it is the reasonable one: every candidate got here by
@@ -741,6 +822,19 @@ const char* SweepLocked(ID3D12GraphicsCommandList* cmdList)
 
         if (t.resource == nullptr || !t.alive)
             continue;
+
+        if (!t.copied && inBudget >= kCopyBudget)
+        {
+            if (!g_scan.saidBudget)
+            {
+                g_scan.saidBudget = true;
+                LOG_WARN("DLSS-NR exposure scan: {} held candidates still have copies the GPU has not settled; no new "
+                         "candidate is copied until some do",
+                         inBudget);
+            }
+
+            continue;
+        }
 
         // Into the candidate's own usage before anything of it is recorded: its release waits for this recording.
         // Finished recordings are let go of first; a game that never resets its old lists would otherwise fill the
@@ -780,6 +874,7 @@ const char* SweepLocked(ID3D12GraphicsCommandList* cmdList)
         Barrier(cmdList, t.resource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         slot.ids[i] = t.id;
+        inBudget += !t.copied;
         t.copied = true;
     }
 
@@ -932,11 +1027,11 @@ void Adopt(ID3D12Resource* resource, const std::string& shape, unsigned int byte
         std::any_of(g_scan.retiring.begin(), g_scan.retiring.end(), held))
         return;
 
-    // Past the retiring bound nothing new is copied (RebalanceLocked), so a newcomer waits even with a place free.
-    const bool toActive = g_scan.active.size() < kMaxCandidates && g_scan.retiring.size() < kMaxRetiring;
+    const bool toActive = g_scan.active.size() < kMaxCandidates;
 
     if (!toActive && g_scan.waiting.size() >= kMaxWaiting)
     {
+        // Never copied, or its copies settled: nothing on the GPU can still be reading it.
         auto oldest =
             std::find_if(g_scan.waiting.begin(), g_scan.waiting.end(), [](const Tracked& t) { return !t.copied; });
 
@@ -956,7 +1051,6 @@ void Adopt(ID3D12Resource* resource, const std::string& shape, unsigned int byte
             return;
         }
 
-        // Never copied, so nothing on the GPU can still be reading it.
         g_scan.since.dropped++;
 
         if (EventLineLocked())
@@ -992,6 +1086,8 @@ void Adopt(ID3D12Resource* resource, const std::string& shape, unsigned int byte
         g_scan.active.push_back(std::move(t));
     else
         g_scan.waiting.push_back(std::move(t));
+
+    NoteHoldingLocked();
 }
 
 void NoteResource(const D3D12_RESOURCE_DESC* desc, ID3D12Resource* resource, ID3D12Heap* heap)
@@ -1089,7 +1185,17 @@ void NoteUav(ID3D12Resource* resource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* d
 void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList)
 {
     if (!Wanted())
+    {
+        // Turned off with candidates held: let them go, and keep draining the ones that wait for the GPU. Nothing
+        // else runs, and with nothing held this is one relaxed load.
+        if (g_holding.load(std::memory_order_relaxed))
+        {
+            std::lock_guard<std::mutex> lock(g_scanMutex);
+            LetGoLocked(false);
+        }
+
         return;
+    }
 
     if (BlindSinceStart())
         return;
@@ -1114,6 +1220,7 @@ void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList)
 
     if (g_scan.active.empty() && g_scan.waiting.empty())
     {
+        NoteHoldingLocked();
         g_scan.status = g_scan.passedOver != 0
                             ? "nothing kept yet: exposures created before the scan was chosen were not kept -- "
                               "restart the game with the scan selected"
@@ -1194,6 +1301,7 @@ void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList)
 
     g_scan.frames++;
     g_scan.status = problem != nullptr ? problem : "";
+    NoteHoldingLocked();
 }
 
 Verdict Where()
@@ -1549,56 +1657,74 @@ std::string SerializeAnchors()
 //
 // This used to release and forget every candidate, which is what stopped the use-after-free that removed the device
 // in Cyberpunk (70f17250): a Streamline/DLSS-D resource the scan held outlived the placed heap its owner freed at
-// teardown, and the scan went on copying it. That guarantee is now given by other means for everything whose memory
-// the scan can keep alive, and kept by the old means for the rest:
+// teardown, and the scan went on copying it. It is now that wipe for everything but one kind of candidate:
 //
-// - A candidate seen only through a view (Origin::View) has a heap the scan does not know, so it is released here,
-//   while that heap still exists, exactly as before. So is any candidate whose device was removed (DeviceRemoved).
-// - A committed candidate owns its memory, and a placed one's heap is held by the scan alongside it, so keeping the
-//   reference cannot leave either pointing at freed memory. Neither is copied again until a Tick has probed it, and
-//   every Tick probes before it records: one the teardown let go of is found let go at the next frame, never copied
-//   after it, and released once its earlier copies settle. One the game still holds stays watched -- a game that
-//   keeps its exposure across a DLSS quality change keeps it in the scan, and one that re-created it just before
-//   (Cyberpunk, 0.25 s before the release) has the new one waiting for a place the let-go old ones free.
+// - A committed candidate on a live device owns its memory, so keeping the reference cannot leave it pointing at
+//   freed memory, and it cannot be aliased. It is kept, not copied again until a Tick has probed it, and every Tick
+//   probes before it records: one the teardown let go of is found at the next frame, never copied after it, and
+//   released once its earlier copies settle. One the game still holds stays watched -- a game that keeps its
+//   exposure across a DLSS quality change keeps it in the scan.
+// - Everything else is released here and then, as before: a candidate seen only through a view (its heap is
+//   unknown), a placed one (holding its heap keeps memory, not the resource's claim on it: aliasing and residency are
+//   the game's, review E-03), and any on a removed device.
+// - With the scan off, or NR off, nothing is kept at all (LetGoLocked, review E-02).
 //
-// Our own readback ring is not touched here: it may have GPU copies in flight. Nothing is held unless the scan is
-// wanted (Adopt), so with the scan off, or NR off, this finds nothing to do.
+// Our own readback ring is not touched here: it may have GPU copies in flight.
 void ReleaseTrackedResources()
 {
     std::lock_guard<std::mutex> lock(g_scanMutex);
 
-    unsigned int kept = 0;
-    unsigned int released = 0;
-
-    auto boundary = [&](auto& list)
-    {
-        for (auto it = list.begin(); it != list.end();)
-        {
-            if (it->origin != Origin::View && !DeviceRemoved(it->resource))
-            {
-                it->alive = false; // re-checked before anything copies it again
-                ++kept;
-                ++it;
-                continue;
-            }
-
-            ReleaseNow(*it);
-            ++released;
-            it = list.erase(it);
-        }
-    };
-
-    boundary(g_scan.active);
-    boundary(g_scan.waiting);
-    boundary(g_scan.retiring);
-
-    g_scan.since.released += released;
     g_scan.complained = false;
     g_scan.barrenLogged = false;
 
+    if (!Config::Instance()->DlssNrEnabled.value_or_default() || !Wanted())
+    {
+        LetGoLocked(true);
+        return;
+    }
+
+    unsigned int kept = 0;
+    unsigned int released = 0;
+
+    // Probed here too, not only at the next frame: if the pass stops reaching Tick, one the game already let go of
+    // must not wait for a frame that never comes. The teardown that follows is caught by the next probe, frame or
+    // release, whichever comes first.
+    auto boundary = [&](auto& list, bool retiring)
+    {
+        for (auto it = list.begin(); it != list.end();)
+        {
+            if (!CarriedAcrossRelease(*it))
+            {
+                ReleaseNow(*it);
+                ++released;
+                it = list.erase(it);
+                continue;
+            }
+
+            if (retiring ? DlssNr::Submission::Settled(it->usage) : OthersHolding(it->resource) == 0)
+            {
+                Tracked t = std::move(*it);
+                it = list.erase(it);
+                RetireLocked(std::move(t));
+                continue;
+            }
+
+            it->alive = false; // re-checked before anything copies it again
+            ++kept;
+            ++it;
+        }
+    };
+
+    boundary(g_scan.retiring, true);
+    boundary(g_scan.active, false);
+    boundary(g_scan.waiting, false);
+
+    g_scan.since.released += released;
+    NoteHoldingLocked();
+
     if (kept != 0 || released != 0)
-        LOG_INFO("DLSS-NR exposure scan: a feature is being released; {} candidate(s) kept and re-checked before "
-                 "the next copy, {} seen only through a view or on a removed device released now",
+        LOG_INFO("DLSS-NR exposure scan: a feature is being released; {} committed candidate(s) kept and re-checked "
+                 "before the next copy, {} placed, seen only through a view or on a removed device released now",
                  kept, released);
 }
 
@@ -1631,6 +1757,7 @@ void Shutdown()
     }
 
     g_scan.nextSlot = 0;
+    NoteHoldingLocked();
     g_scan.frames = 0;
     g_scan.writes = 0;
     g_scan.barrenLogged = false;

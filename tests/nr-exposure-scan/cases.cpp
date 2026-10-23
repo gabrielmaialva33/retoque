@@ -777,25 +777,30 @@ void RemovedAtBoundary()
 }
 
 // A game that records each frame into a new list and never resets the old ones: completed recordings are never
-// sealed, so a candidate's usage must still let go of the finished ones or it fills and the candidate stops being
-// copied.
+// sealed. A readback slot is reused only once its recording settles (complete and aged out of the tracker's replay
+// window, review E-04), so the sweep slows to a few per window -- but it keeps going, a candidate's usage never fills,
+// and the exposure is found.
 void FreshLists()
 {
     Begin();
     Resource* exposure = Create("exposure", Exposure(0.5f, 0));
     std::deque<List> lists;
-    for (int f = 0; f < 300; ++f)
+    unsigned perWindow[6] = {};
+    for (int f = 0; f < 6 * 128; ++f)
     {
         exposure->SetFloat(Exposure(0.5f, f));
         List& list = lists.emplace_back();
         const unsigned before = g_copiesRecorded;
         Scan::Tick(&g_device, &list);
-        if (f >= 200)
-            Expect(g_copiesRecorded > before || f % 4 != 0, "still copied after " + std::to_string(f) + " frames");
+        perWindow[f / 128] += g_copiesRecorded - before;
         Execute(list);
         Complete();
         Advance();
     }
+    for (int w = 1; w < 6; ++w)
+        Expect(perWindow[w] > 0, "still copied in window " + std::to_string(w) + " of 128 frames");
+    std::printf("  fresh lists: copies per 128 frames %u %u %u %u %u %u\n", perWindow[0], perWindow[1], perWindow[2],
+                perWindow[3], perWindow[4], perWindow[5]);
     Expect(FoundExposure(Best(), 0.5f), "found on lists that are never reset");
 }
 
@@ -832,6 +837,32 @@ void ReplayAfterPrune()
     for (int f = 0; f < 3; ++f)
         Frame();
     Expect(q->destroyed, "released once that list was reset");
+}
+
+// Review E-01, the model rule on its own: 57 completed recordings of lists that are kept and never reset, inside the
+// replay window. PruneFinished (the production template) keeps every one; the admission pruning it replaced cut one.
+void PruneModel()
+{
+    std::deque<List> lists;
+    DlssNr::Submission::Usage usage;
+    for (int i = 0; i < 57; ++i)
+    {
+        List& l = lists.emplace_back();
+        Expect(DlssNr::Submission::Track(&l, usage), "tracked");
+        Execute(l);
+        Complete();
+        Advance();
+    }
+    DlssNr::Submission::Usage cut = usage;
+    DlssNr::Submission::Detail::PruneFinished(usage, completedValue, g_model.Clock(), g_model.Strict());
+    Expect(Epochs(usage) == 57,
+           "PruneFinished keeps completed recordings that may still run (" + std::to_string(Epochs(usage)) + ")");
+    DlssNr::Submission::Detail::PruneLifetime(cut, completedValue, g_model.Clock(), g_model.Strict());
+    Expect(Epochs(cut) < 57, "the admission pruning would have cut one (the review's E-01)");
+    for (int i = 0; i < 130; ++i)
+        Advance();
+    DlssNr::Submission::Detail::PruneFinished(usage, completedValue, g_model.Clock(), g_model.Strict());
+    Expect(Epochs(usage) == 0, "aged out of the replay window, they go");
 }
 
 // Review E-04: a readback slot is not rewritten while the recording that last wrote it can still run. `a` copies x
@@ -890,6 +921,8 @@ void OffAfterOn()
     Config::Instance()->DlssNrWhitePointSource = 0;
     for (int f = 0; f < 3; ++f)
         Frame();
+    Expect(waiting->ScanRefs() == 0 && copied->ScanRefs() == 0,
+           "frames of the pass with the scan off let go of what it held, before any feature release");
     Scan::ReleaseTrackedResources();
     GameRelease(copied);
     for (int f = 0; f < 3; ++f)
@@ -928,6 +961,21 @@ void PlacedAtBoundary()
     Scan::ReleaseTrackedResources();
     Expect(p->ScanRefs() == 0 && heap.refs == 1, "a placed candidate and its heap are released at the boundary");
     Expect(c->ScanRefs() == 1, "a committed one is kept");
+}
+
+// With the scan wanted but no frame of the pass reaching Tick any more, a committed candidate the game let go of is
+// released at the next feature release, not held until a frame that never comes.
+void BoundaryProbe()
+{
+    Begin();
+    Resource* gone = Create("gone", 1.0f);
+    Resource* kept = Create("kept", 2.0f);
+    for (int f = 0; f < 5; ++f)
+        Frame();
+    GameRelease(gone);
+    Scan::ReleaseTrackedResources();
+    Expect(gone->destroyed, "let go and settled: released at the boundary without a frame");
+    Expect(kept->ScanRefs() == 1, "still held by the game: kept");
 }
 
 // Review cost note: how many list probes the tracker calls of one Tick can make, with 64 candidates read every frame
@@ -1091,12 +1139,9 @@ bool Settled(const Usage& usage)
     return Detail::IsSettled(usage, completedValue, g_model.Clock(), g_model.Strict());
 }
 
-// Mirrors the production PruneFinished (retoque/dlssnr/DlssNr_Submission.cpp; run.py guards the match).
-void PruneFinished(Usage& usage)
-{
-    g_listProbes += Epochs(usage);
-    Detail::PruneLifetime(usage, completedValue, g_model.Clock(), g_model.Strict());
-}
+// Mirrors the production PruneFinished (retoque/dlssnr/DlssNr_Submission.cpp; run.py guards the match): the model's
+// own PruneFinished, and no orphan refresh, so no list probes.
+void PruneFinished(Usage& usage) { Detail::PruneFinished(usage, completedValue, g_model.Clock(), g_model.Strict()); }
 
 const char* LastRefusal() { return "injected-refusal"; }
 } // namespace DlssNr::Submission
@@ -1121,9 +1166,11 @@ int main(int argc, char** argv)
         { "removed-boundary", RemovedAtBoundary },
         { "fresh-lists", FreshLists },
         { "replay-prune", ReplayAfterPrune },
+        { "prune-model", PruneModel },
         { "replay-slot", ReplaySlot },
         { "off-after-on", OffAfterOn },
         { "placed-boundary", PlacedAtBoundary },
+        { "boundary-probe", BoundaryProbe },
         { "cost", Cost },
 #ifdef DLSSNR_EXPOSURE_SCAN_COPY_BUDGET
         { "budget", Budget },

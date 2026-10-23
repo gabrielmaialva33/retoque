@@ -114,8 +114,23 @@ harvest = body(scan, 'void HarvestLocked(')
 guard(lambda: 'Submission::Completed(slot.usage)' in harvest, 'readings come from completed recordings only')
 guard(lambda: 'writes >= kSlots' not in scan, 'no reading on elapsed sweeps')
 boundary = body(scan, 'void ReleaseTrackedResources()')
-guard(lambda: 'Origin::View' in boundary, 'the boundary releases view candidates')
+carried = body(scan, 'bool CarriedAcrossRelease(const Tracked& t)')
+guard(lambda: 'CarriedAcrossRelease(*it)' in boundary and 'Origin::Committed' in carried,
+      'the boundary carries only committed candidates (review E-03); placed and view ones are released there')
 guard(lambda: 'tracked.clear()' not in boundary, 'the boundary does not forget the rest')
+guard(lambda: boundary.index('!Wanted()') < boundary.index('LetGoLocked(true);') < boundary.index('auto boundary'),
+      'with the scan or NR off, the boundary lets everything go (review E-02)')
+guard(lambda: tick.index('if (!Wanted())') < tick.index('LetGoLocked(false);') < tick.index('BlindSinceStart()'),
+      'a Tick with the scan off lets go of what is held (review E-02)')
+guard(lambda: "!g_scan.slots[s].pending && DlssNr::Submission::Settled(g_scan.slots[s].usage)" in sweep,
+      'a readback slot is reused only once its last recording settled (review E-04)')
+submission = read('retoque/dlssnr/DlssNr_Submission.cpp')
+prune = body(submission, 'void PruneFinished(Usage& usage)')
+guard(lambda: 'Detail::PruneFinished(' in prune and 'RefreshOrphans(' not in prune and 'PruneLifetime' not in prune,
+      'PruneFinished drops finished epochs only, without the capacity cut or an orphan refresh (review E-01, cost)')
+stub = read('tests/nr-exposure-scan/cases.cpp')
+guard(lambda: 'void PruneFinished(Usage& usage) { Detail::PruneFinished(' in stub,
+      'the suite\'s PruneFinished stub is the production rule')
 
 for ok, what in guards:
     print(('PASS ' if ok else 'FAIL ') + 'guard: ' + what)

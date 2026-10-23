@@ -155,9 +155,9 @@ float AnchoredWhitePoint(float scanNow, bool inverted, float trim);
 void LoadAnchors(const std::string& serialized);
 std::string SerializeAnchors();
 
-// A feature is being released (the top of NVSDK_NGX_D3D12_ReleaseFeature). Candidates seen only through a view are
-// released now, as the scan always did; the rest are kept and re-checked before anything copies them again
-// (docs/dlssnr/design/exposure-scan-capacity.md, section 5).
+// A feature is being released (the top of NVSDK_NGX_D3D12_ReleaseFeature). Only committed candidates on a live device
+// are kept, and re-checked before anything copies them again; the rest are released now, as the scan always did, and
+// with the scan or NR off nothing is kept (docs/dlssnr/design/exposure-scan-capacity.md, section 5).
 void ReleaseTrackedResources();
 
 void Shutdown();

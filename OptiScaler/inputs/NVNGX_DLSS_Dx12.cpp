@@ -859,10 +859,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_ReleaseFeature(NVSDK_NGX_Handle* 
     if (!InHandle)
         return NVSDK_NGX_Result_Success;
 
-    // Before any feature's resources are freed, tell the exposure scan: what it cannot keep alive safely is
-    // released here, and nothing it keeps is copied again until it has checked the game still holds it -- a
+    // Before any feature's resources are freed, tell the exposure scan: everything but a committed candidate is
+    // released here, and what it keeps is not copied again until it has checked the game still holds it -- a
     // Streamline/DLSS-D resource used after its heap is freed here was the Cyberpunk device removal
-    // (docs/dlssnr/design/exposure-scan-capacity.md). Nothing is held unless the scan is wanted.
+    // (docs/dlssnr/design/exposure-scan-capacity.md). With the scan off, nothing is kept.
     DlssNr::ExposureScan::ReleaseTrackedResources();
 
     auto handleId = InHandle->Id;

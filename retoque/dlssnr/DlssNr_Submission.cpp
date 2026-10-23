@@ -303,9 +303,10 @@ bool OnlyUnanswerableLeft(const Usage& usage)
 
 void PruneFinished(Usage& usage)
 {
+    // No RefreshOrphans: an orphan flag only lets an epoch finish earlier, and Settled refreshes the flags of the
+    // shared epochs anyway. Refreshing here cost a list AddRef/Release per epoch per copied candidate per sweep.
     std::lock_guard lock(stateMutex);
-    RefreshOrphans(usage);
-    Detail::PruneLifetime(usage, FenceValue, model.Clock(), model.Strict());
+    Detail::PruneFinished(usage, FenceValue, model.Clock(), model.Strict());
 }
 
 void Prune(Usage& usage)
