@@ -1,8 +1,9 @@
 # Guides at the working size on the Vulkan route
 
-Status: **design, 2026-10-23.** The Vulkan half of [reduced-scale-guides.md](reduced-scale-guides.md) (fix 1, matched
-guides), which holds for this route unchanged except where this note says otherwise. Nothing here is measured in a game
-yet.
+Status: **built 2026-10-23; host-tested, and run on a real device under Wine (`tests/guide-match-vk`,
+`tests/vulkan-present-host` `nr-route-guides`); not measured in a game.** The Vulkan half of
+[reduced-scale-guides.md](reduced-scale-guides.md) (fix 1, matched guides), which holds for this route unchanged except
+where this note says otherwise. Written before the code, as the design; the sections below are what was built.
 
 ## What is wrong now
 
@@ -128,10 +129,11 @@ per axis.
 
 On the game's command buffer inside the route, after the encode and the downsample, immediately before the model.
 
-The decision comes before anything is recorded. Whether the resample is wanted, and whether it can run (the pass made,
-the images there, the game's views readable), is settled after the guide geometry is known and before the first
-timestamp or barrier. A refusal therefore records nothing. Recording itself cannot fail once that is settled, because
-descriptor writes and `vkCmd*` return nothing.
+The decision comes before the frame's own commands. Whether the resample is wanted, and whether it can run (the pass
+made, the images there, the game's views readable), is settled after the guide geometry is known and before the first
+timestamp, barrier or dispatch. A refusal therefore records none of the pass's commands. The one thing that can precede
+it is a feature the route built that frame after a resize, which is NGX's own creation and is kept for the next frame.
+Recording itself cannot fail once that is settled, because descriptor writes and `vkCmd*` return nothing.
 
 ### Lifetime
 
@@ -202,6 +204,15 @@ DLSS-NR Vulkan guides matched to the working size: depth and motion 1720x720 for
 DLSS-NR Vulkan model motion scale 1720.0 x 720.0: game scale 2293.0 x 960.0 measured against 2293x960 (render size, low-resolution vectors), motion texture 1720x720 (matched to the working size), model 1720x720
 ```
 
+The pass's creation, once per device and again after each hand-back freed it:
+
+```
+DLSS-NR Vulkan: the guide resample is up (push constants 48 bytes, 16 descriptor sets)
+```
+
+With `MatchGuides=false` and guides larger than the model, once: `DLSS-NR Vulkan guides: larger than the 1720x720 model
+and not resampled (MatchGuides is off); the model gets the frame-size guides`.
+
 A refusal reads, once per reason:
 
 ```
@@ -219,13 +230,19 @@ DLSS-NR Vulkan guides: larger than the 1720x720 model and the resample cannot ru
   - It drives fakes and pure functions, not Vulkan.
 - **Wine, a new suite `guide-match-vk`.** The production pass on a real device under Wine, with the Khronos layer's
   core and synchronization checks (proved active) and zero errors required.
-  - Analytic depth goes in through a `D32_SFLOAT` depth view and an `R32_SFLOAT` colour image, and analytic motion
-    through `R16G16_SFLOAT` and `R32G32_SFLOAT`, all in `SHADER_READ_ONLY_OPTIMAL` and with non-zero subrect bases.
-  - The cases run at 0.5 and at DLSS Quality's 0.667 render scale against a 0.5 model, and three frames run in flight
-    over the ring.
+  - Analytic depth goes in through `D32_SFLOAT`, a depth view of `D32_SFLOAT_S8_UINT` and an `R32_SFLOAT` colour image,
+    and analytic motion through `R16G16_SFLOAT` and `R32G32_SFLOAT`, all in `SHADER_READ_ONLY_OPTIMAL`, with non-zero
+    subrect bases.
+  - The shapes: DOOM's 2293x960 under 1720x720, display-resolution vectors, the route harness's 960x540 under 640x360,
+    an exact 2:1, and an extent that is not a multiple of eight. DOOM's shape also runs 20 frames with three in flight,
+    the inputs changing and the outputs shared, so the descriptor ring wraps.
   - Every texel read back must equal `PointSource`'s prediction exactly.
-- **Wine, `vulkan-present-host`:** a route case at `WorkingScale=0.5` with guides larger than the model, behind
-  OptiScaler's FSR 2.2. It holds the matched line, the model's edit and validation clean, with the real model reading
-  the matched guides.
+- **Wine, `vulkan-present-host`: `nr-route-guides`,** `nr-route-quiet` with the game rendering 960x540 under
+  `WorkingScale=0.5`, behind OptiScaler's FSR 2.2. The route's 640x360 model has larger guides. It holds:
+  - the matched line, the scale line and the pass made on each of the route's three runs;
+  - no refusal, and every evaluate accepted by the real model reading the matched guides;
+  - validation clean of the host's errors;
+  - everything `nr-route-quiet` holds.
+  The route's output is never presented, so the model's edit on it is not read back.
 - **Not covered: the picture.** Whether the shimmer goes on DOOM Eternal at 0.5 is the in-game check: arm A the
   defaults, arm B `MatchGuides=false`, the same spot, a pan and a stop.
