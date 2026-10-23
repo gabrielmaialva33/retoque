@@ -473,6 +473,7 @@ says which rows to drop from this table then. #1138 is the exception: upstream m
 | `10c6760`, `8e021bff`, `47138ca0`, `4d2c8078`, 2026-09-19 | `menu/menu_overlay_vk.cpp`, `hooks/VulkanwDx12_Hooks.cpp` | Bounded fence wait; submit on the queue that presents; no leaks across swapchain recreation; no D3D12 probe in a native Vulkan overlay's `Init`; non-graphics present family (id Tech 7) drawn on the graphics queue with ownership transfers and a three-submit semaphore chain; per-`VkQueue` recursive lock in the `vkQueueSubmit` hooks. Upstream's menu blur (`f72e47b9`) was ported in by hand on 2026-10-12 and is **off on the cross-family path** (its first barrier does not chain after our acquire); `DxOverlayOwnsBackend` reads `dxgiIsDxvk` (`ac7a0111`'s name for `usesDxvk`). Diverged beyond #1138's version of this file, so kept whole; #1138's release of `_vkCleanMutex` across `RenderMenu` was not taken (see below)  Upstream's `ImGui_ImplVulkan_SetQueue` (`01195e9b`, `70f9939f`) is ported on 2026-10-13: ImGui's own texture uploads go to the presenting queue when it is of ImGui's init family, else the init queue; our `NoteDeviceQueues` took upstream's name, `DeviceCreated` | none |
 | `be19e645`, `285bd7a7`, `f462f3ef`, 2026-10-19 | `misc/DeferredRelease.*`, `hooks/Vulkan_Hooks.cpp`, `menu/menu_overlay_vk.cpp`, `retoque/dlssnr/DlssNr_VkPresentHost.cpp` | Retire device-owned deferred callbacks before NR device destruction, synchronized with detached collectors; abandon on loss or an unproven drain; reopen reused device handles; flush queued Vulkan shaders after the menu's successful device-wide idle, preserving its failed-drain retry and cross-family fences. See `docs/linux-proton/upstream-20261019.md` | none (ours) |
 | `d391a944`, `68b5a0e5`, `e35f1c76`, `c397eb1d`, `80a1ab0f`, `77495b8b`, 2026-10-23 | `spoofing/Vulkan_Spoofing.cpp`, `menu/menu_overlay_vk.cpp`, `hooks/FG_Hooks.cpp`, `hooks/Streamline_Hooks.cpp` | Found while taking the sixth merge, all fixes to upstream code: the spoofing's extension lists are `static thread_local` (a second thread's create could rewrite the list another thread had not yet handed to the driver); `vulkanMemoryModelDeviceScope` is enabled wherever #1161 enables `vulkanMemoryModel`; the Vulkan menu's render area is the swapchain extent, not ImGui's client-area `DisplaySize`; the DLSS-G resize hooks keep the frame-latency waitable bit the chain was created with; the MFG clamp limits the count sent to the provider, never the saved `OverrideInterpolationCount`, and re-reads the provider's maximum per provider generation. See `docs/linux-proton/upstream-20261023.md` | none yet; candidates for upstream PRs |
+| `03e7fda3`, 2026-10-23 | `framegen/xefg/XeFG_DynamicCount.h`, `framegen/xefg/XeFG_Dx12.cpp`, `hooks/FG_Hooks.cpp`, `State.h`, `menu/menu_common.cpp`, `OptiScaler.ini` | XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, a pure function appended to `XeFG_DynamicCount.h`) is at most the refresh rate while frame generation presents with V-Sync (`State::fgPresentVsync`, FGPresent's final sync interval): an explicit target or FPS cap above the refresh had both controllers adding frames XeFG drops. janblade `15c1f959`'s behaviour, not its text. `tests/xefg-dynamic-target` | none yet; candidate for an upstream PR |
 
 Not taken from #1138: its `menu_overlay_vk.cpp` drops `_vkCleanMutex` across
 `MenuOverlayBase::RenderMenu` because `RenderMenu` could re-enter `DestroyVulkanObjects` through
@@ -481,6 +482,16 @@ re-entry that did happen here (`Init` reaching D3D12 device creation) was remove
 `getPrimaryGpu()` is cached from startup, so no re-entry path is known; the menu works in DOOM
 Eternal. If a `resource_deadlock_would_occur` ever surfaces from the Vulkan present hook, that
 revision is the fix to port.
+
+Not taken from janblade `ccce7963` (2026-10-21): it widens `HookFGSwapchain`'s `GetFullscreenState` and
+`GetFullscreenDesc` detours from XeFG to FSR-FG, so a game whose FSR-FG chain is kept borderless is told it is
+fullscreen. Here only `hkSetFullscreenState` keeps an FSR-FG chain borderless, and only with `[XeFG]
+ForceBorderless=true` left in the ini: the menu, the game configs and swapchain creation scope that key to XeFG,
+and his other trigger, HDR output's windowed chain, is not in this tree. The D3D11 bridge, meanwhile, asks its
+FSR-FG presenter `GetFullscreenState` to find a real exclusive fullscreen behind its own emulation, which sets
+`SCExclusiveFullscreen`; with the detour and that key, a windowed presenter would read as fullscreen and the bridge
+would send it `SetFullscreenState(FALSE)`, which `hkSetFullscreenState` answers by pausing FG and restyling the
+window. Widening the detour needs the bridge's probes to get the real answer first.
 
 Wine detection (`wine_get_version` → `State::isRunningOnLinux`) is upstream. The upstream fix for
 issue #1101 (dxvk-nvapi recursion in `misc/IdentifyGpu.cpp`) is already in the tree; do not re-apply
