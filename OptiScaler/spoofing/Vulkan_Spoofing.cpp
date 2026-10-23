@@ -919,9 +919,18 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
             o_vkEnumerateDeviceExtensionProperties != nullptr)
         {
             uint32_t count = 0;
-            o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
+            auto result = o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, nullptr);
             std::vector<VkExtensionProperties> supported(count);
-            o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, supported.data());
+            if (result == VK_SUCCESS)
+                result = o_vkEnumerateDeviceExtensionProperties(physicalDevice, nullptr, &count, supported.data());
+
+            // Without the whole list a spoofed name cannot be told from a real one: keep the request as it is, as the
+            // native path below does, rather than drop extensions the device has
+            if (result != VK_SUCCESS)
+            {
+                LOG_WARN("Unable to obtain a complete Vulkan device extension list, preserving requested extensions");
+                return VK_SUCCESS;
+            }
 
             // Per thread, like newExtensionList below: read by the driver after this returns.
             static thread_local std::vector<const char*> filteredExtensions;
