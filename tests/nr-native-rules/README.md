@@ -16,10 +16,11 @@ on someone's Windows machine. The audit it came from, with the findings that are
 | 2 | A root signature costs at most 64 DWORDs; `SetComputeRoot32BitConstants` writes inside its parameter's `Num32BitValues` and only into a constants parameter; `SetComputeRootDescriptorTable` only into a table; no table mixes SAMPLER with CBV/SRV/UAV ranges. | the same |
 | 3 | A committed resource on an UPLOAD heap is created in `GENERIC_READ`, on a READBACK heap in `COPY_DEST` (`D3D12_HEAP_TYPE`). | `CreateCommittedResource` calls and the heap properties declared nearest before them |
 | 4 | A transition names two different states, where both are literals (`D3D12_RESOURCE_TRANSITION_BARRIER`). | `CD3DX12_RESOURCE_BARRIER::Transition` and every local transition/barrier helper |
-| 5 | A CBV's `BufferLocation` is a resource's own GPU address; an offset has to show its 256-byte placement (`D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT`). `nr-invariants` check 5 holds the size. | `BufferLocation =` assignments |
+| 5 | A CBV's `BufferLocation` is a resource's own GPU address; an offset has to show its 256-byte placement (`D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT`). `nr-invariants` check 5 holds the size of `SizeInBytes = sizeof(T)`; the aggregate form `D3D12_CONSTANT_BUFFER_VIEW_DESC v { address, sizeof(T) }` (the cadence probe), which that regex never saw, is held here to the same rule: `T` declared `alignas(256)`, or a literal multiple of 256. | `BufferLocation =` assignments and aggregate CBV descriptors |
+| 7 | A pass whose DXIL carries SFI0's `TypedUAVLoadAdditionalFormats` (a typed UAV load of more than one 32-bit component) asks `CheckFeatureSupport` for `D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD`: past R32_FLOAT/UINT/SINT and the guaranteed set, a format such as `R16G16_SINT` is supported per format ("Typed unordered access view loads"). Found the synthesized-motion estimator loading its R16G16_SINT flow without asking. | SFI0 part of the DXIL container, and the pass's source |
 | 6 | Each committed `.spv`'s push-constant block fits 128 bytes (the guaranteed `maxPushConstantsSize`) at 4-byte offsets; a storage image of format `Unknown` that is read or written carries the capability and its loader checks `shaderStorageImageRead/WriteWithoutFormat`; with `spirv-val` installed, every module validates for Vulkan 1.1. | the SPIR-V words |
 
-Scope: `retoque/shaders/dlssnr/` (and `motion/`), `retoque/shaders/synth_motion/` for checks 1-2 and 6;
+Scope: `retoque/shaders/dlssnr/` (and `motion/`), `retoque/shaders/synth_motion/` for checks 1-2, 6 and 7;
 those plus `retoque/dlssnr/` for 3-5.
 
 Each check is run first against copies of real passes with one violation planted

@@ -22,7 +22,8 @@ native hardware to be found. The audit behind it is docs/dlssnr/design/native-ap
    must differ; the debug layer rejects the barrier, drivers drop it), checked where both are literals.
 5. Constant-buffer view placement. Every CBV's BufferLocation is a resource's own GPU address, with no offset that
    could break the 256-byte placement (D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT). nr-invariants check 5
-   holds the size.
+   holds the size of `SizeInBytes = sizeof(T)`; the aggregate `D3D12_CONSTANT_BUFFER_VIEW_DESC v { address, size }`
+   it never saw is held here: sizeof an alignas(256) struct, or a literal multiple of 256.
 6. SPIR-V. Every committed .spv's push-constant block fits 128 bytes (maxPushConstantsSize's guaranteed minimum,
    VUID-VkPipelineLayoutCreateInfo-pPushConstantRanges-00292 via VkPushConstantRange size), with 4-byte offsets.
    A storage image written or read with format Unknown needs shaderStorageImageWriteWithoutFormat /
@@ -424,6 +425,28 @@ def check_heaps_and_barriers(sources, fail):
             if not re.fullmatch(r'[\w.\->\[\]]+->GetGPUVirtualAddress\(\)', value):
                 fail(f'{rel(path)}:{line_of(text, m.start())}: a constant-buffer view at {m.group(1).strip()}: '
                      'anything but a resource\'s own GPU address needs its 256-byte placement shown')
+        # The aggregate form, `D3D12_CONSTANT_BUFFER_VIEW_DESC v { address, size }`, which neither the line above
+        # nor nr-invariants' `SizeInBytes = sizeof(T)` sees: the address as above, and the size a sizeof(T) of an
+        # alignas(256) struct (nr-invariants check 5's rule) or a literal multiple of 256.
+        for m in re.finditer(r'\bD3D12_CONSTANT_BUFFER_VIEW_DESC\s+\w+\s*\{([^{}]+)\}', text):
+            args = [a.strip() for a in m.group(1).split(',')]
+            if len(args) != 2:
+                continue
+            cbvs += 1
+            where = f'{rel(path)}:{line_of(text, m.start())}'
+            if not re.fullmatch(r'[\w.\->\[\]]+->GetGPUVirtualAddress\(\)', re.sub(r'\s+', '', args[0])):
+                fail(f'{where}: a constant-buffer view at {args[0]}: anything but a resource\'s own GPU address needs '
+                     'its 256-byte placement shown')
+            size = re.fullmatch(r'sizeof\s*\(\s*(\w+)\s*\)', args[1])
+            if size:
+                name = size.group(1)
+                # The struct's declaration from the sources handed in, or else from the pass's own headers on disk.
+                texts = list(sources.values()) + [h.read_text(errors='replace') for h in sibling_headers(path)
+                                                  if h not in sources]
+                if not any(re.search(rf'\bstruct\s+alignas\(256\)\s+{name}\b', t) for t in texts):
+                    fail(f'{where}: a constant-buffer view sized by {name}, which is not declared alignas(256)')
+            elif not (args[1].isdigit() and int(args[1]) % 256 == 0):
+                fail(f'{where}: a constant-buffer view of size {args[1]}, not shown to be a multiple of 256')
     return creations, transitions, cbvs
 
 
@@ -662,6 +685,11 @@ def self_test():
     # 7. The format check taken out of the estimator that loads R16G16_SINT flow.
     expect('typed uav load', {synth: synth_text.replace('D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD', 'D3D12_FORMAT_SUPPORT2_NONE')},
            'never checks D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD')
+    # 5b. An aggregate CBV sized by a struct that is not alignas(256) (the guide resample's 48 bytes, 13f10d60).
+    cadence_header = cadence.with_suffix('.h')
+    header_text = cadence_header.read_text()
+    expect('cbv aggregate size', {cadence: cadence_text, cadence_header: header_text.replace(
+        'struct alignas(256) Constants', 'struct Constants')}, 'which is not declared alignas(256)')
     # 6. SPIR-V: an oversized push-constant block, and a format-less storage write nobody checks.
     pc = root / 'retoque/shaders/synth_motion/precompile/SynthMotion_Expand_Shader_Vk.spv'
     blob = bytearray(pc.read_bytes())
