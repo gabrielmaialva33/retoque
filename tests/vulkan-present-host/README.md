@@ -266,6 +266,30 @@ On build `bfe1b517` (`20261014_224714`), both quiet-route cases and this toggle 
 blockers in the toggle case, starts 96.698/100.320 ms after re-enable, drains 96/98 ms, byte-exact disabled/route
 frames after notifications faded, changed frames after hand-back, and zero host validation errors.
 
+`nr-route-guides` is `nr-route-quiet` with `nr.cpp --route --route-render 960x540` and `[DlssNr] WorkingScale=0.5`.
+The game renders 960x540 behind the 1280x720 output, so the route's 640x360 model has guides larger than it and the
+route resamples them (`docs/dlssnr/design/reduced-scale-guides-vk.md`). It must hold everything `nr-route-quiet`
+holds, with the route's feature at `640x360 (frame 1280x720)`, and:
+
+- the matched line once: `guides matched to the working size: depth and motion 640x360 for a 640x360 model`;
+- the scale line once: `motion scale 0.7 x 0.7 ... motion texture 640x360 (matched to the working size)`;
+- the pass made three times (`the guide resample is up`), once per run of the route, since each hand-back frees it;
+- no refusal and no frame-size guides.
+
+Every evaluate the real model accepts is one where it read the matched guides. The resample's commands go into the
+evaluate's command buffer on the harness's depth (`R32_SFLOAT`) and motion (`R16G16_SFLOAT`), in
+`SHADER_READ_ONLY_OPTIMAL` as NGX takes them, under the same validation. The route's output is never presented, so the
+model's edit on it is not read back.
+
+Measured 2026-10-23 (build of `4bf90718` plus the change):
+
+- **PASS.** Drains of 96 and 93 ms, 81 and 82 exact read-backs while the route held the model, zero host validation
+  errors.
+- **A first run under heavy load from other processes** also passed, with about one present a second during the quiet
+  phases (drains of 1005 ms).
+- **The control fails on the guide checks alone.** The DLL from before the change, its mtime refreshed to pass the
+  freshness check, logs `not resampled (no Vulkan resample yet)` and `motion texture 960x540 (the game's region)`.
+
 What NVIDIA's model records into the host's command buffer is validated too. One report comes from it, once per
 feature build: `VUID-vkCmdDraw-None-09600`, an image of its own named `nv.ngx.dlssnr.resource` used in GENERAL at its
 first evaluate without ever leaving UNDEFINED. The application counts reports naming an `nv.ngx.*` object apart
