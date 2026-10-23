@@ -27,3 +27,6 @@ Separate D3D11 and Vulkan cases require creation fallback without evaluate dimen
 refusal without creation. A shared numeric handle then proves API isolation for dimensions,
 release and DRS, recreation, disabled NR and full 32-bit IDs. The old source-only integration
 guards were replaced by these executed lifetime controls. No new suite/registry entry is needed.
+
+The separate accepted-handle/deferred-backend-success branch in D3D11 executes its own
+Remember statement too. A mutation omitting only that second call must fail the control.

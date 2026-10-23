@@ -83,6 +83,22 @@ DlssNrFrameInfo Evaluate{api}(NVSDK_NGX_Parameter* InParameters, [[maybe_unused]
 }}
 void Release{api}([[maybe_unused]] unsigned handleId) {{ {forget[0] if forget else ""} }}
 """)
+        if api == "D3D11":
+            # Init failure can still publish an accepted handle for deferred backend recovery.
+            # Execute that return path's own Remember, not the normal success path's call.
+            remembers = list(re.finditer(r"DlssNr::RenderGeometry::Remember\([\s\S]*?;", create))
+            deferred = [(position, statement) for position, statement in statements
+                        if not statement.startswith("DlssNr::RenderGeometry::Remember(")]
+            if len(remembers) > 1:
+                deferred.append((remembers[1].start(), remembers[1][0]))
+            deferred.sort()
+            deferred_snapshot = "\n".join(statement for _, statement in deferred)
+            deferred_snapshot = deferred_snapshot.replace("const auto creation", "[[maybe_unused]] const auto creation")
+            functions.append(f"""
+void CreateDeferredD3D11(FakeParams* InParameters, [[maybe_unused]] unsigned handleId) {{
+    {deferred_snapshot}
+}}
+""")
     guard = body(source, "    if (frame.GameGuides && (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight))")
     unit.write_text((HERE/"inputs.cpp.in").read_text().replace("@GATHER@", gather)
                     .replace("@INPUTS@", "\n".join(functions)).replace("@GUARD@", guard))

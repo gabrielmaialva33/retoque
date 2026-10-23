@@ -96,6 +96,13 @@ int main(int argc, char** argv)
     Dimensions(dx11, 40, 20, 80, 40);
     CreateD3D11(&dx11, 77);
 
+    // The accepted handle also needs registration when Init schedules backend recovery.
+    Dimensions(dx11, 40, 20, 80, 40);
+    CreateDeferredD3D11(&dx11, 99);
+    Check(EvaluateD3D11(&empty, 99), 40, 20);
+    ReleaseD3D11(99);
+    Check(EvaluateD3D11(&empty, 99), 0, 0);
+
     // DRS stales only the evaluated API's epoch.
     FakeParams drs;
     drs.Put(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, 36);
@@ -126,5 +133,5 @@ int main(int argc, char** argv)
     Check(EvaluateVulkan(&empty, 77), 0, 0);
     Check(EvaluateD3D12(&empty, 77), 0, 0);
     Check(EvaluateD3D11(&empty, 0xffffffffu), 32, 18);
-    std::puts("PASS: input API isolation (same handle, snapshot, release, DRS, recreation, off, full uint32)");
+    std::puts("PASS: input API isolation (same handle, snapshot, release, DRS, recreation, off, full uint32, deferred Init)");
 }
