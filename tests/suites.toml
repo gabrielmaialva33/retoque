@@ -669,3 +669,11 @@ requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "Native DXGI capture decoding, recorded guide geometry, v1/v2 conformance and mutations."
+
+[fg-resize-flags]
+path = "fg-resize-flags"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Both FG resize hooks preserve the actual per-swapchain waitable creation flag, including creation retry."

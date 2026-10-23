@@ -797,6 +797,16 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
     LOG_DEBUG("BufferCount: {}, Width: {}, Height: {}, NewFormat:{}, SwapChainFlags: {:X}", BufferCount, Width, Height,
               (UINT) NewFormat, SwapChainFlags);
 
+    // The waitable bit is immutable after creation. Read this chain's accepted flags: DLSSG's
+    // creation retry may have dropped it, and SCLastFlags may describe another swapchain.
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG)
+    {
+        DXGI_SWAP_CHAIN_DESC desc {};
+        if (This->GetDesc(&desc) == S_OK)
+            SwapChainFlags = (SwapChainFlags & ~DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) |
+                             (desc.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+    }
+
     auto fgDx12 = State::Instance().currentFG;
     IFGFeature* fg = fgDx12;
 
@@ -1026,6 +1036,16 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
 
     LOG_DEBUG("BufferCount: {}, Width: {}, Height: {}, NewFormat:{}, SwapChainFlags: {:X}, Caller: {}", BufferCount,
               Width, Height, (UINT) Format, SwapChainFlags, Util::WhoIsTheCaller(_ReturnAddress()));
+
+    // The waitable bit is immutable after creation. Read this chain's accepted flags: DLSSG's
+    // creation retry may have dropped it, and SCLastFlags may describe another swapchain.
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG)
+    {
+        DXGI_SWAP_CHAIN_DESC desc {};
+        if (This->GetDesc(&desc) == S_OK)
+            SwapChainFlags = (SwapChainFlags & ~DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT) |
+                             (desc.Flags & DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT);
+    }
 
     auto fgDx12 = State::Instance().currentFG;
     IFGFeature* fg = fgDx12;
