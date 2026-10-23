@@ -52,8 +52,11 @@ def instrument(ref):
     if source.count(anchor) != 1:
         raise RuntimeError('instrumentation include anchor changed')
     source = source.replace(anchor, f'#include "{(HERE / "probe.h").as_posix()}"\n\n' + anchor)
+    # DestroyVulkanObjects returns whether it tore down since 1dca628b (the locked window re-check)
+    destroy = ('bool MenuOverlayVk::DestroyVulkanObjects(' if 'bool MenuOverlayVk::DestroyVulkanObjects(' in source
+               else 'void MenuOverlayVk::DestroyVulkanObjects(')
     for function, counter in [('void MenuOverlayVk::CreateSwapchain(', 'createCalls'),
-                              ('void MenuOverlayVk::DestroyVulkanObjects(', 'destroyCalls'),
+                              (destroy, 'destroyCalls'),
                               ('static bool DestroyVulkanObjectsLocked(bool shutdown)\n{', 'teardownCalls'),
                               ('bool MenuOverlayVk::QueuePresent(', 'presentCalls')]:
         if source.count(function) != 1:
