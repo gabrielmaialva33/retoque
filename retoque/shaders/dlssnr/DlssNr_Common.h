@@ -143,8 +143,8 @@ struct DlssNrFrameInfo
     // DLSS.Render.Subrect.Dimensions. Sizing the guides from the resource instead means handing the
     // model whatever was left in the margin -- stale depth and stale vectors -- and calling it scene.
     //
-    // Zero means the game did not say, in which case the resource's own size is the best answer
-    // available and is what gets used.
+    // Zero means no valid geometry was resolved. Real game guides are refused then; synthetic/zero
+    // guides keep their host-owned resource extent. Creation fallback is scoped to the matching evaluate.
     unsigned int RenderSubrectWidth = 0;
     unsigned int RenderSubrectHeight = 0;
 

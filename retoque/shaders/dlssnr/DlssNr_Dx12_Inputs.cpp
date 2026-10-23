@@ -36,6 +36,8 @@ void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, I
         uint64_t colorWidth = 0, outputWidth = 0;
         unsigned colorHeight = 0, outputHeight = 0, subWidth = 0, subHeight = 0, modelWidth = 0, modelHeight = 0;
         bool haveWidth = false, haveHeight = false;
+        unsigned resolvedWidth = 0, resolvedHeight = 0;
+        DlssNr::RenderSizeSource source = DlssNr::RenderSizeSource::Missing;
         float scale = 1.0f;
         bool operator==(const Contract&) const = default;
     } now;
@@ -55,6 +57,10 @@ void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, I
                     NVSDK_NGX_Result_Success;
     now.haveHeight = params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, &now.subHeight) ==
                      NVSDK_NGX_Result_Success;
+    const auto resolved = DlssNr::ResolveRenderSize(params);
+    now.resolvedWidth = resolved.size.width;
+    now.resolvedHeight = resolved.size.height;
+    now.source = resolved.source;
     now.scale = DlssNr::WorkingScale();
     // Match Dispatch's clamping for logging only; never feed diagnostic values back to rendering.
     if (std::isfinite(now.scale))
@@ -76,10 +82,11 @@ void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, I
     previous[stage] = now;
     LOG_INFO("DLSS-NR spatial contract stage={}: Color-allocation={}x{}, render-subrect={}x{} (width-query={}, "
              "height-query={}), "
-             "game-output={}x{}, model-request={}x{}, WorkingScale={:.3f}",
+             "game-output={}x{}, model-request={}x{}, WorkingScale={:.3f}, render-resolved={}x{} source={}",
              before ? "before" : "after", now.colorWidth, now.colorHeight, now.subWidth, now.subHeight,
              now.haveWidth ? "success" : "absent/failed", now.haveHeight ? "success" : "absent/failed", now.outputWidth,
-             now.outputHeight, now.modelWidth, now.modelHeight, now.scale);
+             now.outputHeight, now.modelWidth, now.modelHeight, now.scale, now.resolvedWidth, now.resolvedHeight,
+             DlssNr::RenderSizeSourceName(now.source));
     if (before && now.outputWidth && now.outputHeight && now.modelWidth >= now.outputWidth &&
         now.modelHeight >= now.outputHeight)
         LOG_INFO("DLSS-NR spatial contract: no spatial reduction before the upscaler; this does not establish DLAA. "
@@ -114,7 +121,7 @@ DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)
             frame.Reset = gameReset != 0;
     }
 
-    // How much of the guides is real. See DlssNrFrameInfo -- zero means the game did not say.
+    // How much of the guides is real. Unknown/incomplete game geometry is refused by Dispatch.
     const auto renderSize = DlssNr::GetRenderSize(params);
     frame.RenderSubrectWidth = renderSize.width;
     frame.RenderSubrectHeight = renderSize.height;

@@ -697,6 +697,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return false;
     }
 
+    if (frame.GameGuides && (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight))
+    {
+        reportSkip("the game's render geometry is unknown or incomplete");
+        return false;
+    }
+
     // Different configured arrival states cannot both describe the same resource. Reject before
     // the first transition; guessing would issue a barrier from a state that never existed.
     if (depth == motion || depth == colour || depth == output || motion == colour || motion == output)
@@ -6107,6 +6113,11 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         if ((subW == 0) != (subH == 0))
         {
             decline("before the upscaler: incomplete render subrect dimensions");
+            return;
+        }
+        if (subW == 0 || subH == 0)
+        {
+            decline("before the upscaler: unknown or stale render geometry");
             return;
         }
         if (subW != 0 && subH != 0)

@@ -693,3 +693,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Production SL hooks refresh provider capacity and clamp only the effective count, preserving the INI preference."
+
+[nr-render-geometry]
+path = "nr-render-geometry"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Feature-scoped creation fallback, DRS freshness, poisoned margins and render/display geometry."

@@ -21,6 +21,7 @@ struct Fixture
         cfg.DlssNrStage = 1;
         params.typed = {{"Color", &color}, {"Depth", &depth}, {"Motion", &motion}, {"Output", &output}};
         params.untyped["Exposure"] = &exposure;
+        params.numbers = {{"NVSDK_Width",1280}, {"NVSDK_Height",720}, {"OutWidth",1920}, {"OutHeight",1080}};
         g_pre = {};
         g_preDevice = nullptr;
         g_preAllocationFailed = false;
@@ -325,6 +326,11 @@ int main()
       DlssNr::ReportSpatialContract(&f.params, &f.color, &f.output, true, 1280, 720);
       assert(infoLogs.size() == 4 && infoLogs.back().find("no spatial reduction") != std::string::npos);
       assert(f.params.sets == 0 && f.cmd.barriers == 0 && f.device.allocations == 0); ++checks; }
+    { Fixture f;
+      f.params.numbers.clear();
+      ScopedPreUpscale p(&f.cmd, &f.params, true);
+      assert(!p.Swapped() && p.Declined() && f.device.allocations == 0 && f.cmd.barriers == 0);
+      f.Restored(); ++checks; }
     assert(checks >= 56 && "ZERO COVERAGE");
     std::printf("PASS: %u boundary cases; allocation-failure and DRS loops: 1000 each\n", checks);
 }
