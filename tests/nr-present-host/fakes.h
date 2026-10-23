@@ -177,6 +177,8 @@ inline int TypelessGroup(DXGI_FORMAT format)
 // nothing may be freed until a fence signalled behind them is seen to complete. Hung: that never happens.
 inline bool g_gpuBusy = false;
 inline bool g_gpuHung = false;
+// Removed: every fence reads UINT64_MAX and the device reports why, though the queue ran nothing.
+inline bool g_deviceRemoved = false;
 inline unsigned g_fenceWaits = 0;
 
 struct ID3D12Resource
@@ -211,10 +213,13 @@ struct ID3D12Fence
     UINT64 completed = 0;
     UINT64 pending = 0; // signalled by a queue whose GPU had not got there yet
     int refs = 1;
-    UINT64 GetCompletedValue() const { return completed; }
-    HRESULT SetEventOnCompletion(UINT64 value, HANDLE)
+    // The event a registration still names: the fence signals it when it gets there, so it must stay open until then.
+    HANDLE registered = nullptr;
+    UINT64 GetCompletedValue() const { return g_deviceRemoved ? ~UINT64(0) : completed; }
+    HRESULT SetEventOnCompletion(UINT64 value, HANDLE event)
     {
         pending = std::max(pending, value);
+        registered = event;
         return S_OK;
     }
     void Release() { --refs; }
@@ -226,7 +231,14 @@ inline HANDLE CreateEventW(void*, BOOL, BOOL, const wchar_t*)
     static int token;
     return &token;
 }
-inline BOOL CloseHandle(HANDLE) { return 1; }
+inline BOOL CloseHandle(HANDLE handle)
+{
+    // Closing the event a pending registration names lets the late signal land on a closed or reused handle.
+    assert(!(g_waitedFence != nullptr && g_waitedFence->registered == handle &&
+             g_waitedFence->completed < g_waitedFence->pending) &&
+           "closed the event a fence registration still names");
+    return 1;
+}
 // The one event the host waits on is its fence's: a GPU that is not hung gets there, and is then idle.
 inline DWORD WaitForSingleObject(HANDLE, DWORD)
 {
@@ -339,6 +351,8 @@ struct ID3D12Device
     std::vector<std::unique_ptr<ID3D12CommandAllocator>> allocators;
     std::vector<std::unique_ptr<ID3D12GraphicsCommandList>> lists;
     std::vector<std::unique_ptr<ID3D12Resource>> resources;
+
+    HRESULT GetDeviceRemovedReason() const { return g_deviceRemoved ? E_FAIL : S_OK; }
 
     HRESULT CheckFeatureSupport(D3D12_FEATURE feature, void* data, UINT size)
     {
