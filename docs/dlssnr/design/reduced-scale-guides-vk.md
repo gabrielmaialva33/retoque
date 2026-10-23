@@ -43,6 +43,16 @@ The D3D12 rules, applied to this route as they stand in `DlssNr_GuideMatch.h`:
      keeps the route's behaviour from before. A refusal at native would stop NR where it used to run, and the case is
      the render-size fallback gap, not this one. (Found by review on 2026-10-23, after the first version had no
      below-native gate.)
+   - **The geometry** (V-04 and V-05, Codex's review). The resample turns whatever region it is given into a whole
+     working-size guide, so the region must be the picture:
+     - below native, a render geometry the resolver reports partial (`Incomplete`) or retired (`Stale`) is refused,
+       not replaced by the whole allocation, whose margin a dynamic-resolution game may never have written. A frame
+       with no geometry at all (`Missing`) keeps the allocation, as D3D12 does; at native nothing changes;
+     - the low-resolution vectors' region and their scale are measured against the render size when it is known, kept
+       apart from the depth's region, which its resource and subrect base clip, as the D3D12 consumer does. That fix is
+       `242f1a05` (the metamorphic geometry work, `tests/nr-geometry-metamorphic`), taken here as it is. Before it, a
+       depth clipped to 1024 of a 1280 render made the model read 1024 texels of motion at `960 / 1024` instead of
+       1280 at `960 / 1280`.
 2. **What.** Depth and motion are point-resampled from the game's regions into two working-size images. Those are handed
    to the model as a full zero-origin region at the working size.
 3. **Filter.** Point, the same `PointSource` mapping as D3D12. The D3D12 note explains why: a depth between two
@@ -81,11 +91,22 @@ removing the device. The Vulkan equivalents are checked against the specificatio
 | 2 | `STORAGE_IMAGE` | the working-size depth (`r32f`) |
 | 3 | `STORAGE_IMAGE` | the working-size motion (`rg32f`) |
 
-- The sets come from a ring of 16, from a pool of the pass's own, written at each dispatch because the game's views can
-  change from frame to frame. They are reused round-robin, without a fence. This is the composition pass's assumption
-  (`DlssNr_Vk`, 18 slots at four dispatches a frame), and with one dispatch a frame it holds up to 15 frames in flight.
-- An updated set must not be in use by a pending command buffer (`VUID-vkUpdateDescriptorSets-None-03047`), and that
-  margin is what keeps it so.
+- **The descriptors are pushed into the command buffer** (`vkCmdPushDescriptorSetKHR`, a set layout made with
+  `VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR`). The pass owns no set and no pool. What a recording binds is
+  in the recording, however many evaluates one command buffer holds and however often a game submits a kept buffer
+  again. Four descriptors, under the 32 the extension guarantees (`maxPushDescriptors`).
+- **Why not sets (V-01, Codex's review, 2026-10-23).** The first version had a ring of 16 sets rewritten at each
+  dispatch without a fence. Updating a set that a recording still names invalidates that recording
+  (`VUID-vkQueueSubmit-pCommandBuffers-00070` at its submit), or breaks `VUID-vkUpdateDescriptorSets-None-03047` if it
+  is pending. A seventeenth evaluate in one command buffer, or a buffer kept executable and submitted again after
+  sixteen others, did exactly that: `tests/guide-match-vk` `one_buffer_x20` and `resubmit_after_17` failed on it with
+  `commandBuffer-recording` and `pCommandBuffers-00070` errors. No ring size depends on how long a game keeps a
+  recording; push descriptors take the question away.
+- **`VK_KHR_push_descriptor` must be enabled on the device.** It is one of the model's device extensions
+  (`DlssNr_VkExtensions.h`); OptiScaler's device hook and the Vulkan present host add it wherever the device offers it
+  (and not beside a Vulkan 1.4 `pushDescriptor` feature left off). The pass asks `vkGetDeviceProcAddr` for
+  `vkCmdPushDescriptorSetKHR`, which answers NULL for a command of an extension that is not enabled. Without it the
+  pass is not made, and that is a stable refusal on the device.
 - **The storage formats are mandatory.** `rg32f` needs the SPIR-V `StorageImageExtendedFormats` capability. Vulkan
   allows that capability without a device feature. The spec's note on `shaderStorageImageExtendedFormats` says that
   feature "only adds a guarantee of format support", and that `R32G32_SFLOAT` is covered by mandatory format support
@@ -150,15 +171,35 @@ Recording itself cannot fail once that is settled, because descriptor writes and
 
 This follows the README's "Vulkan lifetime" and `DEVELOPMENT.md` invariant 8.
 
-- **The pass** (pipeline, layouts, pool, sets) is made once per device, at the first frame that wants it.
-  - It is freed only in `FreeRouteObjects`, whose callers have proven the GPU done: `ShutdownVk(true)` after its device
-    wait, a hand-back after its drained fences, or a device going with its work seen complete.
+**What a drain does not prove (V-02, Codex's review).** `vkDeviceWaitIdle` and the hand-back's fences cover work that
+was submitted. They say nothing of an evaluate the game recorded and has not submitted yet, or of a command buffer it
+keeps and submits again, and either can still name these objects. Nothing the route sees tells it when the game resets
+or frees its command buffers. So the guide resample's objects are never destroyed at a drain; they are retired:
+
+- **The pass** (pipeline and its two layouts) is made once per device, at the first frame that wants it.
+  - In `FreeRouteObjects` (a hand-back after its drained fences, a device going with its work seen complete,
+    `ShutdownVk(true)`) it is copied into a `DeferredRelease` entry owned by its device (`misc/DeferredRelease.h`, the
+    module's retirement, which `Shader_Vk` and so the route's composition pass already use) and forgotten.
   - It is abandoned in `ShutdownVk(false)`: handles forgotten, nothing called.
-  - It is a plain handle bundle: no destructor touches Vulkan, so process exit and a device change call nothing on it.
+  - It is a plain handle bundle: no destructor touches Vulkan.
 - **The two images** are created at the working size the first time they are wanted.
-  - They are destroyed in the resize block after its `vkDeviceWaitIdle`. A working-scale change is a resize, so they
-    never outlive their size.
-  - They are freed or abandoned with the rest of the route.
+  - A resize keeps the pair of the old size alive (`depthRetired`, `motionRetired`) until the next resize, which hands
+    it to `DeferredRelease`. An evaluate recorded at the old size and submitted after the resize still finds its
+    guides.
+  - `FreeRouteObjects` retires the current and the kept pair the same way; `ShutdownVk(false)` abandons both.
+- **`DeferredRelease`** runs an entry after 8 presents and 500 ms, or after 2 s where presents are not hooked. The
+  Vulkan present host finishes a device's entries (destroying after a drain, dropping after a failed one) before
+  `vkDestroyDevice`, and a new device drops the entries of the old.
+- **The drain's own result now decides.** In the resize block: `VK_ERROR_DEVICE_LOST` abandons everything
+  (`ShutdownVk(false)`) and ends the route's session; any other failure frees nothing and the resize is tried again at
+  the next evaluate. `ShutdownVk(true)` abandons after a failed drain. The filter rebuild for supersampling waits for a
+  drain that succeeded. `PrepareGuideMatch` passes `lost` to `CreateImageOn`, so a device lost during the allocation
+  abandons the half-made pair instead of destroying it.
+- **The residual window, stated plainly.** A recording made two resizes ago, or one `DeferredRelease` would have
+  retired (older than 8 presents and 500 ms, or 2 s), and still submitted afterwards, would find its guides gone. That
+  is the same bound the module puts on every `Shader_Vk` object. The rest of the route's objects (its feature, proxy,
+  output and the composition pass's descriptor ring) are not changed here: they are still freed at the resize block's
+  drain and in `FreeRouteObjects`, the window Codex's review calls inherited.
 
 ### When it cannot run
 
@@ -176,17 +217,29 @@ The reasons that can apply:
   allocated;
 - the game's view is one the shader cannot read, or a region is empty (above).
 
-They are latched differently:
+They are latched differently (V-03, Codex's review: the first version cached an allocation failure until a resize):
 
-- the pass is latched per device, and tried again after a device change or a hand-back;
-- format support at the working size, and an image allocation, are tried again after the next resize;
-- a view or region refusal is decided again every frame.
+- **Stable, until the device or the frames change:** a device without push descriptors, a lost device, outputs the
+  device cannot hold at the working size.
+- **Transient, tried again after a backoff:** the pass or its images not made for want of memory. The first retry is
+  after 1 s, each failure in a row doubles the wait, up to a minute. No resize is needed.
+- **The frame's own** (a view the shader cannot read, an empty region, partial or stale geometry): looked at again on
+  the same doubling schedule.
 
-**A known limit:** the decision comes after the route has asked for the model (`ClaimModelForAfterUpscale`), because
-the pass needs the route's device. A route that refuses every frame therefore still holds the model, and with the
-Vulkan present host on, neither side runs it. That takes a device that refuses on every frame, which none of the
-reasons above is expected to on hardware the model runs on. Moving the claim would change the one-owner arbiter's
-contract, so it was left as it is.
+**A refusing route stops holding the model.** The decision comes after the route has asked for the model
+(`ClaimModelForAfterUpscale`), because the pass needs the route's device. The first version therefore kept the model
+while it refused every frame, and with the Vulkan present host on, neither side ran NR.
+
+- Now a refused frame is recorded by what is known before the ask: the device, the frame and working sizes, and the
+  game's guide images and their formats.
+- Every later evaluate of that shape returns before asking, while the refusal stands: stable ones until the shape
+  changes or `MatchGuides` goes off, the others until their retry is due.
+- The route's hold then lapses, and after `kAfterUpscaleIdleMs` (10 s) the present host takes the model back through
+  the ordinary hand-back, which drains and frees the route's objects as before.
+- A retry that falls due asks again; the present host stands down for it, as it does for any evaluate. Because the
+  waits double, a condition that lasts gives the present host the model for most of the time, not a ping-pong every
+  few frames.
+- The record is the frames', not the device objects', so it survives the hand-back.
 
 The menu's frame count stops while frames are refused; the log line is the explanation.
 
@@ -226,7 +279,7 @@ DLSS-NR Vulkan model motion scale 1720.0 x 720.0: game scale 2293.0 x 960.0 meas
 The pass's creation, once per device and again after each hand-back freed it:
 
 ```
-DLSS-NR Vulkan: the guide resample is up (push constants 48 bytes, 16 descriptor sets)
+DLSS-NR Vulkan: the guide resample is up (push constants 48 bytes, 4 push descriptors)
 ```
 
 With `MatchGuides=false` and guides larger than the model, once: `DLSS-NR Vulkan guides: larger than the 1720x720 model
@@ -254,7 +307,9 @@ DLSS-NR Vulkan guides: larger than the 1720x720 model and the resample cannot ru
     subrect bases.
   - The shapes: DOOM's 2293x960 under 1720x720, display-resolution vectors, the route harness's 960x540 under 640x360,
     an exact 2:1, and an extent that is not a multiple of eight. DOOM's shape also runs 20 frames with three in flight,
-    the inputs changing and the outputs shared, so the descriptor ring wraps.
+    the inputs changing and the outputs shared.
+  - V-01's two cases: 20 evaluates recorded into one command buffer before its single submit, and a buffer kept
+    executable, submitted, then submitted again unchanged after 17 other evaluates ran.
   - Every texel read back must equal `PointSource`'s prediction exactly.
 - **Wine, `vulkan-present-host`: `nr-route-guides`,** `nr-route-quiet` with the game rendering 960x540 under
   `WorkingScale=0.5`, behind OptiScaler's FSR 2.2. The route's 640x360 model has larger guides. It holds:

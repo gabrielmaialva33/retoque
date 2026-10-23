@@ -26,7 +26,8 @@ PASS_DIR = ROOT / 'retoque/shaders/dlssnr'
 EXE = 'guide-match-vk-harness.exe'
 
 # The shapes the harness must report, each with every texel compared.
-EXPECTED = {'doom_quality_half', 'display_motion', 'route_harness', 'half_d32s8', 'unaligned', 'doom_inflight'}
+EXPECTED = {'doom_quality_half', 'display_motion', 'route_harness', 'half_d32s8', 'unaligned', 'doom_inflight',
+            'one_buffer_x20', 'resubmit_after_17'}
 
 
 def digest(path):
@@ -150,7 +151,8 @@ def main():
             if name != 'half_d32s8':
                 failures.append(f'{name}: skipped')
             continue
-        want = c['out'][0] * c['out'][1] * c['frames']
+        # resubmit_after_17 judges its first evaluate twice (before and after the other 17) and the 17 once.
+        want = c['out'][0] * c['out'][1] * (c['frames'] + 2 if name == 'resubmit_after_17' else c['frames'])
         if c['texels'] != want:
             failures.append(f'{name}: {c["texels"]} texels compared, expected {want}')
         if c['depth_mismatches'] or c['motion_mismatches']:

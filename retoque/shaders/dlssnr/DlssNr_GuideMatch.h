@@ -106,6 +106,21 @@ constexpr Handed ForModel(bool matched, bool renderMotionScale, Region depth, Re
     return handed;
 }
 
+// Below native the resample turns the region it is given into a whole working-size guide, so a region guessed from
+// the allocation is materialised as if it were the picture. When the frame's render geometry is known to be partial
+// (one dimension published) or stale (the creation fallback retired by a newer evaluate), that guess is refused
+// rather than resampled (V-04). A frame with no geometry at all keeps the allocation, as D3D12 and this route always
+// have. nullptr when the geometry may be used.
+constexpr const char* GeometryRefusal(bool incomplete, bool stale)
+{
+    if (incomplete)
+        return "the game's render geometry is incomplete; the allocation's margin may not be the picture";
+    if (stale)
+        return "the game's render geometry is stale; the allocation's margin may not be the picture";
+
+    return nullptr;
+}
+
 // The texel of a guide region a working-size texel reads: its centre mapped into the region, floored.
 // The shader computes the same thing; this is the one the tests hold it to.
 constexpr uint32_t PointSource(uint32_t destination, uint32_t destinationExtent, uint32_t regionBase,

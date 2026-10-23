@@ -9,7 +9,8 @@
 // every source texel holds a value of its own, so each output texel names the texel it was read from, and it must be
 // exactly DlssNr::GuideMatch::PointSource's prediction, bit for bit. One sequence runs 20 frames, three in flight, the
 // inputs changing every frame and the outputs shared, as in the route: the pass's barriers alone order one frame's
-// write after the last one's read, and its descriptor ring wraps.
+// write after the last one's read. Two more keep a recording alive as a game may: 20 evaluates in one command buffer,
+// and a kept buffer submitted again after 17 others (V-01).
 #include "pch.h"
 
 #include <atomic>
@@ -208,9 +209,25 @@ struct Gpu
         queueInfo.queueFamilyIndex = family;
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &priority;
+        // VK_KHR_push_descriptor, one of the NR model's device extensions, as OptiScaler's device hook and the Vulkan
+        // present host add it: the pass records its descriptors into the command buffer.
+        uint32_t extensionCount = 0;
+        Check(vkEnumerateDeviceExtensionProperties(physical, nullptr, &extensionCount, nullptr),
+              "vkEnumerateDeviceExtensionProperties");
+        std::vector<VkExtensionProperties> available(extensionCount);
+        Check(vkEnumerateDeviceExtensionProperties(physical, nullptr, &extensionCount, available.data()),
+              "vkEnumerateDeviceExtensionProperties");
+        bool pushDescriptor = false;
+        for (const VkExtensionProperties& e : available)
+            pushDescriptor = pushDescriptor || !std::strcmp(e.extensionName, VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+        if (!pushDescriptor)
+            Skip("the device has no VK_KHR_push_descriptor, which the NR model's device needs");
+        const char* deviceExtensions[] = { VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME };
         VkDeviceCreateInfo deviceInfo { VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO };
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
+        deviceInfo.enabledExtensionCount = 1;
+        deviceInfo.ppEnabledExtensionNames = deviceExtensions;
         Check(vkCreateDevice(physical, &deviceInfo, nullptr, &device), "vkCreateDevice");
         vkGetDeviceQueue(device, family, 0, &queue);
 
@@ -574,6 +591,10 @@ struct Case
     uint32_t outW, outH;
     uint32_t frames;   // 1, or a sequence
     uint32_t inFlight; // command buffers in flight
+    // 0: one evaluate per command buffer. 1: `frames` evaluates recorded into one command buffer, one submit. 2: one
+    // evaluate in a buffer kept executable (no ONE_TIME_SUBMIT), submitted, then `frames` other evaluates recorded and
+    // run, then the first buffer submitted again unchanged.
+    uint32_t mode = 0;
 };
 
 struct Outcome
@@ -720,6 +741,123 @@ std::string RunCase(DlssNr_GuideMatch_Vk& pass, const Case& c, Outcome& outcome)
     FreeImage(motionOut);
     return {};
 }
+// What a game can do with the command buffers the route records into, which no frame count bounds: many evaluates in
+// one buffer before a single submit (mode 1), and a buffer kept executable after it ran and submitted again (mode 2).
+// Each evaluate has inputs and outputs of its own, so each is judged on its own.
+std::string RunPersistent(DlssNr_GuideMatch_Vk& pass, const Case& c, Outcome& outcome)
+{
+    if (!Sampleable(c.depthFormat) || !Sampleable(c.motionFormat))
+        return "skipped: the device cannot sample the case's formats";
+
+    const VkImageUsageFlags inputUsage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    struct Evaluate
+    {
+        Image depth, motion, depthOut, motionOut;
+        HostBuffer depthStaging, motionStaging, depthBack, motionBack;
+    };
+    const uint32_t count = c.mode == 2 ? c.frames + 1 : c.frames;
+    std::vector<Evaluate> evaluates(count);
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        Evaluate& e = evaluates[i];
+        e.depth = MakeImage(c.depthFormat, c.depthAllocW, c.depthAllocH, inputUsage);
+        e.motion = MakeImage(c.motionFormat, c.motionAllocW, c.motionAllocH, inputUsage);
+        e.depthOut =
+            MakeImage(DlssNr::GuideMatch::Vk::kDepthFormat, c.outW, c.outH, DlssNr::GuideMatch::Vk::kOutputUsage);
+        e.motionOut =
+            MakeImage(DlssNr::GuideMatch::Vk::kMotionFormat, c.outW, c.outH, DlssNr::GuideMatch::Vk::kOutputUsage);
+        e.depthStaging = Buffer((VkDeviceSize) c.depthAllocW * c.depthAllocH * TexelBytes(c.depthFormat),
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        e.motionStaging = Buffer((VkDeviceSize) c.motionAllocW * c.motionAllocH * TexelBytes(c.motionFormat),
+                                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+        e.depthBack = Buffer((VkDeviceSize) c.outW * c.outH * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        e.motionBack = Buffer((VkDeviceSize) c.outW * c.outH * 8, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        Fill(e.depth, e.depthStaging, i, true);
+        Fill(e.motion, e.motionStaging, i, false);
+    }
+    if (const char* why = pass.InputRefusal(c.depthFormat, evaluates[0].depth.viewRange, c.motionFormat,
+                                            evaluates[0].motion.viewRange))
+        Fail(std::string(c.name) + ": the pass refuses the views: " + why);
+
+    const auto record = [&](VkCommandBuffer cmd, uint32_t from, uint32_t to)
+    {
+        for (uint32_t i = from; i < to; ++i)
+        {
+            Evaluate& e = evaluates[i];
+            Upload(cmd, e.depth, e.depthStaging, true);
+            Upload(cmd, e.motion, e.motionStaging, true);
+            pass.Record(cmd, e.depth.view, e.motion.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, c.depth, c.motion,
+                        e.depthOut.image, e.depthOut.view, e.motionOut.image, e.motionOut.view, c.outW, c.outH);
+            Readback(cmd, e.depthOut, e.depthBack);
+            Readback(cmd, e.motionOut, e.motionBack);
+        }
+    };
+    const auto judge = [&](uint32_t from, uint32_t to)
+    {
+        for (uint32_t i = from; i < to; ++i)
+            Judge(c, evaluates[i].depth, evaluates[i].motion, i, evaluates[i].depthBack, evaluates[i].motionBack,
+                  outcome);
+    };
+
+    VkFence fence = g_gpu.Fence();
+    VkCommandBuffer first = g_gpu.CommandBuffer();
+    if (c.mode == 1)
+    {
+        // Every evaluate into one buffer, recorded before anything is submitted.
+        g_gpu.Begin(first);
+        record(first, 0, count);
+        g_gpu.Submit(first, fence);
+        g_gpu.Wait(fence);
+        judge(0, count);
+    }
+    else
+    {
+        // A buffer kept executable: no ONE_TIME_SUBMIT, never reset after it ran.
+        VkCommandBufferBeginInfo begin { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
+        Check(vkBeginCommandBuffer(first, &begin), "vkBeginCommandBuffer");
+        record(first, 0, 1);
+        g_gpu.Submit(first, fence);
+        g_gpu.Wait(fence);
+        judge(0, 1);
+
+        // Then the route runs on: more evaluates than the old ring of sets held, recorded and run.
+        VkCommandBuffer later = g_gpu.CommandBuffer();
+        g_gpu.Begin(later);
+        record(later, 1, count);
+        g_gpu.Submit(later, fence);
+        g_gpu.Wait(fence);
+        judge(1, count);
+        vkFreeCommandBuffers(g_gpu.device, g_gpu.pool, 1, &later);
+
+        // And the game submits the first buffer again, unchanged: its read-backs must be written again, exactly.
+        std::memset(evaluates[0].depthBack.data, 0xFF, (size_t) evaluates[0].depthBack.size);
+        std::memset(evaluates[0].motionBack.data, 0xFF, (size_t) evaluates[0].motionBack.size);
+        Check(vkResetFences(g_gpu.device, 1, &fence), "vkResetFences");
+        VkSubmitInfo submit { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+        submit.commandBufferCount = 1;
+        submit.pCommandBuffers = &first;
+        Check(vkQueueSubmit(g_gpu.queue, 1, &submit, fence), "vkQueueSubmit (again)");
+        g_gpu.Wait(fence);
+        judge(0, 1);
+    }
+
+    Check(vkQueueWaitIdle(g_gpu.queue), "vkQueueWaitIdle");
+    vkFreeCommandBuffers(g_gpu.device, g_gpu.pool, 1, &first);
+    vkDestroyFence(g_gpu.device, fence, nullptr);
+    for (Evaluate& e : evaluates)
+    {
+        FreeImage(e.depth);
+        FreeImage(e.motion);
+        FreeImage(e.depthOut);
+        FreeImage(e.motionOut);
+        Free(e.depthStaging);
+        Free(e.motionStaging);
+        Free(e.depthBack);
+        Free(e.motionBack);
+    }
+    return {};
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -814,6 +952,36 @@ int main(int argc, char** argv)
           389,
           1,
           1 },
+        // 20 evaluates in one command buffer before its single submit, and a kept buffer submitted again after 17 other
+        // evaluates ran: no frame count bounds how long a recording lives (reduced-scale-guides-vk.md, V-01).
+        { "one_buffer_x20",
+          VK_FORMAT_R32_SFLOAT,
+          960,
+          540,
+          { 0, 0, 960, 540 },
+          VK_FORMAT_R16G16_SFLOAT,
+          960,
+          540,
+          { 0, 0, 960, 540 },
+          640,
+          360,
+          20,
+          1,
+          1 },
+        { "resubmit_after_17",
+          VK_FORMAT_D32_SFLOAT,
+          980,
+          560,
+          { 10, 12, 960, 540 },
+          VK_FORMAT_R16G16_SFLOAT,
+          980,
+          560,
+          { 4, 6, 960, 540 },
+          640,
+          360,
+          17,
+          1,
+          2 },
         { "doom_inflight",
           VK_FORMAT_D32_SFLOAT,
           2304,
@@ -837,7 +1005,7 @@ int main(int argc, char** argv)
     for (const Case& c : cases)
     {
         Outcome outcome;
-        const std::string note = RunCase(pass, c, outcome);
+        const std::string note = c.mode == 0 ? RunCase(pass, c, outcome) : RunPersistent(pass, c, outcome);
         Log("%-20s %8llu texels over %u frame(s), %llu depth and %llu motion mismatches%s%s", c.name,
             (unsigned long long) outcome.texels, c.frames, (unsigned long long) outcome.depthMismatches,
             (unsigned long long) outcome.motionMismatches, note.empty() ? "" : "; ", note.c_str());

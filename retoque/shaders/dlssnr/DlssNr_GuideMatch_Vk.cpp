@@ -47,8 +47,11 @@ const char* DlssNr_GuideMatch_Vk::Unsupported(VkPhysicalDevice physical, uint32_
                          OptimalFeatures(physical, kMotionFormat), ImageFits(physical, kMotionFormat, width, height));
 }
 
-bool DlssNr_GuideMatch_Vk::Create(VkDevice device, VkPhysicalDevice physical, std::string& why)
+bool DlssNr_GuideMatch_Vk::Create(VkDevice device, VkPhysicalDevice physical, std::string& why, bool* stable)
 {
+    if (stable != nullptr)
+        *stable = false;
+
     // Made once: a pass already made is kept, never freed here (nothing proves the GPU done with it). A failed attempt
     // leaves nothing behind, so there is nothing else to clear.
     if (Ready())
@@ -84,7 +87,21 @@ bool DlssNr_GuideMatch_Vk::Create(VkDevice device, VkPhysicalDevice physical, st
         return false;
     }
 
+    // The descriptors are recorded into each command buffer, so no set outlives or is shared between recordings. The
+    // entry point is there only with the extension enabled on the device (vkGetDeviceProcAddr answers NULL for a
+    // command of an extension that is not); the NR device-extension block adds it wherever the device offers it.
+    _push = reinterpret_cast<PFN_vkCmdPushDescriptorSetKHR>(vkGetDeviceProcAddr(device, "vkCmdPushDescriptorSetKHR"));
+    if (_push == nullptr)
+    {
+        why = "VK_KHR_push_descriptor is not enabled on the device";
+        Abandon();
+        if (stable != nullptr)
+            *stable = true;
+        return false;
+    }
+
     VkDescriptorSetLayoutCreateInfo setInfo { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+    setInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
     setInfo.bindingCount = (uint32_t) std::size(kBindings);
     setInfo.pBindings = kBindings;
     if (failed(vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &_setLayout), "the descriptor set layout"))
@@ -129,27 +146,6 @@ bool DlssNr_GuideMatch_Vk::Create(VkDevice device, VkPhysicalDevice physical, st
     if (failed(made, "the compute pipeline"))
         return false;
 
-    const VkDescriptorPoolSize sizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2 * kSets },
-                                           { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * kSets } };
-    VkDescriptorPoolCreateInfo poolInfo { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
-    poolInfo.maxSets = kSets;
-    poolInfo.poolSizeCount = (uint32_t) std::size(sizes);
-    poolInfo.pPoolSizes = sizes;
-    if (failed(vkCreateDescriptorPool(device, &poolInfo, nullptr, &_pool), "the descriptor pool"))
-        return false;
-
-    VkDescriptorSetLayout layouts[kSets];
-    for (VkDescriptorSetLayout& layout : layouts)
-        layout = _setLayout;
-
-    VkDescriptorSetAllocateInfo setsInfo { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
-    setsInfo.descriptorPool = _pool;
-    setsInfo.descriptorSetCount = kSets;
-    setsInfo.pSetLayouts = layouts;
-    if (failed(vkAllocateDescriptorSets(device, &setsInfo, _sets), "the descriptor sets"))
-        return false;
-
-    _next = 0;
     return true;
 }
 
@@ -183,9 +179,6 @@ void DlssNr_GuideMatch_Vk::Record(VkCommandBuffer cmd, VkImageView depth, VkImag
                                   VkImageView depthOutView, VkImage motionOut, VkImageView motionOutView,
                                   uint32_t outWidth, uint32_t outHeight)
 {
-    const VkDescriptorSet set = _sets[_next];
-    _next = (_next + 1) % kSets;
-
     // The game's views in the layout NGX takes them in; ours in GENERAL, the one storage images may be in.
     const VkDescriptorImageInfo images[] = {
         { VK_NULL_HANDLE, depth, inputLayout },
@@ -198,14 +191,12 @@ void DlssNr_GuideMatch_Vk::Record(VkCommandBuffer cmd, VkImageView depth, VkImag
     for (uint32_t i = 0; i < 4; ++i)
     {
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = set;
+        writes[i].dstSet = VK_NULL_HANDLE; // ignored for a push
         writes[i].dstBinding = i;
         writes[i].descriptorCount = 1;
         writes[i].descriptorType = kBindings[i].descriptorType;
         writes[i].pImageInfo = &images[i];
     }
-    vkUpdateDescriptorSets(_device, 4, writes, 0, nullptr);
-
     // Before: whatever used the outputs last -- the model reading them a frame ago, this pass writing them -- is done
     // before this write, and their contents are discarded (UNDEFINED), every texel being written below.
     VkImageMemoryBarrier toWrite[2] {};
@@ -229,7 +220,7 @@ void DlssNr_GuideMatch_Vk::Record(VkCommandBuffer cmd, VkImageView depth, VkImag
         DlssNr::GuideMatch::Vk::MakePush(depthRegion, motionRegion, outWidth, outHeight);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _layout, 0, 1, &set, 0, nullptr);
+    _push(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _layout, 0, DlssNr::GuideMatch::Vk::kPushDescriptors, writes);
     vkCmdPushConstants(cmd, _layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
     vkCmdDispatch(cmd, DlssNr::GuideMatch::Vk::Groups(outWidth), DlssNr::GuideMatch::Vk::Groups(outHeight), 1);
 
@@ -249,9 +240,6 @@ void DlssNr_GuideMatch_Vk::Destroy()
 {
     if (_device != VK_NULL_HANDLE)
     {
-        // The sets go with their pool.
-        if (_pool != VK_NULL_HANDLE)
-            vkDestroyDescriptorPool(_device, _pool, nullptr);
         if (_pipeline != VK_NULL_HANDLE)
             vkDestroyPipeline(_device, _pipeline, nullptr);
         if (_layout != VK_NULL_HANDLE)

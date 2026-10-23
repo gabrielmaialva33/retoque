@@ -1782,7 +1782,7 @@ def check_route(name, facts, log):
                    "(the frame's guides are 960x540 and 960x540)")
         scale = ('DLSS-NR Vulkan model motion scale 0.7 x 0.7: game scale 1.0 x 1.0 measured against 960x540 (render '
                  'size, low-resolution vectors), motion texture 640x360 (matched to the working size), model 640x360')
-        up = 'DLSS-NR Vulkan: the guide resample is up (push constants 48 bytes, 16 descriptor sets)'
+        up = 'DLSS-NR Vulkan: the guide resample is up (push constants 48 bytes, 4 push descriptors)'
         for text, times in ((matched, 1), (scale, 1), (up, 3)):
             need(count(text) == times, f'expected {times} line(s) with {text!r}, found {count(text)}')
         for text in ('the resample cannot run', 'not resampled', "motion texture 960x540 (the game's region)"):
