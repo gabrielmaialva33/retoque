@@ -10,5 +10,14 @@ combination of NULLs and check that the original receives them as given, that no
 and that a reported fullscreen comes with an output (the window's, AddRef'd) instead of NULL, without replacing or
 leaking a target the chain itself returned. Outside the emulation the real answer passes through untouched.
 
+`hkSetFullscreenState`, `hkResizeTarget` and the window cover at the end of both resize hooks apply
+`[XeFG] ForceBorderless` to XeFG only, as swapchain creation, the resize flags, the menu and the game configs do.
+With the key left true while FSR-FG, DLSS-G or Reprojection runs (the menu saves it from the XeFG card, which is
+hidden for the other outputs), the cases check that a chain created exclusive is taken out of it on `FALSE`, that
+`TRUE` and `ResizeTarget` are forwarded, that the D3D11 bridge's take-back of a presenter DXGI put into exclusive
+fullscreen reaches it without restyling the bridge's window, and that a whole mode-change script traces the same
+with the key on and off. Controls: XeFG with the key still emulates (never forwarded, window styled both ways),
+the key off forwards for every output, and an active FG is paused by a mode change either way.
+
 The fakes stand in for DXGI and for the window; this proves the hooks' argument handling, not what a game, XeFG or
 the display does with the answer.

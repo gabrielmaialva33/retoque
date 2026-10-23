@@ -684,7 +684,7 @@ domain = "fg"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
-summary = "The FG swapchain's GetFullscreenState/GetFullscreenDesc hooks against DXGI's optional arguments: NULLs forwarded, only what was asked rewritten, a target with reported fullscreen."
+summary = "The FG swapchain's fullscreen hooks: GetFullscreenState/Desc take DXGI's optional arguments; [XeFG] ForceBorderless changes SetFullscreenState, ResizeTarget and the resize's window cover for XeFG only."
 
 [nr-guide-copy-contract]
 path = "nr-guide-copy-contract"

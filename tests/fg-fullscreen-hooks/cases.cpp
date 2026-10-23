@@ -164,6 +164,199 @@ CASE(desc_null_lenient_proxy, "GetFullscreenDesc(NULL) answered S_OK by a proxy:
     assert(FGHooks::hkGetFullscreenDesc(&sc, nullptr) == S_OK);
 }
 
+// ---- SetFullscreenState / ResizeTarget / the resize's window cover: [XeFG] ForceBorderless is XeFG's ----
+
+namespace
+{
+constexpr FGOutput kOtherOutputs[] = { FGOutput::FSRFG, FGOutput::DLSSG, FGOutput::Reprojection };
+
+// The key left true in the ini (the menu saves it from the XeFG card) while another output runs.
+void LeftoverKey(FGOutput output)
+{
+    Reset();
+    State::Instance().activeFgOutput = output;
+    Config::Instance()->FGXeFGForceBorderless.value = true;
+}
+
+struct Trace
+{
+    int setState, resizeTarget, restyles, moves, deactivations;
+    BOOL realFullscreen, lastSetFullscreen;
+    LONG_PTR style;
+    bool scExclusive, realExclusive, fgChanged;
+    bool operator==(const Trace&) const = default;
+};
+
+// A game's mode changes on one chain: created exclusive, out to a window, back, a mode change, a resize.
+Trace Script(FGOutput output, bool key)
+{
+    Reset();
+    State::Instance().activeFgOutput = output;
+    Config::Instance()->FGXeFGForceBorderless.value = key;
+    IFGFeature fg;
+    fg.active = true;
+    State::Instance().currentFG = &fg;
+    IDXGIOutput monitor;
+    IDXGISwapChain sc;
+    sc.containing = &monitor;
+    sc.realFullscreen = TRUE;
+    DXGI_MODE_DESC mode;
+    assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK);
+    assert(FGHooks::hkSetFullscreenState(&sc, TRUE, &monitor) == S_OK);
+    assert(FGHooks::hkResizeTarget(&sc, &mode) == S_OK);
+    FGHooks::CoverAfterResizeBuffers(S_OK);
+    FGHooks::CoverAfterResizeBuffers1(S_OK);
+    assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK);
+    const auto& st = State::Instance();
+    return { calls.setState,
+             calls.resizeTarget,
+             window.restyles,
+             window.moves,
+             fg.deactivations,
+             sc.realFullscreen,
+             calls.lastSetFullscreen,
+             window.style,
+             st.SCExclusiveFullscreen,
+             st.realExclusiveFullscreen,
+             st.fgChanged };
+}
+} // namespace
+
+CASE(other_leaves_exclusive, "Other outputs, key left on: a chain created exclusive is taken out of it on FALSE")
+{
+    for (auto output : kOtherOutputs)
+    {
+        LeftoverKey(output);
+        IDXGISwapChain sc;
+        sc.realFullscreen = TRUE;
+        assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK);
+        assert(calls.setState == 1 && calls.lastSetFullscreen == FALSE);
+        assert(sc.realFullscreen == FALSE);
+        assert(!State::Instance().SCExclusiveFullscreen && !State::Instance().realExclusiveFullscreen);
+        assert(window.restyles == 0 && window.moves == 0);
+    }
+}
+
+CASE(other_enters_exclusive, "Other outputs, key left on: TRUE is forwarded as with the key off, no restyle")
+{
+    for (auto output : kOtherOutputs)
+    {
+        LeftoverKey(output);
+        IDXGIOutput monitor;
+        IDXGISwapChain sc;
+        assert(FGHooks::hkSetFullscreenState(&sc, TRUE, &monitor) == S_OK);
+        assert(calls.setState == 1 && calls.lastSetFullscreen == TRUE && calls.lastSetTarget == &monitor);
+        assert(sc.realFullscreen == TRUE && State::Instance().realExclusiveFullscreen);
+        assert(!State::Instance().SCExclusiveFullscreen);
+        assert(window.restyles == 0 && window.moves == 0);
+    }
+}
+
+CASE(other_resize_target, "Other outputs, key left on: ResizeTarget reaches the chain")
+{
+    for (auto output : kOtherOutputs)
+    {
+        LeftoverKey(output);
+        IDXGISwapChain sc;
+        DXGI_MODE_DESC mode;
+        assert(FGHooks::hkResizeTarget(&sc, &mode) == S_OK);
+        assert(calls.resizeTarget == 1);
+    }
+}
+
+CASE(bridge_presenter_takeback, "D3D11 bridge, FSR-FG/DLSS-G presenter, key left on: the bridge's take-back works")
+{
+    // The bridge emulates the game's fullscreen (SCExclusiveFullscreen) and styled the window itself. DXGI's Alt+Enter
+    // put the presenter into exclusive fullscreen behind it; the bridge sends it SetFullscreenState(FALSE).
+    for (auto output : { FGOutput::FSRFG, FGOutput::DLSSG })
+    {
+        LeftoverKey(output);
+        State::Instance().SCExclusiveFullscreen = true;
+        window.style = WS_POPUP | WS_VISIBLE;
+        IDXGISwapChain sc;
+        sc.realFullscreen = TRUE;
+        assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK);
+        assert(calls.setState == 1 && sc.realFullscreen == FALSE);
+        assert(State::Instance().SCExclusiveFullscreen); // the bridge's, left to the bridge
+        assert(window.style == (WS_POPUP | WS_VISIBLE) && window.restyles == 0 && window.moves == 0);
+    }
+}
+
+CASE(bridge_resize_no_restyle, "D3D11 bridge, key left on: the presenter's resize does not restyle the window")
+{
+    for (auto output : { FGOutput::FSRFG, FGOutput::DLSSG })
+    {
+        LeftoverKey(output);
+        State::Instance().SCExclusiveFullscreen = true;
+        FGHooks::CoverAfterResizeBuffers(S_OK);
+        FGHooks::CoverAfterResizeBuffers1(S_OK);
+        assert(window.restyles == 0 && window.moves == 0);
+    }
+}
+
+CASE(other_key_is_inert, "Other outputs: a whole mode-change script traces the same with the key on and off")
+{
+    for (auto output : kOtherOutputs)
+        assert(Script(output, true) == Script(output, false));
+}
+
+CASE(xefg_emulates, "XeFG with the key (control): fullscreen emulated, never forwarded, window styled both ways")
+{
+    Reset();
+    State::Instance().activeFgOutput = FGOutput::XeFG;
+    Config::Instance()->FGXeFGForceBorderless.value = true;
+    IDXGIOutput monitor;
+    IDXGISwapChain sc;
+    assert(FGHooks::hkSetFullscreenState(&sc, TRUE, &monitor) == S_OK);
+    assert(calls.setState == 0 && sc.realFullscreen == FALSE);
+    assert(State::Instance().SCExclusiveFullscreen && !State::Instance().realExclusiveFullscreen);
+    assert(window.style == (WS_POPUP | WS_VISIBLE) && window.moves == 1);
+    DXGI_MODE_DESC mode;
+    assert(FGHooks::hkResizeTarget(&sc, &mode) == S_OK && calls.resizeTarget == 0);
+    FGHooks::CoverAfterResizeBuffers(S_OK);
+    FGHooks::CoverAfterResizeBuffers1(S_OK);
+    assert(window.moves == 3);
+    assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK);
+    assert(calls.setState == 0 && !State::Instance().SCExclusiveFullscreen);
+    assert(window.style == (WS_OVERLAPPEDWINDOW | WS_VISIBLE) && window.moves == 4);
+    FGHooks::CoverAfterResizeBuffers(S_OK);
+    assert(window.moves == 4);
+}
+
+CASE(key_off_forwards, "Key off (control): every output forwards SetFullscreenState and ResizeTarget")
+{
+    for (auto output : { FGOutput::XeFG, FGOutput::FSRFG, FGOutput::DLSSG, FGOutput::Reprojection })
+    {
+        Reset();
+        State::Instance().activeFgOutput = output;
+        IDXGISwapChain sc;
+        DXGI_MODE_DESC mode;
+        assert(FGHooks::hkSetFullscreenState(&sc, TRUE, nullptr) == S_OK && sc.realFullscreen == TRUE);
+        assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK && sc.realFullscreen == FALSE);
+        assert(FGHooks::hkResizeTarget(&sc, &mode) == S_OK);
+        assert(calls.setState == 2 && calls.resizeTarget == 1 && window.restyles == 0);
+    }
+}
+
+CASE(fg_paused_on_mode_change, "Every output: an active FG is paused by a mode change, key or not")
+{
+    for (auto output : { FGOutput::XeFG, FGOutput::FSRFG, FGOutput::DLSSG })
+    {
+        for (bool key : { false, true })
+        {
+            Reset();
+            State::Instance().activeFgOutput = output;
+            Config::Instance()->FGXeFGForceBorderless.value = key;
+            IFGFeature fg;
+            fg.active = true;
+            State::Instance().currentFG = &fg;
+            IDXGISwapChain sc;
+            assert(FGHooks::hkSetFullscreenState(&sc, TRUE, nullptr) == S_OK);
+            assert(fg.deactivations == 1 && State::Instance().fgChanged);
+        }
+    }
+}
+
 int main()
 {
     int failed = 0;

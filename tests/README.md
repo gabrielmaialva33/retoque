@@ -194,7 +194,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `fg-fullscreen-hooks` — the FG swapchain's fullscreen hooks, sliced from `hooks/FG_Hooks.cpp` and compiled
   against fakes that follow DXGI's contract: `GetFullscreenState`'s two optional arguments reach the original as
   given and only the ones passed are rewritten, a reported fullscreen comes with the window's output (AddRef'd,
-  never replacing or leaking one the chain returned), and `GetFullscreenDesc` writes nothing through NULL. No DXGI.
+  never replacing or leaking one the chain returned), and `GetFullscreenDesc` writes nothing through NULL;
+  `[XeFG] ForceBorderless` left on with FSR-FG, DLSS-G or Reprojection changes nothing in `SetFullscreenState`,
+  `ResizeTarget` or the resize's window cover (an exclusive chain leaves exclusive, the D3D11 bridge's presenter
+  take-back gets through), while XeFG with the key still emulates. No DXGI.
 - `fg-synth-policy` — synthesized FG's decisions (fast-motion response on incoherent motion
   and its cap, low-fps floor, duplicate-present advice, which HUD fix runs for which output), the
   motion statistics they are made from, and the NR/FG motion handoff, from the production headers,

@@ -609,7 +609,11 @@ HRESULT FGHooks::hkSetFullscreenState(IDXGISwapChain* This, BOOL Fullscreen, IDX
 
     bool modeChanged = false;
     bool orgFS = Fullscreen;
-    if (Config::Instance()->FGXeFGForceBorderless.value_or_default())
+
+    // ForceBorderless is XeFG's, as at swapchain creation: another output's chain can be truly exclusive
+    const bool forceBorderless = State::Instance().activeFgOutput == FGOutput::XeFG &&
+                                 Config::Instance()->FGXeFGForceBorderless.value_or_default();
+    if (forceBorderless)
     {
         if (Fullscreen)
         {
@@ -640,7 +644,7 @@ HRESULT FGHooks::hkSetFullscreenState(IDXGISwapChain* This, BOOL Fullscreen, IDX
 
     auto result = S_OK;
 
-    if (!Config::Instance()->FGXeFGForceBorderless.value_or_default())
+    if (!forceBorderless)
     {
         result = o_FGSCSetFullscreenState(This, Fullscreen, pTarget);
         LOG_DEBUG("Fullscreen: {}, pTarget: {:X}, Result: {:X}", Fullscreen, (size_t) pTarget, (UINT) result);
@@ -941,8 +945,8 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
     }
 
     // Resize window to cover the screen
-    if (result == S_OK && Config::Instance()->FGXeFGForceBorderless.value_or_default() &&
-        State::Instance().SCExclusiveFullscreen)
+    if (result == S_OK && State::Instance().activeFgOutput == FGOutput::XeFG &&
+        Config::Instance()->FGXeFGForceBorderless.value_or_default() && State::Instance().SCExclusiveFullscreen)
     {
         SetWindowLongPtr(_hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
         SetWindowLongPtr(_hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
@@ -961,7 +965,8 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
 
 HRESULT FGHooks::hkResizeTarget(IDXGISwapChain* This, const DXGI_MODE_DESC* pNewTargetParameters)
 {
-    if (Config::Instance()->FGXeFGForceBorderless.value_or_default())
+    if (State::Instance().activeFgOutput == FGOutput::XeFG &&
+        Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
         LOG_DEBUG("Skipping resize target.");
         return S_OK;
@@ -1183,8 +1188,8 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
     }
 
     // Resize window to cover the screen
-    if (result == S_OK && Config::Instance()->FGXeFGForceBorderless.value_or_default() &&
-        State::Instance().SCExclusiveFullscreen)
+    if (result == S_OK && State::Instance().activeFgOutput == FGOutput::XeFG &&
+        Config::Instance()->FGXeFGForceBorderless.value_or_default() && State::Instance().SCExclusiveFullscreen)
     {
         SetWindowLongPtr(_hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
         SetWindowLongPtr(_hwnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
