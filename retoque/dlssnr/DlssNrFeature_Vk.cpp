@@ -721,36 +721,44 @@ unsigned int GameCreateFlags(NVSDK_NGX_Parameter* params)
     return flags;
 }
 
-// Whether the guide resample can run on this frame (reduced-scale-guides-vk.md): the pass made on the device, its two
-// images at the working size, and the game's views ones the shader may read. nullptr if so, otherwise why not. Records
-// nothing: called before the frame's first command, so a refusal leaves the command buffer as the route found it.
+// Whether the guide resample can run on this frame (reduced-scale-guides-vk.md): the regions non-empty, the pass made
+// on the device, its two images at the working size, and the game's views ones the shader may read. nullptr if so,
+// otherwise why not. Records nothing: called before the frame's first command, so a refusal leaves the command buffer
+// as the route found it.
 const char* PrepareGuideMatch(const NVSDK_NGX_Resource_VK& depth, const NVSDK_NGX_Resource_VK& motion,
-                              uint32_t workWidth, uint32_t workHeight)
+                              const DlssNr::GuideMatch::Region& depthRegion,
+                              const DlssNr::GuideMatch::Region& motionRegion, uint32_t workWidth, uint32_t workHeight)
 {
+    if (const char* why = DlssNr::GuideMatch::Vk::RegionRefusal(depthRegion, motionRegion))
+        return why;
+
     if (!g_vk.guideMatchDeviceFailure.empty())
         return g_vk.guideMatchDeviceFailure.c_str();
 
+    // The outputs' support depends on the working size too (an image's largest extent), so a refusal here is tried
+    // again after the next resize, as an allocation failure is.
+    if (!g_vk.guideMatchSizeFailure.empty())
+        return g_vk.guideMatchSizeFailure.c_str();
+
+    if (const char* why = DlssNr_GuideMatch_Vk::Unsupported(g_vk.physicalDevice, workWidth, workHeight))
+    {
+        g_vk.guideMatchSizeFailure = why;
+        return g_vk.guideMatchSizeFailure.c_str();
+    }
+
     if (!g_vk.guideMatch.Ready())
     {
-        if (const char* why = DlssNr_GuideMatch_Vk::Unsupported(g_vk.physicalDevice, workWidth, workHeight))
-        {
-            g_vk.guideMatchDeviceFailure = why;
-            return g_vk.guideMatchDeviceFailure.c_str();
-        }
-
         std::string why;
         if (!g_vk.guideMatch.Create(g_vk.device, g_vk.physicalDevice, why))
         {
-            g_vk.guideMatchDeviceFailure = "the pass could not be made: " + why;
+            g_vk.guideMatchDeviceFailure =
+                "the pass could not be made: " + why + (g_vk.guideMatch.Lost() ? " (the device is lost)" : "");
             return g_vk.guideMatchDeviceFailure.c_str();
         }
 
         LOG_INFO("DLSS-NR Vulkan: the guide resample is up (push constants {} bytes, {} descriptor sets)",
                  sizeof(DlssNr::GuideMatch::Vk::Push), DlssNr::GuideMatch::Vk::kSets);
     }
-
-    if (!g_vk.guideMatchSizeFailure.empty())
-        return g_vk.guideMatchSizeFailure.c_str();
 
     if (!g_vk.depthMatched.Valid() || !g_vk.motionMatched.Valid())
     {
@@ -776,15 +784,16 @@ const char* PrepareGuideMatch(const NVSDK_NGX_Resource_VK& depth, const NVSDK_NG
         motion.Resource.ImageViewInfo.Format, motion.Resource.ImageViewInfo.SubresourceRange);
 }
 
-// Said once per reason, not per frame: a refusal can hold for the whole session.
+// Said once per reason for the session, not per frame: a refusal can hold for the whole session, and two reasons can
+// alternate (a game handing over two kinds of view).
 void SayGuideRefusal(const char* why, uint32_t workWidth, uint32_t workHeight)
 {
-    static std::string said;
+    static std::vector<std::string> said;
 
-    if (why == nullptr || said == why)
+    if (why == nullptr || std::find(said.begin(), said.end(), why) != said.end())
         return;
 
-    said = why;
+    said.emplace_back(why);
     LOG_WARN(
         "DLSS-NR Vulkan guides: larger than the {}x{} model and the resample cannot run ({}); the model is not run "
         "on these frames rather than handed frame-size guides (WorkingScale=1 or MatchGuides=false runs it)",
@@ -1349,9 +1358,18 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // handed over. Decided here, before the frame's first command: when the resample is wanted and cannot run, the
     // model is not run on this frame -- this route never hands it frame-size guides for a smaller colour, which is the
     // fault being fixed -- and nothing has been recorded. MatchGuides=false is the A/B arm, the game's regions.
-    const bool wanted = DlssNr::GuideMatch::Wanted(cfg.DlssNrMatchGuides.value_or_default(), true, workWidth,
-                                                   workHeight, guideWidth, guideHeight, motionWidth, motionHeight);
-    const char* cannotResample = wanted ? PrepareGuideMatch(*depth, *motion, workWidth, workHeight) : nullptr;
+    //
+    // Only below native, unlike D3D12, which also resamples at or above it when a guide is larger than the frame (a
+    // game publishing no render size over a larger depth allocation). Here that case keeps the route's behaviour from
+    // before: a refusal at native would stop NR where it ran.
+    const DlssNr::GuideMatch::Region depthRegion { depthBaseX, depthBaseY, guideWidth, guideHeight };
+    const DlssNr::GuideMatch::Region motionRegion { motionBaseX, motionBaseY, motionWidth, motionHeight };
+    const bool belowNative = workWidth < width || workHeight < height;
+    const bool wanted =
+        belowNative && DlssNr::GuideMatch::Wanted(cfg.DlssNrMatchGuides.value_or_default(), true, workWidth, workHeight,
+                                                  guideWidth, guideHeight, motionWidth, motionHeight);
+    const char* cannotResample =
+        wanted ? PrepareGuideMatch(*depth, *motion, depthRegion, motionRegion, workWidth, workHeight) : nullptr;
     const DlssNr::GuideMatch::Guides guides = DlssNr::GuideMatch::Choose(wanted, cannotResample == nullptr);
 
     if (guides == DlssNr::GuideMatch::Guides::Refused)
@@ -1361,8 +1379,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         return;
     }
 
-    const DlssNr::GuideMatch::Region depthRegion { depthBaseX, depthBaseY, guideWidth, guideHeight };
-    const DlssNr::GuideMatch::Region motionRegion { motionBaseX, motionBaseY, motionWidth, motionHeight };
     const uint32_t motionReferenceWidth = DlssNr::GuideMatch::MotionReference(lowResolutionMotion, guideWidth, width);
     const uint32_t motionReferenceHeight =
         DlssNr::GuideMatch::MotionReference(lowResolutionMotion, guideHeight, height);
@@ -1560,11 +1576,12 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // The motion slot carries it, because the meter has no use for motion vectors and the shader is
     // one shader with a fixed set of bindings. The source slot is left empty and gets the dummy.
     //
-    // Gated on the setting that consumes the answer, which is not merely tidy. This is the only place
-    // the pass binds a resource it does not own on a guess about its layout, and the guess is good
-    // but it is still a guess. A user who has not asked for the exposure source never has the game's
-    // image touched at all, so if some engine does leave it somewhere unexpected, the blast radius is
-    // people who turned the thing on rather than everyone on Vulkan.
+    // Gated on the setting that consumes the answer, which is not merely tidy. Besides the guide resample's
+    // read of depth and motion (which DLSS's own contract puts in the read state, the layout every Vulkan input
+    // path in this tree binds them in), this is the only place the pass binds a resource it does not own on a
+    // guess about its layout, and the guess is good but it is still a guess. A user who has not asked for the exposure
+    // source never has the game's image touched at all, so if some engine does leave it somewhere unexpected, the blast
+    // radius is people who turned the thing on rather than everyone on Vulkan.
     if (cfg.DlssNrWhitePointSource.value_or_default() == 1 && exposure != nullptr &&
         exposure->Type == NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW &&
         exposure->Resource.ImageViewInfo.ImageView != VK_NULL_HANDLE && g_vk.meter.Valid())
@@ -1674,8 +1691,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
                      workWidth, workHeight, renderMotionScale ? "" : " -- legacy working/frame conversion");
         }
 
-        // The A/B arm: guides larger than the model, handed over as they are because MatchGuides is off.
-        if (!saidOff && !handed.matched &&
+        // The A/B arm: below native, guides larger than the model, handed over as they are because MatchGuides is off.
+        if (!saidOff && belowNative && !cfg.DlssNrMatchGuides.value_or_default() &&
             DlssNr::GuideMatch::Wanted(true, true, workWidth, workHeight, guideWidth, guideHeight, motionWidth,
                                        motionHeight))
         {

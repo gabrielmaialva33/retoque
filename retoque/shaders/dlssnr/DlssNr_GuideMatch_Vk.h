@@ -208,6 +208,19 @@ constexpr const char* MotionViewRefusal(VkFormat format, VkImageAspectFlags aspe
     return nullptr;
 }
 
+// Whether the regions the route would hand over can be resampled: every texel of the output reads one texel of each,
+// so neither may be empty (the shader's `regionExtent - 1` would wrap and read past the image). A game's subrect base
+// at the edge of its image leaves one empty once the route has clamped it. nullptr if both have texels.
+constexpr const char* RegionRefusal(Region depth, Region motion)
+{
+    if (depth.width == 0 || depth.height == 0)
+        return "the game's depth region is empty";
+    if (motion.width == 0 || motion.height == 0)
+        return "the game's motion region is empty";
+
+    return nullptr;
+}
+
 // Whether the device can hold the outputs: storage and sampled in optimal tiling, and an image of the route's usage at
 // the working size (vkGetPhysicalDeviceImageFormatProperties). nullptr if so.
 constexpr const char* OutputRefusal(VkFormatFeatureFlags depthOptimal, bool depthImage,

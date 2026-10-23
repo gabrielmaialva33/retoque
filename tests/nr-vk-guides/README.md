@@ -22,6 +22,7 @@ are, against the real Vulkan headers in `external/vulkan`, with g++ and clang++,
   - refused: both aspects named, or a depth/stencil format whose aspect is not stated; stencil; integer formats;
     more than one layer; no sampled support; unknown formats;
   - motion must be a float colour format with two components or more.
+- **Empty regions** are refused, for either guide and either axis.
 - **The outputs**: `R32_SFLOAT` and `R32G32_SFLOAT`, the route's usage, and the refusal when the device lacks storage
   or sampling or the image of that usage.
 - **The interface**: the push block is 48 bytes, within the 128 bytes every device guarantees, in the D3D12 cbuffer's
@@ -32,7 +33,9 @@ are, against the real Vulkan headers in `external/vulkan`, with g++ and clang++,
 - **The route** (`DlssNrFeature_Vk.cpp`, `EvaluateAfterUpscaleVk`):
   - `Choose` decides before the frame's first timestamp, barrier or dispatch, and a refused frame returns with the
     history reset set.
-  - `Wanted` is asked with `MatchGuides` and the regions the route would hand over.
+  - `Wanted` is asked only below native, with `MatchGuides` and the regions the route would hand over. At or above
+    native the route keeps its old guides.
+  - `PrepareGuideMatch` refuses empty regions before it makes anything.
   - The evaluate's depth, motion, sizes, bases and scale are all the plan's.
   - The resample is recorded before the model, reading the game's views in `SHADER_READ_ONLY_OPTIMAL`.
   - Nothing of the resample's exists unless it is wanted.

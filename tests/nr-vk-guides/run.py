@@ -93,9 +93,16 @@ recording = first(rc, 'vkCmdResetQueryPool(', 'vkCmdWriteTimestamp(', 'Transitio
                   'g_vk.guideMatch.Record(')
 check(decide >= 0 and recording >= 0 and decide < recording,
       'the guide decision comes after the frame has recorded something (a refusal must record nothing)')
-check(re.search(r'GuideMatch::Wanted\(cfg\.DlssNrMatchGuides\.value_or_default\(\), true, workWidth, workHeight, '
-                r'guideWidth, guideHeight, motionWidth, motionHeight\)', rc) is not None,
-      'the route does not ask GuideMatch::Wanted with MatchGuides and the regions it would hand over')
+check(re.search(r'belowNative && DlssNr::GuideMatch::Wanted\(cfg\.DlssNrMatchGuides\.value_or_default\(\), true, '
+                r'workWidth, workHeight, guideWidth, guideHeight, motionWidth, motionHeight\)', rc) is not None,
+      'the route does not ask GuideMatch::Wanted, below native only, with MatchGuides and the regions it would hand '
+      'over')
+check('const bool belowNative = workWidth < width || workHeight < height;' in rc,
+      'the resample is not limited to below native (at or above it the route keeps its old guides)')
+prepare_fn = flat(function(feature, 'const char* PrepareGuideMatch('))
+check(prepare_fn.find('DlssNr::GuideMatch::Vk::RegionRefusal(depthRegion, motionRegion)') ==
+      first(prepare_fn, 'DlssNr::GuideMatch::Vk::RegionRefusal(', 'guideMatchDeviceFailure', 'Create(', 'CreateImage('),
+      'PrepareGuideMatch does not refuse empty regions before anything else')
 refused = re.search(r'if \(guides == DlssNr::GuideMatch::Guides::Refused\) \{(.*?)\}', rc)
 check(refused is not None and 'g_vk.reset = true;' in refused.group(1) and 'return;' in refused.group(1),
       'a refused frame does not return with the history reset set')

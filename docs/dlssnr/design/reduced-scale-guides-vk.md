@@ -34,9 +34,15 @@ synthesized field is estimated on the model's own input (`nr-vulkan-present-host
 
 The D3D12 rules, applied to this route as they stand in `DlssNr_GuideMatch.h`:
 
-1. **When.** `GuideMatch::Wanted`: `[DlssNr] MatchGuides` on (the default), and either guide larger than the model's
-   input along some axis. A guide smaller than the model (supersampling, or render size under the working size) is the
-   upscaler's ordinary subrect contract and is handed over as before.
+1. **When.** Below native (the working size under the frame's on some axis), and `GuideMatch::Wanted`: `[DlssNr]
+   MatchGuides` on (the default), and either guide larger than the model's input along some axis.
+   - A guide smaller than the model (supersampling, or render size under the working size) is the upscaler's ordinary
+     subrect contract and is handed over as before.
+   - **Where this differs from D3D12.** D3D12 also resamples at or above native when a guide is larger than the frame,
+     which happens when a game publishes no render size over a depth allocation larger than its output. Here that case
+     keeps the route's behaviour from before. A refusal at native would stop NR where it used to run, and the case is
+     the render-size fallback gap, not this one. (Found by review on 2026-10-23, after the first version had no
+     below-native gate.)
 2. **What.** Depth and motion are point-resampled from the game's regions into two working-size images. Those are handed
    to the model as a full zero-origin region at the working size.
 3. **Filter.** Point, the same `PointSource` mapping as D3D12. The D3D12 note explains why: a depth between two
@@ -100,7 +106,12 @@ invalidly:
   (`VUID-vkCmdDispatch-format-07753`).
 - **Motion with one component**, which has no y to read.
 - **More than one layer.** The shader's image is 2D, not arrayed, and the view's type must match it
-  (`VUID-vkCmdDispatch-viewType-07752`).
+  (`VUID-vkCmdDispatch-viewType-07752`). NGX's resource struct carries no view type, so this catches only a layer count
+  above one. A `2D_ARRAY` view of a single layer cannot be told apart from a `2D` one, and is read as the model reads
+  it.
+- **An empty region.** A game's subrect base at the edge of its image leaves a region of no texels once the route has
+  clamped it, and the shader's `regionExtent - 1` would wrap and read past the image. D3D12's `Dispatch` refuses the
+  same.
 - **A format without `SAMPLED_IMAGE`** in the device's optimal-tiling features.
 
 The views the shader takes are the same ones the upscaler and the model already read.
@@ -161,14 +172,21 @@ When the resample is wanted and cannot run, the route does not run the model on 
 
 The reasons that can apply:
 
-- the output formats are not supported, or the pass could not be made, or its images could not be allocated;
-- the game's view is one the shader cannot read (above).
+- the output formats are not supported at the working size, or the pass could not be made, or its images could not be
+  allocated;
+- the game's view is one the shader cannot read, or a region is empty (above).
 
 They are latched differently:
 
-- format support and the pass are latched per device, and tried again after a device change;
-- an image allocation is tried again after the next resize;
-- a view refusal is decided again every frame.
+- the pass is latched per device, and tried again after a device change or a hand-back;
+- format support at the working size, and an image allocation, are tried again after the next resize;
+- a view or region refusal is decided again every frame.
+
+**A known limit:** the decision comes after the route has asked for the model (`ClaimModelForAfterUpscale`), because
+the pass needs the route's device. A route that refuses every frame therefore still holds the model, and with the
+Vulkan present host on, neither side runs it. That takes a device that refuses on every frame, which none of the
+reasons above is expected to on hardware the model runs on. Moving the claim would change the one-owner arbiter's
+contract, so it was left as it is.
 
 The menu's frame count stops while frames are refused; the log line is the explanation.
 
@@ -190,10 +208,11 @@ now. It is said once in the log.
 The new path records nothing and creates nothing in these cases:
 
 - `[DlssNr]` off;
-- at `WorkingScale` 1 or above;
+- at `WorkingScale` 1 or above, by the below-native gate, whatever the guides' sizes;
 - when no guide is larger than the model.
 
-The route then takes exactly the path it took before.
+The route then takes exactly the path it took before, with the same evaluate arguments. Of the log lines, only the old
+`not resampled (no Vulkan resample yet)` is gone.
 
 ## What the log says
 

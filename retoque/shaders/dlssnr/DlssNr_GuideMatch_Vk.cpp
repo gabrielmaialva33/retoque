@@ -49,7 +49,12 @@ const char* DlssNr_GuideMatch_Vk::Unsupported(VkPhysicalDevice physical, uint32_
 
 bool DlssNr_GuideMatch_Vk::Create(VkDevice device, VkPhysicalDevice physical, std::string& why)
 {
-    Destroy();
+    // Made once: a pass already made is kept, never freed here (nothing proves the GPU done with it). A failed attempt
+    // leaves nothing behind, so there is nothing else to clear.
+    if (Ready())
+        return true;
+
+    Abandon();
     _device = device;
     _physical = physical;
 

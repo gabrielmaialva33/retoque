@@ -281,10 +281,10 @@ evaluate's command buffer on the harness's depth (`R32_SFLOAT`) and motion (`R16
 `SHADER_READ_ONLY_OPTIMAL` as NGX takes them, under the same validation. The route's output is never presented, so the
 model's edit on it is not read back.
 
-Measured 2026-10-23 (build of `4bf90718` plus the change):
+Measured 2026-10-23 on the change as committed, in a full run of all 36 cases (all PASS):
 
-- **PASS.** Drains of 96 and 93 ms, 81 and 82 exact read-backs while the route held the model, zero host validation
-  errors.
+- **PASS.** Drains of 98 and 103 ms, 79 and 79 exact read-backs while the route held the model, zero host validation
+  errors. `nr-route-quiet` in the same run had drains of 95 and 98 ms.
 - **A first run under heavy load from other processes** also passed, with about one present a second during the quiet
   phases (drains of 1005 ms).
 - **The control fails on the guide checks alone.** The DLL from before the change, its mtime refreshed to pass the

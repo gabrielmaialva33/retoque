@@ -225,6 +225,20 @@ static void ViewCases()
     CHECK(reason != nullptr && std::strlen(reason) > 10);
 }
 
+static void RegionCases()
+{
+    // An empty region would make the shader's `regionExtent - 1` wrap and read past the image: refused, either guide,
+    // either axis. A game's subrect base at its image's edge leaves exactly that once the route has clamped it.
+    const Region full { 0, 0, 2293, 960 };
+    CHECK(Vkr::RegionRefusal(full, full) == nullptr);
+    CHECK(Vkr::RegionRefusal(Region { 7, 3, 1, 1 }, Region { 0, 0, 1, 1 }) == nullptr);
+    CHECK(Vkr::RegionRefusal(Region { 2304, 0, 0, 960 }, full) != nullptr);
+    CHECK(Vkr::RegionRefusal(Region { 0, 968, 2293, 0 }, full) != nullptr);
+    CHECK(Vkr::RegionRefusal(full, Region { 2293, 0, 0, 960 }) != nullptr);
+    CHECK(Vkr::RegionRefusal(full, Region { 0, 960, 2293, 0 }) != nullptr);
+    CHECK(std::strcmp(Vkr::RegionRefusal(Region {}, full), Vkr::RegionRefusal(full, Region {})) != 0);
+}
+
 static void OutputCases()
 {
     // The outputs: D3D12's formats, stored and sampled, with the usage every route image is created with.
@@ -269,6 +283,7 @@ int main()
 {
     PlanCases();
     ViewCases();
+    RegionCases();
     OutputCases();
     InterfaceCases();
 
