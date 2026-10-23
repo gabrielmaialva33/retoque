@@ -710,7 +710,7 @@ HRESULT FGHooks::hkGetFullscreenDesc(IDXGISwapChain1* This, DXGI_SWAP_CHAIN_FULL
 {
     auto result = o_FGSCGetFullscreenDesc(This, pDesc);
 
-    if (result == S_OK && State::Instance().SCExclusiveFullscreen &&
+    if (result == S_OK && pDesc != nullptr && State::Instance().SCExclusiveFullscreen &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
         pDesc->Windowed = false;
@@ -721,12 +721,22 @@ HRESULT FGHooks::hkGetFullscreenDesc(IDXGISwapChain1* This, DXGI_SWAP_CHAIN_FULL
 
 HRESULT FGHooks::hkGetFullscreenState(IDXGISwapChain* This, BOOL* pFullscreen, IDXGIOutput** ppTarget)
 {
+    // Both arguments are optional in DXGI, so they reach the original as given and only what was asked is rewritten
     auto result = o_FGSCGetFullscreenState(This, pFullscreen, ppTarget);
 
     if (result == S_OK && State::Instance().SCExclusiveFullscreen &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
-        *pFullscreen = true;
+        if (pFullscreen != nullptr)
+            *pFullscreen = true;
+
+        // Fullscreen comes with its output; the borderless chain has none, so it is the one holding the window
+        if (ppTarget != nullptr && *ppTarget == nullptr)
+        {
+            IDXGIOutput* output = nullptr;
+            if (This->GetContainingOutput(&output) == S_OK)
+                *ppTarget = output;
+        }
     }
 
     return result;
