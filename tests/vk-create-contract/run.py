@@ -63,6 +63,9 @@ fakes = (HERE / 'fakes.h').read_text()
 fakes = fakes.replace('    // @creatingD3DDevice@ (the production declaration from State.h, put here by run.py)',
                       line(state, r'^    inline static thread_local bool creatingD3DDevice = false;$'))
 assert 'creatingD3DDevice = false' in fakes
+fakes = fakes.replace('    // @vkAntiLagSupported@ (the production declaration from State.h, put here by run.py)',
+                      line(state, r'^    (?:inline static thread_local )?bool vkAntiLagSupported = false;$'))
+assert 'vkAntiLagSupported = false' in fakes
 
 production = []
 # State.h: the two per-thread scopes the path depends on, as they are.
@@ -100,6 +103,7 @@ unit = fakes + '#include <dlssnr/DlssNr_VkExtensions.h>\n' + production + (HERE 
 CASES = [
     'game-request-unchanged',
     'game-request-unchanged-fg',
+    'game-chain-read-only',
     'pointers-live-until-return',
     'interleaved-native',
     'interleaved-d3d',

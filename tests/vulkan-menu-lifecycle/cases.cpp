@@ -469,14 +469,13 @@ static void HiddenSplashKeepsMenu()
     End();
 }
 
-// EXPECTATION, not fixed here: the surface hook in Vulkan_Hooks.cpp has the same read-then-act shape
-// (OnOtherWindow, then DestroyVulkanObjects) without a re-check under the overlay's locks. A surface
-// for window B whose check ran before window A's first create finished tears A's objects down; A's
-// menu then stays dark until A's chain is recreated, and B's chain is filtered. No leak, no fault:
-// the state is consistent, the menu is just off. Recorded, with the recovery asserted.
-static void SurfaceHookRaceRecovers()
+// The surface hook in Vulkan_Hooks.cpp reads OnOtherWindow, then tears the menu down and captures the
+// window. A surface for window B whose read ran before window A's first create finished must not tear
+// A's objects down once A owns the menu: the window is asked again under the overlay's locks, as
+// CreateSwapchain does. Before that re-check A's menu stayed dark until A's chain was recreated.
+static void SurfaceHookRaceLeavesMenuAlone()
 {
-    Begin("EXPECTATION: surface hook race darkens the menu until A recreates");
+    Begin("surface hook that lost the race leaves the menu alone");
     auto device = MakeDevice("dev");
     auto queue = QueueOf(device, 0, 0);
     auto windowA = MakeWindow("windowA");
@@ -486,6 +485,8 @@ static void SurfaceHookRaceRecovers()
     std::condition_variable cv;
     bool aMayRun = false, aDone = false;
     VkSwapchainKHR a = VK_NULL_HANDLE, a2 = VK_NULL_HANDLE, b = VK_NULL_HANDLE;
+    HWND hwndBefore = _hwnd;
+    size_t mark = 0;
     std::thread threadA(
         [&]
         {
@@ -494,6 +495,7 @@ static void SurfaceHookRaceRecovers()
             lock.unlock();
             GameCreateSwapchain(device, windowA, "scA", 2, VK_NULL_HANDLE, &a);
             lock.lock();
+            mark = Mark();
             aDone = true;
             cv.notify_all();
         });
@@ -513,15 +515,18 @@ static void SurfaceHookRaceRecovers()
     threadA.join();
     threadB.join();
 
-    bool dark = !_vulkanObjectsCreated;
-    Check(LiveCount() == (dark ? 0 : Generation(2)), "objects are either all alive or all released");
+    auto events = Since(mark);
+    Check(Disturbances(events) == 0, "the losing surface hook makes no drain, release or menu re-init");
+    if (Disturbances(events) != 0)
+        PrintEvents(mark);
+    Check(_vulkanObjectsCreated && LiveCount() == Generation(2), "A's menu objects are all alive");
+    Check(_menuSwapchain == a && Present(queue, a).submits == 1, "A's menu is still drawn");
+    Check(_hwnd == hwndBefore && _hwnd != windowB, "the losing surface hook does not capture window B");
     GameCreateSwapchain(device, windowB, "scB", 2, VK_NULL_HANDLE, &b);
     Check(MenuOverlayBase::Handle() == windowA, "B's chain is still filtered: the menu belongs to A");
     GameCreateSwapchain(device, windowA, "scA2", 2, a, &a2);
     Check(_menuSwapchain == a2 && _vulkanObjectsCreated && Present(queue, a2).submits == 1,
-          "A's next chain brings the menu back");
-    std::cout << "EXPECTATION (residual, not fixed): surface hook race " << (dark ? "darkened" : "did not darken")
-              << " the menu until window A's chain was recreated\n";
+          "A's next chain keeps the menu");
     End();
 }
 
@@ -568,7 +573,7 @@ int main()
     DestroyedWindowRebinds(false);
     DestroyedWindowRebinds(true);
     HiddenSplashKeepsMenu();
-    SurfaceHookRaceRecovers();
+    SurfaceHookRaceLeavesMenuAlone();
     NonMenuPresentPassesThrough();
 
     if (g_failures != 0)

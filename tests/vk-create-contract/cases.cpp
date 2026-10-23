@@ -15,6 +15,7 @@ struct Request
     std::vector<const char*> extensions;
     std::vector<std::shared_ptr<void>> structs;
     std::vector<VkBaseOutStructure*> order;
+    std::vector<size_t> sizes; // of each struct in order
     VkPhysicalDeviceFeatures core {};
     bool useCore = false;
     float priority = 1.0f;
@@ -37,6 +38,7 @@ struct Request
         feature->sType = sType;
         structs.push_back(feature);
         order.push_back(reinterpret_cast<VkBaseOutStructure*>(feature.get()));
+        sizes.push_back(sizeof(T));
         return *feature;
     }
 
@@ -64,7 +66,86 @@ struct Request
         info.pEnabledFeatures = useCore ? &core : nullptr;
         return &info;
     }
+
+    // The built request copied into pages of its own that are then made read-only, as a game that keeps its create
+    // info in constant data has it: any write to what the game handed over faults. Current() is then that copy.
+    void Freeze()
+    {
+        size_t size = sizeof(VkDeviceCreateInfo) + sizeof(VkDeviceQueueCreateInfo) + sizeof(float) +
+                      sizeof(VkPhysicalDeviceFeatures) + extensions.size() * sizeof(const char*) + 16 * 8;
+        for (const auto& name : names)
+            size += name->size() + 1 + 16;
+        for (size_t bytes : sizes)
+            size += bytes + 16;
+        const size_t page = (size_t) sysconf(_SC_PAGESIZE);
+        frozenSize = (size + page - 1) / page * page;
+        frozenBase = mmap(nullptr, frozenSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        Check(frozenBase != MAP_FAILED, "mmap for a read-only request");
+
+        char* next = static_cast<char*>(frozenBase);
+        const auto take = [&](size_t bytes)
+        {
+            char* at = next;
+            next += (bytes + 15) / 16 * 16;
+            return at;
+        };
+        auto* frozen = reinterpret_cast<VkDeviceCreateInfo*>(take(sizeof(VkDeviceCreateInfo)));
+        *frozen = info;
+        auto* frozenQueue = reinterpret_cast<VkDeviceQueueCreateInfo*>(take(sizeof(VkDeviceQueueCreateInfo)));
+        *frozenQueue = queue;
+        auto* frozenPriority = reinterpret_cast<float*>(take(sizeof(float)));
+        *frozenPriority = priority;
+        frozenQueue->pQueuePriorities = frozenPriority;
+        frozen->pQueueCreateInfos = frozenQueue;
+        if (useCore)
+        {
+            auto* frozenCore = reinterpret_cast<VkPhysicalDeviceFeatures*>(take(sizeof(VkPhysicalDeviceFeatures)));
+            *frozenCore = core;
+            frozen->pEnabledFeatures = frozenCore;
+        }
+        if (!extensions.empty())
+        {
+            auto* array = reinterpret_cast<const char**>(take(extensions.size() * sizeof(const char*)));
+            for (size_t i = 0; i < names.size(); i++)
+            {
+                char* name = take(names[i]->size() + 1);
+                std::memcpy(name, names[i]->c_str(), names[i]->size() + 1);
+                array[i] = name;
+            }
+            frozen->ppEnabledExtensionNames = array;
+        }
+        VkBaseOutStructure* previous = nullptr;
+        for (size_t i = 0; i < order.size(); i++)
+        {
+            auto* node = reinterpret_cast<VkBaseOutStructure*>(take(sizes[i]));
+            std::memcpy(node, order[i], sizes[i]);
+            node->pNext = nullptr;
+            if (previous != nullptr)
+                previous->pNext = node;
+            else
+                frozen->pNext = node;
+            previous = node;
+        }
+        Check(next <= static_cast<char*>(frozenBase) + frozenSize, "the read-only request fits its pages");
+        Check(mprotect(frozenBase, frozenSize, PROT_READ) == 0, "mprotect the request read-only");
+        frozenInfo = frozen;
+    }
+
+    const VkDeviceCreateInfo* Current() const { return frozenInfo != nullptr ? frozenInfo : &info; }
+
+    ~Request()
+    {
+        if (frozenBase != nullptr)
+            munmap(frozenBase, frozenSize);
+    }
+
+    void* frozenBase = nullptr;
+    size_t frozenSize = 0;
+    const VkDeviceCreateInfo* frozenInfo = nullptr;
 };
+
+// Every request built from here on is frozen read-only (game-chain-read-only).
+bool gFreezeRequests = false;
 
 // The shapes of request games make. Some are invalid at some API versions; those violations are the game's own,
 // and the contract is only that OptiScaler adds none.
@@ -303,12 +384,17 @@ std::string Join(const std::vector<std::string>& list)
 // One create through the production hook, with the checks every create must pass.
 Outcome Create(const Setup& setup, FakeGpu& gpu, Request& request, const std::string& label)
 {
-    const auto* info = &request.info;
+    const auto* info = request.Current();
     Outcome outcome;
     outcome.game = Copy(info);
     outcome.gameViolations = Violations(gpu, outcome.game);
     VkDeviceCreateInfo topLevel = *info;
-    const std::vector<const char*> pointers = request.extensions;
+    const auto extensionArray = [&]
+    {
+        return std::vector<const char*>(info->ppEnabledExtensionNames,
+                                        info->ppEnabledExtensionNames + info->enabledExtensionCount);
+    };
+    const std::vector<const char*> pointers = extensionArray();
 
     auto previous = gpu.inCreate;
     gpu.inCreate = [&]
@@ -338,8 +424,10 @@ Outcome Create(const Setup& setup, FakeGpu& gpu, Request& request, const std::st
 
     // The game's request: same struct, same pointers, same contents
     Check(std::memcmp(&topLevel, info, sizeof(topLevel)) == 0, where + ": the game's VkDeviceCreateInfo changed");
-    Check(request.extensions == pointers, where + ": the game's extension pointers changed");
+    Check(extensionArray() == pointers, where + ": the game's extension pointers changed");
     Check(SameRequest(Copy(info), outcome.game), where + ": the game's request is not what it was after the call");
+    // ... and not even for the length of the call: another thread may be reading it, or it may be read-only
+    Check(!outcome.gameWrittenDuringCall, where + ": the game's own request was written while the call ran");
 
     // The driver's request did not change under it
     Check(outcome.got.changedWhileRunning.empty(), where + ": the request changed while the driver ran, to " +
@@ -392,6 +480,8 @@ Outcome CreateShape(const Setup& setup, FakeGpu& gpu, Shape shape, const std::st
     Request request;
     Fill(request, shape);
     request.Build();
+    if (gFreezeRequests)
+        request.Freeze();
     return Create(setup, gpu, request, label + " " + ShapeName(shape));
 }
 
@@ -525,10 +615,36 @@ void GameRequestUnchanged(bool fg)
                            { written += outcome.gameWrittenDuringCall; });
         }
     }
-    // Not a failure: VulkanDeviceFeatureState writes a struct it does not own in place and restores it after the
-    // call; Create checked the restore. Reported so the count is visible.
-    std::cout << "  " << runs << " creates; the game's own feature structs were written during " << written
-              << " of them and restored after\n";
+    // Create fails on any; counted again here so the log shows the matrix ran with writes checked.
+    Check(written == 0, "the game's own feature structs were written during " + std::to_string(written) + " creates");
+    std::cout << "  " << runs << " creates; the game's own request written during none of them\n";
+}
+
+void GameChainReadOnly()
+{
+    // The whole request -- create info, queue info, extension array and names, every chained struct -- in
+    // read-only pages: a write to any of it, even one restored afterwards, faults.
+    gFreezeRequests = true;
+    int runs = 0;
+    for (int bits = 0; bits < 8; bits++)
+    {
+        Setup setup;
+        setup.nr = bits & 1;
+        setup.spoofing = bits & 2;
+        setup.fg = bits & 4;
+        runs += Matrix(setup, "read-only");
+    }
+    for (bool d3d : { false, true })
+    {
+        Setup setup;
+        setup.d3d = d3d;
+        setup.skip = !d3d;
+        setup.spoofing = true;
+        setup.nr = true;
+        runs += Matrix(setup, "read-only");
+    }
+    gFreezeRequests = false;
+    std::cout << "  " << runs << " creates from a read-only request\n";
 }
 
 void PointersLiveUntilReturn()
@@ -608,8 +724,10 @@ void NestedCreateInDriver()
 
 void AntiLagCrosstalk()
 {
-    // A lacks Anti-Lag, B has it. A is held right after its Anti-Lag query; B creates in between and sets the
-    // process-wide vkAntiLagSupported. A must still not ask for VK_AMD_anti_lag.
+    // A lacks Anti-Lag, B has it. One is held once its Anti-Lag answer is recorded -- at its first extension
+    // enumeration, which the spoofing makes before it reads that answer -- while the other creates from start to
+    // finish. Each create must act on its own device's answer: A never asks for VK_AMD_anti_lag, B keeps it, and the
+    // Anti-Lag entry point left behind is B's.
     auto gpuA = NvidiaGpu(VK_API_VERSION_1_3);
     auto gpuB = AmdGpu(VK_API_VERSION_1_3);
     Setup setup;
@@ -620,11 +738,12 @@ void AntiLagCrosstalk()
 
     for (int order = 0; order < 2; order++)
     {
+        VulkanHooks::o_vkAntiLagUpdateAMD = nullptr;
         FakeGpu& held = order == 0 ? *gpuA : *gpuB;
         FakeGpu& other = order == 0 ? *gpuB : *gpuA;
         Gate heldQueried, otherDone;
         bool once = false;
-        held.inFeatures = [&]
+        held.inEnumerate = [&]
         {
             if (std::exchange(once, true))
                 return;
@@ -642,13 +761,17 @@ void AntiLagCrosstalk()
             });
         first.join();
         second.join();
-        held.inFeatures = nullptr;
+        held.inEnumerate = nullptr;
         const Received& gotA = order == 0 ? a.got : b.got;
         const Received& gotB = order == 0 ? b.got : a.got;
-        Check(!gotA.Has(VK_AMD_ANTI_LAG_EXTENSION_NAME), "A, which lacks it, never asks for VK_AMD_anti_lag");
-        if (!gotB.Has(VK_AMD_ANTI_LAG_EXTENSION_NAME))
-            std::cout << "  note: B lost VK_AMD_anti_lag while A's create overlapped it (vkAntiLagSupported is "
-                         "process-wide); not a request for something B lacks\n";
+        const std::string which = order == 0 ? "A held, B in between" : "B held, A in between";
+        Check(!gotA.Has(VK_AMD_ANTI_LAG_EXTENSION_NAME), which + ": A, which lacks it, never asks for VK_AMD_anti_lag");
+        Check(gotB.Has(VK_AMD_ANTI_LAG_EXTENSION_NAME),
+              which + ": B, which has Anti-Lag, keeps VK_AMD_anti_lag while A's create overlaps it");
+        // The Anti-Lag output's entry point is B's: A's create, overlapping, neither skips nor clears it
+        Check(VulkanHooks::o_vkAntiLagUpdateAMD == &FakeAntiLagUpdate,
+              which + ": vkAntiLagUpdateAMD is B's after both creates");
+        VulkanHooks::o_vkAntiLagUpdateAMD = nullptr;
     }
 }
 
@@ -1048,6 +1171,7 @@ int main(int argc, char** argv)
     const std::map<std::string, std::function<void()>> cases = {
         { "game-request-unchanged", [] { GameRequestUnchanged(false); } },
         { "game-request-unchanged-fg", [] { GameRequestUnchanged(true); } },
+        { "game-chain-read-only", GameChainReadOnly },
         { "pointers-live-until-return", PointersLiveUntilReturn },
         { "interleaved-native", InterleavedNative },
         { "interleaved-d3d", InterleavedD3d },
