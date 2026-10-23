@@ -1358,6 +1358,21 @@ bool StreamlineHooks::hkcommon_slOnPluginLoad(sl::param::IParameters* params, co
 static std::atomic<unsigned int> g_dlssgOptionsGeneration { 0 };
 static std::atomic<unsigned int> g_reflexOptionsGeneration { 0 };
 
+// Capabilities belong to the provider's current response, not its module address or the first read.
+// A provider may be replaced or patched in place. Keep the user's preference separate from this cap.
+static void UpdateDlssgMfgMax(uint32_t maximum)
+{
+    auto& state = State::Instance();
+    if (state.streamlineVersion < feature_version { 2, 7, 1 } || maximum == 0 || maximum >= 6)
+        return;
+
+    if (state.dlssgMfgMax != static_cast<int>(maximum))
+    {
+        state.dlssgMfgMax = static_cast<int>(maximum);
+        LOG_TRACE("Provider numFramesToGenerateMax: {}", maximum);
+    }
+}
+
 unsigned int StreamlineHooks::dlssgOptionsGeneration()
 {
     return g_dlssgOptionsGeneration.load(std::memory_order_relaxed);
@@ -1505,32 +1520,19 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
 
     if (dlssgPotentiallyActive && state.streamlineVersion >= feature_version { 2, 7, 1 })
     {
-        // Populate dlssgMfgMax once
-        if (!state.dlssgMfgMax.has_value())
-        {
-            // Before the read, so the count this captures is the patched one.
-            MfgUnlock::TryApply();
-
-            sl::DLSSGState localState {};
-            sl::DLSSGOptions localOptions {};
-            if (o_slDLSSGGetState(viewport, localState, &localOptions) == sl::Result::eOk &&
-                localState.numFramesToGenerateMax > 0 && localState.numFramesToGenerateMax < 6)
-            {
-                state.dlssgMfgMax = localState.numFramesToGenerateMax;
-                LOG_TRACE("Saving original numFramesToGenerateMax: {}", state.dlssgMfgMax.value());
-
-                if (Config::Instance()->FGDLSSGOverrideInterpolationCount.has_value() &&
-                    Config::Instance()->FGDLSSGOverrideInterpolationCount.value() > state.dlssgMfgMax.value())
-                {
-                    Config::Instance()->FGDLSSGOverrideInterpolationCount = state.dlssgMfgMax.value();
-                }
-            }
-        }
+        // Query after patching, even if a previous provider already supplied a limit.
+        MfgUnlock::TryApply();
+        sl::DLSSGState localState {};
+        sl::DLSSGOptions localOptions {};
+        if (o_slDLSSGGetState != nullptr && o_slDLSSGGetState(viewport, localState, &localOptions) == sl::Result::eOk)
+            UpdateDlssgMfgMax(localState.numFramesToGenerateMax);
 
         // Won't take effect with Dynamic
         if (Config::Instance()->FGDLSSGOverrideInterpolationCount.has_value())
         {
             auto overrideCount = Config::Instance()->FGDLSSGOverrideInterpolationCount.value();
+            if (state.dlssgMfgMax.has_value())
+                overrideCount = std::min(overrideCount, state.dlssgMfgMax.value());
             if (overrideCount != 0)
             {
                 // On the transition, not on every rewrite. The game asks for 1 every call and we
@@ -1574,6 +1576,10 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
                        });
     }
 
+    // The ordinary response below is authoritative, including for a patched provider at the same address.
+    if (State::Instance().streamlineVersion >= feature_version { 2, 7, 1 })
+        MfgUnlock::TryApply();
+
     sl::Result result {};
 
     const auto originalStructVersion = state.structVersion;
@@ -1583,6 +1589,9 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
 
         // We might be feeding a newer struct to an older SL but that seems to work just fine for this Get function
         result = o_slDLSSGGetState(viewport, dynamic_cast<sl::DLSSGState&>(newState), options);
+
+        if (result == sl::Result::eOk)
+            UpdateDlssgMfgMax(newState.numFramesToGenerateMax);
 
         // Copy back data to game's struct
         memcpy(&state, &newState, 56); // struct ver 1 size
@@ -1607,6 +1616,8 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     else
     {
         result = o_slDLSSGGetState(viewport, state, options);
+        if (result == sl::Result::eOk)
+            UpdateDlssgMfgMax(state.numFramesToGenerateMax);
         State::Instance().dlssgGameDMFGSupported = state.bIsDynamicMFGSupported == sl::eTrue;
     }
 
@@ -1616,30 +1627,6 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     }
 
     auto& optiState = State::Instance();
-
-    if (optiState.streamlineVersion >= feature_version { 2, 7, 1 })
-    {
-        if (!optiState.dlssgMfgMax.has_value())
-        {
-            // Before the read, so the count this captures is the patched one (same as SetOptions).
-            MfgUnlock::TryApply();
-
-            sl::DLSSGState localState {};
-            sl::DLSSGOptions localOptions {};
-            if (o_slDLSSGGetState(viewport, localState, &localOptions) == sl::Result::eOk &&
-                localState.numFramesToGenerateMax > 0 && localState.numFramesToGenerateMax < 6)
-            {
-                optiState.dlssgMfgMax = localState.numFramesToGenerateMax;
-                LOG_TRACE("Saving original numFramesToGenerateMax: {}", optiState.dlssgMfgMax.value());
-
-                if (Config::Instance()->FGDLSSGOverrideInterpolationCount.has_value() &&
-                    Config::Instance()->FGDLSSGOverrideInterpolationCount.value() > optiState.dlssgMfgMax.value())
-                {
-                    Config::Instance()->FGDLSSGOverrideInterpolationCount = optiState.dlssgMfgMax.value();
-                }
-            }
-        }
-    }
 
     if (optiState.activeFgInput == FGInput::DLSSG)
     {
