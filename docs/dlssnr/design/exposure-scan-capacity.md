@@ -67,6 +67,23 @@ It gives them in the crudest way: at the one teardown point it can see, everythi
 a heap the game frees at any other moment (level streaming; the recycling in (2)): until the next feature
 release the scan keeps holding such a resource and keeps copying it every sweep.
 
+**What this change gives instead, as revised after Codex's adversarial review (2026-10-23).** The review found
+that the first version claimed P1-P3 as guarantees the code did not give. As revised, they read:
+
+- **P1, with its exception.** A candidate is released within a few frames of its owner letting go, once the
+  scan's copies of it are proven done, and at once when the scan is turned off and nothing of it is in flight.
+  One whose copies are never proven done is retained, within a budget of 256 (3.3).
+- **P2, narrowed.** After the probe that finds the owner gone, nothing copies the candidate again. One copy can
+  still be recorded in the window between the probe and the recording if another thread drops the last
+  reference there (5); the scan's own reference keeps the object alive through it. Neither the probe nor anything
+  else here certifies that a candidate is not aliased, is resident, or is in the state the copy assumes (3.4).
+- **P3, at the COM level.** The scan's release of a placed candidate runs before the release of the heap the
+  scan holds under it, so it cannot run on a heap the scan let be destroyed. The last reference may be the
+  scan's, so destruction can run in the scan rather than in the owner. Driver state that does not follow COM
+  references is not covered (5).
+- **Across a feature release**, only a committed candidate on a live device is carried; everything else goes as
+  the wipe did (5).
+
 ## 3. Candidate lifetime
 
 ### 3.1 Identity and origin
@@ -111,29 +128,37 @@ A candidate stops being copied and moves to retiring when:
 
 - **the game let it go**: before every sweep the scan probes each held candidate's reference count
   (`AddRef`, then `Release`'s return value). If the scan's own reference is the only one left, the owner has
-  released it. Nothing after that point copies it (P2 for every way a resource ends, not only a feature
-  release).
+  released it. Nothing after that point copies it (P2 as narrowed above, for every way a resource ends, not
+  only a feature release).
 - **it is false** and the list is under pressure (section 4).
 - **it is dropped** from a full waiting list (section 4).
-- **its origin is view and a feature is being released** (section 5).
+- **a feature is being released and it may not be carried** (placed, view, removed device: section 5).
+- **the scan is not wanted any more, or NR is off** (section 5).
 
 A retiring candidate keeps its reference (and its heap's) until the submission tracker says every recording
 that copied it has **settled** (`Submission::Settled` on the candidate's own usage, which every copy of it
 was tracked into). A candidate that was never copied has nothing to wait for and is released at once. Because
 the usage gains a recording every sweep, the ones retirement no longer waits for are dropped before each new one
-(`Submission::PruneFinished`: the tracker's own lifetime rule, as `Admit` applies it). Without that, a game that
-records each frame into a new list and never resets the old ones fills the usage's 64 places, and the candidate
-silently stops being copied. The
-retiring set is bounded at 256: above that nothing new is promoted to active (nothing new is copied, so
-nothing new can need settling), until it drains.
+(`Submission::PruneFinished`). That drops an epoch only when `Settled` itself would no longer wait for it -- never
+one that is merely completed, whatever the usage's free space (review E-01: the first version used `Admit`'s
+pruning, which cuts completed epochs to keep eight places free, and so could forget a list that is executed
+again). A full usage refuses the candidate's next copy instead. With readback slots reused only after
+settlement (3.4), a candidate's usage holds at most a few unfinished recordings, so it does not fill.
 
-That is **P1** in a stronger form than the wipe's: a resource whose owner let go is released as soon as the
-GPU is proven done with the scan's copies -- normally a few frames -- instead of at the next feature
-release, which in a game that never changes its settings is never.
+**The copy budget** (review E-05). A candidate's *first* copy is admitted only while fewer than 256 held
+candidates may still have GPU work the scan recorded: copied and active, copied and waiting with copies not yet
+settled, and retiring. Retiring candidates are made only of those, so the retiring set can never exceed 256,
+however many owners let go at once. The first version only paused promotions once 256 were already retiring,
+which a batch of let-gos could overshoot. The budget counts references, not bytes: a placed candidate also
+holds its heap (3.1).
+
+That is **P1** with its exception stated: a resource whose owner let go is released as soon as the GPU is
+proven done with the scan's copies -- normally a few frames -- and one whose copies are never proven done is
+retained, within the budget, for as long as that lasts.
 
 A candidate whose copies never settle (a failed fence, a list the game never submits) is **retained**, as the
 module's rule for unproven GPU work requires; it is never copied again, its heap stays pinned so the eventual
-release is still safe, and the bound above stops more of them from accumulating.
+release is still safe, and the budget above stops more of them from accumulating.
 
 The one exception is a **removed device**. Its fences never answer (`GetCompletedValue` reads `UINT64_MAX`), so
 nothing on it would ever settle, and waiting would hold the removed device's objects, with the heaps under them,
@@ -149,7 +174,13 @@ Three separate certificates, each with one meaning:
 - **Certified to copy, this sweep**: active; probed in this same `Tick`, under the scan's lock, with a holder
   other than the scan; and tracked: `Submission::Track` accepted this command list both into the
   readback slot's usage and into the candidate's own. Anything that fails one of the three is skipped this
-  sweep, and its offset in the slot records no id.
+  sweep, and its offset in the slot records no id. **What this certifies is narrow** (review E-03): the COM
+  object is alive and someone besides the scan holds it at the probe, and the copy's lifetime is tracked. It
+  does not certify that the resource is still the one active in its memory (aliasing), that it is resident
+  (`Evict`), that it is in `UNORDERED_ACCESS` (an assumption the scan has always made), or that the holder is
+  still using it; and another thread can release its reference between the probe and the copy (the scan's
+  reference keeps the object, not the game's claim on it). Those were the scan's assumptions before this change
+  and still are; what limits them is that only a committed candidate is carried past a feature release (5).
 - **Certified reading**: a value comes from a readback slot whose recording `Submission::Completed`, and is
   credited only to the candidate whose id that slot recorded at that offset when the copy was recorded. A
   value for an id that is retiring or gone is dropped. Readings no longer depend on list position or on
@@ -157,10 +188,19 @@ Three separate certificates, each with one meaning:
 - **Certified to use** (`BestValue`, the Found verdict, the white point): not retiring, and `moves` computed
   from certified readings only.
 
-A slot is written only after its previous recording completed. A slot whose recording does not complete --
+A slot is read once its recording completed, and **rewritten only once that recording has settled** -- Ready
+(completed and Reset), cancelled, or completed and aged out of the tracker's replay window -- not merely
+completed (review E-04: a list executed again after its slot was reused wrote the old candidate's value into
+the new recording's offset, and it was credited to the newcomer). A slot whose recording does not complete --
 the GPU behind, a Signal that failed, a list never submitted, a removed device -- is never read and never
 reused, so the sweep that would write it is skipped. When every slot is waiting the scan says so (section 7)
-rather than reading anything.
+rather than reading anything. In a game that never resets its old lists this slows the sweep to about four per
+replay window (128 renderer ticks); measured by `fresh-lists`.
+
+What remains is the tracker's own window, which this inherits and does not narrow: outside strict mode a
+completed, unsealed recording counts as finished once 128 ticks old, for every user of `Settled`. A list the game
+executes again later than that, without a Reset, is outside the contract of the whole module, not only of the
+scan; the first replay the tracker sees latches strict mode, after which only Ready counts.
 
 When `Track` refuses the command list (an unsupported list type, queue hooks unavailable, a runtime the
 tracker does not admit: `submission-tracking.md`), the scan copies nothing on it and says why once, as the
@@ -200,20 +240,27 @@ read 1800 times; while anything untried waits, it is Watching, and the sweep kee
 `ReleaseTrackedResources` stays the call at the top of `NVSDK_NGX_D3D12_ReleaseFeature`, and becomes a
 **boundary** rather than a wipe:
 
-- **view** candidates, in any state, are released there and then, exactly as before. The scan cannot pin
-  their memory, so for them the old guarantee is kept by the old means (P1-P3 as in section 2). So is any
-  candidate whose device was removed (section 3.3).
-- **committed** and **placed** candidates are kept, with their readings. None of them is copied again until a
-  sweep after the boundary has probed it, and every sweep probes before it records (3.4). A candidate the
-  teardown freed -- the documented Streamline/DLSS-D case -- is therefore found let go at the next sweep,
-  never copied after the teardown (P2), and released once its earlier copies settle, with its heap still
-  pinned (P3). A candidate the game still holds after the teardown stays watched.
+- **view** and **placed** candidates, in any state, are released there and then, as the wipe did, and so is any
+  candidate whose device was removed (section 3.3). For a view candidate the heap is unknown; for a placed one
+  the scan holds the heap, but holding a heap keeps memory allocated, not the resource's claim on it, and a
+  feature release is when a game reorganises its allocations (review E-03). Within an era a placed candidate is
+  still watched, with its heap pinned, as before this change.
+- **committed** candidates on a live device are kept, with their readings. A committed resource owns its
+  memory and cannot be aliased. None is copied again until a sweep after the boundary has probed it, and every
+  sweep probes before it records (3.4). One the teardown freed is found let go at the next sweep, never copied
+  after it, and released once its earlier copies settle. One the game still holds stays watched.
+- **With the scan off, or NR off,** nothing is kept (review E-02): every candidate is let go there, the ones
+  with unsettled copies kept only until those settle. The same happens at the first frame of the pass after the
+  scan is turned off, without waiting for a release; with nothing held, that check is one relaxed load.
 - The once-per-generation log flags (the full list, the barren cadence) are reset, as the wipe did.
 
-Recreation before a release then needs no special window. In Cyberpunk's order: the new buffers are created
-while the list is full and wait; the old feature is released; the game lets go of its old buffers, and the
-next sweep finds them let go and retires them; their active positions are filled from the waiting list; the
-new exposure is read and found. A game that keeps its exposure across the release keeps it in the scan too.
+Recreation before a release then needs no special window **if the buffers are committed**. In Cyberpunk's
+order: the new buffers are created while the list is full and wait; the old feature is released; the game lets
+go of its old buffers, and the next sweep finds them let go and retires them; their active positions are filled
+from the waiting list; the new exposure is read and found. A game that keeps a committed exposure across the
+release keeps it in the scan too. If Cyberpunk's exposure buffers are placed, the release still drops them, as
+the wipe did, and the scan finds the exposure only if it is created again later; which it is, is for the game
+run to say (the adoption line names the origin).
 
 janblade's fork kept candidates adopted in the last 2 s before a release (`9c764ff6`, `b0c63dd7`). That keeps
 anything fresh, including a resource of the very feature being released (a feature made and released inside
@@ -222,27 +269,47 @@ exposure. Probing after the teardown keeps exactly what still has an owner, when
 
 ### What this does not guarantee
 
-- **Aliasing inside a live heap.** An owner that reuses a placed resource's memory for something else while
-  still holding the resource object makes the scan read someone else's bytes. The probe cannot see that; the
-  result is a wrong reading, not a freed page, and it is the same exposure the scan has today.
+- **Aliasing, residency, state, ownership** (review E-03). Within an era the scan copies a placed candidate
+  that a game may have aliased (another resource activated over the same memory) or evicted, and any candidate
+  in a state other than `UNORDERED_ACCESS`; this is not a wrong reading but GPU access without the activation
+  or residency it needs. The base scan had the same exposure for as long as it held a candidate; this change
+  does not narrow it within an era, and no longer extends it across a release for placed candidates. A
+  committed candidate can be evicted too, and is carried; residency is not certified.
+- **The probe-to-copy window.** The probe and the recording are under the scan's lock; the game's Release is
+  not. A reference the game drops between them leaves one copy recorded of a resource the game had just let
+  go. The scan's own reference keeps the object (and a placed one's heap) alive through that copy.
+- **One candidate, one interface.** Candidates are deduplicated by pointer. A resource reached through two
+  distinct interface pointers or proxies would be held twice, and the probe's fixed "minus one" would then
+  see the scan's second reference as another holder. Nothing seen here does that; it is not ruled out.
 - **Reference-count-driven pools.** Software that decides a pooled resource is free by its reference count
   sees the scan's reference as a user. Nothing found here does that, and nothing here rules it out.
 - **Driver-internal objects.** The protection is for objects whose lifetime follows their COM reference
   counts. If the nvwgf2umx removal in `70f17250` came from driver state that is freed at a feature teardown
   whatever the counts say, pinning does not reach it; what does is that nothing the teardown let go of is
   ever copied after it, which is the action that removed the device then.
-- **The mechanism of `ef14d066`.** Unknown. The scan still holds nothing unless it is wanted; what changes is
-  that while it is wanted, a recycled buffer is released within a few frames of its owner letting go,
-  instead of at the next feature release.
-- **Replay.** A list the game executes again without a Reset re-runs old copies into a readback slot the
-  scan may since have rewritten. The tracker latches strict mode when it sees one; a slot rewritten in
-  between can then credit one stale value. Bounded and named, not handled.
+- **The mechanism of `ef14d066`.** Unknown. The scan still adopts nothing unless it is wanted, and since the
+  review lets go of what it holds as soon as it is not wanted (5); what changes while it is wanted is that a
+  recycled buffer is released within a few frames of its owner letting go, instead of at the next feature
+  release, and that a committed candidate is held across releases.
+- **Replay later than the tracker's window** (3.4). Within it, a replayed recording keeps its slot unused and
+  its candidates held. Later than it, without a Reset, is outside the module's contract.
+- **NR switched off between releases.** With NR off no frame of the pass runs, so candidates are let go at the
+  next feature release, not at once; until then they are held, uncopied.
 
 ## 6. Cost
 
 When wanted: one `AddRef`/`Release` pair per held candidate per frame (up to 256), one `Submission::PruneFinished`
-and one `Submission::Track` per copied candidate plus one `Track` per slot, and the copies as before (at most 64 a sweep, the same throttles).
-The readback ring is unchanged (four 32 KB buffers). Not wanted, or NR off: nothing new runs.
+and one `Submission::Track` per copied candidate plus one `Track` per slot, and the copies as before (at most 64 a
+sweep, the same throttles). The readback ring is unchanged (four 32 KB buffers).
+
+List probes (review cost note): `Settled` refreshes orphan flags with an `AddRef`/`Release` pair per held list of
+each epoch it visits. The first version's `PruneFinished` did too, once per copied candidate: 3,648 pairs in one
+`Tick` with 64 candidates on kept lists (`cost`, the review's figure). `PruneFinished` no longer refreshes (an orphan
+flag only lets an epoch finish sooner, and the slot checks refresh the same shared epochs), and with slots reused
+only after settlement a usage stays small: `cost` measures at most 4 per `Tick`, on kept lists and on reset ones,
+and holds it under 448. Retiring candidates add one `Settled` each per frame, bounded by the budget.
+
+Not wanted: one relaxed load per frame while nothing is held. NR off: nothing new runs.
 
 ## 7. What is logged
 
@@ -253,10 +320,10 @@ The readback ring is unchanged (four 32 KB buffers). Not wanted, or NR off: noth
 - The existing ~300-frame readout gains one summary line: active, waiting, retiring, and since the last
   summary how many were adopted, let go by the game, retired as false, moved aside, dropped, refused and
   released.
-- At each boundary: how many candidates were kept to be re-checked, and how many view candidates were
-  released.
+- At each boundary: how many committed candidates were kept to be re-checked, and how many placed, view or
+  removed-device ones were released; with the scan off, how many were let go and how many wait for the GPU.
 - Once: a command list the tracker refuses (with its reason); the first time every readback slot is waiting
-  on an unconfirmed recording; the first time the retiring bound stops promotions.
+  on an unconfirmed recording; the first time the copy budget stops a first copy.
 - The headline's Watching line counts the waiting candidates too.
 
 ## 8. Tests
@@ -281,8 +348,15 @@ decides when (and whether) each fence completes. Cases:
   until then.
 - **Waiting overflow**: with 64 read and 192 waiting, a newcomer takes the place of the oldest never-copied
   waiting candidate, and only that one is let go.
-- **Lists never reset**: a new list every frame, none reset; the exposure is still copied after 300 frames and
-  found.
+- **Lists never reset**: a new list every frame, none reset; still copied in every 128-frame window (four
+  sweeps each), and found.
+- **Review cases** (2026-10-23): `replay-prune` (a recording executed again keeps its candidate held, E-01),
+  `prune-model` (the model's `PruneFinished` keeps 57 completed, unsealed recordings that `Admit`'s pruning would
+  cut), `replay-slot` (a slot is not rewritten while its last recording can run again, E-04), `off-after-on`
+  (frames with the scan off, a release, on again, and NR off with only a release: nothing held, E-02),
+  `placed-boundary` (E-03), `budget` (built with a budget of 8: first copies, retained let-gos, E-05), `cost`
+  (list probes per `Tick`, printed and bounded), and `boundary-probe` (no frame of the pass: a let-go committed
+  candidate is released at the next release).
 - **Failed fence**: a recording whose Signal fails, or whose fence never completes, is never read, its slot
   is never rewritten, and a candidate copied in it is not released. On a removed device the same holds for the
   reading, and the candidate is released once the game lets it go, as it is at a boundary.
