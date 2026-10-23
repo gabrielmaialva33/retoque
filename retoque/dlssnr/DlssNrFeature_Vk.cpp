@@ -1516,9 +1516,14 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     guideHeight = std::min(guideHeight, guideAllocHeight - depthBaseY);
 
     // MVLowRes decides whether the vectors cover the render or the display frame, so the motion
-    // subrect is derived from the flag rather than shared with depth.
-    const uint32_t wantedMotionWidth = lowResolutionMotion ? guideWidth : width;
-    const uint32_t wantedMotionHeight = lowResolutionMotion ? guideHeight : height;
+    // subrect is derived from the flag rather than shared with depth. Its size and its units are the
+    // render size's, not what depth's own allocation left of it (render-geometry.md): a short depth
+    // allocation clips depth alone, as on D3D12.
+    const bool renderKnown = renderWidth != 0 && renderHeight != 0;
+    const uint32_t renderReferenceWidth = renderKnown ? renderWidth : guideWidth;
+    const uint32_t renderReferenceHeight = renderKnown ? renderHeight : guideHeight;
+    const uint32_t wantedMotionWidth = lowResolutionMotion ? renderReferenceWidth : width;
+    const uint32_t wantedMotionHeight = lowResolutionMotion ? renderReferenceHeight : height;
 
     uint32_t motionAllocWidth = motionAllocationWidth;
     uint32_t motionAllocHeight = motionAllocationHeight;
@@ -1615,9 +1620,10 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     g_vk.guideRefusal.active = false;
     g_vk.frameRefusals = 0;
 
-    const uint32_t motionReferenceWidth = DlssNr::GuideMatch::MotionReference(lowResolutionMotion, guideWidth, width);
+    const uint32_t motionReferenceWidth =
+        DlssNr::GuideMatch::MotionReference(lowResolutionMotion, renderReferenceWidth, width);
     const uint32_t motionReferenceHeight =
-        DlssNr::GuideMatch::MotionReference(lowResolutionMotion, guideHeight, height);
+        DlssNr::GuideMatch::MotionReference(lowResolutionMotion, renderReferenceHeight, height);
     const bool renderMotionScale = cfg.DlssNrRenderMotionScale.value_or_default();
     const DlssNr::GuideMatch::Handed handed = DlssNr::GuideMatch::ForModel(
         guides == DlssNr::GuideMatch::Guides::Matched, renderMotionScale, depthRegion, motionRegion, workWidth,

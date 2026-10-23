@@ -73,7 +73,18 @@ harness fail; one that survives, or no longer finds its text, fails the suite:
   region base, the shader mapping over the destination size;
 - a unit changed without compensating the scale: the transformation scaling vectors and not the MV scale, Gather or
   the Vulkan route dropping the game's MV scale, D3D12's scale measured against the output whatever MVLowRes says, the
-  render reference taken from the allocation, the Vulkan reference ignoring MVLowRes.
+  render reference taken from the allocation, the Vulkan reference ignoring MVLowRes, the Vulkan motion region taken
+  from depth's clipped width.
+
+## The defect it found (2026-10-23)
+
+The own-allocation relation failed on the Vulkan route, 20 checks, all MVLowRes: with depth's allocation short of
+base + render, `EvaluateAfterUpscaleVk` sized the low-resolution motion region and its reference from depth's *clipped*
+width (`lowResolutionMotion ? guideWidth : width`), so a complete 96-wide motion texture was handed as 72 wide and
+stretched over the model at 64/72 instead of 64/96. D3D12 (and so both bridges) already took the render size, as
+`render-geometry.md` prescribes. The fix gives the Vulkan route the same render reference: the render size when it is
+known, else what it used before. It needs inconsistent game metadata (a depth base or render size past depth's
+allocation), so no shipped title is known to hit it.
 
 ## Not covered
 
