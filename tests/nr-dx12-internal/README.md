@@ -20,3 +20,6 @@ step-4 base (`3a05c194`), ignoring formatting whitespace only. The scratch
 generation and descriptor-reuse helper must remain in the core. Resource RAII
 behavior is executed by `nr-before-upscale` against its strict host fakes;
 its declarations are also compiled here through the real internal header.
+
+The 2026-10-23 ReadableGuide correction intentionally updates its resource-body hash only;
+`nr-guide-copy-contract` exercises the new copy-shape/retirement behavior. Other extraction hashes stay pinned.

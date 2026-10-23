@@ -80,7 +80,7 @@ struct D3D12_RESOURCE_DESC
     uint64_t Width = 1280;
     unsigned Height = 720, DepthOrArraySize = 1, MipLevels = 1;
     DXGI_FORMAT Format = 1;
-    struct { unsigned Count = 1; } SampleDesc;
+    struct { unsigned Count = 1, Quality = 0; } SampleDesc;
     int Layout = 0, Flags = 0;
 };
 struct D3D12_HEAP_PROPERTIES { int Type; };

@@ -299,10 +299,12 @@ ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* c
         const D3D12_RESOURCE_DESC have = (*clone)->GetDesc();
         const D3D12_RESOURCE_DESC want = source->GetDesc();
 
-        // Dimensions only: the clone's format is whichever candidate CreateGuideClone settled on,
-        // which is not always TypedGuideFormat's first choice. Comparing against that choice would
-        // retire and rebuild the clone on every frame. Shape is what the DRS crash was about.
-        if (have.Width != want.Width || have.Height != want.Height)
+        // CopyResource needs the whole shape, not just the base extent: games can replace a guide
+        // with different mips, slices or samples at the same resolution. Keep the successful candidate
+        // format: comparing it with TypedGuideFormat's first choice would rebuild on every frame.
+        if (have.Dimension != want.Dimension || have.Width != want.Width || have.Height != want.Height ||
+            have.DepthOrArraySize != want.DepthOrArraySize || have.MipLevels != want.MipLevels ||
+            have.SampleDesc.Count != want.SampleDesc.Count || have.SampleDesc.Quality != want.SampleDesc.Quality)
         {
             // Retired, not released: the previous copy may still be in flight on the game's queue.
             ParkNrResource(*clone);

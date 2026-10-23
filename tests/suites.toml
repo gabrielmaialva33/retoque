@@ -669,3 +669,27 @@ requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "Native DXGI capture decoding, recorded guide geometry, v1/v2 conformance and mutations."
+
+[fg-resize-flags]
+path = "fg-resize-flags"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Both FG resize hooks preserve the actual per-swapchain waitable creation flag, including creation retry."
+
+[nr-guide-copy-contract]
+path = "nr-guide-copy-contract"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "ReadableGuide retires incompatible copy shapes while reusing successful candidate formats."
+
+[mfg-provider-capacity]
+path = "mfg-provider-capacity"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Production SL hooks refresh provider capacity and clamp only the effective count, preserving the INI preference."

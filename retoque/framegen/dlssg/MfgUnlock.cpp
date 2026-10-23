@@ -10,12 +10,24 @@
 #include <misc/IdentifyGpu.h>
 
 #include <algorithm>
+#include <atomic>
 #include <filesystem>
 #include <mutex>
 #include <vector>
 
 namespace
 {
+std::atomic<uint64_t> g_mfgProviderGeneration { 0 };
+std::atomic<HMODULE> g_mfgLastProvider { nullptr };
+
+static void PublishProviderGeneration(HMODULE provider, bool updated)
+{
+    const bool changed =
+        provider != nullptr && g_mfgLastProvider.exchange(provider, std::memory_order_relaxed) != provider;
+    if (changed || updated)
+        g_mfgProviderGeneration.fetch_add(1, std::memory_order_release);
+}
+
 // mov ebx,1 / mov r8d,<count> / cmp <reg>,0x1b0 / cmovl r8d,ebx. Both the published count and the
 // register holding the architecture vary between builds of nvngx_dlssg.dll, so both are wildcards:
 // 309 carried mov r8d,3 / cmp edi, and the dlssg shipped with Crimson Desert carries mov r8d,5 /
@@ -668,6 +680,8 @@ MfgUnlock::GateReport MfgUnlock::ProbeGates(HMODULE provider)
     return report;
 }
 
+uint64_t MfgUnlock::ProviderGeneration() { return g_mfgProviderGeneration.load(std::memory_order_acquire); }
+
 void MfgUnlock::TryApply(HMODULE provider)
 {
     // The step-0 MFG-below-Ada probe (MfgProbe.h) looks first: before the option check, so it runs with the
@@ -677,7 +691,10 @@ void MfgUnlock::TryApply(HMODULE provider)
     MfgProbe::LogModule(provider);
 
     if (!Config::Instance()->FGDLSSGAdaMfgUnlock.value_or_default())
+    {
+        PublishProviderGeneration(provider, false);
         return;
+    }
 
     // Reached from the load hooks and from Streamline calls on whatever thread makes them.
     static std::mutex mutex;
@@ -695,13 +712,17 @@ void MfgUnlock::TryApply(HMODULE provider)
     static bool wrapperDone = false;
 
     LiveOps ops;
+    HMODULE observedProvider = provider;
+    bool updated = false;
 
     {
         HMODULE module = provider != nullptr ? provider : GetModuleHandleW(L"nvngx_dlssg.dll");
+        observedProvider = module;
 
         if (module != nullptr && std::find(snippetsDone.begin(), snippetsDone.end(), module) == snippetsDone.end())
         {
             snippetsDone.push_back(module);
+            updated = true;
 
             wchar_t modulePath[MAX_PATH] = {};
             GetModuleFileNameW(module, modulePath, MAX_PATH);
@@ -798,6 +819,7 @@ void MfgUnlock::TryApply(HMODULE provider)
         if (auto module = GetModuleHandleW(L"sl.dlss_g.dll"); module != nullptr)
         {
             wrapperDone = true;
+            updated = true;
 
             // The two wrapper patches are independent ceilings, so each is its own commit: one missing
             // does not make the other wrong.
@@ -827,4 +849,7 @@ void MfgUnlock::TryApply(HMODULE provider)
                 LOG_INFO("{}", line);
         }
     }
+
+    // Publish only after all writes/rollbacks, so a query can capture a completed patch generation.
+    PublishProviderGeneration(observedProvider, updated);
 }
