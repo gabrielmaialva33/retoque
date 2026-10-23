@@ -13,6 +13,23 @@ with tempfile.TemporaryDirectory(prefix="nr-render-geometry-") as folder:
                     "-I",str(ROOT/"external/nvngx_dlss_sdk"),str(HERE/"cases.cpp"),"-o",str(binary)],check=True)
     subprocess.run([str(binary)],check=True)
 
+    source=(ROOT/"retoque/shaders/dlssnr/DlssNr_Dx12.cpp").read_text()
+    geometry=source[source.index("    const D3D12_RESOURCE_DESC guideDesc = depth->GetDesc();"):source.index("    // What the model is actually being shown")]
+    references=source[source.index("    const unsigned int motionReferenceWidth ="):source.index("    if (peripheryActive)", source.index("    const unsigned int motionReferenceWidth ="))]
+    harness=(HERE/"motion.cpp.in").read_text().replace("@GEOMETRY@",geometry).replace("@REFERENCES@",references)
+    unit=Path(folder)/"motion.cpp"
+    unit.write_text(harness)
+    subprocess.run(["g++","-std=c++20","-O1","-g","-Wall","-Wextra","-Werror",
+                    "-fsanitize=address,undefined","-I",str(ROOT/"retoque"),str(unit),"-o",str(binary)],check=True)
+    subprocess.run([str(binary)],check=True)
+    inputs=(ROOT/"retoque/shaders/dlssnr/DlssNr_Dx12_Inputs.cpp").read_text()
+    gather=inputs[inputs.index("DlssNrFrameInfo GatherGuideFrame("):inputs.index("DlssNrFrameInfo GatherFrame(")]
+    unit.write_text((HERE/"gather.cpp.in").read_text().replace("@GATHER@",gather))
+    subprocess.run(["g++","-std=c++20","-O1","-g","-Wall","-Wextra","-Werror",
+                    "-fsanitize=address,undefined","-I",str(ROOT/"retoque"),"-I",str(HERE),
+                    "-I",str(ROOT/"external/nvngx_dlss_sdk"),str(unit),"-o",str(binary)],check=True)
+    subprocess.run([str(binary)],check=True)
+
 # Pin the upstream integration: immutable snapshot before Init, success-only handle registration,
 # release cleanup, and the same evaluate's scope before either NR stage.
 hook=(ROOT/"OptiScaler/inputs/NVNGX_DLSS_Dx12.cpp").read_text()

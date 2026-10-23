@@ -36,7 +36,7 @@ void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, I
         uint64_t colorWidth = 0, outputWidth = 0;
         unsigned colorHeight = 0, outputHeight = 0, subWidth = 0, subHeight = 0, modelWidth = 0, modelHeight = 0;
         bool haveWidth = false, haveHeight = false;
-        unsigned resolvedWidth = 0, resolvedHeight = 0;
+        unsigned resolvedWidth = 0, resolvedHeight = 0, displayWidth = 0, displayHeight = 0;
         DlssNr::RenderSizeSource source = DlssNr::RenderSizeSource::Missing;
         float scale = 1.0f;
         bool operator==(const Contract&) const = default;
@@ -61,6 +61,9 @@ void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, I
     now.resolvedWidth = resolved.size.width;
     now.resolvedHeight = resolved.size.height;
     now.source = resolved.source;
+    const auto display = DlssNr::GetDisplaySize(params);
+    now.displayWidth = display.width;
+    now.displayHeight = display.height;
     now.scale = DlssNr::WorkingScale();
     // Match Dispatch's clamping for logging only; never feed diagnostic values back to rendering.
     if (std::isfinite(now.scale))
@@ -82,11 +85,12 @@ void ReportSpatialContract(NVSDK_NGX_Parameter* params, ID3D12Resource* color, I
     previous[stage] = now;
     LOG_INFO("DLSS-NR spatial contract stage={}: Color-allocation={}x{}, render-subrect={}x{} (width-query={}, "
              "height-query={}), "
-             "game-output={}x{}, model-request={}x{}, WorkingScale={:.3f}, render-resolved={}x{} source={}",
+             "game-output={}x{}, model-request={}x{}, WorkingScale={:.3f}, render-resolved={}x{} source={}, "
+             "display-reference={}x{}",
              before ? "before" : "after", now.colorWidth, now.colorHeight, now.subWidth, now.subHeight,
              now.haveWidth ? "success" : "absent/failed", now.haveHeight ? "success" : "absent/failed", now.outputWidth,
              now.outputHeight, now.modelWidth, now.modelHeight, now.scale, now.resolvedWidth, now.resolvedHeight,
-             DlssNr::RenderSizeSourceName(now.source));
+             DlssNr::RenderSizeSourceName(now.source), now.displayWidth, now.displayHeight);
     if (before && now.outputWidth && now.outputHeight && now.modelWidth >= now.outputWidth &&
         now.modelHeight >= now.outputHeight)
         LOG_INFO("DLSS-NR spatial contract: no spatial reduction before the upscaler; this does not establish DLAA. "
@@ -125,6 +129,9 @@ DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)
     const auto renderSize = DlssNr::GetRenderSize(params);
     frame.RenderSubrectWidth = renderSize.width;
     frame.RenderSubrectHeight = renderSize.height;
+    const auto displaySize = DlssNr::GetDisplaySize(params);
+    frame.DisplayWidth = displaySize.width;
+    frame.DisplayHeight = displaySize.height;
     params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, &frame.DepthSubrectBaseX);
     params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, &frame.DepthSubrectBaseY);
     params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, &frame.MotionSubrectBaseX);
