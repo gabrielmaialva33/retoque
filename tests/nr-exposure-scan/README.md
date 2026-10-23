@@ -34,11 +34,15 @@ process, because the scan's state is global. Design: `docs/dlssnr/design/exposur
 | `long-lived` | an exposure kept across a feature release stays held and found, its readings carried on |
 | `attribution` | a newcomer is never credited with a value its own buffer did not hold: after a release, and after a late completion of a copy of a let-go candidate at the same position |
 | `integer` | an integer buffer (65536 reads as `9.18e-41`) gives way first; 63 plausible quiet buffers are kept |
-| `fence-never`, `fence-signal`, `fence-removed` | a fence that never completes, a failed Signal, a removed device: no reading, no slot rewritten, a let-go candidate with unconfirmed copies retained |
+| `quiet` | 64 plausible buffers that never move: nothing found and Watching (not Barren) until one is past patience, then it is moved aside, still held, and the exposure behind them is found |
+| `overflow` | 64 read and 192 waiting: a newcomer takes the place of the oldest never-copied waiting one, and only that one is let go |
+| `fence-never`, `fence-signal`, `fence-removed` | a fence that never completes, a failed Signal, a removed device: no reading, no slot rewritten; a let-go candidate with unconfirmed copies retained, except on the removed device, where nothing can run again and it is released |
 | `discarded` | a list reset without executing frees its slot unread; readings resume when lists run |
 | `reuse` | let go, retained while its copy is unconfirmed, released after it, and a new resource at the same address adopted fresh and found on its own values |
 | `placed` | the game releases a placed exposure and its heap: nothing copied after, nothing destroyed out of order, both released by the end |
 | `view` | a candidate seen only through a view is released at the boundary, as before; a committed one is kept |
+| `removed-boundary` | a committed candidate is kept at a boundary on a live device and released at one once its device was removed |
+| `fresh-lists` | a new list every frame and none ever reset: the exposure is still copied after 300 frames and found (its usage drops finished recordings before each new one) |
 | `inert-off`, `inert-unwanted` | NR off, or the scan not the white point's source: no reference, no copy (and with NR off nothing examined) |
 | `untracked` | a list the tracker refuses gets no copies, and the status says why |
 
@@ -47,8 +51,14 @@ boundary once and before the feature is torn down, each `Tick` probes before it 
 slot and every candidate before recording, readings come only from completed recordings and never from elapsed
 sweeps, and the boundary releases view candidates without forgetting the rest.
 
-Against the code before this change (`acdba2af`) every case fails except the two inert ones, and so do the
-guards that name the new structure.
+Against the code before this change (`acdba2af`) every case of the first fifteen fails except the two inert ones,
+and so do the guards that name the new structure (`quiet`, `overflow`, `removed-boundary` and `fresh-lists` were added
+after the implementation; `fresh-lists` failed against its first version, which tracked without pruning).
+Five mutations of the new scan were each caught: a probe that never sees a let-go (4 cases), no heap reference
+(`placed`), crediting by position instead of id (`attribution`), reading without completion (4 cases), and
+releasing without settlement (5 cases), and keeping candidates on a removed device at the boundary
+(`removed-boundary`). Not covered: the refusal when every waiting candidate has been copied
+before, and the retiring bound stopping promotions.
 
 ## What it does not prove
 

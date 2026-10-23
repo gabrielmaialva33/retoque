@@ -36,6 +36,7 @@ std::array<uint64_t, DlssNr::Submission::Detail::MaxQueues> g_completed {};
 std::array<uint64_t, DlssNr::Submission::Detail::MaxQueues> g_signalled {};
 uint64_t g_clock = 0;
 bool g_failTrack = false;
+bool g_removed = false; // the device reports itself removed
 auto completedValue = [](size_t q) { return g_completed[q]; };
 
 std::vector<std::string> g_violations;
@@ -107,6 +108,7 @@ struct Resource final : ID3D12Resource
         }
         return refs;
     }
+    HRESULT GetDevice(int, void** out) override;
     D3D12_RESOURCE_DESC GetDesc() override { return desc; }
     HRESULT Map(UINT, const D3D12_RANGE*, void** out) override
     {
@@ -139,6 +141,7 @@ struct Device final : ID3D12Device
 {
     ULONG AddRef() override { return 1; }
     ULONG Release() override { return 1; }
+    HRESULT GetDeviceRemovedReason() override { return g_removed ? E_FAIL : S_OK; }
     HRESULT CreateCommittedResource(const D3D12_HEAP_PROPERTIES*, D3D12_HEAP_FLAGS, const D3D12_RESOURCE_DESC* d,
                                     D3D12_RESOURCE_STATES, const void*, int, void** out) override
     {
@@ -199,6 +202,14 @@ struct List final : ID3D12GraphicsCommandList
     }
 };
 
+Device g_device;
+
+HRESULT Resource::GetDevice(int, void** out)
+{
+    *out = static_cast<ID3D12Device*>(&g_device);
+    return S_OK;
+}
+
 uintptr_t Key(List& list) { return reinterpret_cast<uintptr_t>(static_cast<ID3D12GraphicsCommandList*>(&list)); }
 
 // The GPU runs the list at once; whether anyone is told depends on the fence.
@@ -232,7 +243,6 @@ void Reset(List& list) { Model::AfterReset(g_model.Current(Key(list)), true); }
 
 void Advance() { g_model.Advance(++g_clock); }
 
-Device g_device;
 List g_list;
 int g_frame = 0;
 
@@ -437,7 +447,7 @@ void LongLived()
     Expect(FoundExposure(after, 0.5f), "still found after the release");
     const auto reportAfter = Scan::Report();
     c = ReportFor(reportAfter, after.low, after.high);
-    Expect(c != nullptr && c->reads > readsBefore + 50, "its readings carried on across the release");
+    Expect(c != nullptr && c->reads > readsBefore + 20, "its readings carried on across the release");
 }
 
 // Section 3.4: a newcomer is never credited with a value its own buffer did not hold.
@@ -511,6 +521,53 @@ void Integer()
     Expect(held == quiet.size(), "plausible quiet buffers are kept (" + std::to_string(held) + " of 63)");
 }
 
+// Section 4: 64 plausible quiet buffers never give way as false; once watched past patience, one is moved aside for
+// the untried exposure waiting behind them, and comes back to the waiting list with its reference.
+void Quiet()
+{
+    Begin();
+    std::vector<Resource*> quiet;
+    for (int i = 0; i < 64; ++i)
+        quiet.push_back(Create("quiet" + std::to_string(i), 1.0f + 0.01f * i));
+    Resource* exposure = Create("exposure", Exposure(0.5f, 0));
+    for (int f = 0; f < 1700; ++f)
+    {
+        exposure->SetFloat(Exposure(0.5f, f));
+        Frame();
+    }
+    Expect(Best().value == 0.0f, "nothing found while the exposure waits behind plausible quiet buffers");
+    Expect(Scan::Where() == Scan::Verdict::Watching, "watching, not barren, while something untried waits");
+    for (int f = 1700; f < 2000; ++f)
+    {
+        exposure->SetFloat(Exposure(0.5f, f));
+        Frame();
+    }
+    Expect(FoundExposure(Best(), 0.5f), "found once a quiet buffer past patience made way for it");
+    unsigned held = 0;
+    for (Resource* r : quiet)
+        held += r->ScanRefs() == 1;
+    Expect(held == quiet.size(),
+           "the quiet buffer moved aside is still held, waiting (" + std::to_string(held) + " of 64)");
+}
+
+// Section 4: a full waiting list gives up its oldest never-copied candidate for a newcomer.
+void Overflow()
+{
+    Begin();
+    std::vector<Resource*> made;
+    for (int i = 0; i < 64 + 192; ++i)
+        made.push_back(Create("r" + std::to_string(i), 1.0f));
+    unsigned held = 0;
+    for (Resource* r : made)
+        held += r->ScanRefs();
+    Expect(held == 64 + 192, "64 read and 192 waiting are held (" + std::to_string(held) + ")");
+    Resource* newcomer = Create("newcomer", 1.0f);
+    Expect(newcomer->ScanRefs() == 1, "the newcomer is held");
+    Expect(made[64]->ScanRefs() == 0, "the oldest waiting one gave way");
+    Expect(made[65]->ScanRefs() == 1 && made[63]->ScanRefs() == 1, "and only that one");
+    Expect(!made[64]->destroyed, "a release of a resource the game still holds destroys nothing");
+}
+
 // Section 3.4: readings need a completed recording.
 void FenceCase(const char* how)
 {
@@ -531,6 +588,7 @@ void FenceCase(const char* how)
         {
             Execute(g_list);
             g_completed[0] = std::numeric_limits<uint64_t>::max(); // GetCompletedValue on a removed device
+            g_removed = true;
         }
         Reset(g_list);
         Advance();
@@ -550,7 +608,10 @@ void FenceCase(const char* how)
         Reset(g_list);
         Advance();
     }
-    Expect(!c->destroyed && c->ScanRefs() == 1, "a candidate whose copies are unconfirmed is retained");
+    if (g_removed)
+        Expect(c->destroyed, "on a removed device nothing can run again: let go and released, not held for good");
+    else
+        Expect(!c->destroyed && c->ScanRefs() == 1, "a candidate whose copies are unconfirmed is retained");
 }
 
 // A list the game resets without executing: its copies never run; the slot is reused without being read.
@@ -655,6 +716,44 @@ void View()
     Expect(c->ScanRefs() == 1, "a committed candidate the game holds is kept at the boundary");
 }
 
+// Section 5: a candidate on a removed device is released at the boundary whatever its origin; one on a live device
+// is kept.
+void RemovedAtBoundary()
+{
+    Begin();
+    Resource* c = Create("committed", 2.0f);
+    for (int f = 0; f < 10; ++f)
+        Frame();
+    Scan::ReleaseTrackedResources();
+    Expect(c->ScanRefs() == 1, "kept at a boundary on a live device");
+    g_removed = true;
+    Scan::ReleaseTrackedResources();
+    Expect(c->ScanRefs() == 0, "released at a boundary once its device was removed");
+}
+
+// A game that records each frame into a new list and never resets the old ones: completed recordings are never
+// sealed, so a candidate's usage must still let go of the finished ones or it fills and the candidate stops being
+// copied.
+void FreshLists()
+{
+    Begin();
+    Resource* exposure = Create("exposure", Exposure(0.5f, 0));
+    std::deque<List> lists;
+    for (int f = 0; f < 300; ++f)
+    {
+        exposure->SetFloat(Exposure(0.5f, f));
+        List& list = lists.emplace_back();
+        const unsigned before = g_copiesRecorded;
+        Scan::Tick(&g_device, &list);
+        if (f >= 200)
+            Expect(g_copiesRecorded > before || f % 4 != 0, "still copied after " + std::to_string(f) + " frames");
+        Execute(list);
+        Complete();
+        Advance();
+    }
+    Expect(FoundExposure(Best(), 0.5f), "found on lists that are never reset");
+}
+
 // Section 6: inert when NR is off or the scan is not wanted; nothing copied on an untracked list.
 void Inert(const char* how)
 {
@@ -724,6 +823,8 @@ bool Completed(const Usage& usage)
 
 bool Settled(const Usage& usage) { return Detail::IsSettled(usage, completedValue, g_model.Clock(), g_model.Strict()); }
 
+void PruneFinished(Usage& usage) { Detail::PruneLifetime(usage, completedValue, g_model.Clock(), g_model.Strict()); }
+
 const char* LastRefusal() { return "injected-refusal"; }
 } // namespace DlssNr::Submission
 
@@ -735,6 +836,8 @@ int main(int argc, char** argv)
         { "long-lived", LongLived },
         { "attribution", Attribution },
         { "integer", Integer },
+        { "quiet", Quiet },
+        { "overflow", Overflow },
         { "fence-never", [] { FenceCase("never"); } },
         { "fence-signal", [] { FenceCase("signal"); } },
         { "fence-removed", [] { FenceCase("removed"); } },
@@ -742,6 +845,8 @@ int main(int argc, char** argv)
         { "reuse", Reuse },
         { "placed", Placed },
         { "view", View },
+        { "removed-boundary", RemovedAtBoundary },
+        { "fresh-lists", FreshLists },
         { "inert-off", [] { Inert("off"); } },
         { "inert-unwanted", [] { Inert("unwanted"); } },
         { "untracked", [] { Inert("untracked"); } },

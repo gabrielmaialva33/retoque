@@ -301,6 +301,13 @@ bool OnlyUnanswerableLeft(const Usage& usage)
     return Detail::IsOnlyUnanswerableLeft(usage, FenceValue, model.Clock(), model.Strict());
 }
 
+void PruneFinished(Usage& usage)
+{
+    std::lock_guard lock(stateMutex);
+    RefreshOrphans(usage);
+    Detail::PruneLifetime(usage, FenceValue, model.Clock(), model.Strict());
+}
+
 void Prune(Usage& usage)
 {
     std::lock_guard lock(stateMutex);

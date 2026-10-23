@@ -52,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix='nr-exposure-scan-') as directory:
     subprocess.run(flags + [str(Path(directory) / 'cases.o'), str(Path(directory) / 'scan.o'), '-o', str(binary)],
                    check=True)
     names = subprocess.run([str(binary), '--list'], check=True, capture_output=True, text=True).stdout.split()
-    assert len(names) >= 15, names
+    assert len(names) >= 18, names
     for name in names:
         result = subprocess.run([str(binary), name], capture_output=True, text=True)
         sys.stdout.write(result.stdout)
@@ -96,7 +96,7 @@ guard(lambda: releaseFeature.index('DlssNr::ExposureScan::ReleaseTrackedResource
 tick = body(scan, 'void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList)')
 guard(lambda: 'ProbeLocked(' in tick and tick.index('ProbeLocked(') < tick.index('SweepLocked('),
       'every sweep is preceded by the probe in the same Tick')
-sweep = body(scan, 'void SweepLocked(')
+sweep = body(scan, 'const char* SweepLocked(')
 guard(lambda: 'Submission::Track(cmdList, slot.usage)' in sweep and 'Submission::Track(cmdList, t.usage)' in sweep,
       'the sweep tracks both the slot and each candidate it copies')
 guard(lambda: sweep.index('Submission::Track(cmdList, t.usage)') < sweep.index('CopyBufferRegion('),

@@ -1935,7 +1935,7 @@ static HRESULT hkCreatePlacedResource(ID3D12Device* device, ID3D12Heap* pHeap, U
         o_CreatePlacedResource(device, pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
 
     if (SUCCEEDED(created) && ppvResource != nullptr)
-        DlssNr::ExposureScan::NoteResource(pDesc, (ID3D12Resource*) *ppvResource);
+        DlssNr::ExposureScan::NoteResource(pDesc, (ID3D12Resource*) *ppvResource, pHeap);
 
     return created;
 }

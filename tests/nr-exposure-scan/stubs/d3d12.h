@@ -155,12 +155,14 @@ struct ID3D12Heap : IUnknown
 };
 struct ID3D12Resource : IUnknown
 {
+    virtual HRESULT GetDevice(int, void**) = 0; // ID3D12DeviceChild's
     virtual D3D12_RESOURCE_DESC GetDesc() = 0;
     virtual HRESULT Map(UINT, const D3D12_RANGE*, void**) = 0;
     virtual void Unmap(UINT, const D3D12_RANGE*) = 0;
 };
 struct ID3D12Device : IUnknown
 {
+    virtual HRESULT GetDeviceRemovedReason() = 0;
     virtual HRESULT CreateCommittedResource(const D3D12_HEAP_PROPERTIES*, D3D12_HEAP_FLAGS, const D3D12_RESOURCE_DESC*,
                                             D3D12_RESOURCE_STATES, const void*, int, void**) = 0;
 };

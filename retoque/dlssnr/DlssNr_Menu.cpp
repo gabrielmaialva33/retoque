@@ -2281,7 +2281,7 @@ void RenderMenu(Config* config, float menuResScale)
 
                                     if (c.reads == 0)
                                     {
-                                        ImGui::TextDisabled(Localization::Tr("%zu. %s -- not read yet"), i + 1,
+                                        ImGui::TextDisabled(Localization::Tr("%zu. %s -- not read yet"), (size_t) c.id,
                                                             c.shape.c_str());
                                         continue;
                                     }
@@ -2289,7 +2289,7 @@ void RenderMenu(Config* config, float menuResScale)
                                     // Moving is the whole signal, so it is the thing that is coloured.
                                     ImGui::TextColored(
                                         c.moves ? ImVec4(0.45f, 0.8f, 0.45f, 1.0f) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f),
-                                        Localization::Tr("%zu. %s = %.5f  (seen %.5f..%.5f) %s"), i + 1,
+                                        Localization::Tr("%zu. %s = %.5f  (seen %.5f..%.5f) %s"), (size_t) c.id,
                                         c.shape.c_str(), c.latest, c.lowest, c.highest,
                                         c.moves ? Localization::Tr("MOVES") : Localization::Tr("flat so far"));
                                 }

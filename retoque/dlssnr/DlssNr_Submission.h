@@ -33,6 +33,9 @@ bool OnlyUnanswerableLeft(const Usage& usage);
 // Exact recording, single execution and actual queue frequency; also reports safe slot reuse.
 GpuTiming::Detail::Certificate TimingCertificate(const Usage& usage);
 void Prune(Usage& usage);
+// Drops the epochs retirement no longer waits for (Settled's rule, epoch by epoch, with Admit's slot reserve), so a
+// usage tracked into recording after recording does not fill with finished ones whose lists are never Reset.
+void PruneFinished(Usage& usage);
 
 // Completion observed so far, NOT permission to destroy: a list may execute again.
 bool Completed(const Usage& usage);
