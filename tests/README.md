@@ -69,7 +69,7 @@ suite READMEs for artifact paths and limits.
   non-menu presents pass through untouched. The hidden-splash policy and the surface-hook race are recorded
   expectations. No GPU.
 
-**Host tier.** 80 suites (93 total: 80 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 81 suites (94 total: 81 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -197,6 +197,13 @@ production headers or source slices with local fakes under AddressSanitizer and 
   inputs, bound to the evaluated handle), its retirement after DRS or malformed dimensions, poisoned margins, and
   display-resolution motion before the upscaler, from the production resolver, Dispatch's geometry block and
   GatherGuideFrame against fake NGX parameters. No GPU.
+- `nr-geometry-metamorphic` — the NR input geometry under equivalent representations of one analytic scene (Codex
+  N-03): render size through Width/Height, subrect or creation; guides at non-zero bases in padded allocations with
+  sentinel margins; MV units with a compensating scale; MVLowRes against display vectors; BGRA colour. Pushed through
+  the production GatherGuideFrame, Dispatch's geometry/reference/scale blocks, the Vulkan route's plan and the guide
+  resample's own HLSL on a CPU shim. Exact relations bit for bit, lossy ones under a stated half-texel bound, an
+  analytic check, D3D12 against Vulkan, motion bounded by its own allocation, and 14 mutants (margin reads, unit
+  changes without the scale) that must fail. No GPU or model.
 - `xefg-dynamic-target` — XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, through the production
   `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
   60/120/165 Hz and an unknown refresh rate; FGPresent's final sync interval as the V-Sync signal; both
