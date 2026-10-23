@@ -63,7 +63,7 @@ suite READMEs for artifact paths and limits.
 - `deferred-release` — the production deferred queue with a fake clock: drained/lost owner
   retirement, late enqueue refusal, handle reuse and a detached-collector race at Vulkan device teardown.
 
-**Host tier.** 75 suites (87 total: 75 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 76 suites (88 total: 76 host and 12 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -191,6 +191,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
   `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
   60/120/165 Hz and an unknown refresh rate; FGPresent's final sync interval as the V-Sync signal; both
   controllers settling on a simulated game whose generated frames over the refresh are dropped. No XeFG or DXGI.
+- `fg-dlssg-backbuffer-index` — FGPresent's DLSS-G block, sliced from `hooks/FG_Hooks.cpp`: `GetCurrentBackBufferIndex`
+  on the DLSS-G swapchain exactly once on every DLSS-G present (DLSS-G refuses a frame without it), whether the
+  game's own Reflex markers are used or OptiScaler's, and ahead of OptiScaler's frame token; the token and
+  `ePresentStart` keep their condition. 192 cases against Streamline and DXGI fakes; no DLSS-G.
 - `fg-fullscreen-hooks` — the FG swapchain's fullscreen hooks, sliced from `hooks/FG_Hooks.cpp` and compiled
   against fakes that follow DXGI's contract: `GetFullscreenState`'s two optional arguments reach the original as
   given and only the ones passed are rewritten, a reported fullscreen comes with the window's output (AddRef'd,

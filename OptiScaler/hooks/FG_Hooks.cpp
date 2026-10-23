@@ -1399,11 +1399,15 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
 
     if (willPresent && fgFeatureActive && state.activeFgOutput == FGOutput::DLSSG)
     {
+        // DLSS-G generates nothing in a frame without a GetCurrentBackBufferIndex call on its swapchain
+        // (eFailGetCurrentBackBufferIndexNotCalled), and a game may track the index itself; the game's own
+        // Reflex markers do not make that call, so it is made on every present
+        ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
+
         if ((!ReflexHooks::gameIsSendingMarkers() || !config->FGDLSSGUseGamesReflexMarkers.value_or_default()))
         {
             if (StreamlineProxy::PCLSetMarker() != nullptr)
             {
-                ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
                 const uint32_t frameId = (uint32_t) fg->FrameCount();
                 tokenResult = StreamlineProxy::GetNewFrameToken()(localToken, &frameId);
 

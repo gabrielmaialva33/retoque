@@ -678,6 +678,14 @@ tier = "host"
 timeout = 120
 summary = "Both FG resize hooks preserve the actual per-swapchain waitable creation flag, including creation retry."
 
+[fg-dlssg-backbuffer-index]
+path = "fg-dlssg-backbuffer-index"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "FGPresent queries GetCurrentBackBufferIndex on every DLSS-G present, with or without the game's Reflex markers; the token and ePresentStart keep their condition."
+
 [fg-fullscreen-hooks]
 path = "fg-fullscreen-hooks"
 domain = "fg"
