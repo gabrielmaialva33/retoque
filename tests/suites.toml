@@ -677,3 +677,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Both FG resize hooks preserve the actual per-swapchain waitable creation flag, including creation retry."
+
+[nr-guide-copy-contract]
+path = "nr-guide-copy-contract"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "ReadableGuide retires incompatible copy shapes while reusing successful candidate formats."
