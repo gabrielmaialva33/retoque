@@ -277,6 +277,7 @@ class Config
     CustomOptional<bool, NoDefault> HDR;
     CustomOptional<bool, NoDefault> JitterCancellation;
     CustomOptional<bool, NoDefault> DisplayResolution;
+    CustomOptional<bool, NoDefault> DynamicResolution;
     CustomOptional<bool, NoDefault> DisableReactiveMask;
     CustomOptional<float> DlssReactiveMaskBias { 0.45f };
 
@@ -809,6 +810,7 @@ class Config
     CustomOptional<int> FpsShortcutKey { VK_PRIOR };
     CustomOptional<int> FpsCycleShortcutKey { VK_NEXT };
     CustomOptional<bool> FpsOverlayHorizontal { false };
+    CustomOptional<bool> FpsOverlayShowRatio { false };
     CustomOptional<float> FpsOverlayAlpha { 0.4f };
     CustomOptional<float, NoDefault> FpsScale; // No value means same as MenuScale
     CustomOptional<bool> UseHQFont { true };
@@ -958,7 +960,6 @@ class Config
     // NVAPI Override
     CustomOptional<bool> DisableFlipMetering { false };
     CustomOptional<bool> DisableOTA { false };
-    CustomOptional<bool> ImASillyGooseThatIsAboutToMisuseReflex { false };
 
     // Spoofing
     CustomOptional<bool, SoftDefault> DxgiSpoofing { true };
@@ -1083,6 +1084,7 @@ class Config
     CustomOptional<bool> FGFPTAllowHybridSpin { false };
     CustomOptional<int> FGFPTHybridSpinTime { 2 };
     CustomOptional<bool> FGFPTAllowWaitForSingleObjectOnFence { false };
+    CustomOptional<bool> FSRFGDisableFlipMetering { false };
 
     CustomOptional<bool> FSRFGSkipConfigForHudless { false };
     CustomOptional<bool> FSRFGSkipDispatchForHudless { false };

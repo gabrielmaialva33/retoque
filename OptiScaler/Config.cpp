@@ -237,6 +237,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGFPTHybridSpinTime.set_from_config(readInt("FSRFG", "FPTHybridSpinTime"));
             FGFPTAllowWaitForSingleObjectOnFence.set_from_config(readBool("FSRFG", "FPTWaitForSingleObjectOnFence"));
             FSRFGEnableWatermark.set_from_config(readBool("FSRFG", "EnableWatermark"));
+            FSRFGDisableFlipMetering.set_from_config(readBool("FSRFG", "DisableFlipMetering"));
         }
 
         // OptiFG
@@ -712,6 +713,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FpsShortcutKey.set_from_config(readInt("Menu", "FpsShortcutKey"));
             FpsCycleShortcutKey.set_from_config(readInt("Menu", "FpsCycleShortcutKey"));
             FpsOverlayHorizontal.set_from_config(readBool("Menu", "FpsOverlayHorizontal"));
+            FpsOverlayShowRatio.set_from_config(readBool("Menu", "FpsOverlayShowRatio"));
 
             if (auto setting = readFloat("Menu", "FpsOverlayAlpha"); setting.has_value())
                 FpsOverlayAlpha.set_from_config(std::clamp(setting.value(), 0.0f, 1.0f));
@@ -818,6 +820,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DepthInverted.set_from_config(readBool("InitFlags", "DepthInverted"));
             JitterCancellation.set_from_config(readBool("InitFlags", "JitterCancellation"));
             DisplayResolution.set_from_config(readBool("InitFlags", "DisplayResolution"));
+            DynamicResolution.set_from_config(readBool("InitFlags", "DynamicResolution"));
             DisableReactiveMask.set_from_config(readBool("InitFlags", "DisableReactiveMask"));
         }
 
@@ -917,8 +920,6 @@ bool Config::Reload(std::filesystem::path iniPath)
         {
             DisableFlipMetering.set_from_config(readBool("NvApi", "DisableFlipMetering"));
             DisableOTA.set_from_config(readBool("NvApi", "DisableOTA"));
-            ImASillyGooseThatIsAboutToMisuseReflex.set_from_config(
-                readBool("NvApi", "ImASillyGooseThatIsAboutToMisuseReflex"));
         }
 
         // Spoofing
@@ -1245,6 +1246,8 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->FGFPTAllowWaitForSingleObjectOnFence.value_for_config()).c_str());
         ini.SetValue("FSRFG", "EnableWatermark",
                      GetBoolValue(Instance()->FSRFGEnableWatermark.value_for_config()).c_str());
+        ini.SetValue("FSRFG", "DisableFlipMetering",
+                     GetBoolValue(Instance()->FSRFGDisableFlipMetering.value_for_config()).c_str());
     }
 
     // XeFG output
@@ -1732,6 +1735,8 @@ bool Config::SaveIni()
         ini.SetValue("Menu", "FpsOverlayType", GetIntValue(Instance()->FpsOverlayType.value_for_config()).c_str());
         ini.SetValue("Menu", "FpsOverlayHorizontal",
                      GetBoolValue(Instance()->FpsOverlayHorizontal.value_for_config()).c_str());
+        ini.SetValue("Menu", "FpsOverlayShowRatio",
+                     GetBoolValue(Instance()->FpsOverlayShowRatio.value_for_config()).c_str());
         ini.SetValue("Menu", "FpsOverlayAlpha", GetFloatValue(Instance()->FpsOverlayAlpha.value_for_config()).c_str());
         ini.SetValue("Menu", "FpsScale", GetFloatValue(Instance()->FpsScale.value_for_config()).c_str());
         ini.SetValue("Menu", "FontSize", GetFloatValue(Instance()->FontSize.value_for_config()).c_str());
@@ -1784,6 +1789,8 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->JitterCancellation.value_for_config()).c_str());
         ini.SetValue("InitFlags", "DisplayResolution",
                      GetBoolValue(Instance()->DisplayResolution.value_for_config()).c_str());
+        ini.SetValue("InitFlags", "DynamicResolution",
+                     GetBoolValue(Instance()->DynamicResolution.value_for_config()).c_str());
         ini.SetValue("InitFlags", "DisableReactiveMask",
                      GetBoolValue(Instance()->DisableReactiveMask.value_for_config()).c_str());
     }

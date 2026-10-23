@@ -68,6 +68,8 @@ bool DLSSG_Dx12::CreateSwapchainInternal(IDXGIFactory* factory, ID3D12CommandQue
     // disarms the throttle when the app owns the frame-latency waitable object ("App requested
     // FRAME_LATENCY_WAITABLE_OBJECT itself - flip queue throttling disabled"), which is what
     // this flag requests at swapchain creation.
+    // Upstream requests it only under GameQuirk::DLSSGFrameLatencyWaitable (Kingdom Come: Deliverance II,
+    // 1b96d168); requesting it for every title covers that quirk too.
     desc->Flags |= DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
 
     auto result = S_FALSE;

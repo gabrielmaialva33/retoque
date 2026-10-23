@@ -20,6 +20,8 @@ struct ModelProvider
 constexpr ModelProvider modelProviders[] = {
     { FSR4Model::FP8, "FP8", "ffxProvider_FSR4", false },
     { FSR4Model::INT8, "INT8", "ffxProvider_FSR4_Int8", true }, // FFX allows it only on RDNA 3
+    { FSR4Model::INT8_2, "INT8 RDNA2", "ffxProvider_FSR4_Int8_Navi2", true },
+    { FSR4Model::INT8Lite, "INT8 Lite", "ffxProvider_FSR4Lite_Int8", true },
 };
 
 // ffxProvider::IsSupported(void* device), the vtable layout of FFX SDK 2.0+ providers
@@ -61,6 +63,22 @@ HookedModule* FindHookedModule(HMODULE module)
     return hooked != hookedModules.end() ? &*hooked : nullptr;
 }
 
+// The INT8 model from GPU detection, FFX's own checks can reject it (unofficial support, other asic family)
+std::optional<FSR4Model> DetectedModel()
+{
+    switch (IdentifyGpu::getPrimaryGpu().fsr4Support)
+    {
+    case FSR4Support::INT8:
+        return FSR4Model::INT8;
+    case FSR4Support::INT8_2:
+        return FSR4Model::INT8_2;
+    case FSR4Support::INT8Lite:
+        return FSR4Model::INT8Lite;
+    default:
+        return std::nullopt;
+    }
+}
+
 bool hkIsSupported(void* provider, void* device)
 {
     auto vtable = *static_cast<void***>(provider);
@@ -77,7 +95,12 @@ bool hkIsSupported(void* provider, void* device)
 
         auto model = patched->provider->model;
         auto o_IsSupported = patched->o_IsSupported;
-        auto selected = Config::Instance()->Fsr4Model;
+        // Without a selected model use the detected one, as if it was selected
+        auto detected = DetectedModel();
+        std::optional<FSR4Model> selected = Config::Instance()->Fsr4Model;
+        if (!selected.has_value())
+            selected = detected;
+
         auto useSelected = selected.has_value() && hooked.HasModel(*selected) && FSR4Models::CanGpuRun(*selected);
         lock.unlock();
 
@@ -86,7 +109,15 @@ bool hkIsSupported(void* provider, void* device)
         if (useSelected)
             supported = model == *selected && (supported || Provider(model).ignoreSupportCheck);
 
+        // FFX picks FP8 wherever the device reports it, emulated FP8 on Linux included
+        // When the module lacks the detected INT8 model don't let it fall to FP8, FP8 has to be selected
+        else if (model == FSR4Model::FP8 && detected.has_value())
+            supported = false;
+
         LOG_DEBUG("{}: {}", Provider(model).name, supported);
+
+        if (device == nullptr)
+            return supported;
 
         lock.lock();
         patched->lastReportedSupport = supported;
@@ -177,14 +208,15 @@ bool FSR4Models::CanGpuRun(FSR4Model model)
     switch (model)
     {
     case FSR4Model::FP8:
-        // Fsr4GpuSupport replaces the detected support, otherwise RDNA 4 or RDNA 3 on Linux with the WMMA workaround
-        if (gpu.fsr4ForcedSupport)
-            return gpu.fsr4Support == FSR4Support::FP8;
-
-        return gpu.realFsr4Support == FSR4Support::FP8;
+        // FP8 forced through Fsr4GpuSupport, RDNA 4, or emulated on Linux (e.g. RDNA 3 with the WMMA workaround)
+        return gpu.fsr4Support == FSR4Support::FP8 || gpu.realFsr4Support == FSR4Support::FP8;
 
     case FSR4Model::INT8:
+    case FSR4Model::INT8_2:
         return gpu.fsr4Support != FSR4Support::None;
+
+    case FSR4Model::INT8Lite:
+        return true;
 
     default:
         return false;

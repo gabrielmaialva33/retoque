@@ -76,7 +76,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR;_WINDOWS;_USRDLL;VK_ENABLE_BETA_EXTENSIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -197,7 +197,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
   <ItemGroup>
     <ClInclude Include="framegen\nvngx\Nvngx_Combo.h" />
     <ClInclude Include="framegen\reprojection\swapchain\reprojectionSwapchain.h" />
-    <ClInclude Include="fsr4\FSR4Upgrade.h" />
+    <ClInclude Include="fsr4\FSR4DriverProvider.h" />
+    <ClInclude Include="fsr4\FSR4DriverProviderVk.h" />
     <ClInclude Include="gpu_time\GpuTime_Dx11.h" />
     <ClInclude Include="gpu_time\GpuTime_Dx12.h" />
     <ClInclude Include="gpu_time\GpuTime_Vk.h" />
@@ -224,9 +225,10 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="framegen\IFGFeature_Dx12.h" />
     <ClInclude Include="framegen\IFGFeature_Vk.h" />
     <ClInclude Include="framegen\nvngx\Nvngx_FG.h" />
-    <ClInclude Include="fsr4\FSR4DriverProvider.h" />
+    <ClInclude Include="fsr4\FSR4DriverProviderDx12.h" />
     <ClInclude Include="fsr4\FSR4Models.h" />
     <ClInclude Include="fsr4\FSR4Presets.h" />
+    <ClInclude Include="fsr4\FSR4PipelineLayouts.h" />
     <ClInclude Include="hooks\D3D12_Hooks.h" />
     <ClInclude Include="hooks\DxgiFactory_Hooks.h" />
     <ClInclude Include="hooks\DxgiFactory_WrappedCalls.h" />
@@ -278,10 +280,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="framegen\nvngx\Nvngx_Arturs.h" />
     <ClInclude Include="shaders\hudless_compare_compute\HCC_Common.h" />
     <ClInclude Include="shaders\hudless_compare_compute\HCC_Dx12.h" />
-    <ClInclude Include="hooks\Xell_Hooks.h" />
     <ClInclude Include="low_latency\ll_util.h" />
     <ClInclude Include="nvapi\fakenvapi\log.h" />
-    <ClInclude Include="nvapi\fakenvapi\low_latency.h" />
     <ClInclude Include="low_latency\low_latency_tech\ll_antilag2.h" />
     <ClInclude Include="low_latency\low_latency_tech\ll_antilag_vk.h" />
     <ClInclude Include="low_latency\low_latency_tech\ll_latencyflex.h" />
@@ -423,6 +423,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="shaders\render_ui\RUI_Dx12.h" />
     <ClInclude Include="shaders\resource_copy\precompile\rc_Shader_Vk.h" />
     <ClInclude Include="shaders\resource_copy\RC_Vk.h" />
+    <ClInclude Include="shaders\velocity_convert\precompile\vc_Shader_Vk.h" />
+    <ClInclude Include="shaders\velocity_convert\VC_Vk.h" />
     <ClInclude Include="shaders\Shader_Dx12.h" />
     <ClInclude Include="shaders\Shader_Dx12Utils.h" />
     <ClInclude Include="shaders\Shader_Vk.h" />
@@ -555,6 +557,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="upscalers\IFeature_Dx11.h" />
     <ClInclude Include="upscalers\IFeature_Dx12.h" />
     <ClInclude Include="upscalers\IFeature.h" />
+    <ClInclude Include="upscalers\DynamicResolutionDetector.h" />
     <ClInclude Include="upscalers\IFeature_Vk.h" />
     <ClInclude Include="detours\detours.h" />
     <ClInclude Include="dllmain.h" />
@@ -580,6 +583,9 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="resource.h" />
     <ClInclude Include="scanner\rtti.h" />
     <ClInclude Include="scanner\scanner.h" />
+    <ClInclude Include="shaders\auto_exposure\AE_Common.h" />
+    <ClInclude Include="shaders\auto_exposure\AE_Dx12.h" />
+    <ClInclude Include="shaders\auto_exposure\precompile\AE_Shader.h" />
     <ClInclude Include="shaders\bias\Bias_Common.h" />
     <ClInclude Include="shaders\bias\Bias_Dx11.h" />
     <ClInclude Include="shaders\bias\Bias_Dx12.h" />
@@ -615,7 +621,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
   <ItemGroup>
     <ClCompile Include="framegen\nvngx\Nvngx_Combo.cpp" />
     <ClCompile Include="framegen\reprojection\swapchain\reprojectionSwapchain.cpp" />
-    <ClCompile Include="fsr4\FSR4Upgrade.cpp" />
+    <ClCompile Include="fsr4\FSR4DriverProvider.cpp" />
+    <ClCompile Include="fsr4\FSR4DriverProviderVk.cpp" />
     <ClCompile Include="gpu_time\GpuTime_Dx11.cpp" />
     <ClCompile Include="gpu_time\GpuTime_Dx12.cpp" />
     <ClCompile Include="gpu_time\GpuTime_Vk.cpp" />
@@ -630,9 +637,10 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="framegen\IFGFeature_Dx12.cpp" />
     <ClCompile Include="framegen\IFGFeature_Vk.cpp" />
     <ClCompile Include="framegen\nvngx\Nvngx_FG.cpp" />
-    <ClCompile Include="fsr4\FSR4DriverProvider.cpp" />
+    <ClCompile Include="fsr4\FSR4DriverProviderDx12.cpp" />
     <ClCompile Include="fsr4\FSR4Models.cpp" />
     <ClCompile Include="fsr4\FSR4Presets.cpp" />
+    <ClCompile Include="fsr4\FSR4PipelineLayouts.cpp" />
     <ClCompile Include="hooks\D3D12_Hooks.cpp" />
     <ClCompile Include="hooks\DxgiFactory_Hooks.cpp" />
     <ClCompile Include="hooks\DxgiFactory_WrappedCalls.cpp" />
@@ -641,7 +649,6 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="hooks\Kernel_Hooks.cpp" />
     <ClCompile Include="hooks\LibraryLoad_Hooks.cpp" />
     <ClCompile Include="hooks\VulkanwDx12_Hooks.cpp" />
-    <ClCompile Include="hooks\Xell_Hooks.cpp" />
     <ClCompile Include="shaders\reproject\mouseInputs\InputCollection.cpp" />
     <ClCompile Include="shaders\hud_copy\HudCopy_Vk.cpp" />
     <ClCompile Include="inputs\FG\Streamline_Inputs_Sl1_Dx12.cpp" />
@@ -675,8 +682,6 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="inputs\XeSS_Dx11.cpp" />
     <ClCompile Include="low_latency\ll_util.cpp" />
     <ClCompile Include="nvapi\fakenvapi\log.cpp" />
-    <ClCompile Include="nvapi\fakenvapi\low_latency.cpp" />
-    <ClCompile Include="nvapi\fakenvapi\low_latency_d3d.cpp" />
     <ClCompile Include="low_latency\low_latency_tech\ll_antilag2.cpp" />
     <ClCompile Include="low_latency\low_latency_tech\ll_antilag_vk.cpp" />
     <ClCompile Include="low_latency\low_latency_tech\ll_latencyflex.cpp" />
@@ -684,7 +689,6 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="low_latency\low_latency_tech\ll_reflex.cpp" />
     <ClCompile Include="low_latency\low_latency_tech\ll_reflex_vk.cpp" />
     <ClCompile Include="low_latency\low_latency_tech\ll_xell.cpp" />
-    <ClCompile Include="nvapi\fakenvapi\low_latency_vk.cpp" />
     <ClCompile Include="nvapi\fakenvapi\nvapi_calls.cpp" />
     <ClCompile Include="framegen\nvngx\Nvngx_FFX.cpp" />
     <ClCompile Include="framegen\nvngx\Nvngx_Nukems.cpp" />
@@ -717,6 +721,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="shaders\Shader_Common.cpp" />
     <ClCompile Include="shaders\render_ui\RUI_Dx12.cpp" />
     <ClCompile Include="shaders\resource_copy\RC_Vk.cpp" />
+    <ClCompile Include="shaders\velocity_convert\VC_Vk.cpp" />
     <ClCompile Include="shaders\Shader_Dx12.cpp" />
     <ClCompile Include="shaders\Shader_Vk.cpp" />
     <ClCompile Include="misc\SkipSpoof.cpp" />
@@ -921,6 +926,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="scanner\rtti.cpp" />
     <ClCompile Include="scanner\scanner.cpp" />
     <ClCompile Include="shaders\bias\Bias_Dx11.cpp" />
+    <ClCompile Include="shaders\auto_exposure\AE_Dx12.cpp" />
     <ClCompile Include="shaders\bias\Bias_Dx12.cpp" />
     <ClCompile Include="shaders\format_transfer\FT_Dx12.cpp" />
     <ClCompile Include="shaders\output_scaling\OS_Dx11.cpp" />

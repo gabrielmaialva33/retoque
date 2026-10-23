@@ -17,16 +17,13 @@
 #include <d3d11.h>
 #include <d3d12.h>
 #include <misc/IdentifyGpu.h>
-#include <hooks/Xell_Hooks.h>
 #include <low_latency/input/input_common.h>
 #include <inputs/FG/XeFG_Inputs_Dx12.h>
 
 #include <magic_enum.hpp>
 #include <optional>
 
-#ifdef LOW_LATENCY_INPUTS
 #include <low_latency/input/input_antilag2.h>
-#endif
 
 #include <dlssnr/DlssNr.h>
 
@@ -377,7 +374,6 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     else
         ReflexHooks::update(false, false);
 
-    XellHooks::update();
     InputCommon::update();
 
     // Upscaler GPU time computation. Like the FG path, this only feeds the performance display, so
@@ -474,10 +470,8 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         LOG_DEBUG("Final SyncInterval: {}", SyncInterval);
     }
 
-#ifdef LOW_LATENCY_INPUTS
     ID3D12CommandQueue* fgPresentQueue = nullptr;
     uint32_t fgFrameMultiplier = 1;
-#endif
 
     if (willPresent)
     {
@@ -496,7 +490,6 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         // Draw overlay
         MenuOverlayDx::Present(pSwapChain, SyncInterval, Flags, pPresentParameters, pDevice, hWnd, isUWP);
 
-#ifdef LOW_LATENCY_INPUTS
         if (State::Instance().activeFgOutput == FGOutput::FSRFG || State::Instance().activeFgOutput == FGOutput::XeFG)
         {
             auto fgIsActive = fg != nullptr && fg->IsActive() && !fg->IsPaused();
@@ -515,25 +508,6 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
             // The game's DLSSG presents through here
             InputCommon::dlssg_present();
         }
-#else
-        if (State::Instance().activeFgOutput == FGOutput::FSRFG || State::Instance().activeFgOutput == FGOutput::XeFG)
-        {
-            LOG_DEBUG("Calling fakenvapi");
-
-            static UINT64 fgPresentFrame = 0;
-            auto fgIsActive = fg != nullptr && fg->IsActive() && !fg->IsPaused();
-
-            if (State::Instance().fgPresentIsCalled)
-            {
-                State::Instance().fgPresentIsCalled = false;
-                fgPresentFrame = _frameCounter;
-            }
-
-            auto isInterpolated = fgIsActive && (_frameCounter - fgPresentFrame) > 0;
-
-            fakenvapi::reportFGPresent(pSwapChain, fgIsActive, isInterpolated);
-        }
-#endif
 
         _frameCounter++;
         State::Instance().frameCount = _frameCounter;
@@ -549,13 +523,11 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 
     DeferredRelease::Process();
 
-#ifdef LOW_LATENCY_INPUTS
     if (fgPresentQueue != nullptr)
     {
         InputCommon::fg_output_present(fgPresentQueue, true, fgFrameMultiplier);
         fgPresentQueue->Release();
     }
-#endif
 
     // DXGI_STATUS_OCCLUDED and the other DXGI_STATUS_* codes are successes, not errors, and a covered or
     // minimised window returns one on every present: logged as errors they came at the frame rate (463
@@ -831,7 +803,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::Present(UINT SyncInterval, UIN
         // When Reflex can't be used to limit, sleep in present
         // DXVK's DXGI presents through Vulkan where the limiter already sleeps
         if (!State::Instance().reflexLimitsFps && State::Instance().activeFgOutput == FGOutput::NoFG &&
-            !IdentifyGpu::getPrimaryGpu().dxgiIsDxvk && !XellHooks::canLimit() && !InputCommon::can_limit_fps())
+            !IdentifyGpu::getPrimaryGpu().dxgiIsDxvk && !InputCommon::can_limit_fps())
             FrameLimit::sleep(false);
     }
     else
@@ -1196,7 +1168,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::Present1(UINT SyncInterval, UI
         // When Reflex can't be used to limit, sleep in present
         // DXVK's DXGI presents through Vulkan where the limiter already sleeps
         if (!State::Instance().reflexLimitsFps && State::Instance().activeFgOutput == FGOutput::NoFG &&
-            !IdentifyGpu::getPrimaryGpu().dxgiIsDxvk && !XellHooks::canLimit() && !InputCommon::can_limit_fps())
+            !IdentifyGpu::getPrimaryGpu().dxgiIsDxvk && !InputCommon::can_limit_fps())
             FrameLimit::sleep(false);
     }
     else

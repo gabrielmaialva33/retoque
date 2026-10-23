@@ -14,7 +14,6 @@
 #include <fsr4/FSR4DriverProvider.h>
 
 #include "Hook_Utils.h"
-#include <proxies/XeLL_Proxy.h>
 
 #include "Amdxc64_Hooks.h"
 #pragma intrinsic(_ReturnAddress)
@@ -185,21 +184,14 @@ HMODULE WINAPI KernelHooks::hk_K32_GetModuleHandleW(LPCWSTR lpModuleName)
             return original;
         }
 
-        // FSR 4.0.0 and 4.0.1 in amdxcffx64 only hand out their upscaler when this dll is loaded and signed,
-        // the driver dll is signed and Opti uses newer FFX dlls, so it stands in when the driver asks
-        if (_wcsicmp(lpModuleName, L"amd_fidelityfx_dx12.dll") == 0)
+        // The driver dlls only hand out their providers when they see signed FFX SDK dlls loaded,
+        // when Opti uses its own FFX dlls the driver dll stands in for them
+        if (_wcsnicmp(lpModuleName, L"amd_fidelityfx_", 15) == 0)
         {
-            auto original = o_K32_GetModuleHandleW(lpModuleName);
-            auto driverModule = FSR4DriverProvider::LoadedModule();
+            if (auto original = o_K32_GetModuleHandleW(lpModuleName); original != nullptr)
+                return original;
 
-            if (original == nullptr && driverModule != nullptr &&
-                Util::GetCallerModule(_ReturnAddress()) == driverModule)
-            {
-                LOG_DEBUG("Giving amdxcffx64 its own HMODULE for amd_fidelityfx_dx12.dll");
-                return driverModule;
-            }
-
-            return original;
+            return FSR4DriverDll::SdkModuleStandIn(lpModuleName, Util::GetCallerModule(_ReturnAddress()));
         }
     }
 
@@ -211,16 +203,8 @@ BOOL WINAPI KernelHooks::hk_K32_GetModuleHandleExA(DWORD dwFlags, LPCSTR lpModul
 {
     if (lpModuleName && dwFlags == 0 && strcmp("libxell.dll", lpModuleName) == 0 && phModule)
     {
-#ifdef LOW_LATENCY_INPUTS
         *phModule = dllModule;
         return true;
-#else
-        if (const auto module = XeLLProxy::Module())
-        {
-            return o_K32_GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, reinterpret_cast<LPCSTR>(module),
-                                            phModule);
-        }
-#endif
     }
 
     return o_K32_GetModuleHandleExA(dwFlags, lpModuleName, phModule);
