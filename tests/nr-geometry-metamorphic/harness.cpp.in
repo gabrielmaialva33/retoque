@@ -291,14 +291,27 @@ static unsigned int GameCreateFlags(NVSDK_NGX_Parameter* params)
     return flags;
 }
 
-static const char* PrepareGuideMatch(const FakeVkResource&, const FakeVkResource&, DlssNr::GuideMatch::Region depth,
-                                     DlssNr::GuideMatch::Region motion, uint32_t, uint32_t)
+// The production PrepareGuideMatch's first two refusals (an empty region, partial or stale geometry: V-04), then
+// whether the pass is ready.
+static const char* PrepareGuideMatch(const FakeVkResource&, const FakeVkResource&, DlssNr::RenderSizeSource geometry,
+                                     DlssNr::GuideMatch::Region depth, DlssNr::GuideMatch::Region motion, uint32_t,
+                                     uint32_t)
 {
     if (!depth.width || !depth.height || !motion.width || !motion.height)
         return "empty region";
+    if (const char* why = DlssNr::GuideMatch::GeometryRefusal(geometry == DlssNr::RenderSizeSource::Incomplete,
+                                                              geometry == DlssNr::RenderSizeSource::Stale))
+        return why;
     return g_vkResampleReady ? nullptr : "the resample cannot run";
 }
 static void SayGuideRefusal(const char*, uint32_t, uint32_t) {}
+// The refusal record the route keeps for its stand-down (V-03); nothing of it is observed here.
+static void NoteGuideRefusal(const void*, uint32_t, uint32_t, uint32_t, uint32_t, const FakeVkResource&,
+                             const FakeVkResource&, bool, uint64_t)
+{
+}
+static bool GuideRefusalRetries(const char*) { return true; }
+static uint64_t GuideRefusalRetryMs(const char*) { return 0; }
 
 struct VkPlanResult
 {
@@ -316,7 +329,13 @@ static void VulkanPlan(VkPlanResult& out, NVSDK_NGX_Parameter* params, const uin
     struct
     {
         bool reset = false;
+        struct
+        {
+            bool active = false;
+        } guideRefusal;
+        uint32_t frameRefusals = 0;
     } g_vk;
+    const void* device = nullptr;
     FakeVkResource depthView, motionView;
     const FakeVkResource* depth = &depthView;
     const FakeVkResource* motion = &motionView;
