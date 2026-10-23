@@ -16,6 +16,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 ## Rules and review
 
 - [DEVELOPMENT.md](design/DEVELOPMENT.md): the invariants, state specs and per-change-type review a change must pass before deploy.
+- [native-api-rules.md](design/native-api-rules.md): the fork's D3D12 and Vulkan code read against the API rules (2026-10-23 audit): what was fixed, what is open for review, and what `tests/nr-native-rules` holds mechanically.
 
 ## Performance and cost
 
