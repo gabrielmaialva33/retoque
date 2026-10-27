@@ -69,7 +69,7 @@ suite READMEs for artifact paths and limits.
   non-menu presents pass through untouched, and a surface hook that lost the race with another window's first
   create leaves that menu alone. The hidden-splash policy is a recorded expectation. No GPU.
 
-**Host tier.** 85 suites (98 total: 85 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** 86 suites (99 total: 86 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
@@ -229,6 +229,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
   on the DLSS-G swapchain exactly once on every DLSS-G present (DLSS-G refuses a frame without it), whether the
   game's own Reflex markers are used or OptiScaler's, and ahead of OptiScaler's frame token; the token and
   `ePresentStart` keep their condition. 192 cases against Streamline and DXGI fakes; no DLSS-G.
+- `fg-streamline-real-object` — `Util::CheckForRealObject` and the three DLSS-G factory sites that call it
+  (`DLSSG_Dx12.cpp`'s two swapchain creations, `DxgiFactoryHooks::HookToDLSSGFactory`), sliced and compiled
+  against a Streamline-shaped factory proxy: the real factory's count is unchanged after eight swapchains, and no
+  caller anywhere releases the borrowed object it got back. No Streamline or DXGI.
 - `fg-fullscreen-hooks` — the FG swapchain's fullscreen hooks, sliced from `hooks/FG_Hooks.cpp` and compiled
   against fakes that follow DXGI's contract: `GetFullscreenState`'s two optional arguments reach the original as
   given and only the ones passed are rewritten, a reported fullscreen comes with the window's output (AddRef'd,
