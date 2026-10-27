@@ -11,6 +11,7 @@
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_VkModelOwner.h>
 #include <dlssnr/DlssNr_VkRecording.h>
+#include <dlssnr/DlssNr_VkMeterReadback.h>
 #include <dlssnr/DlssNr_VkPresentBuild.h>
 #include <dlssnr/DlssNr_VkPresentModel.h>
 #include <dlssnr/DlssNr_Enlarge.h>
@@ -24,7 +25,7 @@
 #include <shaders/dlssnr/DlssNr_Vk.h>
 #include <shaders/dlssnr/DlssNr_GuideMatch.h>
 #include <shaders/dlssnr/DlssNr_GuideMatch_Vk.h>
-#include <shaders/output_scaling/OS_Vk.h>
+#include <shaders/dlssnr/DlssNr_Scaler_Vk.h>
 #include <shaders/synth_motion/SynthMotion_Vk.h>
 #include <shaders/dlssnr/DlssNr_PresentHdr_Vk.h>
 #include "DlssNr_PresentHdr.h"
@@ -141,8 +142,8 @@ struct VkState
     // composite. nrScaler is the filter both were built with, so a changed DlssNrScalingDownscaler
     // rebuilds them. Unused and never created at scale <= 1.
     OwnedImage outputNative;
-    std::unique_ptr<OS_Vk> superUp;
-    std::unique_ptr<OS_Vk> superDown;
+    std::unique_ptr<DlssNr_Scaler_Vk> superUp;
+    std::unique_ptr<DlssNr_Scaler_Vk> superDown;
     Scaler nrScaler = Scaler::Count;
 
     // Below the frame's size, depth and motion point-resampled to the working size when either is larger than the
@@ -226,19 +227,20 @@ struct VkState
     // frame-statistics meter that was removed from the shared shader, and 8x8 is here only so that a
     // single 8x8 thread group lands entirely inside the image.
     OwnedImage meter;
-    VkBuffer meterReadback[4] = {};
-    VkDeviceMemory meterReadbackMemory[4] = {};
-    void* meterMapped[4] = {};
-    unsigned long long meterFrames = 0;
+    VkBuffer meterReadback[VkMeterReadback::Ring::SlotCount] = {};
+    VkDeviceMemory meterReadbackMemory[VkMeterReadback::Ring::SlotCount] = {};
+    void* meterMapped[VkMeterReadback::Ring::SlotCount] = {};
+    unsigned long long meterFrames = 0; // Diagnostic count, never a completion or reuse condition.
+    VkMeterReadback::Ring meterPending;
+    uint64_t meterAcceptedSerial = 0;
 };
 
 // The grid the meter writes, and the size of one readback. 8 * 8 * sizeof(float).
 constexpr uint32_t kMeterSide = 8;
 constexpr VkDeviceSize kMeterBytes = kMeterSide * kMeterSide * sizeof(float);
 
-// Four, so the slot being read is four frames behind the slot being written and the read never waits
-// on the GPU. Same depth as the D3D12 meter's ring, for the same reason.
-constexpr unsigned long long kMeterSlots = 4;
+// A bounded pool of recording-owned samples. Retirement, not elapsed frames, permits CPU access.
+constexpr uint32_t kMeterSlots = VkMeterReadback::Ring::SlotCount;
 
 // Four frames of pairs. Three would do, four keeps the modulo cheap and the slot being written well
 // clear of the slot being read.
@@ -485,15 +487,26 @@ bool CreateImage(OwnedImage& img, uint32_t width, uint32_t height, VkFormat form
     return CreateImageOn(g_vk.device, g_vk.physicalDevice, img, width, height, format, readWrite);
 }
 
-// The ring of host-visible buffers the meter's grid is copied into, created once and mapped for
-// good. HOST_COHERENT so the read needs no invalidate; it is universally available for a buffer this
-// small and the alternative is a vkInvalidateMappedMemoryRanges on a path that runs every frame.
+// Permanently mapped, coherent readback slots. Mapping alone does not establish completion;
+// consumption additionally requires retirement of the recording that owns the sample.
+bool MeterReadbackReady(unsigned long long slot)
+{
+    return g_vk.meterReadback[slot] != VK_NULL_HANDLE && g_vk.meterReadbackMemory[slot] != VK_NULL_HANDLE &&
+           g_vk.meterMapped[slot] != nullptr;
+}
+
 bool CreateMeterReadback()
 {
     for (unsigned long long i = 0; i < kMeterSlots; ++i)
     {
-        if (g_vk.meterReadback[i] != VK_NULL_HANDLE)
+        if (MeterReadbackReady(i))
             continue;
+
+        // Publish only a fully bound, mapped slot. A failed attempt owns only these
+        // locals, so a retry can complete the ring without disturbing earlier slots.
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        void* mapped = nullptr;
 
         VkBufferCreateInfo info {};
         info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -501,14 +514,14 @@ bool CreateMeterReadback()
         info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-        if (vkCreateBuffer(g_vk.device, &info, nullptr, &g_vk.meterReadback[i]) != VK_SUCCESS)
+        if (vkCreateBuffer(g_vk.device, &info, nullptr, &buffer) != VK_SUCCESS)
         {
             LOG_WARN("DLSS-NR Vulkan: could not create the exposure readback buffer");
             return false;
         }
 
         VkMemoryRequirements req {};
-        vkGetBufferMemoryRequirements(g_vk.device, g_vk.meterReadback[i], &req);
+        vkGetBufferMemoryRequirements(g_vk.device, buffer, &req);
 
         VkMemoryAllocateInfo alloc {};
         alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -517,14 +530,26 @@ bool CreateMeterReadback()
                                                                             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
         if (alloc.memoryTypeIndex == UINT32_MAX ||
-            vkAllocateMemory(g_vk.device, &alloc, nullptr, &g_vk.meterReadbackMemory[i]) != VK_SUCCESS ||
-            vkBindBufferMemory(g_vk.device, g_vk.meterReadback[i], g_vk.meterReadbackMemory[i], 0) != VK_SUCCESS ||
-            vkMapMemory(g_vk.device, g_vk.meterReadbackMemory[i], 0, kMeterBytes, 0, &g_vk.meterMapped[i]) !=
-                VK_SUCCESS)
+            vkAllocateMemory(g_vk.device, &alloc, nullptr, &memory) != VK_SUCCESS)
         {
+            // Allocation failure transfers no ownership; its output is unspecified.
             LOG_WARN("DLSS-NR Vulkan: could not back the exposure readback buffer");
+            vkDestroyBuffer(g_vk.device, buffer, nullptr);
             return false;
         }
+
+        if (vkBindBufferMemory(g_vk.device, buffer, memory, 0) != VK_SUCCESS ||
+            vkMapMemory(g_vk.device, memory, 0, kMeterBytes, 0, &mapped) != VK_SUCCESS)
+        {
+            LOG_WARN("DLSS-NR Vulkan: could not back the exposure readback buffer");
+            vkDestroyBuffer(g_vk.device, buffer, nullptr);
+            vkFreeMemory(g_vk.device, memory, nullptr);
+            return false;
+        }
+
+        g_vk.meterReadback[i] = buffer;
+        g_vk.meterReadbackMemory[i] = memory;
+        g_vk.meterMapped[i] = mapped;
     }
 
     return true;
@@ -534,22 +559,103 @@ void DestroyMeterReadback()
 {
     for (unsigned long long i = 0; i < kMeterSlots; ++i)
     {
-        if (g_vk.meterReadbackMemory[i] != VK_NULL_HANDLE)
-        {
-            if (g_vk.meterMapped[i] != nullptr)
-                vkUnmapMemory(g_vk.device, g_vk.meterReadbackMemory[i]);
-
-            vkFreeMemory(g_vk.device, g_vk.meterReadbackMemory[i], nullptr);
-        }
+        if (g_vk.meterReadbackMemory[i] != VK_NULL_HANDLE && g_vk.meterMapped[i] != nullptr)
+            vkUnmapMemory(g_vk.device, g_vk.meterReadbackMemory[i]);
 
         if (g_vk.meterReadback[i] != VK_NULL_HANDLE)
             vkDestroyBuffer(g_vk.device, g_vk.meterReadback[i], nullptr);
+
+        if (g_vk.meterReadbackMemory[i] != VK_NULL_HANDLE)
+            vkFreeMemory(g_vk.device, g_vk.meterReadbackMemory[i], nullptr);
 
         g_vk.meterMapped[i] = nullptr;
         g_vk.meterReadbackMemory[i] = VK_NULL_HANDLE;
         g_vk.meterReadback[i] = VK_NULL_HANDLE;
     }
 
+    g_vk.meterFrames = 0;
+}
+
+std::optional<VkMeterReadback::Reservation> ReserveMeterReadback(const VkRecording::Ticket& recording)
+{
+    uint32_t readyMask = 0;
+    for (uint32_t slot = 0; slot < kMeterSlots; ++slot)
+        if (MeterReadbackReady(slot))
+            readyMask |= uint32_t { 1 } << slot;
+
+    auto reservation = g_vk.meterPending.Reserve(readyMask);
+    if (!reservation)
+        return std::nullopt;
+    try
+    {
+        if (!VkRecording::Recordings().Pin(recording, { reservation->pin }))
+        {
+            g_vk.meterPending.Cancel(*reservation);
+            return std::nullopt;
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        g_vk.meterPending.Cancel(*reservation);
+        return std::nullopt;
+    }
+
+    // This slot is exclusively CPU-owned until the new recording can be submitted.
+    // A discarded recording leaves zero, which the exposure validity gate rejects.
+    const float unwritten = 0.0f;
+    std::memcpy(g_vk.meterMapped[reservation->slot], &unwritten, sizeof(unwritten));
+    return reservation;
+}
+
+void ConsumeMeterReadback()
+{
+    float newest = 0.0f;
+    uint64_t newestSerial = g_vk.meterAcceptedSerial;
+    for (uint32_t slot = 0; slot < kMeterSlots; ++slot)
+    {
+        const auto sample = g_vk.meterPending.TakeRetired(slot);
+        if (!sample || !sample->usable || sample->serial <= newestSerial || !MeterReadbackReady(slot))
+            continue;
+
+        // TakeRetired acquires the reset/free thread's retirement publication. Legal retirement
+        // proves the old recording is no longer pending and cannot be submitted again. The
+        // executed copy's transfer-to-host barrier supplies visibility in this coherent mapping.
+        float measured = 0.0f;
+        std::memcpy(&measured, g_vk.meterMapped[slot], sizeof(measured));
+        if (DlssNr::Exposure::ValidSample(measured))
+        {
+            newest = measured;
+            newestSerial = sample->serial;
+        }
+    }
+    if (newestSerial == g_vk.meterAcceptedSerial)
+        return;
+
+    g_vk.meterAcceptedSerial = newestSerial;
+    g_vk.gameExposure = newest;
+    const float implied = DlssNr::Exposure::PreExposure(g_vk.gamePreExposure) / newest;
+    if (g_vk.exposureLatch.Observe(implied))
+    {
+        LOG_WARN("DLSS-NR Vulkan: the game's exposure is not usable (implied white point as low as {:.4f} "
+                 "and as high as {:.1f}; {} readings below 0.02, {} above 512); using paper white for "
+                 "the rest of the session",
+                 g_vk.exposureLatch.Lowest(), g_vk.exposureLatch.Highest(), g_vk.exposureLatch.LowCount(),
+                 g_vk.exposureLatch.HighCount());
+    }
+}
+
+void ForgetMeterReadback()
+{
+    // ForgetDevice is not completion evidence. Drop all pending samples and mapped handles
+    // before its pin destruction can publish retirement. This path never calls the dead device.
+    g_vk.meterPending.Abandon();
+    for (uint32_t slot = 0; slot < kMeterSlots; ++slot)
+    {
+        g_vk.meterReadback[slot] = VK_NULL_HANDLE;
+        g_vk.meterReadbackMemory[slot] = VK_NULL_HANDLE;
+        g_vk.meterMapped[slot] = nullptr;
+    }
+    g_vk.meterAcceptedSerial = 0;
     g_vk.meterFrames = 0;
 }
 
@@ -1067,12 +1173,14 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     {
         g_vk.gameExposure = 0.0f;
         g_vk.meterFrames = 0;
+        g_vk.meterPending.Invalidate();
         g_vk.exposureLatch.Reset();
     }
     else if (g_vk.exposureSettingWasOn && wpSource != 1)
     {
         g_vk.gameExposure = 0.0f;
         g_vk.meterFrames = 0;
+        g_vk.meterPending.Invalidate();
         g_vk.exposureLatch.Reset();
     }
     g_vk.exposureSettingWasOn = (wpSource == 1);
@@ -1102,9 +1210,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // on a path that works. And the header stating nothing means there is no contract to break --
     // the convention is the contract.
     //
-    // So it is bound in SHADER_READ_ONLY_OPTIMAL and no barrier is recorded: this never transitions a
-    // resource it does not own. If a game turns out to leave it somewhere else the cost is a wrong
-    // number, not a lost device, and the gate on the readback throws a wrong number away.
+    // Bind the conventional layout without transitioning a resource the route does not own.
+    // Sample plausibility filters exposure values; it does not establish correctness of that layout.
     NVSDK_NGX_Resource_VK* exposure = nullptr;
     float preExposure = 1.0f;
     const bool havePre = params->Get(NVSDK_NGX_Parameter_DLSS_Pre_Exposure, &preExposure) == NVSDK_NGX_Result_Success;
@@ -1126,37 +1233,10 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     if (havePre && std::isfinite(preExposure) && preExposure > 0.0f)
         g_vk.gamePreExposure = preExposure;
 
-    // Take the grid written four frames ago. Retired by now, so this reads mapped memory rather than
-    // waiting on the GPU -- which is the whole reason for the ring.
-    if (g_vk.meterFrames >= kMeterSlots)
-    {
-        const void* mapped = g_vk.meterMapped[g_vk.meterFrames % kMeterSlots];
-
-        if (mapped != nullptr)
-        {
-            float measured = 0.0f;
-            std::memcpy(&measured, mapped, sizeof(float));
-
-            // Believed only if it could be an exposure. A texel read through a layout the game did
-            // not leave it in, or a slot the game stopped filling, fails here and the last good
-            // value stands.
-            if (DlssNr::Exposure::ValidSample(measured))
-            {
-                g_vk.gameExposure = measured;
-
-                // The game's own implied white, without the user's trim (see ConsumeMeterReadback).
-                const float implied = DlssNr::Exposure::PreExposure(g_vk.gamePreExposure) / measured;
-                if (g_vk.exposureLatch.Observe(implied))
-                {
-                    LOG_WARN("DLSS-NR Vulkan: the game's exposure is not usable (implied white point as low as {:.4f} "
-                             "and as high as {:.1f}; {} readings below 0.02, {} above 512); using paper white for "
-                             "the rest of the session",
-                             g_vk.exposureLatch.Lowest(), g_vk.exposureLatch.Highest(), g_vk.exposureLatch.LowCount(),
-                             g_vk.exposureLatch.HighCount());
-                }
-            }
-        }
-    }
+    // A new device must abandon the old mappings before any read. On the same device, only
+    // synchronized recording retirement permits consumption; elapsed frames do not prove completion.
+    if (g_vk.device == device)
+        ConsumeMeterReadback();
 
     // Said when it moves by more than a fiftieth, not every frame. Enough to see in a log that the
     // number is the game's and that it tracks the scene, without a line per frame.
@@ -1510,11 +1590,11 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             g_vk.nrScaler = wantScaler;
         }
         if (!g_vk.superUp)
-            g_vk.superUp =
-                std::make_unique<OS_Vk>("DLSS-NR VK supersample up", device, physicalDevice, true, wantScaler);
+            g_vk.superUp = std::make_unique<DlssNr_Scaler_Vk>("DLSS-NR VK supersample up", device, physicalDevice, true,
+                                                              wantScaler);
         if (!g_vk.superDown)
-            g_vk.superDown =
-                std::make_unique<OS_Vk>("DLSS-NR VK supersample down", device, physicalDevice, false, wantScaler);
+            g_vk.superDown = std::make_unique<DlssNr_Scaler_Vk>("DLSS-NR VK supersample down", device, physicalDevice,
+                                                                false, wantScaler);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1768,6 +1848,30 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         g_vk.reset = true;
         return;
     }
+    std::optional<DlssNr_Scaler_Vk::Batch> superUpBatch;
+    std::optional<DlssNr_Scaler_Vk::Batch> superDownBatch;
+    if (workScale > 1.0f)
+    {
+        if (reduced && g_vk.proxySmall.Valid() && g_vk.superUp && g_vk.superUp->IsInit())
+        {
+            superUpBatch = g_vk.superUp->Reserve(cmdBuffer, 1);
+            if (!superUpBatch)
+            {
+                g_vk.reset = true;
+                return;
+            }
+        }
+        if (g_vk.outputNative.Valid() && g_vk.superDown && g_vk.superDown->IsInit())
+        {
+            superDownBatch = g_vk.superDown->Reserve(cmdBuffer, 1);
+            if (!superDownBatch)
+            {
+                g_vk.reset = true;
+                return;
+            }
+        }
+    }
+
     try
     {
         if (!VkRecording::Recordings().Pin(*recording, { g_vk.recording }))
@@ -1777,6 +1881,13 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     {
         return;
     }
+
+    // Optional meter admission is also complete before the frame's first GPU command.
+    // Saturation skips only this sample and retains the last valid exposure.
+    std::optional<VkMeterReadback::Reservation> meterRecording;
+    if (wpSource == 1 && exposure != nullptr && exposure->Type == NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW &&
+        exposure->Resource.ImageViewInfo.ImageView != VK_NULL_HANDLE && g_vk.meter.Valid())
+        meterRecording = ReserveMeterReadback(*recording);
 
     BeginRouteRecording();
 
@@ -1850,7 +1961,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             VkImageInfo upin = ImageInfoOf(g_vk.proxy);
             VkImageInfo upout = ImageInfoOf(g_vk.proxySmall);
 
-            if (g_vk.superUp && g_vk.superUp->IsInit() && g_vk.superUp->Dispatch(cmdBuffer, upin, upout))
+            if (superUpBatch && g_vk.superUp->Dispatch(cmdBuffer, *superUpBatch, upin, upout))
                 built = true;
             else
             {
@@ -1898,55 +2009,49 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // guess about its layout, and the guess is good but it is still a guess. A user who has not asked for the exposure
     // source never has the game's image touched at all, so if some engine does leave it somewhere unexpected, the blast
     // radius is people who turned the thing on rather than everyone on Vulkan.
-    if (cfg.DlssNrWhitePointSource.value_or_default() == 1 && exposure != nullptr &&
-        exposure->Type == NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW &&
-        exposure->Resource.ImageViewInfo.ImageView != VK_NULL_HANDLE && g_vk.meter.Valid())
+    if (meterRecording)
     {
-        const unsigned long long slot = g_vk.meterFrames % kMeterSlots;
+        const uint32_t slot = meterRecording->slot;
+        DlssNrConstants meter = encode;
+        meter.Mode = DlssNrMode_Meter;
+        meter.Width = kMeterSide;
+        meter.Height = kMeterSide;
 
-        if (g_vk.meterReadback[slot] != VK_NULL_HANDLE)
+        Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_GENERAL);
+
+        if (g_vk.pass->Dispatch(cmdBuffer, *composition, meter, kMeterSide, kMeterSide, VK_NULL_HANDLE, VK_NULL_HANDLE,
+                                VK_NULL_HANDLE, exposure->Resource.ImageViewInfo.ImageView, g_vk.meter.view,
+                                VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
         {
-            DlssNrConstants meter = encode;
-            meter.Mode = DlssNrMode_Meter;
-            meter.Width = kMeterSide;
-            meter.Height = kMeterSide;
+            Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-            Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_GENERAL);
+            VkBufferImageCopy region {};
+            region.bufferOffset = 0;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+            region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+            region.imageOffset = { 0, 0, 0 };
+            region.imageExtent = { kMeterSide, kMeterSide, 1 };
 
-            if (g_vk.pass->Dispatch(cmdBuffer, *composition, meter, kMeterSide, kMeterSide, VK_NULL_HANDLE,
-                                    VK_NULL_HANDLE, VK_NULL_HANDLE, exposure->Resource.ImageViewInfo.ImageView,
-                                    g_vk.meter.view, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
-            {
-                Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+            vkCmdCopyImageToBuffer(cmdBuffer, g_vk.meter.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   g_vk.meterReadback[slot], 1, &region);
 
-                VkBufferImageCopy region {};
-                region.bufferOffset = 0;
-                region.bufferRowLength = 0;
-                region.bufferImageHeight = 0;
-                region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
-                region.imageOffset = { 0, 0, 0 };
-                region.imageExtent = { kMeterSide, kMeterSide, 1 };
+            // The copy has to be visible to a host read, and only the host will read it.
+            VkBufferMemoryBarrier toHost {};
+            toHost.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            toHost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+            toHost.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toHost.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toHost.buffer = g_vk.meterReadback[slot];
+            toHost.offset = 0;
+            toHost.size = kMeterBytes;
 
-                vkCmdCopyImageToBuffer(cmdBuffer, g_vk.meter.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                                       g_vk.meterReadback[slot], 1, &region);
+            vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr,
+                                 1, &toHost, 0, nullptr);
 
-                // The copy has to be visible to a host read, and only the host will read it.
-                VkBufferMemoryBarrier toHost {};
-                toHost.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-                toHost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-                toHost.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                toHost.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                toHost.buffer = g_vk.meterReadback[slot];
-                toHost.offset = 0;
-                toHost.size = kMeterBytes;
-
-                vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0,
-                                     nullptr, 1, &toHost, 0, nullptr);
-
-                g_vk.meterFrames++;
-            }
+            g_vk.meterFrames++;
         }
     }
 
@@ -2054,7 +2159,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     OwnedImage* resolveProxy = modelInput;
     OwnedImage* resolveAnswer = &g_vk.output;
 
-    if (workScale > 1.0f && g_vk.superDown && g_vk.superDown->IsInit() && g_vk.outputNative.Valid())
+    if (superDownBatch)
     {
         Transition(cmdBuffer, g_vk.output, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         Transition(cmdBuffer, g_vk.outputNative, VK_IMAGE_LAYOUT_GENERAL);
@@ -2062,7 +2167,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         VkImageInfo dsin = ImageInfoOf(g_vk.output);
         VkImageInfo dsout = ImageInfoOf(g_vk.outputNative);
 
-        if (g_vk.superDown->Dispatch(cmdBuffer, dsin, dsout))
+        if (g_vk.superDown->Dispatch(cmdBuffer, *superDownBatch, dsin, dsout))
         {
             resolveProxy = &g_vk.proxy;
             resolveAnswer = &g_vk.outputNative;
@@ -2137,6 +2242,8 @@ void FreeRouteObjects()
     DestroyImage(g_vk.proxySmall);
     DestroyImage(g_vk.outputNative);
     DestroyImage(g_vk.keep);
+    g_vk.meterPending.Abandon();
+    g_vk.meterAcceptedSerial = 0;
     DestroyImage(g_vk.meter);
     DestroyMeterReadback();
     // The guide resample's objects through DeferredRelease, not destroyed here: the drain that proved the submitted
@@ -2192,6 +2299,7 @@ void ShutdownVk(bool deviceAlive)
 {
     if (!deviceAlive)
     {
+        ForgetMeterReadback();
         // Only CPU metadata is held by these leases. Abandon GPU objects below without invoking their destructors.
         VkRecording::Recordings().ForgetDevice((uint64_t) g_vk.device);
         g_vk.recording = std::make_shared<uint8_t>(0);
@@ -2225,13 +2333,6 @@ void ShutdownVk(bool deviceAlive)
         g_vk.guideMatchSizeFailure.clear();
         g_vk.guideMatchTransient.clear();
         g_vk.guideMatchFailures = 0;
-
-        for (int i = 0; i < 4; ++i)
-        {
-            g_vk.meterReadback[i] = VK_NULL_HANDLE;
-            g_vk.meterReadbackMemory[i] = VK_NULL_HANDLE;
-            g_vk.meterMapped[i] = nullptr;
-        }
 
         g_vk.device = VK_NULL_HANDLE;
         g_vk.width = 0;
@@ -2339,6 +2440,13 @@ void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::s
 
         // Actual device retirement: admissions are stopped by the caller's transport and route locks.
         // The registry owns metadata only; destroy versus abandon below still follows the proven drain result.
+        if (g_vk.device == device)
+        {
+            if (forgetOnly)
+                ForgetMeterReadback();
+            else
+                g_vk.meterPending.Abandon(); // Drained teardown below will destroy the still-owned allocations.
+        }
         VkRecording::Recordings().ForgetDevice((uint64_t) device);
 
         if (device != VK_NULL_HANDLE && g_vk.device == device)

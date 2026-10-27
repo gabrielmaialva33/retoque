@@ -369,6 +369,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="shaders\output_scaling\precompile\bcus_Shader_Vk.h" />
     <ClInclude Include="shaders\rcas\RCAS_Vk.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Vk.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Scaler_Vk.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Stabilizer_Dx12.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_GuideMatch.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_GuideMatch_Dx12.h" />
@@ -895,6 +896,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\shaders\synth_motion\SynthMotionNvofa_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\synth_motion\SynthOverlay_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Vk.cpp" />
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Scaler_Vk.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNrFeature_Vk.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_ExposureScan.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Proxy.cpp" />
@@ -1000,6 +1002,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Submission.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCapture.cpp" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkRecording.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMeterReadback.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPresentRegistry.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPresentTransport.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPresentHost.h" />

@@ -14,6 +14,7 @@
 #include <vector>
 
 namespace VkRecording = DlssNr::VkRecording;
+constexpr uint32_t kMeterSlots = 4;
 
 template <class T> T H(uint64_t value) { return (T) (uintptr_t) value; }
 void Check(bool condition, const char* message)
@@ -107,6 +108,12 @@ enum class Scaler
 {
     Count
 };
+// Retirement ring behavior is covered by nr-vk-meter-readback; this boundary records invalidation.
+struct MeterPending
+{
+    unsigned abandoned = 0;
+    void Abandon() { ++abandoned; }
+};
 struct State
 {
     VkDevice device = VK_NULL_HANDLE;
@@ -121,6 +128,8 @@ struct State
     Scaler nrScaler = Scaler::Count;
     VkQueryPool queryPool = VK_NULL_HANDLE;
     uint64_t timedFrames = 0, meterFrames = 0;
+    MeterPending meterPending;
+    uint64_t meterAcceptedSerial = 0;
     Exposure exposureLatch;
     std::optional<double> lastGpuTime;
     unsigned width = 0, height = 0, workWidth = 0, workHeight = 0;

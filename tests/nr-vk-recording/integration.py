@@ -76,7 +76,10 @@ def generate(root, destination):
     begin_signature = r'\bvoid\s+BeginRouteRecording\s*\('
     begin = (extract(route_text, begin_signature) if re.search(begin_signature, code_mask(route_text))
              else 'void BeginRouteRecording() {} // Baseline has no per-recording layout reset.')
-    functions = [busy, begin, extract(route_text, r'\bvoid\s+Transition\s*\('),
+    forget_signature = r'\bvoid\s+ForgetMeterReadback\s*\('
+    forget = (extract(route_text, forget_signature) if re.search(forget_signature, code_mask(route_text))
+              else 'void ForgetMeterReadback() {} // Baseline has no readback retirement helper.')
+    functions = [busy, begin, forget, extract(route_text, r'\bvoid\s+Transition\s*\('),
                  extract(route_text, r'\bvoid\s+FreeRouteObjects\s*\('),
                  extract(route_text, r'\bvoid\s+ShutdownVk\s*\('),
                  extract(route_text, r'\bAfterUpscaleHandBack\s+FinishAfterUpscaleHandBack\s*\('),

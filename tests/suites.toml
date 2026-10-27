@@ -839,3 +839,27 @@ requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "DLSS-G x2/x3/x4 counter-window qualification, provenance gaps, explicit INI options and safe process supervision; no GPU."
+
+[nr-vk-meter]
+path = "nr-vk-meter"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Production Vulkan exposure readback allocation: complete publication, per-stage fault/retry and cleanup under sanitizers."
+
+[nr-vk-scaler]
+path = "nr-vk-scaler"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "NR Vulkan scaler production bodies: immutable per-recording descriptors/constants, admission and allocation failures; no GPU."
+
+[nr-vk-meter-readback]
+path = "nr-vk-meter-readback"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "Exposure readback retirement publication, bounded slots, discard/saturation/abandonment and exact feature helpers; no GPU."
