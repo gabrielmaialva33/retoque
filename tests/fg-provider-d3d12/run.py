@@ -241,7 +241,7 @@ def main():
         if args.strict:
             raise SystemExit(1)
         return
-    lock_path = Path.home() / '.cache/retoque-wt/msvc-prefix.lock'
+    lock_path = Path(os.environ.get('XDG_RUNTIME_DIR') or f'/run/user/{os.getuid()}') / 'msvc-prefix.lock'
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open('a') as lock:
         try:

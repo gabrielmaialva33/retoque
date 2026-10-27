@@ -122,7 +122,7 @@ def main():
     # One user command also retains the broader frame/lifecycle/invalid-input CPU coverage.
     for suite in ('fg-game-camera', 'fg-tag-extents'):
         subprocess.run([sys.executable, ROOT / 'tests' / suite / 'run.py'], check=True)
-    lock_path = Path.home() / '.cache/retoque-wt/msvc-prefix.lock'
+    lock_path = Path(os.environ.get('XDG_RUNTIME_DIR') or f'/run/user/{os.getuid()}') / 'msvc-prefix.lock'
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open('a') as lock:
         try:
