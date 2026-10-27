@@ -2,6 +2,7 @@
 import contextlib
 import copy
 import importlib.util
+import hashlib
 import json
 import io
 import os
@@ -297,6 +298,50 @@ class StepExecution(unittest.TestCase):
 
 
 class PlanAndReport(unittest.TestCase):
+    def test_vulkan_plan_retains_sidecar_bytes_hashes_and_raw_validation_sources(self):
+        with tempfile.TemporaryDirectory() as value:
+            root = Path(value)
+            expected = {}
+            for name, count in zip(report.VK_CASES, (2, 6, 0, 6)):
+                work = root/'tests/vulkan-present-host/artifacts/cases'/name
+                work.mkdir(parents=True)
+                validation = ''.join(f'Validation Error: VUID-{name}-controlled-{i} native diagnostic\n'
+                                     for i in range(count)).encode()
+                attribution = json.dumps({'model_messages': count,
+                                          'model_vuids': ','.join(f'VUID-{name}-controlled-{i}' for i in range(count))}).encode()
+                for filename, data in (('validation.txt', validation), ('result.json', attribution)):
+                    if filename == 'validation.txt' and count == 0:
+                        continue  # Native producer emits no raw file when no validation message occurred.
+                    path = work/filename
+                    path.write_bytes(data)
+                    expected[str(path)] = data
+            with patch.object(report, 'ROOT', root):
+                plan = report.build_steps(report.parse_args(['--no-build']), root/'logs', {'a': {'tier': 'host'}})
+            vulkan = next(step for step in plan if step.kind == 'vulkan')
+            records, findings = report.retain_logs(vulkan.log_paths, root/'retained')
+            by_source = {row['source']: row for row in records}
+            self.assertEqual(set(by_source), set(expected))
+            for source, data in expected.items():
+                saved = by_source[source]
+                self.assertEqual(Path(saved['path']).read_bytes(), data)
+                self.assertEqual(saved['sha256'], hashlib.sha256(data).hexdigest())
+            native_lines = []
+            for name, count in zip(report.VK_CASES, (2, 6, 0, 6)):
+                source = str(root/'tests/vulkan-present-host/artifacts/cases'/name/'validation.txt')
+                if count == 0:
+                    self.assertNotIn(source, by_source)
+                    facts_source = str(root/'tests/vulkan-present-host/artifacts/cases'/name/'result.json')
+                    facts = json.loads(Path(by_source[facts_source]['path']).read_text())
+                    self.assertEqual(facts['model_messages'], 0)
+                    continue
+                retained = by_source[source]['path']
+                lines = [row for row in findings['lines'] if row['log'] == retained]
+                self.assertEqual(len(lines), count)
+                native_lines.extend(lines)
+                self.assertEqual(lines[0]['line'], 1)
+                self.assertIn(f'VUID-{name}-controlled-0', lines[0]['text'])
+            self.assertEqual(len(native_lines), 14)
+
     def test_plan_is_strict_serial_and_only_legacy_compilers_take_outer_lock(self):
         with tempfile.TemporaryDirectory() as value:
             plan = report.build_steps(report.parse_args(['--fg-steady-seconds', '15']), Path(value),

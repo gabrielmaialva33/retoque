@@ -356,7 +356,9 @@ def build_steps(args, log_dir, manifest):
     steps.append(Step('vulkan', command, entry('vulkan-present-host', 4200), 'vulkan',
                       vulkan/'artifacts/results.json',
                       log_paths=tuple(path for name in VK_CASES for path in
-                                      (vulkan/'artifacts'/f'{name}.log', vulkan/'artifacts/cases'/name))))
+                                      (vulkan/'artifacts'/f'{name}.log', vulkan/'artifacts/cases'/name,
+                                       vulkan/'artifacts/cases'/name/'validation.txt',
+                                       vulkan/'artifacts/cases'/name/'result.json'))))
     provider = ROOT/'tests/fg-provider-d3d12'
     command = [python, str(provider/'run.py'), '--strict', '--dll', dll]
     if args.fg_steady_seconds:
