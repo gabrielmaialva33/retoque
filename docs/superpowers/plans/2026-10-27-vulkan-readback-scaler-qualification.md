@@ -8,7 +8,7 @@
 **Spec:** docs/dlssnr/design/vulkan-readback-scaler-qualification.md
 
 ## Global Constraints
-- Preserve non-NR upstream paths, NR configuration defaults, existing shader bytecode and Ada unlock opt-in.
+- Preserve non-NR upstream paths, NR configuration defaults, upstream shader source/bytecode and Ada unlock opt-in. The direct 1.25 GPU regression requires NR-only RGBA16F shader variants with unchanged filter arithmetic; see the design's qualification finding.
 - Vulkan recordings retain resources until successful reset/rebegin/free; completion alone is insufficient for reusable command buffers.
 - Destroy only at a proven safe boundary; device abandonment performs no GPU callbacks.
 - clang-format22; host tests do not prove GPU behavior; exact binary hashes identify runtime evidence.
@@ -36,6 +36,8 @@ Interface: optional<Batch> Reserve(VkCommandBuffer,uint32_t), move-only Batch, b
 - [x] Implement bounded3slot immutable reservations using VkRecording; validate before any effect.
 - [x] Reserve each needed scaler before the NR frame's first command and consume its Batch at dispatch.
 - [x] Verify state/constant/descriptor bytes, saturation, stale/foreign batches and valid reset reuse; review non-NR isolation.
+- [x] Correct the observed BCUS three-component store and source-proven scaler format mismatch with NR-only RGBA16F variants; verify actual SPIR-V contracts and pipeline failure paths.
+- [ ] Retest the isolated WorkingScale=1.25 route with the repaired DLL and preserve the original failing evidence.
 
 ## Task 3: Readback execution and retirement
 Files: fork-owned readback metadata helper if needed; DlssNrFeature_Vk.cpp; nr-vk-meter behavioral fixture.

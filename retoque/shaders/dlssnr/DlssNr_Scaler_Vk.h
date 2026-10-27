@@ -3,8 +3,9 @@
 #include <shaders/output_scaling/OS_Vk.h>
 #include <dlssnr/DlssNr_VkRecording.h>
 
-// NR owns this recording-safe resampler. OS_Vk supplies its unchanged shader/pipeline setup;
-// Output Scaling and Magnifier continue to use OS_Vk directly.
+// NR owns this recording-safe RGBA16F resampler. OS_Vk supplies the shared resource layouts;
+// NR replaces its unused pipeline with a format-compatible variant of the selected filter.
+// Output Scaling and Magnifier continue to use OS_Vk and its original shaders directly.
 class DlssNr_Scaler_Vk final : public OS_Vk
 {
     static constexpr uint32_t kSlots = 3;

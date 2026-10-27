@@ -17,7 +17,24 @@ moved batches, invalid images/dimensions, and FSR payload bytes/range/alignment.
 Rejected operations must leave both the Vulkan/timing effect counter and every
 mapped byte unchanged.
 
-The OS constructor is the boundary substitute: it supplies the pipeline, sampler,
-three descriptor sets and original mapped buffer. The new scaler constructor is
-executed unchanged, including replacement allocation and mapping. Shader binary
-compilation and real driver/GPU execution remain separate smoke-test concerns.
+The OS constructor is the boundary substitute: it supplies the original pipeline,
+sampler, three descriptor sets and mapped buffer. The NR constructor executes
+unchanged, including checked buffer allocation and replacement of the unused base
+pipeline with the matching NR-only RGBA16F module. Tests reject incompatible output
+formats without effects, preserve failure ownership, prevent the old pipeline from
+becoming a fallback, and compare selected shader bytes for all 16 filter/direction
+combinations.
+
+`python3 tests/nr-vk-scaler/run.py` first checks the actual embedded SPIR-V for all
+nine variants: RGBA16F storage, set 0/binding 2, four-component writes, `CSMain`,
+original workgroup sizes, and byte identity with `precompile/scaler/*.spv`.
+`shader_contract.py --upstream-root .` applies that contract to the inherited
+upstream arrays as a regression control; it is expected to fail for those arrays.
+
+Regenerate only the fork-owned modules with
+`python3 retoque/shaders/dlssnr/precompile/build_scaler_vk.py`. This requires native
+DXC with SPIR-V support and SPIRV-Tools; `--dxc` and `--spirv-val` select executables.
+The generator validates every module and the embedded header before publication,
+and records tool identities and source/artifact hashes in its adjacent JSON manifest.
+Upstream shader sources and compiled artifacts are not rewritten. Real GPU
+execution and image-quality qualification remain separate from these host checks.

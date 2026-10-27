@@ -1,0 +1,49 @@
+{
+  "schema": "retoque-nr-scaler-shaders",
+  "version": 1,
+  "compiler": {
+    "version": "libdxcompiler.so: 1.10(5373-c4d8f4f9)(1.10.2605.37)",
+    "executable_sha256": "f315447a5fda680162d0ee374ed8ac20ce1e2f922b008da264d64261841a9449"
+  },
+  "validator": "SPIRV-Tools v2026.4 v2026.4.rc2-0-gef96ed763",
+  "flags": [
+    "-spirv",
+    "-fspv-target-env=vulkan1.0",
+    "-T",
+    "cs_6_0",
+    "-E",
+    "CSMain",
+    "-O3",
+    "-Qstrip_debug",
+    "-D",
+    "VK_MODE"
+  ],
+  "sources_sha256": {
+    "retoque/shaders/dlssnr/precompile/dlssnr_scaler_vk.hlsl": "e2f1cb42731c76355a35d3d85669a70a12c33b84b49a2c1c5118796ed1efa690",
+    "retoque/shaders/dlssnr/precompile/dlssnr_scaler_bcus.hlsl": "d36b2bdab89ecd61320939c0683e2e5dec2e0f784f24cb2ef9951069f5501dfa",
+    "retoque/shaders/dlssnr/precompile/build_scaler_vk.py": "9ea3d16f6fc6ed63bbc92f21e53891d9d4613c8624dc2fc359e74e49976aee60",
+    "OptiScaler/shaders/output_scaling/precompile/bcus.hlsl": "a2c0d83a34dff92ad02fbc53c5a4733201d107823b550ab8777ec4a4319fc57b",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_bicubic.hlsl": "426a9fb342dd469e5b5e81c65435a9935c8095204725bacea817090db5cf29ca",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_catmull.hlsl": "f5b2ca7ff84da9462d289069a0e6a95e4ff0f33f8bc81700c8808e92fd942403",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_lanczos2.hlsl": "8c1248e510f2019ac43c62db5e0e93ff408bb035c0f2733ccb19ae3cc7e854f0",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_lanczos3.hlsl": "d50d850bd9819c3755fab3fe4404c3b117490c00270e02bb7436fdb6ba6619f9",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_kaiser2.hlsl": "cb09cd0899109cb5cf24b51787dc7647626c6f5f7327de24b74e2c79b1c3f86e",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_kaiser3.hlsl": "9289c946c2a63ee2233cdffbf24b93934a1a7d049919175245c36939ea9ac870",
+    "OptiScaler/shaders/output_scaling/precompile/bcds_magc.hlsl": "bc9d1bf5bde9855cd36a085beaa772891e1c40999926cbd39c673a49465ab3f1",
+    "OptiScaler/shaders/output_scaling/fsr1/fsr_easu.hlsl": "e9885923a8b27e007b6c974fecc92bc75b0ba75ceb47183b5b700898f3de849d",
+    "OptiScaler/shaders/output_scaling/fsr1/ffx_a.h": "85ed252dad68716f6e98e16dbab4078eeb422d5521cc72a1d3ecfe3659ce500a",
+    "OptiScaler/shaders/output_scaling/fsr1/ffx_fsr1.h": "c7fd218790f452f254c7a50bde338dddb6519df46bf7530c145174c0931999fc"
+  },
+  "header_sha256": "099902452d6c8df6c019b4fbfcee8f7380c787eddce2c2452e7b1cf14f2c7f1c",
+  "spirv_sha256": {
+    "bcus": "99a71403ab7230b6950241a443bf2b07a80f417263c5394959da8fbdc69a9759",
+    "bcds_bicubic": "0cc8d08893c50bc675cd86264bc7b35d63a02127d84e55e9be2685ecad360b0f",
+    "bcds_catmull": "7a79cdc1b064c488c22ac2c81ff2f8255ae71e2cdcd53d7e04f42963599a0870",
+    "bcds_lanczos2": "91f9eeccff838e76869876312a305f5d4d20fba526f6822642d417217afe72c4",
+    "bcds_lanczos3": "e06edc8705d27091e40f886107905ae86066742676ba8fadf0f090a4c3c994b1",
+    "bcds_kaiser2": "7f7a739b9df961ed26900cce3c4a15b0b2800cf1d324e304f91043c180a8f1b6",
+    "bcds_kaiser3": "c5a827d175d7d141ccadf8d0f4764b79c9680dab139332406bf88d10868e566b",
+    "bcds_magc": "49c79995ab2c0b2f9a5e534aac9f8a7a7f320dc163f67aabc24c198e268ff602",
+    "fsr_easu": "9f58f3e0e995426b25fa54cf24178baa22fb7a3a862bb3603459a2f540e848c0"
+  }
+}

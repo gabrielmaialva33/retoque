@@ -4,10 +4,10 @@ Status: approved implementation scope in the conversation on 2026-10-27; isolate
 Scope: the next code batch recommended and accepted with "Vamos la entao." Performance experiments, replay format transitions, native-Windows qualification and game deployment remain separate work.
 
 ## Intent and boundaries
-Complete the remaining NR Vulkan scaler descriptor/constant lifetime boundary, make exposure readback allocation transactional, remove the readback's reliance on elapsed recordings, and make the existing provider fixture capable of sustained counter qualification. Reuse the existing tests and process ownership. Do not change NR settings, model/shader output, Stage defaults, Ada unlock defaults or the user's display settings.
+Complete the remaining NR Vulkan scaler descriptor/constant lifetime boundary, make exposure readback allocation transactional, remove the readback's reliance on elapsed recordings, and make the existing provider fixture capable of sustained counter qualification. Reuse the existing tests and process ownership. Preserve NR settings, filter arithmetic, upstream shader artifacts, Stage defaults, Ada unlock defaults and the user's display settings. The direct supersampling regression below requires correcting the NR-only storage-image contract before integration.
 
 ## Approach
-Keep upstream OS_Vk behavior intact. A fork-owned DlssNr_Scaler_Vk reuses the existing scaler pipelines and a bounded three-slot pool per scaler instance; each descriptor and aligned constant slice is immutable for the complete command-buffer recording lifetime. Full-frame reservations precede GPU recording, including timing and encode. The existing generation pin protects the scaler objects themselves.
+Keep upstream OS_Vk behavior intact. A fork-owned DlssNr_Scaler_Vk uses a bounded three-slot pool per scaler instance; each descriptor and aligned constant slice is immutable for the complete command-buffer recording lifetime. Full-frame reservations precede GPU recording, including timing and encode. The existing generation pin protects the scaler objects themselves. Its selected NR-only shader must declare the actual RGBA16F storage target and write all four components; the chosen RGB filter algorithm is preserved.
 
 Build each exposure readback slot in local handles; publish buffer, bound memory and mapping only as a complete tuple. On failure, unwind only newly allocated resources. Previously completed slots survive and retries are safe. The copy path requires complete readiness.
 
@@ -19,7 +19,15 @@ Extend the serial rendering entry and CI evidence handling rather than create a 
 
 The serial entry keeps its existing fail-fast behavior. Reuse `tests/run_all.py` supervision; the loopback's detached child cleanup must finish its two-second grace inside the outer four-second grace. A secondary receipt failure preserves TIMEOUT/ABORTED and the actual exit code. Initial hash failures produce terminal reports. Moving receipts validate concrete samples and hashes, not collection lengths alone.
 
-Coverage is explicit: the four existing Vulkan scenarios do not provide an exposure image or select WorkingScale above 1. They cover runtime integration and allocation setup, while the new production-body host fixtures establish meter/scaler ownership and failure behavior. Direct GPU sampling and supersampling coverage remain separate gaps.
+Coverage is explicit: the four existing Vulkan scenarios do not provide an exposure image or select WorkingScale above 1. They cover runtime integration and allocation setup, while the new production-body host fixtures establish meter/scaler ownership and failure behavior. A separate isolated WorkingScale=1.25 route probe exercises the up-leg, with its own invocation and binary identities; it does not independently prove down-leg execution, exposure sampling, executable-recording resubmission or image quality.
+
+### Supersampling regression found during qualification
+
+The first direct 1.25 probe produced ten `VUID-vkCmdDispatch-OpImageWrite-08795` messages: inherited BCUS wrote a three-component texel into RGBA16F. Inspection also found that the inherited four-component downscalers and FSR declared `Rgba32f` while NR allocates RGBA16F targets. This second format mismatch is a source/SPIR-V finding, not an additional observed validation message. Both contracts require an NR-only correction before this batch can integrate.
+
+Compile the unchanged downscaler/FSR algorithms through small fork-owned wrappers that declare `rgba16f`. The fork-owned BCUS variant retains its RGB arithmetic and writes `float4(Result, 1.0)`, matching the other filters' opaque intermediate alpha; the NR resolve restores the original frame alpha. Preserve every upstream shader source and compiled artifact. Test the actual generated SPIR-V image format and texel width, header/binary identity, pipeline selection/failure behavior, then rerun the direct GPU probe against the repaired DLL. Do not erase or relabel the failing receipt.
+
+Contract references: [DXC SPIR-V image formats](https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst) and [Khronos storage-image compatibility](https://docs.vulkan.org/guide/latest/storage_image_and_texel_buffers.html).
 
 ## Alternatives
 A larger global Shader_Vk rewrite was rejected for this batch because it affects unrelated upstream users. Increasing ring size or assuming a fixed frame lag does not establish ownership or completion. Broad new game defaults are deferred until image-quality and cost comparisons exist.

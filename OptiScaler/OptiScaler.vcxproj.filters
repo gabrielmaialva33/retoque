@@ -2076,6 +2076,9 @@
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Scaler_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_Scaler_Shaders_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Scaler_Vk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

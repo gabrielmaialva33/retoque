@@ -38,6 +38,7 @@ class Shader_Vk
     static uint32_t FindMemoryType(VkPhysicalDevice, uint32_t, VkMemoryPropertyFlags);
     static bool CreateBufferResource(VkDevice, VkPhysicalDevice, VkBuffer*, VkDeviceMemory*, VkDeviceSize,
                                      VkBufferUsageFlags, VkMemoryPropertyFlags);
+    static bool CreateComputePipeline(VkDevice, VkPipelineLayout, VkPipeline*, const std::vector<char>&, const char*);
     void CreateConstantBuffer(VkDeviceSize);
     bool CreateImageResource(uint32_t, uint32_t, VkFormat, VkImageUsageFlags) { return false; }
     void SetImageLayout(VkCommandBuffer, VkImage, VkImageLayout, VkImageLayout, VkImageSubresourceRange) {}

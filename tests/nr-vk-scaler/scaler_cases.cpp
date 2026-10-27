@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -59,6 +60,12 @@ enum class Scaler : uint32_t
 #if TEST_RECORDING_SCALER
 #include <shaders/dlssnr/DlssNr_Scaler_Vk.h>
 #endif
+#if __has_include(<shaders/dlssnr/precompile/DlssNr_Scaler_Shaders_Vk.h>)
+#include <shaders/dlssnr/precompile/DlssNr_Scaler_Shaders_Vk.h>
+#define TEST_NR_RGBA_SHADERS 1
+#else
+#define TEST_NR_RGBA_SHADERS 0
+#endif
 #define LOG_ERROR(...) ((void) 0)
 #define LOG_INFO(...) ((void) 0)
 #define LOG_FUNC(...) ((void) 0)
@@ -86,6 +93,10 @@ struct Command
 std::map<uint64_t, VkDescriptorSet> bound;
 std::map<uint64_t, std::vector<Command>> commands;
 size_t effects = 0;
+std::set<uint64_t> pipelines;
+size_t invalidPipelineDestroys = 0;
+int pipelineFailure = 0;
+std::vector<char> selectedShader;
 VkDeviceSize alignment = 512;
 bool allocationFails = false, mappingFails = false, bindingFails = false, memoryTypeUnavailable = false;
 struct Seen
@@ -167,7 +178,32 @@ VKAPI_ATTR void VKAPI_CALL vkUpdateDescriptorSets(VkDevice, uint32_t count, cons
             descriptor.target = writes[i].pImageInfo->imageView;
     }
 }
-VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline) { ++effects; }
+VKAPI_ATTR void VKAPI_CALL vkDestroyPipeline(VkDevice, VkPipeline pipeline, const VkAllocationCallbacks*)
+{
+    if (pipeline != VK_NULL_HANDLE && pipelines.erase(id(pipeline)) != 1)
+        ++invalidPipelineDestroys;
+}
+VKAPI_ATTR void VKAPI_CALL vkCmdBindPipeline(VkCommandBuffer, VkPipelineBindPoint, VkPipeline pipeline)
+{
+    require(pipelines.count(id(pipeline)) == 1, "bound unowned pipeline");
+    ++effects;
+}
+bool Shader_Vk::CreateComputePipeline(VkDevice, VkPipelineLayout, VkPipeline* pipeline, const std::vector<char>& code,
+                                      const char* entry)
+{
+    require(std::string(entry) == "CSMain", "wrong pipeline entry point");
+    selectedShader = code;
+    if (pipelineFailure == 1)
+        return false; // Module creation fails without touching output.
+    if (pipelineFailure == 2)
+    {
+        *pipeline = VK_NULL_HANDLE;
+        return false;
+    }
+    *pipeline = fresh<VkPipeline>();
+    pipelines.insert(id(*pipeline));
+    return pipelineFailure != 3; // Defensive helper-boundary robustness: owned non-null on false.
+}
 VKAPI_ATTR void VKAPI_CALL vkCmdBindDescriptorSets(VkCommandBuffer cmd, VkPipelineBindPoint, VkPipelineLayout, uint32_t,
                                                    uint32_t, const VkDescriptorSet* sets, uint32_t, const uint32_t*)
 {
@@ -244,6 +280,7 @@ void Shader_Vk::CreateConstantBuffer(VkDeviceSize size)
 }
 Shader_Vk::~Shader_Vk()
 {
+    vkDestroyPipeline(_device, _pipeline, nullptr);
     vkDestroyBuffer(_device, _constantBuffer, nullptr);
     vkFreeMemory(_device, _constantBufferMemory, nullptr);
 }
@@ -253,6 +290,7 @@ OS_Vk::OS_Vk(std::string name, VkDevice device, VkPhysicalDevice physical, bool 
     : Shader_Vk(std::move(name), device, physical), _upsample(up), _scalerOverride(scaler)
 {
     _pipeline = fresh<VkPipeline>();
+    pipelines.insert(id(_pipeline));
     _pipelineLayout = fresh<VkPipelineLayout>();
     _textureSampler = fresh<VkSampler>();
     for (int i = 0; i < 3; ++i)
@@ -348,6 +386,7 @@ VkImageInfo resource(uint32_t w, uint32_t h)
     result.ImageView = fresh<VkImageView>();
     result.Width = w;
     result.Height = h;
+    result.Format = VK_FORMAT_R16G16B16A16_SFLOAT;
     return result;
 }
 void checkDimensions(const Seen& seen, int32_t sw, int32_t sh, int32_t dw, int32_t dh)
@@ -553,6 +592,77 @@ void bindingFailure()
                 "missing-memory-type candidate resources leaked");
     }
 }
+void wrongOutputFormat()
+{
+    Fixture f;
+    Pass pass("format", f.device, f.physical, true, Scaler::Lanczos3);
+    auto cmd = f.begin();
+    auto batch = pass.Reserve(cmd, 1);
+    require(bool(batch), "format reserve");
+    auto input = resource(640, 480), output = resource(800, 600);
+    for (auto format : { VK_FORMAT_UNDEFINED, VK_FORMAT_R32G32B32A32_SFLOAT, VK_FORMAT_R16G16B16_SFLOAT })
+    {
+        auto wrong = output;
+        wrong.Format = format;
+        Snapshot before;
+        require(!pass.Dispatch(cmd, *batch, input, wrong), "incompatible storage output format admitted");
+        before.unchanged();
+    }
+    require(pass.Dispatch(cmd, *batch, input, output), "format rejection consumed reservation");
+}
+void replacementPipelineFailure()
+{
+    Fixture f;
+    auto cmd = f.begin();
+    const auto initial = pipelines.size();
+    const auto badDestroys = invalidPipelineDestroys;
+    for (int failure : { 1, 2, 3 })
+    {
+        pipelineFailure = failure;
+        {
+            Pass pass("pipeline failure", f.device, f.physical, true, Scaler::Lanczos3);
+            pipelineFailure = 0;
+            Snapshot before;
+            require(!pass.Reserve(cmd, 1), "replacement failure admitted upstream pipeline fallback");
+            before.unchanged();
+            require(pipelines.size() == initial + 1, "failed replacement leaked candidate or lost base ownership");
+        }
+        require(pipelines.size() == initial, "pipeline destruction leaked owned handle");
+        require(invalidPipelineDestroys == badDestroys, "destroyed unowned pipeline output");
+    }
+}
+void selectedPipelineBytes()
+{
+#if TEST_NR_RGBA_SHADERS
+    Fixture f;
+    const auto initial = pipelines.size();
+    const std::vector<std::vector<char>> down = { { std::begin(nr_bcds_bicubic_spv), std::end(nr_bcds_bicubic_spv) },
+                                                  { std::begin(nr_bcds_catmull_spv), std::end(nr_bcds_catmull_spv) },
+                                                  { std::begin(nr_bcds_lanczos2_spv), std::end(nr_bcds_lanczos2_spv) },
+                                                  { std::begin(nr_bcds_lanczos3_spv), std::end(nr_bcds_lanczos3_spv) },
+                                                  { std::begin(nr_bcds_kaiser2_spv), std::end(nr_bcds_kaiser2_spv) },
+                                                  { std::begin(nr_bcds_kaiser3_spv), std::end(nr_bcds_kaiser3_spv) },
+                                                  { std::begin(nr_bcds_magc_spv), std::end(nr_bcds_magc_spv) },
+                                                  { std::begin(nr_fsr_easu_spv), std::end(nr_fsr_easu_spv) } };
+    for (bool up : { false, true })
+        for (uint32_t filter = 0; filter < 8; ++filter)
+        {
+            selectedShader.clear();
+            {
+                Pass pass("selection", f.device, f.physical, up, static_cast<Scaler>(filter));
+                const auto expected = up && filter != 7
+                                          ? std::vector<char>(std::begin(nr_bcus_spv), std::end(nr_bcus_spv))
+                                          : down[filter];
+                require(selectedShader == expected, "selected pipeline bytes differ from requested NR filter");
+                require(pass.CanRender(), "replacement pipeline not renderable");
+                require(pipelines.size() == initial + 1, "successful replacement retained base pipeline");
+            }
+            require(pipelines.size() == initial, "successful replacement pipeline leaked");
+        }
+#else
+    throw std::runtime_error("generated NR shader header needed for selected-byte contract");
+#endif
+}
 int main()
 {
     int failed = 0;
@@ -563,7 +673,10 @@ int main()
              { "stale ticket and wrong device rejected", staleAndWrongDevice },
              { "FSR payload range, alignment and immutability", fsrPayload },
              { "failed construction rejects reservation", failedConstruction },
-             { "binding failure rejects and reclaims candidate", bindingFailure } })
+             { "binding failure rejects and reclaims candidate", bindingFailure },
+             { "incompatible output format has no effects", wrongOutputFormat },
+             { "replacement failure rejects and cleans owned candidate", replacementPipelineFailure },
+             { "all requested filters select exact embedded NR bytes", selectedPipelineBytes } })
     {
         try
         {

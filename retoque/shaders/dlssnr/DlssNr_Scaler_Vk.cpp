@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DlssNr_Scaler_Vk.h"
+#include "precompile/DlssNr_Scaler_Shaders_Vk.h"
 #include <Config.h>
 #include <shaders/output_scaling/OS_Common.h>
 #include <algorithm>
@@ -43,7 +44,8 @@ DlssNr_Scaler_Vk::DlssNr_Scaler_Vk(std::string InName, VkDevice InDevice, VkPhys
         return;
 
     // The base constructor has never recorded a dispatch or written these descriptors. Replace
-    // only its unused uniform allocation, retaining its compiled pipeline and three descriptor sets.
+    // its unused uniform allocation, retaining its layouts and three descriptor sets. The selected
+    // pipeline is replaced below with an NR-only variant matching the RGBA16F working surfaces.
     if (_mappedConstantBuffer != nullptr)
         vkUnmapMemory(_device, _constantBufferMemory);
     if (_constantBuffer != VK_NULL_HANDLE)
@@ -110,6 +112,55 @@ DlssNr_Scaler_Vk::DlssNr_Scaler_Vk(std::string InName, VkDevice InDevice, VkPhys
     _constantBuffer = candidateBuffer;
     _constantBufferMemory = candidateMemory;
     _mappedConstantBuffer = candidateMapped;
+
+    // Preserve the requested filter and RGB algorithm; only NR's storage format/component
+    // contract differs from the shared Output Scaling shaders. Never admit the base pipeline
+    // if creating this replacement fails.
+    std::vector<char> shaderCode;
+    if (_scaler == Scaler::FSR1)
+        shaderCode.assign(nr_fsr_easu_spv, nr_fsr_easu_spv + sizeof(nr_fsr_easu_spv));
+    else if (_upsample)
+        shaderCode.assign(nr_bcus_spv, nr_bcus_spv + sizeof(nr_bcus_spv));
+    else
+    {
+        switch (_scaler)
+        {
+        case Scaler::Bicubic:
+            shaderCode.assign(nr_bcds_bicubic_spv, nr_bcds_bicubic_spv + sizeof(nr_bcds_bicubic_spv));
+            break;
+        case Scaler::CatmullRom:
+            shaderCode.assign(nr_bcds_catmull_spv, nr_bcds_catmull_spv + sizeof(nr_bcds_catmull_spv));
+            break;
+        case Scaler::Lanczos2:
+            shaderCode.assign(nr_bcds_lanczos2_spv, nr_bcds_lanczos2_spv + sizeof(nr_bcds_lanczos2_spv));
+            break;
+        case Scaler::Lanczos3:
+            shaderCode.assign(nr_bcds_lanczos3_spv, nr_bcds_lanczos3_spv + sizeof(nr_bcds_lanczos3_spv));
+            break;
+        case Scaler::Kaiser2:
+            shaderCode.assign(nr_bcds_kaiser2_spv, nr_bcds_kaiser2_spv + sizeof(nr_bcds_kaiser2_spv));
+            break;
+        case Scaler::Kaiser3:
+            shaderCode.assign(nr_bcds_kaiser3_spv, nr_bcds_kaiser3_spv + sizeof(nr_bcds_kaiser3_spv));
+            break;
+        case Scaler::Magic:
+            shaderCode.assign(nr_bcds_magc_spv, nr_bcds_magc_spv + sizeof(nr_bcds_magc_spv));
+            break;
+        default:
+            return;
+        }
+    }
+    VkPipeline candidatePipeline = VK_NULL_HANDLE;
+    if (!CreateComputePipeline(_device, _pipelineLayout, &candidatePipeline, shaderCode, "CSMain") ||
+        candidatePipeline == VK_NULL_HANDLE)
+    {
+        // The helper can fail before touching its output. Destroy only a non-null owned result.
+        if (candidatePipeline != VK_NULL_HANDLE)
+            vkDestroyPipeline(_device, candidatePipeline, nullptr);
+        return;
+    }
+    vkDestroyPipeline(_device, _pipeline, nullptr);
+    _pipeline = candidatePipeline;
     _init = true;
 }
 
@@ -154,7 +205,7 @@ bool DlssNr_Scaler_Vk::Dispatch(VkCommandBuffer InCmdList, Batch& batch, const V
         _constantBufferMemory == VK_NULL_HANDLE || _pipelineLayout == VK_NULL_HANDLE ||
         _textureSampler == VK_NULL_HANDLE || _slotStride < _constantSize || InResourceView.Image == VK_NULL_HANDLE ||
         InResourceView.ImageView == VK_NULL_HANDLE || OutResourceView.Image == VK_NULL_HANDLE ||
-        OutResourceView.ImageView == VK_NULL_HANDLE)
+        OutResourceView.ImageView == VK_NULL_HANDLE || OutResourceView.Format != VK_FORMAT_R16G16B16A16_SFLOAT)
         return false;
 
     const uint32_t srcW = InResourceView.Width, srcH = InResourceView.Height;
