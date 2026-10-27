@@ -510,8 +510,14 @@ assert re.search(r'~RecordingDone\(\)\s*\{\s*std::lock_guard<std::mutex> lock\(g
                  r'g_owner\.AfterUpscaleDone\(OwnerNowMs\(\)\);', after_upscale)
 # The route records nothing before it asks: a hand-back it did not call off saw everything it recorded drained.
 before_claim = after_upscale[:after_upscale.index('ClaimModelForAfterUpscale(device)')]
-assert not re.search(r'vkCmd|cmdBuffer\)|\(void\*\) cmdBuffer|->Dispatch|g_fwd\.(create|evaluate)', before_claim[
-    before_claim.index('std::lock_guard<std::mutex> lock(g_vkMutex);'):])
+# Inspecting the current epoch is CPU-only; it does not record, submit or acquire a lease.
+before_claim = before_claim[before_claim.index('std::lock_guard<std::mutex> lock(g_vkMutex);'):]
+before_claim, observations = re.subn(
+    r'VkRecording::Recordings\(\)\.Current\(\(uint64_t\) device,\s*\(uint64_t\) cmdBuffer\)',
+    '', before_claim)
+assert observations == 1
+assert not re.search(r'vkCmd|cmdBuffer\)|\(void\*\) cmdBuffer|->Dispatch|g_fwd\.(create|evaluate)|\.Pin\(|->Reserve\(',
+                     before_claim)
 # Taking the token from nobody, the route finds the forwarder's float slot again for its own parameter block.
 claim = code(function(feature_vk, 'bool ClaimModelForAfterUpscale(VkDevice device)'))
 assert re.search(r'if \(!held\)\s*\{\s*g_vk\.floatSlotKnown = false;', claim)
@@ -661,7 +667,8 @@ free_set = code(function(feature_vk, '    void Free(RetiredSet& set)'))
 assert 'SynthMotion::DestroyVkImages(dev.device, set.synth);' in free_set
 # The estimator reads the model's own input (the encode's proxy, downsampled below native), so its field is on the
 # model's grid; the model then gets the field or the zero guide, both at the working size.
-assert record_model.index('m.pass->Dispatch(cmd, encode,') < record_model.index('modelInput = &m.proxySmall;') < \
+assert record_model.index('m.pass->Reserve(cmd, 3)') < record_model.index('m.pass->Dispatch(cmd, *composition, encode,') < \
+    record_model.index('modelInput = &m.proxySmall;') < \
     record_model.index('m.estimator.Record(cmd, m.synthPipelines, m.synthImages, modelInput->view,') < \
     record_model.index('ChooseMotionGuide(fieldReady, m.workWidth, m.workHeight)') < record_model.index('g_fwd.evaluate(')
 assert 'SynthReset(m.lastSynthMs, now)' in record_model

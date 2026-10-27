@@ -823,3 +823,11 @@ requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "Structured suite outcomes, stale-result rejection, timeout and interruption cleanup, strict mode and atomic reports."
+
+[nr-vk-recording]
+path = "nr-vk-recording"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Vulkan recording epochs, bounded slots, production dispatch/teardown and lifecycle forwarding under sanitizers; no GPU."

@@ -10,6 +10,7 @@
 #include <dlssnr/DlssNr_Consumers.h>
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_VkModelOwner.h>
+#include <dlssnr/DlssNr_VkRecording.h>
 #include <dlssnr/DlssNr_VkPresentBuild.h>
 #include <dlssnr/DlssNr_VkPresentModel.h>
 #include <dlssnr/DlssNr_Enlarge.h>
@@ -189,6 +190,8 @@ struct VkState
     uint32_t frameRefusals = 0;
 
     std::unique_ptr<DlssNr_Vk> pass;
+    // All route-owned GPU objects share this generation. Recorded work pins it until reset/free.
+    std::shared_ptr<void> recording = std::make_shared<uint8_t>(0);
 
     uint32_t width = 0;
     uint32_t height = 0;
@@ -243,6 +246,9 @@ constexpr uint32_t kTimingSlots = 4;
 
 VkState g_vk;
 std::mutex g_vkMutex;
+
+// Called with g_vkMutex held. A recording pin covers unsubmitted and resubmittable work too.
+bool RouteRecordingBusy() { return g_vk.recording.use_count() > 1; }
 
 // Set whenever an evaluate finds the pass switched off, taken under the lock by the next one that
 // runs, so switching NR back on starts the model's history over instead of resuming the one from
@@ -572,6 +578,15 @@ void Transition(VkCommandBuffer cmd, OwnedImage& img, VkImageLayout to)
     img.layout = to;
 }
 
+// Only images whose contents are fully replaced by this frame. A discarded command buffer never executed its
+// transitions, so no layout recorded by an earlier frame is evidence for this one.
+void BeginRouteRecording()
+{
+    for (OwnedImage* image : { &g_vk.proxy, &g_vk.keep, &g_vk.proxySmall, &g_vk.output, &g_vk.outputNative, &g_vk.meter,
+                               &g_vk.depthMatched, &g_vk.motionMatched })
+        image->layout = VK_IMAGE_LAYOUT_UNDEFINED;
+}
+
 // A resource the game owns. Its layout is the game's business, so this records the transition and
 // puts it back exactly as it was rather than tracking it.
 void TransitionForeign(VkCommandBuffer cmd, VkImage image, VkImageSubresourceRange range, VkImageLayout from,
@@ -774,10 +789,8 @@ const char* GuideMatchTransient(std::string why)
     return g_vk.guideMatchTransient.c_str();
 }
 
-// Hands an image of the route's to DeferredRelease (misc/DeferredRelease.h), the module's retirement: destroyed once
-// enough presents and wall time have passed for a recording that names it to have been submitted and run, finished
-// with the device's own retirement when it goes (the Vulkan present host retires the device's entries before
-// vkDestroyDevice), or dropped without a call when a new device replaces it. The handles are forgotten here at once.
+// Transfer an already unreferenced route image to DeferredRelease. Recording quiescence is the lifetime proof;
+// the existing time/present delay is only additional deferral. Device teardown drains or abandons its callbacks.
 void RetireImage(OwnedImage& img)
 {
     const VkDevice device = g_vk.device;
@@ -1031,6 +1044,18 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     std::lock_guard<std::mutex> lock(g_vkMutex);
 
+    const auto recording = VkRecording::Recordings().Current((uint64_t) device, (uint64_t) cmdBuffer);
+    if (!recording)
+    {
+        static bool saidUnknownRecording = false;
+        if (!saidUnknownRecording)
+        {
+            saidUnknownRecording = true;
+            LOG_WARN("DLSS-NR Vulkan: NR waits for an observed command-buffer allocation and recording");
+        }
+        return;
+    }
+
     if (g_vk.failed)
         return;
 
@@ -1189,6 +1214,22 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     const uint32_t workWidth = (uint32_t) (width * workScale + 0.5f);
     const uint32_t workHeight = (uint32_t) (height * workScale + 0.5f);
     const bool reduced = workWidth != width || workHeight != height;
+
+    const bool generationChange = g_vk.width != width || g_vk.height != height || g_vk.workWidth != workWidth ||
+                                  g_vk.workHeight != workHeight ||
+                                  (workScale > 1.0f && g_vk.nrScaler != cfg.DlssNrScalingDownscaler.value_or_default());
+    if (g_vk.device == device && generationChange && RouteRecordingBusy())
+    {
+        static uint64_t lastRefusal = 0;
+        const uint64_t now = OwnerNowMs();
+        if (now - lastRefusal >= 5000)
+        {
+            lastRefusal = now;
+            LOG_INFO("DLSS-NR Vulkan: resize/filter change waits for old command-buffer recordings to reset or free");
+        }
+        g_vk.reset = true;
+        return; // Do not acquire another generation pin while waiting for quiescence.
+    }
 
     // See kDlssNrMinExtent: a probe-sized swapchain must never get a model built for it.
     if (width < kDlssNrMinExtent || height < kDlssNrMinExtent || workWidth < kDlssNrMinExtent ||
@@ -1364,8 +1405,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         // on RDR2 and Enshrouded by dragging the model-resolution slider). Drain the device first.
         // Only the rare resize path reaches here, so the CPU stall is a one-off hitch, not per-frame.
         //
-        // Only a drain that succeeded proves the submitted work done (V-02): a lost device abandons everything, as a
-        // device change does; any other failure frees nothing and the resize is tried again at the next evaluate.
+        // The recording-generation gate above also covers work never submitted or legally resubmitted (V-02).
+        // Keep the existing device drain/failure handling before rebuilding the now-unreferenced objects.
         if (g_vk.device != VK_NULL_HANDLE)
         {
             const VkResult idle = vkDeviceWaitIdle(g_vk.device);
@@ -1413,10 +1454,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         DestroyImage(g_vk.proxySmall);
         DestroyImage(g_vk.outputNative);
 
-        // The matched guides are per working size. The drain above covers what was submitted, not an evaluate the game
-        // recorded at the old size and has not submitted yet, which still names them (V-02): so the pair is kept
-        // alive until the next resize, and the one before it goes to DeferredRelease. Made again by the first frame
-        // that wants them.
+        // The old generation is quiescent. Keep the existing bounded retired pair as an extra delay;
+        // recording pins, not elapsed time or the next resize, prove these resources may retire.
         RetireImage(g_vk.depthRetired);
         RetireImage(g_vk.motionRetired);
         g_vk.depthRetired = g_vk.depthMatched;
@@ -1449,23 +1488,33 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         g_vk.reset = true;
     }
 
-    if (g_vk.feature == nullptr)
+    // Scaler replacement also changes generation-owned objects, even without a size change.
+    // Prepare it before any commands; the old path did this after the encode had already recorded.
+    if (workScale > 1.0f)
     {
-        g_vk.feature = g_fwd.create(
-            (void*) cmdBuffer, g_vk.capabilityParams, workWidth, workHeight, (int) cfg.DlssNrPreset.value_or_default(),
-            cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
-            cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
-            cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
-
-        if (g_vk.feature == nullptr)
+        const Scaler wantScaler = cfg.DlssNrScalingDownscaler.value_or_default();
+        if (g_vk.nrScaler != wantScaler)
         {
-            NoteModelFault();
-            Fail("the model would not build a feature on this device");
-            return;
+            const VkResult idle = vkDeviceWaitIdle(device);
+            if (idle != VK_SUCCESS)
+            {
+                if (idle == VK_ERROR_DEVICE_LOST)
+                {
+                    ShutdownVk(false);
+                    Fail("the device was lost while changing the scaler");
+                }
+                return;
+            }
+            g_vk.superUp.reset();
+            g_vk.superDown.reset();
+            g_vk.nrScaler = wantScaler;
         }
-
-        LOG_INFO("DLSS-NR Vulkan: feature up at {}x{} (frame {}x{})", workWidth, workHeight, width, height);
-        g_vk.reset = true;
+        if (!g_vk.superUp)
+            g_vk.superUp =
+                std::make_unique<OS_Vk>("DLSS-NR VK supersample up", device, physicalDevice, true, wantScaler);
+        if (!g_vk.superDown)
+            g_vk.superDown =
+                std::make_unique<OS_Vk>("DLSS-NR VK supersample down", device, physicalDevice, false, wantScaler);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -1704,6 +1753,52 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             LOG_INFO("DLSS-NR Vulkan: residual limit off");
     }
 
+    // Encode + optional resample fallback + optional exposure meter + resolve. Reserve all four
+    // before feature creation, which may itself record GPU work into this command buffer.
+    auto composition = g_vk.pass->Reserve(cmdBuffer, 4);
+    if (!composition)
+    {
+        static uint64_t lastRefusal = 0;
+        const uint64_t now = OwnerNowMs();
+        if (now - lastRefusal >= 5000)
+        {
+            lastRefusal = now;
+            LOG_INFO("DLSS-NR Vulkan: composition waits for free recording slots");
+        }
+        g_vk.reset = true;
+        return;
+    }
+    try
+    {
+        if (!VkRecording::Recordings().Pin(*recording, { g_vk.recording }))
+            return;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return;
+    }
+
+    BeginRouteRecording();
+
+    if (g_vk.feature == nullptr)
+    {
+        g_vk.feature = g_fwd.create(
+            (void*) cmdBuffer, g_vk.capabilityParams, workWidth, workHeight, (int) cfg.DlssNrPreset.value_or_default(),
+            cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
+            cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
+            cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
+
+        if (g_vk.feature == nullptr)
+        {
+            NoteModelFault();
+            Fail("the model would not build a feature on this device");
+            return;
+        }
+
+        LOG_INFO("DLSS-NR Vulkan: feature up at {}x{} (frame {}x{})", workWidth, workHeight, width, height);
+        g_vk.reset = true;
+    }
+
     const VkImageSubresourceRange colourRange = colour->Resource.ImageViewInfo.SubresourceRange;
 
     // Open the measurement. Reset immediately before writing: a query pool slot must be reset before
@@ -1728,8 +1823,9 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // storage image, which is only legal in GENERAL, and nothing transitions it in between. It is the
     // upscaler's output, a storage image the upscaler has just written, so GENERAL is what it is.
     // Inert on the only hardware this model runs on, wrong everywhere it is read.
-    if (!g_vk.pass->Dispatch(cmdBuffer, encode, width, height, colour->Resource.ImageViewInfo.ImageView, VK_NULL_HANDLE,
-                             VK_NULL_HANDLE, VK_NULL_HANDLE, g_vk.proxy.view, g_vk.keep.view, VK_IMAGE_LAYOUT_GENERAL))
+    if (!g_vk.pass->Dispatch(cmdBuffer, *composition, encode, width, height, colour->Resource.ImageViewInfo.ImageView,
+                             VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, g_vk.proxy.view, g_vk.keep.view,
+                             VK_IMAGE_LAYOUT_GENERAL))
     {
         Fail("the encode dispatch failed");
         return;
@@ -1746,32 +1842,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
         if (workScale > 1.0f)
         {
-            // Supersample: upscale the proxy to the super-native working size with the chosen filter so
-            // the model sees a clean input. Rebuild both scalers when the NR downscaler changed (baked
-            // at construction). proxy -> SHADER_READ_ONLY (sampled), proxySmall -> GENERAL (storage).
-            const Scaler wantScaler = cfg.DlssNrScalingDownscaler.value_or_default();
-            if (g_vk.nrScaler != wantScaler)
-            {
-                // Rebuilding frees the old scalers' pipelines/descriptors. The filter dropdown changes
-                // no size, so this does NOT go through the resize block's drain -- and prior frames'
-                // submitted command buffers still bind these pipelines. Freeing them under in-flight GPU
-                // work is device removal (the same hazard the resize path drains for). Drain first. A
-                // filter change is rare, so the one-off stall is a hitch, not a per-frame cost.
-                // Only after a drain that succeeded; otherwise the old filter stays for this frame and the rebuild is
-                // tried again at the next one.
-                if (g_vk.device == VK_NULL_HANDLE || vkDeviceWaitIdle(g_vk.device) == VK_SUCCESS)
-                {
-                    g_vk.superUp.reset();
-                    g_vk.superDown.reset();
-                    g_vk.nrScaler = wantScaler;
-                }
-            }
-            if (!g_vk.superUp)
-                g_vk.superUp =
-                    std::make_unique<OS_Vk>("DLSS-NR VK supersample up", device, physicalDevice, true, wantScaler);
-            if (!g_vk.superDown)
-                g_vk.superDown =
-                    std::make_unique<OS_Vk>("DLSS-NR VK supersample down", device, physicalDevice, false, wantScaler);
+            // Both scalers were prepared before the generation was pinned and before the frame's first command.
 
             Transition(cmdBuffer, g_vk.proxy, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             Transition(cmdBuffer, g_vk.proxySmall, VK_IMAGE_LAYOUT_GENERAL);
@@ -1802,9 +1873,9 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             Transition(cmdBuffer, g_vk.proxy, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
             Transition(cmdBuffer, g_vk.proxySmall, VK_IMAGE_LAYOUT_GENERAL);
 
-            if (!g_vk.pass->Dispatch(cmdBuffer, down, workWidth, workHeight, g_vk.proxy.view, VK_NULL_HANDLE,
-                                     VK_NULL_HANDLE, VK_NULL_HANDLE, g_vk.proxySmall.view, VK_NULL_HANDLE,
-                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+            if (!g_vk.pass->Dispatch(cmdBuffer, *composition, down, workWidth, workHeight, g_vk.proxy.view,
+                                     VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, g_vk.proxySmall.view,
+                                     VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
             {
                 Fail("the downsample dispatch failed");
                 return;
@@ -1842,9 +1913,9 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
             Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_GENERAL);
 
-            if (g_vk.pass->Dispatch(cmdBuffer, meter, kMeterSide, kMeterSide, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                                    VK_NULL_HANDLE, exposure->Resource.ImageViewInfo.ImageView, g_vk.meter.view,
-                                    VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            if (g_vk.pass->Dispatch(cmdBuffer, *composition, meter, kMeterSide, kMeterSide, VK_NULL_HANDLE,
+                                    VK_NULL_HANDLE, VK_NULL_HANDLE, exposure->Resource.ImageViewInfo.ImageView,
+                                    g_vk.meter.view, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
             {
                 Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -2002,8 +2073,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     Transition(cmdBuffer, *resolveAnswer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     Transition(cmdBuffer, g_vk.keep, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    if (!g_vk.pass->Dispatch(cmdBuffer, resolve, width, height, resolveProxy->view, resolveAnswer->view, g_vk.keep.view,
-                             VK_NULL_HANDLE, colour->Resource.ImageViewInfo.ImageView, VK_NULL_HANDLE,
+    if (!g_vk.pass->Dispatch(cmdBuffer, *composition, resolve, width, height, resolveProxy->view, resolveAnswer->view,
+                             g_vk.keep.view, VK_NULL_HANDLE, colour->Resource.ImageViewInfo.ImageView, VK_NULL_HANDLE,
                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
     {
         Fail("the resolve dispatch failed");
@@ -2053,6 +2124,9 @@ namespace
 // device behind fences of its own). NGX stays initialised on the device: it is the device's, and goes with it.
 void FreeRouteObjects()
 {
+    if (RouteRecordingBusy())
+        return;
+
     if (g_vk.feature != nullptr && g_fwd.release != nullptr)
         g_fwd.release(g_vk.feature);
 
@@ -2118,6 +2192,9 @@ void ShutdownVk(bool deviceAlive)
 {
     if (!deviceAlive)
     {
+        // Only CPU metadata is held by these leases. Abandon GPU objects below without invoking their destructors.
+        VkRecording::Recordings().ForgetDevice((uint64_t) g_vk.device);
+        g_vk.recording = std::make_shared<uint8_t>(0);
         // The device these handles belong to is gone (a device change was detected). Destroying a
         // VkDevice already frees every resource created on it, so touch NOTHING on the old device --
         // no wait-idle, no vkDestroy*, no NGX release, and crucially no DlssNr_Vk destructor (it would
@@ -2170,6 +2247,9 @@ void ShutdownVk(bool deviceAlive)
         return;
     }
 
+    if (RouteRecordingBusy())
+        return; // A drain cannot invalidate an executable recording owned by the application.
+
     // The device is alive (real teardown): drain before freeing so nothing the GPU is still using is
     // destroyed under it, the same rule as the resize path. A drain that did not succeed proves nothing: abandon.
     if (g_vk.device != VK_NULL_HANDLE && vkDeviceWaitIdle(g_vk.device) != VK_SUCCESS)
@@ -2207,6 +2287,9 @@ AfterUpscaleHandBack FinishAfterUpscaleHandBack(VkDevice device, std::vector<std
     if (!route.owns_lock())
         return AfterUpscaleHandBack::Busy;
 
+    if (g_vk.device == device && RouteRecordingBusy())
+        return AfterUpscaleHandBack::Busy;
+
     VkModelOwner::HandBack result;
     {
         std::lock_guard<std::mutex> lock(g_ownerMutex);
@@ -2218,9 +2301,8 @@ AfterUpscaleHandBack FinishAfterUpscaleHandBack(VkDevice device, std::vector<std
     if (result == VkModelOwner::HandBack::NotRetiring)
         return AfterUpscaleHandBack::NotRetiring;
 
-    // The token is released, and the route cannot take it back before this returns: its lock is held. Nothing of the
-    // route's is in flight: it recorded nothing since the hand-back began (it would have called it off), and the
-    // command buffers it recorded into before were submitted ahead of the drain's fences, all of which signalled.
+    // The owner token is released with the route lock held. Old recordings have been retired, and the host's
+    // drain covers submitted work; no retained recording can later reuse this feature generation.
     if (g_vk.device == device)
     {
         const bool feature = g_vk.feature != nullptr;
@@ -2254,6 +2336,10 @@ void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::s
     // lock, and vkDestroyDevice holds no queue's submit lock.
     {
         std::lock_guard<std::mutex> route(g_vkMutex);
+
+        // Actual device retirement: admissions are stopped by the caller's transport and route locks.
+        // The registry owns metadata only; destroy versus abandon below still follows the proven drain result.
+        VkRecording::Recordings().ForgetDevice((uint64_t) device);
 
         if (device != VK_NULL_HANDLE && g_vk.device == device)
         {
@@ -3427,6 +3513,14 @@ bool VkPresentModel::Record(const VkPresentNrFrame& input)
         frame.hdrProfile != m.key.hdrProfile)
         return false;
 
+    // The host begins/resets its own buffers explicitly. Reserve before its first NR command or image mutation.
+    auto composition = m.pass->Reserve(cmd, 3);
+    if (!composition)
+    {
+        m.reset = true;
+        return false;
+    }
+
     const bool reduced = m.workWidth != m.width || m.workHeight != m.height;
     m.recordFirst = m.dispatches;
 
@@ -3504,8 +3598,8 @@ bool VkPresentModel::Record(const VkPresentNrFrame& input)
     Transition(cmd, m.keep, VK_IMAGE_LAYOUT_GENERAL);
 
     ++m.dispatches;
-    if (!m.pass->Dispatch(cmd, encode, m.width, m.height, frame.view, VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                          m.proxy.view, m.keep.view, VK_IMAGE_LAYOUT_GENERAL))
+    if (!m.pass->Dispatch(cmd, *composition, encode, m.width, m.height, frame.view, VK_NULL_HANDLE, VK_NULL_HANDLE,
+                          VK_NULL_HANDLE, m.proxy.view, m.keep.view, VK_IMAGE_LAYOUT_GENERAL))
         return fail("the encode dispatch failed");
 
     OwnedImage* modelInput = &m.proxy;
@@ -3521,8 +3615,8 @@ bool VkPresentModel::Record(const VkPresentNrFrame& input)
         Transition(cmd, m.proxySmall, VK_IMAGE_LAYOUT_GENERAL);
 
         ++m.dispatches;
-        if (!m.pass->Dispatch(cmd, down, m.workWidth, m.workHeight, m.proxy.view, VK_NULL_HANDLE, VK_NULL_HANDLE,
-                              VK_NULL_HANDLE, m.proxySmall.view, VK_NULL_HANDLE,
+        if (!m.pass->Dispatch(cmd, *composition, down, m.workWidth, m.workHeight, m.proxy.view, VK_NULL_HANDLE,
+                              VK_NULL_HANDLE, VK_NULL_HANDLE, m.proxySmall.view, VK_NULL_HANDLE,
                               VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
             return fail("the downsample dispatch failed");
 
@@ -3594,8 +3688,8 @@ bool VkPresentModel::Record(const VkPresentNrFrame& input)
     Transition(cmd, m.keep, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     ++m.dispatches;
-    if (!m.pass->Dispatch(cmd, resolve, m.width, m.height, modelInput->view, m.output.view, m.keep.view, VK_NULL_HANDLE,
-                          frame.view, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+    if (!m.pass->Dispatch(cmd, *composition, resolve, m.width, m.height, modelInput->view, m.output.view, m.keep.view,
+                          VK_NULL_HANDLE, frame.view, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
         return fail("the resolve dispatch failed");
 
     if (frame.hdrProfile != 0)

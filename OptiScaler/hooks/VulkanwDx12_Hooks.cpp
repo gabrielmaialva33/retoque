@@ -16,6 +16,7 @@
 #include <atomic>
 #include <cstring>
 #include <misc/IdentifyGpu.h>
+#include <dlssnr/DlssNr_VkRecording.h>
 
 static PFN_vkQueueSubmit o_vkQueueSubmit = nullptr;
 static PFN_vkQueueSubmit2 o_vkQueueSubmit2 = nullptr;
@@ -6634,7 +6635,10 @@ VkResult Vulkan_wDx12::hk_vkBeginCommandBuffer(VkCommandBuffer commandBuffer,
     LOG_DEBUG("commandBuffer: {:X}", (size_t) commandBuffer);
 #endif
 
-    return o_vkBeginCommandBuffer(commandBuffer, pBeginInfo);
+    const auto result = o_vkBeginCommandBuffer(commandBuffer, pBeginInfo);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().Begin((uint64_t) commandBuffer);
+    return result;
 }
 
 VkResult Vulkan_wDx12::hk_vkEndCommandBuffer(VkCommandBuffer commandBuffer)
@@ -6651,11 +6655,16 @@ VkResult Vulkan_wDx12::hk_vkEndCommandBuffer(VkCommandBuffer commandBuffer)
     else
     {
         auto result = o_vkEndCommandBuffer(virtualCommandBuffer);
+        if (result == VK_SUCCESS)
+            DlssNr::VkRecording::Recordings().End((uint64_t) virtualCommandBuffer);
         LOG_DEBUG("Ending virtual command buffer: {:X}, result: {}", (size_t) virtualCommandBuffer,
                   magic_enum::enum_name(result));
     }
 
-    return o_vkEndCommandBuffer(commandBuffer);
+    const auto result = o_vkEndCommandBuffer(commandBuffer);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().End((uint64_t) commandBuffer);
+    return result;
 }
 
 VkResult Vulkan_wDx12::hk_vkResetCommandBuffer(VkCommandBuffer commandBuffer, VkCommandBufferResetFlags flags)
@@ -6667,7 +6676,10 @@ VkResult Vulkan_wDx12::hk_vkResetCommandBuffer(VkCommandBuffer commandBuffer, Vk
     if (GetVirtualCommandBuffer(commandBuffer) == VK_NULL_HANDLE)
         cmdBufferStateTracker.OnReset(commandBuffer);
 
-    return o_vkResetCommandBuffer(commandBuffer, flags);
+    const auto result = o_vkResetCommandBuffer(commandBuffer, flags);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().Reset((uint64_t) commandBuffer);
+    return result;
 }
 
 void Vulkan_wDx12::hk_vkFreeCommandBuffers(VkDevice device, VkCommandPool commandPool, uint32_t commandBufferCount,
@@ -6683,6 +6695,11 @@ void Vulkan_wDx12::hk_vkFreeCommandBuffers(VkDevice device, VkCommandPool comman
 
     // Call original function
     o_vkFreeCommandBuffers(device, commandPool, commandBufferCount, pCommandBuffers);
+
+    if (pCommandBuffers != nullptr)
+        DlssNr::VkRecording::Recordings().Free((uint64_t) device, (uint64_t) commandPool, commandBufferCount,
+                                               [pCommandBuffers](std::size_t i) noexcept
+                                               { return (uint64_t) pCommandBuffers[i]; });
 }
 
 VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* pAllocateInfo,
@@ -6715,6 +6732,20 @@ VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkComm
         // Track both queue family (when known) and primary/secondary level.
         cmdBufferStateTracker.OnAllocateCommandBuffers(pAllocateInfo->commandPool, pAllocateInfo->commandBufferCount,
                                                        pCommandBuffers, queueFamily, pAllocateInfo->level);
+
+        try
+        {
+            std::vector<DlssNr::VkRecording::Handle> buffers;
+            buffers.reserve(pAllocateInfo->commandBufferCount);
+            for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i)
+                buffers.push_back((uint64_t) pCommandBuffers[i]);
+            DlssNr::VkRecording::Recordings().Allocate((uint64_t) device, (uint64_t) pAllocateInfo->commandPool,
+                                                       buffers);
+        }
+        catch (const std::bad_alloc&)
+        {
+            // Preserve the driver's result; untracked command buffers cannot admit NR work.
+        }
     }
 
     return result;
@@ -6736,6 +6767,7 @@ void Vulkan_wDx12::hk_vkDestroyCommandPool(VkDevice device, VkCommandPool comman
     }
 
     o_vkDestroyCommandPool(device, commandPool, pAllocator);
+    DlssNr::VkRecording::Recordings().DestroyPool((uint64_t) device, (uint64_t) commandPool);
 }
 
 VkResult Vulkan_wDx12::hk_vkResetCommandPool(VkDevice device, VkCommandPool commandPool, VkCommandPoolResetFlags flags)
@@ -6748,7 +6780,10 @@ VkResult Vulkan_wDx12::hk_vkResetCommandPool(VkDevice device, VkCommandPool comm
     cmdBufferStateTracker.OnResetPool(commandPool);
 
     // Call original function
-    return o_vkResetCommandPool(device, commandPool, flags);
+    const auto result = o_vkResetCommandPool(device, commandPool, flags);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().ResetPool((uint64_t) device, (uint64_t) commandPool);
+    return result;
 }
 
 // vulkan-1.dll exports Hook detours to the same hooks GetAddress hands out

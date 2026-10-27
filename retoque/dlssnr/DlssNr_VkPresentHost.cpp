@@ -8,6 +8,7 @@
 #include "DlssNr_VkPresentRegistry.h"
 #include "DlssNr_VkPresentTransport.h"
 #include "DlssNr_Session.h"
+#include "DlssNr_VkRecording.h"
 
 #include <Config.h>
 #include <State.h>
@@ -114,6 +115,16 @@ Targets<PFN_vkQueueSubmit> g_submit;
 Targets<PFN_vkQueueSubmit2> g_submit2; // vkQueueSubmit2 and vkQueueSubmit2KHR: one signature
 Targets<PFN_vkQueueBindSparse> g_bindSparse;
 Targets<PFN_vkQueueWaitIdle> g_waitIdle;
+
+// Recording lifetimes are also observed when the w/Dx12 hook bundle is disabled. These hooks belong to the
+// opt-in present host and use the same per-address forwarding slots as its queue hooks.
+Targets<PFN_vkAllocateCommandBuffers> g_recordingAllocate;
+Targets<PFN_vkBeginCommandBuffer> g_recordingBegin;
+Targets<PFN_vkEndCommandBuffer> g_recordingEnd;
+Targets<PFN_vkResetCommandBuffer> g_recordingReset;
+Targets<PFN_vkFreeCommandBuffers> g_recordingFree;
+Targets<PFN_vkResetCommandPool> g_recordingResetPool;
+Targets<PFN_vkDestroyCommandPool> g_recordingDestroyPool;
 
 template <typename T> Handle H(T handle) { return static_cast<Handle>(reinterpret_cast<uintptr_t>(handle)); }
 template <typename T> T As(Handle handle) { return reinterpret_cast<T>(static_cast<uintptr_t>(handle)); }
@@ -645,7 +656,17 @@ VkCommandBuffer AllocateCommandBuffer(DeviceTransport& dev, uint32_t family)
     info.commandBufferCount = 1;
 
     VkCommandBuffer buffer = VK_NULL_HANDLE;
-    return dev.fn.allocateCommandBuffers(dev.device, &info, &buffer) == VK_SUCCESS ? buffer : VK_NULL_HANDLE;
+    if (dev.fn.allocateCommandBuffers(dev.device, &info, &buffer) != VK_SUCCESS)
+        return VK_NULL_HANDLE;
+    try
+    {
+        DlssNr::VkRecording::Recordings().Allocate((uint64_t) dev.device, (uint64_t) pool, { (uint64_t) buffer });
+    }
+    catch (const std::bad_alloc&)
+    {
+        // The allocated buffer remains valid, but cannot admit NR work without its recording registration.
+    }
+    return buffer;
 }
 
 void FreeCommandBuffer(DeviceTransport& dev, uint32_t family, VkCommandBuffer& buffer)
@@ -653,7 +674,10 @@ void FreeCommandBuffer(DeviceTransport& dev, uint32_t family, VkCommandBuffer& b
     if (buffer != VK_NULL_HANDLE)
     {
         if (const auto found = dev.pools.find(family); found != dev.pools.end())
+        {
             dev.fn.freeCommandBuffers(dev.device, found->second, 1, &buffer);
+            DlssNr::VkRecording::Recordings().Free((uint64_t) dev.device, (uint64_t) found->second, (uint64_t) buffer);
+        }
     }
 
     buffer = VK_NULL_HANDLE;
@@ -969,10 +993,22 @@ bool Begin(DeviceTransport& dev, VkCommandBuffer buffer)
 {
     if (dev.fn.resetCommandBuffer(buffer, 0) != VK_SUCCESS)
         return false;
+    DlssNr::VkRecording::Recordings().Reset((uint64_t) buffer);
 
     VkCommandBufferBeginInfo begin { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    return dev.fn.beginCommandBuffer(buffer, &begin) == VK_SUCCESS;
+    if (dev.fn.beginCommandBuffer(buffer, &begin) != VK_SUCCESS)
+        return false;
+    DlssNr::VkRecording::Recordings().Begin((uint64_t) buffer);
+    return true;
+}
+
+bool End(DeviceTransport& dev, VkCommandBuffer buffer)
+{
+    if (dev.fn.endCommandBuffer(buffer) != VK_SUCCESS)
+        return false;
+    DlssNr::VkRecording::Recordings().End((uint64_t) buffer);
+    return true;
 }
 
 enum class Recorded : uint8_t
@@ -1093,7 +1129,7 @@ Recorded RecordWork(DeviceTransport& dev, VkCommandBuffer buffer, VkImage image,
     dev.fn.cmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0,
                               nullptr, 0, nullptr, 1, &out);
 
-    return dev.fn.endCommandBuffer(buffer) == VK_SUCCESS ? Recorded::Ok : Recorded::Failed;
+    return End(dev, buffer) ? Recorded::Ok : Recorded::Failed;
 }
 
 // Cross-family, on the presenting queue: the release to the work family (layout PRESENT_SRC -> TRANSFER_SRC, which
@@ -1113,7 +1149,7 @@ bool RecordHandOver(DeviceTransport& dev, VkCommandBuffer buffer, VkImage image,
     dev.fn.cmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0,
                               nullptr, 0, nullptr, 1, &barrier);
 
-    return dev.fn.endCommandBuffer(buffer) == VK_SUCCESS;
+    return End(dev, buffer);
 }
 
 // Cross-family, on the presenting queue, used only when the work queue's submit failed after the release had run:
@@ -1130,7 +1166,7 @@ bool RecordRecovery(DeviceTransport& dev, VkCommandBuffer buffer, VkImage image)
     dev.fn.cmdPipelineBarrier(buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0,
                               nullptr, 0, nullptr, 1, &barrier);
 
-    return dev.fn.endCommandBuffer(buffer) == VK_SUCCESS;
+    return End(dev, buffer);
 }
 
 // --- The model (stage 3) -----------------------------------------------------------------------------------------
@@ -3273,6 +3309,84 @@ template <size_t S> VkResult VKAPI_CALL hkQueueWaitIdle(VkQueue queue)
     return LockedQueueCall("vkQueueWaitIdle", g_waitIdle.next[S], queue);
 }
 
+// Forward first: failed lifecycle operations leave the prior recording and all its pins intact. These
+// observers perform no function lookup, queue synchronization or w/Dx12 virtual-command-buffer handling.
+template <size_t S>
+VkResult VKAPI_CALL hkRecordingAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* info,
+                                                      VkCommandBuffer* buffers)
+{
+    const VkResult result = g_recordingAllocate.next[S](device, info, buffers);
+    if (result == VK_SUCCESS && info != nullptr && buffers != nullptr)
+    {
+        try
+        {
+            std::vector<DlssNr::VkRecording::Handle> handles;
+            handles.reserve(info->commandBufferCount);
+            for (uint32_t i = 0; i < info->commandBufferCount; ++i)
+                handles.push_back(H(buffers[i]));
+            DlssNr::VkRecording::Recordings().Allocate(H(device), H(info->commandPool), handles);
+        }
+        catch (const std::bad_alloc&)
+        {
+            // Preserve driver success; unregistered buffers cannot admit NR work.
+        }
+    }
+    return result;
+}
+
+template <size_t S>
+VkResult VKAPI_CALL hkRecordingBeginCommandBuffer(VkCommandBuffer buffer, const VkCommandBufferBeginInfo* info)
+{
+    const VkResult result = g_recordingBegin.next[S](buffer, info);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().Begin(H(buffer));
+    return result;
+}
+
+template <size_t S> VkResult VKAPI_CALL hkRecordingEndCommandBuffer(VkCommandBuffer buffer)
+{
+    const VkResult result = g_recordingEnd.next[S](buffer);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().End(H(buffer));
+    return result;
+}
+
+template <size_t S>
+VkResult VKAPI_CALL hkRecordingResetCommandBuffer(VkCommandBuffer buffer, VkCommandBufferResetFlags flags)
+{
+    const VkResult result = g_recordingReset.next[S](buffer, flags);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().Reset(H(buffer));
+    return result;
+}
+
+template <size_t S>
+void VKAPI_CALL hkRecordingFreeCommandBuffers(VkDevice device, VkCommandPool pool, uint32_t count,
+                                              const VkCommandBuffer* buffers)
+{
+    g_recordingFree.next[S](device, pool, count, buffers);
+    if (buffers != nullptr)
+        DlssNr::VkRecording::Recordings().Free(H(device), H(pool), count,
+                                               [buffers](std::size_t i) noexcept { return H(buffers[i]); });
+}
+
+template <size_t S>
+VkResult VKAPI_CALL hkRecordingResetCommandPool(VkDevice device, VkCommandPool pool, VkCommandPoolResetFlags flags)
+{
+    const VkResult result = g_recordingResetPool.next[S](device, pool, flags);
+    if (result == VK_SUCCESS)
+        DlssNr::VkRecording::Recordings().ResetPool(H(device), H(pool));
+    return result;
+}
+
+template <size_t S>
+void VKAPI_CALL hkRecordingDestroyCommandPool(VkDevice device, VkCommandPool pool,
+                                              const VkAllocationCallbacks* allocator)
+{
+    g_recordingDestroyPool.next[S](device, pool, allocator);
+    DlssNr::VkRecording::Recordings().DestroyPool(H(device), H(pool));
+}
+
 static_assert(kTargets == 4, "the slot tables below list four instantiations");
 #define DLSSNR_VK_SLOTS(hook)                                                                                          \
     std::array<void*, kTargets> { (void*) &hook<0>, (void*) &hook<1>, (void*) &hook<2>, (void*) &hook<3> }
@@ -3290,6 +3404,14 @@ const std::array<void*, kTargets> kSubmitHooks = DLSSNR_VK_SLOTS(hkQueueSubmit);
 const std::array<void*, kTargets> kSubmit2Hooks = DLSSNR_VK_SLOTS(hkQueueSubmit2);
 const std::array<void*, kTargets> kBindSparseHooks = DLSSNR_VK_SLOTS(hkQueueBindSparse);
 const std::array<void*, kTargets> kWaitIdleHooks = DLSSNR_VK_SLOTS(hkQueueWaitIdle);
+
+const std::array<void*, kTargets> kRecordingAllocateHooks = DLSSNR_VK_SLOTS(hkRecordingAllocateCommandBuffers);
+const std::array<void*, kTargets> kRecordingBeginHooks = DLSSNR_VK_SLOTS(hkRecordingBeginCommandBuffer);
+const std::array<void*, kTargets> kRecordingEndHooks = DLSSNR_VK_SLOTS(hkRecordingEndCommandBuffer);
+const std::array<void*, kTargets> kRecordingResetHooks = DLSSNR_VK_SLOTS(hkRecordingResetCommandBuffer);
+const std::array<void*, kTargets> kRecordingFreeHooks = DLSSNR_VK_SLOTS(hkRecordingFreeCommandBuffers);
+const std::array<void*, kTargets> kRecordingResetPoolHooks = DLSSNR_VK_SLOTS(hkRecordingResetCommandPool);
+const std::array<void*, kTargets> kRecordingDestroyPoolHooks = DLSSNR_VK_SLOTS(hkRecordingDestroyCommandPool);
 
 #undef DLSSNR_VK_SLOTS
 
@@ -3353,6 +3475,13 @@ void HookDevice(VkDevice device)
     const QueueCallTargets submit2Khr = QueueCall(device, "vkQueueSubmit2KHR");
     const QueueCallTargets bindSparse = QueueCall(device, "vkQueueBindSparse");
     const QueueCallTargets waitIdle = QueueCall(device, "vkQueueWaitIdle");
+    const QueueCallTargets recordingAllocate = QueueCall(device, "vkAllocateCommandBuffers");
+    const QueueCallTargets recordingBegin = QueueCall(device, "vkBeginCommandBuffer");
+    const QueueCallTargets recordingEnd = QueueCall(device, "vkEndCommandBuffer");
+    const QueueCallTargets recordingReset = QueueCall(device, "vkResetCommandBuffer");
+    const QueueCallTargets recordingFree = QueueCall(device, "vkFreeCommandBuffers");
+    const QueueCallTargets recordingResetPool = QueueCall(device, "vkResetCommandPool");
+    const QueueCallTargets recordingDestroyPool = QueueCall(device, "vkDestroyCommandPool");
 
     std::lock_guard lock(g_installMutex);
     AttachTarget(g_destroyDevice, kDestroyDeviceHooks, destroyDevice, "vkDestroyDevice");
@@ -3368,6 +3497,13 @@ void HookDevice(VkDevice device)
     AttachQueueCall(submit2Khr, g_submit2, kSubmit2Hooks, "vkQueueSubmit2KHR");
     AttachQueueCall(bindSparse, g_bindSparse, kBindSparseHooks, "vkQueueBindSparse");
     AttachQueueCall(waitIdle, g_waitIdle, kWaitIdleHooks, "vkQueueWaitIdle");
+    AttachQueueCall(recordingAllocate, g_recordingAllocate, kRecordingAllocateHooks, "vkAllocateCommandBuffers");
+    AttachQueueCall(recordingBegin, g_recordingBegin, kRecordingBeginHooks, "vkBeginCommandBuffer");
+    AttachQueueCall(recordingEnd, g_recordingEnd, kRecordingEndHooks, "vkEndCommandBuffer");
+    AttachQueueCall(recordingReset, g_recordingReset, kRecordingResetHooks, "vkResetCommandBuffer");
+    AttachQueueCall(recordingFree, g_recordingFree, kRecordingFreeHooks, "vkFreeCommandBuffers");
+    AttachQueueCall(recordingResetPool, g_recordingResetPool, kRecordingResetPoolHooks, "vkResetCommandPool");
+    AttachQueueCall(recordingDestroyPool, g_recordingDestroyPool, kRecordingDestroyPoolHooks, "vkDestroyCommandPool");
 }
 
 // At a device's swapchain creation, not at its creation: by then the bundle's own present hook, which it installs in

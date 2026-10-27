@@ -16,8 +16,8 @@
 //
 // Constants are slotted rather than overwritten. A single mapped uniform buffer would be wrong here:
 // encode and resolve run in the same frame with different constants, and the second write would land
-// before the first dispatch had read it. The buffer holds a ring of slots and each dispatch takes the
-// next, at an offset the device's own alignment rule allows.
+// before the first dispatch had read it. Slots are reserved before frame recording and stay immutable
+// until that command-buffer recording is reset or freed. Capacity exhaustion records no frame work.
 //
 // Layouts are the caller's to declare and this pass's to respect. It never guesses what state an
 // image arrived in.
@@ -25,6 +25,7 @@
 #include "SysUtils.h"
 #include <shaders/Shader_Vk.h>
 #include "DlssNr_Common.h"
+#include <dlssnr/DlssNr_VkRecording.h>
 
 class DlssNr_Vk : public Shader_Vk
 {
@@ -35,14 +36,13 @@ class DlssNr_Vk : public Shader_Vk
     static constexpr uint32_t kSlots = kSlotsPerFrame * kFramesInFlight;
 
     VkDeviceSize _slotStride = 0; // sizeof(DlssNrConstants), rounded up to the device's alignment
-    uint32_t _slot = 0;           // next slot to hand out, wrapping
+    DlssNr::VkRecording::SlotPool _slots { kSlots };
 
     // Stands in for a resource a given mode does not read. One pixel, never sampled for its content,
     // present only because Vulkan will not accept an unwritten binding.
     VkImage _dummyImage = VK_NULL_HANDLE;
     VkDeviceMemory _dummyMemory = VK_NULL_HANDLE;
     VkImageView _dummyView = VK_NULL_HANDLE;
-    bool _dummyReady = false;
 
     bool CreateDummy(VkCommandBuffer cmdList);
 
@@ -51,12 +51,33 @@ class DlssNr_Vk : public Shader_Vk
                           VkImageLayout sourceLayout, VkImageLayout motionLayout);
 
   public:
+    struct Batch
+    {
+        std::shared_ptr<DlssNr::VkRecording::SlotPool::Lease> lease;
+        VkCommandBuffer commandBuffer;
+        const DlssNr_Vk* owner;
+        DlssNr::VkRecording::Ticket ticket;
+        uint32_t next = 0;
+
+        Batch(std::shared_ptr<DlssNr::VkRecording::SlotPool::Lease> slots, VkCommandBuffer cmd, const DlssNr_Vk* pass,
+              DlssNr::VkRecording::Ticket recording)
+            : lease(std::move(slots)), commandBuffer(cmd), owner(pass), ticket(recording)
+        {
+        }
+        Batch(const Batch&) = delete;
+        Batch& operator=(const Batch&) = delete;
+        Batch(Batch&&) = default;
+        Batch& operator=(Batch&&) = default;
+    };
+
+    // Reserve the whole frame before its first command; the registry retains the lease through End/submission.
+    std::optional<Batch> Reserve(VkCommandBuffer cmd, uint32_t count);
+
     DlssNr_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InPhysicalDevice);
     ~DlssNr_Vk();
 
-    // The placeholder's one-time setup (its move into GENERAL), recorded into a command buffer of the caller's ahead of
-    // any dispatch, so the first dispatch records none. The Vulkan present host's model builder records it into its
-    // own buffer and waits for it; the after-upscale route leaves it to its first dispatch, as before.
+    // Allocate the placeholder and record its GENERAL transition. Every recording establishes its layout;
+    // a CPU flag cannot prove that an earlier recording was submitted rather than discarded.
     bool Prepare(VkCommandBuffer InCmdList) { return CreateDummy(InCmdList); }
 
     // One dispatch of the composition shader.
@@ -72,7 +93,7 @@ class DlssNr_Vk : public Shader_Vk
     //
     // The default is what a resource read by a compute shader is normally in, and is what every slot
     // holding one of our own images uses.
-    bool Dispatch(VkCommandBuffer InCmdList, const DlssNrConstants& InConstants, uint32_t InThreadsX,
+    bool Dispatch(VkCommandBuffer InCmdList, Batch& batch, const DlssNrConstants& InConstants, uint32_t InThreadsX,
                   uint32_t InThreadsY, VkImageView InSource, VkImageView InModel, VkImageView InOriginal,
                   VkImageView InMotion, VkImageView InTarget, VkImageView InKeep,
                   VkImageLayout InSourceLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

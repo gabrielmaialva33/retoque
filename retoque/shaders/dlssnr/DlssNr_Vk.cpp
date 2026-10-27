@@ -120,9 +120,6 @@ DlssNr_Vk::~DlssNr_Vk()
 // whichever mode is running.
 bool DlssNr_Vk::CreateDummy(VkCommandBuffer cmdList)
 {
-    if (_dummyReady)
-        return true;
-
     if (_dummyImage == VK_NULL_HANDLE)
     {
         VkImageCreateInfo info {};
@@ -174,12 +171,14 @@ bool DlssNr_Vk::CreateDummy(VkCommandBuffer cmdList)
         }
     }
 
-    // GENERAL satisfies both a sampled read and a storage write, so the placeholder can stand in for
-    // either kind of slot without ever changing layout again.
+    if (_dummyView == VK_NULL_HANDLE || _dummyMemory == VK_NULL_HANDLE)
+        return false;
+
+    // Its contents are irrelevant. Establish GENERAL in every recording: a previous recording may
+    // have been discarded, and an executable recording may be submitted again.
     VkImageSubresourceRange range { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
     SetImageLayout(cmdList, _dummyImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, range);
 
-    _dummyReady = true;
     return true;
 }
 
@@ -230,12 +229,39 @@ void DlssNr_Vk::WriteDescriptors(VkDescriptorSet set, VkDeviceSize constantOffse
     vkUpdateDescriptorSets(_device, (uint32_t) (sizeof(writes) / sizeof(writes[0])), writes, 0, nullptr);
 }
 
-bool DlssNr_Vk::Dispatch(VkCommandBuffer InCmdList, const DlssNrConstants& InConstants, uint32_t InThreadsX,
-                         uint32_t InThreadsY, VkImageView InSource, VkImageView InModel, VkImageView InOriginal,
-                         VkImageView InMotion, VkImageView InTarget, VkImageView InKeep, VkImageLayout InSourceLayout,
-                         VkImageLayout InMotionLayout)
+std::optional<DlssNr_Vk::Batch> DlssNr_Vk::Reserve(VkCommandBuffer cmd, uint32_t count)
 {
-    if (!CanRender() || InCmdList == VK_NULL_HANDLE)
+    if (!CanRender() || cmd == VK_NULL_HANDLE)
+        return std::nullopt;
+    auto& recordings = DlssNr::VkRecording::Recordings();
+    const auto ticket = recordings.Current((uint64_t) _device, (uint64_t) cmd);
+    if (!ticket)
+        return std::nullopt;
+    auto lease = _slots.Acquire(count);
+    if (!lease)
+        return std::nullopt;
+    try
+    {
+        if (!recordings.Pin(*ticket, { lease }))
+            return std::nullopt;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return std::nullopt;
+    }
+    return Batch(std::move(lease), cmd, this, *ticket);
+}
+
+bool DlssNr_Vk::Dispatch(VkCommandBuffer InCmdList, Batch& batch, const DlssNrConstants& InConstants,
+                         uint32_t InThreadsX, uint32_t InThreadsY, VkImageView InSource, VkImageView InModel,
+                         VkImageView InOriginal, VkImageView InMotion, VkImageView InTarget, VkImageView InKeep,
+                         VkImageLayout InSourceLayout, VkImageLayout InMotionLayout)
+{
+    if (!CanRender() || InCmdList == VK_NULL_HANDLE || batch.owner != this || batch.commandBuffer != InCmdList ||
+        !batch.lease || batch.next >= batch.lease->slots.size())
+        return false;
+    const auto current = DlssNr::VkRecording::Recordings().Current((uint64_t) _device, (uint64_t) InCmdList);
+    if (!current || current->epoch != batch.ticket.epoch)
         return false;
 
     if (InTarget == VK_NULL_HANDLE)
@@ -247,8 +273,7 @@ bool DlssNr_Vk::Dispatch(VkCommandBuffer InCmdList, const DlssNrConstants& InCon
     if (!CreateDummy(InCmdList))
         return false;
 
-    const uint32_t slot = _slot;
-    _slot = (_slot + 1) % kSlots;
+    const uint32_t slot = batch.lease->slots[batch.next++];
 
     const VkDeviceSize offset = _slotStride * slot;
     std::memcpy((char*) _mappedConstantBuffer + offset, &InConstants, sizeof(DlssNrConstants));
