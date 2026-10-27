@@ -123,9 +123,97 @@ DXGI_FORMAT TypedGuideFormat(DXGI_FORMAT f)
 
 bool IsTypeless(DXGI_FORMAT f) { return TypedGuideFormat(f) != f; }
 
+// Device-child queries return a temporary reference; the session owner is retained separately.
+bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)
+{
+    if (device == nullptr || child == nullptr)
+        return false;
+    ID3D12Device* owner = nullptr;
+    const HRESULT hr = child->GetDevice(IID_PPV_ARGS(&owner));
+    const bool matches = SUCCEEDED(hr) && owner == device;
+    if (owner != nullptr)
+        owner->Release();
+    return matches;
+}
+
+// Only the typeless guide families translated above are admitted for a typed twin.
+// Different typed alternatives in one family remain reusable (e.g. R32_FLOAT / D32_FLOAT).
+DXGI_FORMAT GuideCopyFamily(DXGI_FORMAT format)
+{
+    switch (format)
+    {
+    case DXGI_FORMAT_R32_TYPELESS:
+    case DXGI_FORMAT_R32_FLOAT:
+    case DXGI_FORMAT_D32_FLOAT:
+        return DXGI_FORMAT_R32_TYPELESS;
+    case DXGI_FORMAT_R16_TYPELESS:
+    case DXGI_FORMAT_R16_UNORM:
+    case DXGI_FORMAT_R16_FLOAT:
+        return DXGI_FORMAT_R16_TYPELESS;
+    case DXGI_FORMAT_R24G8_TYPELESS:
+    case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+        return DXGI_FORMAT_R24G8_TYPELESS;
+    case DXGI_FORMAT_R32G8X24_TYPELESS:
+    case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+        return DXGI_FORMAT_R32G8X24_TYPELESS;
+    case DXGI_FORMAT_R32G32_TYPELESS:
+    case DXGI_FORMAT_R32G32_FLOAT:
+        return DXGI_FORMAT_R32G32_TYPELESS;
+    case DXGI_FORMAT_R16G16_TYPELESS:
+    case DXGI_FORMAT_R16G16_FLOAT:
+        return DXGI_FORMAT_R16G16_TYPELESS;
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+        return DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:
+        return DXGI_FORMAT_R16G16B16A16_TYPELESS;
+    default:
+        return DXGI_FORMAT_UNKNOWN;
+    }
+}
+
+bool GuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source, const D3D12_RESOURCE_DESC& clone)
+{
+    if (device == nullptr || source.Dimension != clone.Dimension || source.Width != clone.Width ||
+        source.Height != clone.Height || source.DepthOrArraySize != clone.DepthOrArraySize ||
+        source.MipLevels != clone.MipLevels || source.SampleDesc.Count == 0 ||
+        source.SampleDesc.Count != clone.SampleDesc.Count || source.SampleDesc.Quality != clone.SampleDesc.Quality)
+        return false;
+    const DXGI_FORMAT family = GuideCopyFamily(source.Format);
+    if (family == DXGI_FORMAT_UNKNOWN || family != GuideCopyFamily(clone.Format))
+        return false;
+    D3D12_FEATURE_DATA_FORMAT_INFO srcInfo { source.Format }, dstInfo { clone.Format };
+    return SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO, &srcInfo, sizeof(srcInfo))) &&
+           SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO, &dstInfo, sizeof(dstInfo))) &&
+           srcInfo.PlaneCount != 0 && srcInfo.PlaneCount == dstInfo.PlaneCount;
+}
+
+// The present ring copies only mip zero of depth plane zero (not stencil), using
+// CopyTextureRegion with a null box and destination origin zero. The donor can have
+// additional mips/planes; their numeric subresource indices are deliberately not reused.
+bool PresentGuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source,
+                                const D3D12_RESOURCE_DESC& clone)
+{
+    if (device == nullptr || source.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
+        clone.Dimension != source.Dimension || source.Width == 0 || source.Height == 0 || clone.Width != source.Width ||
+        clone.Height != source.Height || source.DepthOrArraySize != 1 || clone.DepthOrArraySize != 1 ||
+        source.MipLevels == 0 || clone.MipLevels != 1 || source.SampleDesc.Count != 1 || clone.SampleDesc.Count != 1 ||
+        source.SampleDesc.Quality != 0 || clone.SampleDesc.Quality != 0 || source.Format == DXGI_FORMAT_UNKNOWN ||
+        source.Format != clone.Format)
+        return false;
+    D3D12_FEATURE_DATA_FORMAT_INFO info { source.Format };
+    return SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO, &info, sizeof(info))) &&
+           info.PlaneCount != 0;
+}
+
 // Creates a typed twin of a guide buffer, matching everything but the format.
 ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source)
 {
+    if (!DeviceChildBelongsTo(device, source))
+        return nullptr;
     const D3D12_RESOURCE_DESC src = source->GetDesc();
 
     // More than one candidate, because the obvious typed member of a family is not always a format a
@@ -142,11 +230,9 @@ ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source)
     {
     case DXGI_FORMAT_R32G8X24_TYPELESS:
         candidates[count++] = DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
-        candidates[count++] = DXGI_FORMAT_R32_FLOAT;
         break;
     case DXGI_FORMAT_R24G8_TYPELESS:
         candidates[count++] = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        candidates[count++] = DXGI_FORMAT_R32_FLOAT;
         break;
     case DXGI_FORMAT_R32_TYPELESS:
         candidates[count++] = DXGI_FORMAT_D32_FLOAT;
@@ -174,6 +260,8 @@ ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source)
         // the number over made every CreateCommittedResource fail with E_INVALIDARG before the format
         // was even considered -- which is why a candidate as ordinary as R16G16B16A16_FLOAT was refused.
         desc.Alignment = 0;
+        if (!GuideCopyCompatible(device, src, desc))
+            continue;
 
         ID3D12Resource* res = nullptr;
         const HRESULT hr = device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
@@ -287,8 +375,12 @@ bool ExposureTextureUsable(ID3D12Device* device, ID3D12Resource* resource)
 ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* source,
                               ID3D12Resource** clone)
 {
-    if (source == nullptr || !IsTypeless(source->GetDesc().Format))
+    if (!DeviceChildBelongsTo(device, cmdList) || !DeviceChildBelongsTo(device, source))
+        return nullptr;
+    if (!IsTypeless(source->GetDesc().Format))
         return source;
+    if (clone == nullptr)
+        return nullptr;
 
     // A dynamic-resolution game reallocates its depth and motion vectors as the render size moves, so
     // the clone made for the old size no longer matches -- and CopyResource demands identical
@@ -302,9 +394,7 @@ ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* c
         // CopyResource needs the whole shape, not just the base extent: games can replace a guide
         // with different mips, slices or samples at the same resolution. Keep the successful candidate
         // format: comparing it with TypedGuideFormat's first choice would rebuild on every frame.
-        if (have.Dimension != want.Dimension || have.Width != want.Width || have.Height != want.Height ||
-            have.DepthOrArraySize != want.DepthOrArraySize || have.MipLevels != want.MipLevels ||
-            have.SampleDesc.Count != want.SampleDesc.Count || have.SampleDesc.Quality != want.SampleDesc.Quality)
+        if (!DeviceChildBelongsTo(device, *clone) || !GuideCopyCompatible(device, want, have))
         {
             // Retired, not released: the previous copy may still be in flight on the game's queue.
             ParkNrResource(*clone);
@@ -320,6 +410,9 @@ ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* c
 
         LOG_DEBUG("DLSS-NR cloned a typeless guide as format {}", (int) TypedGuideFormat(source->GetDesc().Format));
     }
+
+    if (!DeviceChildBelongsTo(device, *clone) || !GuideCopyCompatible(device, source->GetDesc(), (*clone)->GetDesc()))
+        return nullptr;
 
     Barrier(cmdList, source, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE);
     cmdList->CopyResource(*clone, source);

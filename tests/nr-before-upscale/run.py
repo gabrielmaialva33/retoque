@@ -23,11 +23,15 @@ def between(text, start, end):
 declaration = between(header, 'class ScopedPreUpscale\n', '\n};') + '\n};\n'
 allocation = between(source, 'ID3D12Resource* CreatePreUpscaleScratch(', '\nvoid Barrier(')
 scope = between(source, 'ScopedPreUpscale::ScopedPreUpscale(', '// The pass. Resources in,')
-compose = between(source, 'static void EnsureCompose(', 'struct PresentList\n')
+compose = between(source, 'static bool EnsureCompose(', 'struct PresentList\n')
 after = between(source, 'void EvaluateAfterUpscale(', '// ---------------------------------------------------------------------------------------------')
 coverage = between(source, 'std::mutex g_coverageMutex;', '// Everything the model is reached through.')
 resources = between(source, 'struct RestoreResourceState\n', '// The upscaler\'s own names differ')
-unit = '#include "fakes.h"\n' + coverage + allocation + resources
+internal = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12_Internal.h').read_text()
+owner = between(internal, 'struct NrDeviceOwner\n', 'extern NrDeviceOwner')
+resource_source = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12_Resources.cpp').read_text()
+child_owner = between(resource_source, 'bool DeviceChildBelongsTo(', '// Only the typeless guide families')
+unit = '#include "fakes.h"\n' + owner + 'NrDeviceOwner g_nrDeviceOwner;\n' + child_owner + coverage + allocation + resources
 spatial = between(source, 'void ReportSpatialContract(', 'DlssNrFrameInfo GatherGuideFrame(')
 unit += '\nnamespace DlssNr {\n' + declaration + spatial + compose + after + scope + '\n}\n#include "cases.h"\n'
 (OUT / 'boundary.cpp').write_text(unit)

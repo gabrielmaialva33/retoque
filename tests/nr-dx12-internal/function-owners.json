@@ -1,5 +1,5 @@
 {
-  "comment": "Split steps move whole functions out of DlssNr_Dx12.cpp. Each listed definition must exist exactly once, in its unit, and nowhere else among the renderer units.",
+  "comment": "Split steps move whole functions out of DlssNr_Dx12.cpp. Each listed definition must exist exactly once, in its unit, and nowhere else among the renderer units. The 2026-10-27 device/copy helpers are explicit additions with the same single-definition ownership requirement.",
   "owners": {
     "DlssNr_Dx12_Diagnostics.cpp": [
       "const std::string& TimingModelIdentity()\n{",
@@ -66,7 +66,11 @@
       "ID3D12Resource* GetResource(NVSDK_NGX_Parameter* params, const char* a, const char* b)\n{",
       "void RestoreResourceState::Restore()\n{",
       "RestoreResourceState::~RestoreResourceState() {",
-      "ReadResourceScope::ReadResourceScope("
+      "ReadResourceScope::ReadResourceScope(",
+      "bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)\n{",
+      "DXGI_FORMAT GuideCopyFamily(DXGI_FORMAT format)\n{",
+      "bool GuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source, const D3D12_RESOURCE_DESC& clone)\n{",
+      "bool PresentGuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source,\n                                const D3D12_RESOURCE_DESC& clone)\n{"
     ],
     "DlssNr_Dx12_Lifetime.cpp": [
       "uint32_t PostContract(unsigned int nativeWidth, unsigned int nativeHeight, uint32_t format)\n{",

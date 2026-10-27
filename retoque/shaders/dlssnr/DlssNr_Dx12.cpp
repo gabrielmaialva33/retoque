@@ -136,6 +136,7 @@ struct CoverageScope
 
 // Internal type: NrState (DlssNr_Dx12_Internal.h)
 
+NrDeviceOwner g_nrDeviceOwner;
 NrState g_nr;
 std::unique_ptr<DlssNr_Dx12> g_compose;
 
@@ -728,6 +729,19 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (depth == motion || depth == colour || depth == output || motion == colour || motion == output)
     {
         reportSkip("aliased color/output/depth/motion resources cannot be normalized safely");
+        return false;
+    }
+
+    // Before tracking, timing queries, barriers or writes: the pass and every supplied GPU
+    // object must share the cache owner's device. The borrowed timingQueue hint is unused here.
+    if (!DeviceChildBelongsTo(_device, cmdList) || !DeviceChildBelongsTo(_device, colour) ||
+        !DeviceChildBelongsTo(_device, depth) || !DeviceChildBelongsTo(_device, motion) ||
+        !DeviceChildBelongsTo(_device, output) ||
+        (frame.ExposureTexture != nullptr &&
+         !DeviceChildBelongsTo(_device, static_cast<ID3D12Resource*>(frame.ExposureTexture))) ||
+        !g_nrDeviceOwner.Accept(_device))
+    {
+        reportSkip("NR device changed or inputs belong to another device; restart the process before enabling NR");
         return false;
     }
 
@@ -3476,7 +3490,7 @@ DlssNr::PresentGuides::Ring Dx12Internal::g_presentGuideRing;
 // = 1, SampleDesc.Count = 1.
 static ID3D12Resource* CreatePresentGuideClone(ID3D12Device* device, ID3D12Resource* source)
 {
-    if (device == nullptr || source == nullptr)
+    if (!DeviceChildBelongsTo(device, source))
         return nullptr;
 
     const D3D12_RESOURCE_DESC src = source->GetDesc();
@@ -3496,6 +3510,9 @@ static ID3D12Resource* CreatePresentGuideClone(ID3D12Device* device, ID3D12Resou
     desc.Flags &= ~(D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS);
     desc.DepthOrArraySize = 1;
     desc.SampleDesc.Count = 1;
+
+    if (!PresentGuideCopyCompatible(device, src, desc))
+        return nullptr;
 
     ID3D12Resource* res = nullptr;
     const HRESULT hr =
@@ -3895,12 +3912,28 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
     if (FAILED(depth->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
         return false;
 
+    if (!DeviceChildBelongsTo(device, cmdList) || !DeviceChildBelongsTo(device, motion))
+    {
+        device->Release();
+        return false;
+    }
+
     const auto depthDesc = depth->GetDesc();
     const auto motionDesc = motion->GetDesc();
 
     if (depthDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || depthDesc.DepthOrArraySize != 1 ||
         depthDesc.SampleDesc.Count != 1 || motionDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
         motionDesc.DepthOrArraySize != 1 || motionDesc.SampleDesc.Count != 1)
+    {
+        device->Release();
+        return false;
+    }
+
+    auto depthCopyDesc = depthDesc;
+    auto motionCopyDesc = motionDesc;
+    depthCopyDesc.MipLevels = motionCopyDesc.MipLevels = 1;
+    if (!PresentGuideCopyCompatible(device, depthDesc, depthCopyDesc) ||
+        !PresentGuideCopyCompatible(device, motionDesc, motionCopyDesc))
     {
         device->Release();
         return false;
@@ -3977,7 +4010,17 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         clone.motion = CreatePresentGuideClone(device, motion);
 
     clone.deviceIdentity = devId;
+    const bool copyCompatible = clone.depth != nullptr && clone.motion != nullptr &&
+                                DeviceChildBelongsTo(device, clone.depth) &&
+                                DeviceChildBelongsTo(device, clone.motion) &&
+                                PresentGuideCopyCompatible(device, depthDesc, clone.depth->GetDesc()) &&
+                                PresentGuideCopyCompatible(device, motionDesc, clone.motion->GetDesc());
     device->Release();
+    if (clone.depth != nullptr && clone.motion != nullptr && !copyCompatible)
+    {
+        g_presentGuideRing.InvalidateSlot(slot);
+        return false;
+    }
 
     if (clone.depth == nullptr || clone.motion == nullptr)
     {
@@ -4123,12 +4166,14 @@ unsigned long long BridgePresentedExtent() { return g_bridgePresentedExtent.load
 // The pass object, built once on the device the first frame arrives on. Four routes reach for it and
 // two of them run on the present thread, so the build holds the lock: two threads each building one
 // would leak the first and hand a caller an object the other has replaced.
-static void EnsureCompose(ID3D12Device* device)
+static bool EnsureCompose(ID3D12Device* device)
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
-
+    if (!g_nrDeviceOwner.Accept(device))
+        return false;
     if (g_compose == nullptr)
         g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering", device);
+    return g_compose != nullptr;
 }
 
 // Internal type: PresentList (DlssNr_Dx12_Internal.h)
@@ -4777,13 +4822,11 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         return;
     }
 
-    EnsureCompose(device);
-
-    if (g_compose == nullptr)
+    if (!DeviceChildBelongsTo(device, queue) || !EnsureCompose(device))
     {
         backbuffer->Release();
         device->Release();
-        ReportSkipOnce("the pass could not be created");
+        ReportSkipOnce("the present queue or composition cache belongs to another device");
         return;
     }
 
@@ -5454,13 +5497,16 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     }
 
     // The pass is the object, so the caller holds it. Built once, on the device the frame is on.
-    EnsureCompose(device);
-
+    const bool composeReady = DeviceChildBelongsTo(device, cmdList) && DeviceChildBelongsTo(device, depth) &&
+                              DeviceChildBelongsTo(device, motion) &&
+                              (frame.ExposureTexture == nullptr ||
+                               DeviceChildBelongsTo(device, static_cast<ID3D12Resource*>(frame.ExposureTexture))) &&
+                              EnsureCompose(device);
     device->Release();
 
-    if (g_compose == nullptr)
+    if (!composeReady)
     {
-        coverage.sample.reason = "composition pass unavailable";
+        coverage.sample.reason = "composition device unavailable or changed";
         g_upscaleReason = coverage.sample.reason;
         ReportSkipOnce("the pass could not be created");
         return;
@@ -6003,13 +6049,16 @@ bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colou
         return answer(false, "the colour belongs to no D3D12 device");
     }
 
-    EnsureCompose(device);
-
+    const bool composeReady = DeviceChildBelongsTo(device, cmdList) && DeviceChildBelongsTo(device, depth) &&
+                              DeviceChildBelongsTo(device, motion) &&
+                              (frame.ExposureTexture == nullptr ||
+                               DeviceChildBelongsTo(device, static_cast<ID3D12Resource*>(frame.ExposureTexture))) &&
+                              EnsureCompose(device);
     device->Release();
 
-    if (g_compose == nullptr)
+    if (!composeReady)
     {
-        ReportSkipOnce("the pass could not be created for the present host");
+        ReportSkipOnce("the present host inputs or composition cache belong to another device");
         return answer(false, "the composition pass could not be built");
     }
 
@@ -6256,6 +6305,13 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
 
     {
         std::lock_guard<std::mutex> lock(g_nrMutex);
+        if (!DeviceChildBelongsTo(device, cmdList) || !DeviceChildBelongsTo(device, depth) ||
+            !DeviceChildBelongsTo(device, motion) || !g_nrDeviceOwner.Accept(device))
+        {
+            device->Release();
+            report("before the upscaler: inputs or NR caches belong to another device; restart the process");
+            return;
+        }
         AdvanceNrClock();
 
         const auto requested = cfg.GetDlssNrPassSnapshot();
@@ -6323,6 +6379,13 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         decline("before the upscaler: aliased color, guide or exposure inputs are unsupported");
         return;
     }
+    if (frame.ExposureTexture != nullptr &&
+        !DeviceChildBelongsTo(device, static_cast<ID3D12Resource*>(frame.ExposureTexture)))
+    {
+        device->Release();
+        report("before the upscaler: exposure belongs to another device");
+        return;
+    }
     if (!ExposureTextureUsable(device, static_cast<ID3D12Resource*>(frame.ExposureTexture)))
         frame.ExposureTexture = nullptr;
     frame.OutputState = (int) D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -6372,12 +6435,16 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
     };
     // Each game resource is restored even on a build/skip/failed dispatch. ReadableGuide sees the
     // NPSR state it expects; the upscaler receives its original configured arrival states afterward.
+    if (!EnsureCompose(device))
+    {
+        device->Release();
+        report("before the upscaler: composition device changed");
+        return;
+    }
     ReadScope colorRead(cmdList, colour, colourRest);
     ReadScope depthRead(cmdList, depth, depthRest);
     ReadScope motionRead(cmdList, motion, motionRest);
     ReadScope exposureRead(cmdList, static_cast<ID3D12Resource*>(frame.ExposureTexture), exposureRest);
-
-    EnsureCompose(device);
 
     device->Release();
 

@@ -41,6 +41,36 @@ class DlssNr_PresentHdr_Dx12;
 
 namespace DlssNr::Dx12Internal
 {
+// The renderer has process-session caches beyond g_compose. Hold their first device alive,
+// and refuse a different device rather than disposing resources still referenced by GPU work.
+// Access is serialized by g_nrMutex. Shutdown does not authorize rebinding those caches.
+struct NrDeviceOwner
+{
+    ID3D12Device* device = nullptr;
+    NrDeviceOwner() = default;
+    NrDeviceOwner(const NrDeviceOwner&) = delete;
+    NrDeviceOwner& operator=(const NrDeviceOwner&) = delete;
+    ~NrDeviceOwner() { Reset(); }
+    bool Accept(ID3D12Device* candidate)
+    {
+        if (candidate == nullptr || (device != nullptr && device != candidate))
+            return false;
+        if (device == nullptr)
+        {
+            candidate->AddRef();
+            device = candidate;
+        }
+        return true;
+    }
+    void Reset()
+    {
+        if (device != nullptr)
+            device->Release();
+        device = nullptr;
+    }
+};
+extern NrDeviceOwner g_nrDeviceOwner;
+
 struct NrEnlarger
 {
     DlssNr::PrivateSr::Feature feature;
@@ -680,6 +710,11 @@ void Barrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* res, D3D12_RESO
              D3D12_RESOURCE_STATES to);
 DXGI_FORMAT TypedGuideFormat(DXGI_FORMAT f);
 bool IsTypeless(DXGI_FORMAT f);
+bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child);
+DXGI_FORMAT GuideCopyFamily(DXGI_FORMAT format);
+bool GuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source, const D3D12_RESOURCE_DESC& clone);
+bool PresentGuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source,
+                                const D3D12_RESOURCE_DESC& clone);
 ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source);
 bool ExposureTextureUsable(ID3D12Device* device, ID3D12Resource* resource);
 ID3D12Resource* ReadableGuide(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList, ID3D12Resource* source,

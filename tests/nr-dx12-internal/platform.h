@@ -2,6 +2,7 @@
 // Identity/link fixture only: platform/domain behavior is deliberately not simulated.
 #include <cstdint>
 #include <cstddef>
+#include <cassert>
 #define __cdecl
 class Config;
 // Declared only: the diagnostics helpers (split step 6) take and return these by reference or value.
@@ -33,7 +34,20 @@ enum class Scaler
 {
     Count
 };
-struct ID3D12Device;
+struct ID3D12Device
+{
+    unsigned refs = 1;
+    unsigned AddRef() { return ++refs; }
+    unsigned Release()
+    {
+        assert(refs != 0);
+        return --refs;
+    }
+};
+struct ID3D12DeviceChild
+{
+};
+struct D3D12_RESOURCE_DESC;
 struct ID3D12GraphicsCommandList;
 struct ID3D12Resource;
 struct ID3D12CommandAllocator;

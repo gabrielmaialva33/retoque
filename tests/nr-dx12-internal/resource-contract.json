@@ -7,13 +7,24 @@
     "Barrier": "4d82330e6ae07cc202bb568694678b8d8adb776c9aebd715593ba32ca255eaa5",
     "TypedGuideFormat": "2530c900ca5ea0a52ad5102798540dec135ea5bf4ec986281fd2bfb6526a03ee",
     "IsTypeless": "3d88470f95bd3dab462f553042f423721386472df9ff01fd9d2bb0c914631fee",
-    "CreateGuideClone": "553d676962d216248f1439ab121d36a75ff237f9a7fe40cd00c33db76da0ca89",
+    "CreateGuideClone": "dc01b8998bf1ae9ff869b36f32c5cfa826b449d23f08aeb75e354c18cb18507b",
     "ExposureTextureUsable": "cecc4d996beb84691592fcd3f06e1984a4e22f8d3c0ba49f0589065be7383ca0",
-    "ReadableGuide": "5fa9efb26e6cc945ba77d304cc4a03b52dcc3a36c7c54d21675afd220399d08c",
+    "ReadableGuide": "ac1cc09316d945e54ad116c5fd1368bcbc421f2a5d1e9b7e8a7f7647e803b612",
     "FormatCanHoldLinearHdr": "e91b8547dbadb4b6e7ce6c80927543ced0e5cd09e0e3ac8bdd47201fc0940f7c",
-    "GetResource": "6f8d570c6591846259c8da786362c7cfe1ce873a01fcd7a2fa403026aaa7baa2"
+    "GetResource": "6f8d570c6591846259c8da786362c7cfe1ce873a01fcd7a2fa403026aaa7baa2",
+    "DeviceChildBelongsTo": "f817a4c99ca4dbb51b61193c4591b4fea2e118436c11fedae70bca7ee82a8ea2",
+    "GuideCopyFamily": "401cce55d2c52a0c4a62c6dd0b6bd8312c66900f9445763bc8b6c0b40e4e7817",
+    "GuideCopyCompatible": "d4e60fe3af8c44fc06975ac39d12cce38bc4dba443032d746d0f553f27c1a1ec",
+    "PresentGuideCopyCompatible": "7a9e57c45d3fb6e48973f2bc01ae578b296fddc7738edbaa3e85b76b3e8f5aad"
   },
   "updates": {
-    "ReadableGuide": "2026-10-23: full CopyResource shape checks; behavior exercised by nr-guide-copy-contract"
+    "ReadableGuide": "2026-10-23: full CopyResource shape checks; behavior exercised by nr-guide-copy-contract; 2026-10-27: source/list/clone device checks, family-aware cache reuse and explicit full-copy compatibility before recording; nr-guide-copy-contract.",
+    "CreateGuideClone": "2026-10-27: refuse foreign owner and incompatible family/planes/sample descriptor; remove packed-depth-to-R32_FLOAT fallbacks. Behavioral RED/GREEN: nr-guide-copy-contract."
+  },
+  "extensions": {
+    "DeviceChildBelongsTo": "2026-10-27: new explicit device/guide-copy contract; exercised by nr-guide-copy-contract, not part of the extraction baseline.",
+    "GuideCopyFamily": "2026-10-27: new explicit device/guide-copy contract; exercised by nr-guide-copy-contract, not part of the extraction baseline.",
+    "GuideCopyCompatible": "2026-10-27: new explicit device/guide-copy contract; exercised by nr-guide-copy-contract, not part of the extraction baseline.",
+    "PresentGuideCopyCompatible": "2026-10-27: new explicit device/guide-copy contract; exercised by nr-guide-copy-contract, not part of the extraction baseline."
   }
 }

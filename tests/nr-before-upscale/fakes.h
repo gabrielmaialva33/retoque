@@ -22,9 +22,11 @@
 // Vulkan/D3D12/NGX execution is intentionally not simulated as a performance or GPU-safety claim.
 inline std::vector<std::string> infoLogs;
 #define LOG_INFO(...) infoLogs.push_back(fmt::format(__VA_ARGS__))
-#define LOG_DEBUG(...) ((void)0)
+#define LOG_DEBUG(...) ((void) 0)
 #define FAILED(x) ((x) < 0)
+#define SUCCEEDED(x) ((x) >= 0)
 #define IID_PPV_ARGS(x) (x)
+using HRESULT = int;
 using D3D12_RESOURCE_STATES = int;
 using DXGI_FORMAT = int;
 constexpr int NVSDK_NGX_Result_Success = 1;
@@ -82,25 +84,50 @@ struct D3D12_RESOURCE_DESC
     uint64_t Width = 1280;
     unsigned Height = 720, DepthOrArraySize = 1, MipLevels = 1;
     DXGI_FORMAT Format = 1;
-    struct { unsigned Count = 1, Quality = 0; } SampleDesc;
+    struct
+    {
+        unsigned Count = 1, Quality = 0;
+    } SampleDesc;
     int Layout = 0, Flags = 0;
 };
-struct D3D12_HEAP_PROPERTIES { int Type; };
-struct D3D12_FEATURE_DATA_FORMAT_SUPPORT { int Format; int Support1 = 0, Support2 = 0; };
+struct D3D12_HEAP_PROPERTIES
+{
+    int Type;
+};
+struct D3D12_FEATURE_DATA_FORMAT_SUPPORT
+{
+    int Format;
+    int Support1 = 0, Support2 = 0;
+};
 struct ID3D12Device;
-struct ID3D12Resource
+struct ID3D12DeviceChild
+{
+    virtual int GetDevice(ID3D12Device**) = 0;
+    virtual ~ID3D12DeviceChild() = default;
+};
+struct ID3D12Resource : ID3D12DeviceChild
 {
     D3D12_RESOURCE_DESC desc;
     ID3D12Device* device;
     int state = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    ID3D12Resource(D3D12_RESOURCE_DESC d = {}, ID3D12Device* owner = nullptr,
+                   int initialState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
+        : desc(d), device(owner), state(initialState)
+    {
+    }
     D3D12_RESOURCE_DESC GetDesc() { return desc; }
-    int GetDevice(ID3D12Device** out) { *out = device; return 0; }
+    int GetDevice(ID3D12Device** out) override
+    {
+        *out = device;
+        return device ? 0 : -1;
+    }
 };
 struct ID3D12Device
 {
     bool allocationFails = false, formatSupported = true;
     unsigned allocations = 0;
     std::vector<std::unique_ptr<ID3D12Resource>> owned;
+    void AddRef() {}
     void Release() {}
     int CheckFeatureSupport(int, D3D12_FEATURE_DATA_FORMAT_SUPPORT* s, size_t)
     {
@@ -108,18 +135,28 @@ struct ID3D12Device
         s->Support2 = formatSupported ? 1 : 0;
         return 0;
     }
-    int CreateCommittedResource(D3D12_HEAP_PROPERTIES*, int, D3D12_RESOURCE_DESC* desc, int state,
-                                void*, ID3D12Resource** out)
+    int CreateCommittedResource(D3D12_HEAP_PROPERTIES*, int, D3D12_RESOURCE_DESC* desc, int state, void*,
+                                ID3D12Resource** out)
     {
         ++allocations;
-        if (allocationFails) { *out = nullptr; return -1; }
-        owned.push_back(std::make_unique<ID3D12Resource>(ID3D12Resource{*desc, this, state}));
+        if (allocationFails)
+        {
+            *out = nullptr;
+            return -1;
+        }
+        owned.push_back(std::make_unique<ID3D12Resource>(ID3D12Resource { *desc, this, state }));
         *out = owned.back().get();
         return 0;
     }
 };
-struct ID3D12GraphicsCommandList
+struct ID3D12GraphicsCommandList : ID3D12DeviceChild
 {
+    ID3D12Device* device = nullptr;
+    int GetDevice(ID3D12Device** out) override
+    {
+        *out = device;
+        return device ? 0 : -1;
+    }
     unsigned barriers = 0;
     void CopyResource(ID3D12Resource* dst, ID3D12Resource* src)
     {
@@ -127,10 +164,21 @@ struct ID3D12GraphicsCommandList
         assert(dst->desc.Width == src->desc.Width && dst->desc.Height == src->desc.Height);
     }
 };
-struct ID3D12CommandQueue {};
+// Format/plane policy is extracted and tested with CreateGuideClone in nr-guide-copy-contract.
+// This boundary harness supplies its existing small format vocabulary and checks state restoration.
+bool GuideCopyCompatible(ID3D12Device*, const D3D12_RESOURCE_DESC& a, const D3D12_RESOURCE_DESC& b)
+{
+    return a.Dimension == b.Dimension && a.Width == b.Width && a.Height == b.Height &&
+           a.DepthOrArraySize == b.DepthOrArraySize && a.MipLevels == b.MipLevels &&
+           a.SampleDesc.Count == b.SampleDesc.Count && a.SampleDesc.Quality == b.SampleDesc.Quality;
+}
+struct ID3D12CommandQueue
+{
+};
 void Barrier(ID3D12GraphicsCommandList* cmd, ID3D12Resource* r, int from, int to)
 {
-    if (from == to) return;
+    if (from == to)
+        return;
     assert(r->state == from && "barrier did not match tracked resource state");
     if (to == D3D12_RESOURCE_STATE_RENDER_TARGET)
         assert(r->desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
@@ -141,9 +189,11 @@ bool IsTypeless(int format) { return format == 99; }
 int TypedGuideFormat(int) { return 1; }
 ID3D12Resource* CreateGuideClone(ID3D12Device* device, ID3D12Resource* source)
 {
-    if (device->allocationFails) return nullptr;
-    auto desc = source->desc; desc.Format = 1;
-    device->owned.push_back(std::make_unique<ID3D12Resource>(ID3D12Resource{desc, device, 32}));
+    if (device->allocationFails)
+        return nullptr;
+    auto desc = source->desc;
+    desc.Format = 1;
+    device->owned.push_back(std::make_unique<ID3D12Resource>(ID3D12Resource { desc, device, 32 }));
     return device->owned.back().get();
 }
 
@@ -154,19 +204,49 @@ struct NVSDK_NGX_Parameter
     std::unordered_map<std::string, unsigned> numbers;
     unsigned sets = 0, gets = 0;
     int Get(const char* k, ID3D12Resource** out)
-    { ++gets; if (!typed.count(k)) return 0; *out = typed[k]; return 1; }
+    {
+        ++gets;
+        if (!typed.count(k))
+            return 0;
+        *out = typed[k];
+        return 1;
+    }
     int Get(const char* k, void** out)
-    { ++gets; if (!untyped.count(k)) return 0; *out = untyped[k]; return 1; }
+    {
+        ++gets;
+        if (!untyped.count(k))
+            return 0;
+        *out = untyped[k];
+        return 1;
+    }
     int Get(const char* k, unsigned* out)
-    { ++gets; if (!numbers.count(k)) return 0; *out = numbers[k]; return 1; }
-    void Set(const char* k, ID3D12Resource* r) { ++sets; typed[k] = r; }
-    void Set(const char* k, void* r) { ++sets; untyped[k] = r; }
+    {
+        ++gets;
+        if (!numbers.count(k))
+            return 0;
+        *out = numbers[k];
+        return 1;
+    }
+    void Set(const char* k, ID3D12Resource* r)
+    {
+        ++sets;
+        typed[k] = r;
+    }
+    void Set(const char* k, void* r)
+    {
+        ++sets;
+        untyped[k] = r;
+    }
 };
 #include "retoque/dlssnr/DlssNr_RenderSize.h"
-template<typename T> struct Option : std::optional<T>
+template <typename T> struct Option : std::optional<T>
 {
-    T value_or_default() const { return this->value_or(T{}); }
-    Option& operator=(T v) { this->emplace(v); return *this; }
+    T value_or_default() const { return this->value_or(T {}); }
+    Option& operator=(T v)
+    {
+        this->emplace(v);
+        return *this;
+    }
 };
 struct Config
 {
@@ -176,10 +256,17 @@ struct Config
     Option<uint32_t> DlssNrHookMethod;
     Option<int> ColorResourceBarrier, DepthResourceBarrier, MVResourceBarrier, ExposureResourceBarrier;
     DlssNrPassSnapshot GetDlssNrPassSnapshot() const { return {}; }
-    static Config* Instance() { static Config cfg; return &cfg; }
+    static Config* Instance()
+    {
+        static Config cfg;
+        return &cfg;
+    }
 };
-struct DlssNrFrameInfo {
-    int OutputState = -1; void* ExposureTexture = nullptr; bool AfterRayReconstruction = false;
+struct DlssNrFrameInfo
+{
+    int OutputState = -1;
+    void* ExposureTexture = nullptr;
+    bool AfterRayReconstruction = false;
     unsigned DisplayWidth = 0, DisplayHeight = 0;
     bool MotionVectorsLowResolution = false;
 };
@@ -191,22 +278,29 @@ struct DlssNr_Dx12
     static inline unsigned calls = 0;
     static inline DlssNrFrameInfo lastFrame;
     DlssNr_Dx12(const char*, ID3D12Device*) {}
-    bool Dispatch(ID3D12GraphicsCommandList*, ID3D12Resource* color, ID3D12Resource* depth,
-                  ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
-                  ID3D12CommandQueue*, DlssNr::Detail::CoverageSample* coverage = nullptr, DlssNr::Chain::RecordingLease* = nullptr)
+    bool Dispatch(ID3D12GraphicsCommandList*, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
+                  ID3D12Resource* output, const DlssNrFrameInfo& frame, ID3D12CommandQueue*,
+                  DlssNr::Detail::CoverageSample* coverage = nullptr, DlssNr::Chain::RecordingLease* = nullptr)
     {
         ++calls;
         lastFrame = frame;
-        if (coverage && modelCalled) coverage->ModelResult(modelResult, 1280, 720);
+        if (coverage && modelCalled)
+            coverage->ModelResult(modelResult, 1280, 720);
         if (color != output)
         {
             assert(color->state == 1 && depth->state == 1 && motion->state == 1 && output->state == 2);
-            if (frame.ExposureTexture) assert(static_cast<ID3D12Resource*>(frame.ExposureTexture)->state == 1);
+            if (frame.ExposureTexture)
+                assert(static_cast<ID3D12Resource*>(frame.ExposureTexture)->state == 1);
         }
         return writes;
     }
 };
-struct PreUpscaleState { ID3D12Resource* scratch = nullptr; unsigned width = 0, height = 0; int format = 0; } g_pre;
+struct PreUpscaleState
+{
+    ID3D12Resource* scratch = nullptr;
+    unsigned width = 0, height = 0;
+    int format = 0;
+} g_pre;
 std::mutex g_preMutex, g_nrMutex;
 DlssNr::Detail::StableExtent g_preExtent;
 ID3D12Device* g_preDevice = nullptr;
@@ -224,19 +318,27 @@ bool TrackNrRecording(ID3D12GraphicsCommandList*, const DlssNrPassSnapshot&, Dls
     ++trackingCalls;
     return trackingAccepted;
 }
-std::atomic<const char*> g_preStatus{ "" };
+std::atomic<const char*> g_preStatus { "" };
 std::unique_ptr<DlssNr_Dx12> g_compose;
 void ParkNrResource(ID3D12Resource*& r) { r = nullptr; } // Device fixture owns retired resources.
 void ReportSkipOnce(const char*) {}
 ID3D12Resource* GetResource(NVSDK_NGX_Parameter* p, const char* name, const char*)
-{ ID3D12Resource* r = nullptr; p->Get(name, &r); return r; }
+{
+    ID3D12Resource* r = nullptr;
+    p->Get(name, &r);
+    return r;
+}
 using ApiUpscalerInput = int;
 const char* ApiUpscalerInputName(int) { return "test"; }
 struct State
 {
     int currentInputApiName = 0;
     uint64_t frameCount = 100;
-    static State& Instance() { static State s; return s; }
+    static State& Instance()
+    {
+        static State s;
+        return s;
+    }
 };
 namespace DlssNr
 {
@@ -249,13 +351,18 @@ DlssNrFrameInfo GatherFrame(NVSDK_NGX_Parameter* p)
     DlssNrFrameInfo f;
     p->Get("Exposure", &f.ExposureTexture);
     const auto display = DlssNr::GetDisplaySize(p);
-    f.DisplayWidth = display.width; f.DisplayHeight = display.height;
-    unsigned flags = 0; p->Get("Flags", &flags);
+    f.DisplayWidth = display.width;
+    f.DisplayHeight = display.height;
+    unsigned flags = 0;
+    p->Get("Flags", &flags);
     f.MotionVectorsLowResolution = (flags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
     return f;
 }
 
-struct TemporalFakeState { bool valid = false; };
+struct TemporalFakeState
+{
+    bool valid = false;
+};
 inline TemporalFakeState g_temporal;
 inline std::atomic<bool> g_temporalValid { false };
 inline bool presentHookLive = false;
@@ -280,7 +387,10 @@ inline std::atomic<const char*> g_upscaleReason { nullptr };
 inline std::atomic<unsigned long long> g_passesRecorded { 0 };
 // Set by every entry point that finds NR switched off; the next Dispatch turns it into a model reset.
 inline std::atomic<bool> g_resetOnReturn { false };
-struct NrFakeState { bool reset = false; };
+struct NrFakeState
+{
+    bool reset = false;
+};
 inline NrFakeState g_nr;
 // DlssNr_WorkingScale.cpp resolves auto for the GPU the pass runs on. There is no GPU here, so auto is
 // 1.0, which is what it resolves to on Ada and on anything unidentified.
@@ -289,11 +399,23 @@ inline float WorkingScale()
     const auto& scale = Config::Instance()->DlssNrWorkingScale;
     return scale.has_value() ? *scale : 1.0f;
 }
-}
+} // namespace DlssNr
 
-namespace DlssNr::GpuTiming { inline void SetEnabled(bool) {} }
+namespace DlssNr::GpuTiming
+{
+inline void SetEnabled(bool) {}
+} // namespace DlssNr::GpuTiming
 // The session guard's Windows layer (DlssNr_Session.cpp) is not part of this harness.
-namespace DlssNr { inline void SessionGuardOff() {} inline void SessionGuardEvaluated() {} }
+namespace DlssNr
+{
+inline void SessionGuardOff() {}
+inline void SessionGuardEvaluated() {}
+} // namespace DlssNr
 // The replay recorder is never asked for here: Poll is the idle relaxed load and the frame is never described.
-namespace DlssNr::ReplayRecorder { inline int polls = 0; inline void Poll() { ++polls; } inline bool Wanted() { return false; } }
+namespace DlssNr::ReplayRecorder
+{
+inline int polls = 0;
+inline void Poll() { ++polls; }
+inline bool Wanted() { return false; }
+} // namespace DlssNr::ReplayRecorder
 template <class... Args> inline void RecordReplayFrame(Args&&...) { std::abort(); }

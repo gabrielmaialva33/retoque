@@ -24,10 +24,20 @@ assert 'using namespace' not in header
 assert 'namespace DlssNr::Dx12Internal\n{' in source
 assert 'namespace DlssNr::Dx12Internal\n{' in header
 names = re.findall(r'^extern .*?\b(g_\w+)', header, re.M)
-assert names == contract['names'], 'shared state declarations changed/order drifted'
+extensions = contract.get('extensions', [])
+extension_names = [entry['name'] for entry in extensions]
+assert len(extension_names) == len(set(extension_names))
+assert not set(extension_names) & set(contract['names'])
+assert [name for name in names if name not in extension_names] == contract['names'], \
+    'baseline shared state declarations changed/order drifted'
+assert set(names) == set(contract['names']) | set(extension_names), 'unregistered shared state extension'
+for extension in extensions:
+    assert header.count(extension['declaration']) == 1, 'extension declaration changed'
+    assert names.index(extension['name']) < names.index(extension['declaration_before'])
 assert len(names) == len(set(names))
 # Check actual definitions in original order, with original initializers. Skip function bodies.
 definitions = []
+baseline_definitions = []
 seen = []
 for match in re.finditer(r"^[A-Za-z_][^\n]*?\bg_\w+[\s\S]*?;", source, re.M):
     line = match[0]
@@ -40,9 +50,17 @@ for match in re.finditer(r"^[A-Za-z_][^\n]*?\bg_\w+[\s\S]*?;", source, re.M):
     line = line.split(';')[0] + ';'
     definitions.append(line.replace('Dx12Internal::', ''))
     seen.extend(found)
-assert seen == names, f'missing/duplicate/reordered owner definition: {set(names)-set(seen)}, {set(seen)-set(names)}; count {len(seen)} / {len(names)}'
+    if not set(found) & set(extension_names):
+        baseline_definitions.append(definitions[-1])
+assert len(seen) == len(names) and len(seen) == len(set(seen)) and set(seen) == set(names), \
+    f'missing/duplicate owner definition: {set(names)-set(seen)}, {set(seen)-set(names)}; count {len(seen)} / {len(names)}'
+assert [name for name in seen if name not in extension_names] == contract['names'], \
+    'baseline owner definition order drifted'
+for extension in extensions:
+    assert definitions.count(extension['definition']) == 1, 'extension owner definition changed'
+    assert seen.index(extension['definition_after']) < seen.index(extension['name']) < seen.index(extension['definition_before'])
 normalize = lambda s: re.sub(r'\s+', '', s)
-digest = hashlib.sha256(normalize('\n'.join(definitions)).encode()).hexdigest()
+digest = hashlib.sha256(normalize('\n'.join(baseline_definitions)).encode()).hexdigest()
 assert digest == contract['initializers_sha256'], 'shared initializers changed from pre-refactor'
 
 with tempfile.TemporaryDirectory(prefix='nr-dx12-internal-') as tmp:
@@ -66,6 +84,10 @@ const void* address_{letter}(unsigned i) {{
     static const void* values[] = {{ {address} }};
     return values[i];
 }}
+bool admit_owner_{letter}(ID3D12Device* device) {{
+    std::lock_guard<std::mutex> lock(g_nrMutex);
+    return g_nrDeviceOwner.Accept(device);
+}}
 void mutate_{letter}() {{
     std::lock_guard<std::mutex> lock(g_nrMutex);
     ++g_cadenceEvaluations;
@@ -81,12 +103,20 @@ void mutate_{letter}() {{
 using namespace DlssNr::Dx12Internal;
 const void* address_a(unsigned); const void* address_b(unsigned);
 void mutate_a(); void mutate_b();
+bool admit_owner_a(ID3D12Device*); bool admit_owner_b(ID3D12Device*);
 int main() {{
     const void* expected[] = {{ {address} }};
     for (unsigned i = 0; i < {len(names)}; ++i) {{
         assert(address_a(i) == expected[i]);
         assert(address_b(i) == expected[i]);
     }}
+    ID3D12Device device, other;
+    assert(g_nrDeviceOwner.device == nullptr);
+    assert(admit_owner_a(&device) && device.refs == 2);
+    assert(admit_owner_b(&device) && device.refs == 2);
+    assert(!admit_owner_b(&other) && other.refs == 1 && g_nrDeviceOwner.device == &device);
+    g_nrDeviceOwner.Reset();
+    assert(device.refs == 1 && other.refs == 1);
     const auto evals = g_cadenceEvaluations, generation = g_nrScratchGeneration;
     mutate_a(); mutate_b();
     assert(g_cadenceEvaluations == evals + 2 && g_nrScratchGeneration == generation + 2);
@@ -109,10 +139,12 @@ int main() {{
     negative = subprocess.run(flags + objects[1:] + ['-o', str(out / 'missing-owner')], capture_output=True,
                               env=c_locale)
     assert negative.returncode != 0 and b'undefined reference' in negative.stderr
+    assert b'g_nrDeviceOwner' in negative.stderr, 'new owner must require the owner TU'
     # A second owner must likewise be diagnosed, not hidden by internal/inline linkage.
     negative = subprocess.run(flags + objects + [objects[0], '-o', str(out / 'duplicate-owner')], capture_output=True,
                               env=c_locale)
     assert negative.returncode != 0 and b'multiple definition' in negative.stderr
+    assert b'g_nrDeviceOwner' in negative.stderr, 'new owner must reject duplicate storage'
 
 # Functions moved out of the main unit: one definition each, in the unit that owns it (function-owners.json).
 from nr_sources import renderer_paths  # noqa: E402
@@ -125,7 +157,7 @@ for unit, signatures in owners.items():
         homes = [name for name, text in units.items() if signature in text]
         assert homes == [unit] and units[unit].count(signature) == 1, f'{signature!r} defined in {homes}, not once in {unit}'
         moved += 1
-print(f'PASS: {len(names)} shared objects, separate-TU identity/mutations, missing/duplicate owner controls; '
+print(f'PASS: {len(contract["names"])} baseline + {len(extension_names)} explicit extension shared objects, separate-TU identity/mutations, missing/duplicate owner controls; '
       f'{moved} moved functions defined once in their owning unit')
 
 # Resource extraction contract: same helper definitions, allowing clang-format whitespace only.
@@ -143,4 +175,4 @@ for name, expected in resource_contract['definitions'].items():
     assert actual == expected, f'{name} changed from {resource_contract["base"]}'
 assert 'uint64_t g_nrScratchGeneration = 1;' in units['DlssNr_Dx12.cpp']
 assert 'bool DescriptorReuseAvailable()' in units['DlssNr_Dx12.cpp']
-print('PASS: resource helper bodies preserved; scratch generation/descriptor reuse remain in core')
+print('PASS: resource helper baselines and explicit hardening updates pinned; scratch generation/descriptor reuse remain in core')

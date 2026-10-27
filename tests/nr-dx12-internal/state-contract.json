@@ -98,5 +98,16 @@
     "g_presentHdrWhiteNits",
     "g_presentHdrWhiteFromDisplay"
   ],
-  "initializers_sha256": "86edec9869a7fbde3cacd3def58d02c725414a1b8fa310257608ab0bf3b71849"
+  "initializers_sha256": "86edec9869a7fbde3cacd3def58d02c725414a1b8fa310257608ab0bf3b71849",
+  "extensions": [
+    {
+      "name": "g_nrDeviceOwner",
+      "declaration": "extern NrDeviceOwner g_nrDeviceOwner;",
+      "definition": "NrDeviceOwner g_nrDeviceOwner;",
+      "declaration_before": "g_coverageMutex",
+      "definition_after": "g_coverageLogged",
+      "definition_before": "g_nr",
+      "reason": "2026-10-27: explicitly retained first-device identity for process-session caches; defined before g_nr/g_compose so its extra reference is released after them. Does not permit hot rebinding after partial Shutdown."
+    }
+  ]
 }
