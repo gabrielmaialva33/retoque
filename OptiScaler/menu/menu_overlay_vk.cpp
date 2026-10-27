@@ -834,7 +834,7 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
             }
 
 #ifdef VULKAN_DEBUG_LAYER
-            SetVkObjectName(device, instance, VK_OBJECT_TYPE_SEMAPHORE, (UINT64) fsd, "ImGui Backbuffer Semaphore");
+            SetVkObjectName(device, instance, VK_OBJECT_TYPE_SEMAPHORE, (UINT64) *fsd, "ImGui Backbuffer Semaphore");
 #endif
         }
     }

@@ -553,8 +553,11 @@ static VkResult hkvkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, cons
             _instanceApiVersions[*pInstance] = requestedApiVersion;
         }
 
-        State::Instance().VulkanInstance = *pInstance;
-        LOG_DEBUG("State::Instance().VulkanInstance captured: {0:X}", (UINT64) State::Instance().VulkanInstance);
+        if (!State::Instance().creatingD3DDevice)
+        {
+            State::Instance().VulkanInstance = *pInstance;
+            LOG_DEBUG("State::Instance().VulkanInstance captured: {0:X}", (UINT64) State::Instance().VulkanInstance);
+        }
 
 #ifdef VULKAN_DEBUG_LAYER
         auto address = vkGetInstanceProcAddr(State::Instance().VulkanInstance, "vkCreateDebugUtilsMessengerEXT");
@@ -760,12 +763,16 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
             // Disabled to prevent unnecessary object release
             // MenuOverlayVk::DestroyVulkanObjects(false);
 
-            _PD = physicalDevice;
-            LOG_DEBUG("_PD captured: {0:X}", (UINT64) _PD);
-            _device = *pDevice;
-            LOG_DEBUG("_device captured: {0:X}", (UINT64) _device);
-            HookDevice(_device);
-            MenuOverlayVk::DeviceCreated(_device, &localCreateInfo);
+            HookDevice(*pDevice);
+
+            if (!State::Instance().creatingD3DDevice)
+            {
+                _PD = physicalDevice;
+                LOG_DEBUG("_PD captured: {0:X}", (UINT64) _PD);
+                _device = *pDevice;
+                LOG_DEBUG("_device captured: {0:X}", (UINT64) _device);
+                MenuOverlayVk::DeviceCreated(_device, &localCreateInfo);
+            }
         }
 
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
@@ -937,9 +944,9 @@ static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPres
     if (!dxgiBacked)
         DeferredRelease::Process();
 
-    // Unsure about Vulkan Reflex fps limit and if that could be causing an issue here
+    // The limit counts presented frames, the FG output presents its generated frames from the game's present
     if (!State::Instance().reflexLimitsFps && !InputCommon::can_limit_fps())
-        FrameLimit::sleep(false);
+        FrameLimit::sleep(fgPresent && fg->IsActive() && !fg->IsPaused());
 
     LOG_FUNC_RESULT(result);
     return result;
@@ -1316,9 +1323,12 @@ PFN_vkVoidFunction hkvkGetDeviceProcAddr(VkDevice device, const char* pName)
 
 void VulkanHooks::SetLowLatencySwapchain(VkSwapchainKHR swapchain)
 {
-    // The game's handle of the FG swapchain isn't a driver one, and FFX's real one has no low latency mode
-    if (auto fg = State::Instance().currentVkFG; fg != nullptr && fg->OwnsSwapchain(swapchain))
+    // FFX's handle of the FG swapchain isn't a driver one, and its real one has no low latency mode
+    if (auto fg = State::Instance().currentVkFG;
+        fg != nullptr && fg->OwnsSwapchain(swapchain) && !fg->HasDriverSwapchain())
+    {
         swapchain = VK_NULL_HANDLE;
+    }
 
     lowLatencySwapchain = swapchain;
 }

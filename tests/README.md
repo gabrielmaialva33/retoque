@@ -222,7 +222,7 @@ production headers or source slices with local fakes under AddressSanitizer and 
   or alternating with resets on swap frames, and the run comparison that reads each output in its own channel order.
   On a synthetic capture that `run_replay.load_capture` accepts. No GPU.
 - `xefg-dynamic-target` — XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, through the production
-  `XeFG_Dx12::DynamicTargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
+  `XeFG_DynamicMFG::TargetFps`) at or under the refresh rate when frame generation presents with V-Sync, at
   60/120/165 Hz and an unknown refresh rate; FGPresent's final sync interval as the V-Sync signal; both
   controllers settling on a simulated game whose generated frames over the refresh are dropped. No XeFG or DXGI.
 - `fg-dlssg-backbuffer-index` — FGPresent's DLSS-G block, sliced from `hooks/FG_Hooks.cpp`: `GetCurrentBackBufferIndex`

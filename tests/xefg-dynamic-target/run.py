@@ -19,7 +19,7 @@ def function(source, anchor):
     return source[start:end]
 
 
-target = function((XEFG / "XeFG_Dx12.cpp").read_text(), "float XeFG_Dx12::DynamicTargetFps(double nowMs)")
+target = function((XEFG / "XeFG_DynamicMFG.cpp").read_text(), "float XeFG_DynamicMFG::TargetFps(double nowMs, HWND window)")
 
 # FGPresent from its ForceVsync block to where it records the final sync interval
 hooks = (ROOT / "OptiScaler/hooks/FG_Hooks.cpp").read_text()

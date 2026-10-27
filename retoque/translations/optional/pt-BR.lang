@@ -580,3 +580,8 @@ Record replay clip	Gravar clipe de replay
 Recording: %u frames, %u written	Gravando: %u quadros, %u escritos
 Clip of %u frames written to %s (%s)	Clipe de %u quadros salvo em %s (%s)
 Records about six seconds of what the pass receives -- the upscaler's colour, depth and motion\nvectors, and the game's parameters -- into the dlssnr-replay folder beside OptiScaler, for the\noffline replay harness (tests/dlssnr-loopback --replay-nr). Nothing is recorded until pressed.\n\nAbout 50-60 MB a frame at 3440x1440: a clip is 1-4 GB. Dropping a file named\ndlssnr-capture.trigger containing the word replay asks for the same clip from outside the game.	Grava cerca de seis segundos do que o passe recebe -- a cor do upscaler, a profundidade e os vetores de\nmovimento, e os parâmetros do jogo -- na pasta dlssnr-replay ao lado do OptiScaler, para o\nharness de replay offline (tests/dlssnr-loopback --replay-nr). Nada é gravado até apertar.\n\nCerca de 50-60 MB por quadro em 3440x1440: um clipe tem 1-4 GB. Um arquivo dlssnr-capture.trigger\ncom a palavra replay pede o mesmo clipe de fora do jogo.
+# 2026-10-27: the FPS overlay's section titles from upstream's overlay rework (#1238, 5f6a2e69).
+Presets	Predefinições
+Layout	Layout
+Text	Texto
+Colors	Cores

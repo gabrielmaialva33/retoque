@@ -3,7 +3,8 @@
 `python3 tests/xefg-dynamic-target/run.py` slices two pieces of production code and compiles them with the real
 `XeFG_DynamicCount.h` and `XeFG_DynamicCap.h` under ASan/UBSan:
 
-- `XeFG_Dx12::DynamicTargetFps` (`OptiScaler/framegen/xefg/XeFG_Dx12.cpp`), which hands `FramerateTargetDMFG`,
+- `XeFG_DynamicMFG::TargetFps` (`OptiScaler/framegen/xefg/XeFG_DynamicMFG.cpp`, where upstream `c2876a76` moved
+  Dynamic MFG out of `XeFG_Dx12`), which hands `FramerateTargetDMFG`,
   `FramerateLimit`, the refresh rate and `State::fgPresentVsync` to `XeFG_DynamicTargetFps`. Cases at 60, 120 and
   165 Hz with V-Sync on and off: auto, a target above, below and at the refresh rate, an FPS cap above and below it,
   both together, and an unknown refresh rate (0), which holds nothing.

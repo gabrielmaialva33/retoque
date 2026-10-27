@@ -16,10 +16,10 @@ static float Target(float refresh, bool vsync, float set, float limit)
     Config::Instance()->FGXeFGFramerateTargetDMFG.value = set;
     Config::Instance()->FramerateLimit.value = limit;
     State::Instance().fgPresentVsync.store(vsync);
-    XeFG_Dx12 xefg;
+    XeFG_DynamicMFG xefg;
     xefg.refresh = refresh;
-    const float target = xefg.DynamicTargetFps(1000.0);
-    Check(xefg.refreshQueries <= 1, "DynamicTargetFps asks for the refresh rate at most once");
+    const float target = xefg.TargetFps(1000.0, nullptr);
+    Check(xefg.refreshQueries <= 1, "TargetFps asks for the refresh rate at most once");
     return target;
 }
 

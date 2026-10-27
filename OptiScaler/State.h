@@ -365,7 +365,7 @@ class State
     struct LoadedAsiPlugin
     {
         std::string name;
-        bool isOptiPatcher;
+        std::string version;
     };
     std::vector<LoadedAsiPlugin> loadedAsiPlugins {};
     std::mutex loadedAsiPluginsMutex;
