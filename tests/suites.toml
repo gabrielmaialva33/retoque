@@ -831,3 +831,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Vulkan recording epochs, bounded slots, production dispatch/teardown and lifecycle forwarding under sanitizers; no GPU."
+
+[fg-qualification]
+path = "fg-qualification"
+domain = "fg"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "DLSS-G x2/x3/x4 counter-window qualification, provenance gaps, explicit INI options and safe process supervision; no GPU."

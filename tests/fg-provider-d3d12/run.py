@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Full production OptiScaler + actual local DLSS-G plugin. No game and no substitute backend."""
 import argparse
+import configparser
 import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import signal
@@ -51,6 +53,8 @@ def guard():
 
 
 def execute(command, *, cwd, env, log, timeout):
+    if signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL:
+        raise RuntimeError('process supervision requires default SIGCHLD')
     print('+', ' '.join(map(str, command)), flush=True)
     with log.open('w') as stream:
         child = subprocess.Popen(list(map(str, command)), cwd=cwd, env=env, stdin=subprocess.DEVNULL,
@@ -58,16 +62,17 @@ def execute(command, *, cwd, env, log, timeout):
         try:
             return child.wait(timeout=timeout)
         except BaseException:
-            # A wrapper can exit on TERM while its compiler/Wine descendants ignore it.
-            # Always escalate the owned process group, independently of its leader's state.
+            # A completed/reaped leader no longer reserves the group's numeric ID.
+            if child.returncode is not None:
+                raise
+            # With default SIGCHLD and this fixture as sole reaper, retain that
+            # reservation through TERM/grace/KILL. Never poll/wait in the grace.
             try:
                 os.killpg(child.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
             try:
-                child.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                pass
+                time.sleep(3)
             finally:
                 try:
                     os.killpg(child.pid, signal.SIGKILL)
@@ -119,19 +124,254 @@ def judge(text):
     return result
 
 
+def build_ini(multiplier=2, *, ada_mfg_unlock=False):
+    if multiplier not in (2, 3, 4):
+        raise ValueError('multiplier must be 2, 3, or 4')
+    return ('[FrameGen]\nEnabled=auto\nFGInput=dlssg\nFGOutput=dlssg\nFGNvngxReplacement=None\n'
+            f'[DLSSG]\nInterpolationCount={multiplier-1}\nOverrideInterpolationCount=auto\n'
+            f'AdaMfgUnlock={str(ada_mfg_unlock).lower()}\nForceDMFG=false\nOverrideForceDMFG=false\n'
+            '[Menu]\nOverlayMenu=false\n[DlssNr]\nEnabled=false\n[Vulkan]\nSkipHooks=true\n'
+            '[Log]\nLogToFile=true\nLogLevel=1\n'
+            '[Spoofing]\nDxgi=false\nVulkan=false\nStreamlineSpoofing=false\n')
+
+
+def verify_staged_provenance(before, after, launch_ini, final_ini):
+    """Keep binaries immutable; account for the production INI writer's known output."""
+    if set(before) != set(after):
+        raise RuntimeError('staged runtime artifact set changed; provenance invalid')
+    changed = sorted(name for name in before if before[name] != after[name] and name != 'OptiScaler.ini')
+    if changed:
+        raise RuntimeError('staged runtime binaries changed: ' + ', '.join(changed))
+    launch_hash, final_hash = (hashlib.sha256(data).hexdigest() for data in (launch_ini, final_ini))
+    if before.get('OptiScaler.ini') != launch_hash or after.get('OptiScaler.ini') != final_hash:
+        raise RuntimeError('configuration snapshot hashes disagree; provenance invalid')
+
+    def settings(data):
+        config = configparser.ConfigParser(interpolation=None, strict=True)
+        try:
+            config.read_string(data.decode('utf-8-sig'))
+        except (UnicodeError, configparser.Error) as error:
+            raise RuntimeError('invalid runtime INI: ' + str(error)) from error
+        if config.defaults():
+            raise RuntimeError('unexpected INI defaults; provenance invalid')
+        result, sections = {}, set()
+        for section in config.sections():
+            normalized = section.casefold()
+            if normalized in sections:
+                raise RuntimeError('duplicate INI section identity; provenance invalid')
+            sections.add(normalized)
+            for key, value in config[section].items():
+                result[(normalized, key.casefold())] = value.strip()
+        return result
+
+    requested, observed = settings(launch_ini), settings(final_ini)
+    if any(observed.get(key) != value for key, value in requested.items()):
+        raise RuntimeError('explicit fixture configuration changed during execution')
+    # The production Streamline input persists these camera flags for XeFG even
+    # with DLSS-G selected. Permit only this fixture's exact observed values.
+    allowed = {('xefg', 'depthinverted'): 'false', ('xefg', 'jitteredmv'): 'auto',
+               ('xefg', 'highresmv'): 'true'}
+    added = {key: value for key, value in observed.items() if key not in requested}
+    if any(allowed.get(key) != value for key, value in added.items()):
+        raise RuntimeError('unexpected runtime configuration additions')
+    return {'launch_sha256': launch_hash, 'final_sha256': final_hash,
+            'rewritten': launch_hash != final_hash, 'explicit_settings_unchanged': True,
+            'runtime_added_settings': {'.'.join(key): value for key, value in sorted(added.items())}}
+
+
+def assess(text, multiplier=2):
+    """Keep the x2 runtime gate; qualify only complete, exact counter windows.
+
+    The SDK defines actual as presents since the preceding GetState call. Samples
+    delimit whole call intervals, so no interval is split or interpolated. Five
+    seconds is the existing moving-window method, not a tolerance on the ratio.
+    This qualifies plugin counter ratios in this fixture, never display scanout,
+    unique generated images, latency, or general support of a hardware family.
+    """
+    phases = judge(text)
+    requested = re.findall(r'^REQUEST multiplier=(\d+) generated=(\d+)$', text, re.M)
+    if (multiplier not in (2, 3, 4) or requested != [(str(multiplier), str(multiplier-1))]
+            or len(re.findall(r'^REQUEST ', text, re.M)) != 1):
+        raise RuntimeError('missing or conflicting requested multiplier record')
+    frames = [tuple(map(int, row)) for row in re.findall(
+        r'^FRAME phase=(\d+) app=(\d+) actual=(\d+) status=(\d+) max=(\d+)$', text, re.M)]
+    samples = [tuple(map(int, row)) for row in re.findall(
+        r'^SAMPLE phase=(\d+) app=(\d+) us=(\d+)$', text, re.M)]
+    baselines = [tuple(map(int, row)) for row in re.findall(
+        r'^BASELINE phase=(\d+) us=(\d+)$', text, re.M)]
+    if len(samples) != len(re.findall(r'^SAMPLE ', text, re.M)):
+        raise RuntimeError('malformed timing record')
+    if len(baselines) != len(re.findall(r'^BASELINE ', text, re.M)):
+        raise RuntimeError('malformed timing baseline')
+    if samples and [(p, a) for p, a, _ in samples] != [(r[0], r[1]) for r in frames]:
+        raise RuntimeError('incomplete, duplicate, or reordered per-call timing records')
+    if baselines and [p for p, _ in baselines] != list(range(4)):
+        raise RuntimeError('incomplete or duplicate timing baselines')
+    times = {(p, a): us for p, a, us in samples}
+    baseline = dict(baselines)
+    gpu = re.findall(r'^GPU vendor=(0x[0-9a-fA-F]+) device=(0x[0-9a-fA-F]+) '
+                     r'subsystem=(0x[0-9a-fA-F]+) revision=(\d+) '
+                     r'luid=([0-9a-fA-F]+:[0-9a-fA-F]+) description=(.+)$', text, re.M)
+    modules = re.findall(r'^MODULE role=(output_plugin|provider) path=(.+)$', text, re.M)
+    module_paths = dict(modules)
+    reasons, windows, observed, caps = [], [], [], []
+    if len(gpu) != 1 or int(gpu[0][0], 16) != 0x10de:
+        reasons.append('selected NVIDIA adapter identity is missing or ambiguous')
+    if (len(modules) != 2 or set(module_paths) != {'output_plugin', 'provider'} or
+            any(re.match(r'^[A-Za-z]:[\\/]', value) is None for value in module_paths.values())):
+        reasons.append('actual output-plugin/provider module paths are missing or ambiguous')
+    if not samples or not baselines:
+        reasons.append('per-call timing or phase baselines are missing')
+    previous_phase_end = None
+    for phase in phases:
+        index = phase['phase']
+        rows = [r for r in frames if r[0] == index]
+        if samples and baselines:
+            last = baseline[index]
+            if previous_phase_end is not None and last < previous_phase_end:
+                raise RuntimeError('phase timing moved backwards')
+            for row in rows:
+                now = times[(index, row[1])]
+                if now <= last:
+                    raise RuntimeError('non-monotonic per-call timing')
+                last = now
+            previous_phase_end = last
+        if not phase['enabled']:
+            continue
+        steady = rows[32:]
+        caps.extend(r[4] for r in steady)
+        observed.append({'phase': index, 'application_presents': phase['steady_app'],
+                         'plugin_actual_presents': phase['steady_actual'],
+                         'ratio': phase['steady_actual']/phase['steady_app']})
+        if not samples or not baselines:
+            continue
+        start = times[(index, rows[31][1])]
+        app, actual, phase_windows = 0, 0, 0
+        for row in steady:
+            app += 1
+            actual += row[2]
+            end = times[(index, row[1])]
+            if end-start >= 5_000_000:
+                windows.append({'phase': index, 'start_us': start, 'end_us': end,
+                                'application_presents': app, 'plugin_actual_presents': actual,
+                                'ratio': actual/app, 'requested_ratio_observed': actual == app*multiplier})
+                phase_windows += 1
+                if actual != app*multiplier:
+                    reasons.append(f'phase {index} complete counter window differs from requested x{multiplier}')
+                start, app, actual = end, 0, 0
+        if phase_windows == 0:
+            reasons.append(f'phase {index} has no complete five-second steady window')
+    if min(caps) < multiplier-1:
+        reasons.append('provider-reported steady cap is below the requested generated count')
+    qualification = {'status': 'INCONCLUSIVE' if reasons else 'PASS', 'reasons': reasons,
+                     'scope': 'plugin-present ratio in this fixture; no hardware-family approval',
+                     'window_method': 'whole GetState intervals spanning at least five seconds; exact integer ratio',
+                     'complete_windows': windows, 'partial_tails': 'excluded from window qualification'}
+    return {'status': 'PASS' if multiplier == 2 or not reasons else 'INCONCLUSIVE',
+            'reason': '; '.join(reasons) if multiplier != 2 else '',
+            'runtime_regression': 'PASS', 'requested_multiplier': multiplier,
+            'requested_generated_frames': multiplier-1,
+            'effective_configured_generated_frames': None,
+            'effective_configured_reason': 'GetState options parameter is input, not applied-option readback',
+            'observed_steady_ratios': observed,
+            'provider_capability': {'scope': 'real output-plugin response in this run, including configured policies',
+                                    'steady_min_generated_frames': min(caps),
+                                    'steady_max_generated_frames': max(caps)},
+            'qualification': qualification, 'phases': phases,
+            'gpu': (dict(zip(('vendor', 'device', 'subsystem', 'revision', 'luid', 'description'), gpu[0]))
+                    if len(gpu) == 1 else None),
+            'loaded_module_paths': module_paths}
+
+
+def runtime_identity(proton, module_paths, compat):
+    """Read-only host/selected-runtime identity; no GPU discovery or device mutation."""
+    cpu = {'source': '/proc/cpuinfo', 'model': None, 'logical_processors': os.cpu_count()}
+    try:
+        first = Path('/proc/cpuinfo').read_text().split('\n\n', 1)[0]
+        fields = dict(line.split(':', 1) for line in first.splitlines() if ':' in line)
+        fields = {key.strip(): value.strip() for key, value in fields.items()}
+        cpu.update(model=fields.get('model name', fields.get('Hardware')),
+                   vendor=fields.get('vendor_id'), family=fields.get('cpu family'),
+                   model_id=fields.get('model'), stepping=fields.get('stepping'))
+    except OSError as error:
+        cpu['unavailable'] = str(error)
+    def file_record(path):
+        try:
+            return {'path': str(path), 'sha256': sha(path)}
+        except OSError as error:
+            return {'path': str(path), 'sha256': None, 'unavailable': str(error)}
+    def text_record(path):
+        if not path.is_file():
+            return None
+        record = file_record(path)
+        try:
+            record['text'] = path.read_text(errors='replace').strip()
+        except OSError as error:
+            record['unavailable'] = str(error)
+        return record
+    modules = {}
+    for role, windows_path in module_paths.items():
+        normalized = windows_path.replace('\\', '/')
+        if normalized[:3].lower() == 'z:/':
+            path = Path(normalized[2:])
+        elif normalized[:3].lower() == 'c:/':
+            path = compat/'pfx/drive_c'/normalized[3:]
+        else:
+            modules[role] = {'windows_path': windows_path, 'sha256': None,
+                             'unavailable': 'module drive mapping is unknown'}
+            continue
+        modules[role] = {**file_record(path), 'windows_path': windows_path}
+    version = proton.parent/'version'
+    driver = Path('/proc/driver/nvidia/version')
+    return {'system': {'platform': platform.platform(), 'machine': platform.machine(),
+                       'kernel': platform.release(), 'python': platform.python_version()},
+            'cpu': cpu, 'proton_launcher': file_record(proton),
+            'proton_version_file': text_record(version),
+            'linux_nvidia_driver': text_record(driver),
+            'loaded_module_files': modules,
+            'scope': 'host identity, selected launcher, and module-file hashes read after execution; not a hash of mapped memory'}
+
+
+def finalize_assessment(assessment, identity):
+    """Counter evidence alone cannot qualify an unidentified runtime/driver."""
+    gaps = []
+    if not (identity.get('cpu') or {}).get('model'):
+        gaps.append('CPU identity is unavailable')
+    if not (identity.get('proton_launcher') or {}).get('sha256'):
+        gaps.append('selected Proton launcher hash is unavailable')
+    for key, label in (('proton_version_file', 'Proton runtime version'),
+                       ('linux_nvidia_driver', 'NVIDIA driver version')):
+        record = identity.get(key) or {}
+        if not isinstance(record.get('text'), str) or not record['text'].strip() or not record.get('sha256'):
+            gaps.append(f'{label} and version-file hash are unavailable')
+    modules = identity.get('loaded_module_files') or {}
+    if (set(modules) != {'provider', 'output_plugin'} or
+            any(not record.get('sha256') for record in modules.values())):
+        gaps.append('loaded-module file identity is incomplete')
+    if gaps:
+        assessment['qualification']['status'] = 'INCONCLUSIVE'
+        assessment['qualification']['reasons'].extend(gaps)
+        if assessment['requested_multiplier'] != 2:
+            assessment['status'] = 'INCONCLUSIVE'
+            assessment['reason'] = '; '.join(assessment['qualification']['reasons'])
+    return assessment
+
+
 def cleanup_self_test():
     with tempfile.TemporaryDirectory(prefix='retoque-fg-timeout-') as temporary:
         folder = Path(temporary)
         ready = folder / 'ready'
         child_code = ('import os,signal,time;from pathlib import Path;'
                       'signal.signal(signal.SIGTERM,signal.SIG_IGN);'
-                      f'Path({str(ready)!r}).write_text(str(os.getpid()));time.sleep(60)')
+                      'stat=Path("/proc/self/stat").read_text().rsplit(") ",1)[1].split();'
+                      f'Path({str(ready)!r}).write_text(str(os.getpid())+":"+stat[19]);time.sleep(60)')
         parent_code = ('import subprocess,sys,time;from pathlib import Path;'
                        f'p=subprocess.Popen([sys.executable,"-c",{child_code!r}]);'
                        f'ready=Path({str(ready)!r});'
                        '\nwhile not ready.exists(): time.sleep(.01)'
                        '\ntime.sleep(60)')
         descendant = None
+        descendant_start = None
         try:
             try:
                 execute([sys.executable, '-c', parent_code], cwd=folder, env=dict(os.environ),
@@ -142,21 +382,31 @@ def cleanup_self_test():
                 raise RuntimeError('timeout cleanup negative control did not time out')
             if not ready.is_file():
                 raise RuntimeError('timeout cleanup child never became ready')
-            descendant = int(ready.read_text())
+            descendant, descendant_start = map(int, ready.read_text().split(':'))
             stat = Path(f'/proc/{descendant}/stat')
             for _ in range(100):
-                if not stat.exists() or stat.read_text().split(') ', 1)[1].split()[0] == 'Z':
+                try:
+                    current = stat.read_text().rsplit(') ', 1)[1].split()
+                except FileNotFoundError:
+                    break
+                if current[0] == 'Z' or int(current[19]) != descendant_start:
                     break
                 time.sleep(.01)
             else:
                 raise RuntimeError('timeout left SIGTERM-ignoring descendant alive')
         finally:
             if descendant is None and ready.is_file():
-                descendant = int(ready.read_text())
+                descendant, descendant_start = map(int, ready.read_text().split(':'))
             if descendant is not None:
                 try:
-                    os.kill(descendant, signal.SIGKILL)
-                except ProcessLookupError:
+                    descriptor = os.pidfd_open(descendant)
+                    try:
+                        current = Path(f'/proc/{descendant}/stat').read_text().rsplit(') ', 1)[1].split()
+                        if current[0] != 'Z' and int(current[19]) == descendant_start:
+                            signal.pidfd_send_signal(descriptor, signal.SIGKILL)
+                    finally:
+                        os.close(descriptor)
+                except (ProcessLookupError, FileNotFoundError):
                     pass
     print('PASS: wrapper timeout kills SIGTERM-ignoring descendant (host only)')
 
@@ -191,6 +441,7 @@ def self_test():
         else:
             raise RuntimeError('judge accepted a broken evidence record')
     print('PASS: FG provider evidence judge and six negative controls (host only)')
+    subprocess.run([sys.executable, str(HERE/'test_qualification.py')], check=True)
     cleanup_self_test()
 
 
@@ -201,6 +452,10 @@ def main():
     parser.add_argument('--proton', type=Path, default=Path(os.environ['RETOQUE_PROTON']) if 'RETOQUE_PROTON' in os.environ else None)
     parser.add_argument('--dlss', type=Path, help='existing nvngx_dlss.dll required by native NGX routing')
     parser.add_argument('--strict', action='store_true', help='missing prerequisites fail instead of SKIP')
+    parser.add_argument('--multiplier', type=int, choices=(2, 3, 4), default=2,
+                        help='requested total multiplier; x3/x4 require counter qualification for top-level PASS')
+    parser.add_argument('--ada-mfg-unlock', action='store_true',
+                        help='explicitly enable the existing Ada memory unlock only in the staged fixture INI')
     parser.add_argument('--self-test', action='store_true', help='exercise only the host evidence judge')
     args = parser.parse_args()
     if args.self_test:
@@ -263,10 +518,10 @@ def main():
             raise RuntimeError('MSVC runtime missing')
         for path in redists[-1].glob('*.dll'):
             stage(path, WORK / path.name)
-        (WORK / 'OptiScaler.ini').write_text('[FrameGen]\nEnabled=auto\nFGInput=dlssg\nFGOutput=dlssg\n'
-            'FGNvngxReplacement=None\n[DLSSG]\nInterpolationCount=1\n[Menu]\nOverlayMenu=false\n'
-            '[DlssNr]\nEnabled=false\n[Vulkan]\nSkipHooks=true\n[Log]\nLogToFile=true\nLogLevel=1\n'
-            '[Spoofing]\nDxgi=false\nVulkan=false\nStreamlineSpoofing=false\n')
+        launch_ini = build_ini(args.multiplier, ada_mfg_unlock=args.ada_mfg_unlock).encode('utf-8')
+        launch_snapshot = OUT / 'OptiScaler.launch.ini'
+        launch_snapshot.write_bytes(launch_ini)
+        (WORK / 'OptiScaler.ini').write_bytes(launch_ini)
         for name in ('fg-provider.log', 'OptiScaler.log'):
             (WORK / name).unlink(missing_ok=True)
         source_hashes = {path.name: sha(path) for path in (HERE / 'harness.cpp', HERE / 'run.py')}
@@ -280,6 +535,7 @@ def main():
         if code:
             raise RuntimeError('fixture compile failed; see artifacts/build.log')
         staged_assets = {'OptiScaler.dll': sha(WORK / 'OptiScaler.dll'),
+                         'OptiScaler.ini': sha(WORK / 'OptiScaler.ini'), 'fg-provider.exe': sha(exe),
                          'nvngx_dlss.dll': sha(WORK / 'nvngx_dlss.dll'),
                          **{name: sha(WORK / 'streamline' / name) for name in DLLS},
                          **{'input/' + name: sha(WORK / 'input' / name) for name in DLLS
@@ -294,37 +550,55 @@ def main():
                    PROTON_DLSS_UPGRADE='0', PROTON_XESS_UPGRADE='0', PROTON_USE_OPTISCALER='0', PROTON_LOG='1', PROTON_LOG_DIR=str(OUT),
                    VK_LOADER_LAYERS_DISABLE='~implicit~',
                    WINEDLLOVERRIDES='vcruntime140,vcruntime140_1,msvcp140=n')
-        code = execute([proton, 'run', exe], cwd=WORK, env=env, log=OUT / 'proton.log', timeout=240)
+        launcher_hash = sha(proton)
+        code = execute([proton, 'run', exe, str(args.multiplier)], cwd=WORK, env=env, log=OUT / 'proton.log', timeout=240)
         text = (WORK / 'fg-provider.log').read_text(errors='replace') if (WORK / 'fg-provider.log').exists() else ''
         if code:
             raise RuntimeError(f'provider exited {code}; see artifacts/run/fg-provider.log and proton.log')
-        phases = judge(text)
+        assessment = assess(text, args.multiplier)
         after_assets = {'OptiScaler.dll': sha(WORK / 'OptiScaler.dll'),
+                         'OptiScaler.ini': sha(WORK / 'OptiScaler.ini'), 'fg-provider.exe': sha(exe),
                         'nvngx_dlss.dll': sha(WORK / 'nvngx_dlss.dll'),
                         **{name: sha(WORK / 'streamline' / name) for name in DLLS},
                          **{'input/' + name: sha(WORK / 'input' / name) for name in DLLS
                             if name not in ('sl.dlss_g.dll', 'nvngx_dlssg.dll')}}
         if source_hashes != {path.name: sha(path) for path in (HERE / 'harness.cpp', HERE / 'run.py')}:
             raise RuntimeError('fixture sources changed during build/run; provenance invalid')
-        if staged_assets != after_assets:
-            raise RuntimeError('staged runtime assets changed during execution; provenance invalid')
+        if sha(launch_snapshot) != staged_assets['OptiScaler.ini']:
+            raise RuntimeError('launch configuration snapshot changed; provenance invalid')
+        config_provenance = verify_staged_provenance(
+            staged_assets, after_assets, launch_ini, (WORK / 'OptiScaler.ini').read_bytes())
+        config_provenance['launch_snapshot'] = str(launch_snapshot)
+        if sha(proton) != launcher_hash:
+            raise RuntimeError('selected Proton launcher changed during execution; provenance invalid')
         opti = (WORK / 'OptiScaler.log').read_text(errors='replace')
         if 'DLSSG_Dx12::Dispatch' not in opti or 'Result: Ok' not in opti:
             raise RuntimeError('ZERO COVERAGE: production DLSS-G dispatch evidence missing')
-        result = {'status': 'PASS', 'runtime_coverage': True, 'phases': phases,
+        identity = runtime_identity(proton, assessment['loaded_module_paths'], compat)
+        assessment = finalize_assessment(assessment, identity)
+        result = {**assessment, 'runtime_coverage': True,
+                  'runtime_identity': identity, 'ada_mfg_unlock_requested': args.ada_mfg_unlock,
+                   'ini_sha256': staged_assets['OptiScaler.ini'], 'ini_final_sha256': after_assets['OptiScaler.ini'],
+                   'config_provenance': config_provenance, 'harness_sha256': staged_assets['fg-provider.exe'],
                   'dll_sha256': staged_assets['OptiScaler.dll'], 'dlss_sha256': staged_assets['nvngx_dlss.dll'],
-                  'assets': {name: staged_assets[name] for name in DLLS}, 'staged_assets_unchanged': True,
+                   'assets': {name: staged_assets[name] for name in DLLS},
+                   'staged_assets_unchanged': staged_assets == after_assets, 'staged_binaries_unchanged': True,
                   'sources': source_hashes,
                   'input_assets': {name: value for name, value in staged_assets.items() if name.startswith('input/')},
                   'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                   'dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()),
-                  'cases_not_exercised': {'mfg_above_x2': 'SKIP: this fixture requests only one generated frame; no higher-ratio hardware claim',
-                                          'menu': 'SKIP: no synthetic menu input in this fixture'},
-                  'limits': ['x2 only; no MFG hardware claim', 'plugin actual-present counters, not scanout capture',
+                  'hardware_matrix': {'status': 'PENDING', 'approval_issued': False,
+                                      'targets': [{'gpu': 'RTX 4090', 'runtime': 'Proton', 'multipliers': [2, 3, 4], 'status': 'PENDING_REVIEW'},
+                                                  {'gpu': 'RTX 3060', 'runtime': 'native Windows', 'multipliers': [2, 3, 4], 'status': 'NOT_RUN'}]},
+                  'cases_not_exercised': {'other_multipliers': [x for x in (2, 3, 4) if x != args.multiplier],
+                                         'native_windows': 'NOT_RUN: fixture launcher uses Proton',
+                                         'menu': 'SKIP: no synthetic menu input in this fixture'},
+                  'limits': ['no hardware-family approval', 'plugin actual-present counters, not scanout capture or unique generated-image proof',
                              'no perceptual-quality or latency metric', 'Proton is not native D3D12 validation',
                              'no Vulkan/D3D11/menu coverage']}
         write_result(OUT / 'result.json', result)
-        print('PASS: full production DLSS-G provider; ' + str(OUT / 'result.json'))
+        print(f"{result['status']}: provider runtime PASS; requested x{args.multiplier}; "
+              f"counter qualification {result['qualification']['status']}; {OUT / 'result.json'}")
 
 
 if __name__ == '__main__':

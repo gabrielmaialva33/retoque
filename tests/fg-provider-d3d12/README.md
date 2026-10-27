@@ -2,6 +2,8 @@
 
 ```sh
 python3 tests/fg-provider-d3d12/run.py --strict
+python3 tests/fg-provider-d3d12/run.py --strict --multiplier 3
+python3 tests/fg-provider-d3d12/run.py --strict --multiplier 4
 python3 tests/fg-provider-d3d12/run.py --self-test  # host evidence parser and rejection controls only
 ```
 
@@ -39,12 +41,94 @@ before compiling/launching; no shared wineserver reset is performed.
 
 Missing prerequisites print SKIP with `runtime_coverage=false`; `--strict` converts them to failure.
 Once the process is launched, runtime errors always fail. `result.json` records per-phase counters,
-staged asset/source hashes (checked unchanged across execution), DLL hash and repository state. The runtime log retains every frame. The host
+staged binary/source hashes (checked unchanged across execution), DLL hash and repository state. The runtime log retains every frame. The host
 self-test rejects missing oracle, no surplus, incomplete GPU completion, wrong enable state, zero disabled presents and
 missing frame records. A host timeout regression also starts a wrapper with a SIGTERM-ignoring descendant and proves the owned
 process group is killed even when its leader exits first. These checks provide no GPU evidence.
 
-This exercises native x2. Higher ratios are explicitly untested; Ada's usual max of one generated
-frame is accepted. Plugin actual-present counters are not display scanout capture or perceptual
-quality measurements. Vulkan, D3D11, menu interaction, latency and native Windows validation remain
-outside this fixture.
+## Requested and observed multipliers
+
+`--multiplier {2,3,4}` defaults to x2. The fixture requests one, two, or three generated frames
+through both the game-style options and `[DLSSG] InterpolationCount` for OptiScaler's own output.
+`OverrideInterpolationCount=auto` is intentional: that is the separate override of a game's options.
+The application records its request before startup; the parser rejects missing/conflicting requests.
+
+`AdaMfgUnlock` remains false unless `--ada-mfg-unlock` is supplied explicitly. That flag writes
+the existing option only into the staged fixture INI; the existing production feature may then
+perform its documented memory patches. No production source or provider file is patched by this
+test code, no model is downloaded, and a request does not prove that the unlock was applied.
+The provider's reported cap is recorded from the real output plugin, including any configured policies.
+
+The result separates `requested_multiplier`, `requested_generated_frames`, the observed steady
+ratios, and the provider-reported generated-frame cap. `effective_configured_generated_frames` is
+unknown: the SDK's third GetState argument supplies options and does not read back applied options.
+A cap of three permits a request for three generated frames; it does not prove x4 was observed.
+
+## Runtime regression versus counter qualification
+
+The existing surplus/status/fence checks remain the runtime regression gate. A default x2 run may
+still PASS that regression while `qualification.status` is INCONCLUSIVE. For an explicit x3/x4
+request, insufficient qualification produces top-level INCONCLUSIVE with `runtime_coverage=true`
+and `runtime_regression=PASS`; it cannot become approval of the requested ratio.
+
+The SDK defines `numFramesActuallyPresented` as the count since the preceding GetState call.
+The harness records monotonic call timestamps and a baseline per phase. Qualification groups
+whole consecutive intervals in active steady state into windows spanning at least five seconds,
+following the existing moving-window method. Each completed window must contain exactly the
+requested integer ratio of plugin presents to application presents, and the steady cap must be
+sufficient. No numerical tolerance or phase-wide average hides a degraded window. Partial tails
+are reported as excluded; they are not joined across disable/resize boundaries.
+
+This preparation preserves the current 96/48/96/96-frame schedule and 32-frame warmup. A fast run
+can be too short for a five-second steady window; that is INCONCLUSIVE qualification, not proof of
+failure or success at the requested ratio. Completing qualification in that case requires an
+explicitly longer steady phase in a subsequent fixture change, followed by a fresh run and review.
+Repeating short runs or concatenating their logs does not create a valid window.
+
+CPU/system identity is read on the host. The selected DXGI adapter is recorded by the harness,
+not inferred from the machine's name or the first device from an unrelated query. Results include
+the selected Proton launcher hash, optional version/driver records, INI and harness hashes, and
+file hashes for the observed output-plugin/provider module paths when those paths can be mapped.
+CPU identity, launcher/module hashes, and nonempty driver/runtime version records with their file
+hashes are required for qualification PASS. Unavailable records remain explicit and make
+qualification INCONCLUSIVE; no version is filled from a default or inferred from a GPU name.
+These hashes describe files read from disk; they are not hashes of mapped or patched memory.
+Staged binaries, sources and the launcher must remain byte-identical across execution.
+The production INI writer reformats its file and persists three camera flags under XeFG.
+The fixture retains the exact launch INI in `artifacts/OptiScaler.launch.ini`, hashes both
+versions and requires every explicitly requested setting to remain unchanged. Only those
+three added flags, with this scene's expected values, are permitted; other additions,
+missing settings, changed multipliers/unlock policy or changed binaries fail provenance.
+`staged_assets_unchanged` reports the literal file comparison; `staged_binaries_unchanged`
+and `config_provenance` describe the separately verified contracts.
+
+Plugin actual-present counters are not display scanout capture or proof of distinct generated
+images. Application presents are frame counts, not base FPS without a corresponding time interval.
+No input latency, image quality, GPU frame budget, game integration, Vulkan/D3D11, menu interaction,
+or native Windows validation is claimed by this fixture.
+
+## Qualification matrix: pending
+
+This table describes the prepared targets, not completed measurements of this version.
+
+| GPU | Runtime | x2 | x3 | x4 |
+|---|---|---|---|---|
+| RTX 4090, available locally | Proton | Pending | Pending | Pending |
+| RTX 3060, not available in this session | Native Windows | Not run | Not run | Not run |
+
+The result retains a pending hardware matrix and issues no hardware-family approval. This launcher
+uses Linux/Proton; it does not provide a native Windows runner. Earlier measurements documented
+elsewhere do not qualify this fixture version, a different provider hash, or an untested GPU.
+
+The host-only `test_qualification.py` exercises exact x2/x3/x4 records and rejects x4 requested with
+x2 observed, insufficient cap, short/missing timing, missing identity, conflicting requests, broken
+counters, and a phase average that hides a degraded window. Its identity tests hash temporary files.
+Those tests, including synthetic records naming a GPU, provide no GPU runtime evidence.
+
+The fixture's command cleanup requires default SIGCHLD and exclusive ownership of child reaping.
+After TERM it keeps an unreaped leader for its three-second grace, then signals KILL before wait;
+an already-reaped leader never authorizes a group signal. The host timeout self-test records its
+descendant's PID/start time and uses a pidfd only if that identity is still live, so its finalizer
+does not signal a reused PID or a completed descendant. The three sequence tests use controlled
+Popen doubles and prohibit real signals; the full `--self-test` still needs native Linux for its
+separate actual process-cleanup control.

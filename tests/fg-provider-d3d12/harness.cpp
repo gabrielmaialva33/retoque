@@ -13,6 +13,8 @@
 #include <cstdarg>
 #include <cstring>
 #include <cstdint>
+#include <cstdlib>
+#include <string>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -45,6 +47,31 @@ static void Sl(sl::Result result, const char* why)
     if (result != sl::Result::eOk)
         Say("SL_RESULT=%u\n", static_cast<unsigned>(result));
     Require(result == sl::Result::eOk, why);
+}
+static std::string Utf8(const wchar_t* value)
+{
+    const int count = WideCharToMultiByte(CP_UTF8, 0, value, -1, nullptr, 0, nullptr, nullptr);
+    if (count <= 0)
+        return "unavailable";
+    std::string result(static_cast<size_t>(count), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, value, -1, result.data(), count, nullptr, nullptr);
+    result.pop_back();
+    return result;
+}
+static uint64_t ClockUs()
+{
+    LARGE_INTEGER frequency {}, now {};
+    Require(QueryPerformanceFrequency(&frequency) && frequency.QuadPart > 0, "counter frequency");
+    Require(QueryPerformanceCounter(&now), "counter sample");
+    const auto ticks = static_cast<uint64_t>(now.QuadPart);
+    const auto rate = static_cast<uint64_t>(frequency.QuadPart);
+    return (ticks / rate) * 1000000 + (ticks % rate) * 1000000 / rate;
+}
+static void ModuleIdentity(const char* role, HMODULE module)
+{
+    wchar_t path[32768] {};
+    const auto length = module ? GetModuleFileNameW(module, path, 32768) : 0;
+    Say("MODULE role=%s path=%s\n", role, length > 0 && length < 32768 ? Utf8(path).c_str() : "unavailable");
 }
 // Read the loaded PE export directory, bypassing OptiScaler's GetProcAddress interception. No code patching.
 static FARPROC NativeExport(HMODULE module, const char* name)
@@ -108,7 +135,14 @@ struct Gpu
             Hr(adapter->GetDesc1(&desc), "adapter desc");
             if (!(desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) && desc.VendorId == 0x10de &&
                 SUCCEEDED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device))))
+            {
+                const auto luid = device->GetAdapterLuid();
+                Say("GPU vendor=0x%04x device=0x%04x subsystem=0x%08x revision=%u luid=%08lx:%08lx description=%s\n",
+                    desc.VendorId, desc.DeviceId, desc.SubSysId, desc.Revision,
+                    static_cast<unsigned long>(luid.HighPart), static_cast<unsigned long>(luid.LowPart),
+                    Utf8(desc.Description).c_str());
                 break;
+            }
         }
         Require(device != nullptr, "NVIDIA hardware D3D12 device");
         D3D12_COMMAND_QUEUE_DESC desc {};
@@ -258,11 +292,17 @@ static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPA
 {
     return DefWindowProcW(window, message, wparam, lparam);
 }
-int main()
+int main(int argc, char** argv)
 {
     logFile = fopen("fg-provider.log", "w");
     if (!logFile)
         return 1;
+    Require(argc == 1 || argc == 2, "optional multiplier argument only");
+    char* end = nullptr;
+    const auto multiplier = argc == 2 ? std::strtoul(argv[1], &end, 10) : 2ul;
+    Require((argc == 1 || (end != argv[1] && *end == '\0')) && multiplier >= 2 && multiplier <= 4,
+            "multiplier must be 2, 3, or 4");
+    Say("REQUEST multiplier=%lu generated=%lu\n", multiplier, multiplier - 1);
     Require(LoadLibraryW(L"OptiScaler.dll") != nullptr, "full OptiScaler DLL load");
     auto gameSl = LoadLibraryW(L"input\\sl.interposer.dll");
     Require(gameSl != nullptr, "game Streamline interposer load");
@@ -294,7 +334,7 @@ int main()
     Sl(feature(sl::kFeatureDLSS_G, "slDLSSGSetOptions", reinterpret_cast<void*&>(setOptions)), "game FG options bind");
     sl::DLSSGOptions options {};
     options.mode = sl::DLSSGMode::eOn;
-    options.numFramesToGenerate = 1;
+    options.numFramesToGenerate = static_cast<uint32_t>(multiplier - 1);
     Sl(setOptions(sl::ViewportHandle(0), options), "game enables FG");
     WNDCLASSW windowClass {};
     windowClass.lpfnWndProc = WindowProc;
@@ -356,6 +396,7 @@ int main()
         UINT app = 0, actual = 0, steadyApp = 0, steadyActual = 0, okStates = 0;
         sl::DLSSGState state {};
         Sl(getState(sl::ViewportHandle(0), state, nullptr), "baseline real state");
+        Say("BASELINE phase=%u us=%llu\n", phase, static_cast<unsigned long long>(ClockUs()));
         for (UINT local = 0; local < count; ++local, ++frame)
         {
             MSG message;
@@ -401,6 +442,7 @@ int main()
             gpu.Idle();
             state = {};
             Sl(getState(sl::ViewportHandle(0), state, nullptr), "real plugin state");
+            const auto sampleUs = ClockUs();
             if (state.inputsProcessingCompletionFence)
                 gpu.Wait(static_cast<ID3D12Fence*>(state.inputsProcessingCompletionFence),
                          state.lastPresentInputsProcessingCompletionFenceValue);
@@ -417,6 +459,7 @@ int main()
             }
             Say("FRAME phase=%u app=%u actual=%u status=%u max=%u\n", phase, frame, state.numFramesActuallyPresented,
                 static_cast<unsigned>(state.status), state.numFramesToGenerateMax);
+            Say("SAMPLE phase=%u app=%u us=%llu\n", phase, frame, static_cast<unsigned long long>(sampleUs));
             Sleep(8);
         }
         Say("PHASE phase=%u enabled=%u app=%u actual=%u steady_app=%u steady_actual=%u ok=%u completed=%u\n", phase,
@@ -431,6 +474,8 @@ int main()
         gpu.Idle();
     }
     Say("PASS: FG-PROVIDER app=%u actual=%u phases=4 resizes=1 oracle=real-plugin\n", totalApp, totalActual);
+    ModuleIdentity("output_plugin", output);
+    ModuleIdentity("provider", GetModuleHandleW(L"nvngx_dlssg.dll"));
     // OptiScaler and Streamline own process lifetime hooks; let normal process exit run those hooks.
     return 0;
 }
