@@ -734,6 +734,14 @@ tier = "host"
 timeout = 120
 summary = "Both FG resize hooks preserve the actual per-swapchain waitable creation flag, including creation retry."
 
+[fg-streamline-real-object]
+path = "fg-streamline-real-object"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "CheckForRealObject hands back a borrowed object: the DLSS-G factory sites and HookToDLSSGFactory leave the real factory's count unchanged over a Streamline-shaped proxy, and no caller releases what it got back."
+
 [fg-dlssg-backbuffer-index]
 path = "fg-dlssg-backbuffer-index"
 domain = "fg"

@@ -45,15 +45,12 @@ bool DLSSG_Dx12::CreateSwapchainInternal(IDXGIFactory* factory, ID3D12CommandQue
     _width = desc->BufferDesc.Width;
     _height = desc->BufferDesc.Height;
 
+    // CheckForRealObject hands back a borrowed pointer: it already released the reference its query added
     IDXGIFactory* slFactory = nullptr;
     if (!Util::CheckForRealObject(__FUNCTION__, factory, (IUnknown**) &slFactory))
     {
         StreamlineProxy::UpgradeInterface()((void**) &factory);
         DxgiFactoryHooks::HookToDLSSGFactory(factory);
-    }
-    else
-    {
-        slFactory->Release();
     }
 
     StreamlineProxy::SetFeatureLoaded()(sl::kFeatureDLSS_G, true);
@@ -142,15 +139,12 @@ bool DLSSG_Dx12::CreateSwapchain1Internal(IDXGIFactory* factory, ID3D12CommandQu
     {
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
 
+        // CheckForRealObject hands back a borrowed pointer: it already released the reference its query added
         IDXGIFactory* slFactory = nullptr;
         if (!Util::CheckForRealObject(__FUNCTION__, factory, (IUnknown**) &slFactory))
         {
             StreamlineProxy::UpgradeInterface()((void**) &factory);
             DxgiFactoryHooks::HookToDLSSGFactory(factory);
-        }
-        else
-        {
-            slFactory->Release();
         }
 
         IDXGIFactory2* factory2 = nullptr;
