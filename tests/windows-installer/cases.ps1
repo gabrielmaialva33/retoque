@@ -72,7 +72,9 @@ function Invoke-Installer([string]$Game, [string[]]$Arguments = @(), [string]$Sr
 }
 
 function Invoke-Linux([string]$Game, [string[]]$Arguments = @(), [string]$Src = '', [hashtable]$Extra = @{}) {
-    $a = @($LinuxScript)
+    # Compare the common fake release payload, independent of the host's NVIDIA Wine driver.
+    # Linux driver deployment has its own cases in tests/deploy-safety.
+    $a = @($LinuxScript, '--no-nvngx')
     if ($Src) { $a += @('--source-dir', $Src) }
     $a += $Arguments
     $a += $Game
