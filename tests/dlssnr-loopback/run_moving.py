@@ -9,7 +9,10 @@ import shutil
 import signal
 import subprocess
 import sys
-import time
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from run_all import _stop_child
 
 
 def unreadable_may_be_game(proc):
@@ -62,37 +65,18 @@ def lease(work):
 
 
 def execute(command, *, cwd, env, log, timeout):
+    if signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL:
+        raise RuntimeError("process supervision requires default SIGCHLD")
     with log.open('wb') as stream:
         child = subprocess.Popen(list(map(str, command)), cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                  stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
         try:
             return child.wait(timeout=timeout)
         except BaseException:
-            # Proton's wrapper may exit before its Wine descendants. Always signal the entire
-            # session's process group on timeout/interruption, even when the leader already exited.
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                child.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                pass
-            try:
-                os.killpg(child.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            child.wait()
-            # SIGKILL is delivered asynchronously: a descendant can still be running for a moment after
-            # the leader is reaped, and the next fixture would start beside it. Wait, bounded, until the
-            # group has no live member left (a zombie awaiting its new parent's reap still answers).
-            deadline = time.monotonic() + 2
-            while time.monotonic() < deadline:
-                try:
-                    os.killpg(child.pid, 0)
-                except ProcessLookupError:
-                    break
-                time.sleep(.01)
+            # Finish inner detached-group cleanup before the outer runner's
+            # default 4s grace expires. The shared helper keeps its leader unreaped
+            # until the final signal, and never signals a successfully reaped ID.
+            _stop_child(child, grace_seconds=2.0)
             raise
 
 

@@ -57,6 +57,7 @@ class Result:
     run_id: str | None = None
     evidence: dict | None = None
     evidence_source: str = "runner"
+    returncode: int | None = None
 
     @property
     def failed(self) -> bool:
@@ -201,7 +202,7 @@ def _group_members(group: int) -> dict[int, int]:
     return members
 
 
-def _stop_child(process: subprocess.Popen) -> None:
+def _stop_child(process: subprocess.Popen, *, grace_seconds: float = 4.0) -> None:
     # A reaped leader no longer reserves its PID/PGID for this invocation.
     if process.returncode is not None:
         return
@@ -220,7 +221,7 @@ def _stop_child(process: subprocess.Popen) -> None:
             can_observe = proc_pid == os.getpid()
         except (OSError, ValueError):
             can_observe = False
-        deadline = time.monotonic() + 4.0
+        deadline = time.monotonic() + grace_seconds
         while time.monotonic() < deadline:
             if can_observe and not _group_members(process.pid):
                 break
@@ -233,7 +234,7 @@ def _stop_child(process: subprocess.Popen) -> None:
             pass
     else:
         try:
-            process.wait(timeout=4)
+            process.wait(timeout=grace_seconds)
         except subprocess.TimeoutExpired:
             process.kill()
     process.wait(timeout=3)
@@ -270,9 +271,13 @@ def _read_result(path: pathlib.Path, run_id: str) -> dict:
 
 
 def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool,
-              *, stop: threading.Event | None = None) -> Result:
+              *, stop: threading.Event | None = None,
+              command: list[str] | None = None) -> Result:
     tier = entry["tier"]
     run_id = uuid.uuid4().hex
+    if command is not None and (not isinstance(command, list) or not command or
+                                any(not isinstance(value, str) or not value or "\0" in value for value in command)):
+        return Result(name, tier, "FAIL", 0.0, "command must be a nonempty list of nonempty strings", run_id=run_id)
     try:
         directory = suite_directory(name, entry)
         result_path = suite_result_path(directory, entry)
@@ -300,7 +305,7 @@ def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool,
     try:
         with log_path.open("wb") as log:
             process = subprocess.Popen(
-                [sys.executable, str(directory / "run.py")], cwd=ROOT,
+                command if command is not None else [sys.executable, str(directory / "run.py")], cwd=ROOT,
                 env=dict(os.environ, RETOQUE_TEST_RUN_ID=run_id),
                 stdout=None if stream else log, stderr=subprocess.STDOUT,
                 start_new_session=(os.name == "posix"), close_fds=True,
@@ -328,11 +333,12 @@ def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool,
                             "status": interrupted, "reason": note, "runtime_coverage": False,
                             "terminated_by": "suite-runner",
                         }, run_id=run_id)
-                    except ValueError as error:
-                        return Result(name, tier, "FAIL", time.monotonic() - started,
-                                      f"invalid result: {error}", log_path, run_id)
+                    except (OSError, ValueError, TypeError) as error:
+                        # A secondary receipt failure cannot erase the known
+                        # supervision outcome or permit later serial GPU work.
+                        note += f"; interruption receipt unavailable: {error}"
                 return Result(name, tier, interrupted, time.monotonic() - started,
-                              note, log_path, run_id, evidence, "runner")
+                              note, log_path, run_id, evidence, "runner", process.returncode)
             code = process.returncode
     except (OSError, subprocess.SubprocessError) as error:
         return Result(name, tier, "FAIL", time.monotonic() - started,
@@ -345,15 +351,15 @@ def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool,
         except (OSError, ValueError, TypeError) as error:
             prefix = f"exit {code}; " if code else ""
             return Result(name, tier, "FAIL", elapsed, f"{prefix}invalid result: {error}",
-                          log_path, run_id, evidence_source="process-exit")
+                          log_path, run_id, evidence_source="process-exit", returncode=code)
     source = "structured-result" if evidence is not None else "process-exit"
     if code:
-        return Result(name, tier, "FAIL", elapsed, f"exit {code}", log_path, run_id, evidence, source)
+        return Result(name, tier, "FAIL", elapsed, f"exit {code}", log_path, run_id, evidence, source, code)
     if result_path is None:
         return Result(name, tier, "PASS", elapsed, "process-exit evidence", log_path, run_id,
-                      evidence_source=source)
+                      evidence_source=source, returncode=code)
     note = evidence.get("reason") or "; ".join(map(str, evidence.get("missing", [])))
-    return Result(name, tier, evidence["status"], elapsed, str(note), log_path, run_id, evidence, source)
+    return Result(name, tier, evidence["status"], elapsed, str(note), log_path, run_id, evidence, source, code)
 
 
 def selected(manifest: dict[str, dict], args) -> list[str]:

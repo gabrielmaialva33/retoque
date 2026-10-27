@@ -64,10 +64,10 @@ jobs:
         run: python3 tests/run_all.py --list
 
       - name: Run host tier
-        run: python3 tests/run_all.py --tier host --jobs 4 --log-dir "$RUNNER_TEMP/test-logs"
+        run: python3 tests/run_all.py --tier host --jobs 4 --strict --log-dir "$RUNNER_TEMP/test-logs"
 
-      - name: Upload logs on failure
-        if: failure()
+      - name: Upload host reports and logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-logs

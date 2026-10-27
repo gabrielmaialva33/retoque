@@ -10,6 +10,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / 'tests'))
+from _suite_result import result_run
 OUT = HERE / 'artifacts'
 RUN = OUT / 'run'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
@@ -568,13 +570,15 @@ def main():
 
 
 if __name__ == '__main__':
-    if '--moving-scene' in sys.argv and '--help' not in sys.argv:
-        import run_moving
-        with run_moving.lease(OUT / 'moving-run'):
+    # Interrupt-only receipt; successful mode-specific legacy reports stay authoritative.
+    with result_run(OUT / 'interruption-result.json'):
+        if '--moving-scene' in sys.argv and '--help' not in sys.argv:
+            import run_moving
+            with run_moving.lease(OUT / 'moving-run'):
+                main()
+        elif '--replay-nr' in sys.argv and '--help' not in sys.argv:
+            import run_moving
+            with run_moving.lease(OUT / 'replay-run'):
+                main()
+        else:
             main()
-    elif '--replay-nr' in sys.argv and '--help' not in sys.argv:
-        import run_moving
-        with run_moving.lease(OUT / 'replay-run'):
-            main()
-    else:
-        main()

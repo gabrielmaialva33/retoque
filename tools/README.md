@@ -33,23 +33,37 @@ Redirect output to a file. See `tests/build-lifecycle/README.md` for regression 
 
 ## test-rendering.sh
 
-Runs the host tier with four workers, builds Release, then runs D3D12 camera/texture
-regressions, the moving-scene production NR A/B fixture, the offline replay through the
-production seam (`--replay-nr`: NR off/every/cadence/adaptive variants on one corpus) and the
-complete production DLSS-G provider fixture, in that order. Wine/GPU work is serial. Any failed check stops
-the command; missing DLSS-G prerequisites fail the combined run too.
+Runs every registered host suite in strict mode with four workers, builds Release, then runs
+D3D12 camera/texture checks, the moving-scene production NR A/B fixture, offline replay through
+the production seam, four NR Vulkan scenarios (`nr`, `nr-route-quiet`, `nr-route-quiet-wdx12`,
+`nr-route-guides`), and the complete production DLSS-G provider fixture. Wine/GPU work is serial.
+A non-PASS required step stops the sequence and leaves remaining steps as `NOT_RUN`; unavailable
+prerequisites cannot become a successful combined run.
 
 ```bash
-tools/test-rendering.sh              # complete sequence, without opening a game
-tools/test-rendering.sh --host-only  # portable host policy checks
-tools/test-rendering.sh --no-build   # use the already built x64/out DLL
+tools/test-rendering.sh                         # complete sequence, without opening a game
+tools/test-rendering.sh --host-only             # strict host checks; no GPU coverage
+tools/test-rendering.sh --no-build              # use the existing x64/out DLL pair
+tools/test-rendering.sh --fg-steady-seconds 15   # three complete FG windows per active phase
+tools/test-rendering.sh --report x64/logs/rendering.json --log-dir x64/logs/rendering
 ```
 
-Each GPU suite retains its own ignored `artifacts/` directory with logs and results.
-The model and plugin must already be available locally; the fixtures never download
-them or deploy to game directories. A passing run covers the synthetic scenarios;
-image metrics and GPU timings are measurements, not a claim of better quality or FPS.
-See [the tests index](../tests/README.md) for the individual boundaries.
+The shell entry delegates to `test-rendering.py`, which reuses the existing test runner's owned
+process supervision. Each invocation gets a unique log directory. The default consolidated report
+is `artifacts/rendering/<run-id>/summary.json`; `--report` selects another report path and
+`--log-dir` selects the parent for retained invocation logs. The receipt records exact commands,
+exit codes, original fixture outcomes, before/after DLL and forwarder hashes, copied fixture
+receipts and logs, and raw validation findings. A stale receipt, wrong case set or changed binary
+fails the combined check. The optional `--strict` flag is accepted for compatibility; this entry
+always requires complete PASS results.
+
+Each GPU suite also retains its own ignored `artifacts/` directory. Models and plugins must
+already be available locally. The Vulkan cases cover existing present/route scenarios; they do
+not supply an exposure image or request a working scale above 1, so they do not exercise the new
+meter's GPU sample path or the supersampling scaler. Focused host tests cover those lifetimes.
+Raw Vulkan validation messages remain in the report even when a fixture attributes them outside
+its pass criteria. Image metrics and GPU timings remain scenario measurements; the orchestrator
+issues no general quality or performance approval. See [the tests index](../tests/README.md).
 
 ## deploy-to-game.sh
 

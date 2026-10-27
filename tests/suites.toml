@@ -863,3 +863,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 180
 summary = "Exposure readback retirement publication, bounded slots, discard/saturation/abandonment and exact feature helpers; no GPU."
+
+[rendering-orchestration]
+path = "rendering-orchestration"
+domain = "tooling"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "Strict serial rendering evidence, binary identity, terminal reports and owned nested loopback cleanup; no GPU."

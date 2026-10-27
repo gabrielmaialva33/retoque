@@ -204,7 +204,9 @@ class RunnerResults(unittest.TestCase):
             f"(Path(__file__).parent/'artifacts').symlink_to(Path({str(outside)!r}), target_is_directory=True)\n"
             'time.sleep(60)\n')
         result = self.run_suite()
-        self.assertEqual(result.status, 'FAIL')
+        self.assertEqual(result.status, 'TIMEOUT')
+        self.assertIsInstance(result.returncode, int)
+        self.assertIn('receipt unavailable', result.note)
         self.assertEqual(external_result.read_text(), 'external evidence must survive')
 
     def test_legacy_exit_only_suite_still_runs(self):
