@@ -55,7 +55,7 @@
 ## Task 3: Integration verification and handoff to GPU work
 
 - [x] Review the complete diff independently, addressing important findings with regression tests.
-- [ ] Run all host suites with an aggregate report and inspect skipped/inconclusive counts.
+- [x] Run all host suites with an aggregate report and inspect skipped/inconclusive counts.
 - [x] If the compiler prefix and GPU are available, run one Release build through the new owned entry and the D3D12 input fixture serially.
 - [x] Record exact results and remaining hardware limits in the progress ledger.
 - [x] Continue with the separate V-06/V-02 design and tests; do not count these tooling changes as GPU lifetime fixes.
@@ -66,4 +66,6 @@ Task 1 and Task 2 share the registry and documentation and are committed as one 
 
 Native Arch: build-lifecycle 26/26; runner-results 33/33; provider evidence judge and cleanup controls pass. A real Release build completed through the new entry, then the D3D12 input fixture passed four DirectXMath cases, 64 GPU readbacks and three expected-failure controls. Its debug layer was unavailable.
 
-Full host integration selected 88 suites: 87 PASS, one FAIL in nr-replay-format because importlib loading the runner did not find its new sibling helper. The runner now establishes its sibling import path; the existing nine-case replay-format suite and all 33 runner cases pass. Repeat the complete host aggregate after the Vulkan integration; the earlier aggregate remains an honest FAIL record.
+Full host integration initially selected 88 suites: 87 PASS, one FAIL in nr-replay-format because importlib loading the runner did not find its new sibling helper. The runner now establishes its sibling import path; the existing nine-case replay-format suite and all 33 runner cases pass. A subsequent 90-suite aggregate passed before D3D12 integration; the final post-integration result follows. The earlier aggregate remains an honest FAIL record.
+
+Final integration on 2026-10-27: all 90 host suites PASS after the D3D12 structural-contract migration, with zero FAIL/SKIP/TIMEOUT/ABORTED/INCONCLUSIVE. Aggregate run ID `6ddb1a045f8d41829f08cfeff15b1b47`; detailed results and runtime limits are in `docs/superpowers/reviews/2026-10-27-rendering-hardening.md`. The earlier importer failure and later 89/1 structural-contract failure remain recorded separately.

@@ -10,4 +10,4 @@ Design: docs/dlssnr/design/vulkan-recording-lifetime.md. Work stays on fix/rende
 - [x] Gate resize, scaler changes, release and hand-back on recording quiescence, without renewing pins while waiting.
 - [x] Preserve abandoned-device behavior; prove no GPU callbacks occur after abandonment.
 - [x] Run focused behavioral and available Vulkan fixture validation, full host tests and Release build.
-- [ ] Independent review and a separate implementation commit; record actual GPU/hardware limits.
+- [x] Independent review and a separate implementation commit; record actual GPU/hardware limits. Implementation: `72c9ecd0`; verification record: `docs/superpowers/reviews/2026-10-27-rendering-hardening.md`.
