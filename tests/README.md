@@ -13,6 +13,7 @@ python3 tests/run_all.py            # the host tier, the default
 python3 tests/run_all.py --list     # registry with tiers and availability
 python3 tests/run_all.py --tier all # host and wine
 python3 tests/run_all.py --only nr-menu,nr-multipass -v
+python3 tests/run_all.py --strict --report /tmp/retoque-results.json
 python3 tests/<name>/run.py         # one suite, unchanged, no driver involved
 ```
 
@@ -29,6 +30,27 @@ check their hardware/model prerequisites. `--only` continues to use stable IDs.
 registry entry with no directory, fails the run. Add a suite and you add its
 entry, or the next run tells you.
 
+## Results and interruption
+
+Every execution writes an atomic aggregate JSON report to `<log-dir>/summary.json`, or the
+path selected by `--report`. It records the run identity, git HEAD/dirty state, selected suites,
+per-suite evidence and counts for PASS, FAIL, SKIP, TIMEOUT, ABORTED and INCONCLUSIVE.
+A selection with skips, or no selected suites, is INCONCLUSIVE overall; `--strict` makes either
+case fail the command. A suite that reports INCONCLUSIVE always causes a nonzero exit.
+
+A suite may declare `result = "artifacts/result.json"` in `suites.toml` and use
+`tests/_suite_result.py` to publish schema/version, current invocation ID and terminal status.
+The FG input and provider fixtures use this contract. Exit zero with a SKIP stays SKIP;
+missing, stale, malformed or RUNNING evidence fails. Exit failure always wins, with valid
+current evidence retained for diagnosis. Legacy suites remain process-exit evidence;
+that label does not imply every internal GPU scenario ran.
+
+SIGINT/SIGTERM and suite timeouts stop the runner's child process groups, allowing four
+seconds for fixture-owned cleanup, and persist terminal results. Fixtures own any children
+that leave their process group. The standalone FG wrappers also record handled interruption.
+An uncatchable SIGKILL or power loss can still leave a RUNNING file; it is never accepted as
+terminal evidence by a later invocation. See [runner-results](runner-results/README.md).
+
 ## Tiers
 
 | Tier | Needs | Suites |
@@ -39,7 +61,8 @@ entry, or the next run tells you.
 
 The wine tier is serial on purpose. These suites compile through the single msvc-wine
 prefix, which is also what `build-local.sh` uses, so do not start one while a
-build is running. `CLAUDE.md` has the stall signature and the recovery.
+build is running. The build entry now takes the shared lock itself; call it directly.
+`CLAUDE.md` describes the stall signature, retained evidence and manual-recovery boundary.
 
 The `fork-compat` suite exercises NGX signature redirects and independent custom library paths;
 `fg-locks` exercises the actual resize/release lock scopes when settings or the current FG change.
@@ -69,8 +92,11 @@ suite READMEs for artifact paths and limits.
   non-menu presents pass through untouched, and a surface hook that lost the race with another window's first
   create leaves that menu alone. The hidden-splash policy is a recorded expectation. No GPU.
 
-**Host tier.** 86 suites (99 total: 86 host and 13 wine; `suites.toml` is authoritative). The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
+**Host tier.** `suites.toml` is authoritative; `--list` prints the current registry. The invariant/evidence/analysis/tooling suites run Python directly; most other suites compile
 production headers or source slices with local fakes under AddressSanitizer and UndefinedBehaviorSanitizer.
+
+- `build-lifecycle` — internal compiler-prefix locking, owned child supervision, workload progress and rollback of output publication using controlled native processes. No Wine or GPU.
+- `runner-results` — structured status propagation, stale/invalid evidence, aggregate reports, timeout and interruption cleanup. No rendering runtime.
 
 - `fg-provider-evidence` — the real DLSS-G provider evidence judge rejects incomplete records and missing interpolated presentation surplus. No GPU.
 

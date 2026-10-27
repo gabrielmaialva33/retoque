@@ -139,8 +139,8 @@ commands below work as written, from any cwd. The other scripts we own (`tools/d
   **Signature** (measure CPU *deltas*; `ps` %CPU is an average since start and reads low for a
   process that worked then stalled): `MSBuild.exe` and `CL.exe` at ~0 ticks/s while `wineserver`
   spins at 50-65% of a core, the redirected log stops growing, and no new `.obj` appears.
-  **Recovery**: kill the stalled PIDs, `WINEPREFIX=~/.local/opt/msvc-wineprefix wineserver -k`,
-  then rerun — it resumes incrementally and usually completes.
+  **Historical recovery** used a prefix-wide reset and incremental rerun. The current supervisor
+  does not reset the shared prefix: retain its logs and establish ownership before any manual recovery.
   Extra args land after the script's own `/p:`, so `./build-local.sh Release /p:CL_MPCount=4`
   overrides the default if you want to try a lower count.
 - **It stalls on any translation unit, not a particular one.** Five times in a row it stopped on
@@ -166,40 +166,24 @@ commands below work as written, from any cwd. The other scripts we own (`tools/d
   process, seven minutes at zero CPU. Splitting the build does not avoid the stall. It is still
   worth doing — a stalled forwarder no longer strands a DLL that has already linked — but it is
   not a fix.
-- **What `build-local.sh` does about it now.** Two msbuild processes instead of one solution
-  build — `dlssnr_forwarder.vcxproj` first, then `OptiScaler.vcxproj` — so a stall in one does not
-  strand the other.
-  Each invocation runs under a watchdog (`run_msbuild` in the script): three 30 s samples in which
-  no process of the build — `MSBuild.exe`, the compiler front-ends, the linker — consumed any CPU
-  and the log did not grow count as a hang; the attempt is torn down, `wineserver -k` resets the
-  prefix, and the next attempt resumes incrementally, up to five times. Every manual recovery of
-  that shape completed on the first resume, which is the evidence this is built on.
-  **Two traps this already fell into.** `pgrep -f` takes an ERE, so `'\(CL\|link\)'` matches
-  literal parentheses and nothing else; that pattern shipped, and the watchdog sat silent through a
-  seven-minute stall. And the detector used to return "not stalled" whenever it saw no compiler
-  process, which fails *open*: a detector that cannot see anything reports health. It now samples
-  every build process including msbuild, and only an empty process list — the build genuinely being
-  over — counts as not-stalled. Per-invocation logs are `x64/logs/build-forwarder.log` and `x64/logs/build-optiscaler.log`;
-  watchdog events go to stderr. The original single-invocation form is in git history.
-- **Observed recovery, by hand** (before the watchdog existed): build the forwarder project on its
-  own with the original flags, then run the normal build. This is what the script now automates.
-
-```bash
-WINEPREFIX=~/.local/opt/msvc-wineprefix WINEDEBUG=-all ~/.local/opt/msvc/bin/x64/msbuild \
-  retoque/dlssnr/forwarder/dlssnr_forwarder.vcxproj /nologo /v:normal \
-  /p:Configuration=Release /p:Platform=x64 \
-  "/p:SolutionDir=Z:$(pwd | tr / '\\')\\" \
-  /p:CL_MPCount=4 /p:WholeProgramOptimization=true \
-  /p:PreBuildEventUseInBuild=false /p:PostBuildEventUseInBuild=false > /tmp/fwd.log 2>&1
-./build-local.sh Release /p:CL_MPCount=4 > /tmp/release.log 2>&1
-```
-
-  Evidence, manifests and logs: `~/.local/state/dlss5/gpu-timing-validation/1885828a/`.
-- When killing a stalled build, **use a bracket pattern**: `pgrep -f '[M]SBuild\.exe'`. A plain
-  `pgrep -f 'build-local'` matches the very shell running it, so the kill takes out your own
-  command (exit 144) and leaves the stall untouched. The bracket trick is not enough on its own
-  either: it protects against matching the *pattern text*, not against matching an ancestor
-  process. Walk `/proc/<pid>/stat` field 4 up from `$$` and skip any pid that is an ancestor.
+- **Current build lifecycle (2026-10-27).** `tools/build-local.sh` delegates to `tools/build_local.py`.
+  It locks the shared prefix before touching stamps, then builds the forwarder and OptiScaler in
+  separate owned process sessions. Busy returns 75. The lock descriptor is not inherited.
+  Ninety seconds without build-workload CPU or log growth, or a two-hour hard deadline, returns
+  124 after bounded TERM/KILL cleanup. CPU from Wine infrastructure alone is not progress.
+  Ownership comes from observed ancestry/session and process start identity; signals use pidfds.
+  Unknown processes are never selected by executable name. A descendant that escapes before
+  observation cannot be safely adopted; the supervisor does not perform a global prefix reset.
+  Logs are retained per invocation in `x64/logs/<date-pid-id>/build-{forwarder,optiscaler}.log`.
+  There is one attempt; preserve failure evidence before deciding how to recover.
+- Publication requires successful stages and both outputs; changed build stamps also require a
+  refreshed OptiScaler DLL. The output pair is prepared before either destination is replaced.
+  Replacements are individually atomic, with rollback for ordinary errors and handled signals;
+  the pair is not atomic across a hard crash or to concurrent readers. Do not deploy a failed build.
+  `tests/build-lifecycle` exercises locking, workload progress, owned cleanup and publication using
+  actual local child processes, without Wine. A real Wine build remains a separate validation.
+- The earlier stall investigations and manual-reset observations remain in git history; supporting
+  evidence is under `~/.local/state/dlss5/gpu-timing-validation/1885828a/`.
 - **Never overwrite a proxy DLL while its game is running.** `cp`/`shutil.copy2` truncate and
   rewrite the file that Wine has mapped, and the process dies minutes later somewhere unrelated
   (Cyberpunk, 2026-09-19: deploy at 13:36:04, `EXCEPTION_ACCESS_VIOLATION` at 13:37:40 inside
@@ -209,11 +193,11 @@ WINEPREFIX=~/.local/opt/msvc-wineprefix WINEDEBUG=-all ~/.local/opt/msvc/bin/x64
 - **Never pipe the script** (`./build-local.sh ... | tail`). `wineserver` daemonises and inherits
   stdout, so the pipe never reaches EOF and the output stays hidden even after the build finished —
   a success looks exactly like a hang. Redirect to a file instead.
-- **Serialise with `flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`**, the lock the wine suites and
-  `run_moving.lease` take. The `-o` matters for the same reason as the pipe: without it `wineserver`
-  inherits the lock descriptor and holds the lock after the build has finished, and the next build
-  waits on it forever (2026-10-23). The lock lives in the per-user runtime dir (tmpfs, always present
-  for the session) since 2026-10-24: under `~/.cache/retoque-wt/` it vanished with the cache cleanup.
+- **The supported build entry takes `$XDG_RUNTIME_DIR/msvc-prefix.lock` internally**, falling back
+  to `/run/user/<uid>/msvc-prefix.lock`. Call it directly; wrapping it in an external lock on that
+  same file causes an intentional busy result. Direct toolchain invocations still need the shared
+  lock with a noninherited descriptor (`flock -o`), as the Wine suites and `run_moving.lease` do.
+  The lock stays in the per-user runtime directory rather than the worktree cache.
 - The Visual Studio pre/post-build events are PowerShell and are disabled
   (`PreBuildEventUseInBuild=false`). The script writes `resource_build_date.h` and
   `resource_build_commit.h` itself. The in-game menu title shows this build id and timestamp; use it
@@ -278,15 +262,20 @@ before committing C++, because nothing local enforces it and it had drifted by 5
 
 ### Tests
 
-`tests/README.md` is the index; read it before adding or changing a suite. Ninety-nine directories under
-`tests/`, each self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
+`tests/README.md` is the index; read it before adding or changing a suite. Each suite is
+self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
 
 ```bash
-python3 tests/run_all.py            # host tier, the default; 86 suites
+python3 tests/run_all.py            # host tier, the default
 python3 tests/run_all.py --list     # registry, tiers, and what is runnable here
-python3 tests/run_all.py --tier all # adds the thirteen wine suites
+python3 tests/run_all.py --tier all # includes the wine tier
 python3 tests/<name>/run.py         # one suite, unchanged
 ```
+
+The runner writes an atomic JSON aggregate (`--report` overrides the path); `--strict` rejects
+selected suites that skip. The FG input/provider fixtures publish structured per-invocation
+results: skipped, stale or interrupted evidence cannot become PASS. Legacy suites are explicitly
+process-exit evidence. SIGINT/SIGTERM cleanup and report semantics are covered by `runner-results`.
 
 `tools/test-rendering.sh` runs the host tier, Release build and the D3D12 input, moving NR and real DLSS-G
 regressions serially, without a game. See `tools/README.md` for prerequisites and individual test limits.

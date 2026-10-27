@@ -16,6 +16,8 @@ import time
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / 'tests'))
+from _suite_result import result_run, write_result
 OUT = HERE / 'artifacts'
 WORK = OUT / 'run'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
@@ -205,7 +207,7 @@ def main():
         self_test()
         return
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / 'result.json').write_text('{"status":"RUNNING"}\n')
+    write_result(OUT / 'result.json', {'status': 'RUNNING'})
     steam = Path.home() / '.local/share/Steam'
     kit = args.kit
     if kit is None:
@@ -236,7 +238,7 @@ def main():
         missing.append('graphical session')
     if missing:
         result = {'status': 'FAIL' if args.strict else 'SKIP', 'missing': missing, 'runtime_coverage': False}
-        (OUT / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        write_result(OUT / 'result.json', result)
         print(result['status'] + ': ' + '; '.join(missing))
         if args.strict:
             raise SystemExit(1)
@@ -321,16 +323,17 @@ def main():
                   'limits': ['x2 only; no MFG hardware claim', 'plugin actual-present counters, not scanout capture',
                              'no perceptual-quality or latency metric', 'Proton is not native D3D12 validation',
                              'no Vulkan/D3D11/menu coverage']}
-        (OUT / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        write_result(OUT / 'result.json', result)
         print('PASS: full production DLSS-G provider; ' + str(OUT / 'result.json'))
 
 
 if __name__ == '__main__':
     try:
-        main()
+        with result_run(OUT / 'result.json'):
+            main()
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / 'result.json').write_text(json.dumps({'status': 'FAIL', 'runtime_coverage': False,
-                                                   'reason': str(error)}, indent=2) + '\n')
+        write_result(OUT / 'result.json', {'status': 'FAIL', 'runtime_coverage': False,
+                                          'reason': str(error)})
         print('FAIL:', error, file=sys.stderr)
         sys.exit(1)

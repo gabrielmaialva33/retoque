@@ -2,7 +2,6 @@
 """MSVC/DirectXMath and real D3D12 regression fixture, including failing mutation controls."""
 import fcntl
 import hashlib
-import json
 import os
 from pathlib import Path
 import shutil
@@ -12,6 +11,8 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT / 'tests'))
+from _suite_result import result_run, write_result
 OUT = HERE / 'artifacts'
 WORK = OUT / 'run'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
@@ -118,7 +119,7 @@ def stage(source):
 
 def main():
     WORK.mkdir(parents=True, exist_ok=True)
-    (OUT / 'result.json').write_text('{"status":"RUNNING"}\n')
+    write_result(OUT / 'result.json', {'status': 'RUNNING'})
     # One user command also retains the broader frame/lifecycle/invalid-input CPU coverage.
     for suite in ('fg-game-camera', 'fg-tag-extents'):
         subprocess.run([sys.executable, ROOT / 'tests' / suite / 'run.py'], check=True)
@@ -189,15 +190,16 @@ def main():
                   'SDK consumer is captured, no real Streamline/DLSS-G inference or generated frames',
                   'camera math is CPU DirectXMath; GPU executes the texture transport oracle',
                   'native D3D12 validation only when DEBUG_LAYER=active']}
-        (OUT / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        write_result(OUT / 'result.json', result)
         print('PASS: automated FG input regression; ' + str(OUT / 'result.json'))
 
 
 if __name__ == '__main__':
     try:
-        main()
+        with result_run(OUT / 'result.json'):
+            main()
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / 'result.json').write_text(json.dumps({'status': 'FAIL', 'reason': str(error)}, indent=2) + '\n')
+        write_result(OUT / 'result.json', {'status': 'FAIL', 'reason': str(error)})
         print('FAIL:', error, file=sys.stderr)
         sys.exit(1)

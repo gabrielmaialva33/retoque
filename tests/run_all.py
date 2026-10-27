@@ -21,32 +21,46 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import dataclasses
+from datetime import datetime, timezone
+import json
+import math
 import os
 import pathlib
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
+import threading
+import uuid
 import tomllib
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from _suite_result import atomic_json, write_result
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
 MANIFEST = TESTS / "suites.toml"
 TIERS = ("host", "wine", "wip")
+STATUSES = ("PASS", "FAIL", "SKIP", "TIMEOUT", "ABORTED", "INCONCLUSIVE")
 
 
 @dataclasses.dataclass
 class Result:
     name: str
     tier: str
-    status: str  # PASS FAIL SKIP TIMEOUT
+    status: str
     seconds: float
     note: str = ""
     log: pathlib.Path | None = None
+    run_id: str | None = None
+    evidence: dict | None = None
+    evidence_source: str = "runner"
 
     @property
     def failed(self) -> bool:
-        return self.status in ("FAIL", "TIMEOUT")
+        return self.status in ("FAIL", "TIMEOUT", "ABORTED", "INCONCLUSIVE")
 
 
 def load_manifest() -> dict[str, dict]:
@@ -66,6 +80,7 @@ def check_registry(manifest: dict[str, dict]) -> list[str]:
     for name, entry in sorted(manifest.items()):
         try:
             directory = suite_directory(name, entry)
+            suite_result_path(directory, entry)
             if directory in directories:
                 problems.append(f"{name}: duplicate suite path")
             directories.add(directory)
@@ -102,6 +117,8 @@ def check_registry(manifest: dict[str, dict]) -> list[str]:
 
 
 def suite_directory(name: str, entry: dict) -> pathlib.Path:
+    if not isinstance(name, str) or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) is None:
+        raise ValueError("unsafe suite name")
     value = entry.get("path", name)
     if (not isinstance(value, str) or not value or "\\" in value or ":" in value or
             pathlib.PurePosixPath(value).is_absolute() or ".." in pathlib.PurePosixPath(value).parts):
@@ -152,30 +169,191 @@ def tier_blocker(tier: str) -> str:
     return ""
 
 
-def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool) -> Result:
+def suite_result_path(directory: pathlib.Path, entry: dict) -> pathlib.Path | None:
+    value = entry.get("result")
+    if value is None:
+        return None
+    if (not isinstance(value, str) or not value or "\\" in value or ":" in value or
+            pathlib.PurePosixPath(value).is_absolute() or
+            any(part in (".", "..") for part in value.split("/"))):
+        raise ValueError("unsafe structured result path")
+    path = (directory / value).resolve()
+    if path == directory.resolve() or not path.is_relative_to(directory.resolve()):
+        raise ValueError("structured result path escapes suite")
+    return path
+
+
+def _group_members(group: int) -> dict[int, int]:
+    """Identities in a group we created; never select processes by executable name."""
+    members = {}
+    proc = pathlib.Path("/proc")
+    if not proc.is_dir():
+        return members
+    for path in proc.iterdir():
+        if not path.name.isdigit():
+            continue
+        try:
+            fields = (path / "stat").read_text().rsplit(") ", 1)[1].split()
+            if int(fields[2]) == group and fields[0] != "Z":
+                members[int(path.name)] = int(fields[19])
+        except (OSError, ValueError, IndexError):
+            continue
+    return members
+
+
+def _stop_child(process: subprocess.Popen) -> None:
+    # A reaped leader no longer reserves its PID/PGID for this invocation.
+    if process.returncode is not None:
+        return
+    # Keep the leader unreaped until the final signal. With default SIGCHLD and
+    # this runner as its sole reaper, its PID cannot be reused in this interval.
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGTERM)
+        else:
+            process.terminate()
+    except ProcessLookupError:
+        pass
+    if os.name == "posix":
+        try:
+            proc_pid = int(pathlib.Path("/proc/self/stat").read_text().split(" ", 1)[0])
+            can_observe = proc_pid == os.getpid()
+        except (OSError, ValueError):
+            can_observe = False
+        deadline = time.monotonic() + 4.0
+        while time.monotonic() < deadline:
+            if can_observe and not _group_members(process.pid):
+                break
+            time.sleep(0.02)
+        # No poll()/wait() above: even an exited leader still reserves the ID.
+        # Without Linux procfs, use the entire grace period before this signal.
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    else:
+        try:
+            process.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    process.wait(timeout=3)
+
+
+def _read_result(path: pathlib.Path, run_id: str) -> dict:
+    if path.stat().st_size > 2 * 1024 * 1024:
+        raise ValueError("structured result exceeds 2 MiB")
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("nonfinite number in structured result")
+        return number
+    payload = json.loads(path.read_text(encoding="utf-8"),
+                         parse_float=finite_float, parse_constant=finite_float)
+    if not isinstance(payload, dict):
+        raise ValueError("structured result must be an object")
+    if (payload.get("schema") != "retoque-suite-result" or
+            type(payload.get("version")) is not int or payload["version"] != 1):
+        raise ValueError("unsupported structured result schema/version")
+    if payload.get("run_id") != run_id:
+        raise ValueError("stale structured result: invocation ID does not match")
+    if payload.get("status") not in STATUSES:
+        raise ValueError("missing or nonterminal structured result status")
+    for field in ("reason", "updated_at", "terminated_by"):
+        if field in payload and not isinstance(payload[field], str):
+            raise ValueError(f"structured result {field} must be a string")
+    if "missing" in payload and (not isinstance(payload["missing"], list) or
+                                 any(not isinstance(value, str) for value in payload["missing"])):
+        raise ValueError("structured result missing must be a list of strings")
+    if "runtime_coverage" in payload and not isinstance(payload["runtime_coverage"], bool):
+        raise ValueError("structured result runtime_coverage must be a boolean")
+    return payload
+
+
+def run_suite(name: str, entry: dict, log_dir: pathlib.Path, stream: bool,
+              *, stop: threading.Event | None = None) -> Result:
     tier = entry["tier"]
+    run_id = uuid.uuid4().hex
+    try:
+        directory = suite_directory(name, entry)
+        result_path = suite_result_path(directory, entry)
+    except ValueError as error:
+        return Result(name, tier, "FAIL", 0.0, str(error), run_id=run_id)
+    if stop is not None and stop.is_set():
+        return Result(name, tier, "ABORTED", 0.0, "interrupted before launch", run_id=run_id)
     blocker = entry_blocker(entry)
     if blocker:
-        return Result(name, tier, "SKIP", 0.0, blocker)
+        return Result(name, tier, "SKIP", 0.0, blocker, run_id=run_id)
+    if os.name == "posix" and signal.getsignal(signal.SIGCHLD) != signal.SIG_DFL:
+        return Result(name, tier, "FAIL", 0.0,
+                      "process supervision requires default SIGCHLD", run_id=run_id)
+
+    def current_result_path():
+        # The suite may have replaced directories/symlinks while it ran.
+        current_directory = suite_directory(name, entry)
+        if current_directory != directory:
+            raise ValueError("suite directory changed during execution")
+        return suite_result_path(current_directory, entry)
 
     log_path = log_dir / f"{name}.log"
     started = time.monotonic()
+    interrupted = None
     try:
         with log_path.open("wb") as log:
-            completed = subprocess.run(
-                [sys.executable, str(suite_directory(name, entry) / "run.py")],
-                cwd=ROOT,
-                stdout=None if stream else log,
-                stderr=subprocess.STDOUT if not stream else None,
-                timeout=entry["timeout"],
+            process = subprocess.Popen(
+                [sys.executable, str(directory / "run.py")], cwd=ROOT,
+                env=dict(os.environ, RETOQUE_TEST_RUN_ID=run_id),
+                stdout=None if stream else log, stderr=subprocess.STDOUT,
+                start_new_session=(os.name == "posix"), close_fds=True,
             )
-    except subprocess.TimeoutExpired:
-        return Result(name, tier, "TIMEOUT", time.monotonic() - started,
-                      f"exceeded {entry['timeout']}s", log_path)
+            try:
+                while process.poll() is None:
+                    if stop is not None and stop.is_set():
+                        interrupted = "ABORTED"
+                        break
+                    if time.monotonic() - started >= entry["timeout"]:
+                        interrupted = "TIMEOUT"
+                        break
+                    time.sleep(0.02)
+            except BaseException:
+                _stop_child(process)
+                raise
+            if interrupted:
+                _stop_child(process)
+                note = ("interrupted by runner" if interrupted == "ABORTED" else
+                        f"exceeded {entry['timeout']}s")
+                evidence = None
+                if result_path is not None:
+                    try:
+                        evidence = write_result(current_result_path(), {
+                            "status": interrupted, "reason": note, "runtime_coverage": False,
+                            "terminated_by": "suite-runner",
+                        }, run_id=run_id)
+                    except ValueError as error:
+                        return Result(name, tier, "FAIL", time.monotonic() - started,
+                                      f"invalid result: {error}", log_path, run_id)
+                return Result(name, tier, interrupted, time.monotonic() - started,
+                              note, log_path, run_id, evidence, "runner")
+            code = process.returncode
+    except (OSError, subprocess.SubprocessError) as error:
+        return Result(name, tier, "FAIL", time.monotonic() - started,
+                      f"process error: {error}", log_path, run_id)
     elapsed = time.monotonic() - started
-    if completed.returncode == 0:
-        return Result(name, tier, "PASS", elapsed, log=log_path)
-    return Result(name, tier, "FAIL", elapsed, f"exit {completed.returncode}", log_path)
+    evidence = None
+    if result_path is not None:
+        try:
+            evidence = _read_result(current_result_path(), run_id)
+        except (OSError, ValueError, TypeError) as error:
+            prefix = f"exit {code}; " if code else ""
+            return Result(name, tier, "FAIL", elapsed, f"{prefix}invalid result: {error}",
+                          log_path, run_id, evidence_source="process-exit")
+    source = "structured-result" if evidence is not None else "process-exit"
+    if code:
+        return Result(name, tier, "FAIL", elapsed, f"exit {code}", log_path, run_id, evidence, source)
+    if result_path is None:
+        return Result(name, tier, "PASS", elapsed, "process-exit evidence", log_path, run_id,
+                      evidence_source=source)
+    note = evidence.get("reason") or "; ".join(map(str, evidence.get("missing", [])))
+    return Result(name, tier, evidence["status"], elapsed, str(note), log_path, run_id, evidence, source)
 
 
 def selected(manifest: dict[str, dict], args) -> list[str]:
@@ -211,6 +389,10 @@ def main() -> int:
                         help="stream suite output instead of capturing it to a log")
     parser.add_argument("--log-dir", type=pathlib.Path,
                         help="where to write per-suite logs (default: a temp dir under $TMPDIR)")
+    parser.add_argument("--report", type=pathlib.Path,
+                        help="atomic JSON report (default: <log-dir>/summary.json)")
+    parser.add_argument("--strict", action="store_true",
+                        help="fail when a selected suite is skipped")
     args = parser.parse_args()
 
     manifest = load_manifest()
@@ -234,9 +416,6 @@ def main() -> int:
         return 1
 
     names = selected(manifest, args)
-    if not names:
-        print("nothing selected")
-        return 0
 
     log_dir = args.log_dir or pathlib.Path(
         os.environ.get("TMPDIR", "/tmp")) / f"optiscaler-tests-{os.getpid()}"
@@ -245,43 +424,125 @@ def main() -> int:
     parallel = [n for n in names if manifest[n]["tier"] == "host"]
     serial = [n for n in names if manifest[n]["tier"] != "host"]
     results: list[Result] = []
+    report_path = args.report or log_dir / "summary.json"
+    run_id = uuid.uuid4().hex
+    started_at = datetime.now(timezone.utc).isoformat()
+    stop = threading.Event()
+    interrupted_signal = 0
+    completion_sealed = False
 
-    print(f"running {len(names)} suite(s); logs in {log_dir}\n")
+    def interrupt(number, _frame):
+        nonlocal interrupted_signal
+        if completion_sealed:
+            return
+        interrupted_signal = number
+        stop.set()
 
-    if parallel:
-        workers = 1 if args.verbose else max(1, min(args.jobs, len(parallel)))
-        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(run_suite, n, manifest[n], log_dir, args.verbose): n
-                       for n in parallel}
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                results.append(result)
-                print(f"  {result.status:<7} {result.name}")
-    for name in serial:
-        result = run_suite(name, manifest[name], log_dir, args.verbose)
-        results.append(result)
-        print(f"  {result.status:<7} {result.name}")
+    previous_handlers = {}
+    for number in (signal.SIGINT, signal.SIGTERM):
+        previous_handlers[number] = signal.signal(number, interrupt)
 
-    results.sort(key=lambda r: (TIERS.index(r.tier), r.name))
-    width = max(len(r.name) for r in results)
-    print("\n" + "-" * (width + 30))
-    for result in results:
-        note = f"  {result.note}" if result.note else ""
-        print(f"{result.status:<7} {result.name:<{width}}  {result.seconds:6.1f}s{note}")
-    print("-" * (width + 30))
+    def git_value(*command):
+        try:
+            value = subprocess.run(["git", "-C", str(ROOT), *command], capture_output=True,
+                                   text=True, timeout=3)
+            return value.stdout.strip() if value.returncode == 0 else None
+        except (OSError, subprocess.SubprocessError):
+            return None
 
-    counts = {status: sum(1 for r in results if r.status == status)
-              for status in ("PASS", "FAIL", "TIMEOUT", "SKIP")}
-    print(" ".join(f"{status.lower()}={count}" for status, count in counts.items() if count))
+    head = git_value("rev-parse", "HEAD")
+    dirty_text = git_value("status", "--porcelain")
 
-    failures = [r for r in results if r.failed]
-    if failures:
-        print("\nfailing suites:")
-        for result in failures:
-            print(f"  {result.name}: {result.note}"
-                  + (f" (log: {result.log})" if result.log and not args.verbose else ""))
-        return 1
-    return 0
+    def persist(status, *, error=None):
+        counts = {state: sum(result.status == state for result in results) for state in STATUSES}
+        payload = {
+            "schema": "retoque-test-run", "version": 1, "run_id": run_id,
+            "status": status, "pid": os.getpid(), "head": head,
+            "dirty": None if dirty_text is None else bool(dirty_text),
+            "started_at": started_at,
+            "finished_at": None if status == "RUNNING" else datetime.now(timezone.utc).isoformat(),
+            "selected": names, "counts": counts,
+            "results": [
+                {**dataclasses.asdict(result),
+                 "log": str(result.log) if result.log is not None else None}
+                for result in results
+            ],
+        }
+        if error is not None:
+            payload["error"] = str(error)
+        atomic_json(report_path, payload)
+
+    def finish(status, exit_code):
+        nonlocal completion_sealed
+        written_status = "ABORTED" if interrupted_signal else status
+        persist(written_status)
+        # Close signal observation only after the first terminal write returns.
+        # The assignment is the completion boundary: a handler before it records
+        # interruption; a handler after it cannot alter this invocation's exit.
+        # Snapshot after sealing so no signal can slip between snapshot/closure.
+        completion_sealed = True
+        final_signal = interrupted_signal
+        if final_signal and written_status != "ABORTED":
+            persist("ABORTED")
+        return 128 + final_signal if final_signal else exit_code
+
+    print(f"running {len(names)} suite(s); logs in {log_dir}\n", flush=True)
+    try:
+        persist("RUNNING")
+        if not names:
+            exit_code = finish("INCONCLUSIVE", 0)
+            print(f"nothing selected; report: {report_path}")
+            return exit_code
+        if parallel:
+            workers = 1 if args.verbose else max(1, min(args.jobs, len(parallel)))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+                try:
+                    futures = {pool.submit(run_suite, name, manifest[name], log_dir, args.verbose,
+                                           stop=stop): name for name in parallel}
+                    for future in concurrent.futures.as_completed(futures):
+                        try:
+                            result = future.result()
+                        except Exception as error:
+                            name = futures[future]
+                            result = Result(name, manifest[name]["tier"], "FAIL", 0.0,
+                                            f"runner error: {error}")
+                            stop.set()
+                        results.append(result)
+                        print(f"  {result.status:<12} {result.name}", flush=True)
+                        persist("RUNNING")
+                except BaseException:
+                    # Signal workers before executor.__exit__ waits for them.
+                    stop.set()
+                    raise
+        for name in serial:
+            result = run_suite(name, manifest[name], log_dir, args.verbose, stop=stop)
+            results.append(result)
+            print(f"  {result.status:<12} {result.name}", flush=True)
+            persist("RUNNING")
+
+        results.sort(key=lambda result: (TIERS.index(result.tier), result.name))
+        width = max(len(result.name) for result in results)
+        print("\n" + "-" * (width + 35))
+        for result in results:
+            note = f"  {result.note}" if result.note else ""
+            print(f"{result.status:<12} {result.name:<{width}}  {result.seconds:6.1f}s{note}")
+        print("-" * (width + 35))
+        counts = {state: sum(result.status == state for result in results) for state in STATUSES}
+        print(" ".join(f"{state.lower()}={count}" for state, count in counts.items() if count))
+
+        failed = [result for result in results if result.failed]
+        skipped = any(result.status == "SKIP" for result in results)
+        status = "FAIL" if failed else "INCONCLUSIVE" if skipped else "PASS"
+        exit_code = finish(status, 1 if failed or (args.strict and skipped) else 0)
+        print(f"report: {report_path}")
+        return exit_code
+    except BaseException as error:
+        stop.set()
+        persist("ABORTED" if isinstance(error, KeyboardInterrupt) else "FAIL", error=error)
+        raise
+    finally:
+        for number, handler in previous_handlers.items():
+            signal.signal(number, handler)
 
 
 if __name__ == "__main__":

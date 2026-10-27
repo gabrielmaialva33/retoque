@@ -7,16 +7,29 @@ Every script derives the repo root from its own location, so each runs from any 
 
 ## build-local.sh
 
-Builds OptiScaler and the DLSS-NR forwarder on Linux with msvc-wine (MSVC under Wine), under a
-watchdog that recovers from Wine's intermittent msbuild stalls.
+Builds OptiScaler and the DLSS-NR forwarder on Linux with msvc-wine (MSVC under Wine).
+The shell entry delegates to `build_local.py`, which takes the shared compiler-prefix
+lock before changing build stamps or starting either project.
 
 ```bash
 tools/build-local.sh [Release|Debug] [extra msbuild args]
 ```
 
 Outputs go to `x64/<Config>/` and `x64/out/`. `./build-local.sh` at the repo root is a stub that
-`exec`s this script; it exists because that path is in muscle memory and in old notes.
-Do not pipe its output; redirect it to a file (see `CLAUDE.md`, "Build").
+`exec`s this script. Call either entry directly; do not wrap it in another `flock` on
+`msvc-prefix.lock`. A busy lock returns 75 without changing stamps or invoking the compiler.
+
+Each stage has an owned process session. The Linux supervisor records process identities,
+signals them through pidfds, and retains logs under `x64/logs/<date-pid-id>/`. Ninety seconds
+without build-workload CPU or log growth, or a two-hour hard limit, returns 124 after bounded
+cleanup. An owned wineserver spinning alone does not count as build progress. Detached
+children are tracked only when their ancestry was observed; unknown processes are never
+adopted by name. No automatic prefix-wide reset or retry is performed.
+
+Both DLLs must exist after successful compilation, and OptiScaler must be refreshed when
+its stamps changed. Both outputs are prepared before publication; each replacement is atomic
+and ordinary promotion errors roll back earlier replacements. The pair is not crash-atomic.
+Redirect output to a file. See `tests/build-lifecycle/README.md` for regression coverage and limits.
 
 ## test-rendering.sh
 

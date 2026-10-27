@@ -637,6 +637,7 @@ requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1200
 summary = "MSVC/DirectXMath camera preservation and temporal projection; real D3D12 texture-tag crop/readback; three required failing mutation controls. No game or DLSS-G inference."
+result = "artifacts/result.json"
 
 [fg-dlssg-options]
 path = "fg-dlssg-options"
@@ -653,6 +654,7 @@ requires = ["python", "wine-toolchain"]
 tier = "wine"
 timeout = 1200
 summary = "Synthetic D3D12 application through the production OptiScaler DLL and real DLSS-G plugin, requiring actual interpolated presentation counters."
+result = "artifacts/result.json"
 
 [nr-moving-evidence]
 path = "nr-moving-evidence"
@@ -805,3 +807,19 @@ requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "tools/replay/transform.py: padded guides at a base with sentinel margins, compensated MV units, MVLowRes at 1:1, RGBA8/BGRA8/alternating colour with resets on swaps, and the channel-order-aware run comparison, on a synthetic capture the seam's own validator accepts."
+
+[build-lifecycle]
+path = "build-lifecycle"
+domain = "tooling"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "Compiler-prefix exclusion, owned subprocess supervision, signals and complete output publication; no Wine."
+
+[runner-results]
+path = "runner-results"
+domain = "tooling"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "Structured suite outcomes, stale-result rejection, timeout and interruption cleanup, strict mode and atomic reports."
