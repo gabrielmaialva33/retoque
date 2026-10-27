@@ -1,7 +1,7 @@
 # Synthesized-motion estimator on a real Vulkan device
 
 Run `python3 tests/synth-motion-vk/run.py` outside a build window (it refuses while `MSBuild`, `build-local.sh` or
-`dxc.exe` is running; with other agents on the machine, under `flock -o ~/.cache/retoque-wt/msvc-prefix.lock`).
+`dxc.exe` is running; with other agents on the machine, under `flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`).
 `--build-only` and `--run-only` split compilation from execution; `--run-only` refuses sources changed since the
 build. Output goes to the ignored `artifacts/`: `run.log` (per-frame lines), `run/synth-motion-report.json` (every
 measurement) and `result.json` (PASS/FAIL/SKIP with reasons).

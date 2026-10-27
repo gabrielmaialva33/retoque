@@ -203,10 +203,11 @@ WINEPREFIX=~/.local/opt/msvc-wineprefix WINEDEBUG=-all ~/.local/opt/msvc/bin/x64
 - **Never pipe the script** (`./build-local.sh ... | tail`). `wineserver` daemonises and inherits
   stdout, so the pipe never reaches EOF and the output stays hidden even after the build finished —
   a success looks exactly like a hang. Redirect to a file instead.
-- **Serialise with `flock -o ~/.cache/retoque-wt/msvc-prefix.lock`**, the lock the wine suites and
+- **Serialise with `flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`**, the lock the wine suites and
   `run_moving.lease` take. The `-o` matters for the same reason as the pipe: without it `wineserver`
   inherits the lock descriptor and holds the lock after the build has finished, and the next build
-  waits on it forever (2026-10-23).
+  waits on it forever (2026-10-23). The lock lives in the per-user runtime dir (tmpfs, always present
+  for the session) since 2026-10-24: under `~/.cache/retoque-wt/` it vanished with the cache cleanup.
 - The Visual Studio pre/post-build events are PowerShell and are disabled
   (`PreBuildEventUseInBuild=false`). The script writes `resource_build_date.h` and
   `resource_build_commit.h` itself. The in-game menu title shows this build id and timestamp; use it

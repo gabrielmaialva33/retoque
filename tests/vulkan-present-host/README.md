@@ -365,7 +365,7 @@ core and synchronization validation (only the existing, specifically attributed 
 If the surface offers no HDR profile the case reports `HDR_SURFACE_UNAVAILABLE`; that is not HDR WSI coverage.
 
 Every compiler/runner launch checks `/proc/*/maps` for a running Steam game and refuses to start when one is found.
-On the shared workstation invoke the suite under `flock -o ~/.cache/retoque-wt/msvc-prefix.lock`, as for builds.
+On the shared workstation invoke the suite under `flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`, as for builds.
 
 `nr-hdr-off` holds all HDR readbacks exact with conversion disabled; `nr-hdr-half-synth` combines HDR with
 half-size model input and synthesized motion. The HDR cases destroy the prior swapchain before replacing it:

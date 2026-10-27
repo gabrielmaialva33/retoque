@@ -2,7 +2,7 @@
 # Rebuilds the DXIL for the synthesized-motion estimator and the SPIR-V for its Vulkan twin, and regenerates the
 # headers SynthMotion_Dx12.cpp and SynthMotion_Vk.cpp embed. Needs the msvc-wine prefix (dxc.exe ships in
 # OptiScaler/shaders/shader_tools). Never run it while build-local.sh is using the same prefix (CLAUDE.md, build
-# stalls); with other agents on the machine, under `flock -o ~/.cache/retoque-wt/msvc-prefix.lock`.
+# stalls); with other agents on the machine, under `flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`.
 #
 # The FFX-derived passes are compiled with the flags AMD's BuildOpticalFlowShaders.bat uses for the
 # base (wave32, 32-bit) permutation: cs_6_2, FFX_HLSL_SM=62, FFX_HALF=0. Our two passes use the same.

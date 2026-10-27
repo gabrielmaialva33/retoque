@@ -2,7 +2,7 @@
 
 Run `python3 tests/guide-match-vk/run.py` outside a build window. It refuses to start while `MSBuild`,
 `build-local.sh` or `dxc.exe` is running; with other agents on the machine, run it under
-`flock -o ~/.cache/retoque-wt/msvc-prefix.lock`. `--build-only` and `--run-only` split compilation from execution, and
+`flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`. `--build-only` and `--run-only` split compilation from execution, and
 `--run-only` refuses sources changed since the build.
 
 Output goes to the ignored `artifacts/`:

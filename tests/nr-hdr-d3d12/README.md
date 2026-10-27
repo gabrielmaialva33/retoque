@@ -18,7 +18,7 @@ scanout, and the swapchain probe does not run the NR model.
 Run only with no game mappings, under the shared lock:
 
 ```sh
-flock -o "$HOME/.cache/retoque-wt/msvc-prefix.lock" python3 tests/nr-hdr-d3d12/run.py
+flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock" python3 tests/nr-hdr-d3d12/run.py
 ```
 
 The runner writes `artifacts/{build.log,run.log,result.json}` and stages only inside this suite. Rafael can run
