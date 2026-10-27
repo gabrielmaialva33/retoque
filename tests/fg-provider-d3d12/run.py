@@ -90,22 +90,24 @@ def stage(source, target):
     temporary.replace(target)  # Never truncate a DLL that a process may still have mapped.
 
 
-def judge(text):
+def judge(text, steady_seconds=0):
     phases = re.findall(r'^PHASE phase=(\d+) enabled=(\d+) app=(\d+) actual=(\d+) '
                         r'steady_app=(\d+) steady_actual=(\d+) ok=(\d+) completed=(\d+)$', text, re.M)
     if len(phases) != 4 or 'ORACLE=real-output-plugin' not in text:
         raise RuntimeError('ZERO COVERAGE: complete real-plugin phase record missing')
     frames = [tuple(map(int, row)) for row in re.findall(
         r'^FRAME phase=(\d+) app=(\d+) actual=(\d+) status=(\d+) max=(\d+)$', text, re.M)]
-    if len(frames) != 336 or [row[1] for row in frames] != list(range(1, 337)):
+    if (not frames or [row[1] for row in frames] != list(range(1, len(frames)+1))
+            or (not steady_seconds and len(frames) != 336)):
         raise RuntimeError('incomplete or non-monotonic per-frame progression')
     result = []
     for index, row in enumerate(phases):
         phase, enabled, app, actual, steady_app, steady_actual, ok, completed = map(int, row)
         expected = 48 if index == 1 else 96
-        if phase != index or enabled != (index != 1) or app != expected or completed != expected:
+        valid_count = app >= expected if steady_seconds and enabled else app == expected
+        if phase != index or enabled != (index != 1) or not valid_count or completed != app:
             raise RuntimeError('incomplete frame progression or completion')
-        if steady_app != expected - 32 or ok != steady_app:
+        if steady_app != app - 32 or ok != steady_app:
             raise RuntimeError('missing steady-state successful plugin status')
         if (enabled and steady_actual < steady_app + 16) or (not enabled and steady_actual != steady_app):
             raise RuntimeError('plugin actual-present surplus disagrees with enable state')
@@ -179,7 +181,7 @@ def verify_staged_provenance(before, after, launch_ini, final_ini):
             'runtime_added_settings': {'.'.join(key): value for key, value in sorted(added.items())}}
 
 
-def assess(text, multiplier=2):
+def assess(text, multiplier=2, *, steady_seconds=0):
     """Keep the x2 runtime gate; qualify only complete, exact counter windows.
 
     The SDK defines actual as presents since the preceding GetState call. Samples
@@ -188,11 +190,24 @@ def assess(text, multiplier=2):
     This qualifies plugin counter ratios in this fixture, never display scanout,
     unique generated images, latency, or general support of a hardware family.
     """
-    phases = judge(text)
-    requested = re.findall(r'^REQUEST multiplier=(\d+) generated=(\d+)$', text, re.M)
-    if (multiplier not in (2, 3, 4) or requested != [(str(multiplier), str(multiplier-1))]
+    if type(steady_seconds) is not int or (steady_seconds != 0 and not 5 <= steady_seconds <= 120):
+        raise RuntimeError('steady duration must be zero (quick mode) or an integer in 5..120 seconds')
+    phases = judge(text, steady_seconds)
+    requested = re.findall(r'^REQUEST multiplier=(\d+) generated=(\d+)(?: steady_seconds=(\d+))?$', text, re.M)
+    expected_request = (str(multiplier), str(multiplier-1), str(steady_seconds))
+    legacy_quick_request = (str(multiplier), str(multiplier-1), '')
+    if (multiplier not in (2, 3, 4)
+            or (requested != [expected_request] and (steady_seconds or requested != [legacy_quick_request]))
             or len(re.findall(r'^REQUEST ', text, re.M)) != 1):
-        raise RuntimeError('missing or conflicting requested multiplier record')
+        raise RuntimeError('missing or conflicting requested multiplier/duration record')
+    duration_rows = [tuple(map(int, row)) for row in re.findall(
+        r'^DURATION phase=(\d+) requested_us=(\d+) steady_start_us=(\d+) end_us=(\d+) complete_windows=(\d+)$', text, re.M)]
+    if (len(duration_rows) != len(re.findall(r'^DURATION ', text, re.M))
+            or (duration_rows and [row[0] for row in duration_rows] != list(range(4)))
+            or (steady_seconds and len(duration_rows) != 4)):
+        raise RuntimeError('missing, malformed, or duplicate duration records')
+    durations = {row[0]: row[1:] for row in duration_rows}
+    required_windows = steady_seconds//5 if steady_seconds else 1
     frames = [tuple(map(int, row)) for row in re.findall(
         r'^FRAME phase=(\d+) app=(\d+) actual=(\d+) status=(\d+) max=(\d+)$', text, re.M)]
     samples = [tuple(map(int, row)) for row in re.findall(
@@ -221,6 +236,8 @@ def assess(text, multiplier=2):
             any(re.match(r'^[A-Za-z]:[\\/]', value) is None for value in module_paths.values())):
         reasons.append('actual output-plugin/provider module paths are missing or ambiguous')
     if not samples or not baselines:
+        if steady_seconds or duration_rows:
+            raise RuntimeError('duration evidence requires complete per-call timing and baselines')
         reasons.append('per-call timing or phase baselines are missing')
     previous_phase_end = None
     for phase in phases:
@@ -236,6 +253,27 @@ def assess(text, multiplier=2):
                     raise RuntimeError('non-monotonic per-call timing')
                 last = now
             previous_phase_end = last
+        if samples and baselines:
+            steady_start = times[(index, rows[31][1])]
+            steady_end = times[(index, rows[-1][1])]
+            phase['steady_start_us'] = steady_start
+            phase['end_us'] = steady_end
+            phase['steady_elapsed_us'] = steady_end-steady_start
+            # Derive whole-window count independently from the claimed record.
+            window_start, complete_windows = steady_start, 0
+            for row in rows[32:]:
+                end = times[(index, row[1])]
+                if end-window_start >= 5_000_000:
+                    complete_windows += 1
+                    window_start = end
+            requested_us = steady_seconds*1_000_000 if phase['enabled'] else 0
+            phase['requested_steady_us'] = requested_us
+            phase['complete_steady_windows'] = complete_windows
+            if durations and durations[index] != (requested_us, steady_start, steady_end, complete_windows):
+                raise RuntimeError('duration record disagrees with actual per-call timing')
+            if steady_seconds and phase['enabled'] and (
+                    steady_end-steady_start < requested_us or complete_windows < required_windows):
+                raise RuntimeError('active phase did not complete requested steady duration and whole windows')
         if not phase['enabled']:
             continue
         steady = rows[32:]
@@ -266,10 +304,13 @@ def assess(text, multiplier=2):
     qualification = {'status': 'INCONCLUSIVE' if reasons else 'PASS', 'reasons': reasons,
                      'scope': 'plugin-present ratio in this fixture; no hardware-family approval',
                      'window_method': 'whole GetState intervals spanning at least five seconds; exact integer ratio',
+                     'required_complete_windows_per_active_phase': required_windows,
                      'complete_windows': windows, 'partial_tails': 'excluded from window qualification'}
-    return {'status': 'PASS' if multiplier == 2 or not reasons else 'INCONCLUSIVE',
-            'reason': '; '.join(reasons) if multiplier != 2 else '',
+    quick_x2 = multiplier == 2 and not steady_seconds
+    return {'status': 'PASS' if quick_x2 or not reasons else 'INCONCLUSIVE',
+            'reason': '; '.join(reasons) if not quick_x2 else '',
             'runtime_regression': 'PASS', 'requested_multiplier': multiplier,
+            'requested_steady_seconds': steady_seconds,
             'requested_generated_frames': multiplier-1,
             'effective_configured_generated_frames': None,
             'effective_configured_reason': 'GetState options parameter is input, not applied-option readback',
@@ -351,10 +392,16 @@ def finalize_assessment(assessment, identity):
     if gaps:
         assessment['qualification']['status'] = 'INCONCLUSIVE'
         assessment['qualification']['reasons'].extend(gaps)
-        if assessment['requested_multiplier'] != 2:
+        if assessment['requested_multiplier'] != 2 or assessment.get('requested_steady_seconds', 0):
             assessment['status'] = 'INCONCLUSIVE'
             assessment['reason'] = '; '.join(assessment['qualification']['reasons'])
     return assessment
+
+
+def result_exit_code(assessment):
+    # Explicit duration mode requests qualification, including x2.
+    return int(bool(assessment.get('requested_steady_seconds', 0))
+               and assessment['status'] != 'PASS')
 
 
 def cleanup_self_test():
@@ -445,7 +492,28 @@ def self_test():
     cleanup_self_test()
 
 
-def main():
+def steady_seconds_arg(value):
+    try:
+        seconds = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError('steady seconds must be an integer in 5..120') from error
+    if not 5 <= seconds <= 120:
+        raise argparse.ArgumentTypeError('steady seconds must be an integer in 5..120')
+    return seconds
+
+
+def runtime_timeout(steady_seconds):
+    return 240 + 3*(steady_seconds+5) if steady_seconds else 240
+
+
+def runtime_command(proton, executable, multiplier, steady_seconds):
+    command = [proton, 'run', executable, str(multiplier)]
+    if steady_seconds:
+        command += ['--steady-seconds', str(steady_seconds)]
+    return command
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dll', type=Path, default=ROOT / 'x64/out/OptiScaler.dll')
     parser.add_argument('--kit', type=Path, default=Path(os.environ['RETOQUE_FG_KIT']) if 'RETOQUE_FG_KIT' in os.environ else None)
@@ -454,10 +522,16 @@ def main():
     parser.add_argument('--strict', action='store_true', help='missing prerequisites fail instead of SKIP')
     parser.add_argument('--multiplier', type=int, choices=(2, 3, 4), default=2,
                         help='requested total multiplier; x3/x4 require counter qualification for top-level PASS')
+    parser.add_argument('--steady-seconds', type=steady_seconds_arg, default=0, metavar='N',
+                        help='opt-in qualification: integer 5..120 steady seconds per active phase (suggested 15); default quick mode')
     parser.add_argument('--ada-mfg-unlock', action='store_true',
                         help='explicitly enable the existing Ada memory unlock only in the staged fixture INI')
     parser.add_argument('--self-test', action='store_true', help='exercise only the host evidence judge')
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main():
+    args = parse_args()
     if args.self_test:
         self_test()
         return
@@ -524,7 +598,7 @@ def main():
         (WORK / 'OptiScaler.ini').write_bytes(launch_ini)
         for name in ('fg-provider.log', 'OptiScaler.log'):
             (WORK / name).unlink(missing_ok=True)
-        source_hashes = {path.name: sha(path) for path in (HERE / 'harness.cpp', HERE / 'run.py')}
+        source_hashes = {path.name: sha(path) for path in (HERE / 'harness.cpp', HERE / 'duration_schedule.h', HERE / 'run.py')}
         compile_env = dict(os.environ, WINEPREFIX=str(PREFIX), WINEDEBUG='-all', WINE_MSVC_RAW_STDOUT='1')
         exe = WORK / 'fg-provider.exe'
         command = [MSVC / 'cl', '/nologo', '/std:c++latest', '/EHsc', '/MD', '/W4', '/O2',
@@ -551,18 +625,20 @@ def main():
                    VK_LOADER_LAYERS_DISABLE='~implicit~',
                    WINEDLLOVERRIDES='vcruntime140,vcruntime140_1,msvcp140=n')
         launcher_hash = sha(proton)
-        code = execute([proton, 'run', exe, str(args.multiplier)], cwd=WORK, env=env, log=OUT / 'proton.log', timeout=240)
+        command = runtime_command(proton, exe, args.multiplier, args.steady_seconds)
+        code = execute(command, cwd=WORK, env=env, log=OUT / 'proton.log',
+                       timeout=runtime_timeout(args.steady_seconds))
         text = (WORK / 'fg-provider.log').read_text(errors='replace') if (WORK / 'fg-provider.log').exists() else ''
         if code:
             raise RuntimeError(f'provider exited {code}; see artifacts/run/fg-provider.log and proton.log')
-        assessment = assess(text, args.multiplier)
+        assessment = assess(text, args.multiplier, steady_seconds=args.steady_seconds)
         after_assets = {'OptiScaler.dll': sha(WORK / 'OptiScaler.dll'),
                          'OptiScaler.ini': sha(WORK / 'OptiScaler.ini'), 'fg-provider.exe': sha(exe),
                         'nvngx_dlss.dll': sha(WORK / 'nvngx_dlss.dll'),
                         **{name: sha(WORK / 'streamline' / name) for name in DLLS},
                          **{'input/' + name: sha(WORK / 'input' / name) for name in DLLS
                             if name not in ('sl.dlss_g.dll', 'nvngx_dlssg.dll')}}
-        if source_hashes != {path.name: sha(path) for path in (HERE / 'harness.cpp', HERE / 'run.py')}:
+        if source_hashes != {path.name: sha(path) for path in (HERE / 'harness.cpp', HERE / 'duration_schedule.h', HERE / 'run.py')}:
             raise RuntimeError('fixture sources changed during build/run; provenance invalid')
         if sha(launch_snapshot) != staged_assets['OptiScaler.ini']:
             raise RuntimeError('launch configuration snapshot changed; provenance invalid')
@@ -599,12 +675,13 @@ def main():
         write_result(OUT / 'result.json', result)
         print(f"{result['status']}: provider runtime PASS; requested x{args.multiplier}; "
               f"counter qualification {result['qualification']['status']}; {OUT / 'result.json'}")
+        return result_exit_code(result)
 
 
 if __name__ == '__main__':
     try:
         with result_run(OUT / 'result.json'):
-            main()
+            sys.exit(main())
     except (RuntimeError, OSError, subprocess.SubprocessError) as error:
         OUT.mkdir(parents=True, exist_ok=True)
         write_result(OUT / 'result.json', {'status': 'FAIL', 'runtime_coverage': False,

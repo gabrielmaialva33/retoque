@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include "duration_schedule.h"
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
@@ -297,12 +298,18 @@ int main(int argc, char** argv)
     logFile = fopen("fg-provider.log", "w");
     if (!logFile)
         return 1;
-    Require(argc == 1 || argc == 2, "optional multiplier argument only");
+    Require(argc == 1 || argc == 2 || argc == 4, "optional multiplier and --steady-seconds N arguments only");
     char* end = nullptr;
-    const auto multiplier = argc == 2 ? std::strtoul(argv[1], &end, 10) : 2ul;
+    const auto multiplier = argc >= 2 ? std::strtoul(argv[1], &end, 10) : 2ul;
     Require((argc == 1 || (end != argv[1] && *end == '\0')) && multiplier >= 2 && multiplier <= 4,
             "multiplier must be 2, 3, or 4");
-    Say("REQUEST multiplier=%lu generated=%lu\n", multiplier, multiplier - 1);
+    unsigned steadySeconds = 0;
+    if (argc == 4)
+    {
+        Require(std::strcmp(argv[2], "--steady-seconds") == 0, "expected --steady-seconds N");
+        Require(ParseDurationSeconds(argv[3], steadySeconds), "steady seconds must be an integer in 5..120");
+    }
+    Say("REQUEST multiplier=%lu generated=%lu steady_seconds=%u\n", multiplier, multiplier - 1, steadySeconds);
     Require(LoadLibraryW(L"OptiScaler.dll") != nullptr, "full OptiScaler DLL load");
     auto gameSl = LoadLibraryW(L"input\\sl.interposer.dll");
     Require(gameSl != nullptr, "game Streamline interposer load");
@@ -381,6 +388,7 @@ int main(int argc, char** argv)
         const bool enabled = phase != 1;
         const UINT width = phase == 3 ? 1600 : 1280, height = phase == 3 ? 900 : 720;
         const UINT count = enabled ? 96 : 48;
+        DurationSchedule schedule(count, enabled ? steadySeconds : 0);
         options.mode = enabled ? sl::DLSSGMode::eOn : sl::DLSSGMode::eOff;
         Sl(setOptions(sl::ViewportHandle(0), options), "game enable transition");
         gpu.Idle();
@@ -397,7 +405,7 @@ int main(int argc, char** argv)
         sl::DLSSGState state {};
         Sl(getState(sl::ViewportHandle(0), state, nullptr), "baseline real state");
         Say("BASELINE phase=%u us=%llu\n", phase, static_cast<unsigned long long>(ClockUs()));
-        for (UINT local = 0; local < count; ++local, ++frame)
+        for (UINT local = 0; schedule.NeedsMore(local); ++local, ++frame)
         {
             MSG message;
             while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
@@ -447,6 +455,7 @@ int main(int argc, char** argv)
                 gpu.Wait(static_cast<ID3D12Fence*>(state.inputsProcessingCompletionFence),
                          state.lastPresentInputsProcessingCompletionFenceValue);
             ++app;
+            schedule.Observe(app, sampleUs);
             actual += state.numFramesActuallyPresented;
             if (local >= 32)
             {
@@ -462,6 +471,10 @@ int main(int argc, char** argv)
             Say("SAMPLE phase=%u app=%u us=%llu\n", phase, frame, static_cast<unsigned long long>(sampleUs));
             Sleep(8);
         }
+        Say("DURATION phase=%u requested_us=%llu steady_start_us=%llu end_us=%llu complete_windows=%u\n", phase,
+            static_cast<unsigned long long>(schedule.RequestedUs()),
+            static_cast<unsigned long long>(schedule.SteadyStartUs()),
+            static_cast<unsigned long long>(schedule.EndUs()), schedule.CompleteWindows());
         Say("PHASE phase=%u enabled=%u app=%u actual=%u steady_app=%u steady_actual=%u ok=%u completed=%u\n", phase,
             enabled, app, actual, steadyApp, steadyActual, okStates, app);
         if (enabled)

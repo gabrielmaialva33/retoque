@@ -2,6 +2,7 @@
 
 ```sh
 python3 tests/fg-provider-d3d12/run.py --strict
+python3 tests/fg-provider-d3d12/run.py --strict --steady-seconds 15
 python3 tests/fg-provider-d3d12/run.py --strict --multiplier 3
 python3 tests/fg-provider-d3d12/run.py --strict --multiplier 4
 python3 tests/fg-provider-d3d12/run.py --self-test  # host evidence parser and rejection controls only
@@ -18,9 +19,11 @@ PE exports and its address is checked against the plugin module; the synthetic g
 is never accepted as evidence.
 
 Four phases cover initial enable, game disable, re-enable and resize (1280x720 to 1600x900), with
-336 application presents and completed GPU/input fences. Each active steady phase must have at least
-16 more real-plugin presents than application presents; disabled steady state must report exactly one actual present per application present.
+completed GPU/input fences. The quick schedule uses 96/48/96/96 application presents (336 total).
+Each active steady phase must have at least 16 more real-plugin presents than application presents;
+disabled steady state must report exactly one actual present per application present.
 The first 32 frames of each phase allow production's 22-frame activation debounce and plugin warmup.
+An explicit `--steady-seconds` extends the three active phases; the disabled phase remains 48 frames.
 All remaining plugin statuses must be OK. A successful DLL load, resource tag, dispatch log or
 application Present alone cannot pass this suite.
 
@@ -66,10 +69,11 @@ A cap of three permits a request for three generated frames; it does not prove x
 
 ## Runtime regression versus counter qualification
 
-The existing surplus/status/fence checks remain the runtime regression gate. A default x2 run may
-still PASS that regression while `qualification.status` is INCONCLUSIVE. For an explicit x3/x4
-request, insufficient qualification produces top-level INCONCLUSIVE with `runtime_coverage=true`
-and `runtime_regression=PASS`; it cannot become approval of the requested ratio.
+The existing surplus/status/fence checks remain the runtime regression gate. A quick default x2 run
+may still PASS that regression while `qualification.status` is INCONCLUSIVE. For an explicit x3/x4
+request, or any run with `--steady-seconds`, insufficient qualification produces top-level
+INCONCLUSIVE with `runtime_coverage=true` and `runtime_regression=PASS`, and exits nonzero. It cannot
+become approval of the requested ratio. Missing required identity evidence also prevents qualification PASS.
 
 The SDK defines `numFramesActuallyPresented` as the count since the preceding GetState call.
 The harness records monotonic call timestamps and a baseline per phase. Qualification groups
@@ -79,11 +83,15 @@ requested integer ratio of plugin presents to application presents, and the stea
 sufficient. No numerical tolerance or phase-wide average hides a degraded window. Partial tails
 are reported as excluded; they are not joined across disable/resize boundaries.
 
-This preparation preserves the current 96/48/96/96-frame schedule and 32-frame warmup. A fast run
-can be too short for a five-second steady window; that is INCONCLUSIVE qualification, not proof of
-failure or success at the requested ratio. Completing qualification in that case requires an
-explicitly longer steady phase in a subsequent fixture change, followed by a fresh run and review.
-Repeating short runs or concatenating their logs does not create a valid window.
+`--steady-seconds N` accepts integers from 5 to 120 and is opt-in. Each active phase keeps its
+32-frame warmup and runs until both the requested steady duration and at least `floor(N / 5)`
+complete windows of five seconds have been observed. It also retains the 96-frame minimum.
+Whole GetState intervals form windows; no interval is divided, no tail is interpolated and no
+samples are joined across phases. The parser independently recomputes duration and window counts
+from monotonic SAMPLE timestamps and checks the REQUEST and four DURATION records.
+The runtime timeout is bounded at `240 + 3 * (N + 5)` seconds; the quick path keeps 240 seconds.
+A quick run can be too short for qualification. Repeating short runs or concatenating their logs
+does not create a valid window; use a fresh explicit-duration run instead.
 
 CPU/system identity is read on the host. The selected DXGI adapter is recorded by the harness,
 not inferred from the machine's name or the first device from an unrelated query. Results include
@@ -122,7 +130,9 @@ elsewhere do not qualify this fixture version, a different provider hash, or an 
 
 The host-only `test_qualification.py` exercises exact x2/x3/x4 records and rejects x4 requested with
 x2 observed, insufficient cap, short/missing timing, missing identity, conflicting requests, broken
-counters, and a phase average that hides a degraded window. Its identity tests hash temporary files.
+counters, and a phase average that hides a degraded window. Duration tests reject missing, duplicate,
+malformed or contradictory REQUEST/DURATION records and independently check complete windows.
+They also compile the actual portable C++ duration scheduler and hash temporary identity files.
 Those tests, including synthetic records naming a GPU, provide no GPU runtime evidence.
 
 The fixture's command cleanup requires default SIGCHLD and exclusive ownership of child reaping.
