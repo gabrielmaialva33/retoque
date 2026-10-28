@@ -37,7 +37,7 @@ Interface: optional<Batch> Reserve(VkCommandBuffer,uint32_t), move-only Batch, b
 - [x] Reserve each needed scaler before the NR frame's first command and consume its Batch at dispatch.
 - [x] Verify state/constant/descriptor bytes, saturation, stale/foreign batches and valid reset reuse; review non-NR isolation.
 - [x] Correct the observed BCUS three-component store and source-proven scaler format mismatch with NR-only RGBA16F variants; verify actual SPIR-V contracts and pipeline failure paths.
-- [ ] Retest the isolated WorkingScale=1.25 route with the repaired DLL and preserve the original failing evidence.
+- [x] Retest the isolated WorkingScale=1.25 route with the repaired DLL and preserve the original failing evidence; invocation `6825c786d5e1430895c04c7fa2c8254a` passed on 2026-10-28.
 
 ## Task 3: Readback execution and retirement
 Files: fork-owned readback metadata helper if needed; DlssNrFeature_Vk.cpp; nr-vk-meter behavioral fixture.
@@ -58,8 +58,8 @@ Interface: --steady-seconds integer5..120, absent0; assess(text,multiplier,stead
 Files: tools/test-rendering.sh and focused reporting helper; .github/workflows/nr-tests.yml; tools/README.md; tests/README.md; docs/dlssnr/roadmap.md; verification record.
 - [x] Add strict required-host execution, successful/failed CI evidence retention, serial Vulkan modes and retained invocation receipts.
 - [x] Correct only verified roadmap staleness (Stage1 measurement and existing Windows installer).
-- [ ] Run full host suite, pinned format check, Release and available GPU fixtures serially with final DLL identity.
-- [ ] Independent review, preserve raw findings and qualification limits, commit separate reviewed units.
+- [x] Run full host suite, pinned format check, Release and available GPU fixtures serially with final DLL identity; required invocation `ee577bc1e13b48a8aecc7cd0ab84f46b` passed, including all 94 host suites.
+- [x] Independent review, preserve raw findings and qualification limits, commit separate reviewed units.
 
 ## Review resolutions
 
@@ -68,5 +68,7 @@ Files: tools/test-rendering.sh and focused reporting helper; .github/workflows/n
 - Use atomic release/acquire publication from the final recording token; weak ownership counts alone do not publish mapped writes across threads.
 - The consolidated entry rejects empty/malformed moving measurements, terminalizes startup hash failures, preserves timeout/abort when receipt writing fails, and stops on every non-PASS step.
 - The loopback interrupt guard and shared cleanup helper close a detached-child escape on outer timeout. The inner grace is two seconds, beneath the unchanged outer four seconds; no global Wine cleanup is introduced.
-- Independent Vulkan and orchestration reviews are clear. The host-only draft skipped native process identity checks in its restricted environment; the canonical host gate must execute them.
-- The four unchanged Vulkan scenarios do not execute exposure sampling or WorkingScale above 1. Record this limit beside runtime outcomes.
+- Independent Vulkan and orchestration reviews are clear. The canonical strict host run executed all 94 suites without skips, including native process identity checks.
+- The four unchanged Vulkan scenarios do not execute exposure sampling or WorkingScale above 1. The separate 1.25 probe now covers source-backed up-leg execution; exposure sampling, independent down-leg execution, GPU resubmission and image-quality qualification remain explicit gaps.
+
+Final evidence and preserved attempts: [qualification record](../reviews/2026-10-27-vulkan-readback-scaler-qualification.md).

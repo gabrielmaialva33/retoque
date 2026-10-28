@@ -1,6 +1,6 @@
 # Vulkan readback, scaler lifetime and sustained FG qualification
 
-Status: approved implementation scope in the conversation on 2026-10-27; isolated from dlss-neural-rendering at ff7dc45b.
+Status: implemented on qualified production source `d845b511`; the required serial run and separate WorkingScale=1.25 regression passed. Scope was approved on 2026-10-27, isolated from dlss-neural-rendering at ff7dc45b.
 Scope: the next code batch recommended and accepted with "Vamos la entao." Performance experiments, replay format transitions, native-Windows qualification and game deployment remain separate work.
 
 ## Intent and boundaries
@@ -28,6 +28,8 @@ The first direct 1.25 probe produced ten `VUID-vkCmdDispatch-OpImageWrite-08795`
 Compile the unchanged downscaler/FSR algorithms through small fork-owned wrappers that declare `rgba16f`. The fork-owned BCUS variant retains its RGB arithmetic and writes `float4(Result, 1.0)`, matching the other filters' opaque intermediate alpha; the NR resolve restores the original frame alpha. Preserve every upstream shader source and compiled artifact. Test the actual generated SPIR-V image format and texel width, header/binary identity, pipeline selection/failure behavior, then rerun the direct GPU probe against the repaired DLL. Do not erase or relabel the failing receipt.
 
 Contract references: [DXC SPIR-V image formats](https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst) and [Khronos storage-image compatibility](https://docs.vulkan.org/guide/latest/storage_image_and_texel_buffers.html).
+
+Qualification completed on 2026-10-28: the repaired 1.25 route executed all three 1600x900 builds and 70 active evaluations with zero host validation errors and no recurrence of `08795`. Six known native-model `09600` messages remain separately attributed. The [qualification record](../../superpowers/reviews/2026-10-27-vulkan-readback-scaler-qualification.md) preserves the original failure, later startup timeouts, environment recovery, exact artifact hashes and remaining coverage limits.
 
 ## Alternatives
 A larger global Shader_Vk rewrite was rejected for this batch because it affects unrelated upstream users. Increasing ring size or assuming a fixed frame lag does not establish ownership or completion. Broad new game defaults are deferred until image-quality and cost comparisons exist.
