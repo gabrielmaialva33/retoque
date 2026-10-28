@@ -81,8 +81,8 @@
 - [x] Independently verify bundle byte counts/hashes and retained visual metadata.
 - [x] Obtain an independent review of the complete diff; resolve material findings and verify their regressions.
 - [x] Record commands, exact statuses, numerical verdicts and coverage boundaries.
-- [ ] Integrate the qualified changes into dlss-neural-rendering if its state still permits the already authorized integration; do not push or deploy.
+- [x] Integrate the qualified changes into dlss-neural-rendering if its state still permits the already authorized integration; do not push or deploy.
 
 ## Qualification record
 
-Implementation, source review, runtime qualification and independent evidence audit are complete. Commands, the preserved initial failure, rebuild, measured numerical verdicts and coverage limits are in [the qualification record](../reviews/2026-10-28-rendering-qualification.md). Local integration and its post-integration host check remain pending in this revision.
+Implementation, source review, runtime qualification, independent evidence audit and authorized local integration are complete. Commands, the preserved initial failure, rebuild, measured numerical verdicts, coverage limits and post-integration strict host result (94 PASS, no skips) are in [the qualification record](../reviews/2026-10-28-rendering-qualification.md). The final completion update changes documentation only.

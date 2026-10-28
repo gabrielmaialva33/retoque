@@ -1,6 +1,6 @@
 # Rendering qualification — 2026-10-28
 
-Status: functional runtime qualification PASS; independent evidence audit PASS; source review approved with no open findings. Local branch integration and its final host check are recorded separately below.
+Status: integrated into `dlss-neural-rendering`; functional runtime qualification PASS; independent evidence audit PASS; post-integration strict host tier 94 PASS with no skips; source and runtime acceptance reviews approved with no open findings.
 
 ## Scope and source identity
 
@@ -205,7 +205,19 @@ The disabled phase intentionally has no requested fifteen-second window. The req
 
 ## Integration record
 
-Before integration, the primary checkout was clean on `dlss-neural-rendering` at `f8d9859aedff628bb0d65429a7a55b360294787a`, and its reflog matched the expected previous fast-forward. The qualified execution branch was clean at `abad9704`. This qualification record is prepared before the already authorized local integration. The fast-forward and post-integration strict host result are pending in this revision; no integration success is claimed yet.
+The primary checkout was clean on `dlss-neural-rendering` at `f8d9859aedff628bb0d65429a7a55b360294787a`, with the expected reflog. The qualification record was committed before integration in documentation-only commit `98ef2a7460dcb9636e9ea20c6cce4138558e1a85`; the already authorized fast-forward from `f8d9859a` to `98ef2a74` then succeeded. The implementation remains exactly the runtime-qualified `abad9704`; later changes in this round only record documentation and plan completion.
+
+The strict host tier was run again in the primary checkout after that fast-forward:
+
+```sh
+python3 tests/run_all.py --tier host --jobs 4 --strict \
+  --report x64/logs/qualification-integrated-host-20261028.json \
+  --log-dir x64/logs/qualification-integrated-host-20261028
+```
+
+It exited 0 with **94 PASS, zero FAIL, SKIP, TIMEOUT, ABORTED or INCONCLUSIVE**, and its selected/results lists matched the current host registry exactly. Run `5005e5beb24c40e5b941110956b06997` recorded head `98ef2a7460dcb9636e9ea20c6cce4138558e1a85`, `dirty=false`, start 2026-10-28T22:23:22.509949Z and finish 22:26:12.654999Z. The report in the primary checkout has SHA-256 `48b9c95a39a36fe0fef53eb5a8f1d7e53b352314eb4dd4ff40edaf4c4c314219`.
+
+This final documentation update records the completed integration and host check. It introduces no implementation change after the qualified source. The execution checkout and its ignored evidence remain available; no git push or game deployment was performed.
 
 ## Review resolutions and execution decisions
 
@@ -218,7 +230,7 @@ Before integration, the primary checkout was clean on `dlss-neural-rendering` at
 - The initial decision reused the supplied qualified production pair because production sources were unchanged. The real Vulkan timestamp guard superseded that decision: the supported Release build produced a new pair, and the entire qualification was restarted with those exact hashes. The initial failure report and diagnostic audit remain retained. No model download or game deployment was introduced.
 - The immutable source review ran concurrently with the serial qualification. Runtime acceptance remained a separate gate.
 - The execution checkout is retained with its raw captures and bounded invocation bundle for inspection. No destructive cleanup is part of this round.
-- Integration targets the already authorized `dlss-neural-rendering` branch after checking its actual HEAD, status and reflog. No git push is authorized or performed by this work.
+- The authorized local integration used fast-forward after checking the primary branch's actual HEAD, status and reflog. No git push or game deployment was performed.
 
 ## Coverage boundaries
 
