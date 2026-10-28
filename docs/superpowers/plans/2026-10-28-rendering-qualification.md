@@ -34,12 +34,12 @@
 
 **Interfaces:** Add a preflight Step before the complete plan, omit for host-only. Add optional replay artifact_root on Step and inventory/retention helpers. Existing run_step and result identities remain the authority. Root later adds --replay-quality wiring and VK_CASES.
 
-- [ ] Add tests for connection refusal, exact inherited display, close, fail-fast plan, stale/malformed receipt, timeout and interruption.
-- [ ] Run new tests and record the intended RED.
-- [ ] Implement the 8-second supervised X11 preflight and explicit non-runtime receipt.
-- [ ] Add retention tests for fresh bytes/hash, later overwrite, old unchanged files, identical rewrites, symlink/file-special/size/count refusals and functional-vs-quality verdicts.
-- [ ] Record RED, implement bounded allowlist retention, then run the complete orchestration suite GREEN.
-- [ ] Review diff and commit this task after remote verification.
+- [x] Add tests for connection refusal, exact inherited display, close, fail-fast plan, stale/malformed receipt, timeout and interruption.
+- [x] Run new tests and record the intended RED.
+- [x] Implement the 8-second supervised X11 preflight and explicit non-runtime receipt.
+- [x] Add retention tests for fresh bytes/hash, later overwrite, old unchanged files, identical rewrites, symlink/file-special/size/count refusals and functional-vs-quality verdicts.
+- [x] Record RED, implement bounded allowlist retention, then run the complete orchestration suite GREEN.
+- [x] Review diff and commit this task after remote verification.
 
 ## Task 2: Versioned temporal corpus and explicit policy
 
@@ -47,14 +47,14 @@
 
 **Interfaces:** --replay-quality selects temporal-v1 and artifacts/replay-quality-run. run_replay.run accepts the selected profile while preserving the default call. Emit judge/policy.json and judge/corpus.json; calibrate and judge receive the identical policy. Metadata and phase decisions are additive to replay-report.json.
 
-- [ ] Test the exact spec phase ranges, timing, monotonic ids, single scoring suffix, hold/material identity, previous-pose continuity and cut resets.
-- [ ] Test contradictory overrides/captures, malformed plans and mismatched producer metadata are rejected.
-- [ ] Record RED; implement deterministic stdlib plan generation and the bounded portable C++ plan reader.
-- [ ] Extend only the test harness path to consume the plan, preserving the no-plan path.
-- [ ] Test explicit policy reaches calibration/judge unchanged; report separates seam, numerical and unassessed perceptual results.
-- [ ] Run host tests GREEN; format C++ with the repository's clang-format 22 pin.
-- [ ] Root compiles and runs the actual temporal profile serially, records cut behavior, complete coverage and original visual verdicts.
-- [ ] Review and commit.
+- [x] Test the exact spec phase ranges, timing, monotonic ids, single scoring suffix, hold/material identity, previous-pose continuity and cut resets.
+- [x] Test contradictory overrides/captures, malformed plans and mismatched producer metadata are rejected.
+- [x] Record RED; implement deterministic stdlib plan generation and the bounded portable C++ plan reader.
+- [x] Extend only the test harness path to consume the plan, preserving the no-plan path.
+- [x] Test explicit policy reaches calibration/judge unchanged; report separates seam, numerical and unassessed perceptual results.
+- [x] Run host tests GREEN; format C++ with the repository's clang-format 22 pin.
+- [x] Root compiles and runs the actual temporal profile serially, records cut behavior, complete coverage and original visual verdicts.
+- [x] Review and commit.
 
 ## Task 3: Registered Vulkan scale 1.25 route
 
@@ -62,23 +62,27 @@
 
 **Interfaces:** nr-route-scale125 is a ROUTE_CASES member using --route; check_route keeps existing eleven-phase gates and calls a scale-evidence helper for this case. Root adds its name to consolidated VK_CASES.
 
-- [ ] Use the preserved manual report/log and source to pin route build text and expected working dimensions.
-- [ ] Add behavioral cases rejecting wrong/missing scale/dimensions, missing eval/build, fallback, invalid validation and 08795 even misattributed as model.
-- [ ] Record RED; implement case staging plus strict evidence checks without weakening quiet-route checks.
-- [ ] Run host checks GREEN.
-- [ ] Root executes the real registered case and retains original result/validation/OptiScaler logs.
-- [ ] Review and commit.
+- [x] Use the preserved manual report/log and source to pin route build text and expected working dimensions.
+- [x] Add behavioral cases rejecting wrong/missing scale/dimensions, missing eval/build, fallback, invalid validation and 08795 even misattributed as model.
+- [x] Record RED; implement case staging plus strict evidence checks without weakening quiet-route checks.
+- [x] Run host checks GREEN.
+- [x] Root executes the real registered case and retains original result/validation/OptiScaler logs.
+- [x] Review and commit.
 
 ## Task 4: Integration, documentation and qualification
 
 **Files:** tools/test-rendering.py integration; tools/README.md; tests/README.md; loopback and Vulkan READMEs; docs/superpowers/reviews/2026-10-28-rendering-qualification.md.
 
-- [ ] Verify clean host baseline in the isolated worktree with existing pinned dependencies.
-- [ ] Integrate --replay-quality selection, longer opt-in timeout and nr-route-scale125 required case.
-- [ ] Check source diff and compile all modified Python, then run the strict full host tier.
-- [ ] Verify missing DISPLAY fails promptly and host-only is unaffected.
-- [ ] Run the complete serial rendering qualification using the qualified unchanged DLL pair, including the temporal profile and new Vulkan case.
-- [ ] Independently verify bundle byte counts/hashes and retained visual metadata.
-- [ ] Obtain an independent review of the complete diff; resolve material findings and verify their regressions.
-- [ ] Record commands, exact statuses, numerical verdicts and coverage boundaries.
+- [x] Record the host baseline (93 PASS, one existing privacy failure), repair the legacy document and verify the strict 94-suite host tier with no skips.
+- [x] Integrate --replay-quality selection, longer opt-in timeout and nr-route-scale125 required case.
+- [x] Check source diff and compile all modified Python, then run the strict full host tier.
+- [x] Verify missing DISPLAY fails promptly and host-only is unaffected.
+- [x] Run the complete serial qualification, including temporal replay and the new Vulkan case; the initial reused pair hit the checkout timestamp guard, so a supported Release rebuild and fresh full qualification supplied the accepted evidence.
+- [x] Independently verify bundle byte counts/hashes and retained visual metadata.
+- [x] Obtain an independent review of the complete diff; resolve material findings and verify their regressions.
+- [x] Record commands, exact statuses, numerical verdicts and coverage boundaries.
 - [ ] Integrate the qualified changes into dlss-neural-rendering if its state still permits the already authorized integration; do not push or deploy.
+
+## Qualification record
+
+Implementation, source review, runtime qualification and independent evidence audit are complete. Commands, the preserved initial failure, rebuild, measured numerical verdicts and coverage limits are in [the qualification record](../reviews/2026-10-28-rendering-qualification.md). Local integration and its post-integration host check remain pending in this revision.
