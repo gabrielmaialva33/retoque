@@ -345,7 +345,7 @@ int main(int argc, char** argv)
 
         // --cold-size takes a value, which is not a DLL path either.
         if (argument == "--cold-size" || argument == "--cold-ui-correction" || argument == "--cold-core-sdk" ||
-            argument == "--replay-nr" || argument == "--moving-corpus")
+            argument == "--replay-nr" || argument == "--moving-corpus" || argument == "--moving-plan")
         {
             ++i;
             continue;
@@ -364,6 +364,7 @@ int main(int argc, char** argv)
     unsigned coldCoreSdk = 0;
     const char* replayPlan = nullptr; // --replay-nr PLAN (offline-replay-seam.md)
     unsigned corpusFrames = 0;        // --moving-corpus N: the moving scene, every frame captured
+    const char* movingPlan = nullptr; // --moving-plan PLAN: optional actual pose/clock sequence
     const bool coldLoadOptiScaler = hasFlag("--cold-load-optiscaler");
     const bool coldDeviceFromD3D11 = hasFlag("--cold-device-from-d3d11");
     const bool coldSiblingSnippets = hasFlag("--cold-sibling-snippets");
@@ -396,10 +397,16 @@ int main(int argc, char** argv)
         {
             corpusFrames = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
         }
+        else if (flag == "--moving-plan")
+        {
+            movingPlan = argv[i + 1];
+        }
     }
 
     try
     {
+        Require(!hasFlag("--moving-plan") || (movingPlan && corpusFrames > 0),
+                "--moving-plan needs a path and --moving-corpus N");
         Say("dlssnr-loopback: driving the production NR path\n");
         HWND window = MakeWindow();
         Say("  window %p created and pumping\n", (void*) window);
@@ -507,7 +514,7 @@ int main(int argc, char** argv)
         if (hasFlag("--moving-scene") || corpusFrames > 0)
         {
             MovingScene::Run(dllPath, device, queue, alloc, list, fence, fenceEvent, window,
-                             hasFlag("--moving-present"), corpusFrames);
+                             hasFlag("--moving-present"), corpusFrames, movingPlan);
             DestroyWindow(window);
             CloseHandle(fenceEvent);
             return 0;

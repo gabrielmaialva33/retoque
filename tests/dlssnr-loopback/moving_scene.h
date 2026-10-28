@@ -1,6 +1,7 @@
 // Test-only deterministic graphics input for the production D3D12 NGX exports.
 #pragma once
 #include <array>
+#include "moving_plan.h"
 
 namespace MovingScene
 {
@@ -38,6 +39,7 @@ struct Host
     // --moving-corpus: every frame captured from the first, no settling sleeps (offline-replay-seam.md).
     unsigned total = Count, captureFrom = Warmup;
     bool settleSleep = true;
+    std::vector<MovingPlan::Frame> plan;
 
     void Begin()
     {
@@ -226,8 +228,11 @@ struct Host
             Buffer(c.buffer, c.bytes, D3D12_HEAP_TYPE_READBACK);
         }
         Require(fopen_s(&manifest, "moving.json", "w") == 0 && manifest, "moving manifest open");
-        fprintf(manifest, "{\"width\":%u,\"height\":%u,\"frames\":%u,\"measured\":%u,\"samples\":[\n", Width, Height,
-                total, total - captureFrom);
+        fprintf(manifest, "{\"width\":%u,\"height\":%u,\"frames\":%u,\"measured\":%u,", Width, Height, total,
+                total - captureFrom);
+        if (!plan.empty())
+            fprintf(manifest, "\"moving_plan_version\":1,");
+        fprintf(manifest, "\"samples\":[\n");
     }
 
     void Copy(unsigned slot, ID3D12Resource* resource, D3D12_RESOURCE_STATES state)
@@ -275,8 +280,13 @@ struct Host
     void Frame(unsigned frame)
     {
         stage = "render/evaluate/readback";
-        const auto current = PoseForFrame(frame, static_cast<float>(Width) / Height);
-        const auto previous = PoseForFrame(frame ? frame - 1 : 0, static_cast<float>(Width) / Height);
+        const auto* sample = plan.empty() ? nullptr : &plan[frame];
+        const unsigned poseFrame = sample ? sample->poseFrame : frame;
+        const unsigned previousPoseFrame = sample ? sample->previousPoseFrame : frame ? frame - 1 : 0;
+        const bool reset = sample ? sample->reset : frame == 0;
+        const float frameTimeMs = sample ? static_cast<float>(sample->frameTimeMs) : 1000.f / 120.f;
+        const auto current = PoseForFrame(poseFrame, static_cast<float>(Width) / Height);
+        const auto previous = PoseForFrame(previousPoseFrame, static_cast<float>(Width) / Height);
         const auto jitter = JitterForFrame(frame);
         const auto jitterPrev = JitterForFrame(frame ? frame - 1 : 0);
         FrameConstants c {};
@@ -290,7 +300,8 @@ struct Host
         c.jitterPrev[1] = -2 * jitterPrev.y / Height;
         c.renderExtent[0] = Width;
         c.renderExtent[1] = Height;
-        c.frameIndex = static_cast<float>(frame);
+        // The material also animates with this parameter. Holds must freeze both it and the geometry.
+        c.frameIndex = static_cast<float>(poseFrame);
         Upload(constants, &c, 1);
         Begin();
         for (auto* resource : { colour.p, motion.p, depth.p })
@@ -327,8 +338,8 @@ struct Host
         params->Set(NVSDK_NGX_Parameter_Jitter_Offset_Y, jitter.y);
         params->Set(NVSDK_NGX_Parameter_MV_Scale_X, 1.f); // Shader already writes pixels, not UV units.
         params->Set(NVSDK_NGX_Parameter_MV_Scale_Y, 1.f);
-        params->Set(NVSDK_NGX_Parameter_Reset, frame == 0 ? 1 : 0);
-        params->Set(NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, 1000.f / 120.f);
+        params->Set(NVSDK_NGX_Parameter_Reset, reset ? 1 : 0);
+        params->Set(NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, frameTimeMs);
         params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, Width);
         params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, Height);
         list->EndQuery(queries, D3D12_QUERY_TYPE_TIMESTAMP, 0);
@@ -360,6 +371,12 @@ struct Host
             Matrix(XMMatrixInverse(nullptr, current.model * current.view * current.proj));
             fprintf(manifest, ",\"previous\":");
             Matrix(previous.model * previous.view * previous.proj);
+            if (sample)
+                fprintf(manifest,
+                        ",\"pose_frame\":%u,\"previous_pose_frame\":%u,\"material_frame\":%.9g,"
+                        "\"reset\":%s,\"time_ms\":%.9g,\"frame_time_ms\":%.9g",
+                        poseFrame, previousPoseFrame, c.frameIndex, reset ? "true" : "false", sample->timeMs,
+                        frameTimeMs);
             fprintf(manifest, "}");
             fflush(manifest);
             Save(0, frame, "source");
@@ -390,7 +407,7 @@ struct Host
 // corpusFrames > 0 is --moving-corpus N: N frames, all captured, for offline replay's first corpus.
 static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* queue, ID3D12CommandAllocator* alloc,
                 ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event, HWND window, bool present,
-                unsigned corpusFrames = 0)
+                unsigned corpusFrames = 0, const char* planPath = nullptr)
 {
     // Keep all GPU-owned objects outside the try block. A failed/unknown fence cannot unwind them.
     Host host { device, queue, alloc, list, fence, event };
@@ -404,6 +421,11 @@ static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* q
     Com<IDXGIFactory4> presentFactory;
     try
     {
+        if (planPath)
+        {
+            Require(corpusFrames > 0, "moving plan requires --moving-corpus");
+            host.plan = MovingPlan::Load(planPath, corpusFrames);
+        }
         host.Init(dllPath);
         if (present)
         {

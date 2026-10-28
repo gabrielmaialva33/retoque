@@ -646,3 +646,45 @@ python3 tests/dlssnr-loopback/run.py --replay-nr --dll <candidate>/x64/out/OptiS
 This proves that a recording made by the production DLL replays through it, and that render-resolution guides at a
 base reach the pass. It is not proof that a game's recording replays: a game's formats, flags and states are its
 own. The first Cyberpunk clip is that test.
+
+### Temporal qualification profile
+
+```bash
+python3 tests/dlssnr-loopback/run.py --runtime proton --replay-quality
+```
+
+`--replay-quality` selects the versioned synthetic `temporal-v1` profile in
+`artifacts/replay-quality-run`. The ordinary `--replay-nr` path stays unchanged at
+256 frames / 160 warmup and logical 120 Hz. Temporal qualification renders 480 frames
+at 60 Hz: eight seconds nominal, 400 scored frames (about 6.67 seconds). The timestamp
+span between the first and last frame is reported separately from nominal duration.
+
+| Frames (zero based) | Phase | Content |
+| --- | --- | --- |
+| 0-79 | warmup | fixed pose and material; initial reset |
+| 80-159 | steady | fixed pose and material |
+| 160-239 | motion | two pose steps per frame |
+| 240-319 | recovery | holds the preceding pose |
+| 320-359 | fast-motion | twelve pose steps per frame |
+| 360 | cut | distinct pose; reset; previous pose equals current |
+| 361-479 | post-cut-recovery | holds the cut pose |
+
+The moving plan drives the existing scene geometry and analytic guides. It freezes animated
+material together with the pose in holds; jitter still follows rendered frame ordinal.
+After the first warmup, scoring is continuous, including the cut. Contradictory frame/warmup
+overrides and custom captures cannot be relabeled as this profile. The produced capture also
+validates its declared profile, frame identities, scoring suffix, resets and 60 Hz clocks.
+`LOOPBACK_REPLAY_RECORD_CHECK=1` is incompatible with this profile and is rejected before
+staging; the legacy recorder check remains available with `--replay-nr`.
+
+`replay-quality-policy-v1.json` explicitly preserves the evaluator's existing defaults:
+coverage 0.25, pixel tolerance 0.01, and all eight error floors zero. The same policy reaches
+calibration and judging. `judge/policy.json` and `judge/corpus.json` retain the policy and
+profile evidence alongside calibration, per-frame metrics and visual comparisons.
+
+The report separates functional seam gates, exact repeatability, numerical A/A-envelope
+comparisons and unassessed perceptual quality. It records observed decisions by phase;
+phase names do not imply that an adaptive decision met a target. This is a synthetic scene,
+with no new HDR, exposure-change, DRS or game-capture qualification. The longer profile
+requires more runtime and raw-frame storage; raw frames remain outside the bounded
+consolidated evidence bundle.

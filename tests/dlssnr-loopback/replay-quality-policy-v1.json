@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "min_coverage": 0.25,
+  "pixel_tolerance": 0.01,
+  "floors": {
+    "golden_mae": 0,
+    "golden_max": 0,
+    "golden_bad_fraction": 0,
+    "ghost_mae": 0,
+    "disocclusion_mae": 0,
+    "detail_error": 0,
+    "pulse_p95": 0,
+    "temporal_mae": 0
+  }
+}

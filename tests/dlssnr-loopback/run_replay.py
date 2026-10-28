@@ -25,6 +25,7 @@ import sys
 import uuid
 
 from run_moving import digest, execute
+import replay_quality
 
 STAGED = ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'nvngx_dlssnr.dll', 'nvngx_dlss.dll', '_nvngx.dll',
           'dlssnr-loopback.exe', 'scene.hlsl')
@@ -179,26 +180,38 @@ def raw_dxgi_plane(directory, name, shape):
                 height=shape['height'], pixel_bytes=shape['pixel_bytes'], row_pitch=row, sha256=digest(path))
 
 
-def make_corpus(runner, proton, env, root, provenance):
+def make_corpus(runner, proton, env, root, provenance, profile=None):
     directory = root / 'corpus'
     stage(root, directory)
     write_ini(directory, None)
-    print(f'  replay corpus: moving scene, NR off, {CORPUS_FRAMES} frames all captured', flush=True)
+    schedule = replay_quality.temporal_frames() if profile else None
+    count = len(schedule) if schedule else CORPUS_FRAMES
+    plan = directory / 'moving-plan.txt'
+    if schedule:
+        replay_quality.write_moving_plan(plan, schedule)
+    print(f'  replay corpus: moving scene, NR off, {count} frames all captured' +
+          (f', profile={profile}' if profile else ''), flush=True)
     code = execute([proton, 'run', directory / 'dlssnr-loopback.exe', 'OptiScaler.dll', '--moving-corpus',
-                    str(CORPUS_FRAMES)], cwd=directory, env=env, log=directory / 'proton.log', timeout=600)
+                    str(count)] + (['--moving-plan', plan.name] if schedule else []),
+                   cwd=directory, env=env, log=directory / 'proton.log', timeout=600 + (count if schedule else 0))
     log = (directory / 'dlssnr-loopback.log').read_text(errors='replace')
-    if code or f'MOVING-SCENE PASS: evaluations={CORPUS_FRAMES} captures={CORPUS_FRAMES}' not in log:
+    if code or f'MOVING-SCENE PASS: evaluations={count} captures={count}' not in log:
         raise SystemExit(f'replay corpus recording failed ({code}); see {directory}')
-    samples = json.loads((directory / 'moving.json').read_text())['samples']
-    if [s['frame'] for s in samples] != list(range(CORPUS_FRAMES)):
+    manifest = json.loads((directory / 'moving.json').read_text())
+    samples = manifest['samples']
+    if [s['frame'] for s in samples] != list(range(count)):
         raise SystemExit('replay corpus: the moving manifest does not list every frame')
+    if schedule:
+        replay_quality.validate_samples(manifest, schedule)
     frames = []
     for s in samples:
         i = s['frame']
         frames.append(dict(
-            id=i + 1, present=i + 1, time_ms=round(i * FRAME_MS, 6), reset=i == 0, score=i >= CORPUS_WARMUP,
+            id=i + 1, present=i + 1, time_ms=s['time_ms'] if schedule else round(i * FRAME_MS, 6),
+            reset=s['reset'] if schedule else i == 0, score=schedule[i]['score'] if schedule else i >= CORPUS_WARMUP,
             jitter=s['jitter'], pre_exposure=1.0, exposure=None, exposure_value=1.0, completion='fence-complete',
-            params=dict(create_flags=CREATE_FLAGS, mv_scale=[1.0, 1.0], frame_time_ms=FRAME_MS),
+            params=dict(create_flags=CREATE_FLAGS, mv_scale=[1.0, 1.0],
+                        frame_time_ms=s['frame_time_ms'] if schedule else FRAME_MS),
             color=plane(directory, f'f{i}.output', 'f16', 4, 2),
             depth=plane(directory, f'f{i}.depth', 'f32', 1, 4),
             motion=plane(directory, f'f{i}.motion', 'f16', 2, 2)))
@@ -213,6 +226,10 @@ def make_corpus(runner, proton, env, root, provenance):
                    provenance=dict(provenance, shader_sha256=digest(runner.HERE / 'scene.hlsl'),
                                    note='DLAA output of the moving scene with NR off; analytic guides'),
                    frames=frames)
+    if schedule:
+        capture['provenance'].update(profile=profile, moving_plan_sha256=digest(plan),
+                                     geometry_check='actual previous/current projection matrices validated')
+        capture['provenance']['corpus'] = replay_quality.corpus_metadata(capture, profile)
     path = directory / 'capture.json'
     path.write_text(json.dumps(capture, indent=1) + '\n')
     return path
@@ -590,11 +607,11 @@ def judge_python():
     return ['uv', 'run', '--no-project', '-q', '--with', 'numpy', 'python'] if shutil.which('uv') else [sys.executable]
 
 
-def calibrate(runner, root, capture_path, repeats):
+def calibrate(runner, root, capture_path, repeats, policy=None):
     out = root / 'judge' / 'calibration.json'
     p = subprocess.run(judge_python() + ['-m', 'tools.replay', 'calibrate', '--capture', str(capture_path),
                                          '--reference', str(root / 'runs' / 'every-a' / 'run.json'), '--out',
-                                         str(out)] +
+                                         str(out)] + (['--policy', str(policy)] if policy else []) +
                        [arg for name in repeats for arg in ('--repeat', str(root / 'runs' / name / 'run.json'))],
                        cwd=runner.ROOT, capture_output=True, text=True)
     data = json.loads(out.read_text()) if out.is_file() else {}
@@ -605,7 +622,7 @@ def calibrate(runner, root, capture_path, repeats):
                                      stderr=p.stderr[-2000:])
 
 
-def judge(runner, root, capture_path, runs, calibration=None):
+def judge(runner, root, capture_path, runs, calibration=None, policy=None):
     package = runner.ROOT / 'tools/replay'
     if not (package / '__main__.py').is_file():
         return dict(available=False)
@@ -635,7 +652,8 @@ def judge(runner, root, capture_path, runs, calibration=None):
         p = subprocess.run(judge_python() + ['-m', 'tools.replay', '--capture', str(capture_path), '--reference',
                                              str(reference), '--candidate', str(root / 'runs' / name / 'run.json'),
                                              '--out', str(out)] +
-                           (['--calibration', str(calibration)] if calibration else []),
+                           (['--calibration', str(calibration)] if calibration else []) +
+                           (['--policy', str(policy)] if policy else []),
                            cwd=runner.ROOT, capture_output=True, text=True)
         result = out / 'result.json'
         data = json.loads(result.read_text()) if result.is_file() else {}
@@ -803,24 +821,34 @@ def halfres_check(runner, proton, env, root, capture_path, environment, producer
     return v2_replay_gates('halfres-guides', capture, replays)
 
 
-def run(runner, proton, env, dll):
+def run(runner, proton, env, dll, profile=None):
+    profile = replay_quality.select_profile(profile)
     mode = replay_mode()
     if mode['ring'] and (CALIBRATE != 0 or os.environ.get('LOOPBACK_REPLAY_JUDGE', '1') != '0'):
         raise SystemExit('inflight stress needs CALIBRATE=0 and JUDGE=0 (deliberate scored skips)')
     root = runner.RUN
     report_path = root / 'replay-report.json'
     report_path.unlink(missing_ok=True)
+    policy_path = replay_quality.write_policy(root / 'judge')
+    policy = replay_quality.policy_metadata(policy_path)
     provenance = dict(producer=producer(runner), dll_sha256=digest(root / 'OptiScaler.dll'),
                       model_sha256=digest(root / 'nvngx_dlssnr.dll'),
                       fixture_sources={n: digest(runner.HERE / n) for n in
-                                       ('harness.cpp', 'moving_scene.h', 'replay_nr.h', 'scene.hlsl',
-                                        'run_replay.py', 'run.py')})
+                                       ('harness.cpp', 'moving_scene.h', 'moving_plan.h', 'replay_nr.h', 'scene.hlsl',
+                                        'run_replay.py', 'replay_quality.py', 'replay-quality-policy-v1.json', 'run.py')})
     gpu, driver = gpu_identity()
     environment = dict(model_sha256=provenance['model_sha256'], gpu=gpu, driver=driver, runtime=proton.parent.name)
     supplied = os.environ.get('LOOPBACK_REPLAY_CAPTURE')
     capture_path = Path(supplied).expanduser().resolve() if supplied else make_corpus(runner, proton, env, root,
-                                                                                         provenance)
+                                                                                         provenance, profile)
     capture = load_capture(capture_path)
+    corpus = replay_quality.corpus_metadata(capture, profile)
+    corpus.update(capture_sha256=digest(capture_path), policy=policy)
+    if profile:
+        plan = capture_path.parent / 'moving-plan.txt'
+        shutil.copyfile(plan, root / 'judge' / plan.name)
+        corpus['moving_plan_sha256'] = digest(plan)
+    (root / 'judge' / 'corpus.json').write_text(json.dumps(corpus, indent=2, allow_nan=False) + '\n')
     baseline = load_baseline(BASELINE, digest(capture_path)) if BASELINE else None
     variants = json.loads(os.environ['LOOPBACK_REPLAY_VARIANTS']) if os.environ.get('LOOPBACK_REPLAY_VARIANTS') \
         else DEFAULT_VARIANTS
@@ -837,6 +865,8 @@ def run(runner, proton, env, dll):
     runs = {name: run_variant(runner, proton, env, root, name, settings, capture, capture_path, environment,
                               provenance['producer']) for name, settings in variants.items()}
     results = gates(capture, runs)
+    if profile:
+        results.update(replay_quality.reset_gates(capture, runs))
     if os.environ.get('LOOPBACK_REPLAY_RECORD_CHECK') == '1':
         results.update(record_check(runner, proton, env, root, capture_path, environment, provenance['producer']))
         results.update(halfres_check(runner, proton, env, root, capture_path, environment, provenance['producer']))
@@ -846,12 +876,13 @@ def run(runner, proton, env, dll):
     if sync_baseline:
         results.update(sync_gates(runs, load_baseline(sync_baseline, digest(capture_path))))
     repeats = [name for name in runs if name.startswith('aa-')]
-    calibration, calibration_report = calibrate(runner, root, capture_path, repeats) if repeats else (None, None)
+    calibration, calibration_report = calibrate(runner, root, capture_path, repeats, policy_path) \
+        if repeats else (None, None)
     if repeats:
         results['aa-calibration'] = dict(ok=calibration is not None,
                                          detail=f'{len(repeats)} fresh every-frame repeats, verdict '
                                                 f'{calibration_report["verdict"]}')
-    verdicts = judge(runner, root, capture_path, runs, calibration)
+    verdicts = judge(runner, root, capture_path, runs, calibration, policy_path)
     # The judge's strict reader is the compatibility test of everything written above.
     for name, verdict in verdicts.get('verdicts', {}).items():
         results[f'{name}-judge-accepts-manifests'] = dict(
@@ -867,12 +898,17 @@ def run(runner, proton, env, dll):
         verdicts['calibration'] = calibration_report
     report = dict(schema='retoque-replay-seam-report', version=1, capture=str(capture_path),
                   capture_sha256=digest(capture_path), provenance=provenance, environment=environment,
-                  gates=results, judge=verdicts)
+                  gates=results, judge=verdicts, corpus=corpus, policy=policy,
+                  assessments=replay_quality.assessments(results, verdicts))
+    if profile:
+        report['phase_observations'] = replay_quality.phase_observations(capture, runs)
     report_path.write_text(json.dumps(report, indent=1) + '\n')
     for name, result in results.items():
         mark = 'PASS' if result['ok'] else 'INFO' if result['ok'] is None else 'FAIL'
         print(f'  {mark} {name}: {result["detail"]}', flush=True)
     print(f'  replay report: {report_path}', flush=True)
+    print(f'  numerical A/A comparison: {report["assessments"]["numerical"]}; perceptual acceptance: NOT ASSESSED',
+          flush=True)
     if any(r['ok'] is False for r in results.values()):
         raise SystemExit('REPLAY SEAM FAIL: see replay-report.json')
     print('REPLAY SEAM PASS', flush=True)
