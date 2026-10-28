@@ -6,8 +6,8 @@ Recorded on 2026-10-28. All timestamps in this document are UTC.
 
 ## Source and artifact identity
 
-- Primary repository: `/home/gabrielmaia/Projects/personal/OptiScaler_DLSSNR`.
-- Implementation worktree: `/home/gabrielmaia/.cache/retoque-wt/hardening2-20261027`.
+- Primary repository: this checkout, on `dlss-neural-rendering`.
+- Implementation worktree: `hardening2-20261027` under the local worktree cache.
 - Implementation branch: `fix/vulkan-readback-scaler-20261027`.
 - Qualified source: `d845b511e1b380ba2cf83d1e8635bbd62502ef16`, clean when the required run started.
 - Pre-integration primary check on 2026-10-28: `dlss-neural-rendering`, clean at `ff7dc45b10ee898aead9b02f6587a8cca5c65e69`.

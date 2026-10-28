@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import errno
 import hashlib
 import json
 import math
@@ -13,6 +15,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import sys
 import threading
 import uuid
@@ -22,7 +25,11 @@ sys.path.insert(0, str(ROOT/'tests'))
 import run_all as runner
 from _suite_result import atomic_json
 
-VK_CASES = ('nr', 'nr-route-quiet', 'nr-route-quiet-wdx12', 'nr-route-guides')
+VK_CASES = ('nr', 'nr-route-quiet', 'nr-route-quiet-wdx12', 'nr-route-guides', 'nr-route-scale125')
+REPLAY_ROOT_ARTIFACTS = ('calibration.json', 'policy.json', 'corpus.json', 'moving-plan.txt')
+REPLAY_VARIANT_ARTIFACTS = ('result.json', 'frames.jsonl', 'contact-sheet.png', 'diff-heatmap.png')
+REPLAY_ARTIFACT_LIMITS = {'variants': 32, 'files': 132, 'file_bytes': 16*1024*1024,
+                          'summary_bytes': 2*1024*1024, 'total_bytes': 128*1024*1024}
 
 
 def duration_arg(value):
@@ -39,6 +46,8 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--host-only', action='store_true')
     parser.add_argument('--no-build', action='store_true')
+    parser.add_argument('--replay-quality', action='store_true',
+                        help='select temporal-v1: 480 frames at logical 60 Hz, including a scored cut')
     parser.add_argument('--fg-steady-seconds', type=duration_arg, default=0, metavar='N',
                         help='explicit FG qualification duration per active phase, integer 5..120 (suggested 15)')
     parser.add_argument('--report', type=Path, help='consolidated JSON report')
@@ -91,6 +100,17 @@ def validate_suite(data, dll_sha256, *, steady_seconds=0):
                            or (data.get('qualification') or {}).get('status') != 'PASS'):
         findings.append('requested FG duration qualification did not PASS')
     return findings
+
+
+def validate_preflight(data, run_id):
+    if (data.get('schema') != 'retoque-suite-result' or type(data.get('version')) is not int
+            or data['version'] != 1 or not run_id or data.get('run_id') != run_id
+            or data.get('status') != 'PASS' or data.get('runtime_coverage') is not False
+            or data.get('backend') != 'x11' or data.get('probe') != 'XOpenDisplay/XCloseDisplay'
+            or data.get('connected') is not True or not isinstance(data.get('display'), str)
+            or not data['display'] or '\0' in data['display']):
+        return ['X11 preflight lacks a current versioned connection PASS without runtime coverage']
+    return []
 
 
 def validate_hashes(expected, before, after):
@@ -163,17 +183,31 @@ def validate_moving(data, expected):
     return findings
 
 
-def validate_replay(data, dll_sha256):
+def validate_replay(data, dll_sha256, *, profile=None):
     findings = []
     if (data.get('schema') != 'retoque-replay-seam-report' or type(data.get('version')) is not int
             or data['version'] != 1 or not dll_sha256
             or (data.get('provenance') or {}).get('dll_sha256') != dll_sha256):
         findings.append('replay report schema/build provenance is missing or inconsistent')
+    if profile is not None:
+        corpus = data.get('corpus')
+        if (not isinstance(corpus, dict) or corpus.get('schema') != 'retoque-replay-corpus-summary'
+                or type(corpus.get('version')) is not int or corpus['version'] != 1
+                or corpus.get('profile') != profile):
+            findings.append('replay corpus does not identify the requested profile')
+        elif profile == 'temporal-v1':
+            resets = corpus.get('reset_frame_ids')
+            if (corpus.get('frames') != 480 or corpus.get('scored_frames') != 400
+                    or resets != [1, 361] or any(type(value) is not int for value in resets)):
+                findings.append('temporal replay corpus has incomplete frame/scoring/reset coverage')
     required = {'off-leaves-every-byte', 'off-records-nothing',
                 'every-a-model-every-scored-frame', 'every-b-model-every-scored-frame',
                 'cadence2-carries', 'cadence4-carries', 'adaptive-reports-intervals', 'repeat-decisions-identical'}
     required.update(f'{name}-no-scored-frame-skipped' for name in
                     ('every-a', 'every-b', 'cadence2', 'cadence4', 'adaptive4'))
+    if profile == 'temporal-v1':
+        required.update(f'{name}-scored-reset-runs-model' for name in
+                        ('every-a', 'every-b', 'cadence2', 'cadence4', 'adaptive4'))
     gates = data.get('gates')
     if not isinstance(gates, dict) or not required.issubset(gates):
         findings.append('replay required default scenario gates are missing')
@@ -195,6 +229,8 @@ class Step:
     required: tuple[str, ...] = ()
     log_paths: tuple[Path, ...] = ()
     steady_seconds: int = 0
+    artifact_root: Path | None = None
+    replay_profile: str | None = None
 
 
 def sha(path):
@@ -245,6 +281,250 @@ def retain_logs(paths, folder):
                      'limit': 200}
 
 
+class ArtifactError(ValueError):
+    def __init__(self, reason, detail):
+        super().__init__(detail)
+        self.reason = reason
+
+
+@contextmanager
+def artifact_directory(path, *, create=False):
+    """Open each path component without following symlinks, including ancestors."""
+    path = Path(path).absolute()
+    if '..' in path.parts or not hasattr(os, 'O_NOFOLLOW') or not hasattr(os, 'O_DIRECTORY'):
+        raise ArtifactError('UNSAFE_PATH', 'artifact paths require no-follow directory descriptors')
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    descriptor = os.open(path.anchor, flags)
+    try:
+        for part in path.parts[1:]:
+            if create:
+                try:
+                    os.mkdir(part, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+            child = os.open(part, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+        yield descriptor
+    finally:
+        os.close(descriptor)
+
+
+def artifact_identity(info):
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def artifact_reason(error):
+    if isinstance(error, ArtifactError):
+        return error.reason
+    if isinstance(error, FileNotFoundError):
+        return 'MISSING'
+    if isinstance(error, OSError) and error.errno in (errno.ELOOP, errno.ENOTDIR):
+        return 'SYMLINK_OR_NOT_DIRECTORY'
+    return 'IO_ERROR'
+
+
+def replay_artifact_inventory(root):
+    """Record bounded pre-execution identities; never open raw-frame trees."""
+    files, issues, variants = {}, [], []
+    limits = REPLAY_ARTIFACT_LIMITS
+    def record(directory, filename, relative):
+        try:
+            files[relative] = artifact_identity(os.stat(filename, dir_fd=directory, follow_symlinks=False))
+        except FileNotFoundError:
+            pass
+        except OSError as error:
+            issues.append({'relative_path': relative, 'reason': artifact_reason(error), 'detail': str(error)})
+    try:
+        with artifact_directory(Path(root)/'judge') as judge:
+            for filename in REPLAY_ROOT_ARTIFACTS:
+                record(judge, filename, f'judge/{filename}')
+            # Even unrelated entries cannot make inventory an unbounded directory scan.
+            scan_limit = limits['files'] + limits['variants'] + len(REPLAY_ROOT_ARTIFACTS)
+            with os.scandir(judge) as entries:
+                for count, entry in enumerate(entries, 1):
+                    if count > scan_limit:
+                        raise ArtifactError('INVENTORY_LIMIT', f'judge directory exceeds {scan_limit} entries')
+                    if entry.name in REPLAY_ROOT_ARTIFACTS:
+                        continue
+                    if not entry.is_dir(follow_symlinks=False) and not entry.is_symlink():
+                        continue
+                    if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}', entry.name) is None:
+                        raise ArtifactError('UNSAFE_VARIANT', 'unsafe variant directory name')
+                    variants.append(entry.name)
+                    if len(variants) > limits['variants']:
+                        raise ArtifactError('VARIANT_LIMIT', 'judge directory exceeds variant limit')
+            for name in sorted(variants):
+                try:
+                    directory = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=judge)
+                    try:
+                        for filename in REPLAY_VARIANT_ARTIFACTS:
+                            record(directory, filename, f'judge/{name}/{filename}')
+                    finally:
+                        os.close(directory)
+                except OSError as error:
+                    issues.append({'relative_path': f'judge/{name}', 'reason': artifact_reason(error),
+                                   'detail': str(error)})
+    except FileNotFoundError:
+        pass  # A safely observed absent judge directory contains no previous artifacts.
+    except (OSError, ArtifactError) as error:
+        issues.append({'relative_path': 'judge', 'reason': artifact_reason(error), 'detail': str(error)})
+    return {'files': files, 'issues': issues, 'complete': not issues}
+
+
+def verify_replay_publication(target, output_directory, output, expected_bytes, expected_digest):
+    """Bind the reported pathname to the still-owned output and its actual bytes."""
+    parent = os.fstat(output_directory)
+    expected = artifact_identity(os.fstat(output))
+    def check_parent(directory):
+        current = os.fstat(directory)
+        if (current.st_dev, current.st_ino) != (parent.st_dev, parent.st_ino):
+            raise ArtifactError('DESTINATION_CHANGED', 'published artifact parent pathname was replaced')
+    try:
+        with artifact_directory(target.parent) as named_directory:
+            check_parent(named_directory)
+            named = os.open(target.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=named_directory)
+            try:
+                info = os.fstat(named)
+                if (not stat.S_ISREG(info.st_mode) or info.st_size != expected_bytes
+                        or artifact_identity(info) != expected):
+                    raise ArtifactError('DESTINATION_CHANGED', 'published artifact pathname names a different file')
+                total, digest = 0, hashlib.sha256()
+                while True:
+                    content = os.read(named, min(64*1024, expected_bytes-total+1))
+                    if not content:
+                        break
+                    total += len(content)
+                    if total > expected_bytes:
+                        raise ArtifactError('DESTINATION_CHANGED', 'published artifact grew during verification')
+                    digest.update(content)
+                if (total != expected_bytes or digest.hexdigest() != expected_digest
+                        or artifact_identity(os.fstat(named)) != expected):
+                    raise ArtifactError('DESTINATION_CHANGED', 'published artifact content changed')
+                # A rename while verifying bytes must not detach the pathname from
+                # either owned descriptor. Reopen every ancestor without following links.
+                with artifact_directory(target.parent) as current_directory:
+                    check_parent(current_directory)
+                    current = os.stat(target.name, dir_fd=current_directory, follow_symlinks=False)
+                    if artifact_identity(current) != expected:
+                        raise ArtifactError('DESTINATION_CHANGED', 'published artifact pathname changed during verification')
+            finally:
+                os.close(named)
+    except (OSError, ArtifactError) as error:
+        raise ArtifactError('DESTINATION_CHANGED', f'published destination verification failed: {error}') from error
+
+
+def copy_replay_artifact(source, target, before, *, file_limit, remaining_bytes):
+    """Copy a fresh stable regular file through descriptors, with bounded memory/I/O."""
+    with artifact_directory(source.parent) as directory:
+        info = os.stat(source.name, dir_fd=directory, follow_symlinks=False)
+        if stat.S_ISLNK(info.st_mode):
+            raise ArtifactError('SYMLINK', 'artifact file is a symlink')
+        if not stat.S_ISREG(info.st_mode):
+            raise ArtifactError('NOT_REGULAR', 'artifact is not a regular file')
+        identity = artifact_identity(info)
+        if identity == before:
+            raise ArtifactError('STALE', 'artifact identity is unchanged from before this invocation')
+        if info.st_size > file_limit:
+            raise ArtifactError('FILE_LIMIT', f'artifact exceeds {file_limit} bytes')
+        if info.st_size > remaining_bytes:
+            raise ArtifactError('TOTAL_LIMIT', 'artifact would exceed retained byte limit')
+        descriptor = os.open(source.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        try:
+            if artifact_identity(os.fstat(descriptor)) != identity:
+                raise ArtifactError('CHANGED_BEFORE_OPEN', 'artifact changed between inspection and opening')
+            with artifact_directory(target.parent, create=True) as output_directory:
+                temporary = f'.{target.name}-{uuid.uuid4().hex}.tmp'
+                output = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o600, dir_fd=output_directory)
+                total, digest = 0, hashlib.sha256()
+                try:
+                    while True:
+                        content = os.read(descriptor, min(64*1024, info.st_size-total+1))
+                        if not content:
+                            break
+                        total += len(content)
+                        if total > info.st_size:
+                            raise ArtifactError('CHANGED_DURING_COPY', 'artifact grew during copy')
+                        digest.update(content)
+                        pending = memoryview(content)
+                        while pending:
+                            written = os.write(output, pending)
+                            if written <= 0:
+                                raise OSError('artifact copy made no progress')
+                            pending = pending[written:]
+                    if total != info.st_size or artifact_identity(os.fstat(descriptor)) != identity:
+                        raise ArtifactError('CHANGED_DURING_COPY', 'artifact changed during copy')
+                    os.fsync(output)
+                    os.replace(temporary, target.name, src_dir_fd=output_directory, dst_dir_fd=output_directory)
+                    verify_replay_publication(target, output_directory, output, total, digest.hexdigest())
+                finally:
+                    os.close(output)
+                    try:
+                        os.unlink(temporary, dir_fd=output_directory)
+                    except FileNotFoundError:
+                        pass
+        finally:
+            os.close(descriptor)
+    return {'source': str(source), 'path': str(target), 'sha256': digest.hexdigest(), 'bytes': total}
+
+
+def retain_replay_artifacts(root, folder, before, evidence):
+    limits = dict(REPLAY_ARTIFACT_LIMITS)
+    records, excluded, findings = [], [], []
+    total = 0
+    def reject(relative, reason, detail, *, required=True):
+        excluded.append({'relative_path': relative, 'reason': reason, 'detail': detail, 'required': required})
+        if required or reason not in ('MISSING', 'STALE'):
+            findings.append(f'{relative}: {reason}: {detail}')
+    judge = evidence.get('judge') if isinstance(evidence, dict) else None
+    verdicts = judge.get('verdicts') if isinstance(judge, dict) else None
+    variants = []
+    if not isinstance(verdicts, dict) or not verdicts:
+        reject('judge', 'MISSING_VERDICTS', 'current replay report has no judged variants')
+    elif len(verdicts) > limits['variants']:
+        reject('judge', 'VARIANT_LIMIT', f'more than {limits["variants"]} reported variants')
+    else:
+        for name in verdicts:
+            if not isinstance(name, str) or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,127}', name) is None:
+                reject('judge', 'UNSAFE_VARIANT', 'report contains an unsafe variant name')
+            else:
+                variants.append(name)
+    if not before.get('complete'):
+        reject('judge', 'INVENTORY_INCOMPLETE', 'pre-execution freshness inventory was incomplete')
+        excluded.extend(before.get('issues', []))
+    else:
+        paths = [(f'judge/{name}', name != 'moving-plan.txt') for name in REPLAY_ROOT_ARTIFACTS]
+        paths.extend((f'judge/{name}/{filename}', True) for name in sorted(variants)
+                     for filename in REPLAY_VARIANT_ARTIFACTS)
+        for relative, required in paths:
+            try:
+                # A missing optional plan does not consume a file slot.
+                if not required:
+                    with artifact_directory(Path(root)/'judge') as directory:
+                        os.stat('moving-plan.txt', dir_fd=directory, follow_symlinks=False)
+                if len(records) >= limits['files']:
+                    raise ArtifactError('COUNT_LIMIT', f'more than {limits["files"]} retained files')
+                limit = limits['summary_bytes'] if relative.endswith('.json') else limits['file_bytes']
+                record = copy_replay_artifact(Path(root)/relative, Path(folder)/relative,
+                                              before['files'].get(relative), file_limit=limit,
+                                              remaining_bytes=limits['total_bytes']-total)
+                record['relative_path'] = relative
+                records.append(record)
+                total += record['bytes']
+            except (OSError, ArtifactError) as error:
+                reason = artifact_reason(error)
+                if required or reason != 'MISSING':
+                    reject(relative, reason, str(error), required=required)
+                if reason == 'DESTINATION_CHANGED':
+                    # The rejected published copy may still occupy its admitted
+                    # budget. Do not accumulate further uncharged copies.
+                    break
+    return records, {'status': 'FAIL' if findings else 'PASS', 'bytes': total, 'files': len(records),
+                     'limits': limits, 'excluded': excluded, 'findings': findings,
+                     'scope': 'fresh allowlisted judge artifacts only; raw frames and unreported variants are not copied'}
+
+
 def validate_inputs(data):
     cases = data.get('cases') or {}
     required = {'current': 'PASS', 'no-camera': 'EXPECTED_FAIL',
@@ -260,6 +540,7 @@ def run_step(step, log_dir, expected_hashes, *, stop=None):
     folder = log_dir/step.name
     folder.mkdir(parents=True, exist_ok=True)
     before = runtime_hashes()
+    artifact_before = replay_artifact_inventory(step.artifact_root) if step.artifact_root is not None else None
     if step.command[0] == "flock":
         Path(step.command[3]).parent.mkdir(parents=True, exist_ok=True)
     # Legacy receipts cannot self-identify the invocation. Remove the generated
@@ -281,12 +562,14 @@ def run_step(step, log_dir, expected_hashes, *, stop=None):
             findings.append(f'missing or invalid fresh receipt: {error}')
     if outcome.status != 'PASS':
         findings.append(f'runner {outcome.status}: {outcome.note}')
-    if step.kind not in ('host', 'build'):
+    if step.kind not in ('host', 'build', 'preflight'):
         findings.extend(validate_hashes(expected_hashes, before, after))
     if isinstance(data, dict):
         try:
             if step.kind == 'host':
                 findings.extend(validate_host(data, step.required))
+            elif step.kind == 'preflight':
+                findings.extend(validate_preflight(data, outcome.run_id))
             elif step.kind == 'vulkan':
                 findings.extend(validate_vulkan(data, expected_hashes.get('dll')))
             elif step.kind == 'provider':
@@ -296,23 +579,32 @@ def run_step(step, log_dir, expected_hashes, *, stop=None):
             elif step.kind == 'moving':
                 findings.extend(validate_moving(data, expected_hashes))
             elif step.kind == 'replay':
-                findings.extend(validate_replay(data, expected_hashes.get('dll')))
+                findings.extend(validate_replay(data, expected_hashes.get('dll'), profile=step.replay_profile))
         except (ValueError, TypeError, AttributeError, KeyError) as error:
             findings.append(f'invalid structured metadata fields: {error}')
     if step.kind == 'build' and any(not after.get(name) for name in ('dll', 'forwarder')):
         findings.append('Release build did not publish both DLL and forwarder')
+    functional_status = outcome.status if outcome.status in ('ABORTED', 'TIMEOUT') else 'FAIL' if findings else 'PASS'
+    artifacts, retention = [], None
+    if step.artifact_root is not None:
+        artifacts, retention = retain_replay_artifacts(step.artifact_root, folder/'artifacts', artifact_before, data)
+        findings.extend(f'replay artifact retention: {finding}' for finding in retention['findings'])
     logs, validation = retain_logs((outcome.log, *step.log_paths) if outcome.log else step.log_paths,
                                     folder/'logs')
     status = outcome.status if outcome.status in ('ABORTED', 'TIMEOUT') else 'FAIL' if findings else 'PASS'
     return {'name': step.name, 'kind': step.kind, 'command': step.command,
             'execution_anchor': str(step.entry.get('path', step.name)),
             'status': status, 'runner_status': outcome.status, 'returncode': outcome.returncode,
+            'functional_status': functional_status,
             'run_id': outcome.run_id, 'seconds': outcome.seconds, 'runner_note': outcome.note,
             'fixture_status': data.get('status') if isinstance(data, dict) else None,
             'evidence': data, 'receipt_snapshot': saved_receipt, 'retained_logs': logs,
+            'retained_artifacts': artifacts, 'artifact_retention': retention,
             'hashes_before': before, 'hashes_after': after, 'findings': findings,
             'validation_findings': validation,
-            'evidence_scope': 'required runtime/scenario and seam gates; optional pixel verdicts are separate',
+            'evidence_scope': ('X11/XWayland connection only; no native Wayland or GPU/runtime coverage'
+                               if step.kind == 'preflight' else
+                               'required runtime/scenario and seam gates; numerical pixel verdicts are separate'),
             'quality_qualification': {'status': 'NOT_ISSUED_BY_ORCHESTRATOR',
                                       'original_judge': data.get('judge') if isinstance(data, dict) else None}}
 
@@ -332,6 +624,11 @@ def build_steps(args, log_dir, manifest):
                   entry(anchor, 3600), 'host', host_report, host_names)]
     if args.host_only:
         return steps
+    preflight_receipt = log_dir/'graphics-preflight/result.json'
+    steps.insert(0, Step('graphics-preflight',
+                         [python, str(ROOT/'tools/graphics_preflight.py'), '--report', str(preflight_receipt)],
+                         {'path': 'rendering-orchestration', 'tier': 'host', 'requires': [], 'timeout': 8},
+                         'preflight', preflight_receipt))
     dll = str(ROOT/'x64/out/OptiScaler.dll')
     if not args.no_build:
         steps.append(Step('build', [str(ROOT/'build-local.sh'), 'Release'], entry(anchor, 2400), 'build'))
@@ -342,13 +639,19 @@ def build_steps(args, log_dir, manifest):
                                       ('current', 'no-camera', 'camera-order', 'zero-origin')
                                       for kind in ('build', 'run'))))
     loopback = ROOT/'tests/dlssnr-loopback'
+    replay_flag = '--replay-quality' if args.replay_quality else '--replay-nr'
+    replay_directory = 'replay-quality-run' if args.replay_quality else 'replay-run'
     for name, flag, directory, receipt in (
             ('nr-moving', '--moving-scene', 'moving-run', 'moving-report.json'),
-            ('nr-replay', '--replay-nr', 'replay-run', 'replay-report.json')):
+            ('nr-replay', replay_flag, replay_directory, 'replay-report.json')):
         work = loopback/'artifacts'/directory
+        replay = name == 'nr-replay'
+        timeout = 5400 if replay and args.replay_quality else 3600
+        profile = ('temporal-v1' if args.replay_quality else 'legacy') if replay else None
         steps.append(Step(name, [python, str(loopback/'run.py'), '--dll', dll, '--runtime', 'proton', flag],
-                          entry('dlssnr-loopback', 3600), 'moving' if name == 'nr-moving' else 'replay',
-                          work/receipt, log_paths=(work,)))
+                          entry('dlssnr-loopback', timeout), 'replay' if replay else 'moving',
+                          work/receipt, log_paths=(work,), artifact_root=work if replay else None,
+                          replay_profile=profile))
     vulkan = ROOT/'tests/vulkan-present-host'
     lock = Path(os.environ.get('XDG_RUNTIME_DIR') or f'/run/user/{os.getuid()}')/'msvc-prefix.lock'
     command = ['flock', '-n', '-o', str(lock), python, str(vulkan/'run.py'), '--dll', dll,
@@ -393,13 +696,14 @@ def main(argv=None):
                    'status': status, 'started_at': started,
                    'finished_at': None if status == 'RUNNING' else datetime.now(timezone.utc).isoformat(),
                    'log_dir': str(log_dir), 'requested_fg_steady_seconds': args.fg_steady_seconds,
+                   'requested_replay_profile': 'temporal-v1' if args.replay_quality else 'legacy',
                    'host_only': args.host_only, 'build_requested': not args.no_build and not args.host_only,
                    'expected_runtime_hashes': expected, 'steps': rows,
-                   'runtime_coverage': (not args.host_only and any(row.get('kind') not in ('host', 'build') for row in rows)
-                                        and all(row['status'] == 'PASS' for row in rows if row.get('kind') not in ('host', 'build'))),
+                   'runtime_coverage': (not args.host_only and any(row.get('kind') not in ('host', 'build', 'preflight') for row in rows)
+                                        and all(row['status'] == 'PASS' for row in rows if row.get('kind') not in ('host', 'build', 'preflight'))),
                    'evidence_scope': {'overall': ('host checks only; runtime not run' if args.host_only else
                                                    'required runtime/scenario and seam gates only'),
-                                      'quality_qualification': 'no general quality approval; original optional pixel judgments retained',
+                                      'quality_qualification': 'no general quality approval; original numerical pixel judgments retained',
                                       'validation': 'raw matching log findings retained; no universal validation-clean claim'}}
         if error is not None:
             payload['error'] = str(error)

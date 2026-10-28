@@ -33,37 +33,56 @@ Redirect output to a file. See `tests/build-lifecycle/README.md` for regression 
 
 ## test-rendering.sh
 
-Runs every registered host suite in strict mode with four workers, builds Release, then runs
-D3D12 camera/texture checks, the moving-scene production NR A/B fixture, offline replay through
-the production seam, four NR Vulkan scenarios (`nr`, `nr-route-quiet`, `nr-route-quiet-wdx12`,
-`nr-route-guides`), and the complete production DLSS-G provider fixture. Wine/GPU work is serial.
-A non-PASS required step stops the sequence and leaves remaining steps as `NOT_RUN`; unavailable
-prerequisites cannot become a successful combined run.
+Runs a supervised X11/XWayland connection preflight, every registered host suite in strict mode
+with four workers, the Release build, D3D12 camera/texture checks, moving NR, offline replay,
+five NR Vulkan scenarios (`nr`, `nr-route-quiet`, `nr-route-quiet-wdx12`, `nr-route-guides`,
+`nr-route-scale125`), and the real DLSS-G provider fixture. Wine/GPU work is serial.
+A non-PASS required step stops the sequence and leaves remaining steps as `NOT_RUN`.
 
 ```bash
 tools/test-rendering.sh                         # complete sequence, without opening a game
-tools/test-rendering.sh --host-only             # strict host checks; no GPU coverage
+tools/test-rendering.sh --host-only             # strict host checks; no display/GPU requirement
 tools/test-rendering.sh --no-build              # use the existing x64/out DLL pair
-tools/test-rendering.sh --fg-steady-seconds 15   # three complete FG windows per active phase
+tools/test-rendering.sh --replay-quality        # opt-in eight-second temporal corpus
+tools/test-rendering.sh --fg-steady-seconds 15   # sustained FG counter windows
 tools/test-rendering.sh --report x64/logs/rendering.json --log-dir x64/logs/rendering
 ```
 
-The shell entry delegates to `test-rendering.py`, which reuses the existing test runner's owned
-process supervision. Each invocation gets a unique log directory. The default consolidated report
-is `artifacts/rendering/<run-id>/summary.json`; `--report` selects another report path and
-`--log-dir` selects the parent for retained invocation logs. The receipt records exact commands,
-exit codes, original fixture outcomes, before/after DLL and forwarder hashes, copied fixture
-receipts and logs, and raw validation findings. A stale receipt, wrong case set or changed binary
-fails the combined check. The optional `--strict` flag is accepted for compatibility; this entry
-always requires complete PASS results.
+The graphical preflight opens the exact inherited `DISPLAY` through the system X11 library,
+with an eight-second supervised deadline. It neither selects another session nor configures the
+desktop. A missing or inaccessible display produces a terminal diagnosis before expensive work.
+This proves X11/XWayland connectivity only; it does not qualify native Wayland or the GPU.
+`--host-only` omits the preflight.
 
-Each GPU suite also retains its own ignored `artifacts/` directory. Models and plugins must
-already be available locally. The Vulkan cases cover existing present/route scenarios; they do
-not supply an exposure image or request a working scale above 1, so they do not exercise the new
-meter's GPU sample path or the supersampling scaler. Focused host tests cover those lifetimes.
-Raw Vulkan validation messages remain in the report even when a fixture attributes them outside
-its pass criteria. Image metrics and GPU timings remain scenario measurements; the orchestrator
-issues no general quality or performance approval. See [the tests index](../tests/README.md).
+The shell entry delegates to `test-rendering.py`, reusing the test runner's owned process
+supervision. Each invocation has a unique directory. The default consolidated report is
+`artifacts/rendering/<run-id>/summary.json`; `--report` and `--log-dir` select other locations.
+Receipts retain exact commands, exit codes, original fixture outcomes, before/after DLL and
+forwarder hashes, fixture logs and raw validation findings. Stale receipts, wrong required cases
+and changed binaries fail. `--strict` is a compatibility flag; this entry is always strict.
+
+The replay bundle also preserves fresh `judge/calibration.json`, `policy.json`, `corpus.json`,
+and the variants' `result.json`, `frames.jsonl`, `contact-sheet.png` and `diff-heatmap.png`.
+It records copied byte lengths and SHA-256 hashes. Unchanged old files cannot become evidence
+of a later invocation; symlinks, unsafe entries and exceeded copy limits are reported. The
+allowlist excludes raw frame trees. Limits are 32 variants, 132 files, 16 MiB per file and
+128 MiB total, with 2 MiB for summary/configuration JSON. A failed required retention prevents
+an overall PASS while preserving the original functional and numerical outcomes.
+
+The default replay retains 256 frames / 160 warmup at logical 120 Hz. `--replay-quality` selects
+`temporal-v1`: 480 frames / 80 warmup at 60 Hz, with steady, moving, recovery, fast-motion and
+scored-cut phases, in a separate `replay-quality-run` directory. Its replay-step deadline is
+90 minutes, compared with 60 minutes for the short mode. The requested profile is recorded and
+checked against the produced corpus. The explicit numerical policy keeps every error floor at
+zero. An A/A-envelope comparison is not perceptual approval.
+
+Models and plugins must already be available locally. `nr-route-scale125` exercises a
+1280x720 after-upscale frame with a 1600x900 model, through the real route/hand-back sequence.
+Its scaler coverage is source-backed up-leg execution. It does not independently validate the
+downfilter's pixels, exposure readback or executable command-buffer resubmission. Known model
+validation findings remain visible. Image metrics and GPU timings are scenario measurements;
+the orchestrator issues no general quality or performance approval. See
+[the tests index](../tests/README.md) and the individual fixture READMEs.
 
 ## deploy-to-game.sh
 

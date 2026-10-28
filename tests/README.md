@@ -75,13 +75,14 @@ For automated validation of those changes without a game, run
 cases, 64 D3D12 GPU crop/readback checks and failing mutation controls. It is registered in the
 wine tier. See [its README](fg-inputs-d3d12/README.md) for coverage and the SDK-consumer boundary.
 
-For the complete serial rendering regression, run `tools/test-rendering.sh`. It requires every
-host suite to PASS, builds Release, then runs the D3D12 input checks, moving NR, replay, four NR
-Vulkan scenarios and the real DLSS-G provider. `--host-only` runs the strict host tier;
-`--no-build` uses the existing DLL pair. `--fg-steady-seconds 15` requests sustained FG counter
-qualification. `--report` and `--log-dir` select the consolidated report and retained evidence
-locations. The full command requires the locally supplied NR model and DLSS-G kit; any non-PASS
-step stops the remaining sequence. See [the entrypoint documentation](../tools/README.md#test-renderingsh)
+For the complete serial rendering regression, run `tools/test-rendering.sh`. The full plan
+checks inherited X11/XWayland connectivity, requires every host suite to PASS, builds Release,
+then runs D3D12 input checks, moving NR, replay, five NR Vulkan cases and the real DLSS-G provider.
+`--host-only` needs no display; `--no-build` uses the existing DLL pair. `--replay-quality` selects
+the opt-in temporal corpus, while `--fg-steady-seconds 15` requests sustained FG counter
+qualification. `--report` and `--log-dir` select retained evidence, including fresh replay
+comparisons and heatmaps. Models/plugins must already be supplied locally. A non-PASS step
+stops the sequence. See [the entrypoint documentation](../tools/README.md#test-renderingsh)
 and the individual GPU suite READMEs for exact coverage and limits.
 
 ## What the suites cover
@@ -100,7 +101,7 @@ production headers or source slices with local fakes under AddressSanitizer and 
 
 - `build-lifecycle` — internal compiler-prefix locking, owned child supervision, workload progress and rollback of output publication using controlled native processes. No Wine or GPU.
 - `runner-results` — structured status propagation, stale/invalid evidence, aggregate reports, timeout and interruption cleanup. No rendering runtime.
-- `rendering-orchestration` — serial command planning, strict host and runtime evidence, binary identity, retained receipts/logs, malformed-measurement rejection, and terminal reports on failure/interruption. Native Linux controls check detached loopback child cleanup and unrelated-process survival. No Wine or GPU.
+- `rendering-orchestration` — serial command planning, graphical preflight, bounded fresh replay artifacts, strict receipts and binary identity, temporal profile/plan contracts, Vulkan scale evidence, and terminal reports on failure/interruption. Native controls verify cleanup and unrelated-process survival. No Wine or GPU.
 - `nr-vk-recording` — recording epochs, bounded slot leases, production dispatch/teardown and Vulkan lifecycle forwarding under sanitizers. No GPU.
 - `nr-vk-meter` — actual meter allocation bodies with every construction stage and slot faulted, poisoned failed outputs, complete publication, cleanup and retry. No GPU.
 - `nr-vk-meter-readback` — atomic retirement publication and actual feature helpers: delayed/discarded/resubmitted recordings, saturation, serial ordering, setting invalidation and abandonment. No GPU.
