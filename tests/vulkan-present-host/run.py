@@ -1594,9 +1594,12 @@ def check_nr(name, facts, log):
 # after-upscale route running the model on its output; then the feature released and nothing evaluated until 14 s after
 # the last evaluate, longer than the present host waits (kAfterUpscaleIdleMs); twice. The phases' read-backs say who
 # ran the model when: until 9 s after the last evaluate the route (frames unedited), from 12 s the present host.
-ROUTE_CASES = {'nr-route-quiet', 'nr-route-quiet-wdx12', 'nr-route-toggle-wdx12', 'nr-route-guides'}
+ROUTE_CASES = {'nr-route-quiet', 'nr-route-quiet-wdx12', 'nr-route-toggle-wdx12', 'nr-route-guides',
+               'nr-route-scale125'}
 # nr-route-guides: nr-route-quiet with the game rendering 960x540 under a 0.5 working scale, so the route's 640x360
 # model has guides larger than it and the route resamples them (docs/dlssnr/design/reduced-scale-guides-vk.md).
+# nr-route-scale125: the same complete ownership scenario with the route's model enlarged from frame 1280x720 to
+# working 1600x900. Its separate, small swapchain still exercises the present host at its own size.
 ROUTE_GUIDES_RENDER = '960x540'
 ROUTE_IDLE_S = 10  # retoque/dlssnr/DlssNr_VkModelOwner.h, kAfterUpscaleIdleMs
 
@@ -1631,6 +1634,9 @@ def execute_route(name, dll, redist, files):
     if guides:
         ini = ini.replace('VulkanPresentHost=true\n', 'VulkanPresentHost=true\nWorkingScale=0.5\n')
         (work / 'OptiScaler.ini').write_text(ini)
+    if name == 'nr-route-scale125':
+        ini = ini.replace('VulkanPresentHost=true\n', 'VulkanPresentHost=true\nWorkingScale=1.25\n')
+        (work / 'OptiScaler.ini').write_text(ini)
     args = ['--route'] + (['--wdx12'] if wdx12 else []) + (['--nr-toggle'] if toggle else []) + \
         (['--route-render', ROUTE_GUIDES_RENDER] if guides else [])
     with (OUT / f'{name}.log').open('w') as log:
@@ -1652,6 +1658,97 @@ def execute_route(name, dll, redist, files):
     return facts, log
 
 
+def route_scale125_problems(facts, log):
+    """Additional evidence for the after-upscale route's 1.25 working scale, using its existing lifecycle log.
+
+    DlssNrFeature_Vk.cpp creates the enlarged model feature and dispatches superUp before its native-run line;
+    an unavailable/failed superUp reports the box-enlarge fallback. Together these are source-backed evidence of
+    the up-leg. The harness's exact active-phase readbacks are an ownership oracle for its separate swapchain,
+    not a readback of the route's output, and do not independently qualify the down-leg or pixel algorithm.
+    """
+    problems = []
+
+    def need(condition, message):
+        if not condition:
+            problems.append('WorkingScale=1.25: ' + message)
+
+    need(facts.get('status') == 'PASS', 'the application did not report PASS')
+    need(facts.get('validation_active') is True and type(facts.get('validation_errors')) is int and
+         facts['validation_errors'] == 0, 'validation was not proved active and clean')
+    need(facts.get('first_validation') == '', 'host validation evidence is missing or contains an error')
+    model_messages, model_vuids = facts.get('model_messages'), facts.get('model_vuids')
+    model_evidence = type(model_messages) is int and model_messages >= 0 and isinstance(model_vuids, str)
+    need(model_evidence, 'model validation evidence is missing or malformed')
+    if model_evidence:
+        # nr.cpp writes distinct IDs with every counted model report. Do not turn comma-only or unidentified
+        # positive counts into an empty allowed set, or accept named reports when the count says none occurred.
+        ids = model_vuids.split(',') if model_vuids else []
+        need(bool(model_messages) == bool(ids) and len(ids) == len(set(ids)) and
+             all(vuid in MODEL_VUIDS for vuid in ids),
+             'model validation counts and admitted VUID attribution disagree or are malformed')
+    need('VUID-vkCmdDispatch-OpImageWrite-08795' not in log, '08795 was reported in the log')
+
+    rows = facts.get('phases', [])
+    complete = isinstance(rows, list) and all(
+        isinstance(p, dict) and isinstance(p.get('name'), str) and
+        all(type(p.get(key)) is int and p[key] >= 0 for key in ('presents', 'evaluates', 'readbacks', 'exact')) and
+        p['exact'] <= p['readbacks'] <= p['presents'] and p['evaluates'] <= p['presents'] and
+        type(p.get('mae_mean')) in (int, float) and 0 <= p['mae_mean'] < float('inf') for p in rows)
+    need(complete, 'phase counters or MAE are incomplete, malformed or incoherent')
+    if not complete:
+        return problems
+    phases = {p['name']: p for p in rows}
+    need(len(phases) == len(rows), 'duplicate phase evidence')
+    for name, evaluates, readbacks in (('on', 30, 28), ('on-again', 30, 28), ('on-at-exit', 10, 8)):
+        phase = phases.get(name, {})
+        need(phase.get('evaluates') == phase.get('presents') == evaluates and
+             phase.get('readbacks') == phase.get('exact') == readbacks,
+             f'{name}: expected {evaluates} successful evaluates/presents and {readbacks} exact readbacks: {phase}')
+    need(sum(p['evaluates'] for p in rows) == 70, 'expected exactly 70 active route evaluates')
+
+    lines = log.splitlines()
+    feature_marker = 'DLSS-NR Vulkan: feature up at'
+    feature = re.compile(r'DLSS-NR Vulkan: feature up at (\d+)x(\d+) \(frame (\d+)x(\d+)\)$')
+    build_positions = []
+    for index, line in enumerate(lines):
+        if feature_marker not in line:
+            continue
+        build_positions.append(index)
+        match = feature.search(line)
+        need(match is not None and tuple(map(int, match.groups())) == (1600, 900, 1280, 720),
+             f'route build must name working 1600x900 and frame 1280x720 without unparsed text: {line}')
+    need(len(build_positions) == 3, f'expected three route builds, found {len(build_positions)}')
+
+    # A correct-looking line from the cold present host, or three lines in one ownership period, cannot attest to
+    # all three active phases. check_route also retains its full stand-down/drain/hand-back ordering contract.
+    claimed = 'DLSS-NR Vulkan: this route has the model again (the present host stood down)'
+    freed = "DLSS-NR Vulkan: the after-upscale route's model was freed for the hand-back"
+    exit_freed = "DLSS-NR Vulkan: the after-upscale route's objects on the device freed before it goes"
+    events = []
+    release_positions = []
+    for index, line in enumerate(lines):
+        if claimed in line:
+            events.append('claim')
+        if feature_marker in line:
+            events.append('build')
+        if freed in line or exit_freed in line:
+            events.append('release')
+            release_positions.append(index)
+    need(events == ['claim', 'build', 'release'] * 3,
+         f'one route build is required in each active ownership period: {events}')
+    run_positions = [i for i, line in enumerate(lines) if 'DLSS-NR Vulkan: running natively' in line]
+    need(len(run_positions) == 1 and
+         lines[run_positions[0]].endswith('DLSS-NR Vulkan: running natively at 1280x720, guides 640x360'),
+         'missing or malformed native route execution line for frame 1280x720 and guides 640x360')
+    if len(run_positions) == 1 and build_positions and release_positions:
+        need(build_positions[0] < run_positions[0] < release_positions[0],
+             'native route execution must follow its first enlarged feature build, before the hand-back')
+    for text in ('DLSS-NR Vulkan supersample: upscaler unavailable, falling back to box enlarge.',
+                 'DLSS-NR Vulkan did not run:'):
+        need(text not in log, f'route did not exercise the required supersampling up-leg: {text}')
+    return problems
+
+
 def check_route(name, facts, log):
     """Twice: the present host stands down for the route, the route runs the model, goes quiet, and kAfterUpscaleIdleMs
     later the present host takes the model back, the route's objects freed; never earlier, never called off."""
@@ -1660,6 +1757,11 @@ def check_route(name, facts, log):
     def need(condition, message):
         if not condition:
             problems.append(message)
+
+    if name == 'nr-route-scale125':
+        problems.extend(route_scale125_problems(facts, log))
+        if problems:
+            return problems, ''
 
     wdx12 = name.endswith('-wdx12')
     toggle = name == 'nr-route-toggle-wdx12'
@@ -1764,7 +1866,9 @@ def check_route(name, facts, log):
 
     guides = name == 'nr-route-guides'
     builds = sum(1 for l in lines if "the model's feature is up at" in l)
-    route_feature = 'DLSS-NR Vulkan: feature up at ' + ('640x360 (frame 1280x720)' if guides else '1280x720')
+    route_feature = 'DLSS-NR Vulkan: feature up at ' + (
+        '640x360 (frame 1280x720)' if guides else
+        '1600x900 (frame 1280x720)' if name == 'nr-route-scale125' else '1280x720')
     route_builds = sum(1 for l in lines if route_feature in l)
     need(builds == 3 and route_builds == 3, f'feature builds: {builds} of the present host\'s, {route_builds} of the '
                                             'route\'s')
@@ -1801,6 +1905,10 @@ def check_route(name, facts, log):
                f'{route_builds} of the route\'s; '
                f'0 validation errors of the host\'s ({facts.get("model_messages", 0)} of the model\'s own '
                f'{",".join(sorted(vuids)) or "objects"} set aside)')
+    if name == 'nr-route-scale125':
+        summary += ('; WorkingScale=1.25: frame 1280x720, working 1600x900 over three route builds; '
+                    '70 successful harness upscaler evaluates; source-backed supersampling up-leg '
+                    '(no box-enlarge fallback)')
     return problems, summary
 
 

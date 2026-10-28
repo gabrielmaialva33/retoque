@@ -376,3 +376,27 @@ The stall case keeps enough frames after the forced queue-lock timeout for the a
 builder's retry and model warm-up. With 12 frames per swapchain, a valid retry could leave only
 two evaluations and every readback unchanged. It uses 24, preserving the stall at the sixth
 present of the resized swapchain; the pixel-change, watchdog and validation assertions stay strict.
+
+### Required scale 1.25 regression
+
+```bash
+flock -n -o "$XDG_RUNTIME_DIR/msvc-prefix.lock" python3 tests/vulkan-present-host/run.py \
+  --dll x64/out/OptiScaler.dll --only nr-route-scale125
+```
+
+`nr-route-scale125` reuses the full `--route` ownership/hand-back fixture, adding only
+`WorkingScale=1.25` to its INI. It retains all eleven phases and the existing host/model
+validation gates. The three active after-upscale periods evaluate 30, 30 and 10 frames.
+Their route frame is 1280x720 and its working/model size is 1600x900; this must not be
+confused with the smaller presentation surface or the present host's native-size builds.
+
+The checker requires the route build/ownership evidence and rejects the production
+upscaler fallback, missing evaluations/readbacks and host validation errors. Only the
+already admitted model `VUID-vkCmdDraw-None-09600` remains allowed within the existing
+count contract; `VUID-vkCmdDispatch-OpImageWrite-08795` fails regardless of attribution.
+
+Coverage is source-backed supersampling up-leg execution plus the existing route behavior.
+Exact active-phase presentation readbacks prove the present host stood down: the route's
+upscaled output is a separate resource and is not presented by this fixture. Those readbacks
+do not prove the scaler's pixel algorithm, down-leg correctness or image quality. Exposure
+sample readback and executable command-buffer resubmission remain separate tests.
