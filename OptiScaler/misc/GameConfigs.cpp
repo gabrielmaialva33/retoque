@@ -769,6 +769,13 @@ const std::vector<GameConfig> gameConfigs = {
         .quirks = { SkipD3D11FeatureLevelElevation },
     },
 
+    // Dying Light
+    // "Unknown DX feature level selected" when given 11_1
+    {
+        .exes = { "dyinglightgame.exe" },
+        .quirks = { SkipD3D11FeatureLevelElevation },
+    },
+
     // Self-explanatory
     //
     // The Persistence, Ghostwire: Tokyo, MechWarrior 5: Mercenaries, Ghostrunner, Ghostrunner 2
