@@ -21,6 +21,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 ## Performance and cost
 
 - [model-cadence.md](design/model-cadence.md): run the model every Nth frame and carry its edit along the motion vectors in between.
+- [look-model-half-rate.md](design/look-model-half-rate.md): offline bilateral look-model experiment; better fast motion than plain hold, worse stable/recovery fidelity; no production port recommended yet.
 - [cadence-smoothing.md](design/cadence-smoothing.md): walk each new answer in over the interval and rate-limit the shown light, against the cadence's pulse.
 - [model-310-9-16.md](design/model-310-9-16.md): NVIDIA's October weight set (310.9.16), where the file comes from, what the preset selects, and the panel line that reports which set the model built.
 - [vit-skip.md](design/vit-skip.md): kernel-variant profiling of the model and a proposal to skip its ViT bottleneck on alternating frames.
