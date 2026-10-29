@@ -50,6 +50,15 @@ It does not make the pass viable on these cards. 16.8 ms is a whole 60 fps frame
 ran at about 19 real fps with the pass on at 0.5. The earlier note's conclusion stands: the hardware
 floor for this model is Ada. This is the less bad default for someone who switches it on anyway.
 
+It also does not say what 0.5 costs in image. One outside measurement points the other way, and it is open here
+(2026-10-29). The Universal MFG Unlocker v1.7.0 (`dashdogy/RTX40MFG-Unlock`, MIT, `b97deee`) floors its own
+automatic scale at 75 %, and gives the reason in `source/native/dlss5_auto.h:27-30`. In their provider A/B at
+1080p (their #692), 75 % kept 61.5 % of DLSS 5's change and 22.9 % of its fine detail, while 50 % kept only 41.1 %
+and 8.5 %. That is their claim: the card, the model build and the metric's definition are not in the header, and
+nothing here has reproduced it. Another session is measuring retention against scale with the offline replay
+([offline-replay.md](offline-replay.md)). Until those numbers are in, auto stays at 0.5 on RTX 20/30, and this note
+does not choose between cost and detail.
+
 ## Which GPU, and how it is identified
 
 **The adapter of the device the pass records on**, not IdentifyGpu's "primary GPU". A machine with a

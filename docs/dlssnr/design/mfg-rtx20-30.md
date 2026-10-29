@@ -7,6 +7,12 @@ are into its clone at `7132a103`, read, not built and not run; nothing is copied
 read in a clone at `9621db5` (0.3.5), and its logs from Rafael's PC are quoted where they are the only measurement.
 Roadmap item 5 in [../roadmap.md](../roadmap.md).
 
+**Update 2026-10-29.** "Since 0.3.5" under Prior art adds `dlssg_for_sm86` 0.4.0/0.4.1 (clone at `5038bca`), a second
+run of it on Rafael's 3060 (Mortal Shell II, driver 617.14), and the Universal MFG Unlocker (`dashdogy/RTX40MFG-Unlock`,
+MIT, clone at `7523faa`), which now claims DLSS-G on RTX 30 and, experimentally, RTX 20. Nothing in the
+recommendation changes, and RTX 20 is still out of scope here. Step 3 gains one requirement, taken from the
+Unlocker: hold the game's DLSS-G off after a refusal instead of letting it retry.
+
 Read first: [mfg-count-override.md](mfg-count-override.md) (MFG above 2x on Ada, and the five-gate probe method),
 [model-cost-across-architectures.md](model-cost-across-architectures.md) (Rafael's 3060, where NVIDIA's runtime
 refused frame generation), `retoque/framegen/dlssg/MfgUnlock.h` and `MfgPatchPlan.h` (the Ada unlock and its
@@ -29,7 +35,12 @@ transactional write layer), [dred.md](dred.md) and [DEVELOPMENT.md](DEVELOPMENT.
   310.9.1.0, and logs `hardwareQualification=NOT_RUN` as a constant. Nobody has run it on a 20 or 30 series card.
 - **`dlssg_for_sm86` did run on Rafael's 3060**, with the NGX core answering feature 11 as supported once the
   provider's minimum architecture read 0x170. It ships NVIDIA's runtime and recompiled NVIDIA kernels inside its DLL.
-  We would not.
+  We would not. **0.4.1 ran there too**, on 2026-10-29 in Mortal Shell II: 5342 DLSS-G evaluates, no create failure,
+  clean exit (measured, "Since 0.3.5" below). So two sessions on one Ampere card are now on record, both with that
+  project's runtime, not the game's.
+- **Two other projects now claim RTX 20.** `dlssg_for_sm86` claims a 2080 Ti for its 0.3.x frame generation. The MFG
+  Unlocker claims experimental Turing support through SM75 PTX (v1.6.0), but its last two releases were validated on a
+  test harness on an RTX 4080 and not run in a game. Nothing here has run on Turing.
 - **Recommendation: (a), Ampere only, default off, one exact provider build at a time**, staged so that the first
   thing to run is a log-only probe, then the kernel half forward-compiled on the 4090, then the admission half on
   Rafael's card, and only then both together. On Ampere the kernel half reduces to the transformation the Ada kernel
@@ -290,6 +301,98 @@ the provider's minimum reported as 368 (0x170) instead of 400; the core's answer
 `CreateFeature(11)` at 1920x1080 with `multi_frame_count_max 3` succeeded; 132 kernels created per feature on its own
 `cubin_sm86` images.
 
+### Since 0.3.5 (update 2026-10-29)
+
+Same evidence classes as above. **Measured** means Rafael's logs. **Claim** means another project's README or commit
+message, which nothing here has checked.
+
+**`dlssg_for_sm86` 0.4.0 and 0.4.1** (`6f047bd`, `44f4006`, merged at `5038bca`; paths below are into
+`README.en.md` of that clone). All claims:
+
+- **The bundled runtime is 310.9.16.** It is now the only build, up to 6X, and its output under the default preset is
+  bit-identical to 310.9.1 (`:40`). The project still ships NVIDIA's `nvngx_dlssg.dll` 310.9.16 (`cadee1aa...`) and,
+  for super resolution, an unmodified `nvngx_dlss.dll` 310.9.16 (`858ccff9...`) in `dlssg_sm86\sr\` (`:338`,
+  `THIRD_PARTY_NOTICES.txt:47-55`). So the redistribution line in Legal is unchanged.
+- **DLSS-G preset C ("FG Lite").** Per generated frame at 2X: −28.7 to −37.5 % GPU time in offline replay (RTX 3070
+  and RTX 3080 Ti, `:159-181`), and −24 to −27 % in game (RTX 3070, 4K, five titles, `:217-223`). At 4X it is
+  −44.5 to −47.5 % (`:166`, `:181`). Image quality is "slightly lower" (`:38`), and the preset was not compared
+  against NVIDIA's own preset C on RTX 40/50 (`:317`).
+- **Super resolution in INT8** for the game's preset L and M modes on RTX 30/20 costs −5 to −24 % GPU time per
+  evaluate against the same preset in FP16 (`:37`, `:187-211`). In game that is +1.2 to +7.85 % fps in The Witcher 3
+  (`:231-238`).
+- **An XeSS-FG engine, at 2X to 4X since 0.4.1.** It uses Intel's model 15 as ported by MFG-Unlocker 1.6.0. The
+  graph runs on the project's own D3D12 + NVAPI CUDA runner with hand-written INT8 IMMA tensor-core kernels, and
+  never loads `libxess_fg.dll` (`:21-26`). On RTX 30 it is 8-15 % faster than DLSS-G at 1440p and below, and
+  27-30 % slower from 4K up (`:315`).
+- **The R580 driver floor is hard.** A CUDA 13 cubin the driver refuses now refuses frame generation, logged as
+  `driver_below_floor` or `kernel_image_unavailable`, with no fallback to PTX (`:30`, `:98`). It was tested on
+  591.86, 610.74, 610.88 and 617.14.
+- **Validation hardware:** an RTX 3070 for development and every in-game test, an RTX 3080 Ti for the full 0.4.0 test
+  kit, and a 2080 Ti only for 0.3.x frame generation plus one super-resolution smoke run of this release (`:97`). The
+  RTX 20 frame-generation claim therefore rests on 0.3.x.
+
+**Rafael's RTX 3060 with 0.4.1, 2026-10-29** (measured; `~/.local/state/dlss5/deployments/rafael-logs-20261029-ms2/`,
+`dlssg_sm86.log` and `OptiScaler.log`). The setup was Windows, driver 617.14 (`r617_07`) and HAGS on. He ran Mortal
+Shell II with `dlssg_for_sm86` as `version.dll` and our build `c862bd2e` as `dxgi.dll`.
+
+- **Their side.** The game's own provider, 310.6.0.0 (`17e00fc66d32`), was redirected to the bundled 310.9.16
+  (`runtime_redirect`). It ran on that project's `cubin_sm86` kernels (`install`: 71 kernels). `CreateFeature(11)` at
+  1920x1080 with `multi_frame_count_max 3` returned `0x1`. The reported MFG maximum was rewritten from 5 to 3
+  (`mfg_capability`). The session ended with `fg_gate_exit`: `evaluates 5342`, `create_failures 0`, `clean true`,
+  `process_exit`, about three and a half minutes after start (14:18:15 to 14:21:40).
+- **It noticed us, and changed nothing.** At the first DLSS-G create it logged `foreign_fg_mod` with `kind
+  optiscaler`, matched on `dxgi.dll`'s `ProductName`. The log reads "effect: logged only; nothing was changed" and
+  advises keeping one frame-generation mod per game. Nothing in this run shows the two fighting.
+- **Our probe did what it was built for.** The foreign-loader line came first (`OptiScaler.log:181`, `:187`). The
+  module line then described their bundle, not the game's provider: 310.9.16.0, ts `0x6ab69977`, image `0x744000`,
+  sha256 `cadee1aa6db3`, "from game" because the bundle sits in the game folder (`:182`). That build has **71
+  containers and 32 frame kernels**, none loadable on sm_86, against 310.9.1's 70 and 31 in the inventory above.
+  The admission line read `NGX feature 11 0x1 flags 0x0 minArch 0x170`, which is the supported answer with their
+  export patch in the process, as on 2026-10-04.
+- **`Util::FindFilePath` resolved two NVIDIA files inside their folder.** It found `nvngx_dlss.dll` at
+  `dlssg_sm86\sr\` (`OptiScaler.log:28`, `:41`) and `nvngx_dlssg.dll` at `dlssg_sm86\runtime\` (`:30`). The search
+  is breadth-first from OptiScaler's own directory (`OptiScaler/Util.cpp:565`), and the game's copies sit outside it,
+  under `Engine/Plugins/`. The `sr\` file is the unmodified 310.9.16 SR runtime they bundle. The DLSS feature that
+  came up still reported `v310.9.1` (`:429`), so this log does not settle which file NGX finally mapped. Expect this
+  path whenever `dlssg_for_sm86` sits beside OptiScaler, and read the DLSS version from `ReadVersion`, not from
+  `FindFilePath`.
+- **NR in the same session.** The coverage line reads `model_ok=3108 model_failed=0` at 960x540 (`:946`). The model
+  was a 310.9.16.0 file of 276,162,560 bytes, the size the loopback measurement used in
+  [network-scale.md](network-scale.md), not the official 266,424,944-byte one (model-310-9-16.md). Its hash was not
+  logged. No timing was taken.
+
+**The Universal MFG Unlocker** (`dashdogy/RTX40MFG-Unlock`, MIT, Michael Robles; not the MFGAdaUnlock our Ada unlock
+credits). All claims, from its commit messages:
+
+- **v1.5.0, `325b3ad` (2026-10-14).** RTX 30 frame generation is fixed after NVIDIA's 14 October OTA updates:
+  310.9.16 reads its preset from two call sites, and `sl.dlss_g` 2.14.16 moved its frame-count override. "RTX 30
+  in-game confirmation is pending." Rafael's Mortal Shell II session loaded exactly that `sl.dlss_g` 2.14.16 from the
+  OTA store (`OptiScaler.log:196`).
+- **v1.6.0, `ded3614` (2026-10-20).** Experimental RTX 20 (TU102/104/106) DLSS-G: "kernels, font and both networks
+  lowered to SM75 PTX before the first feature (310.9.0/.1/.16)". This also brings RTX 30 DLSS-G on Vulkan. It was run
+  in The Witcher 3 and Subnautica 2 as beta.2; the commit does not name the card.
+- **v1.6.1, `29504cd` (2026-10-20).** Live DLSS-G presets on RTX 30/20. During `slInit`, an NGX `FeatureNotFound` or
+  `NotSupported` is answered as supported when a signed eligible OTA provider is already selected, so Streamline
+  keeps `sl.dlss_g` (FF7 Rebirth). This is G1 again, answered at a different point than here. "Harness-validated on
+  an RTX 4080: no RTX 50/30/20 game run yet."
+- **v1.7.0, `b97deee` (2026-10-25), `README.md:51-57`.** Frame generation now starts on an RTX 2070 SUPER in FF7
+  Rebirth. **When startup admission fails, the game's DLSS-G is held off:** the options the game sends to Streamline
+  are rewritten to `DLSSGMode::eOff` (`source/native/patcher.cpp:4043-4062`, policy `HoldOffWithoutAdmission` in
+  `source/native/ampere_policy.h:162-170`). Before this, a refused Create was retried every frame, and Doom: The Dark
+  Ages grew to 41 GB of VRAM and crashed. The commit itself says "the allocation itself is not ours, not proven",
+  and the hold-off ran on a harness only: "no game run of this DLL: the RTX 30/20 hold-Off in Doom: The Dark Ages
+  ... untested in games".
+
+**What this means here.** Retoque's own DLSS-G output already stops on a refusal: `PauseAfterError`
+(`OptiScaler/framegen/dlssg/DLSSG_Common.h:49`, `DLSSG_Common.cpp:71-76`) sends Streamline `eOff` when the frame
+token, the constants or a tag is refused. It then pauses for 10 frames (`OptiScaler/framegen/IFGFeature.cpp:316`) and tries again, so a
+permanent refusal costs one retry every ten frames, not one per frame. That covers OptiScaler's output only, and only
+refusals Streamline returns to those three calls. The game's own Streamline DLSS-G, which option (a) would admit, has
+no such guard in this tree. A Create refused inside `sl.dlss_g` during present is not one of those three results
+either; that it never surfaces there is an expectation, not something checked. Step 3 therefore carries the
+Unlocker's rule as a requirement: after admission fails or `CreateFeature(11)` is refused, hold the game's DLSS-G at
+`eOff` through the Streamline options hook, and log it once.
+
 ## Options
 
 ### (a) Port the idea, default off, one exact provider build at a time
@@ -479,7 +582,8 @@ untouched. Expected: feature 11 supported, then a `CreateFeature` or evaluate fa
 what the game does with it.
 
 **Step 3, both, behind the key.** Only if 0 to 2 held. One exact provider build first (whichever Rafael's game loads,
-from step 0), then others one row at a time.
+from step 0), then others one row at a time. A refusal after admission holds the game's DLSS-G at `eOff`
+instead of letting Streamline retry the create every frame (the Unlocker's rule, "Since 0.3.5").
 
 **Turing** gets a step only when a Turing tester exists.
 
