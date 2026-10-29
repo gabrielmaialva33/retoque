@@ -60,6 +60,62 @@ Game frames/models stay local, outside Git.
 The complete producer contract, clocks, completion rules and limitations live in
 [offline-replay.md](../../docs/dlssnr/design/offline-replay.md).
 
+## Temporal events and paired cost (`events.py`)
+
+Analyze existing judged metadata without loading raw images, running the model or
+requiring NumPy:
+
+```sh
+python3 -m tools.replay.events --capture /local/clip/capture.json \
+  --runs /local/replay/runs --judge /local/replay/judge \
+  --candidate adaptive4 --out /local/analysis/adaptive4
+```
+
+The default reference is `every-a` and the independent every-frame control is
+`every-b`; `--reference` and `--control` select other names. The control must retain
+its calibrated PASS. Candidate, control and reference must have distinct trial
+identities and compatible capture, environment, policy and metrics identities.
+The capture must contain a complete `provenance.corpus` phase summary. The tool
+validates frame coverage, clocks, decisions, completed passes and judge aggregates
+against the run manifests before producing a report.
+
+Outputs are `events.json`, derived `frames.jsonl` and `events.md`, in a directory
+separate from all inputs. They preserve the candidate's existing numerical verdict
+and perceptual `NOT_ASSESSED`. Exit 0 means the metadata analysis completed, even
+when the candidate's fidelity verdict is FAIL; exit 2 means invalid input or an
+output error. This tool does not revalidate raw pixels or certify rendering.
+
+For each aligned frame and region, pulse comparisons are signed delta
+`candidate - control`, paired distance `abs(candidate - control)` and signed
+amplitude excess `abs(candidate) - abs(control)`. Equal nonzero pulses have zero
+paired distance; amplitude excess can be negative. A reset or missing pulse stays
+unavailable with a reason and count, even if a decision transition is present.
+History age uses completed model evaluations, including warmup, and preserves the
+preceding carried streak when model execution resumes.
+
+Reports group quality and GPU cost by phase, execution kind, history age and event.
+Each metric includes mean, p50/p95/p99, extrema with frame identities and missing
+counts. These are descriptive frame statistics; small groups are flagged and
+overlapping events do not duplicate whole-corpus totals. GPU milliseconds describe
+the replay harness bracket, not game FPS, latency or display pacing. `--window`
+selects up to 32 preceding/following evaluations around the worst frames (default
+4); `--top` selects 1–16 worst frames per region (default 8). Inputs are bounded to
+10,000 frames and 32 MiB per file.
+
+For retained qualification evidence, point `--judge` to the retained `artifacts/judge`
+directory and add `--qualification /local/evidence/rendering-run.json`. The receipt
+checks that the consumed candidate/control `result.json` and `frames.jsonl` are at
+the receipt's retained paths and match their hashes and sizes. A moved copy requires
+a compatible receipt or analysis without `--qualification`. The result identities
+bind the original capture and raw run manifests;
+recorded producer identities remain unchanged. Without the receipt, the report
+explicitly identifies validation of the current manifests and input hashes only.
+
+The predeclared adaptive2-versus-adaptive4 experiment is in
+[`experiments/adaptive2-v1.json`](experiments/adaptive2-v1.json). It fixes three
+paired trials, controls, order, quality guards and GPU budgets. Its acceptance
+criteria are separate from the existing fidelity judge and do not change defaults.
+
 ## Short game clips: a held warmup
 
 The replay scores only frames after the pass's start-up gates, so a recorded clip shorter than its 1.5 s warmup has

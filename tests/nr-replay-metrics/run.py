@@ -579,5 +579,10 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(self.reference.read_bytes(), original)
 
 
+def load_tests(loader, tests, pattern):
+    tests.addTests(loader.discover(str(Path(__file__).parent), pattern="test_*.py"))
+    return tests
+
+
 if __name__ == "__main__":
     unittest.main()
