@@ -744,6 +744,14 @@ tier = "host"
 timeout = 120
 summary = "CheckForRealObject hands back a borrowed object: the DLSS-G factory sites and HookToDLSSGFactory leave the real factory's count unchanged over a Streamline-shaped proxy, and no caller releases what it got back."
 
+[optiscaler-instance-claim]
+path = "optiscaler-instance-claim"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "One OptiScaler per process: a second proxy copy in the same game folder runs in pass-through instead of hooking twice, and the first copy reports it after the GPU list; child processes and excluded processes are unaffected."
+
 [dlss-library-path]
 path = "dlss-library-path"
 domain = "platform"

@@ -285,9 +285,10 @@ Every key lives under `[DlssNr]` and ships as `auto`; the table says what `auto`
 ## Known issues
 
 > [!CAUTION]
-> Keep **one** proxy name per game folder. Two copies loaded together fight over the same hooks and the
-> game dies at startup. The log line `CheckWorkingMode OptiScaler working as <name>` says which one
-> loaded.
+> Keep **one** proxy name per game folder. Two copies loaded together used to fight over the same hooks
+> until the game died at startup; now the second one only forwards its exports, and the first logs
+> `Another OptiScaler loaded in this process and only forwards its exports` with its path. The log line
+> `CheckWorkingMode OptiScaler working as <name>` says which one runs.
 
 - **Native Vulkan games under Proton** can hit fence timeouts when OptiScaler's Vulkan overlay runs next to
   DLSS-G. Set `[Vulkan] SkipHooks=true` for those.

@@ -8,6 +8,7 @@
 #include <proxies/D3d12_Proxy.h>
 #include "nvapi/NvApiTypes.h"
 #include <hooks/Amdxc64_Hooks.h>
+#include <misc/InstanceClaim.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -672,6 +673,12 @@ void IdentifyGpu::updateD3d12Capabilities(D3d12Proxy::PFN_D3D12CreateDevice o_D3
     }
 
     spdlog::info(gpus);
+
+    // Copies of OptiScaler that stood down in this process (retoque/misc/InstanceClaim.h)
+    if (auto inert = InstanceClaim::InertCopies(); !inert.empty())
+        spdlog::warn("Another OptiScaler loaded in this process and only forwards its exports, so its hooks do not "
+                     "fight these: {}. Keep one proxy name per game folder.",
+                     wstring_to_string(inert));
 
     auto primaryGpu = !detectedGpus.empty() ? detectedGpus.front() : GpuInformation {};
 

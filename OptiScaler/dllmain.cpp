@@ -38,6 +38,7 @@
 #include <hooks/Gdi32_Hooks.h>
 #include <hooks/Wintrust_Hooks.h>
 #include <hooks/Crypt32_Hooks.h>
+#include <misc/InstanceClaim.h>
 #include <hooks/Advapi32_Hooks.h>
 #include <hooks/Streamline_Hooks.h>
 
@@ -1626,6 +1627,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         }
 
         CheckForExcludedProcess();
+
+        // One OptiScaler per process: a later copy only forwards its exports (retoque/misc/InstanceClaim.h)
+        if (!_passThruMode && InstanceClaim::AnotherCopyOwnsProcess())
+        {
+            _passThruMode = true;
+            InstanceClaim::NoteInertCopy(Util::DllPath().wstring());
+        }
 
         if (_passThruMode)
         {
