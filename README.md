@@ -12,6 +12,12 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
   <a href="https://github.com/optiscaler/OptiScaler"><img src="https://img.shields.io/badge/built%20on-OptiScaler-5865F2?style=for-the-badge&logo=github&logoColor=white" alt="Built on OptiScaler"></a>
 </div>
+<div align="center">
+  <a href="https://github.com/gabrielmaialva33/retoque/releases"><img src="https://img.shields.io/badge/Download-Releases-18a99d?style=for-the-badge&logo=github&logoSize=auto" alt="Releases"></a>
+  <a href="https://github.com/gabrielmaialva33/retoque/releases/tag/nightly"><img src="https://img.shields.io/badge/Download-Nightly-7b5cff?style=for-the-badge&logo=github&logoSize=auto" alt="Nightly build"></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/Documentation-blue?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Documentation"></a>
+  <a href="#known-issues"><img src="https://img.shields.io/badge/Known%20issues-ff7a45?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Known issues"></a>
+</div>
 <br />
 
 ## Quick start
@@ -43,10 +49,11 @@ If a mod already occupies the proxy name, the installer explains the conflict be
 **6.** [**Requirements**](#requirements)  
 **7.** [**Installation**](#installation)  
 **8.** [**Using it**](#using-it)  
-**9.** [**Building and tests**](#building-and-tests)  
-**10.** [**Repository layout**](#repository-layout)  
-**11.** [**Credits**](#credits)  
-**12.** [**License**](#license)
+**9.** [**Known issues**](#known-issues)  
+**10.** [**Building and tests**](#building-and-tests)  
+**11.** [**Repository layout**](#repository-layout)  
+**12.** [**Credits**](#credits)  
+**13.** [**License**](#license)
 
 ## About
 
@@ -64,6 +71,10 @@ Everything OptiScaler does (swapping upscalers, frame generation, spoofing) is s
 > [!WARNING]
 > Experimental, and unsupported by NVIDIA. It drives an undocumented NGX feature directly. Back up the
 > game folder's files before you install, and keep the game's own copies of any DLL you replace.
+
+> [!CAUTION]
+> * **Do not use it with online games.** Like any proxy DLL, it can trip anti-cheat software and get an account banned.
+> * Retoque is **free**. This GitHub repository is its only home: there is no website, app or paid build of it.
 
 **Key aspects of Retoque:**
 - Runs the model on four routes: after the game's upscaler on **D3D12**, after the upscaler on
@@ -87,21 +98,9 @@ Like OptiScaler, Retoque is one DLL that the game loads under a system DLL's nam
 everything to the real system DLL, except the calls it is interested in: the game's upscaler calls and
 its presents. That is where the Neural Rendering pass runs.
 
-```mermaid
-flowchart LR
-    game["Game"] -->|"loads dxgi.dll<br/>(or winmm.dll, version.dll, ...)"| retoque["Retoque<br/>OptiScaler.dll, renamed"]
-    retoque -->|"everything else"| sys["Real system DLL"]
-    retoque -->|"upscaler calls<br/>DLSS / FSR / XeSS"| pass(["Neural Rendering pass"])
-    retoque -->|"present"| pass
-    pass --> fwd["nvngx.dll_dlssnr.dll<br/>forwarder, built here"]
-    fwd --> model["nvngx_dlssnr.dll<br/>DLSS 5 NR model, yours"]
-    model --> ngx["NVIDIA driver<br/>NGX"]
-
-    classDef nr fill:#7b5cff,stroke:#5a3ee0,color:#ffffff
-    classDef yours fill:#2c313d,stroke:#76819a,color:#ffffff,stroke-dasharray:4 3
-    class pass nr
-    class model yours
-```
+<div align="center">
+  <img src="docs/images/retoque-routes.svg" alt="Inputs: DLSS, FSR 2/3 or XeSS; Direct3D 11; no upscaler at all. Outputs: the Neural Rendering pass after the upscaler on D3D12 and Vulkan, on the D3D11-to-D3D12 bridge, at present time, and before frame generation. Every route ends in the same model, through the forwarder and NVIDIA NGX." width="760" />
+</div>
 
 > [!NOTE]
 > **Why a forwarder?** The model only answers callers whose module path contains `nvngx.dll`, so its
@@ -130,24 +129,7 @@ flowchart LR
 `HookMethod=1` (the default) leaves the HUD untouched, because the HUD is drawn after the pass.
 `HookMethod=2` covers games with no upscaler, and sees the finished picture, HUD included.
 
-**Which route does my game take?**
-
-```mermaid
-flowchart TD
-    game(["Your game"]) --> api{"Graphics API"}
-    api -->|"D3D12"| up12{"DLSS, FSR 2/3<br/>or XeSS?"}
-    up12 -->|"yes"| r1["After the upscaler<br/>e.g. Crimson Desert"]
-    up12 -->|"no"| r4["At present time, HookMethod=2<br/>e.g. PCSX2"]
-    api -->|"Vulkan"| upvk{"DLSS, FSR 2/3<br/>or XeSS?"}
-    upvk -->|"yes"| r2["After the upscaler, on Vulkan<br/>e.g. DOOM Eternal"]
-    upvk -->|"no"| none["Not covered yet"]
-    api -->|"D3D11"| r3["Through the D3D11-to-D3D12 bridge<br/>e.g. Divinity: Original Sin 2,<br/>The Witcher 3 (DX11)"]
-
-    classDef route fill:#18a99d,stroke:#12857b,color:#ffffff
-    classDef gap fill:#3a4150,stroke:#76819a,color:#ffffff
-    class r1,r2,r3,r4 route
-    class none gap
-```
+The picture above answers **which route your game takes**; the menu and `OptiScaler.log` say which one it did.
 
 > [!TIP]
 > A D3D11 game with no upscaler runs the pass on the bridge's own swapchain with `HookMethod=2`; that is
@@ -188,25 +170,29 @@ Measured working on Linux (Proton, RTX 4090):
 | Game | Route |
 |---|---|
 | Crimson Desert | after the upscaler (D3D12), with DLSS-G |
+| Cyberpunk 2077 | after the upscaler (D3D12), with ray reconstruction and DLSS-G |
 | Divinity: Original Sin 2 | D3D11 bridge, with synthesized frame generation |
 | The Witcher 3 (DirectX 11) | D3D11 bridge |
+| Sons Of The Forest | D3D11 bridge, with the game's native DLSS depth and motion |
 | DOOM Eternal | Vulkan, plus the menu overlay |
+| Hellraiser: Revival | D3D12 present pass (its videos and UI are drawn after the upscaler) |
 | PCSX2 | D3D12 present pass |
 
-Builds are also run on native Windows with an RTX 3060.
+Games that need something other than the defaults get it from a built-in [game profile](docs/dlssnr/design/game-profiles.md),
+logged as `DLSS-NR game profile:`; a key you set yourself always wins. Builds are also run on native Windows with an
+RTX 3060.
 
 > [!NOTE]
 > Proton is not a D3D12 validator: it accepts some calls that Windows rejects. Windows reports are
-> especially welcome. HDR10/PQ and scRGB swapchains are declined at present time for now (the game's
-> picture is shown untouched) until that conversion exists.
+> especially welcome.
 
 ## Requirements
 
 - An **NVIDIA RTX GPU**. The cost depends a lot on the architecture: `WorkingScale=auto` runs the model
   at full scale on RTX 40 and later, and at half scale on RTX 20 and 30.
-- **`nvngx_dlssnr.dll`**, the Neural Rendering model, which you supply. The 310.8.2.0 build in common use
-  is a community patch of NVIDIA's 310.8.0.0 (NVIDIA's own build is known to fault). Retoque does not
-  redistribute either one.
+- **`nvngx_dlssnr.dll`**, the Neural Rendering model, which you supply. NVIDIA's **310.9.16** works (see
+  the [model notes](docs/dlssnr/design/model-310-9-16.md) for presets and RTX 20/30/40); the older 310.8.2.0
+  is a community patch of 310.8.0.0, which faults. Retoque does not redistribute any of them.
 - **`nvngx.dll_dlssnr.dll`**, the forwarder, built by this project.
 - A recent NVIDIA driver. Development runs on the Linux 615.78 driver; there is no tested minimum yet.
 
@@ -228,9 +214,6 @@ Preview with `--dry-run`; undo with `bash install-linux.sh --uninstall "/path/to
 The installer refuses running games, unknown conflicting files and a second OptiScaler proxy. Use
 `--keep-reshade` to keep ReShade, or `--replace-foreign` only after checking the named conflict.
 Replaced files are recorded under `.retoque/backup/`; uninstall restores them and leaves subsequent user edits alone.
-
-Native Vulkan games can hit fence timeouts when the Vulkan overlay runs next to DLSS-G under Proton. Set
-`[Vulkan] SkipHooks=true` for those.
 
 </details>
 
@@ -261,10 +244,7 @@ By hand instead:
 </details>
 
 > [!CAUTION]
-> Keep **one** proxy name per game folder. Two copies loaded together fight over the same hooks and the
-> game dies at startup. The log line `CheckWorkingMode OptiScaler working as <name>` says which one
-> loaded. If the game's prefix has no `nvapi64.dll` (Divinity is one), point `[Libraries] NvapiPath` at
-> Proton's own `files/lib/wine/nvapi/x86_64-windows/nvapi64.dll`.
+> Keep **one** proxy name per game folder; see [Known issues](#known-issues).
 
 ## Using it
 
@@ -301,6 +281,28 @@ Every key lives under `[DlssNr]` and ships as `auto`; the table says what `auto`
 | `StabilizerStrength` | 0 | Holds still pixels steady (0 is off). |
 | `GpuTiming` | false | Fence-confirmed GPU timing for the pass. |
 | `Compare` | 0 | 1 side by side, 2 wipe (0 is off). |
+
+## Known issues
+
+> [!CAUTION]
+> Keep **one** proxy name per game folder. Two copies loaded together fight over the same hooks and the
+> game dies at startup. The log line `CheckWorkingMode OptiScaler working as <name>` says which one
+> loaded.
+
+- **Native Vulkan games under Proton** can hit fence timeouts when OptiScaler's Vulkan overlay runs next to
+  DLSS-G. Set `[Vulkan] SkipHooks=true` for those.
+- **A prefix without `nvapi64.dll`** (Divinity is one) makes NGX refuse the model with `FAIL_PlatformError`.
+  Point `[Libraries] NvapiPath` at Proton's own `files/lib/wine/nvapi/x86_64-windows/nvapi64.dll`; the
+  Divinity profile does it for you.
+- **The present pass has no game depth or motion** in games without an upscaler, so the model can ghost when
+  the camera moves. `[DlssNr] ZeroGuideReset=true` removes the ghosts at the cost of temporal smoothing; the
+  D3D11 bridge uses native DLSS's guides when the game has them.
+- **HDR10 and scRGB swapchains** are shown untouched at present time unless you turn on the experimental
+  `[DlssNr] HdrPresent` (D3D12 and the D3D11 bridge); other HDR formats are always left alone.
+- **The Vulkan present host** (`VulkanPresentHost`, for Vulkan games without an upscaler and D3D games under
+  DXVK/vkd3d-proton) is an experiment: off by default, and it stands down while frame generation runs.
+- **Windows** is tested on one RTX 3060. Proton accepts calls that native D3D12 rejects, so a Windows
+  report is worth more than another Linux one.
 
 ## Building and tests
 

@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1010" viewBox="0 0 960 1010" role="img" aria-label="What your game has, and where Retoque runs DLSS 5 Neural Rendering on it">
+  <!-- The same layout as OptiScaler's inputs-and-outputs picture, for Retoque's routes. Text only: no third-party
+       logos. Colours follow retoque-banner.svg. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10131a"/>
+      <stop offset="1" stop-color="#1b2030"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#18d2c4"/>
+      <stop offset="0.55" stop-color="#7b5cff"/>
+      <stop offset="1" stop-color="#ff7a45"/>
+    </linearGradient>
+    <linearGradient id="node" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a3042"/>
+      <stop offset="1" stop-color="#1d2231"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#8a93a8"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif; }
+      .head { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
+      .sub { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
+      .section { font-size: 15px; font-weight: 700; letter-spacing: 2px; fill: #b4bccc; }
+      .big { font-size: 34px; font-weight: 800; }
+      .mid { font-size: 22px; font-weight: 700; fill: #e9ecf3; }
+      .out { font-size: 20px; font-weight: 700; fill: #ffffff; }
+      .note { font-size: 12.5px; font-style: italic; fill: #8a93a8; }
+      .key { font-size: 12.5px; font-family: "Cascadia Code", "DejaVu Sans Mono", monospace; fill: #18d2c4; }
+      .nodet { font-size: 17px; font-weight: 700; fill: #ffffff; }
+      .nodes { font-size: 12.5px; fill: #b4bccc; }
+      .flow { fill: none; stroke: #8a93a8; stroke-width: 3; }
+      .rule { stroke: #3a4150; stroke-width: 2; }
+    </style>
+  </defs>
+
+  <rect width="960" height="1010" rx="22" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <text x="36" y="52" class="head" fill="#9b87ff">INPUT</text>
+  <text x="36" y="76" class="sub" fill="#9b87ff">WHAT YOUR GAME HAS</text>
+  <text x="924" y="52" class="head" fill="#18d2c4" text-anchor="end">OUTPUT</text>
+  <text x="924" y="76" class="sub" fill="#18d2c4" text-anchor="end">WHERE NEURAL RENDERING RUNS</text>
+  <line x1="24" y1="96" x2="936" y2="96" class="rule"/>
+
+  <!-- 1. Games with an upscaler -->
+  <text x="455" y="126" class="section" text-anchor="middle">GAMES WITH AN UPSCALER</text>
+  <text x="40" y="186" class="big" fill="#76b900">DLSS</text>
+  <text x="40" y="206" class="note">DLSS 2 and later</text>
+  <text x="40" y="256" class="big" fill="#ed1c24">FSR 2 / 3</text>
+  <text x="40" y="320" class="big" fill="#3b8fe0">XeSS</text>
+  <text x="40" y="340" class="note">D3D12 or Vulkan</text>
+  <path d="M150 176 C 240 176, 240 250, 318 250" class="flow" marker-end="url(#arrow)"/>
+  <path d="M236 246 L 318 250" class="flow" marker-end="url(#arrow)"/>
+  <path d="M150 310 C 240 310, 240 250, 318 250" class="flow" marker-end="url(#arrow)"/>
+  <text x="455" y="262" font-size="40" font-weight="800" fill="url(#brand)" text-anchor="middle" letter-spacing="3">RETOQUE</text>
+  <text x="455" y="284" class="note" text-anchor="middle">on OptiScaler: every upscaler call, one path</text>
+  <path d="M592 250 C 620 250, 620 186, 640 186" class="flow" marker-end="url(#arrow)"/>
+  <path d="M592 250 C 620 250, 620 300, 640 300" class="flow" marker-end="url(#arrow)"/>
+  <text x="650" y="182" class="out">D3D12, after the upscaler</text>
+  <text x="650" y="202" class="note">linear light, before the HUD is drawn</text>
+  <text x="650" y="222" class="key">HookMethod=1 (default)</text>
+  <text x="650" y="296" class="out">Vulkan, after the upscaler</text>
+  <text x="650" y="316" class="note">DOOM Eternal</text>
+
+  <line x1="24" y1="372" x2="936" y2="372" class="rule"/>
+
+  <!-- 2. Direct3D 11 -->
+  <text x="455" y="402" class="section" text-anchor="middle">DIRECT3D 11 GAMES</text>
+  <text x="40" y="464" class="big" fill="#e9ecf3">Direct3D 11</text>
+  <text x="40" y="484" class="note">with or without an upscaler</text>
+  <path d="M250 455 L 327 455" class="flow" marker-end="url(#arrow)"/>
+  <rect x="335" y="420" width="240" height="70" rx="14" fill="url(#node)" stroke="url(#brand)" stroke-width="2"/>
+  <text x="455" y="450" class="nodet" text-anchor="middle">D3D11 to D3D12 bridge</text>
+  <text x="455" y="472" class="nodes" text-anchor="middle">keeps native DLSS guides</text>
+  <path d="M583 455 L 640 455" class="flow" marker-end="url(#arrow)"/>
+  <text x="650" y="451" class="out">On the bridge</text>
+  <text x="650" y="471" class="note">Divinity: Original Sin 2, The Witcher 3 (DX11),</text>
+  <text x="650" y="488" class="note">Sons Of The Forest</text>
+
+  <line x1="24" y1="520" x2="936" y2="520" class="rule"/>
+
+  <!-- 3. No upscaler at all -->
+  <text x="455" y="550" class="section" text-anchor="middle">NO UPSCALER AT ALL</text>
+  <text x="40" y="606" class="mid">Direct3D 12 game</text>
+  <text x="40" y="626" class="note">emulators included (PCSX2)</text>
+  <text x="40" y="686" class="mid">Vulkan</text>
+  <text x="40" y="706" class="note">native, or D3D through DXVK / vkd3d-proton</text>
+  <path d="M236 600 C 290 600, 290 634, 327 634" class="flow" marker-end="url(#arrow)"/>
+  <path d="M118 680 C 290 680, 290 648, 327 648" class="flow" marker-end="url(#arrow)"/>
+  <rect x="335" y="605" width="240" height="70" rx="14" fill="url(#node)" stroke="url(#brand)" stroke-width="2"/>
+  <text x="455" y="635" class="nodet" text-anchor="middle">Present pass</text>
+  <text x="455" y="657" class="nodes" text-anchor="middle">the finished picture, before the flip</text>
+  <path d="M583 640 C 620 640, 620 600, 640 600" class="flow" marker-end="url(#arrow)"/>
+  <path d="M583 640 C 620 640, 620 684, 640 684" class="flow" marker-end="url(#arrow)"/>
+  <text x="650" y="596" class="out">At present, HUD included</text>
+  <text x="650" y="616" class="key">HookMethod=2</text>
+  <text x="650" y="680" class="out">Vulkan present host</text>
+  <text x="650" y="700" class="note">experimental, off by default</text>
+
+  <line x1="24" y1="736" x2="936" y2="736" class="rule"/>
+
+  <!-- 4. Frame generation -->
+  <text x="455" y="766" class="section" text-anchor="middle">FRAME GENERATION</text>
+  <text x="40" y="826" class="mid">The retouched frame</text>
+  <text x="40" y="846" class="note">no motion vectors? they are synthesized</text>
+  <path d="M262 820 L 327 820" class="flow" marker-end="url(#arrow)"/>
+  <rect x="335" y="785" width="240" height="70" rx="14" fill="url(#node)" stroke="url(#brand)" stroke-width="2"/>
+  <text x="455" y="815" class="nodet" text-anchor="middle">Before frame generation</text>
+  <text x="455" y="837" class="nodes" text-anchor="middle">generated frames inherit the pass</text>
+  <path d="M583 820 C 620 820, 620 784, 640 784" class="flow" marker-end="url(#arrow)"/>
+  <path d="M583 820 L 640 820" class="flow" marker-end="url(#arrow)"/>
+  <path d="M583 820 C 620 820, 620 856, 640 856" class="flow" marker-end="url(#arrow)"/>
+  <text x="650" y="790" class="out" style="fill:#76b900">DLSS-G</text>
+  <text x="650" y="826" class="out" style="fill:#ed1c24">FSR frame generation</text>
+  <text x="650" y="862" class="out" style="fill:#3b8fe0">XeFG</text>
+
+  <!-- Footer: the model -->
+  <rect x="24" y="890" width="912" height="96" rx="16" fill="#151925" stroke="#3a4150" stroke-width="2"/>
+  <text x="48" y="922" class="sub" fill="#b4bccc">EVERY ROUTE ENDS IN THE SAME MODEL</text>
+  <text x="48" y="952" class="mid">nvngx_dlssnr.dll</text>
+  <text x="48" y="972" class="note">DLSS 5 NR model, supplied by you</text>
+  <path d="M248 946 L 318 946" class="flow" marker-end="url(#arrow)"/>
+  <text x="330" y="952" class="mid">forwarder</text>
+  <text x="330" y="972" class="note">nvngx.dll_dlssnr.dll, built here</text>
+  <path d="M452 946 L 522 946" class="flow" marker-end="url(#arrow)"/>
+  <text x="534" y="952" class="mid">NVIDIA NGX</text>
+  <text x="534" y="972" class="note">feature 18, in the driver</text>
+  <text x="912" y="952" font-size="18" font-weight="800" fill="url(#brand)" text-anchor="end">Linux / Proton first</text>
+  <text x="912" y="972" class="note" text-anchor="end">and Windows</text>
+</svg>
