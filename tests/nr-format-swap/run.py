@@ -205,7 +205,8 @@ if call_site is not None:
     guard(built is not None and all(f in built.group(1) for f in
                                     ('frame.ColourIsLinearHdr', 'frame.PresentWhite', 'frame.PresentQuantRel')),
           'the transfer is built from the game\'s HDR claim, the present white and the output code')
-    game_reset = dispatch.index('    if (frame.Reset)\n    {\n        g_nr.reset = true;')
+    # frameReset is the game's Reset, or ZeroGuideReset's on all-zero game motion (zero-motion-detection.md).
+    game_reset = dispatch.index('    if (frameReset)\n    {\n        g_nr.reset = true;')
     guard(game_reset < call_site.start(), 'the game\'s Reset is set before the format check runs')
 
 guard('reset = false' not in release, 'the format check never clears a reset')

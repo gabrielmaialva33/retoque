@@ -13,7 +13,6 @@
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
 #include <dlssnr/DlssNr_DetailStats.h>
 #include <dlssnr/DlssNr_Pulse.h>
-#include <dlssnr/DlssNr_MotionProbe.h>
 #include <dlssnr/DlssNr_PresentGuideRing.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 #include <dlssnr/DlssNr_Enlarge.h>
@@ -40,6 +39,10 @@ class DlssNr_GuideMatch_Dx12;
 class DlssNr_Periphery_Dx12;
 class DlssNr_PresentHdr_Dx12;
 class DlssNr_MotionProbe_Dx12;
+namespace DlssNr::MotionProbe
+{
+struct Shape;
+}
 
 namespace DlssNr::Dx12Internal
 {
