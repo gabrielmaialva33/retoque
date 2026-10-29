@@ -2258,7 +2258,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // Zero-motion detection (zero-motion-detection.md): the game's own vectors, read in the game's region before
     // anything resamples them, every eighth such evaluate; the verdict is applied above, from probes already read back.
-    if (frame.GameGuides)
+    // Only with ZeroGuideReset on: the probe is a pass of its own, and with the key off its verdict changes nothing.
+    if (frame.GameGuides && cfg.DlssNrZeroGuideReset.value_or_default())
     {
         DlssNr::MotionProbe::Shape probeShape;
         probeShape.depthWidth = guideWidth;

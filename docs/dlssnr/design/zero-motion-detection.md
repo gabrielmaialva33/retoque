@@ -70,8 +70,10 @@ The verdict is applied as `ZeroGuideReset` applies to a zero-guide frame: **whil
 on, every frame with the game's guides drops the model's history**, marked as policy (`ResetIsPolicy`), so the output
 stabilizer and the log do not read it as a cut. A reset the game asked for that frame is left as the game's.
 
-With `ZeroGuideReset` off (its default) nothing on screen changes, by invariant 1 (default-identical): the log says
-what was found and what the key would do. The choice is the same trade the key already is -- no ghosts against three
+With `ZeroGuideReset` off (its default) nothing on screen changes, by invariant 1 (default-identical), and **the probe
+does not run at all**: it is a D3D12 pass of its own, every eighth evaluate, and no game of ours has shown dead vectors,
+so it is not worth a pass on every NR session before it has run on native Windows (2026-10-29). The first version
+probed always and only logged with the key off. The choice is the same trade the key already is -- no ghosts against three
 times the shimmer of the raw game on a still background (the PCSX2 measurement in synthesized-motion.md) -- and that
 trade was made opt-in for zero guides; a dead field is zero guides by another name.
 

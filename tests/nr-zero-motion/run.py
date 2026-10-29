@@ -82,7 +82,7 @@ dispatch = renderer[renderer.index('bool DlssNr_Dx12::Dispatch('):]
 dispatch = dispatch[:dispatch.index('\n}\n')]
 assert renderer.count('UpdateMotionProbe(cmdList, device, depthIn, motionIn, probeShape,') == 1
 call = dispatch.index('UpdateMotionProbe(cmdList, device, depthIn, motionIn, probeShape,')
-gate = dispatch.rindex('if (frame.GameGuides)', 0, call)
+gate = dispatch.rindex('if (frame.GameGuides && cfg.DlssNrZeroGuideReset.value_or_default())', 0, call)
 assert dispatch.index('ID3D12Resource* motionIn = ReadableGuide(') < gate
 assert dispatch.index('LOG_ERROR("DLSS-NR unavailable: depth {} | motion vectors {}"') < gate
 assert call < dispatch.index('g_nr.guideMatch->Dispatch(cmdList, depthIn, motionIn,')
