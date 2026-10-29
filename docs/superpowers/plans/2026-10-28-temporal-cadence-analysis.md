@@ -59,11 +59,11 @@
 - [x] Run analysis on retained historical evidence with the original qualification hashes; independently inspect event selection and timing scope.
 - [x] Freeze the variant order, acceptance criteria, reverse schedule and source identities before new runtime work.
 - [x] Reuse the exact qualified harness after verifying its C++/shader sources and executable hash are unchanged; identify qualified DLL/forwarder/model exactly.
-- [ ] Run forward development capture and reverse holdout with the same candidate/control pairs and five A/A repeats; retain commands and failures.
-- [ ] Analyze every trial by phase, quality and cost; preserve original fidelity verdicts and make one explicit continuation/rejection decision under the frozen criteria.
-- [ ] Create bounded visual sequences around selected temporal events using original pixels and consistent scaling; verify frame labels and identities.
-- [ ] Run strict host tier, independent whole-branch/evidence review and privacy/whitespace checks.
-- [ ] Commit the measured record, integrate by fast-forward if the authorized target remains compatible, verify clean state and preserve evidence.
+- [x] Run forward development capture and reverse holdout with the same candidate/control pairs and five A/A repeats; retain commands and failures.
+- [x] Analyze every trial by phase, quality and cost; preserve original fidelity verdicts and make one explicit continuation/rejection decision under the frozen criteria.
+- [x] Create bounded visual sequences around selected temporal events using original pixels and consistent scaling; verify frame labels and identities.
+- [x] Run strict host tier, independent whole-branch/evidence review and privacy/whitespace checks.
+- [x] Commit the measured record, integrate by fast-forward if the authorized target remains compatible, verify clean state and preserve evidence.
 
 ## Execution rulings
 
