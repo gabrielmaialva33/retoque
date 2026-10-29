@@ -80,6 +80,11 @@ same 4 checks red again.
 
 ## What it does not cover
 
+`DeviceCreated` maps only queues created without flags: a protected queue comes from `vkGetDeviceQueue2`, and
+`vkGetDeviceQueue` on one is invalid (VUID-vkGetDeviceQueue-flags-01841). Upstream's own `DeviceCreated` skipped
+them; ours did not until 2026-10-29. The case gives family 0 one plain and three protected queues and fails if the
+menu asks for any index past the plain one.
+
 These are fakes. No Vulkan driver, GPU, Wine, validation layer, real ImGui backend or game is involved.
 A green run is not evidence about rendering, pacing or a real multi-window title. The fake device has
 one graphics family, so the cross-family and pool-move paths are left to `tests/vulkan-overlay`, which

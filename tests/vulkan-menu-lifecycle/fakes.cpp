@@ -192,8 +192,12 @@ VKAPI_ATTR void VKAPI_CALL vkGetPhysicalDeviceQueueFamilyProperties(VkPhysicalDe
     props[0].queueCount = 1;
 }
 
+// Every (family, index) vkGetDeviceQueue was asked for, outside the event list so present-time checks stay exact
+static std::vector<std::pair<uint32_t, uint32_t>> g_queueGets;
+
 VKAPI_ATTR void VKAPI_CALL vkGetDeviceQueue(VkDevice device, uint32_t family, uint32_t index, VkQueue* queue)
 {
+    g_queueGets.emplace_back(family, index);
     *queue = QueueOf(device, family, index);
 }
 

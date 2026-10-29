@@ -744,6 +744,14 @@ tier = "host"
 timeout = 120
 summary = "CheckForRealObject hands back a borrowed object: the DLSS-G factory sites and HookToDLSSGFactory leave the real factory's count unchanged over a Streamline-shaped proxy, and no caller releases what it got back."
 
+[dlss-library-path]
+path = "dlss-library-path"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "[Libraries] NvngxDlssPath naming a folder (with or without a trailing separator) or the file keeps the file's path, so both NGX path users get the folder; a folder without the file or a missing path leaves the search to run."
+
 [fg-dlssg-backbuffer-index]
 path = "fg-dlssg-backbuffer-index"
 domain = "fg"

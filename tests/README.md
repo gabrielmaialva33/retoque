@@ -265,6 +265,9 @@ production headers or source slices with local fakes under AddressSanitizer and 
   on the DLSS-G swapchain exactly once on every DLSS-G present (DLSS-G refuses a frame without it), whether the
   game's own Reflex markers are used or OptiScaler's, and ahead of OptiScaler's frame token; the token and
   `ePresentStart` keep their condition. 192 cases against Streamline and DXGI fakes; no DLSS-G.
+- `dlss-library-path` — dllmain's `[Libraries] NvngxDlssPath` block, sliced and run on real folders: a folder with
+  or without a trailing separator, or the file itself, keeps the file's path, so NGX's feature paths get the folder
+  (they took its parent before); a folder without the file or a missing path leaves the search to run.
 - `fg-streamline-real-object` — `Util::CheckForRealObject` and the three DLSS-G factory sites that call it
   (`DLSSG_Dx12.cpp`'s two swapchain creations, `DxgiFactoryHooks::HookToDLSSGFactory`), sliced and compiled
   against a Streamline-shaped factory proxy: the real factory's count is unchanged after eight swapchains, and no

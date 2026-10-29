@@ -320,6 +320,11 @@ void MenuOverlayVk::DeviceCreated(VkDevice device, const VkDeviceCreateInfo* pCr
     for (uint32_t i = 0; i < pCreateInfo->queueCreateInfoCount; i++)
     {
         const auto& qci = pCreateInfo->pQueueCreateInfos[i];
+
+        // Queues with flags need vkGetDeviceQueue2, not presented from in practice (upstream skips them too)
+        if (qci.flags != 0)
+            continue;
+
         auto& slot = families[qci.queueFamilyIndex];
         slot = std::max(slot, qci.queueCount);
     }

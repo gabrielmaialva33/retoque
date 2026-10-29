@@ -562,6 +562,43 @@ static void NonMenuPresentPassesThrough()
     End();
 }
 
+// A device whose family 0 also has protected queues: those come from vkGetDeviceQueue2 with the protected flag, and
+// vkGetDeviceQueue on them is invalid (VUID-vkGetDeviceQueue-flags-01841). The menu maps only the plain ones.
+static void ProtectedQueuesNotFetched()
+{
+    Begin("protected queues are not fetched with vkGetDeviceQueue");
+    auto device = Mint<VkDevice>("devProtected");
+    float priorities[3] = { 1.0f, 1.0f, 1.0f };
+    VkDeviceQueueCreateInfo queues[2] {};
+    queues[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queues[0].queueFamilyIndex = 0;
+    queues[0].queueCount = 1;
+    queues[0].pQueuePriorities = priorities;
+    queues[1] = queues[0];
+    queues[1].flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
+    queues[1].queueCount = 3;
+    VkDeviceCreateInfo info {};
+    info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    info.queueCreateInfoCount = 2;
+    info.pQueueCreateInfos = queues;
+    MenuOverlayVk::DeviceCreated(device, &info);
+
+    g_queueGets.clear();
+    auto window = MakeWindow("windowProtected");
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    GameCreateSwapchain(device, window, "scProtected", 2, VK_NULL_HANDLE, &swapchain);
+
+    bool sawPlain = false, sawProtected = false;
+    for (auto& [family, index] : g_queueGets)
+    {
+        sawPlain |= family == 0 && index == 0;
+        sawProtected |= family == 0 && index >= 1;
+    }
+    Check(sawPlain, "the plain queue of family 0 is mapped");
+    Check(!sawProtected, "no protected queue index is asked of vkGetDeviceQueue");
+    End();
+}
+
 int main()
 {
     SecondWindowLeavesMenuAlone();
@@ -575,6 +612,7 @@ int main()
     HiddenSplashKeepsMenu();
     SurfaceHookRaceLeavesMenuAlone();
     NonMenuPresentPassesThrough();
+    ProtectedQueuesNotFetched();
 
     if (g_failures != 0)
     {
