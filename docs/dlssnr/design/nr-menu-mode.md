@@ -2,6 +2,12 @@
 
 Status: **design note; not yet implemented.** Proposes optional continuation of Neural Rendering during game menus, inventories, and pause screens when upscaler evaluation calls cease.
 
+Re-surveyed 2026-10-29 against `c862bd2e`: §2 is rewritten route by route (its old line citations had gone stale, and
+it missed the two routes that already continue), and §3 gains the corrections in §3.3. Still no code: the change is
+not small (a new verdict in the present pass, a key, the Vulkan owner's idle rule) and it moves NR onto frames with
+the interface already drawn, which `retoque/dlssnr/README.md` ("HUD detection was tried and removed") says is safe
+today only because the pass runs before the interface.
+
 ---
 
 ## 1. Where this comes from
@@ -22,25 +28,37 @@ The solution is established across community projects:
 
 ---
 
-## 2. What exists in this codebase today
+## 2. What exists in this codebase today (re-surveyed 2026-10-29)
 
-- **Present skipping on stale guides:**
-  In `retoque/shaders/dlssnr/DlssNr_Dx12.cpp:5884` (under `HookMethod=2`, Present mode):
-  ```cpp
-  if (temporalValid && temporalSeq == g_nrLastEnhancedSeq)
-  {
-      ++g_presentSkips;
-      ReportRuntimeStatus(false, "held temporal guides: waiting for fresh upscale");
-      return;
-  }
-  ```
-  If the game stops evaluating DLSS, the present pass immediately aborts.
-- **Inactive under standard HookMethod=1 (Upscaled):**
-  In `DlssNr_Dx12.cpp:5717-5718`, the present pass exits immediately under the default hook configuration (`HookMethod=1`). When the game pauses and stops calling DLSS evaluate, NR does not run anywhere.
-- **Existing reusable components:**
-  - `DlssNr_ZeroGuides.h/.cpp`: zero-motion and constant-depth generator (`DlssNr::ZeroGuides`);
-  - `ZeroGuideReset` logic;
-  - `DlssNr_UiMask*`: HUD protection mask designed to preserve sharp 2D UI elements.
+No route has a menu mode. Two present-time hosts already keep NR on frames without an upscaler call, by
+construction; the default route and the Vulkan route do not. Line numbers are against `c862bd2e`.
+
+| Route | A menu frame (the game stopped calling its upscaler) | Where |
+|---|---|---|
+| D3D12 after-upscale, `HookMethod=1` (the default) | **No NR.** Every present takes the `Upscaled` verdict, reports status and returns; nothing takes over when the evaluates stop. The status line can keep saying "active". | `DlssNr_PresentBoundary.h:81-82` (`Decide`), `DlssNr_Dx12.cpp:4714-4721`; `hellraiser-video-present.md:9-12` |
+| `HookMethod=0` (Auto) | **No NR** once it has seen the game's DLSS-G (it behaves as 1, `PresentBoundary.h:47-53`). Before that, on a lower present entry, the same as the next row. | |
+| D3D12 present, `HookMethod=2`, lower entries (wrapped swapchain, OptiScaler's own FG hook) | **No NR after the first capture**: once the newest capture has been consumed, an unchanged newest sequence skips every later present (`!boundary`), whatever `RequireDlss` says. That skip exists because below the boundary no new capture can mean a generated frame. | `DlssNr_Dx12.cpp:4951-4965` |
+| D3D12 present, `HookMethod=2`, the game's own Present (Streamline boundary) | **Continues**, with `RequireDlss=false`: the frame runs on constant depth and zero motion (or `SynthMotion`), and the model's history restarts once the new source has held for 4 frames. With `RequireDlss=true` the frame is shown as drawn. The boundary probe is installed only for `HookMethod=2`, so Auto never gets here. | `DlssNr_Dx12.cpp:5050-5101`, `:3746-3762`; `DlssNr_PresentGuideIdentity.h:41` (`kSourceStable`); `DlssNr_SlBoundaryProbe.cpp:522`; `hellraiser-video-present.md` |
+| D3D11 bridge (built only at `HookMethod=2`) | **Continues**: the host runs every present, with the captured guides when they are the frame's and zeros or `SynthMotion` otherwise. No skip for an unchanged capture. | `DlssNr_PresentHost.cpp:683-760`; `dx11_with_dx12_sc.cpp:59` |
+| Vulkan after-upscale | **No NR**: the route simply stops. | |
+| Vulkan present host (`VulkanPresentHost`, off by default) | **No NR for 10 s**, then cold NR on zero guides: the host is refused while the after-upscale route "owns the model", takes it back only after `kAfterUpscaleIdleMs` = 10 s without an evaluate (draining the device's queues, freeing the route's objects), and hands it back when DLSS returns, at the cost of two feature rebuilds. The 10 s was chosen so a menu does *not* cost those rebuilds, which makes it the opposite of menu continuation. Under vkd3d-proton it stands down for good once the D3D12 model exists. | `DlssNr_VkModelOwner.h:51-56`, `DlssNr_VkPresentHost.cpp:1615-1622`, `DlssNrFeature_Vk.cpp:4099, 4116`; `nr-vulkan-present-host.md:1109-1115` |
+
+Two things work against continuation on purpose and must be reconciled, not overridden:
+
+- **`PauseWithoutFrameGen`** (`pause-without-frame-gen.md`, `DlssNr_Dx12_Lifetime.cpp:98`) skips NR while the game has
+  turned its own DLSS-G off, which is exactly what many menus do. With it on, menu mode would be asked to run on frames
+  the user asked to leave alone; the two need a stated precedence (proposed: `PauseWithoutFrameGen` wins).
+- **The interface is in the frame.** On the after-upscale route the pass runs before the game draws its UI; at present
+  it does not. The UI mask (`DlssNr_UiMask_Dx12`, `hud-protection.md`) is the only protection the present route has.
+
+And one document disagreed with the code (corrected in the same change as this survey): `present-real-guides.md:83` and `:198` said Auto "stays on the present route
+after the upscaler stops, so the zero-guide frames in a menu or cutscene keep being edited". On a lower entry the skip
+at `DlssNr_Dx12.cpp:4951` stops that after the first capture, and Auto never reaches the boundary, where the claim
+would hold. The claim is true only of `HookMethod=2` at the boundary and of the D3D11 bridge.
+
+Reusable pieces: `DlssNr_ZeroGuides.h/.cpp` (constant depth, zero motion), `ZeroGuideReset`, `SynthMotion`, the
+source-change reset (`g_sourceIsPresent`, `DlssNr_Dx12.cpp:5110` and `:5483`), the UI mask, and the per-entry
+boundary flag that already lets the boundary continue where lower entries skip.
 
 ---
 
@@ -79,6 +97,31 @@ An opt-in configuration (`[DlssNr] MenuMode=true`, default `false`) that bridges
 
 ### 3.2 Handling `HookMethod=1` (Upscaled mode)
 Under `HookMethod=1`, `RunPresentPass` normally stands down entirely. When `MenuMode` is enabled and menu inactivity is confirmed, `RunPresentPass` temporarily activates as an opportunistic fallback, relinquishing presentation as soon as the upscaler evaluation resumes.
+
+### 3.3 Corrections from the 2026-10-29 survey
+
+- **Where it lives.** Not a timeout inside `RunPresentPass` alone: a new verdict (`MenuRun`) from
+  `DlssNr::PresentBoundary::Decide`, with the time of the last `++g_upscaleRenders` (`DlssNr_Dx12.cpp:5479`) and the
+  presents since, decided by a pure header with a host test in the shape of `DlssNr_PresentBoundary.h`. `MenuRun`
+  forces zero guides (or `SynthMotion`) and bypasses the unchanged-capture skip at `:4951` for that present only: a
+  generated frame never arrives 150 ms after a real one, which is what makes the bypass safe there.
+- **Entry conditions** add to §3.1: at least one evaluate this session; neither the game's DLSS-G nor OptiScaler's FG
+  active (or this is the FG hook's base-frame entry); `PauseWithoutFrameGen` not pausing; an SDR swapchain, or
+  `HdrPresent` on.
+- **History.** BeliyG3 keeps the model's history *into* the menu (`menu_param_book.cpp:182`, `Reset=0`) and resets only
+  on the first game evaluate after a menu pass (`menu_state.h:13-16`), because his menu frames are the same surface.
+  Here they are not: the after-upscale route edits linear HDR before tone mapping and the present pass a tone-mapped
+  backbuffer, at another size and format. So a reset on entry and on exit is required here, and both already exist
+  (the source-change reset). Expect a visible step in look at each switch; the "pop" moves, it does not disappear, and
+  a size or format change also costs a feature rebuild on entry.
+- **Exit.** Decided on the evaluate's CPU side, before its own present: on an engine with a lagging render thread that
+  loses one frame rather than editing it twice.
+- **Cost.** Menus run uncapped; the model at full rate there is what `PauseWithoutFrameGen` exists to avoid. Take
+  BeliyG3's suspension rule too: three menu passes in a row at 100 ms or more and the menu stays without NR
+  (`docs/MENU_MODE.md:58`).
+- **Vulkan** is out of scope for a first version: a short-idle claim on the model would be two feature rebuilds per
+  menu, the cost the 10 s rule was written to avoid.
+- **Cadence** (§5): forced to 1 during menu mode, as written.
 
 ---
 

@@ -81,7 +81,10 @@ What nothing records, and which therefore cannot be checked:
    frames are running on the zero-guide branch. Routing on the latch is harmless today, and arguably
    wanted: once the evaluates stop, the after-upscale route has nothing to act on, and the present
    route carrying on with zero guides is what `nr-menu-mode.md` asks for. The status being wrong is the
-   defect.
+   defect. (2026-10-29: the carrying on holds only at the game's own Present under `HookMethod=2` and on the
+   D3D11 bridge. On a lower entry, which is where Auto always is, an unchanged newest capture skips every later
+   present once it has been consumed (`DlssNr_Dx12.cpp:4951` at `c862bd2e`), so the menu frames are not edited;
+   `nr-menu-mode.md` §2.)
 6. **The output subrect.** `GatherFrame` reads the render subrect and the depth and motion bases, not
    `DLSS.Output.Subrect.Base`. A non-zero output base means the upscaler wrote into part of a larger
    texture, and a present of the whole texture is not that picture.
@@ -194,8 +197,9 @@ get wrong:
 - **The status stops reading the latch.** The status line and the menu line take their guide source
   from the decision's own recent answer ("accepted in the last N presents"), so they say "zero" or
   "synthesized" when that is what is running. Routing does not change: Auto stays on the present
-  route after the upscaler stops, so the zero-guide frames in a menu or cutscene keep being edited,
-  which is the behaviour `nr-menu-mode.md` is trying to preserve.
+  route after the upscaler stops. Whether the menu or cutscene frames are then edited depends on the entry:
+  at the game's own Present (`HookMethod=2`) they run on zero guides; on a lower entry, Auto's, the
+  unchanged-capture skip stands them down after the first one (`nr-menu-mode.md` §2, 2026-10-29).
 
 ### D4. Lifetime and synchronisation
 
