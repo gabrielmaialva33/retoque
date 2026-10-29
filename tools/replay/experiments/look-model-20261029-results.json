@@ -1,0 +1,2595 @@
+{
+  "schema": "retoque-look-model-experiment-evidence",
+  "version": 1,
+  "date": "2026-10-29",
+  "reports": {
+    "forward": {
+      "schema": "retoque-offline-look-experiment",
+      "version": 1,
+      "status": "DESCRIPTIVE_NOT_CALIBRATED",
+      "domain": "decoded clipped model RGB, DebugScale=1",
+      "capture_sha256": "f17fea2bac406cb0821d98225f720920240d48e45e0a30b40fe9185ed1497c57",
+      "run_sha256": {
+        "proxy": "32702b0534111013ace67523d85f216e0dc844349cffc02f566dd2821c8d4cb9",
+        "every-a": "c002825f240d7852b766c94da9686c7bc2ecbd197cacdc5a339c6108e3f603fa",
+        "every-b": "a80d61ee235c8e19f96627680fd9cc0985efd967fe6786d61f81cccf4ffb6646"
+      },
+      "environment": {
+        "model_sha256": "6eb209e764f39872625debd6abaf45e2bb6322f6f270f781f70c059ae30b3927",
+        "gpu": "NVIDIA GeForce RTX 4090",
+        "driver": "615.78.08",
+        "runtime": "Proton - Experimental"
+      },
+      "dll_sha256": "4d48c575e880049ca56dcc6a75d27d88be842621a10a5c66c0e6e820e31a805c",
+      "experiment_sha256": "83110c4f7eff570edd3111dd87710e2298c923fb84b079db6820c8ea74f7bc49",
+      "numpy_version": "2.5.4",
+      "counts": {
+        "network_oracle": 201,
+        "predicted": 199
+      },
+      "variants": {
+        "look16x8": [
+          16,
+          8
+        ],
+        "look32x8": [
+          32,
+          8
+        ],
+        "look16x16": [
+          16,
+          16
+        ]
+      },
+      "ridge": 0.005,
+      "all_frames": {
+        "every-b": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "hold": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.0002470540996145078,
+              "golden_mae_p95": 0.0006020445968455111,
+              "paired_pulse_distance_p95": 0.02008181592234647,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0006214882403224086,
+              "golden_mae_p95": 0.0011645869508522708,
+              "paired_pulse_distance_p95": 0.03784759935639631,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0015335547127372895,
+              "golden_mae_p95": 0.00431480206231828,
+              "paired_pulse_distance_p95": 0.04243049473358053,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.00427151028969739,
+              "golden_mae_p95": 0.012772158011242192,
+              "paired_pulse_distance_p95": 0.0965944311581694,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00015720730643779796,
+              "golden_mae_p95": 0.0003868749227581752,
+              "paired_pulse_distance_p95": 0.007909616285118009,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.000378074468113482,
+              "golden_mae_p95": 0.0009281363477930426,
+              "paired_pulse_distance_p95": 0.01233852017917944,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 7.509797196133817e-05,
+              "golden_mae_p95": 0.000187180278374365,
+              "paired_pulse_distance_p95": 0.005064629527223909,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.0001385555231530385,
+              "golden_mae_p95": 0.0003535448875692155,
+              "paired_pulse_distance_p95": 0.006010500148788047,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00010386635758267302,
+              "golden_mae_p95": 0.0002456592333597924,
+              "paired_pulse_distance_p95": 0.005355705577191352,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0001980357500034626,
+              "golden_mae_p95": 0.0004365952264827987,
+              "paired_pulse_distance_p95": 0.007316463024920213,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 9.571124439093249e-05,
+              "golden_mae_p95": 0.0002272140071554868,
+              "paired_pulse_distance_p95": 0.005525016085188723,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.00018947449795625828,
+              "golden_mae_p95": 0.0004305130971802605,
+              "paired_pulse_distance_p95": 0.006152551482156697,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x16": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.0001917672818948459,
+              "golden_mae_p95": 0.000627337392591519,
+              "paired_pulse_distance_p95": 0.0057842230054308465,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0005046235411729233,
+              "golden_mae_p95": 0.0012283778327188543,
+              "paired_pulse_distance_p95": 0.009048643742999778,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005258729983629429,
+              "golden_mae_p95": 0.0015189204516443955,
+              "paired_pulse_distance_p95": 0.016287652350338414,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0013644630962244368,
+              "golden_mae_p95": 0.004419858018767357,
+              "paired_pulse_distance_p95": 0.025863716735074337,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00017368817946708466,
+              "golden_mae_p95": 0.000398520260066912,
+              "paired_pulse_distance_p95": 0.0048730607971733285,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0004566881411796547,
+              "golden_mae_p95": 0.0009818151827701647,
+              "paired_pulse_distance_p95": 0.006718010321039448,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.00012581261595717428,
+              "golden_mae_p95": 0.0002814435334070855,
+              "paired_pulse_distance_p95": 0.0050298051503737725,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.00033422214188411683,
+              "golden_mae_p95": 0.000721323330439999,
+              "paired_pulse_distance_p95": 0.005991873825341173,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0001723978007594149,
+              "golden_mae_p95": 0.000384991795561373,
+              "paired_pulse_distance_p95": 0.0052187955571289316,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.00043817130216747757,
+              "golden_mae_p95": 0.0009521800561468991,
+              "paired_pulse_distance_p95": 0.007281071871602448,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0001626676638299616,
+              "golden_mae_p95": 0.000366024117233354,
+              "paired_pulse_distance_p95": 0.005502899321537991,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.000448871278352642,
+              "golden_mae_p95": 0.0009470055905433211,
+              "paired_pulse_distance_p95": 0.00617346483161707,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x8": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.00019878025569619728,
+              "golden_mae_p95": 0.0006210557568276928,
+              "paired_pulse_distance_p95": 0.0061321238931227855,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0005255346684649507,
+              "golden_mae_p95": 0.0013030471074432128,
+              "paired_pulse_distance_p95": 0.010007666683411725,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005250394238364125,
+              "golden_mae_p95": 0.0016414974482461945,
+              "paired_pulse_distance_p95": 0.01699467853562664,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.001356591501893394,
+              "golden_mae_p95": 0.004667367924817813,
+              "paired_pulse_distance_p95": 0.028417641691779967,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00018388756157884458,
+              "golden_mae_p95": 0.00042398975096944445,
+              "paired_pulse_distance_p95": 0.004804398213299349,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0004880547036801271,
+              "golden_mae_p95": 0.001040816007647567,
+              "paired_pulse_distance_p95": 0.006536736341108627,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.0001330918315179466,
+              "golden_mae_p95": 0.0002969091064255693,
+              "paired_pulse_distance_p95": 0.005041123362616767,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.00035704215504135726,
+              "golden_mae_p95": 0.0007699037871196331,
+              "paired_pulse_distance_p95": 0.006169378550054169,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00017891268174486814,
+              "golden_mae_p95": 0.00039981544690009807,
+              "paired_pulse_distance_p95": 0.005515853160578029,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0004544972297259053,
+              "golden_mae_p95": 0.0009844875560153356,
+              "paired_pulse_distance_p95": 0.006972687846068387,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0001706072238561218,
+              "golden_mae_p95": 0.00038273745932576727,
+              "paired_pulse_distance_p95": 0.0055753815723638194,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0004757254523480057,
+              "golden_mae_p95": 0.0010014713686147538,
+              "paired_pulse_distance_p95": 0.006244256362115972,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look32x8": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.00024037698815044777,
+              "golden_mae_p95": 0.000734279798433914,
+              "paired_pulse_distance_p95": 0.006351412902504165,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0006460205704801602,
+              "golden_mae_p95": 0.0015524832886149743,
+              "paired_pulse_distance_p95": 0.010671038128391206,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.000596500795495675,
+              "golden_mae_p95": 0.0017745027057778212,
+              "paired_pulse_distance_p95": 0.016168849181472354,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0015684905008718475,
+              "golden_mae_p95": 0.005225911006707299,
+              "paired_pulse_distance_p95": 0.027826404535355845,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00023038581427266156,
+              "golden_mae_p95": 0.0005117116937555578,
+              "paired_pulse_distance_p95": 0.004620385344502044,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0006062623123669504,
+              "golden_mae_p95": 0.0013598319592786124,
+              "paired_pulse_distance_p95": 0.006680139942763352,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.0001655322960682144,
+              "golden_mae_p95": 0.0003553960714073548,
+              "paired_pulse_distance_p95": 0.004836451285154558,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.00046110667434029733,
+              "golden_mae_p95": 0.000987761383278902,
+              "paired_pulse_distance_p95": 0.0063972551493375,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00022194294622793087,
+              "golden_mae_p95": 0.0004933954796075182,
+              "paired_pulse_distance_p95": 0.0059864150110776285,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0005747961691374865,
+              "golden_mae_p95": 0.0012474771968434175,
+              "paired_pulse_distance_p95": 0.008788894032790368,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00020507649210234,
+              "golden_mae_p95": 0.0004571902419653582,
+              "paired_pulse_distance_p95": 0.005342285873373937,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0005789029423792474,
+              "golden_mae_p95": 0.0012191021989200871,
+              "paired_pulse_distance_p95": 0.006624012795004053,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        }
+      },
+      "predicted_frames": {
+        "every-b": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "hold": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0004965911550040358,
+              "golden_mae_p95": 0.0028203677717182365,
+              "paired_pulse_distance_p95": 0.0200818159223465,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.0012492225936128814,
+              "golden_mae_p95": 0.008026240266307636,
+              "paired_pulse_distance_p95": 0.037847599356396325,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.003067109425474579,
+              "golden_mae_p95": 0.004674497235980299,
+              "paired_pulse_distance_p95": 0.042430494733580536,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.00854302057939478,
+              "golden_mae_p95": 0.014298117074701522,
+              "paired_pulse_distance_p95": 0.0965944311581694,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003144146128755959,
+              "golden_mae_p95": 0.0004205260477632422,
+              "paired_pulse_distance_p95": 0.007909616285118009,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.000756148936226964,
+              "golden_mae_p95": 0.0009552498569160146,
+              "paired_pulse_distance_p95": 0.01233852017917944,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.00015146879090507188,
+              "golden_mae_p95": 0.00020921340588204288,
+              "paired_pulse_distance_p95": 0.005064629527223909,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.00027945944500358614,
+              "golden_mae_p95": 0.00036397812322334,
+              "paired_pulse_distance_p95": 0.006010500148788047,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00020773271516534605,
+              "golden_mae_p95": 0.0002717160057983601,
+              "paired_pulse_distance_p95": 0.005355705577191352,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003960715000069252,
+              "golden_mae_p95": 0.0004677922242424547,
+              "paired_pulse_distance_p95": 0.007316463024920213,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00019142248878186498,
+              "golden_mae_p95": 0.00024500148426051494,
+              "paired_pulse_distance_p95": 0.005525016085188723,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.00037894899591251656,
+              "golden_mae_p95": 0.00044481343582824417,
+              "paired_pulse_distance_p95": 0.006152551482156697,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x16": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0003854618731554691,
+              "golden_mae_p95": 0.0008776933617122605,
+              "paired_pulse_distance_p95": 0.00578422300543086,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.001014318675724469,
+              "golden_mae_p95": 0.0021931227972905028,
+              "paired_pulse_distance_p95": 0.00904864374299981,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0010517459967258858,
+              "golden_mae_p95": 0.0017488527690814842,
+              "paired_pulse_distance_p95": 0.01628765235033842,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.0027289261924488737,
+              "golden_mae_p95": 0.004661056117476165,
+              "paired_pulse_distance_p95": 0.025863716735074375,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003473763589341693,
+              "golden_mae_p95": 0.00040521691099640805,
+              "paired_pulse_distance_p95": 0.0048730607971733285,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0009133762823593094,
+              "golden_mae_p95": 0.001066573530100725,
+              "paired_pulse_distance_p95": 0.006718010321039448,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.00025375764913396166,
+              "golden_mae_p95": 0.00030766425413042317,
+              "paired_pulse_distance_p95": 0.0050298051503737725,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.0006741090658340662,
+              "golden_mae_p95": 0.000760798832598084,
+              "paired_pulse_distance_p95": 0.005991873825341173,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003447956015188298,
+              "golden_mae_p95": 0.00039326420147889747,
+              "paired_pulse_distance_p95": 0.0052187955571289316,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0008763426043349551,
+              "golden_mae_p95": 0.000958735624908488,
+              "paired_pulse_distance_p95": 0.007281071871602448,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003253353276599232,
+              "golden_mae_p95": 0.0003711529798740643,
+              "paired_pulse_distance_p95": 0.005502899321537991,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.000897742556705284,
+              "golden_mae_p95": 0.0009853313897864508,
+              "paired_pulse_distance_p95": 0.00617346483161707,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x8": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0003995583029069292,
+              "golden_mae_p95": 0.0008631386006562746,
+              "paired_pulse_distance_p95": 0.006132123893122794,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.0010563510923918607,
+              "golden_mae_p95": 0.002177164893996269,
+              "paired_pulse_distance_p95": 0.010007666683411815,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.001050078847672825,
+              "golden_mae_p95": 0.001763430821616314,
+              "paired_pulse_distance_p95": 0.016994678535626653,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.002713183003786788,
+              "golden_mae_p95": 0.004912621446581566,
+              "paired_pulse_distance_p95": 0.02841764169178001,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00036777512315768916,
+              "golden_mae_p95": 0.0004278327183343225,
+              "paired_pulse_distance_p95": 0.004804398213299349,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0009761094073602542,
+              "golden_mae_p95": 0.0011346189015303024,
+              "paired_pulse_distance_p95": 0.006536736341108627,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.00026843945679043467,
+              "golden_mae_p95": 0.0003223925053882752,
+              "paired_pulse_distance_p95": 0.005041123362616767,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.000720135872032568,
+              "golden_mae_p95": 0.0008076844295478453,
+              "paired_pulse_distance_p95": 0.006169378550054169,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003578253634897363,
+              "golden_mae_p95": 0.0004086877993174466,
+              "paired_pulse_distance_p95": 0.005515853160578029,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0009089944594518106,
+              "golden_mae_p95": 0.0009939056074207851,
+              "paired_pulse_distance_p95": 0.006972687846068387,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003412144477122436,
+              "golden_mae_p95": 0.00038811457893068226,
+              "paired_pulse_distance_p95": 0.0055753815723638194,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0009514509046960114,
+              "golden_mae_p95": 0.0010403903868934355,
+              "paired_pulse_distance_p95": 0.006244256362115972,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look32x8": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.00048316982542803575,
+              "golden_mae_p95": 0.001026937934153533,
+              "paired_pulse_distance_p95": 0.006351412902504173,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.001298533810010372,
+              "golden_mae_p95": 0.0025948247431267137,
+              "paired_pulse_distance_p95": 0.01067103812839123,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.00119300159099135,
+              "golden_mae_p95": 0.0021378057850807188,
+              "paired_pulse_distance_p95": 0.01616884918147237,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.003136981001743695,
+              "golden_mae_p95": 0.00564211386422014,
+              "paired_pulse_distance_p95": 0.027826404535355894,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0004607716285453231,
+              "golden_mae_p95": 0.0005817217912143711,
+              "paired_pulse_distance_p95": 0.004620385344502044,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0012125246247339009,
+              "golden_mae_p95": 0.0014106115168512452,
+              "paired_pulse_distance_p95": 0.006680139942763352,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.0003338702242731782,
+              "golden_mae_p95": 0.0003833282354571228,
+              "paired_pulse_distance_p95": 0.004836451285154558,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.0009300287160422946,
+              "golden_mae_p95": 0.0010240418273732993,
+              "paired_pulse_distance_p95": 0.0063972551493375,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00044388589245586174,
+              "golden_mae_p95": 0.000505108772606406,
+              "paired_pulse_distance_p95": 0.0059864150110776285,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.001149592338274973,
+              "golden_mae_p95": 0.001294016519625125,
+              "paired_pulse_distance_p95": 0.008788894032790368,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00041015298420468,
+              "golden_mae_p95": 0.00046163381117236846,
+              "paired_pulse_distance_p95": 0.005342285873373937,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0011578058847584948,
+              "golden_mae_p95": 0.0012687110394656177,
+              "paired_pulse_distance_p95": 0.006624012795004053,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        }
+      },
+      "unsafe_cut": [
+        {
+          "id": 361,
+          "method": "look16x8",
+          "golden_mae": 0.004114163655364849
+        },
+        {
+          "id": 361,
+          "method": "look32x8",
+          "golden_mae": 0.004156708631225879
+        },
+        {
+          "id": 361,
+          "method": "look16x16",
+          "golden_mae": 0.004194819274726703
+        },
+        {
+          "id": 361,
+          "method": "hold",
+          "golden_mae": 0.03803037242618976
+        }
+      ],
+      "training_mae": {
+        "look16x8": 0.0003149307165321116,
+        "look32x8": 0.0004191865864900178,
+        "look16x16": 0.0002954581777068947
+      },
+      "wall_seconds": 370.2892545799999,
+      "limitations": [
+        "full-rate oracle history",
+        "diagnostic FP16 quantization and saturating decode",
+        "no production resolve or guide-free network evaluation",
+        "no GPU performance measurement"
+      ]
+    },
+    "reverse": {
+      "schema": "retoque-offline-look-experiment",
+      "version": 1,
+      "status": "DESCRIPTIVE_NOT_CALIBRATED",
+      "domain": "decoded clipped model RGB, DebugScale=1",
+      "capture_sha256": "42e7b2549b34d08b4b61e057eb244108143f02d08f4bc2c3041b64d7542b0dfb",
+      "run_sha256": {
+        "proxy": "1718db6eac1ca290c76242ac00ef80aae9dcc1cedd10a565a308c931c924e116",
+        "every-a": "463b9cf771f7b2ffb0ddd38390ac9f222e2c208fcb120bc4f169a688d9c1287f",
+        "every-b": "315407de063a0840e9e3196e08bee757ab1f7850eec1660b7475187a98ba52db"
+      },
+      "environment": {
+        "model_sha256": "6eb209e764f39872625debd6abaf45e2bb6322f6f270f781f70c059ae30b3927",
+        "gpu": "NVIDIA GeForce RTX 4090",
+        "driver": "615.78.08",
+        "runtime": "Proton - Experimental"
+      },
+      "dll_sha256": "4d48c575e880049ca56dcc6a75d27d88be842621a10a5c66c0e6e820e31a805c",
+      "experiment_sha256": "83110c4f7eff570edd3111dd87710e2298c923fb84b079db6820c8ea74f7bc49",
+      "numpy_version": "2.5.4",
+      "counts": {
+        "network_oracle": 201,
+        "predicted": 199
+      },
+      "variants": {
+        "look16x8": [
+          16,
+          8
+        ],
+        "look32x8": [
+          32,
+          8
+        ],
+        "look16x16": [
+          16,
+          16
+        ]
+      },
+      "ridge": 0.005,
+      "all_frames": {
+        "every-b": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "hold": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.0002640065678231487,
+              "golden_mae_p95": 0.001004979479644032,
+              "paired_pulse_distance_p95": 0.014724266208087667,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0006597372437965262,
+              "golden_mae_p95": 0.0028274081266588635,
+              "paired_pulse_distance_p95": 0.044089431283562144,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0011860383011883606,
+              "golden_mae_p95": 0.003467123376205563,
+              "paired_pulse_distance_p95": 0.032675734979409225,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0031220296845184984,
+              "golden_mae_p95": 0.00977279826129476,
+              "paired_pulse_distance_p95": 0.0869099646736314,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0003812133510148636,
+              "golden_mae_p95": 0.0009719577260591365,
+              "paired_pulse_distance_p95": 0.010047218777956144,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0010245430226679202,
+              "golden_mae_p95": 0.002695811045942483,
+              "paired_pulse_distance_p95": 0.012860451772236553,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 7.509797196133817e-05,
+              "golden_mae_p95": 0.000187180278374365,
+              "paired_pulse_distance_p95": 0.005064629527223909,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.0001385555231530385,
+              "golden_mae_p95": 0.0003535448875692155,
+              "paired_pulse_distance_p95": 0.006010500148788047,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00011764004845517102,
+              "golden_mae_p95": 0.00026879262537867925,
+              "paired_pulse_distance_p95": 0.003552810545667033,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0002678707114386338,
+              "golden_mae_p95": 0.0005926798789037598,
+              "paired_pulse_distance_p95": 0.005271683498145515,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00011645205575903808,
+              "golden_mae_p95": 0.00028426977088329966,
+              "paired_pulse_distance_p95": 0.004087364140187508,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0002391563019266835,
+              "golden_mae_p95": 0.0006058859869285866,
+              "paired_pulse_distance_p95": 0.004357304835343394,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x16": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.000250720116308117,
+              "golden_mae_p95": 0.0007294342918806045,
+              "paired_pulse_distance_p95": 0.005645306207120056,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0006581085681371674,
+              "golden_mae_p95": 0.0019477092137650369,
+              "paired_pulse_distance_p95": 0.010360581817987786,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00040116730760334255,
+              "golden_mae_p95": 0.0010081775674945265,
+              "paired_pulse_distance_p95": 0.01190355783868475,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0010229550512797483,
+              "golden_mae_p95": 0.002475522348667895,
+              "paired_pulse_distance_p95": 0.017670380188759452,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0003360927750299054,
+              "golden_mae_p95": 0.0007531662360419161,
+              "paired_pulse_distance_p95": 0.005740081367060302,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0008687794824519793,
+              "golden_mae_p95": 0.002000317741396362,
+              "paired_pulse_distance_p95": 0.00933774815475335,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.00012581261595717428,
+              "golden_mae_p95": 0.0002814435334070855,
+              "paired_pulse_distance_p95": 0.0050298051503737725,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.00033422214188411683,
+              "golden_mae_p95": 0.000721323330439999,
+              "paired_pulse_distance_p95": 0.005991873825341173,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00027746631079719254,
+              "golden_mae_p95": 0.0006032484365144276,
+              "paired_pulse_distance_p95": 0.003638233868227877,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0007905311533094037,
+              "golden_mae_p95": 0.001704012043398473,
+              "paired_pulse_distance_p95": 0.004703008729562869,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00025231157567551926,
+              "golden_mae_p95": 0.0005317747888312557,
+              "paired_pulse_distance_p95": 0.004042042409274669,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0006225992432319563,
+              "golden_mae_p95": 0.0013131263750927043,
+              "paired_pulse_distance_p95": 0.004716732648498089,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x8": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.00026168684195488094,
+              "golden_mae_p95": 0.0007676057422444901,
+              "paired_pulse_distance_p95": 0.005597904859635302,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.000689437961409681,
+              "golden_mae_p95": 0.0020441700351342728,
+              "paired_pulse_distance_p95": 0.009050978885118325,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0003999871949442224,
+              "golden_mae_p95": 0.0009988658614527243,
+              "paired_pulse_distance_p95": 0.011683842247451405,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0010090339741693065,
+              "golden_mae_p95": 0.0025240520533865224,
+              "paired_pulse_distance_p95": 0.018041171385010515,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0003541549863862201,
+              "golden_mae_p95": 0.0007981794878019678,
+              "paired_pulse_distance_p95": 0.005588314745738714,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0009176021275475925,
+              "golden_mae_p95": 0.00217167287504526,
+              "paired_pulse_distance_p95": 0.009021528268037121,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.0001330918315179466,
+              "golden_mae_p95": 0.0002969091064255693,
+              "paired_pulse_distance_p95": 0.005041123362616767,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.00035704215504135726,
+              "golden_mae_p95": 0.0007699037871196331,
+              "paired_pulse_distance_p95": 0.006169378550054169,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00029178474408137037,
+              "golden_mae_p95": 0.0006288070624310605,
+              "paired_pulse_distance_p95": 0.003854599667571135,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0008366761888145178,
+              "golden_mae_p95": 0.0018281782868856072,
+              "paired_pulse_distance_p95": 0.004585913293273573,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0002645267824517574,
+              "golden_mae_p95": 0.0005551940423853449,
+              "paired_pulse_distance_p95": 0.004083251718615642,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0006572942979776228,
+              "golden_mae_p95": 0.0013834948591050947,
+              "paired_pulse_distance_p95": 0.004799314880149064,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look32x8": {
+          "all": {
+            "all": {
+              "frames": 400,
+              "golden_mae_mean": 0.0003475232895141824,
+              "golden_mae_p95": 0.0010347629244039811,
+              "paired_pulse_distance_p95": 0.005591440732406607,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 400,
+              "golden_mae_mean": 0.0009436402750631499,
+              "golden_mae_p95": 0.0027628618229377177,
+              "paired_pulse_distance_p95": 0.011313666900567575,
+              "pulse_pairs": 399,
+              "pulse_missing": 1
+            }
+          },
+          "cut": {
+            "all": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            },
+            "centre": {
+              "frames": 1,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": null,
+              "pulse_pairs": 0,
+              "pulse_missing": 1
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0004566589120166666,
+              "golden_mae_p95": 0.001120856108116565,
+              "paired_pulse_distance_p95": 0.01154056582504184,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0011765059993684873,
+              "golden_mae_p95": 0.003190784740243746,
+              "paired_pulse_distance_p95": 0.018684614332645736,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0004940565941600509,
+              "golden_mae_p95": 0.001228210121362163,
+              "paired_pulse_distance_p95": 0.005652049530464388,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0012893915016829514,
+              "golden_mae_p95": 0.0035331130389218333,
+              "paired_pulse_distance_p95": 0.011311195357770192,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 119,
+              "golden_mae_mean": 0.0001655322960682144,
+              "golden_mae_p95": 0.0003553960714073548,
+              "paired_pulse_distance_p95": 0.004836451285154558,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 119,
+              "golden_mae_mean": 0.00046110667434029733,
+              "golden_mae_p95": 0.000987761383278902,
+              "paired_pulse_distance_p95": 0.0063972551493375,
+              "pulse_pairs": 119,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.0004192842263198936,
+              "golden_mae_p95": 0.0009656575747733479,
+              "paired_pulse_distance_p95": 0.003870474378507028,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0012390534459600362,
+              "golden_mae_p95": 0.002898357818180018,
+              "paired_pulse_distance_p95": 0.0047162694851200565,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 80,
+              "golden_mae_mean": 0.00034971688068116517,
+              "golden_mae_p95": 0.000728967979470983,
+              "paired_pulse_distance_p95": 0.004047026365016203,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 80,
+              "golden_mae_mean": 0.0009156072499073263,
+              "golden_mae_p95": 0.0019131526993107937,
+              "paired_pulse_distance_p95": 0.005088589873199348,
+              "pulse_pairs": 80,
+              "pulse_missing": 0
+            }
+          }
+        }
+      },
+      "predicted_frames": {
+        "every-b": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0,
+              "golden_mae_p95": 0.0,
+              "paired_pulse_distance_p95": 0.0,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "hold": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0005306664679862286,
+              "golden_mae_p95": 0.0025871086425872302,
+              "paired_pulse_distance_p95": 0.014724266208087757,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.0013261050126563343,
+              "golden_mae_p95": 0.006059305445325594,
+              "paired_pulse_distance_p95": 0.04408943128356233,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0023720766023767213,
+              "golden_mae_p95": 0.003582349427768754,
+              "paired_pulse_distance_p95": 0.03267573497940929,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.006244059369036997,
+              "golden_mae_p95": 0.010457471889340215,
+              "paired_pulse_distance_p95": 0.08690996467363146,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0007624267020297272,
+              "golden_mae_p95": 0.00099439457817762,
+              "paired_pulse_distance_p95": 0.010047218777956144,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0020490860453358404,
+              "golden_mae_p95": 0.002780646069734185,
+              "paired_pulse_distance_p95": 0.012860451772236553,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.00015146879090507188,
+              "golden_mae_p95": 0.00020921340588204288,
+              "paired_pulse_distance_p95": 0.005064629527223909,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.00027945944500358614,
+              "golden_mae_p95": 0.00036397812322334,
+              "paired_pulse_distance_p95": 0.006010500148788047,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00023528009691034204,
+              "golden_mae_p95": 0.0003330842127540596,
+              "paired_pulse_distance_p95": 0.003552810545667033,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005357414228772676,
+              "golden_mae_p95": 0.0007041854425160965,
+              "paired_pulse_distance_p95": 0.005271683498145515,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.00023290411151807616,
+              "golden_mae_p95": 0.0002989665467154096,
+              "paired_pulse_distance_p95": 0.004087364140187508,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.000478312603853367,
+              "golden_mae_p95": 0.0006209586174399762,
+              "paired_pulse_distance_p95": 0.004357304835343394,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x16": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0005039600327801347,
+              "golden_mae_p95": 0.0008543645829570068,
+              "paired_pulse_distance_p95": 0.005645306207120058,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.001322831292738025,
+              "golden_mae_p95": 0.002208373292383671,
+              "paired_pulse_distance_p95": 0.010360581817987819,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0008023346152066851,
+              "golden_mae_p95": 0.0010413843986548212,
+              "paired_pulse_distance_p95": 0.011903557838684757,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.0020459101025594967,
+              "golden_mae_p95": 0.0025533942517368415,
+              "paired_pulse_distance_p95": 0.017670380188759455,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0006721855500598108,
+              "golden_mae_p95": 0.0007958571802475857,
+              "paired_pulse_distance_p95": 0.005740081367060301,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0017375589649039585,
+              "golden_mae_p95": 0.00221669591349874,
+              "paired_pulse_distance_p95": 0.00933774815475335,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.00025375764913396166,
+              "golden_mae_p95": 0.00030766425413042317,
+              "paired_pulse_distance_p95": 0.0050298051503737725,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.0006741090658340662,
+              "golden_mae_p95": 0.000760798832598084,
+              "paired_pulse_distance_p95": 0.005991873825341173,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005549326215943851,
+              "golden_mae_p95": 0.0006678513842048485,
+              "paired_pulse_distance_p95": 0.003638233868227877,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0015810623066188074,
+              "golden_mae_p95": 0.0018217914736141107,
+              "paired_pulse_distance_p95": 0.004703008729562869,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005046231513510385,
+              "golden_mae_p95": 0.0005421898742809692,
+              "paired_pulse_distance_p95": 0.004042042409274669,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0012451984864639126,
+              "golden_mae_p95": 0.0013216780264257168,
+              "paired_pulse_distance_p95": 0.004716732648498089,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look16x8": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0005260037024218712,
+              "golden_mae_p95": 0.0008672392080893922,
+              "paired_pulse_distance_p95": 0.005597904859635307,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.0013858049475571478,
+              "golden_mae_p95": 0.002244124448943694,
+              "paired_pulse_distance_p95": 0.00905097888511834,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0007999743898884448,
+              "golden_mae_p95": 0.0010345141775694104,
+              "paired_pulse_distance_p95": 0.011683842247451412,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.002018067948338613,
+              "golden_mae_p95": 0.002609026006602091,
+              "paired_pulse_distance_p95": 0.01804117138501052,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0007083099727724402,
+              "golden_mae_p95": 0.0008534321689080062,
+              "paired_pulse_distance_p95": 0.005588314745738714,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.001835204255095185,
+              "golden_mae_p95": 0.0023972771399234324,
+              "paired_pulse_distance_p95": 0.00902152826803712,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.00026843945679043467,
+              "golden_mae_p95": 0.0003223925053882752,
+              "paired_pulse_distance_p95": 0.005041123362616767,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.000720135872032568,
+              "golden_mae_p95": 0.0008076844295478453,
+              "paired_pulse_distance_p95": 0.006169378550054169,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005835694881627407,
+              "golden_mae_p95": 0.0007055664914578216,
+              "paired_pulse_distance_p95": 0.003854599667571135,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0016733523776290356,
+              "golden_mae_p95": 0.001954822032941323,
+              "paired_pulse_distance_p95": 0.004585913293273573,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0005290535649035148,
+              "golden_mae_p95": 0.0005672846143011662,
+              "paired_pulse_distance_p95": 0.004083251718615642,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0013145885959552457,
+              "golden_mae_p95": 0.001391085405361082,
+              "paired_pulse_distance_p95": 0.004799314880149064,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        },
+        "look32x8": {
+          "all": {
+            "all": {
+              "frames": 199,
+              "golden_mae_mean": 0.0006985392754053918,
+              "golden_mae_p95": 0.0011198040751827546,
+              "paired_pulse_distance_p95": 0.005591440732406609,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 199,
+              "golden_mae_mean": 0.001896764371986231,
+              "golden_mae_p95": 0.0031908352418881635,
+              "paired_pulse_distance_p95": 0.011313666900567579,
+              "pulse_pairs": 199,
+              "pulse_missing": 0
+            }
+          },
+          "fast-motion": {
+            "all": {
+              "frames": 20,
+              "golden_mae_mean": 0.0009133178240333332,
+              "golden_mae_p95": 0.0011810987875875763,
+              "paired_pulse_distance_p95": 0.011540565825041841,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 20,
+              "golden_mae_mean": 0.0023530119987369745,
+              "golden_mae_p95": 0.0032024750174755863,
+              "paired_pulse_distance_p95": 0.01868461433264574,
+              "pulse_pairs": 20,
+              "pulse_missing": 0
+            }
+          },
+          "motion": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0009881131883201018,
+              "golden_mae_p95": 0.0013090719809585468,
+              "paired_pulse_distance_p95": 0.005652049530464388,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.002578783003365903,
+              "golden_mae_p95": 0.0036728082360693434,
+              "paired_pulse_distance_p95": 0.011311195357770192,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "post-cut-recovery": {
+            "all": {
+              "frames": 59,
+              "golden_mae_mean": 0.0003338702242731782,
+              "golden_mae_p95": 0.0003833282354571228,
+              "paired_pulse_distance_p95": 0.004836451285154558,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 59,
+              "golden_mae_mean": 0.0009300287160422946,
+              "golden_mae_p95": 0.0010240418273732993,
+              "paired_pulse_distance_p95": 0.0063972551493375,
+              "pulse_pairs": 59,
+              "pulse_missing": 0
+            }
+          },
+          "recovery": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0008385684526397872,
+              "golden_mae_p95": 0.0010589363553789282,
+              "paired_pulse_distance_p95": 0.003870474378507028,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0024781068919200724,
+              "golden_mae_p95": 0.0030968877615187343,
+              "paired_pulse_distance_p95": 0.0047162694851200565,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          },
+          "steady": {
+            "all": {
+              "frames": 40,
+              "golden_mae_mean": 0.0006994337613623303,
+              "golden_mae_p95": 0.0007358048145742941,
+              "paired_pulse_distance_p95": 0.004047026365016203,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            },
+            "centre": {
+              "frames": 40,
+              "golden_mae_mean": 0.0018312144998146526,
+              "golden_mae_p95": 0.0019321496328945312,
+              "paired_pulse_distance_p95": 0.005088589873199348,
+              "pulse_pairs": 40,
+              "pulse_missing": 0
+            }
+          }
+        }
+      },
+      "unsafe_cut": [
+        {
+          "id": 361,
+          "method": "look16x8",
+          "golden_mae": 0.001940824979241491
+        },
+        {
+          "id": 361,
+          "method": "look32x8",
+          "golden_mae": 0.001888862947140174
+        },
+        {
+          "id": 361,
+          "method": "look16x16",
+          "golden_mae": 0.001790767869236334
+        },
+        {
+          "id": 361,
+          "method": "hold",
+          "golden_mae": 0.0043541937114463915
+        }
+      ],
+      "training_mae": {
+        "look16x8": 0.0004375878013957305,
+        "look32x8": 0.0006296953633783102,
+        "look16x16": 0.00041032158940343725
+      },
+      "wall_seconds": 347.09640928,
+      "limitations": [
+        "full-rate oracle history",
+        "diagnostic FP16 quantization and saturating decode",
+        "no production resolve or guide-free network evaluation",
+        "no GPU performance measurement"
+      ]
+    }
+  },
+  "binary_provenance": {
+    "dll_sha256": "4d48c575e880049ca56dcc6a75d27d88be842621a10a5c66c0e6e820e31a805c",
+    "harness_sha256": "36f2f2152c787d1bf2d93955d8b3770173c254b0d13d2226b643d36019b3535c",
+    "forwarder_sha256": "68f78e20ebf2e150647c66c584631a7ddcb86c4346566260ae0ecbaba178c8ad",
+    "capture_sha256": "42e7b2549b34d08b4b61e057eb244108143f02d08f4bc2c3041b64d7542b0dfb",
+    "note": "Reused binaries; producer.commit in run.json identifies orchestration, not binary build."
+  },
+  "input_validation": {
+    "forward": {
+      "guide_frames_validated": 480,
+      "fixed_exposure": true,
+      "range_min_max_nonpositive_atleastone": {
+        "game": [
+          -0.0003120899200439453,
+          0.95263671875,
+          41887,
+          0
+        ],
+        "model": [
+          0.0,
+          0.84716796875,
+          3242,
+          0
+        ]
+      }
+    },
+    "reverse": {
+      "guide_frames_validated": 480,
+      "fixed_exposure": true,
+      "range_min_max_nonpositive_atleastone": {
+        "game": [
+          -0.00029397010803222656,
+          0.81201171875,
+          41627,
+          0
+        ],
+        "model": [
+          -0.00029397010803222656,
+          0.8984375,
+          4387,
+          0
+        ]
+      }
+    }
+  },
+  "validation": {
+    "analytic_cases": 12,
+    "replay_metrics_tests": 47,
+    "replay_format_tests": 9,
+    "nr_ab_compare": "PASS"
+  },
+  "reference": "dashdogy/RTX40MFG-Unlock b97deee; independent NumPy implementation; no residual or motion carry"
+}

@@ -60,6 +60,10 @@ Game frames/models stay local, outside Git.
 The complete producer contract, clocks, completion rules and limitations live in
 [offline-replay.md](../../docs/dlssnr/design/offline-replay.md).
 
+The [half-rate look-model experiment](experiments/look-model-README.md) independently
+fits a bilateral affine grid to diagnostic model I/O and measures guide-free reuse.
+Its scripts and results are experimental; they do not alter the judge or renderer.
+
 ## Temporal events and paired cost (`events.py`)
 
 Analyze existing judged metadata without loading raw images, running the model or
