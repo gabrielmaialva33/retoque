@@ -54,6 +54,12 @@ URLs redirect), which adds Linux/Proton overlay patches on top.
     XeFG Dynamic MFG moved into `XeFG_DynamicMFG.cpp` (our V-Sync rule `03e7fda3` moved with it), the game's own
     FSR-FG keeping its swapchain, AntiLag 2 frame types, and the FPS overlay rework (our external DLSS-G telemetry
     re-applied on it). Decisions and validation: `docs/linux-proton/upstream-20261027.md`.
+  - The ninth is on `merge/optiscaler-20261029` (8 commits, to `e57377fc`): custom D3D12/Vulkan upscaler
+    DLLs, FidelityFX SDK 2.4 (`7539ae8b`) and Vulkan per-feature modules with the legacy fallback, XeSS responsive
+    mask limits, BeamNG FSR4 filtering and removal of upstream's FSR-FG/XeFG detection. The NGX proxy keeps our
+    SDK-version fallback, driver-core shutdown ABI and Transfer 2 shutdown counter on upstream's new structure;
+    custom NGX keeps its separate public-SDK shutdown entry. Decisions and validation:
+    `docs/linux-proton/upstream-20261029.md`.
   - Conflicts resolve as upstream's structure first, with our changes re-applied on top. Where one
     of our commits was a port of upstream work that later landed there (reprojection, the
     FGPreserveSwapChain factoring), take upstream's.
@@ -226,7 +232,7 @@ forwarder (checks exports), refuses any `Enabled=true` in the packaged ini, and 
 Do **not** run `git submodule update --init --recursive` blindly. `external/FidelityFX-SDK` is huge
 and slow to clone, so it is deliberately not checked out: only the 12 headers under
 `ffx-api/include/ffx_api/` were fetched file-by-file from commit `c6efa6b`, which is all the build
-needs. `external/FidelityFX-SDK-v2` **is** checked out (`60f4ea8`, SDK 2.3.0, 241 MB): the
+needs. `external/FidelityFX-SDK-v2` **is** checked out (`7539ae8b`, SDK 2.4): the
 disabled post-build step copies the signed FidelityFX DLLs from its `Kits/FidelityFX/signedbin/`
 (`OptiScaler.vcxproj:259-262`), and its FSR3 frame-interpolation and optical-flow sources are MIT per
 its `docs/license.md` (the rest of that SDK is binary-only), which

@@ -18,6 +18,8 @@ def between(start, end):
 types = between('typedef NVSDK_NGX_Result (*PFN_D3D12_Shutdown)',
                 'typedef NVSDK_NGX_Result (*PFN_D3D12_GetParameters)')
 adapter = between('    static NVSDK_NGX_Result ShutdownDx12Device(', '    inline static void LogCallback(')
+custom = between('struct CustomNgxModule', 'class NVNGXProxy')
+custom_shutdown = between('    static void ShutdownCustomDx12(', '    static void SetDx12Inited(')
 getter = between('    static PFN_D3D12_Shutdown1 D3D12_Shutdown1()', '    // Vulkan')
 unit = """
 #include <cassert>
@@ -33,12 +35,14 @@ struct Module
     PFN_D3D12_Shutdown D3D12_Shutdown = nullptr;
     PFN_D3D12_CoreShutdown1 D3D12_Shutdown1 = nullptr;
 };
+using NvngxModule = Module;
+""" + custom + """
 class NVNGXProxy
 {
   public:
     inline static Module _module;
     inline static bool _dx12Inited = false;
-""" + adapter + getter + "};\n" + (here / 'cases.h').read_text()
+""" + adapter + getter + custom_shutdown + "};\n" + (here / 'cases.h').read_text()
 with tempfile.TemporaryDirectory(prefix='optiscaler-ngx-shutdown-') as directory:
     cpp = Path(directory) / 'shutdown.cpp'
     binary = Path(directory) / 'shutdown'
