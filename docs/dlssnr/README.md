@@ -49,6 +49,7 @@ These are records, not designs.
 - [nr-log-rate.md](design/nr-log-rate.md): rate-limiting the NR drift logs, from a measured log.
 - [stage-before-upscale-measured.md](design/stage-before-upscale-measured.md): running the model before the upscaler, measured in one Cyberpunk 2077 session.
 - [model-cost-vs-working-scale.md](design/model-cost-vs-working-scale.md): four GPU measurements of what the pass costs and how it answers to working scale.
+- [working-scale-detail-retention.md](design/working-scale-detail-retention.md): the image side of working scale, how much of NR's change and fine detail survives 0.75 and 0.5 on a replayed Cyberpunk clip.
 - [model-cost-across-architectures.md](design/model-cost-across-architectures.md): the same cost on a card that is not Ada.
 - [comparison-capture.md](design/comparison-capture.md): saving the game's frame and the processed frame of the same frame, with provenance, without stalling it (v1 on D3D12: PNG or PFM, a JSON sidecar, `retoque-captures/`).
 
