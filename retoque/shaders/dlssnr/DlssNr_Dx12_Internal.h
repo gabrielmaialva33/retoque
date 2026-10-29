@@ -38,6 +38,11 @@ class DlssNr_Cadence_Dx12;
 class DlssNr_GuideMatch_Dx12;
 class DlssNr_Periphery_Dx12;
 class DlssNr_PresentHdr_Dx12;
+class DlssNr_MotionProbe_Dx12;
+namespace DlssNr::MotionProbe
+{
+struct Shape;
+}
 
 namespace DlssNr::Dx12Internal
 {
@@ -436,6 +441,7 @@ struct NrRetired
     NrEnlarger* enlarger = nullptr;
     DlssNr_DetailStats_Dx12* detailStats = nullptr;
     DlssNr_Pulse_Dx12* pulse = nullptr;
+    DlssNr_MotionProbe_Dx12* motionProbe = nullptr;
 };
 
 struct DetailMeasureSession
@@ -774,6 +780,14 @@ void ReportSkipOnce(const char* reason);
 // Lifetime helpers the diagnostics park through (DlssNr_Dx12_Lifetime.cpp).
 void ParkNrDetailStats(DlssNr_DetailStats_Dx12*& detailStats);
 void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse);
+// Zero-motion detection (DlssNr_Dx12_Diagnostics.cpp, docs/dlssnr/design/zero-motion-detection.md): whether the
+// game's motion vectors have been read all zero in a moving scene, and the probe that finds out, recorded on frames
+// with the game's guides once they are readable. Under g_nrMutex.
+bool MotionProbeDead();
+void UpdateMotionProbe(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource* depth,
+                       ID3D12Resource* motion, const DlssNr::MotionProbe::Shape& shape, bool zeroGuideReset);
+void ShutdownMotionProbe();
+void ParkNrMotionProbe(DlssNr_MotionProbe_Dx12*& probe);
 // Enlargement behavior lives in DlssNr_Dx12_Enlarge.cpp; storage stays in core; retirement lives in Lifetime.
 DlssNr::Enlarge::Decision PlanEnlarge(uint32_t configured, bool proxy, bool periphery, uint32_t debugView,
                                       const DlssNrFrameInfo& frame, ID3D12Device* device, bool beforeUpscale,

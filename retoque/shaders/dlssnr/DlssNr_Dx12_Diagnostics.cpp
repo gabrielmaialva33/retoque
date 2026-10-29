@@ -69,6 +69,7 @@
 #include "DlssNr_DetailStats_Dx12.h"
 #include <dlssnr/DlssNr_DetailStats.h>
 #include "DlssNr_Pulse_Dx12.h"
+#include "DlssNr_MotionProbe_Dx12.h"
 #include "DlssNr_PresentHdr_Dx12.h"
 #include <dlssnr/DlssNr_Pulse.h>
 #include <dlssnr/DlssNr_PresentGuideRing.h>
@@ -490,6 +491,152 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
             }
         }
     }
+}
+
+// Zero-motion detection (docs/dlssnr/design/zero-motion-detection.md). File-local: nothing outside this unit reads
+// the probe's state but the verdict, through MotionProbeDead. Under g_nrMutex, like everything Dispatch touches.
+namespace
+{
+struct MotionProbeSession
+{
+    struct Slot
+    {
+        bool pending = false;
+        uint64_t seq = 0;
+        DlssNr::MotionProbe::Shape shape {};
+        DlssNr::Submission::Usage usage {};
+    };
+
+    DlssNr_MotionProbe_Dx12* pass = nullptr;
+    Slot slots[DLSSNR_MOTION_PROBE_SLOTS] {};
+    uint32_t next = 0;
+    // Evaluates with the game's guides that reached the probe: its sequence, and what Due() counts.
+    uint64_t evaluates = 0;
+    bool saidUnavailable = false;
+    bool saidUntracked = false;
+    DlssNr::MotionProbe::Detector detector;
+    DlssNr::MotionProbe::Probe probe; // the one being read out; 8 KB, kept off the render thread's stack
+};
+
+MotionProbeSession s_motionProbe;
+} // namespace
+
+bool MotionProbeDead() { return s_motionProbe.detector.Dead(); }
+
+// A probe's slots belong to the pass they were recorded with: parked together, the verdict kept (a device change is
+// not a reason to forget what the game's vectors were), the readings started over by the next shape.
+static void StopMotionProbeLocked()
+{
+    ParkNrMotionProbe(s_motionProbe.pass);
+    for (auto& slot : s_motionProbe.slots)
+        slot = {};
+    s_motionProbe.next = 0;
+}
+
+// Once per Dispatch with the game's guides, after they were made readable and before anything resamples them. Feeds
+// the readbacks that completed to the detector, oldest first, then records this evaluate's probe if it is due and its
+// slot is free. Never waits: a slot still in flight skips the probe.
+void UpdateMotionProbe(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource* depth,
+                       ID3D12Resource* motion, const DlssNr::MotionProbe::Shape& shape, bool zeroGuideReset)
+{
+    using namespace DlssNr::MotionProbe;
+
+    if (!DlssNr_MotionProbe_Dx12::Available())
+    {
+        if (!s_motionProbe.saidUnavailable)
+            LOG_INFO("DLSS-NR motion probe: this build carries no probe shader; game motion vectors are not checked");
+        s_motionProbe.saidUnavailable = true;
+        return;
+    }
+
+    if (s_motionProbe.pass != nullptr && !s_motionProbe.pass->BuiltFor(device))
+        StopMotionProbeLocked();
+
+    if (s_motionProbe.pass == nullptr)
+    {
+        // A failed pass is kept, so it is not rebuilt, and logged again, every frame.
+        s_motionProbe.pass = new DlssNr_MotionProbe_Dx12("DLSS-NR motion probe", device);
+        if (!s_motionProbe.pass->IsInit())
+            LOG_ERROR("DLSS-NR motion probe: the probe could not be built; game motion vectors are not checked on "
+                      "this device");
+    }
+
+    if (!s_motionProbe.pass->IsInit())
+        return;
+
+    // A slot whose list was dropped unexecuted (a present list the pass gave up on) never completes; it is settled
+    // without completing, and freed unread: its buffer holds whatever an earlier probe left there.
+    uint32_t done[DLSSNR_MOTION_PROBE_SLOTS];
+    uint32_t doneCount = 0;
+    for (uint32_t i = 0; i < DLSSNR_MOTION_PROBE_SLOTS; ++i)
+    {
+        auto& slot = s_motionProbe.slots[i];
+        if (!slot.pending)
+            continue;
+        if (DlssNr::Submission::Completed(slot.usage))
+            done[doneCount++] = i;
+        else if (DlssNr::Submission::Settled(slot.usage))
+            slot.pending = false;
+    }
+    std::sort(done, done + doneCount,
+              [](uint32_t a, uint32_t b) { return s_motionProbe.slots[a].seq < s_motionProbe.slots[b].seq; });
+
+    for (uint32_t k = 0; k < doneCount; ++k)
+    {
+        auto& slot = s_motionProbe.slots[done[k]];
+        slot.pending = false;
+        FromGrid(s_motionProbe.pass->Grid(done[k]), slot.seq, s_motionProbe.probe);
+        const Event event = s_motionProbe.detector.Add(slot.shape, s_motionProbe.probe);
+        if (event != Event::None)
+            LOG_INFO("{}", EventLine(event, s_motionProbe.detector.LastReading(), zeroGuideReset));
+    }
+
+    const uint64_t seq = s_motionProbe.evaluates++;
+    if (!Due(seq))
+        return;
+
+    auto& slot = s_motionProbe.slots[s_motionProbe.next];
+    if (slot.pending)
+        return;
+
+    if (!DlssNr::Submission::Track(cmdList, slot.usage))
+    {
+        if (!s_motionProbe.saidUntracked)
+            LOG_INFO("DLSS-NR motion probe: this command list cannot be tracked ({}); motion vectors on it are not "
+                     "checked",
+                     DlssNr::Submission::LastRefusal());
+        s_motionProbe.saidUntracked = true;
+        return;
+    }
+
+    if (s_motionProbe.pass->Record(cmdList, depth, motion, shape, s_motionProbe.next))
+    {
+        slot.pending = true;
+        slot.seq = seq;
+        slot.shape = shape;
+        s_motionProbe.next = (s_motionProbe.next + 1) % DLSSNR_MOTION_PROBE_SLOTS;
+    }
+}
+
+// Shutdown, once Shutdown() has found the pass's own recordings settled. A probe slot whose recording is not proven
+// past keeps the probe alive: it is left to the process's end rather than freed under the GPU.
+void ShutdownMotionProbe()
+{
+    for (const auto& slot : s_motionProbe.slots)
+    {
+        if (slot.pending && !DlssNr::Submission::Ready(slot.usage))
+        {
+            LOG_INFO("DLSS-NR shutdown: the motion probe has a readback in flight; it is retained, not released");
+            return;
+        }
+    }
+
+    delete s_motionProbe.pass;
+    s_motionProbe.pass = nullptr;
+    for (auto& slot : s_motionProbe.slots)
+        slot = {};
+    s_motionProbe.next = 0;
+    s_motionProbe.detector.Reset();
 }
 
 // Records the copy of this frame's grid into whichever readback buffer is furthest from being read.

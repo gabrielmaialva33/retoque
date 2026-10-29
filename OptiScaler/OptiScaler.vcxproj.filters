@@ -2127,6 +2127,12 @@
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Pulse.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_MotionProbe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_PresentHdr_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -2203,6 +2209,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Pulse_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_PresentHdr_Dx12.cpp">

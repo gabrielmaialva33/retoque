@@ -202,6 +202,11 @@ struct DlssNr_Pulse_Dx12
 {
 };
 
+// Zero-motion detection's probe belongs to another feature (tests/nr-zero-motion); here it is only parked and deleted.
+struct DlssNr_MotionProbe_Dx12
+{
+};
+
 struct NrState
 {
     void (*release)(void*) = nullptr;
