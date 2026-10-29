@@ -903,3 +903,19 @@ requires = ["python"]
 tier = "host"
 timeout = 120
 summary = "Strict serial rendering evidence, binary identity, terminal reports and owned nested loopback cleanup; no GPU."
+
+[repo-docs]
+path = "repo-docs"
+domain = "tooling"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "Local documentation destinations, ignored artifacts and deterministic test catalog drift; no network."
+
+[release-evidence]
+path = "release-evidence"
+domain = "tooling"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "Archive identity and sanitized same-commit complete-host evidence; rejects partial claims and unsafe ZIPs."

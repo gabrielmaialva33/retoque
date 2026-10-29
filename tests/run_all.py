@@ -372,6 +372,15 @@ def selected(manifest: dict[str, dict], args) -> list[str]:
         if unknown:
             raise SystemExit(f"--only names no such suite: {', '.join(sorted(unknown))}")
         names = [n for n in sorted(wanted)]
+    domain = getattr(args, "domain", None)
+    if domain is not None:
+        wanted_domains = {part.strip() for part in domain.split(",") if part.strip()}
+        known_domains = {entry.get("domain", "legacy") for entry in manifest.values()}
+        unknown = wanted_domains - known_domains
+        if not wanted_domains or unknown:
+            raise SystemExit(f"--domain expects known domains ({', '.join(sorted(known_domains))}); "
+                             f"got {domain!r}")
+        names = [name for name in names if manifest[name].get("domain", "legacy") in wanted_domains]
     if args.skip:
         dropped = {s.strip() for s in args.skip.split(",") if s.strip()}
         unknown = dropped - manifest.keys()
@@ -381,13 +390,52 @@ def selected(manifest: dict[str, dict], args) -> list[str]:
     return names
 
 
+def registry_groups(manifest: dict[str, dict], names: list[str], group_by: str):
+    """Deterministic groups, independent of this machine's available toolchains."""
+    groups: dict[str, list[str]] = {}
+    for name in sorted(names):
+        key = manifest[name].get(group_by, "legacy")
+        groups.setdefault(key, []).append(name)
+    keys = sorted(groups, key=TIERS.index) if group_by == "tier" else sorted(groups)
+    return [(key, groups[key]) for key in keys]
+
+
+def registry_markdown(manifest: dict[str, dict], names: list[str], group_by: str = "domain") -> str:
+    """Render a portable catalog with links relative to tests/, not live PASS claims."""
+    from urllib.parse import quote
+
+    def cell(value):
+        return str(value).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+
+    lines = ["# Test suite catalog", "", "Generated from `suites.toml`; do not edit this table by hand.",
+             "Regenerate with `python3 tools/check_docs.py --write-catalog` from the repository root.",
+             "This is a coverage index, not evidence that any suite or hardware passed.", ""]
+    for group, members in registry_groups(manifest, names, group_by):
+        lines.extend([f"## {group}", "", "| Suite | Tier | Requirements | Evidence contract | Summary |",
+                      "|---|---|---|---|---|"])
+        for name in members:
+            entry = manifest[name]
+            path = quote(entry.get("path", name) + "/README.md", safe="/")
+            requirements = ", ".join(entry.get("requires", default_requirements(entry["tier"])))
+            evidence = "structured per invocation" if entry.get("result") else "process exit (see suite limits)"
+            lines.append(f"| [{cell(name)}]({path}) | {cell(entry['tier'])} | {cell(requirements)} | "
+                         f"{evidence} | {cell(entry['summary'])} |")
+        lines.append("")
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--tier", choices=(*TIERS, "all"), default="host",
-                        help="which tier to run (default: host)")
+    parser.add_argument("--tier", choices=(*TIERS, "all"), default=None,
+                        help="tier to run (default: host; --list defaults to all)")
     parser.add_argument("--only", help="comma-separated suite names, overrides --tier")
     parser.add_argument("--skip", help="comma-separated suite names to leave out")
+    parser.add_argument("--domain", help="comma-separated domains; intersects tier/--only selection")
+    parser.add_argument("--group-by", choices=("tier", "domain"), default="tier",
+                        help="group the --list output (default: tier)")
+    parser.add_argument("--format", choices=("text", "markdown"), default="text",
+                        help="--list output format; markdown is deterministic and relative to tests/")
     parser.add_argument("--jobs", type=int, default=4,
                         help="parallel host suites (default: 4); the wine tier is always serial")
     parser.add_argument("--list", action="store_true", help="print the registry and exit")
@@ -400,20 +448,27 @@ def main() -> int:
     parser.add_argument("--strict", action="store_true",
                         help="fail when a selected suite is skipped")
     args = parser.parse_args()
+    if not args.list and (args.format != "text" or args.group_by != "tier"):
+        parser.error("--format and --group-by are listing options; use --list")
+    if args.tier is None:
+        args.tier = "all" if args.list else "host"
 
     manifest = load_manifest()
     problems = check_registry(manifest)
-
-    if args.list:
-        for name in sorted(manifest, key=lambda n: (TIERS.index(manifest[n]["tier"]), n)):
-            entry = manifest[name]
-            blocker = entry_blocker(entry)
-            state = "ready" if not blocker else f"unavailable: {blocker}"
-            print(f"{name:<22} {entry['tier']:<5} {state}")
-            print(f"{'':<22} {'':<5} {entry['summary']}")
-        for problem in problems:
-            print(f"registry: {problem}", file=sys.stderr)
-        return 1 if problems else 0
+    if args.list and not problems:
+        names = selected(manifest, args)
+        if args.format == "markdown":
+            print(registry_markdown(manifest, names, args.group_by), end="")
+        else:
+            for group, members in registry_groups(manifest, names, args.group_by):
+                print(f"## {group}")
+                for name in members:
+                    entry = manifest[name]
+                    blocker = entry_blocker(entry)
+                    state = "ready" if not blocker else f"unavailable: {blocker}"
+                    print(f"{name:<22} {entry['tier']:<5} {state}")
+                    print(f"{'':<22} {'':<5} {entry['summary']}")
+        return 0
 
     if problems:
         for problem in problems:
@@ -496,7 +551,7 @@ def main() -> int:
     try:
         persist("RUNNING")
         if not names:
-            exit_code = finish("INCONCLUSIVE", 0)
+            exit_code = finish("INCONCLUSIVE", 1 if args.strict else 0)
             print(f"nothing selected; report: {report_path}")
             return exit_code
         if parallel:

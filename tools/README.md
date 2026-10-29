@@ -200,15 +200,41 @@ and RenoDX attribution. The release ini sets Home as the menu key and enables fi
 off until the installer is asked to enable it. Required missing files and a model hidden in a support
 folder are refused. `-SkipBuild` can package fixture build output under PowerShell 7 on Linux as well.
 
-`.github/workflows/retoque-release.yml` builds Release on Windows for `retoque-v*` tags or a manual version
-input, packages it and creates **only a draft prerelease**, using `docs/releases/<tag>.md`. The input is
-validated and an existing tag must match the selected checkout. Any existing release with that tag
-(including a draft) is refused; retries never edit or publish it. If upload fails, inspect the partial
-draft manually before retrying. Publication is a separate human action; the workflow never uses `nightly`.
+`.github/workflows/retoque-release.yml` first requires complete strict host checks and documentation checks
+at the same commit, then builds Release on Windows for `retoque-v*` tags or a manual version input.
+After packaging it validates a sanitized archive/evidence manifest before creating **only a draft prerelease**,
+using `docs/releases/<tag>.md`. The zip and manifest are attached together. The input is validated and an existing
+tag must match the selected checkout. Any existing release with that tag (including a draft) is refused;
+retries never edit or publish it. If upload fails, inspect the partial draft manually before retrying.
+Publication is a separate human action; the workflow never uses `nightly`. Host checks do not qualify GPU behavior.
 
 ```powershell
 pwsh tools\package_release.ps1 [-Version <tag>] [-SkipBuild]
 ```
+
+## release_manifest.py
+
+Post-packaging identity/evidence step, Python 3.11+ standard library. The PowerShell packager remains usable
+without Python; a local zip by itself is not release qualification. The CI draft requires this step.
+
+```bash
+python3 tools/release_manifest.py --archive release/Retoque-v0.3.0.zip --version retoque-v0.3.0
+python3 tools/release_manifest.py --archive release/Retoque-v0.3.0.zip --version retoque-v0.3.0 --host-report artifacts/host/summary.json --require-host
+```
+
+Writes `<archive>.manifest.json` atomically after validation: SHA-256 and sizes for archive/members, packaging
+checkout identity, declared build context and a sanitized source-test summary. A supplied report must be a
+complete clean same-commit host PASS; stale/partial reports are rejected. Runtime is explicitly `NOT_RUN`.
+`--build-mode existing-output` is the default; hashes do not prove which source compiled a DLL.
+See the [release contract](../docs/releases/VALIDATION.md) and [regressions](../tests/release-evidence/README.md).
+
+## check_docs.py
+
+`python3 tools/check_docs.py` checks local Markdown/HTML destinations and `tests/CATALOG.md` against the registry.
+It includes new untracked documentation but excludes ignored artifacts and upstream/vendor source directories.
+No network, external-link, heading-anchor or technical-truth checks are implied.
+`--write-catalog` regenerates the deterministic table; suite READMEs retain narrative coverage limits.
+See [documentation regressions](../tests/repo-docs/README.md).
 
 ## gen-vk-device-chain-types.py
 

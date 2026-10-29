@@ -1,5 +1,8 @@
 # Contributing to OptiScaler
 
+For this fork's workflow, tests and evidence requirements, read [Contributing to Retoque](docs/contributing.md).
+The upstream PCH requirements below still apply.
+
 To maintain build efficiency and project structure, please follow these requirements for all code contributions.
 
 ### Precompiled Header (PCH) Usage

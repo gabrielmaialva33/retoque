@@ -1,607 +1,88 @@
-# CLAUDE.md
+# Working on Retoque
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+`AGENTS.md` points here. This is the current entrypoint for all agents, not a release-status report.
+Retoque extends OptiScaler with NR, presentation and Proton integrations. The default branch is
+`dlss-neural-rendering`; the upstream we integrate is `optiscaler/master`, not the older Dagherbou fork.
 
-## What this repository is
+## Non-negotiable boundaries
 
-A fork chain, three deep. Upstream **optiscaler/OptiScaler** (a Windows DLL that sits between a game and
-its upscaler / frame-gen SDKs and swaps the backend) → **Dagherbou/OptiScaler_DLSSNR** (adds the DLSS 5
-Neural Rendering module under `OptiScaler/dlssnr/`, which this fork moved to `retoque/dlssnr/`) →
-**gabrielmaialva33/retoque** (this repo, Retoque; named `OptiScaler_DLSSNR` until 2026-10-13, and the old
-URLs redirect), which adds Linux/Proton overlay patches on top.
+- Check status, branch, worktrees and recent reflog before writing. Other agents and the user work concurrently.
+  Preserve their changes. Use an isolated branch/worktree for unproven work; never reset another checkout.
+- Never commit, merge or push without the user's authorization for that operation. The default branch has
+  historically been mirrored externally; do not assume a local commit there remains private.
+- Keep upstream files at upstream paths. Fork-owned implementation belongs in `retoque/`, tooling in `tools/`,
+  suites in `tests/` and design/measurement records in `docs/`. Do not reorganize `OptiScaler/` for aesthetics.
+- Read the module's README and relevant design note before changing behavior. Preserve rejected experiments
+  and their evidence. The authoritative NR rules are [DEVELOPMENT.md](docs/dlssnr/design/DEVELOPMENT.md).
+- NR disabled/default paths must remain unchanged. No control for an unavailable feature; config keys round-trip
+  through declaration, read, save and shipped INI. C++ constants and HLSL cbuffer layout stay append-only/in sync.
+- Never free resources still used by the GPU. Preserve lock order and recording/completion identity; abandon
+  resources after device loss when a safe drain cannot be proved. Do not introduce speculative lifetime changes.
+- Never overwrite DLLs in a running game. Use receipt-based installers; inspect the actually loaded proxy.
+  Keep one proxy per game folder even though a second copy now has a pass-through guard.
+- Never redistribute `nvngx_dlssnr.dll` or the user's LSFG shaders/models. Preserve third-party licences and
+  `Licenses/RenoDX_ATTRIBUTION.txt`. Keep personal paths, network addresses, tokens and raw local captures out of Git.
+- Do not commit `x64/`, `.winx/`, build stamps, temporary clones or machine-local scripts. A successful build or
+  host test does not prove GPU behavior, image quality, performance or native Windows compatibility.
 
-- Working and default branch: `dlss-neural-rendering`. It began as Dagherbou's `v0.2.0-dlssnr`
-  (commit `9737616`) plus our Linux patches.
-  - Dagherbou has not moved since 2026-09-03, and everything he published is in this tree.
-  - The NR module has since been largely rewritten here: about +25.6k/−6k lines against his last
-    commit, as of 2026-09-27.
-- Remotes:
-  - `origin` (SSH, push target);
-  - `optiscaler` (plain upstream OptiScaler, read-only): **the one we sync from**;
-  - `up` (Dagherbou, read-only, dormant);
-  - `scottmudge` (another NR fork, read-only). Its present-hook work is already in this tree,
-    rewritten, so compare behaviour rather than patches: `git apply --check` calls all of it
-    "diverged".
-- Update flow, since 2026-09-27: `git fetch optiscaler && git merge optiscaler/master`, on a scratch
-  branch, then build and test before the default branch gets it.
-  - The first such merge was `7de75fc1` (113 commits).
-  - The second was `7323085a` (53 commits, to `2a382e1f`, 2026-10-12), on `merge/optiscaler-20261012`; resolution
-    notes in `~/.local/state/dlss5/notes/fork-delta-20261009/merge-optiscaler-20261012.md`.
-  - The third was on `merge/optiscaler-20261013` (8 commits, to `5108b6df`, 2026-10-13): Vulkan DLSS-G input
-    and FSR-FG output, the Vulkan menu queue fix, the FG ratio slider, the Streamline inputs move. Upstream's
-    own per-thread `creatingD3DDevice` (`2d91b8e3`) replaced the port of janblade's we took that morning;
-    `vulkanSkipHooks` keeps our per-thread `ScopedSkipVulkanHooks`, since upstream's is still a shared bool.
-  - The fourth is on `merge/optiscaler-20261016` (19 commits, to `0e42d595`): Vulkan FG inputs/output and HUDfix,
-    common DLSS-G factoring, Streamline initialization, Quirks/ASI status and x64-only project configurations.
-    Resolution and validation boundaries: `docs/linux-proton/upstream-20261016.md`.
-  - The fifth is on `merge/optiscaler-20261019` (28 commits, to `c2e44a8b`): Vulkan reprojection/resource
-    flipping, reprojection cache, XeFG Dynamic MFG, FSR4 driver/model handling and deferred resource release.
-    Resolution decisions and validation boundaries: `docs/linux-proton/upstream-20261019.md`.
-  - The sixth is on `merge/optiscaler-20261023` (38 commits, to `83e18f1a`): the Cyberpunk launch deadlock and
-    XeLL fixes, the D3D12 menu past eight buffers, Vulkan device extensions from the real list (#1161), FSR4 on
-    Vulkan, the fakenvapi low-latency removal and the menu reform. The DLSS-G frame-latency waitable stays on for
-    every title (upstream made it a KCD2 quirk). Vulkan headers move to `8864cdc8`, and one more FidelityFX-SDK
-    header (SPIRV-Reflect's `spirv.h`) was fetched file by file. After moving `external/vulkan`, rebuild with
-    `/t:Rebuild`: the incremental build kept a `pch` made with the old headers. Decisions and validation:
-    `docs/linux-proton/upstream-20261023.md`.
-  - The seventh is on `merge/optiscaler-20261023b` (5 commits, to `12fd52d8`, same day), without conflicts: the
-    Enshrouded DLSS-G crash (NGX's Vulkan extension-requirement arrays copied before Streamline's reload frees
-    them), amdxc64 hooked twice, FfxApi pinning a game's own `amd_fidelityfx_vk.dll`, the Textures tab hidden on
-    Vulkan, and fixed status colours.
-  - The eighth is on `merge/optiscaler-20261027` (16 commits, to `b19cfd29`): Vulkan instance and device creations
-    inside OptiScaler's own D3D device creations no longer taken as the game's (`54f310f7`; under Proton each of
-    those goes through DXVK/vkd3d-proton and creates Vulkan objects),
-    XeFG Dynamic MFG moved into `XeFG_DynamicMFG.cpp` (our V-Sync rule `03e7fda3` moved with it), the game's own
-    FSR-FG keeping its swapchain, AntiLag 2 frame types, and the FPS overlay rework (our external DLSS-G telemetry
-    re-applied on it). Decisions and validation: `docs/linux-proton/upstream-20261027.md`.
-  - The ninth is on `merge/optiscaler-20261029` (8 commits, to `e57377fc`): custom D3D12/Vulkan upscaler
-    DLLs, FidelityFX SDK 2.4 (`7539ae8b`) and Vulkan per-feature modules with the legacy fallback, XeSS responsive
-    mask limits, BeamNG FSR4 filtering and removal of upstream's FSR-FG/XeFG detection. The NGX proxy keeps our
-    SDK-version fallback, driver-core shutdown ABI and Transfer 2 shutdown counter on upstream's new structure;
-    custom NGX keeps its separate public-SDK shutdown entry. Decisions and validation:
-    `docs/linux-proton/upstream-20261029.md`.
-  - Conflicts resolve as upstream's structure first, with our changes re-applied on top. Where one
-    of our commits was a port of upstream work that later landed there (reprojection, the
-    FGPreserveSwapChain factoring), take upstream's.
-  - Test paths after a merge, one title each: Crimson Desert (after-upscale NR + DLSS-G),
-    Divinity (D3D11 bridge + NR + synthesized FG), DOOM Eternal (Vulkan NR + menu), and PCSX2
-    (`~/Games/pcsx2-nr-test/run.sh`, D3D12 present pass).
-  - Before 2026-09-27 we merged Dagherbou and cherry-picked upstream fixes one by one, with
-    per-commit decisions (`512e168d`, `acfeab51`).
-  - `fetch.recurseSubmodules=no` is already set in the repo config; keep it.
-- Commit subjects use prefixes seen in history: `DLSS-NR:` for the module, `linux:` for Proton
-  patches, `ci:` for workflows.
-- **Do not push. But do not believe the tree is private either.** Never run `git push` unless the
-  user asks for that specific ref (`docs/dlssnr/design/DEVELOPMENT.md` invariant 9). That rule governs
-  *your* actions and still holds.
-  **What it no longer describes is the repository.** Something on this machine mirrors
-  `dlss-neural-rendering` to `origin` on its own, one to six minutes after each commit — verified on
-  2026-09-15 against `git ls-remote`, with the reflog showing `update by push` back to 2026-09-13.
-  It was not identified: not a git hook, not `core.hooksPath`, not a Claude Code hook, not cron, not
-  a systemd timer, and not an editor (no VS Code config exists here and none was running).
-  **It is scoped to that one branch.** A commit on a scratch branch sat for nine minutes and was
-  never pushed; `origin` carries exactly one head. A ten-minute connection trace over that window
-  caught only `git-upload-pack` — reads — and no `git-receive-pack` at all.
-  So the control you actually have is **which branch receives the commit**, not whether it leaves
-  the machine. Production changes and anything unproven go on a branch and merge to
-  `dlss-neural-rendering` once they are measured; committing straight to the default branch
-  publishes the tip of a public repository that other projects reference.
-  **The user also operates this repository by hand, alongside Claude sessions.** The 2026-09-27
-  reflog entries that looked like automation were the user's own git work: the fast-forward of
-  `dlss-neural-rendering` to `merge-optiscaler-20260927` at 19:31, the deletion of that branch and
-  `synth-fg`, and a `reset: moving to HEAD` at 18:39. So before assuming the default branch is where
-  you left it, check `git reflog --date=iso`, and do not read an unexpected branch move as a fault.
-- **Never commit** `OptiScaler/resource_build_date.h`, `OptiScaler/resource_build_commit.h`, `x64/`,
-  or `.winx/`. All are gitignored.
-- **Upstream's tree stays at upstream's paths; ours lives beside it.** Most tracked files live under
-  `OptiScaler/` and belong to upstream. Moving them turns every `git merge optiscaler/master` into a
-  whole-tree conflict, and this branch carries hundreds of commits of our own (393 not in Dagherbou's
-  fork as of 2026-09-27). So upstream's paths stay byte-identical, and what this fork owns sits in
-  top-level directories of its own: `retoque/` (the NR module), `docs/`, `tools/` and `tests/`, plus
-  `CLAUDE.md`, `.github/workflows/nr-tests.yml`, `.clang-format-ignore` and the files listed under
-  "Linux / Proton patches".
-  The NR module is `retoque/dlssnr/` and `retoque/shaders/dlssnr/` (moved from `OptiScaler/` on
-  2026-10-13). `OptiScaler.vcxproj` adds `..\retoque\` as an include root, in the fork-owned tail rather
-  than upstream's `IncludePath`, so `<dlssnr/...>` and `<shaders/dlssnr/...>` resolve unchanged and no
-  upstream `#include` line was edited. The synthesized-motion estimator followed the same way to
-  `retoque/shaders/synth_motion/`, so `<shaders/synth_motion/...>` resolves through that root too.
-  The rest of the files this fork added under `OptiScaler/` followed, keeping their relative paths:
-  `inputs/FG/Synth_*`, `misc/Localization.*`, `framegen/dlssg/MfgUnlock.*`, `hooks/Streamline_LogRepeat.h`,
-  `menu/DlssgExternalTelemetry.h`, `menu/frame_telemetry_api.h`, `menu/input/kcd_input_fix.*` and
-  `translations/`, plus the vendored NVIDIA Optical Flow headers in `retoque/include/nvofa/` (a second
-  include root, `..\retoque\include\`). So every file under `OptiScaler/` now exists upstream too. Four
-  quoted includes we had added to upstream files had to become rooted ones for
-  that (`hooks/Streamline_Hooks.cpp`, `menu/menu_common.cpp`, `menu/input/input_system.cpp` and
-  `input_system_directinput.cpp`); no line of upstream's own changed. `nr-invariants` fails if any of
-  the old paths reappears.
+## Read by task
+
+| Task | Read first |
+|---|---|
+| Find responsibilities | [Architecture](docs/architecture.md), then the code-adjacent README |
+| Contribute or review | [Contributing](docs/contributing.md), [NR rules](docs/dlssnr/design/DEVELOPMENT.md) |
+| Determine what works | [Capabilities and evidence](docs/capabilities.md); never infer support from a toggle |
+| Plan next work | [Roadmap](docs/dlssnr/roadmap.md); proposals are not implementation authorization |
+| Build, shaders, upstream integration | [Maintenance](docs/maintenance.md), [tools](tools/README.md) |
+| Choose tests | [Tests](tests/README.md), generated [catalog](tests/CATALOG.md) |
+| Package or publish | [Release validation](docs/releases/VALIDATION.md); publication remains manual |
+| Investigate old merge decisions or Wine stalls | Dated [maintainer notes](docs/history/maintainer-notes-20261029.md) |
 
 ## Build
 
-Windows-only C++ (`stdcpplatest`, MSVC), built from `OptiScaler.sln`. Two projects: `OptiScaler` (the
-DLL) and `dlssnr_forwarder` (a ~115 KB shim, see below). Target is `x64`; upstream removed the unused
-Win32 configurations in the 2026-10-16 merge. Configurations: `Debug`, `Release`,
-`ReleaseDebug`.
+Windows DLL, MSVC, x64; Linux uses MSVC under Wine, not a native Linux build.
+`./build-local.sh [Release|Debug]` owns the shared compiler-prefix lock. Never run other Wine/compiler work
+against that prefix concurrently or wrap the script in the same lock. Never reset/kill the shared prefix
+as automatic recovery; preserve evidence and establish process ownership. Redirect logs to a file, not a pipe.
+Do not deploy a failed build. See [maintenance](docs/maintenance.md#build-and-toolchains).
 
-### Local, on this Linux workstation (msvc-wine)
+Do not run `git submodule update --init --recursive` blindly. The old FidelityFX SDK is deliberately partial.
+Host CI checks out only `external/simpleini`, `external/spdlog` and `external/vulkan`.
+Use clang-format **22**, not whichever version happens to be on PATH. Every C++ translation unit starts
+with `pch.h`; headers never include it. See upstream [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The script is `tools/build-local.sh`; `./build-local.sh` at the root is a stub that `exec`s it, so the
-commands below work as written, from any cwd. The other scripts we own (`tools/deploy-to-game.sh`,
-`tools/package_release.ps1`, `tools/nrlog_summary.py`) are described in `tools/README.md`.
-
-```bash
-./build-local.sh                # Release
-./build-local.sh Debug
-./build-local.sh Release /t:Rebuild   # extra args after the config go straight to msbuild
-```
-
-- MSVC 14.44 + Windows SDK 26100 under Wine at `~/.local/opt/msvc` (`MSVC_BIN`), prefix
-  `~/.local/opt/msvc-wineprefix` (`WINEPREFIX`). Both env vars are overridable. The `msbuild` wrapper
-  there is patched to export `VCToolsInstallDir_170`.
-- No `/m`: MSBuild child nodes do not work under Wine. Parallelism comes from `/p:CL_MPCount=16`.
-- **The build stalls intermittently under Wine, and lowering `CL_MPCount` does not reliably fix
-  it.** Observed twice: once mid-compile with 8 `CL.exe` at `CL_MPCount=16`, once at
-  `CL_MPCount=4` with only 2 `CL.exe`, on the trivial `dlssnr_forwarder.cpp`, *after*
-  `OptiScaler.dll` had already linked. So it is not a parallelism threshold.
-  **Signature** (measure CPU *deltas*; `ps` %CPU is an average since start and reads low for a
-  process that worked then stalled): `MSBuild.exe` and `CL.exe` at ~0 ticks/s while `wineserver`
-  spins at 50-65% of a core, the redirected log stops growing, and no new `.obj` appears.
-  **Historical recovery** used a prefix-wide reset and incremental rerun. The current supervisor
-  does not reset the shared prefix: retain its logs and establish ownership before any manual recovery.
-  Extra args land after the script's own `/p:`, so `./build-local.sh Release /p:CL_MPCount=4`
-  overrides the default if you want to try a lower count.
-- **It stalls on any translation unit, not a particular one.** Five times in a row it stopped on
-  `dlssnr_forwarder.cpp` (right after `OptiScaler.dll` linked), which made the forwarder look
-  special; the sixth stall was on `FSR3_Dx12_FG.cpp` mid-compile. Five hypotheses were tested and
-  *disproved*: `CL_MPCount` (stalls at 16, 4, 1 and the default), an orphaned Wine process, the
-  file's own content (stalls formatted or not), a corrupted intermediate (stalls after deleting
-  `x64/Release/dlssnr_forwarder/`), and `/GL`/LTCG — an isolated control passed both with
-  `WholeProgramOptimization=true` and without it. **Root cause is unknown.**
-- **Never run anything else against the compiler prefix while a build is in flight.** The sixth
-  stall happened with `tests/dlssnr-loopback/run.py` compiling its harness through the same prefix
-  at the same time. That is not proven to be the cause — stalls also happen alone — but it is the
-  one condition that was added, and the wine test tier is serial for exactly this reason.
-- `/MP` was the seventh hypothesis and it fell too: with `MultiProcessorCompilation=false`
-  injected through `ForceImportBeforeCppTargets` (verified absent from the `.rsp` — a global `/p:`
-  does *not* override that item metadata) the DLL still stalled on `pch.cpp`, and two `CL.exe`
-  were still present, because the MSVC driver forks its front-end regardless of `/MP`. One earlier
-  serial run of 202 TUs passed; that was a sample, not evidence. The forwarder never defines
-  `MultiProcessorCompilation` at all, so `/MP` could never have explained its stalls.
-- **The forwarder stalls when built alone too.** "Seven of eight forwarder stalls were at the
-  in-process project transition, and it never stalled built alone" was written after eight
-  observations; the ninth stalled on `dlssnr_forwarder.cpp` inside its own dedicated msbuild
-  process, seven minutes at zero CPU. Splitting the build does not avoid the stall. It is still
-  worth doing — a stalled forwarder no longer strands a DLL that has already linked — but it is
-  not a fix.
-- **Current build lifecycle (2026-10-27).** `tools/build-local.sh` delegates to `tools/build_local.py`.
-  It locks the shared prefix before touching stamps, then builds the forwarder and OptiScaler in
-  separate owned process sessions. Busy returns 75. The lock descriptor is not inherited.
-  Ninety seconds without build-workload CPU or log growth, or a two-hour hard deadline, returns
-  124 after bounded TERM/KILL cleanup. CPU from Wine infrastructure alone is not progress.
-  Ownership comes from observed ancestry/session and process start identity; signals use pidfds.
-  Unknown processes are never selected by executable name. A descendant that escapes before
-  observation cannot be safely adopted; the supervisor does not perform a global prefix reset.
-  Logs are retained per invocation in `x64/logs/<date-pid-id>/build-{forwarder,optiscaler}.log`.
-  There is one attempt; preserve failure evidence before deciding how to recover.
-- Publication requires successful stages and both outputs; changed build stamps also require a
-  refreshed OptiScaler DLL. The output pair is prepared before either destination is replaced.
-  Replacements are individually atomic, with rollback for ordinary errors and handled signals;
-  the pair is not atomic across a hard crash or to concurrent readers. Do not deploy a failed build.
-  `tests/build-lifecycle` exercises locking, workload progress, owned cleanup and publication using
-  actual local child processes, without Wine. A real Wine build remains a separate validation.
-- The earlier stall investigations and manual-reset observations remain in git history; supporting
-  evidence is under `~/.local/state/dlss5/gpu-timing-validation/1885828a/`.
-- **Never overwrite a proxy DLL while its game is running.** `cp`/`shutil.copy2` truncate and
-  rewrite the file that Wine has mapped, and the process dies minutes later somewhere unrelated
-  (Cyberpunk, 2026-09-19: deploy at 13:36:04, `EXCEPTION_ACCESS_VIOLATION` at 13:37:40 inside
-  REDGalaxy64 unwinding through our module). The guard that let it happen was `pgrep -x
-  Cyberpunk2077.exe`: `comm` is cut at 15 characters, so that pattern never matches. Check
-  `/proc/*/maps` for the target path instead, or match `ps -eo comm=` by prefix.
-- **Never pipe the script** (`./build-local.sh ... | tail`). `wineserver` daemonises and inherits
-  stdout, so the pipe never reaches EOF and the output stays hidden even after the build finished —
-  a success looks exactly like a hang. Redirect to a file instead.
-- **The supported build entry takes `$XDG_RUNTIME_DIR/msvc-prefix.lock` internally**, falling back
-  to `/run/user/<uid>/msvc-prefix.lock`. Call it directly; wrapping it in an external lock on that
-  same file causes an intentional busy result. Direct toolchain invocations still need the shared
-  lock with a noninherited descriptor (`flock -o`), as the Wine suites and `run_moving.lease` do.
-  The lock stays in the per-user runtime directory rather than the worktree cache.
-- The Visual Studio pre/post-build events are PowerShell and are disabled
-  (`PreBuildEventUseInBuild=false`). The script writes `resource_build_date.h` and
-  `resource_build_commit.h` itself. The in-game menu title shows this build id and timestamp; use it
-  to confirm which build a screenshot came from.
-- Outputs `x64/<Config>/OptiScaler.dll` and `x64/<Config>/a/nvngx.dll_dlssnr.dll`, then copies both to
-  `x64/out/`.
-
-### CI
+## Tests
 
 ```bash
-gh workflow run just_build_no_signature.yml --ref dlss-neural-rendering   # workflow "Build (No Signing)"
+python3 tests/run_all.py --list --group-by domain
+python3 tests/run_all.py --domain tooling --strict
+python3 tests/run_all.py --tier host --jobs 4 --strict
+python3 tools/check_docs.py
 ```
 
-The artifact downloaded through the API is named `.zip` but is a 7z; extract with `bsdtar`.
-
-### Windows
-
-Open `OptiScaler.sln` in Visual Studio 2022, or
-`msbuild OptiScaler.sln /m /p:Configuration=Release /p:Platform=x64 /verbosity:minimal`.
-`tools/package_release.ps1` assembles the release zip from an explicit allow-list: it refuses a stale
-forwarder (checks exports), refuses any `Enabled=true` in the packaged ini, and never ships
-`nvngx_dlssnr.dll` (NVIDIA's model; users supply their own).
-
-### Submodules
-
-Do **not** run `git submodule update --init --recursive` blindly. `external/FidelityFX-SDK` is huge
-and slow to clone, so it is deliberately not checked out: only the 12 headers under
-`ffx-api/include/ffx_api/` were fetched file-by-file from commit `c6efa6b`, which is all the build
-needs. `external/FidelityFX-SDK-v2` **is** checked out (`7539ae8b`, SDK 2.4): the
-disabled post-build step copies the signed FidelityFX DLLs from its `Kits/FidelityFX/signedbin/`
-(`OptiScaler.vcxproj:259-262`), and its FSR3 frame-interpolation and optical-flow sources are MIT per
-its `docs/license.md` (the rest of that SDK is binary-only), which
-`docs/dlssnr/design/synthesized-frame-generation.md` builds on. The other submodules
-(`simpleini`, `unordered_dense`, `xess`, `vulkan`, `spdlog`, `magic_enum`, `nvapi`) are initialised.
-Vendored headers the build includes directly live in `OptiScaler/include/` and `OptiScaler/library/`.
-
-### Formatting
-
-CI runs clang-format **22** over `OptiScaler/` excluding `external/`, `OptiScaler/include/` and
-`/precompile/` (`.github/workflows/clang-format.yml`, upstream's; moved from 20 to 22 in `cec3c146` along
-with upstream), and over `retoque/` excluding `/precompile/` (the `clang-format-retoque` job in
-`nr-tests.yml`, ours). Style is in `.clang-format`: LLVM base, Allman braces, 4-space indent, 120 columns,
-`SortIncludes: false`, `Type* ptr` pointer alignment.
-
-**Use clang-format 22**, the version CI pins, and **not the one on `PATH`**: Arch moved that to 23.x
-(23.1.1 as of 2026-10-04), and 23 flags upstream's own 22-formatted code (the `EnumConfig<FGInput>`
-table in `State.h`). Get 22 through `uvx --from 'clang-format==22.*' clang-format`. The Arch `clang20`
-binary at `/usr/lib/llvm20/bin/clang-format` was the pin before that and disagrees with CI in the other
-direction: it flags upstream's 22-formatted `Config.h` and `NVNGX_Proxy.h`.
-
-```bash
-for f in $(fd -e cpp -e h . OptiScaler retoque --exclude include --exclude external --exclude precompile); do
-    uvx -q --from 'clang-format==22.*' clang-format --dry-run --Werror "$f" >/dev/null 2>&1 || echo "$f"
-done
-```
-
-`.clang-format-ignore` at the repo root excludes the generated shader bytecode headers
-(`*_Shader.h`, `*_Shader_Dx11.h`, `*_Shader_Vk.h`). They are emitted by `create_header.py`, so
-formatting them is undone by the next shader rebuild; the CI `exclude-regex` carries `/precompile/`
-for the same reason. The tree is clean under 22 as of `5360a854` (2026-09-23); run the loop above
-before committing C++, because nothing local enforces it and it had drifted by 500+ lines once.
-
-### Tests
-
-`tests/README.md` is the index; read it before adding or changing a suite. Each suite is
-self-contained with its own `run.py` and README, registered in `tests/suites.toml`.
-
-```bash
-python3 tests/run_all.py            # host tier, the default
-python3 tests/run_all.py --list     # registry, tiers, and what is runnable here
-python3 tests/run_all.py --tier all # includes the wine tier
-python3 tests/<name>/run.py         # one suite, unchanged
-```
-
-The runner writes an atomic JSON aggregate (`--report` overrides the path); `--strict` rejects
-selected suites that skip. The FG input/provider fixtures publish structured per-invocation
-results: skipped, stale or interrupted evidence cannot become PASS. Legacy suites are explicitly
-process-exit evidence. SIGINT/SIGTERM cleanup and report semantics are covered by `runner-results`.
-
-`tools/test-rendering.sh` runs the host tier, Release build and the D3D12 input, moving NR and real DLSS-G
-regressions serially, without a game. See `tools/README.md` for prerequisites and individual test limits.
-
-The `nr-ab-compare` suite is stdlib Python and tests the offline PNG/PFM/raw A/B metrics and provenance checks.
-
-Three tiers. **host** needs only Python plus `g++`/`clang++` and runs in parallel: the 40
-`nr-*` suites plus `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `mfg-pattern`,
-`mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy` (no home path, LAN/tailnet address or token in
-a tracked file; the tree is public), `deploy-safety` (`tools/deploy-to-game.sh` on fake game directories),
-`windows-installer` (`tools/install-windows.ps1` in a PowerShell container on the docker context, cases skipped
-without docker or `pwsh`), `lsfg-shader-library`, `lsfg-integration` and `lsfg-presenter`. One of them,
-`nr-invariants`, is the `docs/dlssnr/design/DEVELOPMENT.md` §4 mechanical guard (config round-trip for every `DlssNr`
-key, struct equals cbuffer, precompiled headers equal the committed bytecode, retired identifiers);
-it is pure Python and the one to run after touching `Config.*`, `OptiScaler.ini` or the shader. **wine** needs the msvc-wine prefix and runs serially, because these suites contend for the
-same prefix `build-local.sh` uses: `nr-gpu-timing-d3d12`, `nr-session-exit` (the session guard's exit hook in a
-real process, under the system Wine and GE-Proton's), `nr-hdr-d3d12` (the HDR present conversion on a real D3D12
-device), `nr-present-guide-identity-msvc` (the present guides' identity cases compiled by MSVC), `synth-motion-d3d12`,
-`synth-motion-vk` (the same estimator on Vulkan), `guide-match-vk` (the Vulkan guide resample read back texel by
-texel on a real device, validation and synchronization checks on), `vulkan-overlay` (which also needs a graphical session and a working
-Vulkan loader), `vulkan-present-host` (the production DLL's Vulkan present host, the round trip and, under a local
-Proton with the model kit, cold NR, HDR and synthesized motion), `dx11-guides-transport` (a D3D11 game's depth and
-motion crossing to the D3D12 bridge under GE-Proton), `fg-inputs-d3d12` (camera and GPU crop regression),
-`dlssnr-loopback` (real NGX/NR under Proton) and `fg-provider-d3d12` (the production DLL and real DLSS-G interpolation).
-There are currently no **wip** suites.
-
-`suites.toml` is a drift guard, not just a config file. A directory with no entry, or an entry with
-no directory, fails the run. That is deliberate: this list had gone stale before.
-
-Know what they do **not** cover: the host `nr-*` suites exercise decision logic against fakes — they do
-not execute NGX, a real D3D12 device, or a real shader, so a green suite is not evidence about GPU
-behaviour, image quality or performance. `vulkan-overlay` builds a real DLL and drives real Vulkan.
-`nr-before-upscale/verify-invariants.py` is an orphan by design: a one-shot evidence script pinned to
-baseline `660303ec` that no runner calls.
-
-CI: `.github/workflows/nr-tests.yml` runs the host tier on Linux for pushes and PRs that touch
-`tests/`, `OptiScaler/`, `retoque/` or `tools/`. It checks out only `simpleini`, `spdlog` and `vulkan` — never
-FidelityFX-SDK. Upstream's `test.yml` is **not** a test workflow despite the name; it publishes the
-nightly release. Nothing runs the wine tier in CI; that stays local.
-
-In-game validation is still required (see "Test target"). For NR changes, follow the
-per-change-type review in `docs/dlssnr/design/DEVELOPMENT.md` §3 before considering a change
-done.
-
-## Test target
-
-Crimson Desert (Steam 3321460), `~/.local/share/Steam/steamapps/common/Crimson Desert/bin64/`:
-
-- `OptiScaler.dll` installed as `dxgi.dll`; `nvngx.dll_dlssnr.dll` beside it; marker file
-  `optiscaler_skip_vulkan_hooks` present.
-- `_nvngx.dll` is a copy of `/usr/lib/nvidia/wine/_nvngx.dll`; refresh it when the NVIDIA driver
-  updates. `nvngx_dlssnr.dll` (310.8.SF, the NR model) is user-supplied and not in the repo.
-- Steam launch options: `WINEDLLOVERRIDES="dxgi=n,b" mangohud gamemoderun %command%`.
-- Ini: `[DlssNr] Enabled=true ToggleKey=0x76` (F7); `[Menu] ShortcutKey=0x24` (Home);
-  `[Log] LogToFile=true LogLevel=2`. Runtime log: `bin64/OptiScaler.log`.
-- Full history, backups and rollback notes:
-  `~/.local/state/dlss5/backups/20260902-201621-optiscaler/README.md`.
-
-### Titles with no upscaler at all (the `Dx11BridgeHost` path)
-
-Crimson Desert exercises the ordinary after-upscale route. These two exercise the other one: a D3D11
-game that never calls an upscaler, where the pass is hosted on the D3D11-to-D3D12 bridge and there is
-no `EvaluateAfterUpscale` to hook. Both measured working on 2026-09-18.
-
-- **Divinity: Original Sin 2** (435150), `DefEd/bin/`, installed as `winmm.dll`. Isometric, slow
-  camera. **Its prefix has no `nvapi64.dll`**, so OptiScaler substitutes fakenvapi, and NGX then
-  fails to build the model's kernels -- `NGXCubinD3D12::CreateKernel failed - nvapi status -3` --
-  and refuses feature 18 with `FAIL_PlatformError`. The fix is `[Libraries] NvapiPath` pointing at
-  Proton's own `files/lib/wine/nvapi/x86_64-windows/nvapi64.dll`; putting a copy in the prefix's
-  system32 does not survive, because Proton manages that directory and reverts it on launch.
-- **The Witcher 3** (292030), `bin/x64/`, installed as `dxgi.dll`. The DirectX 11 renderer ships no
-  upscaler -- DLSS went only to `bin/x64_dx12` in the next-gen update -- so the same game provides
-  both routes side by side with identical content. Third-person, fast orbital camera. Its prefix
-  already has `nvapi64.dll`, so no `NvapiPath` is needed. Pick **DirectX 11** in Steam's launch
-  selector; the DX12 entry runs a different executable in a different directory.
-
-- **DOOM Eternal** (782330), a second Steam library (`<library>/steamapps/common/DOOMEternal`), installed as `winmm.dll` (the
-  exe imports no dxgi; id Tech 7 is pure Vulkan). NR runs on the Vulkan route (`EvaluateAfterUpscaleVk`,
-  3440x1440 with DLSS Quality guides at 2293x960). The game presents from its **compute** queue family,
-  so the Vulkan overlay draws on the graphics queue with a queue-family transfer around it (see
-  `menu/menu_overlay_vk.cpp`, 2026-09-19); the log line to look for is `drawing the menu on graphics
-  family 0 with a queue-family transfer around it`. A dead DualSense here was **Steam Input**, not
-  OptiScaler: the per-game layout had become `controller_base/empty.vdf` and no virtual X360 pad was
-  created (Steam `logs/controller.txt` shows `uses xinput : true` only when it works). OptiScaler's
-  XInput hook lands on `xinput1_4.dll` while this exe reads `XINPUT1_3.dll`, so it cannot be the cause.
-
-Three traps, all paid for:
-
-- **Replace the keys in the shipped ini, never insert new ones.** Copying `OptiScaler.ini` and adding
-  `Enabled=true` at the top of `[DlssNr]` leaves the section's own `Enabled=auto` further down, and
-  the parser keeps the last one. The result is a game where OptiScaler loads, captures the device and
-  builds no bridge, with nothing in the log to say why.
-- **NGX writes its own diagnosis through `LOG_DEBUG`.** At the default `LogLevel=2` it is discarded.
-  Set `LogLevel=1` before investigating anything NGX refuses; the answer is usually already there.
-- **One proxy per game directory, and which one is loaded depends on the Proton build.** Divinity
-  carried both `dxgi.dll` (the 2026-09-05 install) and `winmm.dll` (added later because the dxgi one
-  was inert). Under Valve Proton 11.0 only `winmm.dll` loaded; GE-Proton11-7 (installed 2026-09-19,
-  now the Steam default) honours the game-dir `dxgi.dll` too, and `EoCApp.exe` imports dxgi
-  statically while `OptiScaler.dll` imports `winmm.dll` -- so both loaded, two sets of Detours hooks
-  fought over `LoadLibraryExW`/`CreateDXGIFactory`, and the game died before the engine started.
-  Signature: a normal-looking boot log of ~5.5 KB that stops at the first FFX `LoadLibrary`, plus a
-  **0-byte** second `OptiScaler_*.log` (the other instance's logger, never flushed). Fix was
-  `dxgi.dll -> dxgi.dll.off`. The deployment manifests had recorded `dxgi.dll` as Divinity's proxy,
-  so two "verified" deploys never touched the DLL the game actually loads; check with
-  `CheckWorkingMode OptiScaler working as <name>` in the log, not with the manifest.
-  Since `8e6d4f4b` a second copy no longer hooks: it forwards its exports only, and the first copy's log says
-  `Another OptiScaler loaded in this process and only forwards its exports` with its path. Still keep one proxy
-  name per folder: which copy wins depends on load order.
+Wine/GPU suites are serial and require their own prerequisites. A SKIP is not a PASS. Record exact commands,
+commit/dirty state and binary hashes, with the limits of each result. New D3D12 passes require native Windows
+validation; Proton accepting a call is not a D3D12 correctness oracle.
 
 ## Precompiled shaders
 
-Every compute pass under `OptiScaler/shaders/<pass>/` ships its bytecode as a header in
-`precompile/` (`<Name>_Shader.h` for DX12, `<Name>_Shader_Dx11.h` for DX11, `<Name>_Shader_Vk.h` for
-Vulkan). Editing the `.hlsl` changes nothing until the header is regenerated. Scripts are in
-`OptiScaler/shaders/shader_tools/` and expect to run from the shader's `precompile/` directory:
+HLSL edits do nothing until bytecode headers are regenerated. Rebuild both DX12 and Vulkan for the common
+NR shader (`dxc cs_6_0`, plus `-spirv -D VK_MODE`); use the code-adjacent [recipe](retoque/dlssnr/README.md).
+Keep generated headers out of formatting. Review passthrough and constant-buffer invariants before deployment.
 
-```
-..\..\shader_tools\build_precompiled_shader.bat <Name>     # dxc cs_6_0 -> _Shader.h ; fxc cs_5_0 -> _Shader_Dx11.h
-..\..\shader_tools\build_precompiled_shader_vk.bat <Name>  # dxc -spirv -D VK_MODE -> _Shader_Vk.h
-```
+## Linux / Proton patches
 
-On Linux, `dxc.exe`/`fxc.exe` run under the msvc-wine prefix
-(`WINEPREFIX=~/.local/opt/msvc-wineprefix wine ../../shader_tools/dxc.exe ...`), then
-`python3 ../../shader_tools/create_header.py <in.cso|in.spv> <out.h> <array_name>`.
+Retain the fork's hook/overlay, device ownership and frame-generation protections during upstream merges.
+Resolve toward upstream structure, then reapply required behavior and test it. Current merge records are indexed
+in [maintenance](docs/maintenance.md#upstream-integration); the detailed historical patch table remains archived.
 
-The NR passes and the synthesized-motion estimator are the exception: they live in
-`retoque/shaders/dlssnr/precompile/` and `retoque/shaders/synth_motion/precompile/`, so from there use
-`../../../../OptiScaler/shaders/shader_tools/` in place of `../../shader_tools/` in the commands above
-(`retoque/shaders/synth_motion/precompile/build.sh` already does).
+## Test target
 
-For the NR shader (`retoque/shaders/dlssnr/precompile/dlssnr.hlsl`) rebuild **both** targets: DX12 via dxc
-`cs_6_0` into `DlssNr_Shader.h` (array `DlssNr_cso`) and Vulkan via dxc `-spirv -D VK_MODE` into
-`DlssNr_Shader_Vk.h` (array `dlssnr_spv`). The committed `.cso` is a DXIL container, so
-`docs/dlssnr/design/DEVELOPMENT.md` invariant 6 is authoritative; `retoque/dlssnr/README.md` carries the
-same recipe, with its old fxc `cs_5_0` instruction already corrected.
-
-## Architecture
-
-### One DLL, many disguises
-
-`OptiScaler.dll` is renamed by the user to a system DLL name the game loads early (`dxgi.dll`,
-`winmm.dll`, `version.dll`, `dbghelp.dll`, `d3d12.dll`, `winhttp.dll`, `wininet.dll`) or installed as
-an `.asi` plugin. `Source.def` exports the union of all those APIs; `exports/` and `proxies/` forward
-them to the real system DLL. `dllmain.cpp` works out which name it was loaded under (`dllNames`),
-loads the real library, then installs Detours hooks from `hooks/` (D3D11, D3D12, DXGI, Vulkan,
-Streamline, NVAPI, kernel loader). `wrapped/` wraps the DXGI factory and swapchain so the overlay can
-draw at present time.
-
-### Inputs → parameters → outputs
-
-- **Inputs** (`inputs/`): the game's upscaler calls are intercepted per SDK and API. NVNGX (DLSS),
-  FfxApi/FSR2/FSR3, and XeSS entry points all normalise into an `NVSDK_NGX_Parameter` block
-  (`NVNGX_Parameter.cpp`), which is the internal lingua franca.
-- **Outputs** (`upscalers/`): `IFeature` is the backend base. `IFeature_Dx12`, `IFeature_Dx11`,
-  `IFeature_Vk` are native; `IFeature_Dx11wDx12` and `IFeature_VkwDx12` run a DX12-only backend on
-  a background D3D12 device (`with_dx12/`). Concrete backends: `dlss/`, `dlssd/`, `fsr2/`, `fsr2_212/`,
-  `fsr31/`, `ffx/`, `xess/`. `FeatureProvider_<Api>` instantiates the one selected by
-  `Config::Dx12Upscaler` / `Dx11Upscaler` / `VulkanUpscaler` and handles hot-swapping.
-- **Frame generation** (`framegen/`, `inputs/FG/`, `hudfix/`): the same input/output split via
-  `IFGFeature`, with FSR3-FG, XeFG, DLSS-G and NVNGX replacement outputs.
-- **Post passes** (`shaders/`): RCAS, output scaling, format/depth transfers, the NR pass. Each is a
-  class that dispatches an embedded shader; nothing compiles HLSL at runtime.
-
-### Globals
-
-- `Config::Instance()` (`Config.h/.cpp`): every INI key is a `CustomOptional<T>` mirroring a section
-  of `OptiScaler.ini`. Adding a key means four edits: declare with default in `Config.h`, read in
-  `Config.cpp`, save in `Config.cpp`, add to the shipped `OptiScaler.ini`. Missing one is a silent
-  no-op or a setting lost on restart.
-- `State::Instance()` (`State.h`): runtime state (devices, current feature, detected GPU, Linux/Wine
-  flags). The `Scoped*` RAII classes at the bottom of `State.h` temporarily disable spoofing, hooks,
-  or wrapping for a thread; use them rather than toggling the flags by hand.
-- Logging is spdlog through the `LOG_*` macros in `Logger.h`.
-
-### Precompiled header rule (from CONTRIBUTING.md)
-
-Every `.cpp` includes `"pch.h"` as its first non-comment line. Never include `pch.h` from a header.
-Only large stable third-party/system headers go in `pch.h`; utilities go in `SysUtils.h` or a new
-header.
-
-### Linux / Proton patches (this fork's own layer)
-
-These must survive every merge from `optiscaler/master`. Why they exist: under vkd3d-proton the
-Vulkan overlay competes with Streamline DLSS-G's swapchain/pacer, producing fence timeouts and
-`VK_ERROR_DEVICE_LOST`; the D3D12 overlay path coexists with native FG.
-
-The patch surface was converged with upstream's open PRs on 2026-09-27: where a PR carries the same
-change, our text now matches it, so the day it merges the conflict is empty. The "Upstream" column
-says which rows to drop from this table then. #1138 is the exception: upstream moved underneath it
-(see its row), so it would not merge cleanly anywhere.
-
-| Commit | File | Change | Upstream |
-|---|---|---|---|
-| `255ca14`, `a4f1bbb`, 2026-09-27 | `dllmain.cpp` (`ResolveVulkanHookPolicy`), `hooks/Vulkan_Hooks.cpp` (`VulkanHooks::Hook`) | `[Vulkan] SkipHooks=true`, or on Wine the older `optiscaler_skip_vulkan_hooks` marker beside the DLL (deprecated, still honoured, logged), sets `State::vulkanHooksSkipped` right after Wine detection; `VulkanHooks::Hook` returns early when it is set, so a late `vulkan-1.dll` load through the loader hook is covered too. `CheckWorkingMode`'s Vulkan block is back to upstream's text | none (ours) |
-| `33f2961` | `State.h` | `vulkanHooksSkipped` field | none (ours) |
-| `b4e3c5cc`, 2026-09-27 | `spoofing/Vulkan_Spoofing.cpp` | `OPTISCALER_DISABLE_VULKAN_WDX12_HOOKS=1` gates all three Vulkan_wDx12 entry paths. **Byte-identical to PR #1131** (RizziU); `[Vulkan] SkipHooks` no longer feeds it (it now means the whole bundle, as the ini always said) | #1131 open |
-| `d8275824` | `State.h`, `dllmain.cpp`, `DLSSG_Dx12.cpp`, `Streamline_Hooks.*`, `Vulkan_Hooks.cpp`, `menu_overlay_dx.cpp`, `IFeature.cpp` | DLSS-G interlock keyed on `menuOverlayIsVulkan`, overlay routing guards, frozen check under FG, NVAPI loaded early for `DisableFlipMetering`. y4my4my4m's own commit. **Its `Vulkan_Hooks.cpp` frozen-tick guard (`swapchainApi != DX12`) is superseded** by upstream's `dxgiBacked` (`1cc9d5a1`, taken in the 2026-10-12 merge): a present from dxgi/d3d11/d3d12 no longer ticks or sets `swapchainApi = Vulkan`. **Every line #1138 adds is in the tree in the first six files** (checked 2026-09-29). `IFeature.cpp` is not #1138's text: `TickFrozenCheck` takes upstream's `presentPerEval` (`04bf0b08`, which superseded #1138's hunk there) and scales by the larger of it and #1138's `dlssgDetectedInterpolationCount + 1`, so 3 of that hunk's 5 lines match  **Its Vulkan menu delay (`delayMenuRenderBy`) is gone**: upstream `01195e9b` dropped it for `ImGui_ImplVulkan_SetQueue`, and our `applyMenuDlssgInterlock` keeps only turning DLSS-G off while the menu is open; since 2026-10-14 for every overlay, not just Vulkan (on D3D12 the menu drawn into the real frame came back blended into DLSS-G's generated frames), with the options re-sent whenever the menu opens or closes | #1138 open, but no longer applies to upstream master (`Vulkan_Hooks.cpp`, `menu_overlay_vk.cpp`, `IFeature.cpp` fail `git apply --check`); expect a conflict, not an empty merge, if it lands rebased |
-| `7fe23f4`, 2026-09-27, **retired 2026-10-12** | `wrapped/wrapped_swapchain.cpp` | **Retired by upstream `1cc9d5a1`, which deletes the whole shortcut: every DXGI present now reaches `MenuOverlayDx`, which is what our clause was for. Drop this row.** Was: DXVK direct-present shortcut limited to D3D11 (**text of PR #1163**, jackra1n; #1138 carries the same condition in its own words, none of which are in the tree), plus our `&& !vulkanHooksSkipped` so a D3D11 title with the hooks skipped reaches `MenuOverlayDx` too | moot: the code is gone upstream |
-| `10c6760`, `8e021bff`, `47138ca0`, `4d2c8078`, 2026-09-19 | `menu/menu_overlay_vk.cpp`, `hooks/VulkanwDx12_Hooks.cpp` | Bounded fence wait; submit on the queue that presents; no leaks across swapchain recreation; no D3D12 probe in a native Vulkan overlay's `Init`; non-graphics present family (id Tech 7) drawn on the graphics queue with ownership transfers and a three-submit semaphore chain; per-`VkQueue` recursive lock in the `vkQueueSubmit` hooks. Upstream's menu blur (`f72e47b9`) was ported in by hand on 2026-10-12 and is **off on the cross-family path** (its first barrier does not chain after our acquire); `DxOverlayOwnsBackend` reads `dxgiIsDxvk` (`ac7a0111`'s name for `usesDxvk`). Diverged beyond #1138's version of this file, so kept whole; #1138's release of `_vkCleanMutex` across `RenderMenu` was not taken (see below)  Upstream's `ImGui_ImplVulkan_SetQueue` (`01195e9b`, `70f9939f`) is ported on 2026-10-13: ImGui's own texture uploads go to the presenting queue when it is of ImGui's init family, else the init queue; our `NoteDeviceQueues` took upstream's name, `DeviceCreated` | none |
-| `be19e645`, `285bd7a7`, `f462f3ef`, 2026-10-19 | `misc/DeferredRelease.*`, `hooks/Vulkan_Hooks.cpp`, `menu/menu_overlay_vk.cpp`, `retoque/dlssnr/DlssNr_VkPresentHost.cpp` | Retire device-owned deferred callbacks before NR device destruction, synchronized with detached collectors; abandon on loss or an unproven drain; reopen reused device handles; flush queued Vulkan shaders after the menu's successful device-wide idle, preserving its failed-drain retry and cross-family fences. See `docs/linux-proton/upstream-20261019.md` | none (ours) |
-| `a51df1c5`, 2026-10-23 | `menu/menu_overlay_vk.cpp` (`CreateSwapchain`) | Upstream's `OnOtherWindow` filter (`b543eb15`) stays where upstream put it, before the locks, and is **asked again once both locks are held**: two first creates on two windows could both pass the unlocked read, and the second then drained the device, tore the first's generation down and moved the ImGui context to its own window. The window-change block's `ImGui_ImplVulkan_Shutdown` is gated on `_vulkanBackendInited`, because our `DestroyVulkanObjectsLocked` (`47138ca0`) has already shut the backend down by then; the second call dereferenced a null backend in `ImGui_ImplVulkan_DestroyDeviceObjects` on every window migration. Held by `tests/vulkan-menu-lifecycle`, which also records one undecided case: a hidden splash keeps the menu. The surface hook's own read-then-destroy race in `Vulkan_Hooks.cpp` is closed the same way by `1dca628b` (row below) | none (ours) |
-| `d391a944`, `68b5a0e5`, `e35f1c76`, `c397eb1d`, `80a1ab0f`, `77495b8b`, 2026-10-23 | `spoofing/Vulkan_Spoofing.cpp`, `menu/menu_overlay_vk.cpp`, `hooks/FG_Hooks.cpp`, `hooks/Streamline_Hooks.cpp` | Found while taking the sixth merge, all fixes to upstream code: the spoofing's extension lists are `static thread_local` (a second thread's create could rewrite the list another thread had not yet handed to the driver); `vulkanMemoryModelDeviceScope` is enabled wherever #1161 enables `vulkanMemoryModel`; the Vulkan menu's render area is the swapchain extent, not ImGui's client-area `DisplaySize`; the DLSS-G resize hooks keep the frame-latency waitable bit the chain was created with; the MFG clamp limits the count sent to the provider, never the saved `OverrideInterpolationCount`, and re-reads the provider's maximum per provider generation. See `docs/linux-proton/upstream-20261023.md` | none yet; candidates for upstream PRs |
-| `658337cc`, `77da020a`, `a80f1d70`, 2026-10-23 | `spoofing/Vulkan_Spoofing.cpp` | Found by `tests/vk-create-contract` (the production `vkCreateDevice` path against a fake driver), both fixes to upstream code (c4668477, #1161): the filter for spoofed names on dxvk/vkd3d-proton's create keeps the request as it is when the device's extension list cannot be read whole (a failed count query had removed every extension, `VK_KHR_swapchain` included); and the version that picks the enabled features is at least the one the request's own `VkPhysicalDeviceVulkan12/13Features` imply (`ApiVersionOfFeatureChain`), so an unknown or understated instance version no longer puts the promoted structs beside the game's aggregate ones (02830, 06532) | none yet; candidates for upstream PRs |
-| `5b916a6b`, 2026-10-23 | `hooks/Vulkan_Hooks.cpp` (`hkvkCreateDevice`), `retoque/hooks/Vulkan_OwnedDeviceRequest.h`, `retoque/hooks/Vulkan_DeviceCreateChainTypes.h` (generated by `tools/gen-vk-device-chain-types.py`) | The hook copies the game's whole `pNext` chain into storage the call owns right after its `memcpy` of the create info, so upstream's `VulkanDeviceFeatureState` (unchanged) enables features in the copy: it used to write the game's own structs in place behind a `VkPhysicalDeviceVulkan11Features` or any struct its copier does not know, and the FG output's timeline request wrote the game's V12, restoring both after the call -- a fault for a chain in read-only memory, wrong values for another thread reading it. Sizes come from a table generated from `external/vulkan/registry/vk.xml` (every struct `vulkan_core.h` defines that may extend `VkDeviceCreateInfo`; regenerate when `external/vulkan` moves, `vk-create-contract` fails while it is stale); a struct newer than those headers stops the copy and the chain is the game's from there, as before. The extension array the spoofing built is copied into the same storage once it returns, so a create nested on the same thread inside the driver call no longer rewrites the outer request (the probe `d391a944` left). Eight added lines in the upstream file | none yet; candidate for an upstream PR |
-| `d5511ed3`, 2026-10-23 | `State.h` (`vkAntiLagSupported`), `hooks/Vulkan_Hooks.cpp` (`hkvkCreateDevice`) | `vkAntiLagSupported` is `inline static thread_local` (as upstream's `creatingD3DDevice`), reset at each create, and the post-create step reads a local copy: overlapping creates on two GPUs had cost the Anti-Lag one its `VK_AMD_anti_lag`, or let the other overwrite `vkAntiLagUpdateAMD` with the null its device returns. The spoofing's read is unchanged | none yet; candidate for an upstream PR |
-| `1dca628b`, 2026-10-23 | `hooks/Vulkan_Hooks.cpp` (`hkvkCreateWin32SurfaceKHR`), `menu/menu_overlay_vk.*` (`DestroyVulkanObjects`) | The surface hook's `OnOtherWindow` check stays where upstream put it; `DestroyVulkanObjects` takes the window as an optional argument, asks `OnOtherWindow` again once both locks are held and keeps the menu (returns false) when it is on another window by then, and the hook captures `_hwnd` only when the teardown ran. A surface whose check raced another window's first create had torn that menu down, dark until its chain was recreated -- the race `a51df1c5` closed in `CreateSwapchain`. Without the argument the function behaves as before | none (ours) |
-| `8feb116f`, 2026-10-23 | `menu/menu_common.h` (`Handle`, `IsInited`), `menu/menu_common.cpp` (`Init`, `Shutdown`) | Codex review FM-01: `MenuOverlayVk::OnOtherWindow` reads the menu's window and inited flag before the overlay's locks, and the DX backend writes them without those locks -- a C++ data race on a plain `HWND` and `bool`. The two getters load through `std::atomic_ref` and `Init`/`Shutdown` store through it; storage type, declarations and every other access stay upstream's. Other plain reads of `_handle` inside `menu_common.cpp` (render and input paths) are not changed. `tests/vulkan-menu-lifecycle` now reads a plain `HWND`/`bool` with the production getters' own expressions, cut from `menu_common.h`, and checks the writers | none (ours) |
-| `03e7fda3`, 2026-10-23 | `framegen/xefg/XeFG_DynamicCount.h`, `framegen/xefg/XeFG_DynamicMFG.cpp` (`XeFG_Dx12.cpp` before the eighth merge), `hooks/FG_Hooks.cpp`, `State.h`, `menu/menu_common.cpp`, `OptiScaler.ini` | XeFG Dynamic MFG's target (`XeFG_DynamicTargetFps`, a pure function appended to `XeFG_DynamicCount.h`) is at most the refresh rate while frame generation presents with V-Sync (`State::fgPresentVsync`, FGPresent's final sync interval): an explicit target or FPS cap above the refresh had both controllers adding frames XeFG drops. janblade `15c1f959`'s rule, re-done on upstream's own header instead of a new file. `tests/xefg-dynamic-target` | none yet; candidate for an upstream PR |
-| `a8f4cacf`, 2026-10-23 | `hooks/FG_Hooks.cpp` (`hkGetFullscreenState`, `hkGetFullscreenDesc`) | The XeFG `GetFullscreenState` detour wrote `*pFullscreen` unchecked, though DXGI declares both arguments `_Out_opt_`, and answered TRUE with a NULL `*ppTarget`. Both arguments reach the original as given, only the ones passed are rewritten, and a reported fullscreen comes with the window's output (`GetContainingOutput`, AddRef'd) unless the chain returned one; `hkGetFullscreenDesc` checks `pDesc`. `tests/fg-fullscreen-hooks` | none yet; candidate for an upstream PR |
-| `675d73a8`, 2026-10-23 | `hooks/FG_Hooks.cpp` (`hkSetFullscreenState`, `hkResizeTarget`, the window cover after both resize hooks) | `[XeFG] ForceBorderless` reaches these for XeFG only, as creation, the resize flags, the menu and the game configs already did. With the key left true (the menu saves it from the XeFG card, hidden for other outputs) an FSR-FG, DLSS-G or Reprojection chain created exclusive never got the game's `SetFullscreenState(FALSE)`, and the D3D11 bridge's presenter take-back was swallowed with its borderless window restyled. The key is now inert for those outputs. `tests/fg-fullscreen-hooks` | none yet; candidate for an upstream PR |
-| `e0dddf0c`, 2026-10-23 | `hooks/FG_Hooks.cpp` (`FGPresent`) | Injected DLSS-G: `GetCurrentBackBufferIndex` on the DLSS-G swapchain on every DLSS-G present, ahead of the frame token, not only on the branch that sends OptiScaler's own Reflex markers; DLSS-G refuses a frame without it (`eFailGetCurrentBackBufferIndexNotCalled`), and a game that sends its own markers and tracks the index itself (RDR2) never makes it. Skynizz v1.3.0 `de1c009d`'s change. `tests/fg-dlssg-backbuffer-index` | none yet; candidate for an upstream PR |
-| `8e322aa6`, 2026-10-27 | `framegen/dlssg/DLSSG_Dx12.cpp` (`CreateSwapchainInternal`, `CreateSwapchain1Internal`), `hooks/DxgiFactory_Hooks.cpp` (`HookToDLSSGFactory`) | `Util::CheckForRealObject` releases the reference sl.interposer's retrieve-base `QueryInterface` adds (the base, AddRef'd once), so what it hands back is borrowed, as every other caller treats it. These three sites released it again: one reference off the real DXGI factory per DLSS-G swapchain created over a Streamline proxy. wilsjo2 `e797906f` found the same. `tests/fg-streamline-real-object` runs the four functions against a Streamline-shaped proxy and fails on any caller that releases the borrowed object | none yet; candidate for an upstream PR (b19cfd29 still has it) |
-| `8e6d4f4b`, 2026-10-29 | `dllmain.cpp` (attach, after `CheckForExcludedProcess`), `misc/IdentifyGpu.cpp` (after the GPU list), `retoque/misc/InstanceClaim.h` | One OptiScaler per process: the first copy to attach claims it with a per-pid named mutex; a second proxy name in the same folder runs in upstream's pass-through mode (forwards its exports, no hooks) instead of fighting the first, and leaves its path in a per-pid environment variable that the first copy logs after the GPU list (a pass-through copy cannot open the logger: that would rename the first copy's live log). `tests/optiscaler-instance-claim` | none (ours) |
-| `99945d24`, 2026-10-29 | `misc/IdentifyGpu.cpp` (the DXGI enumeration, `isDisplayOnlyAdapter`), `misc/IdentifyGpu.h`, `retoque/misc/DisplayOnlyAdapter.h` | An indirect display adapter that cannot render (Parsec's virtual display, enumerated with the real GPU's name and ids, unknown to NVAPI) is left out of the GPU list, so it can no longer be the primary GPU with no architecture and no DLSS; on Rafael's 3060 it came first in DXGI's order. `tests/display-only-adapter` | none yet; candidate for an upstream PR |
-
-Not taken from #1138: its `menu_overlay_vk.cpp` drops `_vkCleanMutex` across
-`MenuOverlayBase::RenderMenu` because `RenderMenu` could re-enter `DestroyVulkanObjects` through
-`IdentifyGpu::getPrimaryGpu()` and the swapchain hook. Ours holds both locks across it. The
-re-entry that did happen here (`Init` reaching D3D12 device creation) was removed in `4d2c8078`, and
-`getPrimaryGpu()` is cached from startup, so no re-entry path is known; the menu works in DOOM
-Eternal. If a `resource_deadlock_would_occur` ever surfaces from the Vulkan present hook, that
-revision is the fix to port.
-
-Not taken from janblade `ccce7963` (2026-10-21): it widens `HookFGSwapchain`'s `GetFullscreenState` and
-`GetFullscreenDesc` detours from XeFG to FSR-FG, so a game whose FSR-FG chain is kept borderless is told it is
-fullscreen. Here only `hkSetFullscreenState` kept an FSR-FG chain borderless, and only with `[XeFG]
-ForceBorderless=true` left in the ini; since `675d73a8` that key reaches the fullscreen hooks for XeFG only, as the
-menu, the game configs and swapchain creation already scoped it, so no FSR-FG chain is kept borderless. His other
-trigger, HDR output's windowed chain, is not in this tree. The D3D11 bridge, meanwhile, asks its
-FSR-FG presenter `GetFullscreenState` to find a real exclusive fullscreen behind its own emulation, which sets
-`SCExclusiveFullscreen`; with the detour and that key, a windowed presenter would read as fullscreen and the bridge
-would send it `SetFullscreenState(FALSE)`, which `hkSetFullscreenState` answers by pausing FG and restyling the
-window. Widening the detour needs the bridge's probes to get the real answer first.
-
-Not needed from Skynizz `de1c009d` (v1.3.0): its other injected-DLSS-G fix, OptiScaler's own `slInit` losing
-DLSS-G to `hkslInit`'s strip (`Streamline_Hooks.cpp:325-334`), cannot happen here. That hook is only attached to an
-interposer that is not OptiScaler's: the loader hook skips any `sl.interposer.dll` under `<MainDllPath>/streamline`
-(`LibraryLoad_Hooks.cpp:168-177`), and `CheckModulesInMemory`, which runs inside every load, including the nested ones
-while `LoadStreamline` is still loading the interposer and has not yet set `optiSlInterposer`
-(`Streamline_Proxy.h:93-99`), skips it by path too (`LibraryLoad_Hooks.cpp:1111-1113`, upstream `d14b6303`,
-2026-10-10). His tree predates that commit and has only the `optiSlInterposer` check, which that window defeats. The
-one exception, `FGInput=nvngx`, forces the FG output to none (`dllmain.cpp:1687-1688`).
-
-Wine detection (`wine_get_version` → `State::isRunningOnLinux`) is upstream. The upstream fix for
-issue #1101 (dxvk-nvapi recursion in `misc/IdentifyGpu.cpp`) is already in the tree; do not re-apply
-it. `.github/workflows/` are registered on this fork so CI builds this branch.
-
-### DLSS Neural Rendering module
-
-`retoque/dlssnr/` (menu, capture, exposure scan, forwarder, driver-proxy experiment) and
-`retoque/shaders/dlssnr/` (the pass: encode → NGX feature 18 → resolve). Read
-`retoque/dlssnr/README.md` before touching it; its "Design notes worth knowing" section records
-dead ends already paid for with device hangs (never free under the GPU, one lock, debounced feature
-rebuild, no temporal accumulator).
-
-- **Forwarder.** The NVIDIA snippet rejects callers whose module path lacks `nvngx.dll`, so all NGX
-  calls go through `nvngx.dll_dlssnr.dll` (`retoque/dlssnr/forwarder/`, built by `dlssnr_forwarder.vcxproj`
-  into `x64/<Config>/a/`, also buildable standalone with CMake). It must not tail-call the snippet;
-  results go through a `volatile` local so the forwarder's frame stays on the stack.
-- **`[DlssNr] ModelLoader=direct`** (default `forwarder`) makes the same D3D12 calls from OptiScaler.dll
-  (`DlssNr_DirectRuntime`, wilsjo2's technique), answering the caller check through the model's own
-  `GetModuleFileNameW/A` import slots. Vulkan and the D3D11 probe keep the forwarder.
-  `tests/nr-model-loader` holds its parameter writes to the forwarder's.
-- **NVIDIA 616.64+ loaders route feature 18 themselves**, this machine's wine `_nvngx.dll` included
-  (32.0.16.1691, shipped with Linux 615.71.09; 615.78.08's 32.0.16.1752 too). Only `UseProxy` takes that
-  route, and it refuses the known-faulting model, the unpatched 310.8.0.0. The 310.8.2.0 build in use is
-  ShortFuse's patch of it, not an NVIDIA release: no newer official model exists as of 2026-10-12, so the
-  check means "not 310.8.0.0", not "a fixed NVIDIA build". The first build logs `DLSS-NR NGX:` lines with
-  the loader, its build, the route and the model. See `docs/dlssnr/design/ngx-driver-616.md`.
-- **The present-time pass had never shipped.** `RunPresentPass` (wrapped swapchain and FG
-  present hooks) sat behind `#ifdef DLSS_NEURAL_RENDERING`, a macro no file, project or script ever
-  defined, so LTCG dropped it and every string it owned from every build: `HookMethod=2` on a D3D12
-  title silently ran nothing (the D3D11 bridge host is a separate path, which is why Divinity worked),
-  and the runtime status line could not appear. The guards were removed on 2026-09-19; check a build
-  with `grep -a -c 'could not reach the swapchain' OptiScaler.dll` (1 = present pass linked in).
-- **Call sites outside the module** are deliberately one-liners: `inputs/NVNGX_DLSS_Dx12.cpp` and
-  `NVNGX_DLSS_Vk.cpp` (evaluate after upscale), `inputs/NVNGX_DLSS_Dx11.cpp` (`dlss_12` as the D3D11
-  DLSS default with NR on; `NoteDx11Evaluate`, which at `HookMethod=2` also carries native D3D11 DLSS's depth and
-  motion to the bridge's present pass, and reports when it cannot),
-  `upscalers/IFeature_Dx11wDx12.cpp` and `IFeature_VkwDx12.cpp`
-  (bridges), `menu/menu_common.cpp` (panel, timing row, toggle key, compare tags, scan meter),
-  `hooks/Vulkan_Hooks.cpp` (device extensions), `hooks/D3D12_Hooks.cpp` and
-  `resource_tracking/ResTrack_dx12.cpp` (exposure-scan resource notes), and the `[DlssNr]` block in
-  `Config.h/.cpp` marked `removable as one block`. Everything must be inert when `DlssNrEnabled` is off.
-  The full list, with what each site does, is in `dlssnr/README.md`.
-- **The model's own log is in `OptiScaler.log`.** `DlssNr_ModelLog` patches the model's
-  `OutputDebugStringA/W` import before the first feature build, so its lines appear as
-  `DLSS-NR model: ...` (feature built at WxH with which weights, history reset after a control
-  change). It also reads "N config(s) available": 310.8 reports one, which is why the preset combo is
-  hidden then. Look there before measuring pixels to learn what the model did.
-- **Proton is not a D3D12 validator.** vkd3d-proton accepts calls that native Windows answers by removing
-  the device. The guide resample's 48-byte constant-buffer view ran fine here and killed Rafael's RTX 3060 at
-  the first frame (`13f10d60`; `reduced-scale-guides.md`, "Native Windows"). `nr-invariants` now checks CBV
-  sizes. For any new pass, check descriptor sizes, formats and flags against the D3D12 rules, not against
-  what ran here, and get a run on Rafael's PC before calling it done.
-- **A fault inside the model no longer takes the game down.** The forwarder makes every model call
-  inside `__try`; the first fault is recorded, every later call is refused (release included -- the
-  model can be left holding its lock), and the host switches NR off for the session with
-  `DLSS-NR: the model faulted inside its own code ... (exception 0x... at module+0x...)` in the log.
-- **Invariants** (`docs/dlssnr/design/DEVELOPMENT.md` §1, enforced by review): default-identical when off;
-  no control shown for a thing that does not exist; one quantity, one control; four-point config
-  round-trip; `DlssNrConstants` (C++) and the `Params` cbuffer (HLSL) are one ordered scalar list,
-  append-only at the end in both; both shader targets rebuilt; `gPassthrough` gate everywhere the
-  encode is reproduced; Vulkan resources drained before free and abandoned (never destroyed) when
-  their device is gone.
-- **Design-doc-first.** New NR behaviour gets a design note in `docs/dlssnr/design/` before code
-  (`frame-hold.md`, `multi-point-anchoring.md` are the pattern). `docs/history/FORWARDER_INVESTIGATION.md` is the
-  evidence log for the attempt to drop the forwarder via the driver core (`DlssNr_Proxy`).
-- The colour composition is RenoDX's design (clshortfuse); `Licenses/RenoDX_ATTRIBUTION.txt` must
-  ship with any distributed build.
-
-## Reference docs
-
-`Config.md` (every INI key), `Spoofing.md`, `Issues.md`, `Changelog.md` (upstream OptiScaler
-releases), `setup_linux.sh` / `setup_windows.bat` (end-user install: pick the proxy DLL name, spoofing
-choices).
+Use the [route validation matrix](docs/maintenance.md#validation-route-matrix), not a single game's success.
+Game-specific settings and model versions belong in their design notes and user-owned installations.
 
 ## Documentation
 
-`docs/README.md` indexes everything this fork owns: NR design notes (`docs/dlssnr/design/`, topic index in
-`docs/dlssnr/README.md`), Linux/Proton notes, user guides and history. Upstream's own docs stay at the root.
-Code-adjacent READMEs (`retoque/dlssnr/`, `retoque/shaders/synth_motion/`) and `tests/` READMEs stay
-beside what they describe.
+[docs/README.md](docs/README.md) defines document authority. Keep current instructions short, dated observations
+in evidence records, and history explicitly historical. Regenerate `tests/CATALOG.md` after registry edits with
+`python3 tools/check_docs.py --write-catalog`. Never promote a historical run to current-build qualification.

@@ -18,6 +18,9 @@ on:
       - 'OptiScaler/**'
       - 'retoque/**'
       - 'tools/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/retoque-release.yml'
       - 'OptiScaler.ini'
       - '.github/workflows/nr-tests.yml'
   pull_request:
@@ -26,6 +29,9 @@ on:
       - 'OptiScaler/**'
       - 'retoque/**'
       - 'tools/**'
+      - 'docs/**'
+      - '**/*.md'
+      - '.github/workflows/retoque-release.yml'
       - 'OptiScaler.ini'
       - '.github/workflows/nr-tests.yml'
 
@@ -59,6 +65,9 @@ jobs:
           g++ --version | head -1
           clang++ --version | head -1
           python3 --version
+
+      - name: Documentation destinations and generated catalog
+        run: python3 tools/check_docs.py
 
       - name: Registry check
         run: python3 tests/run_all.py --list

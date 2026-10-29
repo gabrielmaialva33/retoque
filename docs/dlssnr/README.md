@@ -10,8 +10,8 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 
 ## Roadmap
 
-- [roadmap.md](roadmap.md): what NeuRotic has that this fork does not yet, in order, with each item's design note, where
-  it stands and the game run it needs.
+- [roadmap.md](roadmap.md): current priorities, blockers and next evidence decisions; the earlier fork comparison is archived.
+- [Capabilities and evidence](../capabilities.md): implementation state separated from dated validation, with code and suite links.
 
 ## Rules and review
 

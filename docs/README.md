@@ -1,52 +1,53 @@
-# Documentation index
+# Documentation index and authority
 
-This fork (Retoque, `OptiScaler_DLSSNR` until 2026-10-13) keeps upstream OptiScaler's own documents at the
-repository root, where upstream has them: `README.md`, `Features.md`, `Spoofing.md`, `Issues.md`,
-`Changelog.md`, `CONTRIBUTING.md` and the INI reference `Config.md`. Everything this fork added lives
-here or beside the code it describes.
+Start with the document that answers your question. Historical measurements never automatically certify the
+current checkout or a freshly packaged binary. Upstream-owned files keep their paths; fork guidance lives here.
 
-## Users
+| Question | Authoritative entry |
+|---|---|
+| What is Retoque and how do I install it? | [README](../README.md) |
+| Which behavior exists and where was it validated? | [Capabilities and evidence](capabilities.md) |
+| How do I contribute safely? | [Contributor guide](contributing.md), [NR invariants](dlssnr/design/DEVELOPMENT.md) |
+| Where does each responsibility live? | [Architecture](architecture.md), then code-adjacent READMEs |
+| What work is next or blocked? | [Roadmap](dlssnr/roadmap.md) |
+| How do I build, merge upstream or investigate a runtime failure? | [Maintenance](maintenance.md), [tools](../tools/README.md) |
+| Which tests exist and what do they cover? | Generated [test catalog](../tests/CATALOG.md), [test methodology](../tests/README.md) |
+| What exactly is in a release and what passed? | [Release validation](releases/VALIDATION.md), version-specific [release notes](releases/) |
+| Why was a design chosen or rejected? | [NR design index](dlssnr/README.md), [reviews](superpowers/reviews/) |
 
-- [Config.md](../Config.md): every INI key, including the `[DlssNr]` block.
-- [README.md, Installation](../README.md#installation): Linux and Windows; on Windows the release's `install-windows.cmd`, described in [tools/README.md](../tools/README.md#install-windowsps1-and-install-windowscmd).
-- [guides/ExternalDlssgTelemetry.md](guides/ExternalDlssgTelemetry.md): feeding DLSSG source-frame telemetry from an external DLL/ASI.
+## User references
 
-## Linux and Proton
+[Config.md](../Config.md) and `OptiScaler.ini` describe configuration. The root
+[Features](../Features.md), [Spoofing](../Spoofing.md), [Issues](../Issues.md) and
+[Changelog](../Changelog.md) retain the upstream context; do not confuse upstream release notes with Retoque
+qualification. External DLL telemetry is documented in [ExternalDlssgTelemetry](guides/ExternalDlssgTelemetry.md).
 
-- [linux-proton/vulkan-overlay-nongraphics-present.md](linux-proton/vulkan-overlay-nongraphics-present.md): decision record for the Vulkan overlay on a non-graphics present family.
-- [CLAUDE.md](../CLAUDE.md): "Linux / Proton patches" lists the fork's overlay patches over upstream.
+## Code-adjacent references
 
-- [linux-proton/fork-fixes-20261016.md](linux-proton/fork-fixes-20261016.md): NGX/library compatibility, menu GPU completion and FG lock-pairing fixes from the fork audit.
-- [linux-proton/streamline-game-camera.md](linux-proton/streamline-game-camera.md): preserve valid game camera matrices by frame and D3D12 resource-tag origins.
-- [linux-proton/upstream-20261016.md](linux-proton/upstream-20261016.md): Vulkan FG and common DLSS-G integration, retained fork protections and automated validation boundaries.
-- [linux-proton/upstream-20261019.md](linux-proton/upstream-20261019.md): fifth upstream merge, lifetime changes and explicit conflict/validation decisions.
+| Module | Entry |
+|---|---|
+| Neural Rendering | [NR module](../retoque/dlssnr/README.md), [forwarder](../retoque/dlssnr/forwarder/README.md) |
+| Synthesized motion | [Estimator and provenance](../retoque/shaders/synth_motion/README.md) |
+| LSFG | [Runtime/presenter](../retoque/lsfg/README.md), [study tooling](../tools/lsfg-study/README.md) |
+| Optional translations | [Text packs](../retoque/translations/README.md) |
 
-## DLSS Neural Rendering design
+## Linux, Proton and integration records
 
-- [dlssnr/README.md](dlssnr/README.md): topic index of the design notes in [dlssnr/design/](dlssnr/design/), with a reading order for the present hosts.
-- [dlssnr/design/DEVELOPMENT.md](dlssnr/design/DEVELOPMENT.md): the invariants and per-change review every NR change is held to.
+The [maintenance integration index](maintenance.md#upstream-integration) links the dated upstream merges.
+Additional focused records: [non-graphics Vulkan presentation](linux-proton/vulkan-overlay-nongraphics-present.md),
+[fork audit fixes](linux-proton/fork-fixes-20261016.md) and [game camera forwarding](linux-proton/streamline-game-camera.md).
 
-## History
+## Historical evidence
 
-- [history/FORWARDER_INVESTIGATION.md](history/FORWARDER_INVESTIGATION.md): evidence log of the attempt to drop the forwarder DLL, superseded in part by `ngx-driver-616.md`.
+The [old maintainer guide](history/maintainer-notes-20261029.md) and
+[old comparison roadmap](dlssnr/roadmap-20261029-history.md) are dated snapshots, not alternative live instructions.
+The [forwarder investigation](history/FORWARDER_INVESTIGATION.md) retains failed approaches and later findings.
+Keep rejected experiments: they prevent repeated work. Plan/spec/review records under `superpowers/` record the
+scope and evidence of individual changes, not a second roadmap.
 
-## Tests
+## Keeping this index useful
 
-- [tests/README.md](../tests/README.md): suite index, tiers and what each suite does and does not cover.
-
-## Code-adjacent READMEs
-
-- [retoque/dlssnr/README.md](../retoque/dlssnr/README.md): NR module overview, file index, shader rebuild.
-- [retoque/dlssnr/forwarder/README.md](../retoque/dlssnr/forwarder/README.md): why `nvngx.dll_dlssnr.dll` exists.
-- [retoque/lsfg/README.md](../retoque/lsfg/README.md): LSFG 3.1 D3D12 pipeline and custom MFG presenter (x2/x3/x4).
-- [retoque/shaders/synth_motion/README.md](../retoque/shaders/synth_motion/README.md): the synthesized-motion estimator and the provenance of its FidelityFX-derived files.
-- [retoque/translations/README.md](../retoque/translations/README.md): the optional pt-BR text pack (shipped in the release zip).
-
-## Tools and Studies
-
-- [tools/README.md](../tools/README.md): build, deployment, the Windows installer, release packaging and log summarizer scripts.
-- [tools/lsfg-study/README.md](../tools/lsfg-study/README.md): LSFG on D3D12 study, bytecode conversion tooling and integration notes.
-
-## Licences
-
-- [Licenses/](../Licenses/): attribution and licence texts that ship with a distributed build.
+Update the current authority when a status changes; add a dated evidence record rather than rewriting history.
+`python3 tools/check_docs.py` checks local destinations and generated catalog freshness. It does not verify
+external URLs, heading anchors or technical truth. Regenerate the catalog after changing `tests/suites.toml`.
+Third-party attribution and distribution obligations remain in [Licenses](../Licenses/).

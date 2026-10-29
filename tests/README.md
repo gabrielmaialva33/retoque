@@ -6,12 +6,18 @@ The host suites are not a unit-test framework: many host runners compile product
 exercise Python readers, analysis and tooling directly. That is deliberate, and it is also the reason the suites
 are honest about what they do not prove.
 
+The generated [catalog](CATALOG.md) groups every registered suite by domain. `suites.toml` is the source of
+truth for IDs, tiers and requirements; this README explains methodology and coverage limits.
+
 ## Running them
 
 ```bash
 python3 tests/run_all.py            # the host tier, the default
 python3 tests/run_all.py --list     # registry with tiers and availability
 python3 tests/run_all.py --tier all # host and wine
+python3 tests/run_all.py --list --group-by domain
+python3 tests/run_all.py --domain nr,transport --strict
+python3 tests/run_all.py --list --domain fg --format markdown
 python3 tests/run_all.py --only nr-menu,nr-multipass -v
 python3 tests/run_all.py --strict --report /tmp/retoque-results.json
 python3 tests/<name>/run.py         # one suite, unchanged, no driver involved
@@ -25,6 +31,12 @@ prints one summary. A missing toolchain is a skip with a reason, not a failure.
 Paths are relative to `tests/`; no suite directories have moved. Requirements distinguish
 Python-only, C++ host and Wine-toolchain availability; individual GPU fixtures still
 check their hardware/model prerequisites. `--only` continues to use stable IDs.
+
+`--domain` accepts comma-separated registered domains and intersects the tier/`--only` selection;
+`--skip` is applied last. Unknown/empty domain names are errors. Listing defaults to all tiers;
+execution still defaults to host. Explicit `--tier` filters a listing, and `--only` still overrides tier.
+`--list --format markdown --group-by domain` is deterministic and contains no machine-local availability claims.
+Regenerate `CATALOG.md` after registry edits with `python3 tools/check_docs.py --write-catalog`.
 
 `suites.toml` is also a drift guard. A directory with no registry entry, or a
 registry entry with no directory, fails the run. Add a suite and you add its
@@ -62,7 +74,8 @@ terminal evidence by a later invocation. See [runner-results](runner-results/REA
 The wine tier is serial on purpose. These suites compile through the single msvc-wine
 prefix, which is also what `build-local.sh` uses, so do not start one while a
 build is running. The build entry now takes the shared lock itself; call it directly.
-`CLAUDE.md` describes the stall signature, retained evidence and manual-recovery boundary.
+The [maintenance guide](../docs/maintenance.md#build-and-toolchains) describes the stall signature,
+retained evidence and manual-recovery boundary.
 
 The `fork-compat` suite exercises NGX signature redirects and independent custom library paths;
 `fg-locks` exercises the actual resize/release lock scopes when settings or the current FG change.

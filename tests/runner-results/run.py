@@ -273,6 +273,17 @@ class RunnerResults(unittest.TestCase):
         self.assertEqual(payload['selected'], [])
         self.assertEqual(payload['results'], [])
 
+    def test_empty_selection_is_nonzero_in_strict_mode(self):
+        self.emitter('PASS')
+        command = self.prepare_cli()
+        completed = subprocess.run(command + ['--skip', 'fixture', '--strict'],
+                                   capture_output=True, text=True, timeout=10)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
+        payload = json.loads((self.root/'summary.json').read_text())
+        self.assertEqual(payload['status'], 'INCONCLUSIVE')
+        self.assertEqual(payload['selected'], [])
+        self.assertEqual(payload['results'], [])
+
     def terminal_signal_case(self, *, empty, after_commit):
         self.emitter('PASS')
         command = self.prepare_cli()[2:]
@@ -479,6 +490,74 @@ class RunnerResults(unittest.TestCase):
             if child.poll() is None:
                 os.killpg(child.pid, signal.SIGKILL)
                 child.communicate(timeout=3)
+
+
+class RunnerDiscovery(unittest.TestCase):
+    """Selection mistakes must not silently run the wrong domain or hide suites."""
+
+    manifest = {
+        'alpha': dict(tier='host', domain='nr', path='alpha', requires=['python'], summary='A | B'),
+        'beta': dict(tier='wine', domain='nr', path='beta', requires=['wine-toolchain'], summary='GPU'),
+        'gamma': dict(tier='host', domain='fg', path='gamma', requires=['python'], summary='FG'),
+    }
+
+    def args(self, **kw):
+        from argparse import Namespace
+        return Namespace(**(dict(tier='host', only=None, skip=None, domain=None) | kw))
+
+    def test_domain_intersects_tier_and_only_before_skip(self):
+        cases = [
+            (dict(domain='nr'), ['alpha']),
+            (dict(tier='all', domain='nr'), ['alpha', 'beta']),
+            (dict(domain=' nr,fg,nr ', skip='gamma'), ['alpha']),
+            (dict(only='beta,gamma', domain='nr'), ['beta']),
+            (dict(only='alpha,gamma', domain='nr', skip='alpha'), []),
+        ]
+        for args, expected in cases:
+            with self.subTest(args=args):
+                self.assertEqual(runner.selected(self.manifest, self.args(**args)), expected)
+
+    def test_unknown_or_empty_domain_is_rejected(self):
+        for domain in ('typo', 'nr,typo', ' , '):
+            with self.subTest(domain=domain), self.assertRaises(SystemExit):
+                runner.selected(self.manifest, self.args(domain=domain))
+
+    def cli(self, *args):
+        return subprocess.run([sys.executable, str(ROOT/'tests/run_all.py'), '--list', *args],
+                              capture_output=True, text=True, timeout=15)
+
+    def test_default_listing_keeps_all_tiers(self):
+        result = self.cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('nr-invariants', result.stdout)
+        self.assertIn('nr-gpu-timing-d3d12', result.stdout)
+
+    def test_list_respects_explicit_tier_domain_and_only(self):
+        result = self.cli('--tier', 'host', '--domain', 'tooling', '--group-by', 'domain')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('## tooling', result.stdout)
+        self.assertIn('runner-results', result.stdout)
+        self.assertNotIn('nr-invariants', result.stdout)
+        only = self.cli('--only', 'nr-invariants', '--domain', 'nr')
+        self.assertEqual(only.returncode, 0, only.stderr)
+        self.assertIn('nr-invariants', only.stdout)
+        self.assertNotIn('nr-menu ', only.stdout)
+
+    def test_markdown_has_real_links_escapes_cells_and_no_host_availability(self):
+        self.assertTrue(hasattr(runner, 'registry_markdown'), 'deterministic registry Markdown is missing')
+        text = runner.registry_markdown(self.manifest, sorted(self.manifest), 'domain')
+        self.assertIn('## nr', text)
+        self.assertIn('[alpha](alpha/README.md)', text)
+        self.assertIn('A \\| B', text)
+        self.assertNotIn('ready', text)
+        self.assertNotIn('unavailable', text)
+        self.assertEqual(text, runner.registry_markdown(dict(reversed(list(self.manifest.items()))),
+                                                        list(reversed(sorted(self.manifest))), 'domain'))
+
+    def test_unknown_domain_fails_in_list_mode(self):
+        result = self.cli('--domain', 'not-a-domain')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('domain', result.stderr)
 
 
 if __name__ == "__main__":
