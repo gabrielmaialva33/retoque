@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 PROFILE = 'temporal-v1'
+PROFILES = (PROFILE, 'temporal-reverse-v1')
 FRAME_MS = 1000.0 / 60.0
 FRAMES, WARMUP = 480, 80
 PHASES = (
@@ -24,29 +25,32 @@ def select_profile(profile=None, env=None):
     """Reject relabeling a different capture or schedule as the fixed profile."""
     if profile is None:
         return None
-    if profile != PROFILE:
+    if profile not in PROFILES:
         raise ValueError(f'unknown replay profile: {profile!r}')
     env = os.environ if env is None else env
     if env.get('LOOPBACK_REPLAY_CAPTURE'):
-        raise ValueError(f'{PROFILE} records its own corpus; LOOPBACK_REPLAY_CAPTURE is incompatible')
+        raise ValueError(f'{profile} records its own corpus; LOOPBACK_REPLAY_CAPTURE is incompatible')
     if env.get('LOOPBACK_REPLAY_RECORD_CHECK') == '1':
-        raise ValueError(f'{PROFILE} is incompatible with LOOPBACK_REPLAY_RECORD_CHECK=1: '
+        raise ValueError(f'{profile} is incompatible with LOOPBACK_REPLAY_RECORD_CHECK=1: '
                          'the recorder check renders the legacy scene; use --replay-nr for that check')
     for name, expected in (('LOOPBACK_REPLAY_FRAMES', FRAMES), ('LOOPBACK_REPLAY_WARMUP', WARMUP)):
         if name in env and env[name] != str(expected):
-            raise ValueError(f'{PROFILE} requires {name}={expected}; remove the contradictory override')
+            raise ValueError(f'{profile} requires {name}={expected}; remove the contradictory override')
     return profile
 
 
-def temporal_frames():
-    rows, pose = [], 64
+def temporal_frames(profile=PROFILE):
+    if profile not in PROFILES:
+        raise ValueError(f'unknown replay profile: {profile!r}')
+    rows, pose = [], 704 if profile == 'temporal-reverse-v1' else 64
+    direction = -1 if profile == 'temporal-reverse-v1' else 1
     for phase, first, stop in PHASES:
         for i in range(first, stop):
             previous = pose
             if phase == 'motion':
-                pose += 2
+                pose += direction * 2
             elif phase == 'fast-motion':
-                pose += 12
+                pose += direction * 12
             elif phase == 'cut':
                 pose = 32
             reset = i in (0, 360)
@@ -56,11 +60,15 @@ def temporal_frames():
     return rows
 
 
-def write_moving_plan(path, rows):
+def _moving_plan_text(rows):
     lines = [f'moving-plan 1 {len(rows)}']
     lines += [' '.join((str(f['frame']), str(f['pose_frame']), str(f['previous_pose_frame']),
                         str(int(f['reset'])), repr(f['time_ms']), repr(f['frame_time_ms']))) for f in rows]
-    Path(path).write_text('\n'.join(lines) + '\n')
+    return '\n'.join(lines) + '\n'
+
+
+def write_moving_plan(path, rows):
+    Path(path).write_text(_moving_plan_text(rows))
 
 
 def _halton(index, base):
@@ -148,12 +156,9 @@ def _frame_delta(frames, index):
     return frames[1]['time_ms'] - frame['time_ms'] if len(frames) > 1 else 1000.0 / 60.0
 
 
-def validate_temporal_capture(capture):
-    """Validate the fixed capture contract before giving it temporal-v1 metadata.
-
-    A nested corpus summary is optional: the producer calls this while constructing
-    that summary. Any identity already declared must nevertheless agree.
-    """
+def _validate_capture_identity(capture, profile):
+    if profile not in PROFILES:
+        raise ValueError(f'unknown replay profile: {profile!r}')
     if not isinstance(capture, dict):
         raise ValueError('temporal capture must be an object')
     provenance = capture.get('provenance', {})
@@ -163,10 +168,23 @@ def validate_temporal_capture(capture):
     if not isinstance(nested, dict):
         raise ValueError('temporal corpus metadata must be an object')
     for identity in (capture, provenance, nested):
-        if 'profile' in identity and identity['profile'] != PROFILE:
+        if 'profile' in identity and identity['profile'] != profile:
             raise ValueError('temporal capture declared profile mismatch')
         if 'source' in identity and identity['source'] != 'loopback-moving-scene':
             raise ValueError('temporal capture declared source mismatch')
+        if 'moving_plan_sha256' in identity:
+            expected = hashlib.sha256(_moving_plan_text(temporal_frames(profile)).encode()).hexdigest()
+            if identity['moving_plan_sha256'] != expected:
+                raise ValueError('temporal capture moving plan digest differs from declared profile')
+
+
+def validate_temporal_capture(capture, profile=PROFILE):
+    """Validate the selected fixed capture contract, defaulting to temporal-v1.
+
+    A nested corpus summary is optional: the producer calls this while constructing
+    that summary. Any identity or moving-plan binding already declared must agree.
+    """
+    _validate_capture_identity(capture, profile)
     frames = capture.get('frames')
     if not isinstance(frames, list) or len(frames) != FRAMES:
         raise ValueError('temporal corpus frame count mismatch')
@@ -189,11 +207,11 @@ def validate_temporal_capture(capture):
 
 
 def corpus_metadata(capture, profile=None):
-    if profile == PROFILE:
-        validate_temporal_capture(capture)
+    if profile is not None:
+        validate_temporal_capture(capture, profile)
     frames = capture['frames']
     # Nominal profile time is exact at 60 Hz; the recorded NGX float32 delta is retained per frame.
-    deltas = [FRAME_MS if profile == PROFILE else _frame_delta(frames, i) for i in range(len(frames))]
+    deltas = [FRAME_MS if profile is not None else _frame_delta(frames, i) for i in range(len(frames))]
     result = dict(schema='retoque-replay-corpus-summary', version=1, profile=profile or 'legacy',
                   source=capture.get('source'), frames=len(frames),
                   scored_frames=sum(f['score'] for f in frames),
@@ -201,7 +219,7 @@ def corpus_metadata(capture, profile=None):
                   timestamp_span_ms=frames[-1]['time_ms'] - frames[0]['time_ms'],
                   scored_duration_ms=sum(dt for dt, f in zip(deltas, frames) if f['score']),
                   reset_frame_ids=[f['id'] for f in frames if f['reset']], phases=[])
-    if profile == PROFILE:
+    if profile is not None:
         for name, first, stop in PHASES:
             phase = frames[first:stop]
             result['phases'].append(dict(name=name, first_frame_id=phase[0]['id'], last_frame_id=phase[-1]['id'],
@@ -231,8 +249,9 @@ def reset_gates(capture, runs):
     return results
 
 
-def phase_observations(capture, runs):
+def phase_observations(capture, runs, profile=PROFILE):
     """Report actual admission on every phase, including warmup and any skipped cut."""
+    _validate_capture_identity(capture, profile)
     result = {}
     ids = [f['id'] for f in capture['frames']]
     for name, run in runs.items():

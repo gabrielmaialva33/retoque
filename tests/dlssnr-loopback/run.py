@@ -177,7 +177,8 @@ def check_present_coverage(harness):
 def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_ab=False, cold_size=None,
                      cold_ui=None, cold_sdk=None, cold_load_opti=False, cold_from_d3d11=False,
                      cold_siblings=False, mask_ab=False, transfer_ab=False, reset_cost=False,
-                     ui_protect_ab=False, moving_scene=False, dll=None, replay_nr=False, replay_quality=False):
+                     ui_protect_ab=False, moving_scene=False, dll=None, replay_nr=False, replay_quality=False,
+                     replay_profile='temporal-v1'):
     """Run the harness the way a Steam game runs: through Proton, in a compatdata prefix of its own.
 
     Hand-mirroring what Proton provides (vkd3d-proton, dxvk-nvapi, the driver's nvngx pair and the
@@ -208,7 +209,7 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
     if replay_nr or replay_quality:
         import run_replay
         return run_replay.run(sys.modules[__name__], proton, env, dll,
-                              profile='temporal-v1' if replay_quality else None)
+                              profile=replay_profile if replay_quality else None)
     for stale in ('OptiScaler.log', 'dlssnr-loopback.log'):
         (RUN / stale).unlink(missing_ok=True)
     if present_nr:
@@ -305,9 +306,9 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
     raise SystemExit(0)
 
 
-def main():
-    global RUN
-    ap = argparse.ArgumentParser()
+def parse_args(argv=None):
+    """One preflight for both the artifact lease and the production invocation."""
+    ap = argparse.ArgumentParser(allow_abbrev=False)
     ap.add_argument('--dll', default=str(ROOT / 'x64/out/OptiScaler.dll'),
                     help='OptiScaler build whose NGX exports are driven')
     ap.add_argument('--runtime', choices=('proton', 'wine'), default='proton',
@@ -350,8 +351,11 @@ def main():
                             'through the production seam, one fresh process per variant; LOOPBACK_REPLAY_CAPTURE '
                             'names a capture.json, else the moving-scene corpus is recorded first; requires Proton')
     modes.add_argument('--replay-quality', action='store_true',
-                       help='opt-in temporal-v1 corpus: 480 frames at 60 Hz, 80 warmup, steady/motion/recovery '
+                       help='opt-in temporal corpus (default temporal-v1): 480 frames at 60 Hz, 80 warmup, steady/motion/recovery '
                             'and a scored cut; numerical A/A comparison, no perceptual approval; requires Proton')
+    ap.add_argument('--replay-profile', choices=('temporal-v1', 'temporal-reverse-v1'),
+                    help='with --replay-quality: fixed trajectory (default temporal-v1); '
+                         'temporal-reverse-v1 uses a separate reserved corpus and artifact directory')
     modes.add_argument('--cold-nr', action='store_true',
                     help='probe core cold defaults and NR feature 18 through the production forwarder; '
                          'no OptiScaler Init, DLSS or RR feature; isolated artifacts/cold-run')
@@ -367,7 +371,7 @@ def main():
                                   'against the HUD fixture (hud-protection.md)')
     experiments.add_argument('--transfer-ab', action='store_true', help='with --present-nr: Transfer 0/1/3 with the model at half size')
     experiments.add_argument('--reset-cost', action='store_true', help='with --present-nr: model cost with Reset on every frame (ZeroGuideReset) vs the first only; lock the clocks')
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     if args.composition_ab and not args.present_nr:
         ap.error('--composition-ab requires --present-nr')
     if args.hud_ab and not args.present_nr:
@@ -384,16 +388,16 @@ def main():
         ap.error('--moving-scene requires --runtime proton')
     if args.replay_nr and args.runtime != 'proton':
         ap.error('--replay-nr requires --runtime proton')
+    if args.replay_profile is not None and not args.replay_quality:
+        ap.error('--replay-profile requires --replay-quality')
     if args.replay_quality:
         if args.runtime != 'proton':
             ap.error('--replay-quality requires --runtime proton')
         import replay_quality
         try:
-            replay_quality.select_profile('temporal-v1')
+            args.replay_profile = replay_quality.select_profile(args.replay_profile or replay_quality.PROFILE)
         except ValueError as error:
             ap.error(str(error))
-    # The replay records its first corpus with the moving scene, so it stages exactly what that scene needs.
-    scene = args.moving_scene or args.replay_nr or args.replay_quality
     if args.present_nr and args.runtime != 'proton':
         ap.error('--present-nr requires --runtime proton')
     if args.hud_ab or args.composition_ab or args.mask_ab or args.transfer_ab or args.ui_protect_ab:
@@ -401,6 +405,25 @@ def main():
         for module in ('numpy', 'PIL'):
             if importlib.util.find_spec(module) is None:
                 ap.error('image analysis requires numpy and Pillow in the runner Python environment')
+    return args
+
+
+def fixture_directory(args):
+    if args.moving_scene:
+        return OUT / 'moving-run'
+    if args.replay_nr:
+        return OUT / 'replay-run'
+    if args.replay_quality:
+        return OUT / ('replay-quality-reverse-run' if args.replay_profile == 'temporal-reverse-v1'
+                      else 'replay-quality-run')
+    return None
+
+
+def main(args=None):
+    global RUN
+    args = parse_args() if args is None else args
+    # The replay records its first corpus with the moving scene, so it stages exactly what that scene needs.
+    scene = args.moving_scene or args.replay_nr or args.replay_quality
     standalone = args.cold_nr or args.present_nr
     if args.present_nr:
         RUN = OUT / ('composition-run' if args.composition_ab else 'mask-run' if args.mask_ab else
@@ -409,12 +432,9 @@ def main():
                      'hud-run' if args.hud_ab else 'present-run')
     if args.cold_nr:
         RUN = OUT / 'cold-run'
-    if args.moving_scene:
-        RUN = OUT / 'moving-run'
-    if args.replay_nr:
-        RUN = OUT / 'replay-run'
-    if args.replay_quality:
-        RUN = OUT / 'replay-quality-run'
+    fixture = fixture_directory(args)
+    if fixture is not None:
+        RUN = fixture
 
     dll = Path(args.dll)
     if not dll.exists():
@@ -540,7 +560,8 @@ def main():
                                 args.cold_device_from_d3d11, args.cold_sibling_snippets, mask_ab=args.mask_ab,
                                 transfer_ab=args.transfer_ab, reset_cost=args.reset_cost,
                                 ui_protect_ab=args.ui_protect_ab, moving_scene=args.moving_scene, dll=dll,
-                                replay_nr=args.replay_nr, replay_quality=args.replay_quality)
+                                replay_nr=args.replay_nr, replay_quality=args.replay_quality,
+                                replay_profile=args.replay_profile)
 
     # A separate runtime prefix: the compiler prefix is configured for MSVC, not for graphics, and
     # running the app there conflates "the harness is wrong" with "this prefix has no D3D12".
@@ -586,13 +607,11 @@ def main():
 if __name__ == '__main__':
     # Interrupt-only receipt; successful mode-specific legacy reports stay authoritative.
     with result_run(OUT / 'interruption-result.json'):
-        if '--moving-scene' in sys.argv and '--help' not in sys.argv:
+        args = parse_args()
+        fixture = fixture_directory(args)
+        if fixture is not None:
             import run_moving
-            with run_moving.lease(OUT / 'moving-run'):
-                main()
-        elif ('--replay-nr' in sys.argv or '--replay-quality' in sys.argv) and '--help' not in sys.argv:
-            import run_moving
-            with run_moving.lease(OUT / ('replay-quality-run' if '--replay-quality' in sys.argv else 'replay-run')):
-                main()
+            with run_moving.lease(fixture):
+                main(args)
         else:
-            main()
+            main(args)

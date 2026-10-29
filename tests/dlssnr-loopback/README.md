@@ -688,3 +688,27 @@ phase names do not imply that an adaptive decision met a target. This is a synth
 with no new HDR, exposure-change, DRS or game-capture qualification. The longer profile
 requires more runtime and raw-frame storage; raw frames remain outside the bounded
 consolidated evidence bundle.
+
+### Reserved reverse trajectory
+
+```bash
+python3 tests/dlssnr-loopback/run.py --runtime proton --replay-quality \
+  --replay-profile temporal-reverse-v1
+```
+
+`--replay-profile` requires `--replay-quality`; omitting it preserves `temporal-v1`
+and its existing output directory. The opt-in `temporal-reverse-v1` profile writes
+to `artifacts/replay-quality-reverse-run`, with its own lease and corpus identity.
+It keeps the 480-frame schedule, 80-frame warmup, 60 Hz clock, phase boundaries and
+resets above. The initial pose is 704; motion steps by −2 to pose 544, fast motion
+by −12 to pose 64, then the cut resets to pose 32. Held phases keep the actual pose
+and material, jitter follows the rendered ordinal, and previous matrices follow
+the actual preceding pose. At each reset, previous pose equals current pose.
+
+The selected profile is carried through plan generation, rendered-sample checks,
+capture metadata and phase observations. Contradictory CLI/environment settings
+are rejected before staging. Profile labels and any declared moving-plan digest
+must agree with the selected trajectory. The C++ renderer and moving-plan text
+format are unchanged; the forward plan retains its original bytes. The reverse
+profile is another trajectory of the same opaque scene, with the same exposure
+and resolution limits described above.

@@ -184,7 +184,7 @@ def make_corpus(runner, proton, env, root, provenance, profile=None):
     directory = root / 'corpus'
     stage(root, directory)
     write_ini(directory, None)
-    schedule = replay_quality.temporal_frames() if profile else None
+    schedule = replay_quality.temporal_frames(profile) if profile else None
     count = len(schedule) if schedule else CORPUS_FRAMES
     plan = directory / 'moving-plan.txt'
     if schedule:
@@ -901,7 +901,7 @@ def run(runner, proton, env, dll, profile=None):
                   gates=results, judge=verdicts, corpus=corpus, policy=policy,
                   assessments=replay_quality.assessments(results, verdicts))
     if profile:
-        report['phase_observations'] = replay_quality.phase_observations(capture, runs)
+        report['phase_observations'] = replay_quality.phase_observations(capture, runs, profile)
     report_path.write_text(json.dumps(report, indent=1) + '\n')
     for name, result in results.items():
         mark = 'PASS' if result['ok'] else 'INFO' if result['ok'] is None else 'FAIL'
