@@ -152,6 +152,13 @@ production headers or source slices with local fakes under AddressSanitizer and 
   late and non-finite readbacks breaking the pair, two-second windows, reset, the menu's words, the log line and
   its rate, and a synthetic cadence's pulse. Source guards on the pass and the renderer: off builds and records
   nothing, one sample per present. No GPU, no shader.
+- `nr-zero-motion` — zero-motion detection (`docs/dlssnr/design/zero-motion-detection.md`): the probe's grid read
+  out, a sample's depth moved only past two pixels of its own slope (TAA jitter on a still camera is not motion),
+  a pan and a walk called dead after two readings of an all-zero field and held until one non-zero sample, real,
+  partial and NaN motion never dead, shape changes and old probes starting over, and the `ZeroGuideReset` rule.
+  Source guards: constants equal the cbuffer, one grid and one sampling on both sides, optional bytecode, the probe
+  recorded once in `Dispatch` on the game's readable guides before the resample, the rule applied where the frame's
+  reset is read, never a CPU wait, parked and freed. No GPU, no shader compile.
 - `nr-exposure-scan` — the exposure scan's candidate lifetime and capacity (`docs/dlssnr/design/exposure-scan-capacity.md`): the production `DlssNr_ExposureScan.cpp` against fake D3D12
   objects that keep destroyed ones for checking and the production submission model. A full list with a late
   exposure, recreation before a feature release, an exposure kept across one, attribution by id after a list

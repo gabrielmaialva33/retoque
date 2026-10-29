@@ -13,6 +13,7 @@
 #include "DlssNr_Stabilizer_Dx12.h"
 #include "DlssNr_UiMask_Dx12.h"
 #include "DlssNr_Cadence_Dx12.h"
+#include "DlssNr_MotionProbe_Dx12.h"
 #include <algorithm>
 
 namespace DlssNr::Dx12Internal
@@ -384,6 +385,7 @@ void TickNrRetired(bool shutdown)
         delete retired.cadence;
         delete retired.detailStats;
         delete retired.pulse;
+        delete retired.motionProbe;
 
         if (retired.enlarger != nullptr)
             enlargers.push_back(retired.enlarger);
@@ -454,6 +456,21 @@ void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse)
         r.usage = g_usage;
     r.pulse = pulse;
     pulse = nullptr;
+    g_nrRetired.push_back(r);
+}
+
+// Zero-motion detection's probe, parked like the pulse metric's pass: its last recordings still reference its buffers.
+void ParkNrMotionProbe(DlssNr_MotionProbe_Dx12*& probe)
+{
+    if (!probe)
+        return;
+
+    NrRetired r;
+    r.tracked = g_tracked;
+    if (g_tracked)
+        r.usage = g_usage;
+    r.motionProbe = probe;
+    probe = nullptr;
     g_nrRetired.push_back(r);
 }
 

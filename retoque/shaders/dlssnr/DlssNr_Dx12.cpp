@@ -72,6 +72,7 @@
 #include "DlssNr_DetailStats_Dx12.h"
 #include <dlssnr/DlssNr_DetailStats.h>
 #include "DlssNr_Pulse_Dx12.h"
+#include "DlssNr_MotionProbe_Dx12.h"
 #include "DlssNr_PresentHdr_Dx12.h"
 #include <dlssnr/DlssNr_Pulse.h>
 #include <dlssnr/DlssNr_PresentGuideRing.h>
@@ -1098,7 +1099,15 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // it as a cut, so on those frames this is what it goes by.
     const bool resetBeforeFrameFlag = g_nr.reset;
 
-    if (frame.Reset)
+    // The game's own vectors, read all zero in a moving scene by the motion probe (zero-motion-detection.md), are zero
+    // guides by another name: ZeroGuideReset drops the model's history on them as it does on zero guides, as policy.
+    // Off, nothing changes. A reset the game asked for this frame stays the game's.
+    const bool deadMotionReset = DlssNr::MotionProbe::PolicyReset(
+        MotionProbeDead(), frame.GameGuides, cfg.DlssNrZeroGuideReset.value_or_default(), frame.Reset);
+    const bool frameReset = frame.Reset || deadMotionReset;
+    const bool frameResetIsPolicy = deadMotionReset || frame.ResetIsPolicy;
+
+    if (frameReset)
     {
         g_nr.reset = true;
 
@@ -1106,12 +1115,16 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // frame, and a log saying "the game asked" 69300 times described a game that asked for nothing.
         static unsigned long long resets = 0;
         static unsigned long long policyResets = 0;
-        auto& count = frame.ResetIsPolicy ? policyResets : resets;
+        auto& count = frameResetIsPolicy ? policyResets : resets;
         ++count;
 
         if (count <= 3 || count % 100 == 0)
         {
-            if (frame.ResetIsPolicy)
+            if (deadMotionReset)
+                LOG_INFO("DLSS-NR: model history dropped on the game's all-zero motion vectors, as ZeroGuideReset "
+                         "asks ({} so far)",
+                         count);
+            else if (frameResetIsPolicy)
                 LOG_INFO("DLSS-NR: model history dropped on zero guides, as ZeroGuideReset asks ({} so far)", count);
             else
                 LOG_INFO("DLSS-NR: the game asked for a history reset ({} so far)", count);
@@ -2243,6 +2256,23 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return false;
     }
 
+    // Zero-motion detection (zero-motion-detection.md): the game's own vectors, read in the game's region before
+    // anything resamples them, every eighth such evaluate; the verdict is applied above, from probes already read back.
+    if (frame.GameGuides)
+    {
+        DlssNr::MotionProbe::Shape probeShape;
+        probeShape.depthWidth = guideWidth;
+        probeShape.depthHeight = guideHeight;
+        probeShape.depthBaseX = depthBaseX;
+        probeShape.depthBaseY = depthBaseY;
+        probeShape.motionWidth = motionWidth;
+        probeShape.motionHeight = motionHeight;
+        probeShape.motionBaseX = motionBaseX;
+        probeShape.motionBaseY = motionBaseY;
+        probeShape.motionLowResolution = frame.MotionVectorsLowResolution;
+        UpdateMotionProbe(cmdList, device, depthIn, motionIn, probeShape, cfg.DlssNrZeroGuideReset.value_or_default());
+    }
+
     // What the model is handed as guides, and the motion-vector scale that goes with them
     // (reduced-scale-guides.md; both faults and both fixes are jlrouzies-fr's, v0.8.92 of wilsjo2's fork).
     //
@@ -2689,7 +2719,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // Read before it is cleared: everything that reset the model this frame resets the stabilizer too,
     // except the zero-guide policy, which changes nothing on screen.
-    const bool stabilizerReset = frame.ResetIsPolicy ? resetBeforeFrameFlag : g_nr.reset;
+    const bool stabilizerReset = frameResetIsPolicy ? resetBeforeFrameFlag : g_nr.reset;
 
     // Cleared only by a frame the model ran on. A carried frame holds it, so a reset is never lost on one.
     if (!carried)
@@ -6682,6 +6712,7 @@ void Shutdown()
         delete r.cadence;
         delete r.detailStats;
         delete r.pulse;
+        delete r.motionProbe;
         if (r.feature != nullptr && g_nr.release != nullptr)
             g_nr.release(r.feature);
 
@@ -6779,6 +6810,8 @@ void Shutdown()
         delete g_nr.guideMatch;
         g_nr.guideMatch = nullptr;
     }
+
+    ShutdownMotionProbe();
 
     for (ID3D12Resource** r : { &g_nr.unpackedProxy, &g_nr.unpackedAnswer })
     {

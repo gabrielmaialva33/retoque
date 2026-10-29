@@ -242,6 +242,12 @@ if (precompile / 'DlssNr_Pulse_Shader.cso').exists():
     targets.append(('DlssNr_Pulse_Shader.cso', 'DlssNr_Pulse_Shader.h', 'DlssNr_Pulse_cso', b'DXBC'))
 elif (precompile / 'DlssNr_Pulse_Shader.h').exists():
     fail('DlssNr_Pulse_Shader.h is committed without DlssNr_Pulse_Shader.cso beside it')
+# Zero-motion detection's probe (zero-motion-detection.md). Optional bytecode like the pulse metric's: without it no
+# verdict forms.
+if (precompile / 'DlssNr_MotionProbe_Shader.cso').exists():
+    targets.append(('DlssNr_MotionProbe_Shader.cso', 'DlssNr_MotionProbe_Shader.h', 'DlssNr_MotionProbe_cso', b'DXBC'))
+elif (precompile / 'DlssNr_MotionProbe_Shader.h').exists():
+    fail('DlssNr_MotionProbe_Shader.h is committed without DlssNr_MotionProbe_Shader.cso beside it')
 # The HDR present conversion (hdr-present-conversion.md). Optional bytecode like the pulse metric's: without it the
 # conversion reports itself unavailable and HDR swapchains stay declined; the pair is checked once committed.
 if (precompile / 'DlssNr_PresentHdr_Shader.cso').exists():
