@@ -1,0 +1,119 @@
+{
+  "schema": "retoque-cadence-experiment",
+  "version": 1,
+  "name": "adaptive2-vs-adaptive4-v1",
+  "hypothesis": "A shorter maximum reuse interval may reduce later temporal deviation without exceeding the predeclared cost budget; this does not identify model history as the cause.",
+  "controls": {
+    "off": null,
+    "every-a": {
+      "Cadence": "1",
+      "CadenceAdaptive": "false",
+      "CadenceSmoothing": "false"
+    },
+    "every-b": {
+      "Cadence": "1",
+      "CadenceAdaptive": "false",
+      "CadenceSmoothing": "false"
+    }
+  },
+  "variants": {
+    "off": null,
+    "every-a": {
+      "Cadence": "1",
+      "CadenceAdaptive": "false",
+      "CadenceSmoothing": "false"
+    },
+    "every-b": {
+      "Cadence": "1",
+      "CadenceAdaptive": "false",
+      "CadenceSmoothing": "false"
+    },
+    "adaptive4-1": {
+      "Cadence": "4",
+      "CadenceAdaptive": "true",
+      "CadenceSmoothing": "false"
+    },
+    "adaptive2-1": {
+      "Cadence": "2",
+      "CadenceAdaptive": "true",
+      "CadenceSmoothing": "false"
+    },
+    "adaptive2-2": {
+      "Cadence": "2",
+      "CadenceAdaptive": "true",
+      "CadenceSmoothing": "false"
+    },
+    "adaptive4-2": {
+      "Cadence": "4",
+      "CadenceAdaptive": "true",
+      "CadenceSmoothing": "false"
+    },
+    "adaptive4-3": {
+      "Cadence": "4",
+      "CadenceAdaptive": "true",
+      "CadenceSmoothing": "false"
+    },
+    "adaptive2-3": {
+      "Cadence": "2",
+      "CadenceAdaptive": "true",
+      "CadenceSmoothing": "false"
+    }
+  },
+  "pairs": [
+    {
+      "baseline": "adaptive4-1",
+      "candidate": "adaptive2-1",
+      "order": "AB"
+    },
+    {
+      "baseline": "adaptive4-2",
+      "candidate": "adaptive2-2",
+      "order": "BA"
+    },
+    {
+      "baseline": "adaptive4-3",
+      "candidate": "adaptive2-3",
+      "order": "AB"
+    }
+  ],
+  "environment": {
+    "LOOPBACK_REPLAY_CALIBRATE": "5",
+    "LOOPBACK_REPLAY_JUDGE": "1",
+    "LOOPBACK_REPLAY_INFLIGHT": "0",
+    "LOOPBACK_REPLAY_CANCEL_EVERY": "0",
+    "LOOPBACK_REPLAY_RECREATE_EVERY": "0"
+  },
+  "development_profile": "temporal-v1",
+  "reserved_profile": "temporal-reverse-v1",
+  "criteria": {
+    "primary_region": "all",
+    "primary_phase": "fast-motion",
+    "primary_metric": "paired_pulse_distance_p95",
+    "minimum_median_improvement": 0.2,
+    "require_each_pair_improves": true,
+    "protected_regions": [
+      "all",
+      "centre"
+    ],
+    "protected_metrics": [
+      "golden_mae",
+      "temporal_mae",
+      "ghost_mae",
+      "disocclusion_mae",
+      "detail_error"
+    ],
+    "maximum_relative_metric_regression": 0.05,
+    "absolute_allowance": "matching-region observed A/A metric envelope",
+    "guard_each_phase": true,
+    "maximum_gpu_mean_fraction_of_every": 0.8,
+    "maximum_gpu_mean_fraction_of_baseline": 1.3,
+    "unavailable_metrics": "retain absence and counts; never zero",
+    "inference": "three paired fresh-process observations; descriptive ranges only, no population confidence interval"
+  },
+  "limitations": [
+    "Configuration experiment only; production defaults are not promoted automatically.",
+    "Retain existing numerical fidelity verdict and perceptual NOT_ASSESSED.",
+    "GPU milliseconds are the replay harness bracket, not game FPS, latency or display pacing.",
+    "Reverse holdout covers another trajectory of the same opaque fixed-exposure/resolution scene."
+  ]
+}
