@@ -1776,12 +1776,21 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         if (Config::Instance()->NVNGX_DLSS_Library.has_value())
         {
+            // NvngxDlssPath names the file or the folder holding it; the path kept is the file's, as a search
+            // finds it, because its users take the folder with remove_filename / parent_path
             std::filesystem::path dlssPath(Config::Instance()->NVNGX_DLSS_Library.value());
 
-            if (std::filesystem::is_directory(dlssPath) && std::filesystem::exists(dlssPath))
+            if (std::filesystem::is_directory(dlssPath))
+                dlssPath /= L"nvngx_dlss.dll";
+
+            if (std::filesystem::is_regular_file(dlssPath))
             {
-                State::Instance().NVNGX_DLSS_Path = dlssPath;
+                State::Instance().NVNGX_DLSS_Path = dlssPath.wstring();
                 LOG_DEBUG("nvngx_dlss.dll found at {}", dlssPath.string());
+            }
+            else
+            {
+                LOG_WARN("NvngxDlssPath: no nvngx_dlss.dll at {}, searching for it instead", dlssPath.string());
             }
         }
 

@@ -58,6 +58,8 @@ bool FeatureProvider_Vk::GetFeature(Upscaler upscaler, UINT handleId, NVSDK_NGX_
         }
         else
         {
+            LOG_WARN("DLSS selected, but {}; using FSR 2.2 instead",
+                     primaryGpu.dlssCapable ? "nvngx_dlss.dll was not found" : "the GPU is not DLSS capable");
             *feature = std::make_unique<FSR2FeatureVk>(handleId, parameters);
             upscaler = Upscaler::FSR22;
             break;
@@ -84,6 +86,8 @@ bool FeatureProvider_Vk::GetFeature(Upscaler upscaler, UINT handleId, NVSDK_NGX_
         }
         else
         {
+            LOG_WARN("DLSSD selected, but {}; using FSR 2.2 instead",
+                     primaryGpu.dlssCapable ? "nvngx_dlssd.dll was not found" : "the GPU is not DLSS capable");
             *feature = std::make_unique<FSR2FeatureVk>(handleId, parameters);
             upscaler = Upscaler::FSR22;
             break;
