@@ -744,6 +744,14 @@ tier = "host"
 timeout = 120
 summary = "CheckForRealObject hands back a borrowed object: the DLSS-G factory sites and HookToDLSSGFactory leave the real factory's count unchanged over a Streamline-shaped proxy, and no caller releases what it got back."
 
+[display-only-adapter]
+path = "display-only-adapter"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "IdentifyGpu skips an indirect display adapter that cannot render (Parsec's virtual display, enumerated with the real GPU's name and ids), so it can no longer become the primary GPU; anything the kernel cannot answer keeps the adapter."
+
 [optiscaler-instance-claim]
 path = "optiscaler-instance-claim"
 domain = "platform"

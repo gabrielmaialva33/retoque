@@ -9,6 +9,7 @@
 #include "nvapi/NvApiTypes.h"
 #include <hooks/Amdxc64_Hooks.h>
 #include <misc/InstanceClaim.h>
+#include <misc/DisplayOnlyAdapter.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -63,6 +64,16 @@ std::vector<GpuInformation> IdentifyGpu::checkGpuInfo()
         }
 
         result = adapter->GetDesc1(&adapterDesc);
+
+        // An indirect display (Parsec's virtual display, say) names the GPU it renders with but cannot render
+        if (result == S_OK && isDisplayOnlyAdapter(adapterDesc.AdapterLuid))
+        {
+            LOG_INFO("Skipping {}: a display-only adapter (indirect display, no rendering) with LUID {:X}:{:X}",
+                     wstring_to_string(adapterDesc.Description), (UINT) adapterDesc.AdapterLuid.HighPart,
+                     (UINT) adapterDesc.AdapterLuid.LowPart);
+            adapterIndex++;
+            continue;
+        }
 
         if (result == S_OK)
         {
@@ -726,6 +737,26 @@ void IdentifyGpu::updateInt8Support(bool sdkSupportsInt8, bool driverSupportsInt
         gpuInfo.fsr4Support = FSR4Support::None;
         gpuInfo.fsr4ForcedSupport = false;
     }
+}
+
+// retoque/misc/DisplayOnlyAdapter.h, with gdi32's entry points resolved the way queryAmdAsicInfo resolves them
+bool IdentifyGpu::isDisplayOnlyAdapter(LUID luid)
+{
+    auto gdi32 = KernelBaseProxy::GetModuleHandleW_()(L"gdi32.dll");
+
+    if (gdi32 == nullptr)
+        gdi32 = NtdllProxy::LoadLibraryExW_Ldr(L"gdi32.dll", NULL, 0);
+
+    if (gdi32 == nullptr)
+        return false;
+
+    return DisplayOnlyAdapter::Is(luid,
+                                  reinterpret_cast<decltype(&D3DKMTOpenAdapterFromLuid)>(
+                                      KernelBaseProxy::GetProcAddress_()(gdi32, "D3DKMTOpenAdapterFromLuid")),
+                                  reinterpret_cast<decltype(&D3DKMTQueryAdapterInfo)>(
+                                      KernelBaseProxy::GetProcAddress_()(gdi32, "D3DKMTQueryAdapterInfo")),
+                                  reinterpret_cast<decltype(&D3DKMTCloseAdapter)>(
+                                      KernelBaseProxy::GetProcAddress_()(gdi32, "D3DKMTCloseAdapter")));
 }
 
 bool IdentifyGpu::queryAmdAsicInfo(LUID luid, uint32_t vendorId, uint32_t deviceId, uint32_t& family,
