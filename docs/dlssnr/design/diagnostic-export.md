@@ -77,7 +77,7 @@ over that last name; the stretch ends at a newline, a quote or a character Windo
 and at a space that begins another path or a `key=value` token. `ms/frame`, `1/2`, `D3D11/D3D12`, relative paths and
 URLs are left alone. The redaction runs over the whole text, so a path inside a failure reason or LSFG's fallback is
 caught whichever field carried it. A last name with no extension before its first space may be a folder whose name has
-spaces (`C:\Users\Jane Doe`), so it runs on to the end of the stretch or to `)`, `]`, `}` or `:`: privacy over
+spaces (`C:\Users\<first last>`), so it runs on to the end of the stretch or to `)`, `]`, `}` or `:`: privacy over
 precision, at the cost of an occasional trailing word after an extensionless path. A file name with an extension still
 ends at the space, so `x.dll was not found` keeps its words.
 

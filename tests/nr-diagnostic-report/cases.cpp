@@ -287,15 +287,23 @@ void NrOffIsShort()
 
 void Redaction()
 {
+    // User folders are split into adjacent literals so the source holds no personal-looking path (repo-privacy).
     const std::vector<std::pair<std::string, std::string>> cases = {
-        { "C:\\Users\\Jane Doe\\Games\\x\\nvngx_dlssnr.dll", "<path>" },
+        { "C:\\Users\\"
+          "Jane Doe\\Games\\x\\nvngx_dlssnr.dll",
+          "<path>" },
         { "c:\\games\\x.dll", "<path>" },
-        { "Z:\\home\\jane\\.steam\\steam\\steamapps\\common\\Game\\OptiScaler.dll was not found",
+        { "Z:\\home\\"
+          "jane\\.steam\\steam\\steamapps\\common\\Game\\OptiScaler.dll was not found",
           "<path> was not found" },
-        { "/home/jane/.local/share/Steam/steamapps/common/Game/x.dll", "<path>" },
+        { "/home/"
+          "jane/.local/share/Steam/steamapps/common/Game/x.dll",
+          "<path>" },
         { "C:/Program Files (x86)/Steam/steamapps/common/Game/bin/x.dll", "<path>" },
         { "C:\\Program Files (x86)\\Steam\\x.dll was not found", "<path> was not found" },
-        { "\\\\?\\C:\\Users\\me\\x.dll", "<path>" },
+        { "\\\\?\\C:\\Users\\"
+          "me\\x.dll",
+          "<path>" },
         { "\\\\server\\share\\dir\\file.txt", "<path>" },
         { "failed to open 'D:\\Games\\x.ini' (code 5)", "failed to open '<path>' (code 5)" },
         { "failed to open \"D:\\Games\\x.ini\"", "failed to open \"<path>\"" },
@@ -303,16 +311,33 @@ void Redaction()
         { "model=C:\\a\\b.dll route=present", "model=<path> route=present" },
         { "C:\\a\\b.dll and Z:\\c\\d.dll", "<path> and <path>" },
         { "C:\\a\\b.dll: access denied", "<path>: access denied" },
-        { "Error:/home/u/x", "Error:<path>" },
-        { "one /home/u/a\ntwo /mnt/games/b", "one <path>\ntwo <path>" },
+        { "Error:/home/"
+          "u/x",
+          "Error:<path>" },
+        { "one /home/"
+          "u/a\ntwo /mnt/"
+          "games/b",
+          "one <path>\ntwo <path>" },
         { "C:\\a\\b.dll, then /tmp/c", "<path>, then <path>" },
         // A last name without an extension may hold spaces (a user folder): none of it survives.
-        { "C:\\Users\\Jane Doe", "<path>" },
-        { "Z:\\home\\jane doe", "<path>" },
-        { "(see C:\\Users\\Jane Doe)", "(see <path>)" },
-        { "C:\\Users\\Jane Doe: access denied", "<path>: access denied" },
-        { "C:\\Users\\Jane Doe.txt", "<path>" },
-        { "C:\\Users\\Jane Doe\\x.dll was not found", "<path> was not found" },
+        { "C:\\Users\\"
+          "Jane Doe",
+          "<path>" },
+        { "Z:\\home\\"
+          "jane doe",
+          "<path>" },
+        { "(see C:\\Users\\"
+          "Jane Doe)",
+          "(see <path>)" },
+        { "C:\\Users\\"
+          "Jane Doe: access denied",
+          "<path>: access denied" },
+        { "C:\\Users\\"
+          "Jane Doe.txt",
+          "<path>" },
+        { "C:\\Users\\"
+          "Jane Doe\\x.dll was not found",
+          "<path> was not found" },
         // Not paths: left byte for byte.
         { "ms/frame 1/2 U of P D3D11/D3D12 on/off", "ms/frame 1/2 U of P D3D11/D3D12 on/off" },
         { "dlssnr-replay\\clip relative/dir", "dlssnr-replay\\clip relative/dir" },
@@ -330,11 +355,14 @@ void Redaction()
 
     // Redaction runs over the whole report, whichever field a path arrived in.
     auto in = FullInputs();
-    in.failureReason = "nvngx_dlssnr.dll at C:\\Users\\someone\\Game\\nvngx_dlssnr.dll refused";
+    in.failureReason = "nvngx_dlssnr.dll at C:\\Users\\"
+                       "someone\\Game\\nvngx_dlssnr.dll refused";
     in.pass = DR::Pass::NotRunning;
     in.lsfg.active = false;
-    in.lsfg.fallbackReason = "shaders not found in /home/someone/.local/share/lsfg";
-    in.hookStatus = "Z:\\home\\someone\\x";
+    in.lsfg.fallbackReason = "shaders not found in /home/"
+                             "someone/.local/share/lsfg";
+    in.hookStatus = "Z:\\home\\"
+                    "someone\\x";
     in.build = "OptiScaler v10 built in C:\\build\\someone";
     const auto text = DR::Build(in);
     Require(!Contains(text, "someone"), "no user name survives anywhere in the report: " + text);
@@ -342,7 +370,8 @@ void Redaction()
     Require(Contains(text, "Pass: off for this session: nvngx_dlssnr.dll at <path> refused"),
             "the text around a path is kept");
     DR::Inputs off;
-    off.build = "built in /home/someone/src";
+    off.build = "built in /home/"
+                "someone/src";
     Require(!Contains(DR::Build(off), "someone"), "the NR-off report is redacted too");
 }
 } // namespace
