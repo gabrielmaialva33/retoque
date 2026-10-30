@@ -590,6 +590,14 @@ tier = "host"
 timeout = 60
 summary = "No home path, LAN or tailnet address, or token in any tracked file outside vendored code; every pattern self-tested."
 
+[menu-native-key-state]
+path = "menu-native-key-state"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "The menu's key polling reads win32u's NtUserGetAsyncKeyState beneath another overlay's GetAsyncKeyState detour (REFramework), and keeps the user32 path where win32u lacks the export."
+
 [deploy-safety]
 path = "deploy-safety"
 domain = "platform"

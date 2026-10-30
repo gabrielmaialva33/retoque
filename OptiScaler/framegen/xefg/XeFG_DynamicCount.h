@@ -470,6 +470,10 @@ class XeFG_DynamicCount
     static constexpr double kCapRetestMs = 20000.0;
     static constexpr double kMinBackoffMs = 3000.0;
     static constexpr double kMaxBackoffMs = 60000.0;
+    // A step down that did not hold is tried again later and later, up to this: where a limiter holds the presented
+    // rate the game never looks lighter than when the step failed, only the clock asks again, and every try is a
+    // visible dip. One step more costs a little GPU time at the same rate (janblade a1490c26).
+    static constexpr double kMaxDownBackoffMs = 600000.0;
     static constexpr double kNearMargin = 0.03;    // share of the target a step has to land nearer by, without a cap
     static constexpr double kSideMargin = 0.01;    // up / down without a cap: kept from the side they avoid
     static constexpr double kAtMost = 1.03;        // down rounding without a cap: at or below the target up to here
@@ -651,7 +655,7 @@ class XeFG_DynamicCount
     void FailedDown(int from, double nowMs, bool farShort, double fromFps)
     {
         Step& step = StepFrom(from);
-        step.backoffMs = std::min(step.backoffMs * (farShort ? 4.0 : 2.0), kMaxBackoffMs);
+        step.backoffMs = std::min(step.backoffMs * (farShort ? 4.0 : 2.0), kMaxDownBackoffMs);
         step.blockedUntilMs = nowMs + step.backoffMs;
         step.failFps = fromFps;
         _lastDownMs = -1.0;

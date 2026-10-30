@@ -2,6 +2,7 @@
 #include "input_system_internal.h"
 
 #include <hooks/Kernel_Hooks.h>
+#include <menu/input/native_key_state.h>
 
 #include <detours/detours.h>
 
@@ -26,6 +27,18 @@ namespace OptiInput
 {
 SHORT RealGetAsyncKeyStateSafe(int vk)
 {
+    // Physical state, beneath other overlays' detours of GetAsyncKeyState (retoque/menu/input/native_key_state.h)
+    static const auto native = []
+    {
+        const auto reader = NativeAsyncKeyStateReader();
+        LOG_INFO("Menu key polling reads {}",
+                 reader != nullptr ? "win32u NtUserGetAsyncKeyState" : "user32 GetAsyncKeyState (no win32u export)");
+        return reader;
+    }();
+
+    if (native != nullptr && vk >= 0 && vk < 256)
+        return native(vk);
+
     ScopedHookBypass bypass;
 
     if (o_GetAsyncKeyState != nullptr)

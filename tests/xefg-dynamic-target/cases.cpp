@@ -177,6 +177,89 @@ static void CheckControllers()
     Check(capFollowed.lateChanges <= 2, "the cap controller holds its count");
 }
 
+// A step down that did not hold, retried (janblade/OptiScaler-F5-DLSSNR-Multipass a1490c26, NBA 2K27 with XeFG). A GPU
+// bound game at an FPS limit of 140 = the target: 5 ms of CPU work, then the CPU waits for the GPU until 18 ms, and
+// that wait looks like idle time, so one step less always looks like it would hold. 3X reaches 140, 2X only 111.
+// After `lightAtS` the GPU floor goes away and 2X holds 140.
+struct Retried
+{
+    int count = 0;
+    int undosLate = 0; // steps down taken back in the second 10 minutes of the heavy part
+    double maxBackoffMs = 0.0;
+    double settledAtS = -1.0; // when the light part last changed the count (-1: never)
+};
+
+static constexpr double kHeavyFloorMs = 18.0;
+
+static double RetryWorkMs(int count) { return 5.0 + (count > 0 ? 1.0 + (count - 1) * 0.5 : 0.0); }
+
+static double RetryFrameMs(int count, bool light)
+{
+    return std::max({ RetryWorkMs(count), light ? 0.0 : kHeavyFloorMs, (count + 1) * 1000.0 / 140.0 });
+}
+
+template <typename Controller, typename Update>
+static Retried SimRetry(Controller& controller, Update update, double lightAtS, double seconds)
+{
+    Retried r;
+    int count = 4;
+    double now = 0.0;
+
+    while (now < seconds * 1000.0)
+    {
+        const bool light = now >= lightAtS * 1000.0;
+        const double frameMs = RetryFrameMs(count, light);
+        now += frameMs;
+        const int next = update(controller, now, frameMs, frameMs - RetryWorkMs(count), count);
+        r.maxBackoffMs = std::max(r.maxBackoffMs, controller.BackoffMs());
+
+        if (next != count)
+        {
+            if (!light && now >= 600000.0 && now < 1200000.0 && controller.LastReason() == Controller::Reason::Undo)
+                ++r.undosLate;
+
+            if (light)
+                r.settledAtS = now / 1000.0;
+        }
+
+        count = next;
+    }
+
+    r.count = count;
+    return r;
+}
+
+static void CheckRetryBackoff()
+{
+    constexpr double lightAtS = 1800.0, seconds = 3000.0;
+
+    XeFG_DynamicCount countController;
+    const auto c = SimRetry(
+        countController, [](XeFG_DynamicCount& dc, double now, double frameMs, double waitMs, int count)
+        { return dc.Update({ now, frameMs, waitMs, 140.0, 0.0, 140.0, 5, count, 1, 1 }); }, lightAtS, seconds);
+    std::printf("  GPU bound at 140: count controller %d undone steps down in minutes 10-20, longest wait %.0f s, "
+                "lighter game settles at %dX at %.0f s\n",
+                c.undosLate, c.maxBackoffMs / 1000.0, c.count + 1, c.settledAtS);
+    Check(c.undosLate <= 3, "count controller: a failed step down is tried again at most 3 times in 10 minutes");
+    Check(c.maxBackoffMs == 600000.0, "count controller: the wait after failed steps down grows to 10 minutes");
+    Check(c.count == 1, "count controller: once the game is lighter, the step down to 2X still happens");
+    Check(c.settledAtS > lightAtS && c.settledAtS <= lightAtS + 600.0 + 5.0,
+          "count controller: the lighter game steps down within one longest wait and stays");
+
+    XeFG_DynamicCap capController;
+    const auto p = SimRetry(
+        capController, [](XeFG_DynamicCap& dc, double now, double frameMs, double sleepMs, int count)
+        { return dc.Update({ now, frameMs, sleepMs, 140.0, 5, count }); }, lightAtS, seconds);
+    std::printf("  GPU bound at 140: cap controller %d undone steps down in minutes 10-20, longest wait %.0f s, "
+                "lighter game settles at %dX at %.0f s\n",
+                p.undosLate, p.maxBackoffMs / 1000.0, p.count + 1, p.settledAtS);
+    Check(p.undosLate <= 3, "cap controller: a failed step down is tried again at most 3 times in 10 minutes");
+    Check(p.maxBackoffMs == 600000.0, "cap controller: the wait after failed steps down grows to 10 minutes");
+    Check(p.count == 1, "cap controller: once the game is lighter, the step down to 2X still happens");
+    Check(p.settledAtS > lightAtS && p.settledAtS <= lightAtS + 600.0 + 5.0,
+          "cap controller: the lighter game steps down within one longest wait and stays");
+}
+
 #ifdef HAVE_PRESENT_SLICE
 // FGPresent's final sync interval, what XeFG presents with, is what the target reads as V-Sync
 static void CheckPresentSignal()
@@ -219,6 +302,7 @@ int main()
 {
     CheckTargets();
     CheckControllers();
+    CheckRetryBackoff();
 #ifdef HAVE_PRESENT_SLICE
     CheckPresentSignal();
 #endif

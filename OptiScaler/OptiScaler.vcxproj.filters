@@ -587,6 +587,9 @@
     <ClInclude Include="..\retoque\resource_tracking\ResourceReferenceIndex.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\hooks\Streamline_DlssgRequest.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="proxies\IGDExt_Proxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1041,6 +1044,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\retoque\menu\input\kcd_input_fix.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\menu\input\native_key_state.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="menu\input\input_system_internal.h">

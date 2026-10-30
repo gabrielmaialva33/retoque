@@ -336,6 +336,8 @@ class StreamlineHooks
     inline static decltype(&slDLSSGGetState) o_slDLSSGGetState = nullptr;
     static inline sl::ViewportHandle lastDlssgViewport {}; // For updating options when we change them
     static inline sl::DLSSGOptions lastDlssgOptions {};
+    // updateDlssgOptions' replay of the game's last request is ours: PauseWithoutFrameGen's signal ignores it
+    static inline thread_local bool replayingDlssgOptions = false;
 
     static bool hkdlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON, const char** pluginJSON);
     static sl::Result hkslSetConstants(const sl::Constants& values, const sl::FrameToken& frame,

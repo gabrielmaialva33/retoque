@@ -11,11 +11,13 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <hooks/Streamline_DlssgRequest.h>
 #define SI_NO_CONVERSION
 #include <SimpleIni.h>
 #define LOG_INFO(...) ((void) 0)
 #define LOG_TRACE(...) ((void) 0)
 #define LOG_DEBUG(...) ((void) 0)
+#define LOG_FUNC() ((void) 0)
 // @optional@
 // @serializer@
 struct Config
@@ -65,6 +67,7 @@ struct State
     FGOutput activeFgOutput = FGOutput::NoFG;
     bool dlssgGameDMFGSupported = false;
     std::atomic<bool> dlssgGameRequestsFg { false };
+    std::atomic<uint64_t> dlssgGameViewports { 0 };
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
     void* currentFG = nullptr;
     static State& Instance()
@@ -96,10 +99,11 @@ struct Provider
     {
         return Get(v, s, o);
     }
+    static inline sl::Result setResult = sl::Result::eOk;
     static sl::Result Set(const sl::ViewportHandle&, const sl::DLSSGOptions& options)
     {
         sent = options;
-        return sl::Result::eOk;
+        return setResult;
     }
 };
 struct MfgUnlock
@@ -130,6 +134,8 @@ struct StreamlineHooks
   public:
     static void RebindGetter(PFun_slDLSSGGetState* getter) { o_slDLSSGGetState = getter; }
     static void applyMenuDlssgInterlock(sl::DLSSGOptions&, bool) {}
+    static inline thread_local bool replayingDlssgOptions = false;
+    static void updateDlssgOptions();
     static sl::Result hkslDLSSGSetOptions(const sl::ViewportHandle&, const sl::DLSSGOptions&);
     static sl::Result hkslDLSSGGetState(const sl::ViewportHandle&, sl::DLSSGState&, const sl::DLSSGOptions*);
 };

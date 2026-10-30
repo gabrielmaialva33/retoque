@@ -93,7 +93,7 @@ class XeFG_DynamicCap
             if (_checkCount >= kCheckMinFrames && sinceChange >= kCheckMinMs &&
                 1000.0 * (count + 1) * _checkCount / _checkSumMs < s.targetFps * 0.93 && count < maxCount)
             {
-                _backoffMs = std::min(_backoffMs * 2.0, kMaxBackoffMs);
+                _backoffMs = std::min(_backoffMs * 2.0, kMaxDownBackoffMs);
                 _downBlockedUntilMs = s.nowMs + _backoffMs;
                 _failedReachable = _downReachable;
                 return Change(count + 1, s.nowMs, Reason::Undo, reachable);
@@ -107,7 +107,7 @@ class XeFG_DynamicCap
             if (_checkCount > 0 && 1000.0 * (count + 1) * _checkCount / _checkSumMs < s.targetFps * 0.97 &&
                 count < maxCount)
             {
-                _backoffMs = std::min(_backoffMs * 2.0, kMaxBackoffMs);
+                _backoffMs = std::min(_backoffMs * 2.0, kMaxDownBackoffMs);
                 _downBlockedUntilMs = s.nowMs + _backoffMs;
                 _failedReachable = _downReachable;
                 return Change(count + 1, s.nowMs, Reason::Undo, reachable);
@@ -207,7 +207,10 @@ class XeFG_DynamicCap
     static constexpr double kCheckMinMs = 400.0;
     static constexpr double kCheckMs = 1500.0;
     static constexpr double kMinBackoffMs = 5000.0;
-    static constexpr double kMaxBackoffMs = 60000.0;
+    // A step down that did not hold is tried again later and later, up to this: where a limiter holds the presented
+    // rate the game never looks lighter than when the step failed, only the clock asks again, and every try is a
+    // visible dip. One step more costs a little GPU time at the same rate (janblade a1490c26).
+    static constexpr double kMaxDownBackoffMs = 600000.0;
     static constexpr double kSleepProbeMs = 15000.0; // a try against a measured sleep's evidence
     static constexpr double kGraceMs = 300.0;        // a dip this short doesn't end the hold at the target
     static constexpr double kHitchFactor = 2.5;      // a frame this much longer than the average is a hitch

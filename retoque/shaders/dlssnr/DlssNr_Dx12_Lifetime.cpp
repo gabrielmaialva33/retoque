@@ -8,6 +8,7 @@
 #include <State.h>
 #include <dxgi1_4.h>
 #include <menu/menu_overlay_base.h>
+#include <hooks/Streamline_DlssgRequest.h>
 #include <framegen/IFGFeature_Dx12.h>
 #include <shaders/output_scaling/OS_Dx12.h>
 #include "DlssNr_Stabilizer_Dx12.h"
@@ -95,8 +96,10 @@ bool PausedWithoutFrameGen(const Config& cfg)
     const bool on = State::Instance().dlssgGameRequestsFg.load(std::memory_order_relaxed);
     if (on)
         seenOn = true;
-    const bool candidate =
-        cfg.DlssNrPauseWithoutFrameGen.value_or_default() && seenOn && !on && !MenuOverlayBase::IsVisible();
+    // A game driving DLSS-G on more than one viewport: one signal can't follow them, so never pause
+    const bool oneViewport = !StreamlineDlssgRequest::MultipleViewports(State::Instance().dlssgGameViewports);
+    const bool candidate = cfg.DlssNrPauseWithoutFrameGen.value_or_default() && seenOn && !on && oneViewport &&
+                           !MenuOverlayBase::IsVisible();
     if (!candidate)
         offSince.reset();
     else if (!offSince)
