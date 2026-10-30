@@ -2,6 +2,7 @@
 
 #include "DlssNr_ExposureScan.h"
 
+#include <dlssnr/DlssNr_ExposureMatch.h>
 #include <dlssnr/DlssNr_Submission.h>
 
 #include <Config.h>
@@ -14,6 +15,7 @@
 #include <cstring>
 #include <deque>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -198,6 +200,54 @@ std::mutex g_scanMutex;
 // Whether the scan holds anything at all, so a Tick with the scan off can skip the lock when there is nothing to let go
 // of (every NR frame of every session that never chose the scan).
 std::atomic<bool> g_holding { false };
+
+// [DlssNr] ScanMatch: the candidate that follows the light, chosen by its fit against a meter of the game's frame
+// instead of by widest travel (DlssNr_ExposureMatch.h, docs/dlssnr/design/exposure-scan-match.md). Everything here is
+// guarded by g_scanMutex and nothing in it runs with the key off.
+
+// A row of the recording at most this often: about ten a second at 60 fps, janblade's rate. After a mover is found
+// the sweep runs every kScanThrottle frames, so rows come every eighth frame then.
+constexpr unsigned int kRowFrames = 6;
+
+// A meter reading older than this, in Ticks, is no reading: the pulse pass stopped measuring (the pass skipped, the
+// list could not be tracked), and a stale light beside fresh candidate values would be a wrong row, not a missing one.
+constexpr unsigned int kMeterFreshFrames = 30;
+
+// How many rows are kept, and how many new ones before the candidates are judged again (~2.5 min, ~6 s at 60 fps).
+// A judgement is the cost: 6.5 ms on the host at -O2 for the worst case, 64 smoothly moving candidates over 1200 rows
+// (most candidates are set aside as steady or not floats in a pass over their rows). It runs on the render thread,
+// off the scan's lock, once per kJudgeRows rows; in-game frame times with the key on are not measured yet.
+constexpr size_t kMatchRows = 1200;
+constexpr unsigned int kJudgeRows = 50;
+
+// A match that does not trail the light is eased (ExposureMatch::NeedsEasing), at the time constants janblade's
+// Automatic used: half a second toward a brighter scene, a second and a half toward a darker one, at 60 fps.
+constexpr float kEaseBrighterFrames = 30.0f;
+constexpr float kEaseDarkerFrames = 90.0f;
+
+struct MatchState
+{
+    DlssNr::ExposureMatch::History history { kMatchRows };
+    float meter = 0.0f;
+    unsigned long long meterFrame = 0; // g_scan.frames when it arrived
+    unsigned long long lastRowFrame = 0;
+    unsigned long long rowsAdded = 0;
+    unsigned long long rowsJudged = 0; // rowsAdded at the last judgement
+    bool anyRow = false;
+    bool anyMeter = false;
+
+    DlssNr::ExposureMatch::What what = DlssNr::ExposureMatch::What::NotSure;
+    unsigned int id = 0; // the found (or baked) candidate's id
+    DlssNr::ExposureMatch::Fit fit;
+    size_t rows = 0;       // metered rows at the last judgement
+    float travelEv = 0.0f; // the meter's travel then
+    float eased = 0.0f;    // the found candidate as an exposure, eased where it needs it; 0 for none
+};
+
+MatchState g_match;
+
+// Under g_scanMutex. Forgets the recording and the verdict: the scan let everything go, or the key went off.
+void ClearMatchLocked() { g_match = MatchState {}; }
 
 // Under g_scanMutex.
 void NoteHoldingLocked()
@@ -521,6 +571,8 @@ bool CarriedAcrossRelease(const Tracked& t) { return t.origin == Origin::Committ
 // release (`boundary`), one that may not be carried across it goes there and then.
 void LetGoLocked(bool boundary)
 {
+    ClearMatchLocked();
+
     unsigned int count = (unsigned int) (g_scan.active.size() + g_scan.waiting.size());
 
     auto all = [boundary](auto& list)
@@ -604,6 +656,183 @@ void CreditLocked(Tracked& t, float value, unsigned long long serial)
         t.moves = true;
 }
 
+// Under g_scanMutex. Whether the match picks the best candidate ([DlssNr] ScanMatch).
+bool MatchOnLocked() { return Config::Instance()->DlssNrScanMatch.value_or_default(); }
+
+// Under g_scanMutex. One row of the recording from a sweep the GPU completed: the meter beside every candidate read so
+// far, at most every kRowFrames.
+void RecordRowLocked()
+{
+    if (!MatchOnLocked())
+        return;
+
+    if (g_match.anyRow && g_scan.frames - g_match.lastRowFrame < kRowFrames)
+        return;
+
+    const bool fresh = g_match.anyMeter && g_scan.frames - g_match.meterFrame <= kMeterFreshFrames;
+    std::vector<std::pair<unsigned, float>> values;
+    values.reserve(g_scan.active.size() + g_scan.waiting.size());
+
+    auto add = [&](const Tracked& t)
+    {
+        if (t.reads > 0)
+            values.push_back({ t.id, t.latest });
+    };
+
+    for (const Tracked& t : g_scan.active)
+        add(t);
+
+    for (const Tracked& t : g_scan.waiting)
+        add(t);
+
+    g_match.history.AddRow(fresh ? g_match.meter : 0.0f, values);
+    g_match.anyRow = true;
+    g_match.lastRowFrame = g_scan.frames;
+    g_match.rowsAdded++;
+}
+
+// Under g_scanMutex. The matched candidate, while the scan still holds it and reads it; else null.
+const Tracked* MatchedLocked()
+{
+    if (g_match.what != DlssNr::ExposureMatch::What::Found || g_match.id == 0)
+        return nullptr;
+
+    for (const Tracked& t : g_scan.active)
+        if (t.id == g_match.id)
+            return &t;
+
+    for (const Tracked& t : g_scan.waiting)
+        if (t.id == g_match.id)
+            return &t;
+
+    return nullptr;
+}
+
+// Under g_scanMutex. A copy of the recording to judge, when enough new rows came in, after forgetting the columns of
+// candidates the scan no longer holds. Judged off the lock (Tick): a judgement fits every column at every lag.
+std::optional<DlssNr::ExposureMatch::History> MatchDueLocked()
+{
+    if (!MatchOnLocked())
+    {
+        if (g_match.anyRow || g_match.what != DlssNr::ExposureMatch::What::NotSure)
+            ClearMatchLocked();
+
+        return std::nullopt;
+    }
+
+    if (g_match.rowsAdded - g_match.rowsJudged < kJudgeRows)
+        return std::nullopt;
+
+    std::vector<unsigned> held;
+    held.reserve(g_scan.active.size() + g_scan.waiting.size());
+
+    for (const Tracked& t : g_scan.active)
+        held.push_back(t.id);
+
+    for (const Tracked& t : g_scan.waiting)
+        held.push_back(t.id);
+
+    g_match.history.Keep(held);
+    g_match.rowsJudged = g_match.rowsAdded;
+    return g_match.history;
+}
+
+std::string MatchLineLocked();
+
+// Under g_scanMutex. A judgement taken; said in the log when the answer changes.
+void PublishMatchLocked(const DlssNr::ExposureMatch::History::Judgement& j)
+{
+    using DlssNr::ExposureMatch::What;
+
+    const bool changed = j.verdict.what != g_match.what || j.id != g_match.id || j.verdict.fit.kind != g_match.fit.kind;
+
+    if (j.id != g_match.id)
+        g_match.eased = 0.0f; // another buffer, other units: start at its value, not from the last one's
+
+    g_match.what = j.verdict.what;
+    g_match.id = j.id;
+    g_match.fit = j.verdict.fit;
+    g_match.rows = j.verdict.rows;
+    g_match.travelEv = j.verdict.meterTravelEv;
+
+    if (changed && j.verdict.what != What::NotSure)
+        LOG_INFO("DLSS-NR exposure scan match: {}", MatchLineLocked());
+}
+
+// Under g_scanMutex. Once a Tick: the matched candidate as an exposure, eased if it does not trail the light.
+void EaseMatchLocked()
+{
+    const Tracked* t = MatchOnLocked() ? MatchedLocked() : nullptr;
+
+    if (t == nullptr)
+    {
+        g_match.eased = 0.0f;
+        return;
+    }
+
+    const float target = DlssNr::ExposureMatch::AsExposure(g_match.fit, t->latest);
+    g_match.eased = DlssNr::ExposureMatch::NeedsEasing(g_match.fit)
+                        ? DlssNr::ExposureMatch::Ease(g_match.eased, target, kEaseBrighterFrames, kEaseDarkerFrames)
+                        : (target > 0.0f && std::isfinite(target) ? target : 0.0f);
+}
+
+// Under g_scanMutex. What the menu and the log say about the match.
+std::string MatchLineLocked()
+{
+    using DlssNr::ExposureMatch::What;
+
+    if (!MatchOnLocked())
+        return std::string();
+
+    char buf[224];
+    const DlssNr::ExposureMatch::Settings settings;
+
+    switch (g_match.what)
+    {
+    case What::Found:
+    {
+        const Tracked* t = MatchedLocked();
+
+        if (t == nullptr)
+        {
+            snprintf(buf, sizeof(buf), "candidate %u followed the light and is gone; matching again", g_match.id);
+            break;
+        }
+
+        snprintf(buf, sizeof(buf), "candidate %u (%s) follows the light: %s, r %.3f, %d rows behind it%s", t->id,
+                 t->shape.c_str(), DlssNr::ExposureMatch::KindName(g_match.fit.kind), g_match.fit.corr, g_match.fit.lag,
+                 DlssNr::ExposureMatch::NeedsEasing(g_match.fit) ? ", eased" : "");
+        break;
+    }
+
+    case What::Baked:
+        snprintf(buf, sizeof(buf),
+                 "the light is already in the colour: the frame's light holds still while candidate %u swings; "
+                 "nothing to follow",
+                 g_match.id);
+        break;
+
+    case What::None:
+        snprintf(buf, sizeof(buf), "nothing follows the light over %zu rows and %.1f EV of it", g_match.rows,
+                 g_match.travelEv);
+        break;
+
+    default:
+    {
+        const size_t rows = g_match.history.MeteredRows();
+
+        if (rows == 0)
+            snprintf(buf, sizeof(buf), "matching to the light: no reading of the frame's light yet");
+        else
+            snprintf(buf, sizeof(buf), "matching to the light: %zu of %zu rows, %.1f of %.1f EV of light so far", rows,
+                     settings.minRows, g_match.history.TravelEv(), settings.minTravelEv);
+        break;
+    }
+    }
+
+    return buf;
+}
+
 // Under g_scanMutex. Section 3.4: a reading comes from a slot whose recording completed, credited to the id the slot
 // recorded at that offset. A slot whose recording settled without completing -- the list was discarded and will
 // never run -- is freed unread. Anything else stays pending and is not reused.
@@ -671,6 +900,8 @@ void HarvestLocked()
 
         D3D12_RANGE nothingWritten { 0, 0 };
         buffer->Unmap(0, &nothingWritten);
+
+        RecordRowLocked();
     }
 }
 
@@ -907,7 +1138,8 @@ bool BarrenLocked(bool* outMover = nullptr, bool* outFresh = nullptr)
     return !anyMover && mostReads >= kPatience && std::none_of(g_scan.waiting.begin(), g_scan.waiting.end(), Untried);
 }
 
-// Under g_scanMutex. The moving candidate with the widest travel among those still read, or null.
+// Under g_scanMutex. The moving candidate with the widest travel among those still read, or null. With [DlssNr]
+// ScanMatch on its callers ask MatchedLocked instead (Headline, BestValue).
 const Tracked* BestLocked()
 {
     const Tracked* best = nullptr;
@@ -1210,7 +1442,7 @@ void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList)
     if (!EnsureReadback(device))
         return;
 
-    std::lock_guard<std::mutex> lock(g_scanMutex);
+    std::unique_lock<std::mutex> lock(g_scanMutex);
 
     // In this order, every frame: who is still held by the game, what the GPU has confirmed, who takes which place.
     // Nothing is copied that this Tick did not see alive.
@@ -1296,12 +1528,30 @@ void Tick(ID3D12Device* device, ID3D12GraphicsCommandList* cmdList)
                      (unsigned int) g_scan.retiring.size(), c.adopted, c.letGo, c.falseOnes, c.movedAside, c.dropped,
                      c.refused, c.released);
 
+        if (MatchOnLocked())
+            LOG_INFO("DLSS-NR scan match: {}", MatchLineLocked());
+
         g_scan.since = {};
     }
 
     g_scan.frames++;
     g_scan.status = problem != nullptr ? problem : "";
     NoteHoldingLocked();
+
+    // [DlssNr] ScanMatch: the candidates judged against the light every kJudgeRows rows, on a copy, off the lock -- a
+    // judgement fits every column at every lag, and the creation hooks and the menu must not wait on it. Nothing here
+    // runs with the key off.
+    if (std::optional<DlssNr::ExposureMatch::History> due = MatchDueLocked())
+    {
+        lock.unlock();
+        const DlssNr::ExposureMatch::History::Judgement judgement = due->Judge();
+        lock.lock();
+
+        if (MatchOnLocked())
+            PublishMatchLocked(judgement);
+    }
+
+    EaseMatchLocked();
 }
 
 Verdict Where()
@@ -1320,7 +1570,7 @@ Verdict Where()
     bool anyMover = false;
     const bool barren = BarrenLocked(&anyMover);
 
-    if (anyMover)
+    if (anyMover || (MatchOnLocked() && MatchedLocked() != nullptr))
         return Verdict::Found;
 
     return barren ? Verdict::Barren : Verdict::Watching;
@@ -1373,6 +1623,14 @@ const char* Headline()
     {
         std::lock_guard<std::mutex> lock(g_scanMutex);
 
+        // With [DlssNr] ScanMatch on, the line is the match's: which candidate follows the light, or how far the
+        // matching has come. The scan's value is offered only once it is sure.
+        if (MatchOnLocked())
+        {
+            line = "DLSS-NR exposure scan: " + MatchLineLocked();
+            break;
+        }
+
         // The widest travel wins where several move. An exposure swings by orders of magnitude
         // between a dark interior and open daylight; anything that merely wobbles is something else.
         const Tracked* best = BestLocked();
@@ -1403,6 +1661,38 @@ const char* Headline()
 float BestValue(int* outIndex, float* outLowest, float* outHighest)
 {
     std::lock_guard<std::mutex> lock(g_scanMutex);
+
+    if (MatchOnLocked())
+    {
+        const Tracked* matched = MatchedLocked();
+        const float offered = matched != nullptr ? DlssNr::ExposureMatch::Offered(g_match.fit, g_match.eased) : 0.0f;
+
+        if (matched == nullptr || !(offered > kFloor && offered < kCeiling))
+            return 0.0f;
+
+        // The range in the same units as the value: the candidate's own for a multiplier or divisor, the multiplier a
+        // stop value stands for otherwise.
+        float low = matched->lowest, high = matched->highest;
+
+        if (g_match.fit.kind == DlssNr::ExposureMatch::Kind::Stops)
+        {
+            const float a = DlssNr::ExposureMatch::AsExposure(g_match.fit, matched->lowest);
+            const float b = DlssNr::ExposureMatch::AsExposure(g_match.fit, matched->highest);
+            low = std::min(a, b);
+            high = std::max(a, b);
+        }
+
+        if (outIndex != nullptr)
+            *outIndex = (int) matched->id;
+
+        if (outLowest != nullptr)
+            *outLowest = low;
+
+        if (outHighest != nullptr)
+            *outHighest = high;
+
+        return offered;
+    }
 
     const Tracked* best = BestLocked();
 
@@ -1442,6 +1732,29 @@ std::vector<Candidate> Report()
     }
 
     return out;
+}
+
+bool MeterWanted()
+{
+    return Config::Instance()->DlssNrEnabled.value_or_default() && Wanted() &&
+           Config::Instance()->DlssNrScanMatch.value_or_default();
+}
+
+void NoteMeter(float meter)
+{
+    if (!MeterWanted())
+        return;
+
+    std::lock_guard<std::mutex> lock(g_scanMutex);
+    g_match.meter = std::isfinite(meter) && meter > 0.0f ? meter : 0.0f;
+    g_match.meterFrame = g_scan.frames;
+    g_match.anyMeter = true;
+}
+
+std::string MatchLine()
+{
+    std::lock_guard<std::mutex> lock(g_scanMutex);
+    return MatchLineLocked();
 }
 
 const char* Status()
@@ -1758,6 +2071,7 @@ void Shutdown()
 
     g_scan.nextSlot = 0;
     NoteHoldingLocked();
+    ClearMatchLocked();
     g_scan.frames = 0;
     g_scan.writes = 0;
     g_scan.barrenLogged = false;

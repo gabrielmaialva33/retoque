@@ -85,7 +85,22 @@ unsigned int Examined();
 // the indicator. Written so the log can carry the scan's number and the game's own exposure on one
 // line -- which is the only way to tell, offline and after the fact, whether the scan found the
 // right buffer or merely a moving one.
+//
+// With [DlssNr] ScanMatch on, the best candidate is instead the one the match found following the light
+// (DlssNr_ExposureMatch.h, docs/dlssnr/design/exposure-scan-match.md), and 0 until it is sure: no widest-travel
+// fallback. A multiplier or divisor is offered in its own units; a stop value as the multiplier it stands for; a
+// match that does not trail the light is eased.
 float BestValue(int* outIndex = nullptr, float* outLowest = nullptr, float* outHighest = nullptr);
+
+// [DlssNr] ScanMatch, the scan wanted and NR on: whether the renderer should measure the game's frame for the match.
+bool MeterWanted();
+
+// One reading of the meter (DlssNr::ExposureMatch::Meter of the game's frame), as it arrives. Ignored unless
+// MeterWanted(); 0 is "no reading".
+void NoteMeter(float meter);
+
+// Where the match stands, in one line, for the menu and the log. Empty with ScanMatch off.
+std::string MatchLine();
 
 // Called once per frame from the Neural Rendering pass, on its command list. Checks that the game still holds each
 // candidate, reads back the copies whose recordings the GPU has completed, and copies one value out of each certified

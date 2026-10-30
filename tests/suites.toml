@@ -262,6 +262,14 @@ tier = "host"
 timeout = 300
 summary = "Exposure scan candidate lifetime and capacity: the production scan against fake D3D12 objects and the production submission model."
 
+[nr-exposure-match]
+path = "nr-exposure-match"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Exposure scan match ([DlssNr] ScanMatch): the pure correlation rule on synthetic traces (lagged exposure, divisor and stop forms, timer, frozen, clamped, luminance) and janblade's trimmed Cyberpunk/Doom/NBA recordings, the recorder, meter and easing, plus source guards on its opt-in wiring."
+
 [nr-submission]
 path = "nr-submission"
 domain = "nr"

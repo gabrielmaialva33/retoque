@@ -80,6 +80,27 @@ inline double EditLight(const float* grid)
     return EditLight(sumOut, sumIn);
 }
 
+// The game's frame's mean luminance from the same grid: luminance in over pixels read, the untouched copy only and
+// never the pass's output (channel 0). The exposure scan's match reads its meter off this ([DlssNr] ScanMatch,
+// docs/dlssnr/design/exposure-scan-match.md). NaN where nothing was measured.
+inline double MeanInputLuma(const float* grid)
+{
+    if (grid == nullptr)
+        return NAN;
+
+    double sumIn = 0.0;
+    double pixels = 0.0;
+    for (unsigned i = 0; i < kGrid * kGrid; ++i)
+    {
+        const float* tile = grid + i * 4;
+        if (!(tile[2] > 0.0f) || !std::isfinite(tile[1]) || !std::isfinite(tile[2]))
+            continue;
+        sumIn += tile[1];
+        pixels += tile[2];
+    }
+    return pixels > 0.0 && std::isfinite(sumIn) ? sumIn / pixels : NAN;
+}
+
 struct Bucket
 {
     unsigned n = 0;

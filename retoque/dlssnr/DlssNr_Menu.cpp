@@ -2291,6 +2291,35 @@ void RenderMenu(Config* config, float menuResScale)
                                "\nthat is what the setting above is for."
                                "\n\nPurely a readout. It changes nothing.");
 
+                    // [DlssNr] ScanMatch (docs/dlssnr/design/exposure-scan-match.md): which buffer the scan offers.
+                    // Only where it acts -- the scan is the source -- and where its meter can run: the pulse pass's
+                    // reduction reads the game's frame, and it is not built without its bytecode or behind the driver
+                    // proxy, which returns before the pass writes (the pulse metric's own rule, below).
+                    if (config->DlssNrWhitePointSource.value_or_default() == 2 && DlssNr::PulseAvailable() &&
+                        !config->DlssNrUseProxy.value_or_default())
+                    {
+                        bool match = config->DlssNrScanMatch.value_or_default();
+
+                        if (ImGui::Checkbox(Localization::Label("Choose the buffer by matching it to the light"),
+                                            &match))
+                            config->DlssNrScanMatch = match;
+
+                        HelpMarker("Off: the buffer whose value travels widest drives the white point, as before."
+                                   "\nA counter or a timer travels widest of all, and then the picture drifts."
+                                   "\n\nOn: the buffer whose value follows the light of the game's own frame the"
+                                   "\nway an exposure does -- a little behind it, as eyes adapt -- and nothing"
+                                   "\nuntil that is sure, which takes about half a minute of walking between"
+                                   "\nlight and shade. Timers, frozen values and the frame's own brightness"
+                                   "\nare turned down. Paper white is used until then."
+                                   "\n\nAnchors set under one rule may need setting again under the other."
+                                   "\nCosts one small measuring pass a frame. Adapted from janblade's fork.");
+
+                        const std::string matchLine = DlssNr::ExposureScan::MatchLine();
+
+                        if (match && DlssNr::ExposureScan::Scanning() && !matchLine.empty())
+                            ImGui::TextDisabled("%s", matchLine.c_str());
+                    }
+
                     // Shown when the scan is actually running, whichever way it got switched on.
                     if (DlssNr::ExposureScan::Scanning())
                     {
