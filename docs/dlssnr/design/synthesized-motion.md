@@ -337,7 +337,8 @@ build. Both print `SYNTH-MOTION PASS` over 12 scored sequences, with the sign cu
    was meant to remove. Compare it with FidelityFX in Generation Zero, or Witcher 3 DX11.
 2. **Cuts.** One wrong frame, and the engine seeds the next pair from the vectors across the cut
    (temporal hints are dropped only on a reset). If cuts matter, the FidelityFX scene-change passes
-   could run beside the engine; they are cheap.
+   could run beside the engine; they are cheap. A route-independent rule for cuts the game does not flag
+   is designed in [scene-cut-detection.md](scene-cut-detection.md) (2026-10-30, rule only, not wired).
 3. **The Windows driver's handling of our fence pattern** is unverified. dxvk-nvapi's is read from
    source, not run.
 4. **The prefix** may lack `nvofapi64.dll` (see Proton above).

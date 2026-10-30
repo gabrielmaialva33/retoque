@@ -48,6 +48,7 @@ These are records, not designs.
 - [detail-measure.md](design/detail-measure.md): the in-game "Measure detail" metric, ported from janblade's fork.
 - [pulse-metric.md](design/pulse-metric.md): the light step per frame, model frames against carried ones: model cadence's pulse as a number.
 - [zero-motion-detection.md](design/zero-motion-detection.md): the game's motion vectors read all zero in a moving scene, found by a sparse probe and treated as zero guides under `ZeroGuideReset`.
+- [scene-cut-detection.md](design/scene-cut-detection.md): finding a cut the game did not flag, from a 16x16 grid of its frame's light; phase 1 is the host-tested rule only, with the feed, key and A/B plan proposed.
 - [nr-log-rate.md](design/nr-log-rate.md): rate-limiting the NR drift logs, from a measured log.
 - [stage-before-upscale-measured.md](design/stage-before-upscale-measured.md): running the model before the upscaler, measured in one Cyberpunk 2077 session.
 - [model-cost-vs-working-scale.md](design/model-cost-vs-working-scale.md): four GPU measurements of what the pass costs and how it answers to working scale.

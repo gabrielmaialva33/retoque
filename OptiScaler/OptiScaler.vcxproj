@@ -398,6 +398,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Pulse.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_MotionProbe.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_SceneCut.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_PresentHdr_Dx12.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentHdr.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SwapchainColour.h" />

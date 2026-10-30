@@ -184,6 +184,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   Source guards: constants equal the cbuffer, one grid and one sampling on both sides, optional bytecode, the probe
   recorded once in `Dispatch` on the game's readable guides before the resample, the rule applied where the frame's
   reset is read, never a CPU wait, parked and freed. No GPU, no shader compile.
+- `nr-scene-cut` — scene-cut detection, phase 1 (`docs/dlssnr/design/scene-cut-detection.md`): the pure rule in
+  `DlssNr_SceneCut.h`, not yet called by the renderer. Synthetic 16x16 grids in the pulse pass's layout: static,
+  pans, zoom, hard cuts (a 100-pair recall floor), flashes, an explosion, muzzle flashes, fades and a dissolve; the
+  warm-up, cooldown, pairing, blank-frame and game-reset hysteresis; the reset request's reset, shadow, late and
+  game-already answers. Source guards: stdlib only, reads the game's frame and never the pass's output. No GPU.
 - `nr-exposure-scan` — the exposure scan's candidate lifetime and capacity (`docs/dlssnr/design/exposure-scan-capacity.md`): the production `DlssNr_ExposureScan.cpp` against fake D3D12
   objects that keep destroyed ones for checking and the production submission model. A full list with a late
   exposure, recreation before a feature release, an exposure kept across one, attribution by id after a list
