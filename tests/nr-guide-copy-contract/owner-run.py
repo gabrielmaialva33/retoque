@@ -33,6 +33,9 @@ namespace DlssNr { namespace Detail { struct CoverageSample { const char* reason
 namespace Chain { struct RecordingLease {}; } namespace PairCapture { void Poll() {} } }
 struct State { unsigned frameCount=1; static State& Instance() { static State s; return s; } };
 void ReportSkipOnce(const char*) {} void AdvanceNrClock() {} void NoteModelFault() {} void NotePulsePresent(unsigned) {}
+// The game's own Streamline NR stand-down (DlssNr_SlNativeNr.h; tests/nr-sl-native-nr covers it): never here.
+static const char* GameNrStandDown() { return nullptr; }
+std::atomic<bool> g_resetOnReturn { false };
 bool PausedWithoutFrameGen(const Config&) { return false; }
 struct ID3D12CommandQueue : ID3D12DeviceChild {};
 struct DlssNr_Dx12 {

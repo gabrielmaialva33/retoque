@@ -25,6 +25,11 @@ generation = between(renderer, 'uint64_t g_nrScratchGeneration', '// A change ha
 
 declaration = header[header.index('#define DLSSNR_NUM_OF_HEAPS'):]
 implementation = between(renderer, 'DlssNr_Dx12::DlssNr_Dx12(', 'bool DlssNr_Dx12::Dispatch(')
+# The Streamline stand-down helper (DlssNr_SlNativeNr.h) sits just before Dispatch; it is not what this suite tests
+# (tests/nr-sl-native-nr covers it), so its definition is cut out of the slice.
+_stand = implementation.find('static const char* GameNrStandDown()')
+if _stand >= 0:
+    implementation = implementation[:_stand] + implementation[implementation.index('\n}\n', _stand) + 3:]
 
 
 def guard_descriptor_key(source):
