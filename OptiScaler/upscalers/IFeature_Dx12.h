@@ -1,5 +1,6 @@
 #pragma once
 #include <d3d12.h>
+#include <mutex>
 #include "IFeature.h"
 
 #include "SysUtils.h"
@@ -30,6 +31,14 @@ class IFeature_Dx12 : public virtual IFeature
   protected:
     ID3D12Device* Device = nullptr;
     static inline std::unique_ptr<Menu_Dx12> Imgui = nullptr;
+    // Imgui is shared by every D3D12 feature, and a replaced or failed feature is destroyed on its own thread
+    // (Util::DelayedDestroy): its destructor's reset raced the render thread drawing the menu, and two features dropped
+    // together reset it at once (RE2 froze, then crashed, on an XeSS to DLSS switch with the legacy menu). Creation,
+    // the draw and the reset hold this lock (janblade/OptiScaler-F5-DLSSNR-Multipass 07f52a9e, GPL-3.0). Lock order:
+    // taken last. While it is held only the menu's own leaf mutexes (MenuCommon's) are taken; never create, draw or
+    // destroy a feature's menu while holding a lock the menu draw could need. Recursive, as in the source: a feature
+    // destroyed on the drawing thread itself waits for nothing.
+    static inline std::recursive_mutex ImguiMutex;
     std::unique_ptr<OS_Dx12> OutputScaler = nullptr;
     std::unique_ptr<RCAS_Dx12> RCAS = nullptr;
     std::unique_ptr<Bias_Dx12> Bias = nullptr;

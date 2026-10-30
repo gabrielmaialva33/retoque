@@ -530,6 +530,8 @@ void DLSSG_Dx12::CreateObjects(ID3D12Device* InDevice)
         }
 
     } while (false);
+
+    DropIncompleteCommandObjects();
 }
 
 bool DLSSG_Dx12::Present()
@@ -795,6 +797,9 @@ bool DLSSG_Dx12::SetResource(Dx12Resource* inputResource)
 
             if (lastFormat[fIndex] != DXGI_FORMAT_UNKNOWN && lastFormat[fIndex] != desc.Format)
             {
+                // Remember the new format: frame generation restarts once for it instead of rejecting every frame
+                // (lonewolf0622/HelixSR-Scaler 1c90e142e8, GPL-3.0)
+                lastFormat[fIndex] = desc.Format;
                 State::Instance().fgChanged = true;
                 return false;
             }
@@ -870,12 +875,9 @@ bool DLSSG_Dx12::SetResource(Dx12Resource* inputResource)
             }
         }
 
-        // Potentially we don't need to restore but do it just to be safe
-        if (inputResource->state == D3D12_RESOURCE_STATE_COPY_SOURCE)
-        {
-            ResourceBarrier(inputResource->cmdList, inputResource->resource, D3D12_RESOURCE_STATE_COPY_DEST,
-                            inputResource->state);
-        }
+        // No restore barrier here: unlike XeFG, DLSSG never moves a COPY_SOURCE input to COPY_DEST (CopyResource
+        // restores its source itself), so a COPY_DEST before-state was wrong, and a resource valid until present may
+        // come without a command list (lonewolf0622/HelixSR-Scaler 49a25a3d9a, GPL-3.0)
 
         SetResourceReady(type, fIndex);
     }

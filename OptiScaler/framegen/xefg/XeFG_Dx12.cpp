@@ -1253,6 +1253,8 @@ void XeFG_Dx12::CreateObjects(ID3D12Device* InDevice)
         }
 
     } while (false);
+
+    DropIncompleteCommandObjects();
 }
 
 bool XeFG_Dx12::Present()
@@ -1556,6 +1558,9 @@ bool XeFG_Dx12::SetResource(Dx12Resource* inputResource)
 
             if (lastFormat[fIndex] != DXGI_FORMAT_UNKNOWN && lastFormat[fIndex] != desc.Format)
             {
+                // Remember the new format: frame generation restarts once for it instead of rejecting every frame
+                // (lonewolf0622/HelixSR-Scaler 1c90e142e8, GPL-3.0)
+                lastFormat[fIndex] = desc.Format;
                 State::Instance().fgChanged = true;
                 return false;
             }

@@ -31,8 +31,13 @@ bool IFeature_Dx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCo
 
     if (result)
     {
-        if (!Config::Instance()->OverlayMenu.value_or_default() && (Imgui == nullptr || Imgui.get() == nullptr))
-            Imgui = std::make_unique<Menu_Dx12>(Util::GetProcessWindow(), InDevice);
+        if (!Config::Instance()->OverlayMenu.value_or_default())
+        {
+            std::lock_guard lock(ImguiMutex);
+
+            if (Imgui == nullptr || Imgui.get() == nullptr)
+                Imgui = std::make_unique<Menu_Dx12>(Util::GetProcessWindow(), InDevice);
+        }
 
         OutputScaler = std::make_unique<OS_Dx12>("Output Scaling", InDevice, (TargetWidth() < DisplayWidth()));
         RCAS = std::make_unique<RCAS_Dx12>("RCAS", InDevice);
@@ -287,6 +292,9 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
 
 void IFeature_Dx12::RenderLegacyMenu(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InOutput)
 {
+    // Shared with every feature; a dropped feature's destructor resets it on another thread
+    std::lock_guard lock(ImguiMutex);
+
     if (Imgui != nullptr && Imgui.get() != nullptr)
     {
         if (Imgui->IsHandleDifferent())
@@ -359,7 +367,11 @@ IFeature_Dx12::~IFeature_Dx12()
     if (State::Instance().isShuttingDown)
         return;
 
-    Imgui.reset();
+    {
+        std::lock_guard lock(ImguiMutex);
+        Imgui.reset();
+    }
+
     OutputScaler.reset();
     RCAS.reset();
     Bias.reset();
