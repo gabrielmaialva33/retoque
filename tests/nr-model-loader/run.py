@@ -187,10 +187,12 @@ if not (clean_probe.index('nrLock(g_nrMutex)') < clean_probe.index('DlssNrProbeD
     fail('D3D11 probe lock/opt-in/one-shot/loader order changed')
 with tempfile.TemporaryDirectory(prefix='nr-model-probe-') as directory:
     out = Path(directory)
-    (out / 'probe.cpp').write_text('#include "probe_fakes.h"\nnamespace DlssNr {\n'
+    (out / 'probe.cpp').write_text('#include "probe_fakes.h"\n'
+                                   '#include <dlssnr/DlssNr_DriverInitGate.h>\n'  # as DlssNr_Dx12_Model.cpp
+                                   'namespace DlssNr {\n'
                                    'using namespace Dx12Internal;\n' + probe_definition + '\n}\n')
     flags = ['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-pthread',
-             '-Wno-unused-variable', '-Wno-unused-but-set-variable', '-I' + str(root)]
+             '-Wno-unused-variable', '-Wno-unused-but-set-variable', '-I' + str(root), '-I' + str(repo / 'retoque')]
     # Separate compilation retains the probe's real out-of-line/static storage boundaries.
     subprocess.run(flags + ['-c', str(out / 'probe.cpp'), '-o', str(out / 'probe.o')], check=True)
     subprocess.run(flags + [str(root / 'probe_cases.cpp'), str(out / 'probe.o'),

@@ -106,7 +106,8 @@ production.append(block(hooks, 'static VkResult hkvkCreateDevice('))
 production = '\n'.join(production) + '\n'
 
 # The production code reads the NR helpers through its own include root.
-unit = (fakes + '#include <dlssnr/DlssNr_VkExtensions.h>\n#include <hooks/Vulkan_OwnedDeviceRequest.h>\n' + production +
+unit = (fakes + '#include <dlssnr/DlssNr_VkExtensions.h>\n#include <hooks/Vulkan_OwnedDeviceRequest.h>\n'
+        '#include <dlssnr/DlssNr_DriverInitGate.h>\n' + production +
         (HERE / 'cases.cpp').read_text())
 
 CASES = [
@@ -134,6 +135,7 @@ CASES = [
     'extension-spoofing-off-on',
     'd3d-path',
     'nested-create-in-driver',
+    'nr-creates-serialized',
 ]
 # The cases that must fail once the extension lists are function-static again and the hook stops copying the array
 # they build (A-01), once only that copy is gone (a create nested on the same thread inside the driver call), and

@@ -537,6 +537,11 @@ struct Gate
         std::unique_lock lock(mutex);
         cv.wait(lock, [&] { return open; });
     }
+    bool WaitFor(std::chrono::milliseconds bound)
+    {
+        std::unique_lock lock(mutex);
+        return cv.wait_for(lock, bound, [&] { return open; });
+    }
 };
 
 enum class Hold
@@ -684,18 +689,65 @@ void InterleavedD3d()
 
 void InterleavedMixed()
 {
-    Setup native, d3d, nr;
+    Setup native, d3d;
     native.spoofing = true;
     d3d.spoofing = true;
     d3d.d3d = true;
-    nr.spoofing = true;
-    nr.nr = true;
     Interleave(d3d, native, Hold::BeforeRead, "d3d then native");
     Interleave(native, d3d, Hold::BeforeRead, "native then d3d");
-    Interleave(nr, nr, Hold::BeforeRead, "nr on both");
+    // NR on both is not interleaved any more: with NR on, two creates never meet inside the driver
+    // (nr-creates-serialized; retoque/dlssnr/DlssNr_DriverInitGate.h).
     Setup skip = native;
     skip.skip = true;
     Interleave(skip, native, Hold::BeforeRead, "skip scope on A only");
+}
+
+// With NR on, the hook's call down holds the driver-init gate: a second create on another thread does not reach the
+// driver while the first is inside it (the NVIDIA driver froze two threads in vkCreateDevice and the model's NGX
+// creation against each other). NR off, the two still overlap exactly as before the gate.
+void NrCreatesSerialized()
+{
+    for (bool nr : { false, true })
+    {
+        auto gpuA = NvidiaGpu(VK_API_VERSION_1_3);
+        auto gpuB = AmdGpu(VK_API_VERSION_1_3);
+        Setup setup;
+        setup.spoofing = true;
+        setup.nr = nr;
+        Apply(setup, { gpuA.get(), gpuB.get() });
+        Request requestA, requestB;
+        Fill(requestA, Shape::Spoofed);
+        requestA.Build();
+        Fill(requestB, Shape::Individual);
+        requestB.Build();
+
+        Gate aInDriver, bInDriver;
+        std::atomic<bool> overlapped { false };
+        gpuA->onEntry = [&]
+        {
+            aInDriver.Open();
+            overlapped = bInDriver.WaitFor(std::chrono::milliseconds(300)); // B, if it can get in meanwhile
+        };
+        gpuB->onEntry = [&] { bInDriver.Open(); };
+        Outcome a, b;
+        std::thread threadA([&] { a = Create(setup, *gpuA, requestA, "serialized A"); });
+        std::thread threadB(
+            [&]
+            {
+                aInDriver.Wait();
+                b = Create(setup, *gpuB, requestB, "serialized B");
+            });
+        threadA.join();
+        threadB.join();
+        gpuA->onEntry = nullptr;
+        gpuB->onEntry = nullptr;
+
+        if (nr)
+            Check(!overlapped, "NR on: a second vkCreateDevice reached the driver while the first was inside it");
+        else
+            Check(overlapped, "NR off: two creates no longer overlap inside the driver (the NR-off path changed)");
+        std::cout << "  nr=" << nr << ": " << (overlapped ? "overlapped inside the driver" : "serialized") << "\n";
+    }
 }
 
 // A create made on the same thread while the driver is still reading the outer request. The spoofing's lists are
@@ -1184,6 +1236,7 @@ int main(int argc, char** argv)
         { "interleaved-d3d", InterleavedD3d },
         { "interleaved-mixed", InterleavedMixed },
         { "nested-create-in-driver", NestedCreateInDriver },
+        { "nr-creates-serialized", NrCreatesSerialized },
         { "antilag-crosstalk", AntiLagCrosstalk },
         { "capabilities-native", CapabilitiesNative },
         { "capabilities-nr", CapabilitiesNr },

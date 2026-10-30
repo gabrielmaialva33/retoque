@@ -33,6 +33,17 @@ constexpr int kDlssNrForwarderAbi = 2;
 // is lost below this: no one plays at 64 pixels.
 constexpr unsigned int kDlssNrMinExtent = 64;
 
+namespace DlssNr
+{
+// Whether the frame or the model's working size is below kDlssNrMinExtent: then nothing of the model is built for it.
+// One decision for the Vulkan routes (the after-upscale route, the present host's admission and its builder).
+constexpr bool BelowMinExtent(uint32_t width, uint32_t height, uint32_t workWidth, uint32_t workHeight)
+{
+    return width < kDlssNrMinExtent || height < kDlssNrMinExtent || workWidth < kDlssNrMinExtent ||
+           workHeight < kDlssNrMinExtent;
+}
+} // namespace DlssNr
+
 // Which of the passes a dispatch is. One shader, because they read and write the same set of
 // resources and differ only in what they compute.
 enum DlssNrMode : uint32_t

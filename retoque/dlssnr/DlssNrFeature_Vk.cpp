@@ -8,6 +8,7 @@
 #include <NVNGX_Parameter.h>
 #include <proxies/NVNGX_Proxy.h>
 #include <dlssnr/DlssNr_Consumers.h>
+#include <dlssnr/DlssNr_DriverInitGate.h>
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_VkModelOwner.h>
 #include <dlssnr/DlssNr_VkRecording.h>
@@ -248,6 +249,21 @@ constexpr uint32_t kTimingSlots = 4;
 
 VkState g_vk;
 std::mutex g_vkMutex;
+
+// The driver-init gate's lines (DlssNr_DriverInitGate.h) go to the log, from whichever thread waited; set once, at
+// load.
+void ReportDriverInitGate(const std::string& line, bool warning)
+{
+    if (warning)
+        LOG_WARN("{}", line);
+    else
+        LOG_INFO("{}", line);
+}
+const bool g_driverInitGateReported = (DlssNr::DriverInitGate::SetReporter(&ReportDriverInitGate), true);
+
+// Frames the after-upscale route refused below kDlssNrMinExtent, and when it last said so. Under g_vkMutex.
+uint64_t g_vkTooSmall = 0;
+uint64_t g_vkTooSmallSaidMs = 0;
 
 // Called with g_vkMutex held. A recording pin covers unsubmitted and resubmittable work too.
 bool RouteRecordingBusy() { return g_vk.recording.use_count() > 1; }
@@ -1311,18 +1327,19 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         return; // Do not acquire another generation pin while waiting for quiescence.
     }
 
-    // See kDlssNrMinExtent: a probe-sized swapchain must never get a model built for it.
-    if (width < kDlssNrMinExtent || height < kDlssNrMinExtent || workWidth < kDlssNrMinExtent ||
-        workHeight < kDlssNrMinExtent)
+    // See kDlssNrMinExtent: a probe-sized swapchain must never get a model built for it. Every such frame is counted;
+    // the first is said, then at most one line every ten seconds while they go on.
+    if (DlssNr::BelowMinExtent(width, height, workWidth, workHeight))
     {
-        static bool reported = false;
+        ++g_vkTooSmall;
+        const uint64_t now = OwnerNowMs();
 
-        if (!reported)
+        if (g_vkTooSmall == 1 || now - g_vkTooSmallSaidMs >= 10000)
         {
-            reported = true;
+            g_vkTooSmallSaidMs = now;
             LOG_INFO("DLSS-NR Vulkan did not run: {}x{} (working {}x{}) is below {} pixels; the model is not "
-                     "built that small",
-                     width, height, workWidth, workHeight, kDlssNrMinExtent);
+                     "built that small ({} frames refused for it so far)",
+                     width, height, workWidth, workHeight, kDlssNrMinExtent, g_vkTooSmall);
         }
 
         return;
@@ -1405,8 +1422,14 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             return;
         }
 
-        const int result = g_fwd.init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                                      (void*) instance, (void*) physicalDevice, (void*) device, 0x0000015);
+        int result = 0;
+        {
+            // Never at the same moment as a vkCreateDevice (DlssNr_DriverInitGate.h): g_vkMutex -> the gate.
+            DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                               "the model's NGX initialisation (Vulkan, after upscale)");
+            result = g_fwd.init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
+                                (void*) instance, (void*) physicalDevice, (void*) device, 0x0000015);
+        }
 
         if (result != 1)
         {
@@ -1893,11 +1916,16 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     if (g_vk.feature == nullptr)
     {
-        g_vk.feature = g_fwd.create(
-            (void*) cmdBuffer, g_vk.capabilityParams, workWidth, workHeight, (int) cfg.DlssNrPreset.value_or_default(),
-            cfg.DlssNrIntensity.value_or_default(), (int) cfg.DlssNrStyle.value_or_default(),
-            cfg.DlssNrLocalStructure.value_or_default(), cfg.DlssNrLocalTone.value_or_default(),
-            cfg.DlssNrSkinStructure.value_or_default(), cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
+        {
+            DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                               "the model's feature creation (Vulkan, after upscale)");
+            g_vk.feature =
+                g_fwd.create((void*) cmdBuffer, g_vk.capabilityParams, workWidth, workHeight,
+                             (int) cfg.DlssNrPreset.value_or_default(), cfg.DlssNrIntensity.value_or_default(),
+                             (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+                             cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+                             cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
+        }
 
         if (g_vk.feature == nullptr)
         {
@@ -2699,6 +2727,12 @@ void RunBuild(PresentBuildJob& job)
             FreeBuild(job);
     };
 
+    // Admit never asks for one (kDlssNrMinExtent); whatever did, nothing is built below the floor.
+    if (DlssNr::BelowMinExtent(job.key.width, job.key.height, job.key.workWidth, job.key.workHeight))
+        return stop("a build was asked for " + std::to_string(job.key.width) + "x" + std::to_string(job.key.height) +
+                    " (working " + std::to_string(job.key.workWidth) + "x" + std::to_string(job.key.workHeight) +
+                    "), below " + std::to_string(kDlssNrMinExtent) + " pixels; the model is not built that small");
+
     if (job.needDevice)
     {
         activity.Stage("loading the forwarder");
@@ -2721,8 +2755,15 @@ void RunBuild(PresentBuildJob& job)
         // initialises with. The forwarder answers 1 at once for the device it already initialised.
         activity.Stage("initialising NGX on the device (the model's snippet, through the forwarder)");
         const std::wstring dataPath = PresentModelDataPath();
-        const int result = g_fwd.init(snippet->wstring().c_str(), dataPath.c_str(), (void*) job.dev.instance,
-                                      (void*) pd, (void*) d, 0x0000015);
+        int result = 0;
+        {
+            // Never at the same moment as a vkCreateDevice (DlssNr_DriverInitGate.h); the builder holds no lock of
+            // ours.
+            DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                               "the model's NGX initialisation (Vulkan present host)");
+            result = g_fwd.init(snippet->wstring().c_str(), dataPath.c_str(), (void*) job.dev.instance, (void*) pd,
+                                (void*) d, 0x0000015);
+        }
         if (result != 1)
         {
             std::string fault;
@@ -2766,7 +2807,11 @@ void RunBuild(PresentBuildJob& job)
 
         if (!NVNGXProxy::IsVulkanInited())
         {
-            NVNGXProxy::InitVulkan(job.dev.instance, pd, d, vkGetInstanceProcAddr, vkGetDeviceProcAddr);
+            {
+                DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                                   "the driver's NGX core bring-up (Vulkan present host)");
+                NVNGXProxy::InitVulkan(job.dev.instance, pd, d, vkGetInstanceProcAddr, vkGetDeviceProcAddr);
+            }
             if (!NVNGXProxy::IsVulkanInited())
                 return stop("the driver's NGX core would not initialise on this device");
             std::lock_guard<std::mutex> lock(g_presentNgxMutex);
@@ -2967,8 +3012,12 @@ void RunBuild(PresentBuildJob& job)
     // The feature, built cold: no game parameters, the tuning from the config, UI correction on as the after-upscale
     // route creates it. Its initialisation is recorded into this buffer.
     const BuildConfig& c = job.config;
-    job.feature = g_fwd.create((void*) cmd, params, k.workWidth, k.workHeight, c.preset, c.intensity, c.style,
-                               c.localStructure, c.localTone, c.skinStructure, c.autoMask, 1);
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                           "the model's feature creation (Vulkan present host)");
+        job.feature = g_fwd.create((void*) cmd, params, k.workWidth, k.workHeight, c.preset, c.intensity, c.style,
+                                   c.localStructure, c.localTone, c.skinStructure, c.autoMask, 1);
+    }
     if (job.feature == nullptr)
     {
         vkEndCommandBuffer(cmd);
@@ -3518,9 +3567,9 @@ VkPresentAdmission VkPresentModel::Admit(uint32_t width, uint32_t height, uint32
     const uint32_t workWidth = (uint32_t) (width * workScale + 0.5f);
     const uint32_t workHeight = (uint32_t) (height * workScale + 0.5f);
 
-    // See kDlssNrMinExtent: a probe-sized swapchain must never get a model built for it.
-    if (width < kDlssNrMinExtent || height < kDlssNrMinExtent || workWidth < kDlssNrMinExtent ||
-        workHeight < kDlssNrMinExtent)
+    // See kDlssNrMinExtent: a probe-sized swapchain must never get a model built for it. The host counts the refusal
+    // (NrStats, "too small") and its line gives the first one's text.
+    if (DlssNr::BelowMinExtent(width, height, workWidth, workHeight))
     {
         return { NrSkip::TooSmall, std::to_string(width) + "x" + std::to_string(height) + " (working " +
                                        std::to_string(workWidth) + "x" + std::to_string(workHeight) + ") is below " +

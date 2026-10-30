@@ -1486,6 +1486,56 @@ No cycle needs more than these; the remaining blocking waits (a present lock, th
 device destruction) are waits for holders whose work is now bounded or is the game's own, and the watchdog names them
 if that ever stops being true.
 
+### The driver-init gate (2026-10-30)
+
+Added after the lock-order audit above; it changes no lock of the host's and no lifetime rule.
+
+**Why.** janblade's fork (OptiScaler-F5-DLSSNR-Multipass `12de6a03`, GPL-3.0; the idea taken, not the code) recorded
+Assassin's Creed Odyssey on DXVK frozen at startup: live stacks showed the game's thread inside a hooked
+vkCreateDevice, holding the NVIDIA driver's Vulkan lock and waiting for its CUDA lock, and the render thread inside the
+model's NGX feature creation, holding the CUDA lock and waiting for the Vulkan lock. Not reproduced here.
+
+**What.** `retoque/dlssnr/DlssNr_DriverInitGate.h`: one process-wide, re-entrant, bounded gate. It is held only across
+the opaque call: each vkCreateDevice call down of ours (OptiScaler's `hkvkCreateDevice` and the host's `hkCreateDevice`,
+**only with `[DlssNr] Enabled`**, so NR off is unchanged), and each NGX initialisation, core bring-up and feature
+creation the model makes -- D3D12 (`g_nr.create` x2, `NVNGXProxy::InitDx12` in `EnsureCapabilityParams`, the
+enlargement's DLSS feature, the opt-in proxy and D3D11 probes; the D3D11 and Vulkan bridges run through these), the
+after-upscale route (`g_fwd.init`, `g_fwd.create`) and the builder (`g_fwd.init`, `NVNGXProxy::InitVulkan`,
+`g_fwd.create`). A wait that reaches 10 s goes ahead without the gate and logs a warning; every wait of a millisecond
+or more is logged (`DLSS-NR driver-init gate: ... waited N ms for ...`).
+
+**Its place in the order: innermost.** Read at every acquisition site (`tests/nr-driver-init-gate` checks the held set
+at each and freezes where the named locks are taken):
+
+| Site | Held when the gate is taken |
+|---|---|
+| D3D12 `Dispatch` (`DlssNr_Dx12.cpp`: `std::lock_guard nrLock(g_nrMutex)` first in it), its core init, probes, enlargement | `g_nrMutex`; `g_preMutex` above it on the before-upscale route (`g_preMutex` -> `g_nrMutex` -> gate) |
+| after-upscale route (`EvaluateAfterUpscaleVk`, `lock_guard(g_vkMutex)`) | `g_vkMutex` |
+| builder (`RunBuild`) | nothing of ours: `g_presentNgxMutex` scopes end before and start after each call |
+| both vkCreateDevice call downs | nothing of the hook's |
+
+While it is held our code takes nothing: only the call runs. What a gate holder can reach is the driver (a
+vkCreateDevice reaches no hook of ours) or NGX, which reaches our hooks only through Vulkan or D3D12 calls: the host's
+queue-call hooks take a queue's submit lock, whose holders (a present's round-trip submits, the builder's one submit,
+the game's submits) never wait for the gate. `g_preMutex`, `g_nrMutex`, `g_vkMutex` and `g_presentNgxMutex` are taken
+only in NR's own entry points (`DlssNr_Dx12*.cpp`, `DlssNrFeature_Vk.cpp`), none of them a hook an NGX call reaches.
+
+**The one cycle found, and how it is avoided.** The host's `hkCreateDevice` runs below OptiScaler's (`Install` attaches
+first; see `DlssNr_VkPresentHost.h`) and takes the transport lock after its call down; `vkDestroyDevice` takes
+`g_vkMutex` under the transport lock (`AfterUpscaleDeviceGone`, the table above); the after-upscale route takes the gate
+under `g_vkMutex`. Held across the host's hook, the gate would close transport -> `g_vkMutex` -> gate -> transport. So
+the host's hook begins with `OwnCode`: the thread's device-create holds are let go for its own code and taken back when
+it returns, and only its own call down holds the gate. `OwnCode` never lets go of a hold an NGX call made (a create
+nested inside NGX keeps it). The host test runs that three-thread chain: it finishes; with `OwnCode` letting nothing go
+it ends only at the bound.
+
+**Not established.** That the NVIDIA driver's inversion is the only one (a vkd3d-proton or NGX-internal lock a gate
+waiter's caller holds while NGX needs it would show as a 10 s warning, not a hang); NGX creating a device through
+`vulkan-1.dll` from inside an NGX call (re-entry keeps it safe from itself; the host's transport lock would then be
+taken under the gate, as it already is under `g_vkMutex` without it). The game's own DLSS feature creation through
+OptiScaler's upscaler backends is not gated: the evidence names the model's. Needs a game run (the Odyssey case on
+DXVK, a DXVK/vkd3d-proton title with the present host) and a native Windows run.
+
 ### The stall watchdog
 
 A host thread, started by `Install` after its gate (so it does not exist with `VulkanPresentHost` off), wakes every

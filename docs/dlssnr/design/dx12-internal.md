@@ -17,7 +17,9 @@ The internal header is not part of the public feature API. It must never include
 `pch.h`, define shared storage, or gain a header-local mutex/cache. The global class
 implementation uses a CPP-only using-directive. Existing public entrypoints remain
 in `DlssNr`. The lock order remains pre-upscale mutex before NR mutex; diagnostics
-retain their existing nested publication locks. Shutdown remains in the owner TU.
+retain their existing nested publication locks. Since 2026-10-30 the model's NGX
+initialisation and feature creation take the driver-init gate innermost, under the NR
+mutex (`nr-vulkan-present-host.md`, "The driver-init gate (2026-10-30)"). Shutdown remains in the owner TU.
 
 Source-region host fixtures read moved types from the header through the explicit
 `renderer_with_internal_types()` helper; the ordinary source concatenator still

@@ -2,6 +2,7 @@
 
 #include "DlssNr_Dx12_Internal.h"
 #include <dlssnr/DlssNr_DirectRuntime.h>
+#include <dlssnr/DlssNr_DriverInitGate.h>
 #include <dlssnr/DlssNr_Consumers.h>
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_Session.h>
@@ -122,13 +123,22 @@ void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList)
     // settles it: if a nonsense id comes back differently, the difference is knowledge of feature
     // 18. If both come back the same, the first result meant nothing.
     NVSDK_NGX_Handle* handle = nullptr;
-    const auto result = (unsigned int) create(cmdList, (NVSDK_NGX_Feature) 18, params, &handle);
+    unsigned int result = 0;
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true, "the proxy probe's feature 18");
+        result = (unsigned int) create(cmdList, (NVSDK_NGX_Feature) 18, params, &handle);
+    }
 
     if (handle != nullptr && release != nullptr)
         release(handle);
 
     NVSDK_NGX_Handle* controlHandle = nullptr;
-    const auto control = (unsigned int) create(cmdList, (NVSDK_NGX_Feature) 200, params, &controlHandle);
+    unsigned int control = 0;
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                           "the proxy probe's control feature");
+        control = (unsigned int) create(cmdList, (NVSDK_NGX_Feature) 200, params, &controlHandle);
+    }
 
     if (controlHandle != nullptr && release != nullptr)
         release(controlHandle);
@@ -304,7 +314,15 @@ bool EnsureCapabilityParams(ID3D12Device* device)
     if (g_nr.capabilityParams != nullptr)
         return true;
 
-    if (!NVNGXProxy::IsDx12Inited() && !NVNGXProxy::InitDx12(device))
+    bool coreUp = NVNGXProxy::IsDx12Inited();
+    if (!coreUp)
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                           "the NGX core's initialisation (D3D12)");
+        coreUp = NVNGXProxy::InitDx12(device);
+    }
+
+    if (!coreUp)
     {
         g_nr.reason = "the NGX core would not initialise";
         return false;
@@ -595,8 +613,12 @@ void ProbeD3D11(void* d3d11Device)
     int attempt = 0;
     int results[4] = { -9, -9, -9, -9 };
 
-    const int result = init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
-                            d3d11Device, 0x0000015, &attempt, results);
+    int result = 0;
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true, "the D3D11 init probe");
+        result = init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(), d3d11Device,
+                      0x0000015, &attempt, results);
+    }
 
     static const char* kNames[4] = { "Init_Ext on our own copy", "Init on our own copy",
                                      "Init_Ext on the shared module", "Init on the shared module" };

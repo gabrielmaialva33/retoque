@@ -3,6 +3,7 @@
 #include "DlssNr_Dx12_Internal.h"
 #include "DlssNr_GuideMatch_Dx12.h"
 #include <dlssnr/DlssNr_ReplayClock.h>
+#include <dlssnr/DlssNr_DriverInitGate.h>
 #include <proxies/NVNGX_Proxy.h>
 #include <State.h>
 #include <Logger.h>
@@ -187,7 +188,12 @@ void BuildEnlarger(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, con
     }
 
     const DlssNr::PrivateSr::Shape shape { f.workWidth, f.workHeight, f.width, f.height, f.depthInverted };
-    const auto created = bundle->feature.Create(api, cmdList, shape);
+    NVSDK_NGX_Result created = NVSDK_NGX_Result_Fail;
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                           "the enlargement's DLSS feature creation");
+        created = bundle->feature.Create(api, cmdList, shape);
+    }
 
     if (created != NVSDK_NGX_Result_Success)
     {

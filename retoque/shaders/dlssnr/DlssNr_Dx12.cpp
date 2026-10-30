@@ -22,6 +22,7 @@
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
 #include <dlssnr/DlssNr_DirectRuntime.h>
 #include <dlssnr/DlssNr_DriverGate.h>
+#include <dlssnr/DlssNr_DriverInitGate.h>
 #include <dlssnr/DlssNr_NgxInfo.h>
 #include <dlssnr/DlssNr_PresentColour.h>
 #include <dlssnr/DlssNr_DisplayWhite.h>
@@ -1519,13 +1520,19 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             }
             VideoMemory(device, memoryBefore);
         }
-        g_nr.feature = g_nr.create(
-            snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(), device, cmdList,
-            g_nr.capabilityParams, workWidth, workHeight, static_cast<int>(presetForChain), intensityForChain,
-            styleForChain, localStructureForChain, localToneForChain, skinStructureForChain, autoMaskForChain ? 1 : 0,
-            // UI correction at the model's own default: with no UI layer fed to it there
-            // is nothing for it to correct.
-            1);
+        {
+            // Never at the same moment as a vkCreateDevice (DlssNr_DriverInitGate.h): g_nrMutex -> the gate.
+            DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                               "the model's feature creation (D3D12)");
+            g_nr.feature =
+                g_nr.create(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(), device,
+                            cmdList, g_nr.capabilityParams, workWidth, workHeight, static_cast<int>(presetForChain),
+                            intensityForChain, styleForChain, localStructureForChain, localToneForChain,
+                            skinStructureForChain, autoMaskForChain ? 1 : 0,
+                            // UI correction at the model's own default: with no UI layer fed to it there
+                            // is nothing for it to correct.
+                            1);
+        }
         ++g_nr.featureGeneration; // a carried edit belongs to the feature that made it
 
         if (chainEnabled)
@@ -1643,11 +1650,15 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             }
             const auto& settings = passSnapshot.Settings[i];
             SetExtras(cfg, nullptr, nullptr, 0, 0, 0, 0);
-            g_nr.passFeature[i] =
-                g_nr.create(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(), device,
-                            cmdList, g_nr.capabilityParams, workWidth, workHeight, (int) settings.Preset,
-                            settings.Intensity, (int) settings.Style, settings.LocalStructure, settings.LocalTone,
-                            settings.SkinStructure, settings.AutoMask ? 1 : 0, 1);
+            {
+                DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                                   "a chained pass's feature creation (D3D12)");
+                g_nr.passFeature[i] =
+                    g_nr.create(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(), device,
+                                cmdList, g_nr.capabilityParams, workWidth, workHeight, (int) settings.Preset,
+                                settings.Intensity, (int) settings.Style, settings.LocalStructure, settings.LocalTone,
+                                settings.SkinStructure, settings.AutoMask ? 1 : 0, 1);
+            }
             ++g_nr.featureGeneration;
             g_nr.passBuilt[i] = settings;
             g_nr.creationFrame[i] = observedFrame;
