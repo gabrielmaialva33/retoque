@@ -515,6 +515,7 @@ struct PulseSession
         int64_t ms = 0;
         DlssNr::Pulse::Kind kind = DlssNr::Pulse::Kind::Every;
         uint32_t cadence = 1;
+        float preExposure = 1.0f; // the frame's, for the exposure scan's meter ([DlssNr] ScanMatch)
         DlssNr::Submission::Usage usage {};
     };
 
@@ -781,9 +782,9 @@ void DetailMeasureCopy(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device,
                        ID3D12Resource* from, D3D12_RESOURCE_STATES fromState);
 void NotePulsePresent(uint64_t present);
 void PublishPulse(bool running, bool failed);
-void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, ID3D12Resource* target,
-                 ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height, uint32_t format,
-                 uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
+void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, bool meter,
+                 ID3D12Resource* target, ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height,
+                 uint32_t format, uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
                  uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs);
 void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound);
 void ConsumeMeterReadback();

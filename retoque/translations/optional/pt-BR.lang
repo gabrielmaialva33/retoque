@@ -78,6 +78,8 @@ Paper white	Branco de referência
 Highlight guard	Proteção de altas luzes
 Highlight recovery	Recuperação de altas luzes
 Show the light meter on screen	Mostrar medidor de luz na tela
+Choose the buffer by matching it to the light	Escolher o buffer comparando-o com a luz
+Off: the buffer whose value travels widest drives the white point, as before.\nA counter or a timer travels widest of all, and then the picture drifts.\n\nOn: the buffer whose value follows the light of the game's own frame the\nway an exposure does -- a little behind it, as eyes adapt -- and nothing\nuntil that is sure, which takes about half a minute of walking between\nlight and shade. Timers, frozen values and the frame's own brightness\nare turned down. Paper white is used until then.\n\nAnchors set under one rule may need setting again under the other.\nCosts one small measuring pass a frame. Adapted from janblade's fork.	Desligado: o buffer cujo valor varia mais conduz o ponto branco, como antes.\nUm contador ou cronômetro varia mais que todos, e a imagem deriva.\n\nLigado: o buffer cujo valor acompanha a luz do próprio quadro do jogo como uma\nexposição -- um pouco atrás, como os olhos se adaptam -- e nenhum até ter certeza,\no que leva cerca de meio minuto andando entre luz e sombra. Cronômetros, valores\ncongelados e o próprio brilho do quadro são recusados. Até lá usa-se o branco de referência.\n\nPontos criados com uma regra podem precisar ser refeitos com a outra.\nCusta uma pequena passagem de medição por quadro. Adaptado do fork de janblade.
 Anchor here	Criar ponto aqui
 The number runs the other way	O valor varia no sentido inverso
 Advanced	Avançado

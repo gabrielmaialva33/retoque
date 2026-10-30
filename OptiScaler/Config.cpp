@@ -513,6 +513,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrScanAnchorWhitePoint.set_from_config(readFloat("DlssNr", "ScanAnchorWhitePoint"));
             DlssNrScanAnchors.set_from_config(readString("DlssNr", "ScanAnchors"));
             DlssNrScanInverted.set_from_config(readBool("DlssNr", "ScanInverted"));
+            DlssNrScanMatch.set_from_config(readBool("DlssNr", "ScanMatch"));
             DlssNrWhitePointTrim.set_from_config(readFloat("DlssNr", "WhitePointTrim"));
             DlssNrWhitePointScale.set_from_config(readFloat("DlssNr", "WhitePointScale"));
             DlssNrKernelProfile.set_from_config(readBool("DlssNr", "KernelProfile"));
@@ -1951,6 +1952,7 @@ bool Config::SaveIni()
                      GetFloatValue(Instance()->DlssNrScanAnchorWhitePoint.value_for_config()).c_str());
         ini.SetValue("DlssNr", "ScanAnchors", Instance()->DlssNrScanAnchors.value_for_config_or("").c_str());
         ini.SetValue("DlssNr", "ScanInverted", GetBoolValue(Instance()->DlssNrScanInverted.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "ScanMatch", GetBoolValue(Instance()->DlssNrScanMatch.value_for_config()).c_str());
         ini.SetValue("DlssNr", "ScanMeter", GetBoolValue(Instance()->DlssNrScanMeter.value_for_config()).c_str());
         ini.SetValue("DlssNr", "UseProxy", GetBoolValue(Instance()->DlssNrUseProxy.value_for_config()).c_str());
         ini.SetValue("DlssNr", "ModelLoader",

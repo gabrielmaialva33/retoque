@@ -25,6 +25,7 @@ class Config
     TestOption<bool> DlssNrEnabled { true };
     TestOption<int> DlssNrWhitePointSource { 2 };
     TestOption<bool> DlssNrScanExposure { false };
+    TestOption<bool> DlssNrScanMatch { false };
     TestOption<std::string> DlssNrScanAnchors {};
     TestOption<float> DlssNrScanAnchorValue { 0.0f };
     TestOption<float> DlssNrScanAnchorWhitePoint { 0.0f };

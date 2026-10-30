@@ -61,7 +61,9 @@ assert '-T cs_6_0 -E CSMain' in shader
 update = renderer[renderer.index('void UpdatePulse('):]
 update = update[:update.index('\n}\n')]
 assert renderer.count('new DlssNr_Pulse_Dx12(') == 1 and 'new DlssNr_Pulse_Dx12(' in update
-off = update.index('if (!enabled || !DlssNr_Pulse_Dx12::Available())')
+# With the exposure scan's meter ([DlssNr] ScanMatch, docs/dlssnr/design/exposure-scan-match.md) the pass also runs
+# for the meter alone; with both off it is built and records nothing, as before.
+off = update.index('if ((!enabled && !meter) || !DlssNr_Pulse_Dx12::Available())')
 assert off < update.index('StopPulseLocked();', off) < update.index('new DlssNr_Pulse_Dx12(')
 assert renderer.count('UpdatePulse(cmdList, device, cfg.DlssNrPulseMetric.value_or_default(),') == 1
 assert renderer.count('g_pulse.pass->Record(') == 1

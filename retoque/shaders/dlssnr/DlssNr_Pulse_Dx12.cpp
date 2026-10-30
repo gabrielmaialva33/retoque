@@ -206,3 +206,11 @@ double DlssNr_Pulse_Dx12::Light(uint32_t slot) const
         return NAN;
     return DlssNr::Pulse::EditLight(static_cast<const float*>(_mappedReadback[slot]));
 }
+
+double DlssNr_Pulse_Dx12::InputLuma(uint32_t slot) const
+{
+    slot %= DLSSNR_PULSE_SLOTS;
+    if (_mappedReadback[slot] == nullptr)
+        return NAN;
+    return DlssNr::Pulse::MeanInputLuma(static_cast<const float*>(_mappedReadback[slot]));
+}

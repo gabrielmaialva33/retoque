@@ -10,6 +10,7 @@
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_PairCaptureDx12.h>
 #include <dlssnr/DlssNr_Proxy.h>
+#include <dlssnr/DlssNr_ExposureMatch.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/DlssNr_Replay.h>
 #include <dlssnr/DlssNr_ReplayClock.h>
@@ -387,15 +388,26 @@ static void StopPulseLocked()
 // starts over if what is measured changed; then measures this frame if the pass wrote it. A present it cannot measure
 // -- the pass returned early, did not write, the slot is still in flight, the list cannot be tracked -- still took a
 // sequence number in NotePulsePresent, so the pair across it is broken rather than bridged.
-void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, ID3D12Resource* target,
-                 ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height, uint32_t format,
-                 uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
+//
+// `meter`: the exposure scan's match wants the game's frame's light ([DlssNr] ScanMatch,
+// docs/dlssnr/design/exposure-scan-match.md). The same reduction serves it, so the pass also runs for the meter alone;
+// the metric's window, log and steps then stay empty, as with the metric off.
+void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, bool meter,
+                 ID3D12Resource* target, ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height,
+                 uint32_t format, uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
                  uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs)
 {
-    if (!enabled || !DlssNr_Pulse_Dx12::Available())
+    if ((!enabled && !meter) || !DlssNr_Pulse_Dx12::Available())
     {
         StopPulseLocked();
         return;
+    }
+
+    // The meter alone: nothing is filed under the metric, so turning it on later starts its window afresh.
+    if (!enabled)
+    {
+        g_pulse.tracker.Reset();
+        g_pulse.logGate.Reset();
     }
 
     if (g_pulse.pass != nullptr && !g_pulse.pass->BuiltFor(device))
@@ -429,10 +441,16 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
     {
         auto& slot = g_pulse.slots[done[k]];
         slot.pending = false;
+
+        // The game's frame's light, whatever the metric's window: a change of shape does not change the scene.
+        if (meter)
+            DlssNr::ExposureScan::NoteMeter(
+                DlssNr::ExposureMatch::Meter(g_pulse.pass->InputLuma(done[k]), slot.preExposure));
+
         if (slot.stale)
             continue;
 
-        if (g_pulse.tracker.Add(slot.seq, slot.ms, slot.kind, g_pulse.pass->Light(done[k]), slot.cadence))
+        if (enabled && g_pulse.tracker.Add(slot.seq, slot.ms, slot.kind, g_pulse.pass->Light(done[k]), slot.cadence))
         {
             PublishPulse(true, false);
             if (g_pulse.logGate.Due(nowMs))
@@ -487,6 +505,7 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
                 slot.ms = nowMs;
                 slot.kind = DlssNr::Pulse::KindOf(cadenceInEffect, carried);
                 slot.cadence = cadenceRequested;
+                slot.preExposure = g_nr.gamePreExposure;
                 g_pulse.next = (g_pulse.next + 1) % DLSSNR_PULSE_SLOTS;
             }
         }

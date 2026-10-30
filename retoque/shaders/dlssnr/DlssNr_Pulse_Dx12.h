@@ -47,6 +47,10 @@ class DlssNr_Pulse_Dx12 : public Shader_Dx12
     // nothing to compare.
     double Light(uint32_t slot) const;
 
+    // The game's frame's mean luminance from the slot's readback (DlssNr::Pulse::MeanInputLuma), for the exposure
+    // scan's meter. NaN if nothing was measured.
+    double InputLuma(uint32_t slot) const;
+
   private:
     static constexpr uint32_t kSrvCount = 2;
     static constexpr uint32_t kUavCount = 1;

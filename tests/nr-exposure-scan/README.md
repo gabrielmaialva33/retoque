@@ -55,6 +55,10 @@ process, because the scan's state is global. Design: `docs/dlssnr/design/exposur
 | `budget` | review E-05, built with a copy budget of 8: at most 8 first copies, none while the budget is held by unconfirmed copies, retained let-gos within it, copying resumes once confirmed |
 | `inert-off`, `inert-unwanted` | NR off, or the scan not the white point's source: no reference, no copy (and with NR off nothing examined) |
 | `untracked` | a list the tracker refuses gets no copies, and the status says why |
+| `match-off` | `ScanMatch` off: widest travel offers a timer though the meter follows another candidate (the default rule, unchanged) |
+| `match-on` | `ScanMatch` on: nothing offered before the match is sure; then the adapted divisor-form exposure, not the timer |
+| `match-eased` | a lag-0 match (the per-frame target) is eased: a 1 EV flash over one sweep moves the offered value ~0.02 EV |
+| `match-inert` | the meter is wanted only with the scan the source and the key on |
 
 Source guards then check the call sites and the review fixes (the boundary carries only committed candidates and
 lets everything go with the scan off, a Tick with the scan off lets go, a slot is reused only after its recording

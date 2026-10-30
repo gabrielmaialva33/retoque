@@ -1107,6 +1107,159 @@ void Inert(const char* how)
         Expect(Scan::Examined() == 0, "nothing examined with NR off");
 }
 
+// ---- [DlssNr] ScanMatch (docs/dlssnr/design/exposure-scan-match.md)
+// --------------------------------------------------
+//
+// The meter arrives as the pulse pass delivers it in the renderer: one reading a frame, through NoteMeter.
+void FeedMeter(float meter) { Scan::NoteMeter(meter); }
+
+std::string MatchLineNow() { return Scan::MatchLine(); }
+
+// The light the player walks through: 6 EV and back every 800 frames, from a dark interior to daylight.
+float Light(int frame) { return std::exp2(-2.0f + 3.0f * (1.0f - std::cos(6.2831853f * (float) frame / 800.0f))); }
+
+// One frame of the scene: the meter reads the light with a little noise (as the pulse pass reads the game's frame).
+float MeterAt(int frame) { return Light(frame) * std::exp2(0.1f * std::sin((float) frame * 1.7f)); }
+
+struct MatchScene
+{
+    Resource* timer = nullptr;   // a 1x1 that climbs every frame: x500 travel, the widest by far
+    Resource* frozen = nullptr;  // one value for the whole run
+    Resource* adapted = nullptr; // the game's exposure, a divisor eased behind the light: x64 travel
+    Resource* target = nullptr;  // the game's per-frame target, a multiplier at lag 0 (made only when asked)
+    float adaptedLog = 0.0f;
+    bool started = false;
+
+    void Make(bool withTarget)
+    {
+        timer = Create("timer", 0.02f);
+        frozen = Create("frozen", 1.0f);
+        adapted = Create("adapted", 1.0f);
+        if (withTarget)
+            target = Create("target", Light(0));
+    }
+
+    // Sets this frame's values, feeds the meter and runs the frame.
+    void Step(int f, float flash = 1.0f)
+    {
+        timer->SetFloat(0.02f + 0.004f * (float) f);
+        const float light = Light(f);
+        adaptedLog = started ? adaptedLog + (std::log2(light) - adaptedLog) * (1.0f - std::exp(-1.0f / 48.0f))
+                             : std::log2(light);
+        started = true;
+        adapted->SetFloat(0.5f / std::exp2(adaptedLog));
+        if (target != nullptr)
+            target->SetFloat(2.0f * light * flash);
+        FeedMeter(MeterAt(f));
+        Frame();
+    }
+
+    float Adapted() const { return 0.5f / std::exp2(adaptedLog); }
+};
+
+float Contents(const Resource* r)
+{
+    float v = 0.0f;
+    std::memcpy(&v, r->contents, sizeof(v));
+    return v;
+}
+
+// Stops between an offered value and a candidate's current one. The offered value is the last sweep's, read a few
+// frames late and, after a mover is found, every fourth frame: close, not equal.
+float StopsFrom(float offered, const Resource* r)
+{
+    return offered > 0.0f && Contents(r) > 0.0f ? std::fabs(std::log2(offered / Contents(r))) : 1e9f;
+}
+
+// Key off: the scan's rule is widest travel exactly as before -- the timer is offered, whatever the meter says.
+void MatchOff()
+{
+    Begin();
+    MatchScene scene;
+    scene.Make(false);
+    for (int f = 0; f < 2400; ++f)
+        scene.Step(f);
+
+    const Found best = Best();
+    Expect(StopsFrom(best.value, scene.timer) < 0.02f && best.high > best.low * 100.0f,
+           "key off: widest travel offers the timer (" + std::to_string(best.value) + ")");
+    Expect(MatchLineNow().empty(), "key off: no match line");
+}
+
+// Key on: nothing is offered until the match is sure, and then it is the adapted exposure, not the timer.
+void MatchOn()
+{
+    Begin();
+    Config::Instance()->DlssNrScanMatch = true;
+    MatchScene scene;
+    scene.Make(false);
+
+    bool offeredEarly = false;
+    for (int f = 0; f < 2400; ++f)
+    {
+        scene.Step(f);
+        if (f == 600)
+            offeredEarly = Best().value != 0.0f;
+    }
+
+    Expect(!offeredEarly, "key on: nothing is offered before the match is sure (no widest-travel fallback)");
+    const Found best = Best();
+    Expect(StopsFrom(best.value, scene.adapted) < 0.3f && StopsFrom(best.value, scene.timer) > 1.0f,
+           "key on: the adapted exposure is offered (" + std::to_string(best.value) + " vs " +
+               std::to_string(Contents(scene.adapted)) + ", timer " + std::to_string(Contents(scene.timer)) + ")");
+    const std::string line = MatchLineNow();
+    Expect(line.find("divisor") != std::string::npos, "the match line names its units: " + line);
+    std::printf("  match line: %s\n", line.c_str());
+}
+
+// A match at lag 0 (the game's per-frame target) is eased: a 1 EV flash over one sweep moves the offered value a
+// little, not a stop. The candidate itself reads the flash.
+void MatchEased()
+{
+    Begin();
+    Config::Instance()->DlssNrScanMatch = true;
+    MatchScene scene;
+    scene.Make(true);
+    // The target alone follows the light: the adapted one is left out of this case by holding it frozen.
+    for (int f = 0; f < 2400; ++f)
+    {
+        scene.Step(f);
+        scene.adapted->SetFloat(1.0f);
+    }
+
+    const float before = Best().value;
+    Expect(StopsFrom(before, scene.target) < 0.3f && StopsFrom(before, scene.timer) > 1.0f,
+           "the per-frame target is matched and offered (" + std::to_string(before) + " vs " +
+               std::to_string(Contents(scene.target)) + ")");
+    for (int f = 2400; f < 2404; ++f)
+        scene.Step(f, 2.0f); // a pan into a sunlit wall and back: one sweep reads it
+    const float during = Best().value;
+    for (int f = 2404; f < 2408; ++f)
+        scene.Step(f);
+
+    const float moved = std::fabs(std::log2(during / std::max(before, 1e-6f)));
+    Expect(moved < 0.25f, "the flash moved the offered value " + std::to_string(moved) + " EV (raw: 1 EV)");
+    std::printf("  flash: 1 EV raw, %.3f EV offered\n", moved);
+}
+
+// The meter is ignored with the key off, and with it on but the scan unwanted nothing is held or recorded.
+void MatchInert()
+{
+    Begin();
+    Config::Instance()->DlssNrScanMatch = true;
+    Config::Instance()->DlssNrWhitePointSource = 0;
+    MatchScene scene;
+    scene.Make(false);
+    for (int f = 0; f < 50; ++f)
+        scene.Step(f);
+    Expect(scene.adapted->ScanRefs() == 0 && g_copiesRecorded == 0, "the scan unwanted: nothing held or copied");
+    Expect(!Scan::MeterWanted(), "the meter is not wanted with the scan unwanted");
+    Config::Instance()->DlssNrWhitePointSource = 2;
+    Expect(Scan::MeterWanted(), "the meter is wanted with the scan the source and the key on");
+    Config::Instance()->DlssNrScanMatch = false;
+    Expect(!Scan::MeterWanted(), "the meter is not wanted with the key off");
+}
+
 } // namespace
 
 namespace DlssNr::Submission
@@ -1178,6 +1331,10 @@ int main(int argc, char** argv)
         { "inert-off", [] { Inert("off"); } },
         { "inert-unwanted", [] { Inert("unwanted"); } },
         { "untracked", [] { Inert("untracked"); } },
+        { "match-off", MatchOff },
+        { "match-on", MatchOn },
+        { "match-eased", MatchEased },
+        { "match-inert", MatchInert },
     };
 
     if (argc == 2 && std::strcmp(argv[1], "--list") == 0)

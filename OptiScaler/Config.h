@@ -658,6 +658,12 @@ class Config
     // the picture moves the wrong way, flip it.
     CustomOptional<bool> DlssNrScanInverted { false };
 
+    // Which scan candidate drives the white point: off (the default), the one with the widest travel, as ever; on,
+    // the one whose value follows the light of the game's frame the way an exposure does, fitted on log scales with
+    // eye-adaptation lag, and nothing until that fit is sure. Opt-in, D3D12, and it runs the pulse pass's measuring
+    // reduction to read the frame's light. docs/dlssnr/design/exposure-scan-match.md; adapted from janblade's fork.
+    CustomOptional<bool> DlssNrScanMatch { false };
+
     // The trim on an exposure-derived white point, kept apart from the manual divisor on purpose.
     //
     // These are two different quantities that happened to share one slider: the manual path wants an

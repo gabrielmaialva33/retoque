@@ -3488,10 +3488,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // The pulse metric ([DlssNr] PulseMetric, docs/dlssnr/design/pulse-metric.md): the edit's light on every frame the
     // pass wrote, its change from the frame before filed under the kind of frame this one was. Off builds and records
     // nothing; on, one small reduction of the target against the untouched copy, after the stabilizer, so it measures
-    // what is shown.
-    UpdatePulse(cmdList, device, cfg.DlssNrPulseMetric.value_or_default(), target, g_nr.hdrCopy, wrote, width, height,
-                static_cast<uint32_t>(desc.Format), cadenceInputs.requested, cadenceInputs.smoothing,
-                DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default()),
+    // what is shown. The same reduction is the exposure scan's meter when its match wants one ([DlssNr] ScanMatch);
+    // with both off it builds and records nothing.
+    UpdatePulse(cmdList, device, cfg.DlssNrPulseMetric.value_or_default(), DlssNr::ExposureScan::MeterWanted(), target,
+                g_nr.hdrCopy, wrote, width, height, static_cast<uint32_t>(desc.Format), cadenceInputs.requested,
+                cadenceInputs.smoothing, DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default()),
                 DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default()), cadence.cadence, carried, observedFrame,
                 std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
 

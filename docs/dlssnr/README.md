@@ -65,6 +65,7 @@ These are records, not designs.
 - [hdr-present-conversion.md](design/hdr-present-conversion.md): decoding HDR10 and scRGB to linear BT.709 and re-encoding around the present pass.
 - [multi-point-anchoring.md](design/multi-point-anchoring.md): more than one anchor for the scanned-exposure white point.
 - [exposure-scan-capacity.md](design/exposure-scan-capacity.md): what makes an exposure-scan candidate safe to hold, copy and use; a full list and a feature release without losing the exposure.
+- [exposure-scan-match.md](design/exposure-scan-match.md): `ScanMatch`, the opt-in choice of the scan's candidate by correlation with the frame's light (adapted from janblade).
 - [hud-protection.md](design/hud-protection.md): protecting the HUD through the model's UI correction.
 - [output-stabilizer.md](design/output-stabilizer.md): hold still pixels still and follow the model where the game moved.
 - [residual-limit.md](design/residual-limit.md): an optional flat bound, in stops, on how far the model may move a pixel's light, inside the guard.
