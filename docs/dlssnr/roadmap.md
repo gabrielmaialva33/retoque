@@ -26,7 +26,7 @@ Do not overwrite a newer field record with this planning snapshot; link the new 
 | 1 | Revisit ViT reuse | Reconcile [vit-skip](design/vit-skip.md) with the newer reference implementation; profile on target hardware, especially Ampere, before a port. Include cuts, resize and total-frame cost |
 | 2 | User-facing diagnostic export and effective-state explanation | Reuse current NGX/route/guide facts; separate detected inputs from inputs actually used. This is a future in-game feature, not the release sidecar added by repository tooling |
 | 3 | Adaptive LSFG multiplier | Establish presenter's runtime baseline first; measure real FPS, latency and pacing, not only generated FPS. Respect V-Sync target limits without changing VRR |
-| 4 | Evaluate RR scale 0.75 on Ada | Extend the [retention study](design/working-scale-detail-retention.md) beyond one clip; A/A calibration, visual review, non-RR and varied motion. Defaults stay unchanged |
+| 4 | Evaluate RR scale 0.75 on Ada | Extend the [retention study](design/working-scale-detail-retention.md) beyond one clip; A/A calibration, visual review, non-RR and varied motion. Pin and record the RR provider and preset: SDK 310.9.1 made RR Preset F the default. Defaults stay unchanged |
 | 5 | Additional temporal / private-reconstruction ideas | Compare against existing Stage/Transfer behavior and [rejected measurements](design/look-model-half-rate.md); only a demonstrated gap earns a new experiment |
 
 ## Implemented paths with remaining coverage work

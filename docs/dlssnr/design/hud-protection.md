@@ -50,6 +50,21 @@ kibblerz probed feature 18 of the same 310.8 package directly
   overrides the automatic mask. control-mask.md found no effect in 13 trials, with the mask written
   through the same `unsigned long long` slot the forwarder uses for `Color`, which works. Both used
   310.8. This slice does not depend on ControlMask. `--mask-ab` stays available to re-ask.
+- **2026-10-30: the "no effect" result may be specific to 310.8. This is a re-test lead, not a result.** Two
+  later sources, read with `gh api` and not reproduced here:
+  - **NVIDIA's RTX Remix** (`NVIDIAGameWorks/dxvk-remix` commit `09808cc70`, 2026-10-16) now always passes a
+    control mask through the Vulkan evaluate parameters (`pInControlMask`). The mask is a render-size
+    `R8G8B8A8_UNORM` image created with clear value 1 (`rtx_resources.cpp`). The subrect is the whole mask:
+    `InControlMaskSubrectBase` {0,0}, `InControlMaskSubrectSize` the mask's extent. With the automatic mask on,
+    it sets `InMaskBlendMode` to `NVSDK_NGX_DLSSNR_Mask_Blend_Mode_Min`. Before that commit the mask was null
+    whenever the automatic mask was on.
+  - **GrimsVerk/nr-runtime-research** (static analysis and Witcher 3 tests; its report says Claude wrote it)
+    reports these channel meanings: R scales intensity, G local tone, B structure. It also reports that 310.8 has
+    no `MaskBlendMode` and turns the automatic skin/structure mask off whenever any mask is set. In 310.9.16,
+    `MaskBlendMode` 1–3 keeps the automatic mask and combines it with B by average, min or max.
+  - If that reading holds, an all-ones mask is expected to change nothing. In the 13 trials only the zeros and
+    HUD masks could have shown an effect. Re-test on 310.9.16 with an RGBA8 mask, `MaskBlendMode`, and a
+    non-uniform R channel.
 
 ## Where a UI alpha can come from
 

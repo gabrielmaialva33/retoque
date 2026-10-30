@@ -6,7 +6,9 @@ Status: **Step 1 implemented on D3D12 behind `[DlssNr] KernelProfile=true`, off 
 
 ## 1. Where this comes from
 
-The concept originates from **janblade** (`OptiScaler` fork, `origin/main` branch):
+The concept originates from **janblade** (`janblade/OptiScaler-F5-DLSSNR-Multipass`, `origin/main` branch). On GitHub
+that repository is a fork of `wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass` (corrected 2026-10-30; this line previously
+called it a plain `OptiScaler` fork):
 
 - **Commit history:**
   - `34e33c6a` (2026-09-21): introduced `DlssNrVitReuse.h` ("Reuse bottleneck");
@@ -21,6 +23,19 @@ The concept originates from **janblade** (`OptiScaler` fork, `origin/main` branc
   `NvApiHooks.cpp:206,273` redirects internal kernel launch queries through `DlssNrNative::WrapNvapi`. Intercepted interface IDs include:
   `0xad1a677d`, `0xe2436e22`, `0x24973538`, `0x41c65285`, `0xdf295ea6`.
 - **Licence:** GPL-3.0 (same as OptiScaler).
+
+**Update 2026-10-30 (read with `gh api`, nothing built or run).** janblade's later commits go past the
+forced-off Vulkan state above:
+- `67fa0e5a` (2026-09-27), "DLSS-NR Vulkan: Reuse bottleneck and kernel-set detection", detects the kernel set on
+  Vulkan. It hooks the `VK_NVX_binary_import` entry points (`vkCreateCuModuleNVX`, `vkCreateCuFunctionNVX`) in
+  `VulkanwDx12_Hooks.cpp`.
+- `d810d066` (2026-10-17) adds a ViT "copy mode" for the plain kernels: `DlssNrVitCopy.ptx` and the `nr_vit_copy16`
+  kernel.
+- `330a4272` (2026-10-17) extends copy mode to both kernel sets on Vulkan.
+
+The v0.1.32 release notes claim that reuse works in Vulkan games, through both the D3D12 bridge and native Vulkan.
+They list the games the release was tested in, but no Vulkan-specific image or timing result. As of 2026-10-30, no
+published Vulkan field result for reuse or copy mode was found, so the Vulkan risk in §6 remains unproven either way.
 
 ---
 
