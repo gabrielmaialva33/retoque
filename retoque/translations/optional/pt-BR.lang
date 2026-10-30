@@ -585,3 +585,7 @@ Presets	Predefinições
 Layout	Layout
 Text	Texto
 Colors	Cores
+# 2026-10-30: the NR panel's "Copy NR diagnostics" button (docs/dlssnr/design/diagnostic-export.md). The report it copies stays English.
+Copy NR diagnostics	Copiar diagnóstico do NR
+Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths are replaced by <path>. Assembled only when pressed; the report itself is in English.	Copia um relatório em texto simples do que a renderização neural detectou e do que usou -- build, plataforma, rota, guias, configurações, a última amostra de GPU confirmada e o LSFG -- para um relato de bug. Caminhos absolutos são substituídos por <path>. Montado só ao clicar; o relatório em si fica em inglês.
+Copied to the clipboard.	Copiado para a área de transferência.

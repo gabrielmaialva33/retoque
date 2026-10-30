@@ -240,8 +240,13 @@ assert 'if (presenting && PresentRouteLive())' in status
 assert 'waiting for DLSS temporal inputs' not in status  # one wording for waiting: RouteText's
 assert 'swapchain source with DLSS temporal inputs' not in renderer
 menu = (retoque / 'dlssnr/DlssNr_Menu.cpp').read_text()
-assert menu.count('DlssNr::PresentGuidesLine()') == 1
-assert menu.index('const char* status = DlssNr::HookStatus();') < menu.index('DlssNr::PresentGuidesLine()')
+# The panel reads the line once, after the hook status; "Copy NR diagnostics" (diagnostic-export.md) reads it once more,
+# on its click only (tests/nr-diagnostic-report guards that).
+panel = menu[menu.index('void RenderMenu('):]
+assert panel.count('DlssNr::PresentGuidesLine()') == 1
+assert panel.index('const char* status = DlssNr::HookStatus();') < panel.index('DlssNr::PresentGuidesLine()')
+export = menu[menu.index('static std::string CollectDiagnosticReport('):menu.index('static void RenderDiagnosticExport(')]
+assert menu.count('DlssNr::PresentGuidesLine()') == 2 and export.count('DlssNr::PresentGuidesLine()') == 1
 assert glue.count('g_guideStatus = ') == 1 and 'g_guideStatus = ' in function(renderer, 'static void CountGuideIdentity(')
 
 print('PASS: source guards -- pure header; the glue reads the ring and writes only the reset a held source change '

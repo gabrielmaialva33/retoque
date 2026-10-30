@@ -118,6 +118,14 @@ tier = "host"
 timeout = 60
 summary = "D3D11 DLSS with NR on: dlss_12 chosen when Dx11Upscaler is unset, native D3D11 DLSS reported once and shown while it runs."
 
+[nr-diagnostic-report]
+path = "nr-diagnostic-report"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 60
+summary = "Copy NR diagnostics: the report's sections (Detected before Used), determinism, the short NR-off text, frame fields stripped from the settings contract, the historical GPU sample, path redaction, and guards that it is assembled on a click only."
+
 [nr-dx11-native-guides]
 path = "nr-dx11-native-guides"
 domain = "nr"

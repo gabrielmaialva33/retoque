@@ -4,6 +4,7 @@
 
 #include "DlssNr.h"
 #include "DlssNr_Cadence.h"
+#include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_Dx11Upscaler.h"
 #include "DlssNr_Enlarge.h"
 #include "DlssNr_GameProfiles.h"
@@ -12,6 +13,7 @@
 #include "DlssNr_Looks.h"
 #include "DlssNr_ModelLog.h"
 #include "DlssNr_ModelLogParse.h"
+#include "DlssNr_NgxInfo.h"
 #include "DlssNr_PresentBoundary.h"
 #include "DlssNr_PresentHdr.h"
 #include "DlssNr_PairCapture.h"
@@ -20,8 +22,10 @@
 #include "DlssNr_Session.h"
 #include "DlssNr_WorkingScale.h"
 
+#include <BuildInfo.h>
 #include <Config.h>
 #include <State.h>
+#include <lsfg/Lsfg.h>
 #include <menu/menu_common.h>
 #include <shaders/dlssnr/DlssNr_Periphery.h>
 
@@ -359,6 +363,144 @@ static void RenderReplayRecorder(Config* config, bool nativeVulkan)
                             status.folder.c_str(), Localization::Tr(status.reason != nullptr ? status.reason : ""));
     else if (status.phase == RR::Phase::Failed && status.reason != nullptr)
         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s", Localization::Tr(status.reason));
+}
+
+// "Copy NR diagnostics" (docs/dlssnr/design/diagnostic-export.md): the getters the panel already reads, read once
+// when the button is pressed, arranged and redacted by DiagnosticReport::Build. Reads only, and only on that click;
+// with NR off nothing past the build and the platform is asked.
+static std::string CollectDiagnosticReport(Config* config)
+{
+    namespace DR = DlssNr::DiagnosticReport;
+    DR::Inputs in;
+    const auto& state = State::Instance();
+    in.build = BuildInfo::ProductName();
+    in.wine = state.isRunningOnLinux;
+    in.nrEnabled = config->DlssNrEnabled.value_or_default();
+    if (!in.nrEnabled)
+        return DR::Build(in);
+
+    // Detected.
+    in.api = state.api == API::DX11     ? "D3D11"
+             : state.api == API::DX12   ? "D3D12"
+             : state.api == API::Vulkan ? "Vulkan"
+                                        : "";
+    if (state.currentFeature != nullptr)
+        in.upscaler = state.currentFeature->Name();
+    if (const char* route = DlssNr::Dx11Route::ReportText(DlssNr::Dx11RouteReport()))
+        in.dx11Route = route;
+    if (const auto model = DlssNr::NgxInfo::FindModel(); model.has_value())
+    {
+        if (const auto ngx = DlssNr::NgxInfo::Described(*model); ngx.has_value())
+        {
+            const auto version = [](const uint16_t v[4])
+            {
+                return v[0] == 0 && v[1] == 0 && v[2] == 0 && v[3] == 0
+                           ? std::string()
+                           : std::to_string(v[0]) + "." + std::to_string(v[1]) + "." + std::to_string(v[2]) + "." +
+                                 std::to_string(v[3]);
+            };
+            in.modelDescribed = true;
+            in.modelVersion = version(ngx->modelVersion);
+            in.modelBytes = ngx->modelBytes;
+            if (!ngx->loaderPath.empty())
+            {
+                in.loaderVersion = version(ngx->loaderVersion);
+                if (in.loaderVersion.empty())
+                    in.loaderVersion = "unknown";
+                in.loaderBuild = DlssNr::NgxInfo::DriverFromLoaderVersion(ngx->loaderVersion);
+                in.feature18Route = DlssNr::PeScan::Describe(ngx->route);
+            }
+        }
+    }
+    const bool vulkan = DlssNr::IsRunningVk();
+    if (!vulkan)
+    {
+        const auto exposure = DlssNr::GameExposureStatus();
+        in.exposureFrames = exposure.seenFrames;
+        in.exposureOfferedNow = exposure.offeredNow;
+        in.exposureEverOffered = exposure.everOffered;
+        in.exposureLatched = exposure.latched;
+    }
+    const auto hdr = DlssNr::GetPresentHdrStatus();
+    const bool hdrOn = config->DlssNrHdrPresent.value_or_default();
+    in.hdrSeen = hdr.seen;
+    in.hdrProfile = hdr.profile == DlssNr::PresentColour::Hdr10   ? "HDR10"
+                    : hdr.profile == DlssNr::PresentColour::ScRgb ? "scRGB"
+                                                                  : "declined";
+    in.hdrConverted = hdr.seen && hdrOn && hdr.converted;
+    if (hdr.seen && !in.hdrConverted)
+        in.hdrReason = !hdr.available          ? "this build does not carry the conversion"
+                       : !hdrOn                ? "HDR output is off"
+                       : hdr.reason != nullptr ? hdr.reason
+                                               : "";
+
+    // Used.
+    in.applyModel = config->DlssNrApplyModel.value_or_default();
+    in.hookMethod = config->DlssNrHookMethod.value_or_default();
+    if (vulkan)
+    {
+        in.pass = DR::Pass::RunningVulkan;
+        in.vulkanFrames = DlssNr::FramesVk();
+    }
+    else if (DlssNr::IsRunning())
+        in.pass = DR::Pass::RunningD3D12;
+    else
+        in.failureReason = DlssNr::FailureReason();
+    if (const char* status = DlssNr::HookStatus(); status != nullptr)
+        in.hookStatus = status;
+    in.guidesLine = DlssNr::PresentGuidesLine();
+    in.settingsContract = DlssNr::SettingsContractText();
+
+    const bool nativeVulkan =
+        vulkan || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
+    in.gpu.instrumented = !nativeVulkan && !config->DlssNrUseProxy.value_or_default();
+    if (in.gpu.instrumented)
+    {
+        const auto sample = DlssNr::GpuTiming::GetSnapshot();
+        in.gpu.measuring = sample.enabled;
+        in.gpu.valid = sample.valid;
+        in.gpu.totalMs = sample.totalMs;
+        in.gpu.modelMs = sample.modelMs;
+        in.gpu.otherMs = sample.otherMs;
+        in.gpu.sampleId = sample.sampleId;
+        in.gpu.ageMs = sample.sampleAgeMs;
+        in.gpu.settingsGeneration = sample.metadata.settingsGeneration;
+        in.gpu.contractHash = sample.metadata.contractHash;
+        in.gpu.stage = sample.metadata.stage != nullptr ? sample.metadata.stage : "";
+        in.gpu.modelWidth = sample.metadata.modelWidth;
+        in.gpu.modelHeight = sample.metadata.modelHeight;
+        in.gpu.passes = sample.actualPasses;
+        in.gpu.cadence = sample.metadata.cadence;
+        in.gpu.carried = sample.metadata.carried;
+    }
+
+    const auto lsfg = Lsfg::GetStatus();
+    in.lsfg.enabled = lsfg.enabled;
+    in.lsfg.active = lsfg.active;
+    in.lsfg.width = lsfg.width;
+    in.lsfg.height = lsfg.height;
+    in.lsfg.gpuMs = lsfg.gpuMs;
+    in.lsfg.fallbackReason = lsfg.fallbackReason;
+    return DR::Build(in);
+}
+
+// The button and its acknowledgement. The text is assembled inside the click branch and nowhere else.
+static void RenderDiagnosticExport(Config* config)
+{
+    static double copiedAt = -1.0;
+    if (ImGui::Button(Localization::Label("Copy NR diagnostics")))
+    {
+        ImGui::SetClipboardText(CollectDiagnosticReport(config).c_str());
+        copiedAt = ImGui::GetTime();
+    }
+    HelpMarker("Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, "
+               "route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths "
+               "are replaced by <path>. Assembled only when pressed; the report itself is in English.");
+    if (copiedAt >= 0.0 && ImGui::GetTime() - copiedAt < 3.0)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", Localization::Tr("Copied to the clipboard."));
+    }
 }
 
 static void RenderGpuTimingReadout()
@@ -1021,6 +1163,10 @@ void RenderMenu(Config* config, float menuResScale)
         const auto& state = State::Instance();
         const bool nativeVulkan =
             vulkan || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
+
+        // In both views, under the status lines it copies.
+        RenderDiagnosticExport(config);
+
         if (RenderSimpleView(config, nativeVulkan, menuResScale))
             return;
 

@@ -144,6 +144,14 @@ const Snapshot& Describe(const std::filesystem::path& modelPath)
     return g_snapshots.emplace(key, std::move(s)).first->second;
 }
 
+std::optional<Snapshot> Described(const std::filesystem::path& modelPath)
+{
+    std::lock_guard lock(g_mutex);
+    if (const auto found = g_snapshots.find(modelPath.wstring()); found != g_snapshots.end())
+        return found->second;
+    return std::nullopt;
+}
+
 std::optional<std::filesystem::path> FindModel()
 {
     auto found = Util::FindFilePath(Util::DllPath().remove_filename(), "nvngx_dlssnr.dll");

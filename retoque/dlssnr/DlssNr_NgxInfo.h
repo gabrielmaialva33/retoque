@@ -30,6 +30,11 @@ struct Snapshot
 // version and a size. Logs the result once per distinct model path.
 const Snapshot& Describe(const std::filesystem::path& modelPath);
 
+// What Describe found for this path, if it has run for it: a lookup that describes, adds and logs nothing. For the NR
+// panel's diagnostic export (docs/dlssnr/design/diagnostic-export.md), which must not be the first to describe a path:
+// Describe keeps its first answer, and LoaderRouteKnownToFault decides from it.
+std::optional<Snapshot> Described(const std::filesystem::path& modelPath);
+
 // "616.64" from a loader file version 32.0.16.1664 (NVIDIA's numbering: the last five digits of the
 // third and fourth fields). Empty when the version does not have that shape.
 //
