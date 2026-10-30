@@ -92,11 +92,25 @@ def check_present_coverage(harness):
     print(f'  present transport coverage accepted; inspect before/after images in {RUN}')
 
 
+def write_mask_provenance(preset):
+    """Which model file and preset the mask A/B ran, so a report cannot be read against the wrong one."""
+    import hashlib, json
+    model = (RUN / 'nvngx_dlssnr.dll').resolve()
+    digest = hashlib.sha256()
+    with open(model, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            digest.update(chunk)
+    record = {'model': str(model), 'bytes': model.stat().st_size, 'sha256': digest.hexdigest().upper(),
+              'preset': 0 if preset is None else preset, 'loopback_model': os.environ.get('LOOPBACK_MODEL')}
+    (RUN / 'mask-model.json').write_text(json.dumps(record, indent=1))
+    print(f'  mask A/B model: {model.name} {record["bytes"]} bytes sha256 {record["sha256"]} preset {record["preset"]}')
+
+
 def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_ab=False, cold_size=None,
                      cold_ui=None, cold_sdk=None, cold_load_opti=False, cold_from_d3d11=False,
                      cold_siblings=False, mask_ab=False, transfer_ab=False, reset_cost=False,
                      ui_protect_ab=False, moving_scene=False, dll=None, replay_nr=False, replay_quality=False,
-                     replay_profile='temporal-v1'):
+                     replay_profile='temporal-v1', preset=None):
     """Run the harness the way a Steam game runs: through Proton, in a compatdata prefix of its own.
 
     Hand-mirroring what Proton provides (vkd3d-proton, dxvk-nvapi, the driver's nvngx pair and the
@@ -138,6 +152,7 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
             (RUN / 'composition-vs-direct.png').unlink(missing_ok=True)
         if mask_ab:
             (RUN / 'mask-report.json').unlink(missing_ok=True)
+            write_mask_provenance(preset)
         if ui_protect_ab:
             (RUN / 'ui-protect-report.json').unlink(missing_ok=True)
         if transfer_ab:
@@ -155,7 +170,8 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
                        + (['--cold-core-sdk', cold_sdk] if cold_nr and cold_sdk else [])
                        + (['--cold-load-optiscaler'] if cold_nr and cold_load_opti else [])
                        + (['--cold-device-from-d3d11'] if cold_nr and cold_from_d3d11 else [])
-                       + (['--cold-sibling-snippets'] if cold_nr and cold_siblings else []),
+                       + (['--cold-sibling-snippets'] if cold_nr and cold_siblings else [])
+                       + (['--present-preset', str(preset)] if mask_ab and preset is not None else []),
                        cwd=RUN, env=env, timeout=600)
     hlog = RUN / 'dlssnr-loopback.log'
     harness = hlog.read_text(errors='replace') if hlog.exists() else ''
@@ -187,7 +203,8 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
             run([sys.executable, HERE / 'analyze_uiprotect.py', RUN])
         elif mask_ab:
             import re
-            if not re.search(r'^MASK-AB PASS: trials=13 attempts=416 successes=416 presents=416 controls=13 capture_pairs=91$', harness, re.M):
+            # 24 trials x 32 frames; one ApplyModel=0 control and seven kept frames (0, 1, 8, 15, 16, 24, 31) each.
+            if not re.search(r'^MASK-AB PASS: trials=24 attempts=768 successes=768 presents=768 controls=24 capture_pairs=168$', harness, re.M):
                 raise SystemExit('ZERO COVERAGE: incomplete ControlMask A/B')
             run([sys.executable, HERE / 'analyze_mask.py', RUN])
         elif hud_ab:
@@ -258,6 +275,10 @@ def parse_args(argv=None):
                     help="with --cold-nr: load nvngx_dlss/dlssd/dlssg beside the NR snippet, as a game "
                          "folder has them and OptiScaler loads them. The identity diff found this to be "
                          "the only named difference left between this process and production.")
+    ap.add_argument('--preset', default=None, type=int, choices=range(0, 4), metavar='N',
+                    help='with --mask-ab: DLSSNR.Hint.Render.Preset at create (default 0, what every mode '
+                         'passes). On 310.9.16, 1 is the September weight set and anything else the October '
+                         'one (docs/dlssnr/design/model-310-9-16.md); 310.8 has one set.')
     ap.add_argument('--skip-build', action='store_true',
                     help='reuse the selected mode\'s artifacts/{run,cold-run,present-run}/dlssnr-loopback.exe')
     modes = ap.add_mutually_exclusive_group()
@@ -296,6 +317,8 @@ def parse_args(argv=None):
         ap.error('--hud-ab requires --present-nr')
     if args.mask_ab and not args.present_nr:
         ap.error('--mask-ab requires --present-nr')
+    if args.preset is not None and not args.mask_ab:
+        ap.error('--preset requires --mask-ab')
     if args.ui_protect_ab and not args.present_nr:
         ap.error('--ui-protect-ab requires --present-nr')
     if args.transfer_ab and not args.present_nr:
@@ -474,7 +497,7 @@ def main(args=None, *, lease_held=False):
                                 transfer_ab=args.transfer_ab, reset_cost=args.reset_cost,
                                 ui_protect_ab=args.ui_protect_ab, moving_scene=args.moving_scene, dll=dll,
                                 replay_nr=args.replay_nr, replay_quality=args.replay_quality,
-                                replay_profile=args.replay_profile)
+                                replay_profile=args.replay_profile, preset=args.preset)
 
     # A separate runtime prefix: the compiler prefix is configured for MSVC, not for graphics, and
     # running the app there conflates "the harness is wrong" with "this prefix has no D3D12".

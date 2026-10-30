@@ -30,6 +30,10 @@ stands in for the automatic one. So most trials set `SkinStructureStrength` 0 ag
 python3 tests/dlssnr-loopback/run.py --present-nr --mask-ab
 ```
 
+**2026-10-30:** that command now runs a different, 24-trial matrix: RGBA8 masks with per-channel values,
+`MaskBlendMode` and the global controls they are compared with. See the README's "ControlMask re-test" entry.
+The table below describes the 2026-09-27 run; that harness is still in the history, e.g. at `2d36321b`.
+
 - **Hardware and model:** RTX 4090, NVIDIA 615.71.09, Proton Experimental. The model is `6eb209e7…`,
   the same file every other measurement in this project used.
 - **Frame:** the HUD fixture from the UICorrection experiment, 1280×720 SDR, 32 frames per trial.

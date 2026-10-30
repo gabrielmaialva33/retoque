@@ -395,7 +395,7 @@ int main(int argc, char** argv)
         // --cold-size takes a value, which is not a DLL path either.
         if (argument == "--cold-size" || argument == "--cold-ui-correction" || argument == "--cold-core-sdk" ||
             argument == "--replay-nr" || argument == "--moving-corpus" || argument == "--moving-plan" ||
-            argument == "--moving-present-delay-ms")
+            argument == "--present-preset" || argument == "--moving-present-delay-ms")
         {
             ++i;
             continue;
@@ -416,6 +416,7 @@ int main(int argc, char** argv)
     unsigned corpusFrames = 0;         // --moving-corpus N: the moving scene, every frame captured
     const char* movingPlan = nullptr;  // --moving-plan PLAN: optional actual pose/clock sequence
     unsigned movingPresentDelayMs = 0; // default off; bounded and used only after a present
+    unsigned presentPreset = 0;        // --present-preset N: DLSSNR.Hint.Render.Preset for the mask A/B
     const bool coldLoadOptiScaler = hasFlag("--cold-load-optiscaler");
     const bool coldDeviceFromD3D11 = hasFlag("--cold-device-from-d3d11");
     const bool coldSiblingSnippets = hasFlag("--cold-sibling-snippets");
@@ -452,6 +453,10 @@ int main(int argc, char** argv)
         {
             movingPlan = argv[i + 1];
         }
+        else if (flag == "--present-preset")
+        {
+            presentPreset = static_cast<unsigned>(std::strtoul(argv[i + 1], nullptr, 10));
+        }
     }
 
     try
@@ -481,6 +486,7 @@ int main(int argc, char** argv)
                 "present delay requires --moving-scene and --moving-present");
         if (sawPresentDelay)
             Say("MOVING-PRESENT delay_ms=%u\n", movingPresentDelayMs);
+        Require(!hasFlag("--present-preset") || maskAb, "--present-preset requires --present-mask-ab");
 
         Say("dlssnr-loopback: driving the production NR path\n");
         HWND window = MakeWindow();
@@ -606,7 +612,7 @@ int main(int argc, char** argv)
         if (presentNr)
         {
             PresentNr::Run(factory, window, device, queue, alloc, list, fence, fenceEvent, hudAb, compositionAb, maskAb,
-                           transferAb, resetCost, uiProtectAb);
+                           transferAb, resetCost, uiProtectAb, presentPreset);
             DestroyWindow(window);
             CloseHandle(fenceEvent);
             return 0;

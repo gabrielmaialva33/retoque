@@ -61,8 +61,22 @@ struct Host
     // SkinStructureStrength, so the hypothesis under test is "a caller-supplied mask standing in for the
     // automatic one": skin 0 against local structure 1 makes a region the model treats as masked differ
     // from one it does not. -1 writes a null resource, which is what production does by never setting it.
+    //
+    // 2026-10-30 re-test (hud-protection.md, "ControlMask re-test lead"): the mask is RGBA8 with R scaling
+    // intensity, G local tone and B structure (alpha unused), so each trial gives one RGBA value inside the
+    // HUD cover and one outside it (maskPattern 3). maskBlendMode >= 0 writes DLSSNR.MaskBlendMode, which
+    // only 310.9.16 reads; -1 leaves it unwritten, as production does. maskSubrect false leaves the four
+    // ControlMaskSubrect* keys unwritten; see the trial table for why that trial has to run first.
     bool maskAb = false;
-    int maskPattern = -1; // -1 null, 0 all zero, 1 all one, 2 one over the HUD and zero elsewhere
+    int maskPattern = -1; // -1 null, 0 all zero, 1 all one, 2 one over the HUD and zero elsewhere, 3 maskInside/Outside
+    std::array<unsigned char, 4> maskInside {}, maskOutside {};
+    int maskBlendMode = -1;
+    bool maskSubrect = true;
+    bool maskLogged = false; // the six mask keys are logged once per trial
+    // The positional tuning the forwarder writes at create and at every evaluate. The defaults are the
+    // values every mode passed before these became fields, so only the mask A/B ever changes them.
+    float intensity = 1, localStructure = 1, localTone = 1;
+    unsigned preset = 0; // DLSSNR.Hint.Render.Preset at create; --present-preset N, mask A/B only
     // --present-ui-protect-ab: the UI correction contract with separate layers (hud-protection.md). The same
     // mask texture, as RGBA8 with the cover in every channel, goes in as DLSSNR.UIAlpha (uiRoute 1) or as
     // DLSSNR.UI whose alpha is the mask (uiRoute 2); the model's own input goes in as DLSSNR.Backbuffer
@@ -572,8 +586,9 @@ struct Host
         // own default; one is an explicit strength. Passing 1 here made every measurement taken with
         // this harness a measurement of a configuration no user runs. Found by reading NIGos/ngxGym's
         // scenario files (MIT), which set NRSkinStructure=-1 throughout.
-        feature = create(snippetPath, L"", device, list, params, workWidth, workHeight, 0, 1, static_cast<int>(style), 1, 1,
-                         maskAb ? skinStructure : -1, maskAb ? static_cast<int>(useAutoMask) : 1, uiCorrection);
+        feature = create(snippetPath, L"", device, list, params, workWidth, workHeight, static_cast<int>(preset),
+                         intensity, static_cast<int>(style), localStructure, localTone, maskAb ? skinStructure : -1,
+                         maskAb ? static_cast<int>(useAutoMask) : 1, uiCorrection);
         Submit();
         ColdNr::NgxResult("snippet Init", static_cast<unsigned>(*lastInit));
         ColdNr::NgxResult("CreateFeature(18)", static_cast<unsigned>(*lastCreate));
@@ -585,8 +600,13 @@ struct Host
             Require(read == uiCorrection, "create UI parameter did not round-trip");
             Say("  HUD trial=%s create_ui=%u\n", trial.c_str(), read);
             if (maskAb)
-                Say("  MASK trial=%s pattern=%d auto_mask=%u skin=%.1f format=%d\n", trial.c_str(), maskPattern,
-                    useAutoMask, skinStructure, static_cast<int>(maskFormat));
+                Say("  MASK trial=%s pattern=%d inside=%u,%u,%u,%u outside=%u,%u,%u,%u format=%d subrect=%d "
+                    "blend_mode=%d auto_mask=%u skin=%.1f intensity=%.2f local_structure=%.2f local_tone=%.2f "
+                    "preset=%u\n",
+                    trial.c_str(), maskPattern, maskInside[0], maskInside[1], maskInside[2], maskInside[3],
+                    maskOutside[0], maskOutside[1], maskOutside[2], maskOutside[3], static_cast<int>(maskFormat),
+                    maskSubrect ? 1 : 0, maskBlendMode, useAutoMask, skinStructure, intensity, localStructure,
+                    localTone, preset);
         }
     }
 
@@ -621,10 +641,12 @@ struct Host
         Save("mask-hud-cover.ppm", shown);
     }
 
-    // Records the mask's upload onto the open list. The model's expected format is unknown, so the
-    // trials try R8_UNORM first and then the float and four-channel formats a mask could plausibly be.
+    // Records the mask's upload onto the open list. The 2026-09-27 trials tried R8_UNORM, two float formats
+    // and RGBA8 with the same value in every channel. Pattern 3 is the re-test's per-channel mask: RGBA8
+    // with maskInside over the HUD cover and maskOutside elsewhere; a one-channel format takes channel R.
     void UploadMask()
     {
+        Require(hudCover.size() == static_cast<size_t>(width) * height, "HUD cover missing before a mask upload");
         mask.p = MakeTexture(device, width, height, maskFormat, false, D3D12_RESOURCE_STATE_COPY_DEST);
         auto desc = mask->GetDesc();
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp {};
@@ -637,7 +659,10 @@ struct Host
         for (unsigned y = 0; y < height; ++y)
             for (unsigned x = 0; x < width; ++x)
             {
-                const unsigned char v = maskPattern == 1   ? 255
+                const bool covered = hudCover[static_cast<size_t>(y) * width + x] != 0;
+                const auto& rgba = covered ? maskInside : maskOutside;
+                const unsigned char v = maskPattern == 3   ? rgba[0]
+                                        : maskPattern == 1 ? 255
                                         : maskPattern == 2 ? hudCover[static_cast<size_t>(y) * width + x]
                                                            : 0;
                 unsigned char* at = mapped + fp.Offset + static_cast<UINT64>(y) * fp.Footprint.RowPitch;
@@ -651,6 +676,8 @@ struct Host
                     const uint16_t h = v == 0 ? 0 : v == 255 ? 0x3C00 : 0x3800; // 0, 1.0, 0.5
                     memcpy(at + x * 2, &h, 2);
                 }
+                else if (maskFormat == DXGI_FORMAT_R8G8B8A8_UNORM && maskPattern == 3)
+                    memcpy(at + x * 4, rgba.data(), 4);
                 else if (maskFormat == DXGI_FORMAT_R8G8B8A8_UNORM)
                     memset(at + x * 4, v, 4);
                 else
@@ -669,18 +696,51 @@ struct Host
 
     // The same block serves every trial, so a trial without a mask must write null over the last one.
     // Written through the unsigned-long-long slot, which is how the forwarder writes every resource.
+    // Called before create and before every evaluate. All six keys are read back each time: the five
+    // written must round-trip, and an unwritten one is logged with its Get result, because the block
+    // belongs to the driver and nothing here can clear a key once written.
     void SetMask()
     {
         ID3D12Resource* resource = maskPattern >= 0 ? mask.p : nullptr;
         const auto value = static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(resource));
         params->Set("DLSSNR.ControlMask", value);
-        params->Set("DLSSNR.ControlMaskSubrectBaseX", 0u);
-        params->Set("DLSSNR.ControlMaskSubrectBaseY", 0u);
-        params->Set("DLSSNR.ControlMaskSubrectWidth", resource ? width : 0u);
-        params->Set("DLSSNR.ControlMaskSubrectHeight", resource ? height : 0u);
+        const unsigned subrect[4] = { 0u, 0u, resource ? width : 0u, resource ? height : 0u };
+        const char* subrectKeys[4] = { "DLSSNR.ControlMaskSubrectBaseX", "DLSSNR.ControlMaskSubrectBaseY",
+                                       "DLSSNR.ControlMaskSubrectWidth", "DLSSNR.ControlMaskSubrectHeight" };
+        if (maskSubrect)
+            for (unsigned i = 0; i < 4; ++i)
+                params->Set(subrectKeys[i], subrect[i]);
+        if (maskBlendMode >= 0)
+            params->Set("DLSSNR.MaskBlendMode", static_cast<unsigned>(maskBlendMode));
         unsigned long long read = ~0ull;
         ColdNr::NgxResult("ControlMask Get", params->Get("DLSSNR.ControlMask", &read));
         Require(read == value, "ControlMask did not round-trip");
+        unsigned got[5] = { ~0u, ~0u, ~0u, ~0u, ~0u };
+        unsigned results[5] {};
+        for (unsigned i = 0; i < 4; ++i)
+        {
+            results[i] = static_cast<unsigned>(params->Get(subrectKeys[i], &got[i]));
+            if (maskSubrect)
+            {
+                Require(results[i] == 1, "ControlMask subrect Get failed");
+                Require(got[i] == subrect[i], "ControlMask subrect did not round-trip");
+            }
+        }
+        results[4] = static_cast<unsigned>(params->Get("DLSSNR.MaskBlendMode", &got[4]));
+        if (maskBlendMode >= 0)
+        {
+            Require(results[4] == 1, "MaskBlendMode Get failed");
+            Require(got[4] == static_cast<unsigned>(maskBlendMode), "MaskBlendMode did not round-trip");
+        }
+        // Once per generation is enough to show what the block held; every evaluate is checked above.
+        if (!maskLogged)
+        {
+            maskLogged = true;
+            Say("  MASK keys trial=%s control_mask=%s subrect=%u,%u,%u,%u (get 0x%08X,0x%08X,0x%08X,0x%08X) "
+                "blend_mode=%u (get 0x%08X)\n",
+                trial.c_str(), value ? "set" : "null", got[0], got[1], got[2], got[3], results[0], results[1],
+                results[2], results[3], got[4], results[4]);
+        }
     }
 
     // The UI layers through the forwarder's own export, before create and before every evaluate, exactly as
@@ -813,10 +873,10 @@ struct Host
         ID3D12Resource* modelIn = transferAb ? proxySmall.p : proxy.p;
         ID3D12Resource* modelOut = transferAb ? answerSmall.p : answer.p;
         ++attempts;
-        auto result = evaluate(list, feature, params, modelIn, depth, motion, modelOut, workWidth, workHeight, workWidth,
-                               workHeight, workWidth, workHeight, 0, 0, 0, 0, 0, frame == 0 || resetEvery ? 1 : 0, 1, 0, 1, 1,
-                               maskAb ? skinStructure : 1,
-                               maskAb ? static_cast<int>(useAutoMask) : 1, 1, 1);
+        auto result = evaluate(list, feature, params, modelIn, depth, motion, modelOut, workWidth, workHeight,
+                               workWidth, workHeight, workWidth, workHeight, 0, 0, 0, 0, 0,
+                               frame == 0 || resetEvery ? 1 : 0, intensity, 0, localStructure, localTone,
+                               maskAb ? skinStructure : 1, maskAb ? static_cast<int>(useAutoMask) : 1, 1, 1);
         Say("  EvaluateFeature(18) generation=%u frame=%u result=0x%08X\n", generation, frame,
             static_cast<unsigned>(result));
         // A failed evaluate may have recorded GPU work. Submit/drain before diagnosing; never copy back.
@@ -1104,7 +1164,7 @@ struct Host
 static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D12CommandQueue* queue,
                 ID3D12CommandAllocator* alloc, ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event,
                 bool hud = false, bool composition = false, bool maskAb = false, bool transferAb = false,
-                bool resetCost = false, bool uiProtect = false)
+                bool resetCost = false, bool uiProtect = false, unsigned preset = 0)
 {
     Host host { device, queue, alloc, list, fence, event };
     try
@@ -1115,6 +1175,11 @@ static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D1
                 : "  UICorrection=1\n");
         host.hud = hud || maskAb || uiProtect;
         host.maskAb = maskAb;
+        // The model preset at create: 0 is what every mode has always passed. 310.9.16 maps 1 to the
+        // September weight set and everything else to the October one (model-310-9-16.md).
+        host.preset = preset;
+        if (preset != 0)
+            Say("  model preset at create: %u\n", preset);
         host.uiProtect = uiProtect;
         host.transferAb = transferAb;
         host.composition = composition;
@@ -1234,45 +1299,100 @@ static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D1
         }
         else if (maskAb)
         {
+            // The 2026-10-30 re-test matrix (hud-protection.md, "ControlMask re-test lead"). The mask is
+            // RGBA8, R intensity, G local tone, B structure, alpha unused (255): one value inside the HUD
+            // cover and one outside it. Skin follows local structure (-1) throughout, as in production.
+            using Rgba = std::array<unsigned char, 4>;
+            constexpr Rgba ones { 255, 255, 255, 255 }, zeros { 0, 0, 0, 0 };
+            constexpr Rgba r0 { 0, 255, 255, 255 }, r128 { 128, 255, 255, 255 };
+            constexpr Rgba g0 { 255, 0, 255, 255 }, b0 { 255, 255, 0, 255 };
+            constexpr auto rgba8 = DXGI_FORMAT_R8G8B8A8_UNORM;
             struct Trial
             {
                 const char* name;
-                int pattern;
+                bool masked;
+                Rgba inside, outside;
+                DXGI_FORMAT format;
+                bool subrect;  // write the four ControlMaskSubrect* keys
+                int blendMode; // DLSSNR.MaskBlendMode, -1 unwritten
                 unsigned autoMask;
-                float skin;
-                DXGI_FORMAT format = DXGI_FORMAT_R8_UNORM;
+                float intensity, localTone, localStructure;
             };
-            // Controls first, so every mask trial has an unmasked twin that ran before any mask was
-            // written; the last trial writes null again after the masks, to prove null means "none".
+            // a0-r0-nosubrect MUST be the first trial in the process. The capability block belongs to the
+            // driver and outlives every feature, and the parameter interface has no way to remove a key, so
+            // once any trial has written the ControlMaskSubrect* keys every later trial inherits them. Only
+            // the first trial can ask what the model does with a mask whose subrect was never written
+            // (RTX Remix always writes the full extent; production writes nothing). Its unmasked twins run
+            // right after it, so they are not "before any mask was written" as the 2026-09-27 controls
+            // were; a0-null-after repeats the null at the very end to show null still means none.
+            //
+            // MaskBlendMode is written only in block B, which comes after every trial that leaves it
+            // unwritten, except a0-null-after: that one inherits mode 3 with a null mask, which the
+            // 310.9.16 parameter read ignores (it acts only when a mask is given). The six-key readback
+            // logs what each trial's block actually held.
             const Trial trials[] = {
-                { "base-r0", -1, 1, -1.0f },   { "base-r1", -1, 1, -1.0f },   { "a0s0-null", -1, 0, 0.0f },
-                { "a1s0-null", -1, 1, 0.0f },  { "a0s0-zeros", 0, 0, 0.0f },  { "a0s0-ones", 1, 0, 0.0f },
-                { "a0s0-hud", 2, 0, 0.0f },    { "a1s0-hud", 2, 1, 0.0f },    { "a1s0-ones", 1, 1, 0.0f },
-                { "a0s0-cleared", -1, 0, 0.0f },
-                { "a0s0-ones-r16f", 1, 0, 0.0f, DXGI_FORMAT_R16_FLOAT },
-                { "a0s0-ones-r32f", 1, 0, 0.0f, DXGI_FORMAT_R32_FLOAT },
-                { "a0s0-ones-rgba8", 1, 0, 0.0f, DXGI_FORMAT_R8G8B8A8_UNORM },
+                // Block A: UseAutoMask 0.
+                { "a0-r0-nosubrect", true, r0, r0, rgba8, false, -1, 0, 1, 1, 1 },
+                { "a0-null-r0", false, zeros, zeros, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-null-r1", false, zeros, zeros, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-r8-zeros", true, zeros, zeros, DXGI_FORMAT_R8_UNORM, true, -1, 0, 1, 1, 1 },
+                { "a0-ones", true, ones, ones, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-zeros", true, zeros, zeros, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-r0", true, r0, r0, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-r128", true, r128, r128, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-r0-hud", true, r0, ones, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-g0", true, g0, g0, rgba8, true, -1, 0, 1, 1, 1 },
+                { "a0-b0", true, b0, b0, rgba8, true, -1, 0, 1, 1, 1 },
+                // Block A controls: no mask, the global control each channel is reported to scale.
+                { "a0-int50", false, zeros, zeros, rgba8, true, -1, 0, 0.5f, 1, 1 },
+                { "a0-tone0", false, zeros, zeros, rgba8, true, -1, 0, 1, 0, 1 },
+                { "a0-struct0", false, zeros, zeros, rgba8, true, -1, 0, 1, 1, 0 },
+                // Block B: UseAutoMask 1, then each mask under every MaskBlendMode.
+                { "a1-null", false, zeros, zeros, rgba8, true, -1, 1, 1, 1, 1 },
+                { "a1-ones-m0", true, ones, ones, rgba8, true, 0, 1, 1, 1, 1 },
+                { "a1-ones-m1", true, ones, ones, rgba8, true, 1, 1, 1, 1, 1 },
+                { "a1-ones-m2", true, ones, ones, rgba8, true, 2, 1, 1, 1, 1 },
+                { "a1-ones-m3", true, ones, ones, rgba8, true, 3, 1, 1, 1, 1 },
+                { "a1-b0-m0", true, b0, b0, rgba8, true, 0, 1, 1, 1, 1 },
+                { "a1-b0-m1", true, b0, b0, rgba8, true, 1, 1, 1, 1, 1 },
+                { "a1-b0-m2", true, b0, b0, rgba8, true, 2, 1, 1, 1, 1 },
+                { "a1-b0-m3", true, b0, b0, rgba8, true, 3, 1, 1, 1, 1 },
+                // Null again after every mask and blend mode.
+                { "a0-null-after", false, zeros, zeros, rgba8, true, -1, 0, 1, 1, 1 },
             };
+            static_assert(sizeof(trials) / sizeof(trials[0]) == 24, "run.py expects MASK-AB trials=24");
+            // The first trial carries a mask, and Allocate uploads it, so the cover is built first.
+            host.width = 1280;
+            host.height = 720;
+            host.CoverHud();
             for (const auto& t : trials)
             {
                 host.trial = t.name;
-                host.maskPattern = t.pattern;
-                host.useAutoMask = t.autoMask;
-                host.skinStructure = t.skin;
+                host.maskPattern = t.masked ? 3 : -1;
+                host.maskInside = t.inside;
+                host.maskOutside = t.outside;
                 host.maskFormat = t.format;
+                host.maskSubrect = t.subrect;
+                host.maskBlendMode = t.blendMode;
+                host.maskLogged = false;
+                host.useAutoMask = t.autoMask;
+                host.skinStructure = -1.0f;
+                host.intensity = t.intensity;
+                host.localTone = t.localTone;
+                host.localStructure = t.localStructure;
                 host.Allocate(1280, 720);
-                if (host.hudCover.empty())
-                    host.CoverHud();
                 for (unsigned frame = 0; frame < 32; ++frame)
                 {
                     host.Record(frame);
                     host.Submit();
+                    host.ReadTiming(frame);
                     host.Inspect(frame);
                     host.Present();
                 }
                 Check(queue->Signal(fence, ++host.serial), "mask post-Present Signal");
                 host.ReleaseGeneration();
             }
+            host.intensity = host.localTone = host.localStructure = 1;
         }
         else if (hud)
         {
@@ -1377,7 +1497,7 @@ static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D1
             Say("UI-PROTECT-AB PASS: trials=8 attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
                 host.attempts, host.successes, host.presents, host.controls, host.captures);
         else if (maskAb)
-            Say("MASK-AB PASS: trials=13 attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
+            Say("MASK-AB PASS: trials=24 attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
                 host.attempts, host.successes, host.presents, host.controls, host.captures);
         else if (hud)
             Say("HUD-AB PASS: trials=6 attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
