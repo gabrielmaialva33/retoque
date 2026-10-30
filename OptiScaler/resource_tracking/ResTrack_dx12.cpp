@@ -151,23 +151,14 @@ void __stdcall ResTrack_Dx12::ResourceDestroyed(void* data)
         return;
 
     auto* resource = static_cast<ID3D12Resource*>(data);
-    std::vector<TrackedResourceSlot> toClean;
-
-    {
-        std::lock_guard lock(_trackedResourcesMutex);
-        if (auto it = _trackedResources.find(resource); it != _trackedResources.end())
-        {
-            toClean = std::move(it->second);
-            _trackedResources.erase(it);
-        }
-    }
+    auto toClean = _trackedResources.Take(resource);
 
     Hudfix_Dx12::RemoveResourceFromTracking(resource);
 
     // Clean descriptor slots
-    for (const auto& slot : toClean)
+    for (const auto& [slot, heapReference] : toClean)
     {
-        if (auto heap = slot.heap.lock())
+        if (auto heap = heapReference.lock())
             heap->ClearSlotIfMatches(slot.index, resource);
     }
 }
@@ -177,20 +168,14 @@ bool ResTrack_Dx12::TrackResourceRelease(ID3D12Resource* resource)
     if (resource == nullptr || State::Instance().isShuttingDown)
         return false;
 
-    {
-        std::lock_guard trackedLock(_trackedResourcesMutex);
-        if (_trackedResources.contains(resource))
-            return true;
-    }
+    if (_trackedResources.Contains(resource))
+        return true;
 
     // Only new registrations take this mutex
     std::lock_guard lifetimeLock(_resourceLifetimeMutex);
 
-    {
-        std::lock_guard trackedLock(_trackedResourcesMutex);
-        if (_trackedResources.contains(resource))
-            return true;
-    }
+    if (_trackedResources.Contains(resource))
+        return true;
 
     ID3DDestructionNotifier* notifier = nullptr;
     auto result = resource->QueryInterface(IID_PPV_ARGS(&notifier));
@@ -211,10 +196,7 @@ bool ResTrack_Dx12::TrackResourceRelease(ID3D12Resource* resource)
         return false;
     }
 
-    {
-        std::lock_guard trackedLock(_trackedResourcesMutex);
-        _trackedResources.try_emplace(resource);
-    }
+    _trackedResources.Register(resource);
 
     notifier->Release();
     return true;
@@ -2678,10 +2660,7 @@ void ResTrack_Dx12::HookDevice(ID3D12Device* device)
     {
         _useShards = Config::Instance()->FGUseShards.value_or_default();
 
-        {
-            std::scoped_lock lock(_trackedResourcesMutex);
-            _trackedResources.reserve(1024);
-        }
+        _trackedResources.Reserve(1024 / decltype(_trackedResources)::ShardCount);
 
         if (Config::Instance()->FGHudfixPersistentBindings.value_or_default())
         {

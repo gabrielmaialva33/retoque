@@ -678,6 +678,14 @@ tier = "host"
 timeout = 120
 summary = "Production resize/release FG lock pairing through mutable settings, FG replacement, null inputs and exceptions."
 
+[restrack-resource-references]
+path = "restrack-resource-references"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 600
+summary = "D3D12 descriptor reverse-reference index: production HeapInfo/ResourceDestroyed/TrackResourceRelease slices characterised, 4x100k-op differential against the former single-mutex model, 2M-op concurrent stress; ASan/UBSan and TSan."
+
 [fg-present-reentry]
 path = "fg-present-reentry"
 domain = "fg"
