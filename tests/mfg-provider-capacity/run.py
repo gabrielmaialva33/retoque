@@ -41,9 +41,11 @@ if "static void RefreshDlssgMfgMax(" in hooks:
     unit += function(hooks, "static void RefreshDlssgMfgMax(")
 for name in ("hkslDLSSGSetOptions", "hkslDLSSGGetState"):
     unit += function(hooks, "sl::Result StreamlineHooks::" + name + "(")
+unit += function(hooks, "void StreamlineHooks::updateDlssgOptions(")
 unit += (HERE / "cases.cpp").read_text()
 cases = ("setter-preference", "getter-preference", "setter-refresh", "getter-refresh", "downgrade",
-         "query-failure", "old-structs", "menu-transitions", "stable-queries", "setter-rebind", "game-get-free", "patch-during-probe", "auto-off")
+         "query-failure", "old-structs", "menu-transitions", "stable-queries", "setter-rebind", "game-get-free", "patch-during-probe", "auto-off",
+         "pause-request-failed", "pause-request-viewports", "pause-request-replay")
 with tempfile.TemporaryDirectory(prefix="retoque-mfg-capacity-") as folder:
     cpp, binary = Path(folder) / "cases.cpp", Path(folder) / "cases"
     cpp.write_text(unit)
@@ -51,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix="retoque-mfg-capacity-") as folder:
                     "-Wno-unused-variable", "-Wno-unused-parameter", "-Wno-class-memaccess", "-Wno-narrowing",
                     "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
                     "-isystem", str(ROOT / "external/streamline"), "-isystem", str(ROOT / "external/simpleini"),
-                    str(cpp), "-o", str(binary)], check=True)
+                    "-I", str(ROOT / "retoque"), str(cpp), "-o", str(binary)], check=True)
     results = [subprocess.run([str(binary), case]).returncode for case in cases]
     if any(results):
         raise SystemExit(1)

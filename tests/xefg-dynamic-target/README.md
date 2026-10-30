@@ -15,6 +15,11 @@
   each climbing to 6X when aimed at 180; on the target the policy gives they settle at 4X, the fewest generated
   frames that fill the refresh rate.
 
+- A step down that did not hold, retried (janblade's a1490c26, NBA 2K27): a GPU bound game at an FPS limit of 140,
+  whose wait for the GPU looks like idle time, for 30 minutes, then lighter for 20. The wait after failed steps down
+  grows to 10 minutes (before: 60 s); undone steps down in minutes 10-20 fall from 10 to 1 (count controller) and from
+  9 to 1 (cap controller); once lighter, both still step down to 2X, within one longest wait, and stay.
+
 What it does not prove: the simulation's premise, that XeFG drops the generated frames that don't fit the refresh
 instead of holding the game, is janblade's observation (Witcher 3, 120 Hz) and not measured here. No XeFG, DXGI,
 display or limiter runs; how the limiter at the refresh rate ("Use target as cap") paces against V-Sync, and what

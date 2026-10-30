@@ -16,3 +16,8 @@ The publisher unit does not execute the loader or patcher; real DLL mapping/patc
 A wrapper-only getter rebind invalidates the cache even without a snippet generation change.
 Fake hook entry points are private class members, matching production, so a global cache helper
 cannot accidentally access them without receiving the selected getter explicitly.
+
+The `pause-request-*` cases drive the same production setter for PauseWithoutFrameGen's signal
+(`State::dlssgGameRequestsFg`): a call Streamline refused is not recorded, also on the own-DLSS-G path; a second
+accepted viewport stops any viewport from setting it, while a refused call from one is no viewport; and the menu's
+replay (`updateDlssgOptions`, also spliced in) is never taken for the game's request or viewport.

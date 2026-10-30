@@ -11,6 +11,7 @@
 #include <framegen/dlssg/MfgUnlock.h>
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
+#include <hooks/Streamline_DlssgRequest.h>
 #include <hooks/Streamline_LogRepeat.h>
 #include <menu/menu_overlay_base.h>
 #include <framegen/nvngx/Nvngx_FG.h>
@@ -1459,7 +1460,19 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     // newOptions is the same content, correctly sized, and still pre-policy: this records what the
     // game asked for, which is what the menu's replay needs.
     lastDlssgOptions = newOptions;
-    State::Instance().dlssgGameRequestsFg.store(newOptions.mode != sl::DLSSGMode::eOff, std::memory_order_relaxed);
+
+    // PauseWithoutFrameGen's signal (docs/dlssnr/design/pause-without-frame-gen.md): the game's own request, read here
+    // before any OptiScaler policy, published once Streamline accepted the call and only from the one viewport that
+    // drives DLSS-G (retoque/hooks/Streamline_DlssgRequest.h). A refused call changed nothing.
+    const bool gameRequestsFg = newOptions.mode != sl::DLSSGMode::eOff;
+    const auto recordGameRequest = [&viewport, gameRequestsFg](sl::Result result)
+    {
+        if (result == sl::Result::eOk && !replayingDlssgOptions &&
+            StreamlineDlssgRequest::Accept(State::Instance().dlssgGameViewports, (uint32_t) viewport))
+            State::Instance().dlssgGameRequestsFg.store(gameRequestsFg, std::memory_order_relaxed);
+
+        return result;
+    };
 
     auto& state = State::Instance();
 
@@ -1467,7 +1480,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     if (state.activeFgInput != FGInput::DLSSG && state.activeFgOutput == FGOutput::DLSSG)
     {
         newOptions.mode = sl::DLSSGMode::eOff;
-        return o_slDLSSGSetOptions(viewport, newOptions);
+        return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));
     }
 
     // Make DLSSG auto always mean On
@@ -1577,7 +1590,7 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
 
     state.dlssgLastSetMode = newOptions.mode;
 
-    return o_slDLSSGSetOptions(viewport, newOptions);
+    return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));
 }
 
 sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport, sl::DLSSGState& state,
@@ -2144,7 +2157,10 @@ void StreamlineHooks::updateDlssgOptions()
     if (o_slDLSSGSetOptions)
     {
         LOG_FUNC();
+        // Not a request from the game: before its first call this goes out on viewport 0 with default options
+        replayingDlssgOptions = true;
         hkslDLSSGSetOptions(lastDlssgViewport, lastDlssgOptions);
+        replayingDlssgOptions = false;
     }
 }
 

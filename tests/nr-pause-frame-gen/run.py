@@ -2,7 +2,9 @@
 """Source contract for [DlssNr] PauseWithoutFrameGen (docs/dlssnr/design/pause-without-frame-gen.md)."""
 from pathlib import Path
 import re
+import subprocess
 import sys
+import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
 from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
@@ -37,12 +39,26 @@ assert 'dlssgLastSetMode' not in rule and 'dlssgDetectedInterpolationCount' not 
 state_h = (ROOT / 'OptiScaler/State.h').read_text()
 assert 'std::atomic<bool> dlssgGameRequestsFg { false };' in state_h
 hook = (ROOT / 'OptiScaler/hooks/Streamline_Hooks.cpp').read_text()
-setter = hook[hook.index('sl::Result StreamlineHooks::hkslDLSSGSetOptions('):]
-record = setter.index('dlssgGameRequestsFg.store(newOptions.mode != sl::DLSSGMode::eOff')
-assert setter.index('lastDlssgOptions = newOptions;') < record < setter.index('applyMenuDlssgInterlock(newOptions')
-assert record < setter.index('if (state.activeFgInput != FGInput::DLSSG && state.activeFgOutput == FGOutput::DLSSG)')
+setter = body(hook, 'sl::Result StreamlineHooks::hkslDLSSGSetOptions(')
+request = setter.index('const bool gameRequestsFg = newOptions.mode != sl::DLSSGMode::eOff;')
+assert setter.index('lastDlssgOptions = newOptions;') < request < setter.index('applyMenuDlssgInterlock(newOptions')
+assert request < setter.index('if (state.activeFgInput != FGInput::DLSSG && state.activeFgOutput == FGOutput::DLSSG)')
+# Published only once Streamline accepted the call, and only from the one viewport that drives DLSS-G (kkyleeb21's
+# D18 0.4.1, 3f61eb29): a failed call changed nothing, and two viewports would toggle the one signal between them.
+publish = setter[request:]
+assert re.search(r'result == sl::Result::eOk\s*&&\s*!replayingDlssgOptions\s*&&\s*StreamlineDlssgRequest::Accept\(\s*State::Instance\(\)\.dlssgGameViewports,'
+                 r'\s*\(uint32_t\) viewport\)\)\s*State::Instance\(\)\.dlssgGameRequestsFg\.store\(gameRequestsFg,', publish)
+assert setter.count('dlssgGameRequestsFg.store(') == 1
+assert 'return o_slDLSSGSetOptions(' not in setter                     # every call to Streamline goes through it
+assert setter.count('return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));') == 2
+assert 'std::atomic<uint64_t> dlssgGameViewports { 0 };' in state_h
+assert '#include <hooks/Streamline_DlssgRequest.h>' in hook
+update = body(hook, 'void StreamlineHooks::updateDlssgOptions(')       # our own replay is not the game's request
+assert re.search(r'replayingDlssgOptions = true;\s*hkslDLSSGSetOptions\(lastDlssgViewport, lastDlssgOptions\);'
+                 r'\s*replayingDlssgOptions = false;', update)
 assert 'if (on)\n        seenOn = true;' in rule                        # arms only after the game asked for DLSS-G
 assert '!MenuOverlayBase::IsVisible()' in rule                         # never for our own menu
+assert 'StreamlineDlssgRequest::MultipleViewports(State::Instance().dlssgGameViewports)' in rule  # one viewport
 assert 'cfg.DlssNrPauseWithoutFrameGen.value_or_default()' in rule     # off by default
 assert 'std::chrono::milliseconds(500)' in rule                        # half a second, by the clock
 assert 'if (!candidate)\n        offSince.reset();' in rule             # resumes at once
@@ -55,3 +71,12 @@ assert check < dispatch.index('g_activePasses = 0;')
 assert '###nrPauseNoFg' in menu
 assert menu.index('if (!nativeVulkan)', menu.index('pause-without-frame-gen.md')) < menu.index('###nrPauseNoFg')
 print('PASS: PauseWithoutFrameGen config, arm/debounce/menu exclusion and its place before any recording')
+
+# The viewport owner itself, under ASan/UBSan
+with tempfile.TemporaryDirectory(prefix='retoque-nr-pause-frame-gen-') as folder:
+    binary = str(Path(folder) / 'viewports')
+    subprocess.run(['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-pthread',
+                    '-fsanitize=address,undefined', '-fno-sanitize-recover=all', '-fno-omit-frame-pointer',
+                    '-I', str(ROOT / 'retoque'), str(Path(__file__).resolve().parent / 'viewports.cpp'), '-o', binary],
+                   check=True)
+    subprocess.run([binary], check=True)

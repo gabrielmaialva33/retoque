@@ -36,7 +36,8 @@ qualification. External DLL telemetry is documented in [ExternalDlssgTelemetry](
 The [maintenance integration index](maintenance.md#upstream-integration) links the dated upstream merges.
 Additional focused records: [non-graphics Vulkan presentation](linux-proton/vulkan-overlay-nongraphics-present.md),
 [fork audit fixes](linux-proton/fork-fixes-20261016.md), [nvapi kept loaded after the startup checks](linux-proton/nvapi-keep-loaded-20261030.md),
-[FG swapchain lock and lifetime fixes](linux-proton/fork-fixes-20261030.md), [game camera forwarding](linux-proton/streamline-game-camera.md) and
+[FG swapchain lock and lifetime fixes](linux-proton/fork-fixes-20261030.md), [Dynamic MFG retry wait, NR pause guard and menu key polling](linux-proton/fork-ports-menu-pause-backoff-20261030.md),
+[game camera forwarding](linux-proton/streamline-game-camera.md) and
 [Unreal plugin DLSS search](linux-proton/unreal-dlss-search-20261030.md).
 
 ## Historical evidence

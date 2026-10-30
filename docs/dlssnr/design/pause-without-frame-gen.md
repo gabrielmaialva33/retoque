@@ -19,6 +19,11 @@ than time, and offered the control on native Vulkan.
   DLSS-G into `State::dlssgGameRequestsFg`, an atomic, before any OptiScaler policy runs: the menu interlock, the
   interpolation override, our own DLSS-G substitution. None of those can pause NR. DLSS-G a game drives through
   NGX without Streamline is not seen; the pause simply never arms there.
+- **Only requests Streamline accepted, from one viewport** (2026-10-30, after kkyleeb21's D18 0.4.1, 3f61eb29). The
+  request is still read before any policy, but published only when the call returned `eOk`: a refused call changed
+  nothing. OptiScaler's own replay of the game's last options (`updateDlssgOptions`) is not a request. The first
+  viewport accepted owns the signal; once a second one is accepted, the pause stands down for the rest of the process,
+  since one bool cannot follow two viewports (`retoque/hooks/Streamline_DlssgRequest.h`).
 - **Arms only after seeing it.** Nothing happens until the game has asked for DLSS-G in this session.
 - **Never for our own menu.** With our menu open, NR keeps running so settings can be judged.
 - **Debounced by the clock.** The off state has to hold for 500 ms, so the options the menu re-sends when it
@@ -33,6 +38,7 @@ than time, and offered the control on native Vulkan.
 
 ## Validation
 
-- **Host.** A source contract (config, the arm, debounce and menu-exclusion order).
+- **Host.** A source contract (config, the arm, debounce and menu-exclusion order), the viewport owner under
+  ASan/UBSan, and the production setter on refused calls, two viewports and the menu replay (`mfg-provider-capacity`).
 - **In game.** Cyberpunk's pause menu turns DLSS-G off: with the key on, NR pauses there and comes back on
   resume. The log shows the transitions.

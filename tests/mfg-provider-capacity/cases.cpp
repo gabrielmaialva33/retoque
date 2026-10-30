@@ -184,6 +184,69 @@ int main(int argc, char** argv)
         set();
         require(Provider::sent.mode == sl::DLSSGMode::eOff, "explicit off overridden");
     }
+    else if (name == "pause-request-failed")
+    {
+        // PauseWithoutFrameGen's signal: a call Streamline refused changed nothing (kkyleeb21's D18, 3f61eb29)
+        require(set() == sl::Result::eOk && state.dlssgGameRequestsFg, "accepted FG on not recorded");
+        options.mode = sl::DLSSGMode::eOff;
+        Provider::setResult = sl::Result::eErrorInvalidParameter;
+        require(set() == sl::Result::eErrorInvalidParameter, "the refusal was not returned to the game");
+        require(state.dlssgGameRequestsFg, "a refused FG off was recorded as the game's request");
+        Provider::setResult = sl::Result::eOk;
+        set();
+        require(!state.dlssgGameRequestsFg, "accepted FG off not recorded");
+        options.mode = sl::DLSSGMode::eOn;
+        state.activeFgOutput = FGOutput::DLSSG; // our own DLSS-G: the game's call goes out as off
+        Provider::setResult = sl::Result::eErrorNotInitialized;
+        set();
+        require(!state.dlssgGameRequestsFg, "a refused call on the own-DLSS-G path was recorded");
+        Provider::setResult = sl::Result::eOk;
+        set();
+        require(Provider::sent.mode == sl::DLSSGMode::eOff && state.dlssgGameRequestsFg,
+                "the own-DLSS-G path lost the game's accepted request");
+    }
+    else if (name == "pause-request-viewports")
+    {
+        // A second DLSS-G viewport stands the pause down: one signal can't follow two (kkyleeb21's D18, 3f61eb29)
+        const sl::ViewportHandle second { 1 };
+        auto setOn = [&](const sl::ViewportHandle& v, sl::DLSSGMode mode)
+        {
+            options.mode = mode;
+            return StreamlineHooks::hkslDLSSGSetOptions(v, options);
+        };
+        setOn(viewport, sl::DLSSGMode::eOn);
+        require(state.dlssgGameRequestsFg, "first viewport's FG on not recorded");
+        Provider::setResult = sl::Result::eErrorInvalidParameter;
+        setOn(second, sl::DLSSGMode::eOff);
+        require(!StreamlineDlssgRequest::MultipleViewports(state.dlssgGameViewports),
+                "a refused call from another viewport counted as a second viewport");
+        Provider::setResult = sl::Result::eOk;
+        setOn(second, sl::DLSSGMode::eOff);
+        require(StreamlineDlssgRequest::MultipleViewports(state.dlssgGameViewports), "second viewport not seen");
+        require(state.dlssgGameRequestsFg, "a second viewport's FG off was recorded");
+        require(Provider::sent.mode == sl::DLSSGMode::eOff, "the second viewport's call did not reach Streamline");
+        setOn(viewport, sl::DLSSGMode::eOff);
+        require(state.dlssgGameRequestsFg, "after two viewports, no viewport sets the signal");
+    }
+    else if (name == "pause-request-replay")
+    {
+        // The menu's replay of the game's last request is ours, not the game's: before the game's first call it goes
+        // out on viewport 0 and must not make the game's own viewport look like a second one
+        StreamlineHooks::updateDlssgOptions();
+        require(Provider::sent.mode == sl::DLSSGMode::eOff, "the replay did not reach Streamline");
+        const sl::ViewportHandle game { 3 };
+        options.mode = sl::DLSSGMode::eOn;
+        StreamlineHooks::hkslDLSSGSetOptions(game, options);
+        require(!StreamlineDlssgRequest::MultipleViewports(state.dlssgGameViewports),
+                "our replay before the game's first call counted as a viewport");
+        require(state.dlssgGameRequestsFg, "the game's FG on not recorded after our replay");
+        StreamlineHooks::updateDlssgOptions();
+        require(Provider::sent.mode == sl::DLSSGMode::eOn, "the replay did not repeat the game's request");
+        options.mode = sl::DLSSGMode::eOff;
+        StreamlineHooks::hkslDLSSGSetOptions(game, options);
+        require(!state.dlssgGameRequestsFg && !StreamlineDlssgRequest::MultipleViewports(state.dlssgGameViewports),
+                "the game's FG off after a replay not recorded");
+    }
     else
         throw std::runtime_error("unknown case");
     std::cout << "PASS: " << name << "\n";
