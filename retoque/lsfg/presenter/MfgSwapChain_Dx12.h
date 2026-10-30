@@ -31,6 +31,7 @@
 
 #include "MfgSwapChain_Helpers.h"
 #include "MfgSwapChain_UiComposition.h"
+#include <lsfg/presenter/MfgAdaptive.h>
 #include <lsfg/presenter/MfgPacing.h>
 
 #include <d3d12.h>
@@ -183,6 +184,11 @@ struct PresentInfo
     PresentWindow window;
     int64_t windowStartQpc = 0;
     int64_t lastStatsPresentQpc = 0;
+
+    // The adaptive multiplier shadow (MfgAdaptive.h, phase 1): fed by the presenter thread after each entry's presents
+    // and reported in the 10 s summary. It only logs; nothing it computes reaches the count or the pacing.
+    Adaptive::Shadow adaptive;
+    HWND outputWindow = nullptr; // the game's window, for the refresh rate (Util::GetActiveRefreshRate)
 };
 
 struct ReplacementResource

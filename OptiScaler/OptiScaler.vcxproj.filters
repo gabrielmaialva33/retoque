@@ -2271,6 +2271,9 @@
     <ClInclude Include="..\retoque\lsfg\presenter\LsfgPresenter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\lsfg\presenter\MfgAdaptive.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\lsfg\presenter\MfgLatch.h">
       <Filter>Header Files</Filter>
     </ClInclude>

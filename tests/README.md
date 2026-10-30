@@ -67,7 +67,7 @@ terminal evidence by a later invocation. See [runner-results](runner-results/REA
 
 | Tier | Needs | Suites |
 |---|---|---|
-| `host` | Python, `g++`, `clang++` | the `nr-*` suites, `deferred-release`, `vk-create-contract`, `vulkan-menu-lifecycle`, `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `mfg-pattern`, `mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy`, `deploy-safety`, `windows-installer`, `lsfg-shader-library`, `lsfg-integration` and `lsfg-presenter` |
+| `host` | Python, `g++`, `clang++` | the `nr-*` suites, `deferred-release`, `vk-create-contract`, `vulkan-menu-lifecycle`, `bridge-lifetime`, `bridge-window`, `vulkan-query-readiness`, `mfg-pattern`, `mfg-patch-plan`, `mfg-probe`, `fg-synth-policy`, `sl-log-repeat`, `repo-privacy`, `deploy-safety`, `windows-installer`, `lsfg-shader-library`, `lsfg-integration`, `lsfg-presenter` and `lsfg-adaptive` |
 | `wine` | msvc-wine prefix; `vulkan-overlay` and `vulkan-present-host` also need a graphical session, and they, `synth-motion-vk` and `guide-match-vk` a working Vulkan loader | `nr-gpu-timing-d3d12`, `nr-session-exit`, `synth-motion-d3d12`, `synth-motion-vk`, `guide-match-vk`, `vulkan-overlay`, `vulkan-present-host`, `dlssnr-loopback`, `nr-present-guide-identity-msvc`, `nr-hdr-d3d12`, `dx11-guides-transport`, `fg-inputs-d3d12` and `fg-provider-d3d12` |
 | `wip` | registered, no runner yet | — |
 
@@ -144,6 +144,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   10 s summary), and source guards: FSRFG's swapchain calls routed, our swapchain created only behind the latch,
   the router forwarding everything else to `FfxApiProxy` unchanged, no FFX interface on the fork, nothing freed
   before the drain, AMD's MIT notice on every copied file and the SDK's bytecode verbatim. No D3D12 is executed.
+- `lsfg-adaptive` — the presenter's log-only adaptive multiplier shadow (phase 1, `retoque/lsfg/presenter/MfgAdaptive.h`,
+  [design](../docs/dlssnr/design/lsfg-adaptive-shadow.md)): MAKO's refresh budget (63/100 fps at x2 on 120 Hz, 165 Hz
+  non-divisors), the cadence estimator (8/32 ms trace, bursts, hitch against sustained drop, stalls), the 5% delivery
+  rule, MAKO's 40→30 FPS rejection at 120, the adviser's choices; source guards that `setGeneratedFrames`, its callers
+  and the pacing writer are unchanged and the shadow lives only on the presenter thread. No D3D12 or display runs.
 - `nr-kernel-profile` — DLSS-NR NvAPI CUDA kernel classification by prefix (pre_block, swin_*, vit,
   etc.), FP8 variant identification, and per-window timing aggregation (mean and maximum).
 - `nr-drs-override` — the production `NvAPI_DRS_GetSetting` hook sliced out of `NvApiHooks.cpp` with its fork headers,
