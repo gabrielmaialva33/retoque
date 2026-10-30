@@ -5090,6 +5090,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     // The game's own NR through Streamline (DlssNr_SlNativeNr.h): the same stand-down, nothing recorded.
     if (const char* why = GameNrStandDown())
     {
+        funnel.Declined(Funnel::Decline::GameOwnNr);
         coverage.sample.reason = why;
         g_upscaleReason = why;
         g_resetOnReturn = true;

@@ -338,6 +338,8 @@ std::atomic<const char*> g_preStatus { "" };
 std::unique_ptr<DlssNr_Dx12> g_compose;
 void ParkNrResource(ID3D12Resource*& r) { r = nullptr; } // Device fixture owns retired resources.
 void ReportSkipOnce(const char*) {}
+// The game's own Streamline NR (DlssNr_SlNativeNr.h): never running here; tests/nr-sl-native-nr covers it.
+static const char* GameNrStandDown() { return nullptr; }
 ID3D12Resource* GetResource(NVSDK_NGX_Parameter* p, const char* name, const char*)
 {
     ID3D12Resource* r = nullptr;

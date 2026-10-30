@@ -13,7 +13,7 @@
       "void NotePulsePresent(uint64_t present)\n{",
       "void PublishPulse(bool running, bool failed)\n{",
       "static void StopPulseLocked()\n{",
-      "void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, ID3D12Resource* target,\n                 ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height, uint32_t format,\n                 uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,\n                 uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs)\n{",
+      "void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool enabled, bool meter,\n                 ID3D12Resource* target, ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height,\n                 uint32_t format, uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,\n                 uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs)\n{",
       "void CopyCalibrationToReadback(ID3D12GraphicsCommandList* cmdList)\n{",
       "void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound)\n{",
       "void ConsumeCalibrationReadback()\n{",

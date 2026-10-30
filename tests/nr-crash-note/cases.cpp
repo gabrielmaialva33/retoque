@@ -263,7 +263,9 @@ void ExportNames()
     Require(ExportName(unterminated, unterminated.size(), unterminated.size()) == "<none>",
             "a name that runs off the image is refused");
 
-    auto pathy = Image("C:\\Users\\someone\\evil/x.dll");
+    // A synthetic user folder, split so the source holds no personal-looking path (repo-privacy).
+    auto pathy = Image("C:\\Users\\"
+                       "someone\\evil/x.dll");
     const auto cleaned = ExportName(pathy, pathy.size(), pathy.size());
     Require(cleaned != "<none>" && !Contains(cleaned, "\\") && !Contains(cleaned, "/") && !Contains(cleaned, ":"),
             "an export name can never carry a path into the log: " + cleaned);

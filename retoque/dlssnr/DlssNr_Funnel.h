@@ -51,6 +51,7 @@ enum class Decline : uint8_t
     NoDevice,             // the command list belongs to no D3D12 device
     PassUnavailable,      // the composition could not be built on this device, or its inputs are on another
     PassRecordedNothing,  // the pass was asked and recorded nothing: building, failed, paused, a refused frame
+    GameOwnNr,            // the game runs its own NR through Streamline (DlssNr_SlNativeNr.h)
     Count
 };
 inline constexpr size_t kDeclineCount = static_cast<size_t>(Decline::Count);
@@ -116,6 +117,8 @@ inline const char* DeclineTag(Decline decline)
         return "pass_unavailable";
     case Decline::PassRecordedNothing:
         return "pass_recorded_nothing";
+    case Decline::GameOwnNr:
+        return "game_own_nr";
     default:
         return "unknown";
     }
@@ -144,6 +147,8 @@ inline const char* DeclineText(Decline decline)
         return "the pass could not be built on this device";
     case Decline::PassRecordedNothing:
         return "the pass recorded nothing";
+    case Decline::GameOwnNr:
+        return "the game runs its own NR (Streamline)";
     default:
         return "unknown";
     }
