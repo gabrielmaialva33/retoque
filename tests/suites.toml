@@ -534,6 +534,14 @@ tier = "host"
 timeout = 120
 summary = "Zero-motion detection's CPU half (the probe grid read out, depth moved past TAA jitter, two readings of an all-zero field in a moving scene before the verdict, one non-zero sample ending it, shape and gap starting over, the ZeroGuideReset rule) and source guards on its pass and its wiring in Dispatch."
 
+[nr-scene-cut]
+path = "nr-scene-cut"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Scene-cut detection's pure rule (phase 1, not wired): the game's frame read off the pulse grid, rank incoherence at the best global shift, breadth, distribution and polarity over synthetic static, pan, zoom, cut, flash, explosion, fade and dissolve sequences; warm-up, cooldown, pairing, blank frames and the late or shadow reset request."
+
 [nr-hdr-math]
 path = "nr-hdr-math"
 domain = "nr"
