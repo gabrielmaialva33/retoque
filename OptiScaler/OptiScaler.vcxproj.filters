@@ -584,6 +584,9 @@
     <ClInclude Include="..\retoque\hooks\Streamline_LogRepeat.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\resource_tracking\ResourceReferenceIndex.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="proxies\IGDExt_Proxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>

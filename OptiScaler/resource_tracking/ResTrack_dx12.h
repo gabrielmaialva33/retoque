@@ -4,6 +4,7 @@
 
 #include <hudfix/Hudfix_Dx12.h>
 #include <framegen/IFGFeature_Dx12.h>
+#include <resource_tracking/ResourceReferenceIndex.h>
 
 #include <ankerl/unordered_dense.h>
 
@@ -127,15 +128,8 @@ struct SpinLock
 
 struct HeapInfo;
 
-struct TrackedResourceSlot
-{
-    std::weak_ptr<HeapInfo> heap;
-    uint64_t heapVersion = 0;
-    UINT index = 0;
-};
-
-inline ankerl::unordered_dense::map<ID3D12Resource*, std::vector<TrackedResourceSlot>> _trackedResources;
-inline std::mutex _trackedResourcesMutex;
+// Resource -> descriptor slots that reference it. Sharded, O(1) attach/detach: see ResourceReferenceIndex.h.
+inline ResourceReferenceIndex<ID3D12Resource, HeapInfo> _trackedResources;
 inline std::mutex _resourceLifetimeMutex;
 
 // Smaller info for descriptor tracking
@@ -289,19 +283,10 @@ struct HeapInfo : public std::enable_shared_from_this<HeapInfo>
         if (oldResource == nullptr)
             return;
 
-        std::scoped_lock lock(_trackedResourcesMutex);
         LOG_TRACK("Heap: {:X}, Index: {}, Resource: {:X}, Res: {}x{}, Format: {}", (size_t) this, index,
                   (size_t) oldResource, info[index].width, info[index].height, (UINT) info[index].format);
 
-        auto it = _trackedResources.find(oldResource);
-        if (it == _trackedResources.end())
-            return;
-
-        const auto currentVersion = version.load(std::memory_order_relaxed);
-        auto& vec = it->second;
-        vec.erase(std::remove_if(vec.begin(), vec.end(), [currentVersion, index](const TrackedResourceSlot& slot)
-                                 { return slot.heapVersion == currentVersion && slot.index == index; }),
-                  vec.end());
+        _trackedResources.Detach(oldResource, version.load(std::memory_order_relaxed), index);
     }
 
     void AttachToNewResourceLocked(UINT index)
@@ -310,24 +295,13 @@ struct HeapInfo : public std::enable_shared_from_this<HeapInfo>
         if (newResource == nullptr)
             return;
 
-        std::scoped_lock lock(_trackedResourcesMutex);
         LOG_TRACK("Heap: {:X}, Index: {}, Resource: {:X}, Res: {}x{}, Format: {}", (size_t) this, index,
                   (size_t) newResource, info[index].width, info[index].height, (UINT) info[index].format);
 
-        const auto currentVersion = version.load(std::memory_order_relaxed);
-        auto it = _trackedResources.find(newResource);
-        if (it == _trackedResources.end())
-        {
+        // An untracked resource has no destruction callback: do not keep a view that could outlive it
+        if (!_trackedResources.Attach(newResource, version.load(std::memory_order_relaxed), index,
+                                      [this] { return std::weak_ptr<HeapInfo>(shared_from_this()); }))
             info[index].buffer = nullptr;
-            return;
-        }
-
-        auto& vec = it->second;
-        auto found = std::find_if(vec.begin(), vec.end(), [currentVersion, index](const TrackedResourceSlot& slot)
-                                  { return slot.heapVersion == currentVersion && slot.index == index; });
-
-        if (found == vec.end())
-            vec.push_back({ shared_from_this(), currentVersion, index });
     }
 
     bool GetByCpuHandle(SIZE_T cpuHandle, ResourceInfo& outInfo) const
@@ -485,23 +459,16 @@ struct HeapInfo : public std::enable_shared_from_this<HeapInfo>
         for (size_t i = 0; i < DESCRIPTOR_LOCK_STRIPE_COUNT; ++i)
             locks[i] = std::unique_lock<std::shared_mutex>(descriptorLocks[i]);
 
-        std::scoped_lock trackedLock(_trackedResourcesMutex);
+        // Every stripe is held, so no slot of this heap can be attached or detached concurrently; each
+        // resource's shard is locked only for its own removal.
+        const auto currentVersion = version.load(std::memory_order_relaxed);
         for (UINT index = 0; index < numDescriptors; ++index)
         {
             auto* resource = info[index].buffer;
             if (resource == nullptr)
                 continue;
 
-            if (auto it = _trackedResources.find(resource); it != _trackedResources.end())
-            {
-                const auto currentVersion = version.load(std::memory_order_relaxed);
-                auto& vec = it->second;
-                vec.erase(std::remove_if(vec.begin(), vec.end(),
-                                         [currentVersion, index](const TrackedResourceSlot& slot)
-                                         { return slot.heapVersion == currentVersion && slot.index == index; }),
-                          vec.end());
-            }
-
+            _trackedResources.Detach(resource, currentVersion, index);
             info[index].buffer = nullptr;
         }
 
