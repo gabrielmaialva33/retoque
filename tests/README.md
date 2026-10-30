@@ -146,6 +146,13 @@ production headers or source slices with local fakes under AddressSanitizer and 
   before the drain, AMD's MIT notice on every copied file and the SDK's bytecode verbatim. No D3D12 is executed.
 - `nr-kernel-profile` — DLSS-NR NvAPI CUDA kernel classification by prefix (pre_block, swin_*, vit,
   etc.), FP8 variant identification, and per-window timing aggregation (mean and maximum).
+- `nr-drs-override` — the production `NvAPI_DRS_GetSetting` hook sliced out of `NvApiHooks.cpp` with its fork headers,
+  against a fake driver (`DlssNr_DrsOverride.h`, `docs/dlssnr/design/model-310-9-16.md`): with NR off the three NR
+  settings reach the reader byte for byte as the driver wrote them and nothing is logged; with NR on the preset
+  selection reads as off, both enable switches pass unchanged, each value is logged once and on change; failed reads,
+  non-DWORD values and a null output are left alone; the SR/RR preset handling is the same either way. The ids are
+  spelled out from NVIDIA's R615 header, not taken from production. Not which component reads the settings, or whether
+  a real driver applies them.
 - `nr-detail-measure` — the "Measure detail" CPU tile reduction and statistical aggregation (detail added,
   Laplacian raw, flicker beyond native, OkLab chroma/warmth, and shadow darkening/crush), delta comparisons
   and textual metric generation.

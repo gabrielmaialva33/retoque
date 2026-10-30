@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "NvApiHooks.h"
 #include <NvApiDriverSettings.h>
+#include <dlssnr/DlssNr_DrsOverride.h>
 #include <dlssnr/DlssNr_KernelProfile.h>
 
 #include "State.h"
@@ -178,6 +179,22 @@ NvAPI_Status __stdcall NvApiHooks::hkNvAPI_DRS_GetSetting(NvDRSSessionHandle hSe
             pSetting->u32CurrentValue = NGX_DLSS_RR_OVERRIDE_RENDER_PRESET_SELECTION_OFF;
 
             LOG_DEBUG("DLSSD External override: {}", State::Instance().dlssdRenderPresetExternal);
+        }
+
+        // Retoque's NR selects its own weight set. With NR on, the driver's NR overrides are logged once (and on
+        // change) and its NR preset selection is reported as off; with NR off they pass as before
+        // (DlssNr_DrsOverride.h).
+        if (DlssNr::DrsOverride::IsNrSetting(settingId) && pSetting->settingType == NVDRS_DWORD_TYPE &&
+            Config::Instance()->DlssNrEnabled.value_or_default())
+        {
+            const auto seen = DlssNr::DrsOverride::Driver().Filter(settingId, pSetting->u32CurrentValue);
+            if (seen.neutralised)
+                pSetting->u32CurrentValue = DlssNr::DrsOverride::kPresetSelectionOff;
+
+            if (seen.log)
+                LOG_INFO("DLSS-NR: driver setting {} ({:#X}) is {} ({:#X}){}", DlssNr::DrsOverride::Name(settingId),
+                         settingId, DlssNr::DrsOverride::ValueName(settingId, seen.driverValue), seen.driverValue,
+                         seen.neutralised ? "; reported to its reader as off, [DlssNr] Preset selects the model" : "");
         }
 
         if (settingId == NGX_DLSS_RR_OVERRIDE_SCALING_RATIO_ID || settingId == NGX_DLSS_SR_OVERRIDE_SCALING_RATIO_ID)
