@@ -2512,19 +2512,13 @@ struct RetiredSet
     std::vector<uint64_t> waitFor;
 };
 
-// The core's shutdown on one device. Its device-specific entry takes an out count of what is left, as the D3D12 one
-// does (NVNGXProxy::ShutdownDx12Device), which NVNGXProxy's Vulkan typedef leaves out: called through that, the core
-// wrote the count through whatever was in the register (a null write inside _nvngx.dll, 2026-10-14). Called here with
-// it.
+// The core's shutdown on one device. Its device-specific entry takes an out count of what is left; called without one,
+// the core wrote the count through whatever was in the register (a null write inside _nvngx.dll, 2026-10-14).
+// NVNGXProxy's public getter supplies it (NVNGXProxy::ShutdownVulkanDevice), as it does for the SDK input.
 void ShutdownPresentCore(VkDevice device)
 {
-    using PFN_Shutdown1 = NVSDK_NGX_Result (*)(VkDevice, unsigned int*);
-
-    if (const auto shutdown = reinterpret_cast<PFN_Shutdown1>(NVNGXProxy::VULKAN_Shutdown1()))
-    {
-        unsigned int remaining = 0;
-        shutdown(device, &remaining);
-    }
+    if (const auto shutdown = NVNGXProxy::VULKAN_Shutdown1())
+        shutdown(device);
 }
 
 // The forwarder's record of an NGX call's result (an exported int), as NGX names it.

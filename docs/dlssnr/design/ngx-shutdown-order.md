@@ -85,3 +85,38 @@ separate fix-only runtime validation passed 200 evaluations and presents, return
 from Shutdown1 and all releases, and exited with code 0; the baseline failed with
 the same inputs. See the [validation review](../../superpowers/reviews/2026-10-30-dx11-core-shutdown.md) for
 combined results and remaining limits.
+
+## Vulkan core shutdown adapter — 2026-10-30
+
+The same inspected core's Vulkan `Shutdown1` export (RVA `0xd640`) keeps its second
+argument and passes it to the shared shutdown routine at `0x3b820`, which writes the
+remaining count through it. The SDK input called the raw slot with one argument; the
+NR present host compensated with its own two-argument cast of the public getter.
+
+The Vulkan raw slot and loader now use a private two-argument type, and the public
+getter returns an adapter with the D3D11/D3D12 semantics: initialized writable count,
+unchanged result, all-devices export or NotImplemented for a null device, nothing
+exposed when uninitialized or absent. The NR host's `ShutdownPresentCore` calls the
+public getter with its one-argument signature; its cast is gone. When and whether the
+host shuts the core down, and its device teardown order, are unchanged.
+
+`NVNGXProxy::ShutdownVulkanDevice` and the public `NVSDK_NGX_VULKAN_Shutdown1` log a
+debug entry and return (the adapter's with the core's result and remaining count); no
+logic, lifetime or return value changes. Both consumers discard the core's result.
+
+`tests/nr-shutdown` compiles the production Vulkan types, slot, loader assignment,
+adapter and getter with both consumers — `NVSDK_NGX_VULKAN_Shutdown1` with the
+`NVSDK_NGX_VULKAN_Shutdown` it ends in, and `ShutdownPresentCore` — and their debug
+lines against host fakes with ASan/UBSan. A behavioural run of the old code under the
+same fakes faulted in the fake core on the unsupplied output.
+`tests/nr-shutdown/vk_shutdown_evidence.py` judges one run of an existing
+`tests/vulkan-present-host` case from an executor's receipt (run id, case folder,
+Proton prefix, the application's exit code, hashes of facts, log, loader trace and
+runner results): `nr-control` for the host and `nr-route-quiet` for the public input.
+That route case runs with DLSS disabled unless `RETOQUE_VK_ROUTE_SR` links a user-owned
+`nvngx_dlss.dll` into its folder; only then do the application's calls reach the core.
+The judge requires the exact loaded DLL and prefix core, exit 0, a PASS runner verdict
+and, on the facts' device, bring-up, the consumer's call (entry, core result 1) and
+destruction in that order. It proves the call for that run, not the core's result
+through the public return. Runtime results and limits are in the
+[Vulkan evidence record](../../superpowers/reviews/2026-10-30-vk-core-shutdown.md).

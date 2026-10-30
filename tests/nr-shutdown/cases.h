@@ -35,8 +35,136 @@ unsigned CoreDx11Shutdown(ID3D11Device* device, unsigned* remaining)
 }
 unsigned CoreDx11AllShutdown() { ++dx11AllCalls; return result; }
 
+unsigned vkCalls = 0, vkAllCalls = 0;
+VkDevice expectedVk = nullptr;
+unsigned CoreVkShutdown(VkDevice device, unsigned* remaining)
+{
+    assert(device == expectedVk && device != nullptr);
+    assert(remaining != nullptr && *remaining == 0);
+    *remaining = 5;
+    ++vkCalls;
+    return result;
+}
+unsigned CoreVkAllShutdown() { ++vkAllCalls; return result; }
+
+// The adapter's two debug lines for one device call: entry, then the core's result and remaining count.
+void ExpectCoreCallAt(size_t at, VkDevice device, unsigned coreResult, unsigned remaining)
+{
+    assert(debugLog.size() >= at + 2);
+    const auto pointer = static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(device));
+    assert(debugLog[at].function == "ShutdownVulkanDevice" && debugLog[at].format == std::string("device 0x{0:X}"));
+    assert(debugLog[at].values == std::vector<unsigned long long>({ pointer }));
+    assert(debugLog[at + 1].format == std::string("device 0x{0:X}: core result 0x{1:X}, {2} remaining"));
+    assert(debugLog[at + 1].values == std::vector<unsigned long long>({ pointer, coreResult, remaining }));
+}
+
+void ExpectCoreCallLogged(size_t at, VkDevice device, unsigned coreResult, unsigned remaining)
+{
+    assert(debugLog.size() == at + 2);
+    ExpectCoreCallAt(at, device, coreResult, remaining);
+}
+
+// The SDK input's entry and return, around the adapter's pair when it called the core: the public consumer's own lines.
+void ExpectPublicBracket(size_t at, VkDevice device, bool coreCalled, unsigned coreResult = 1)
+{
+    const size_t ret = at + (coreCalled ? 3 : 1);
+    assert(debugLog.size() == ret + 1);
+    const auto pointer = static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(device));
+    assert(debugLog[at].function == "NVSDK_NGX_VULKAN_Shutdown1" && debugLog[at].format == std::string("device 0x{0:X}"));
+    assert(debugLog[at].values == std::vector<unsigned long long>({ pointer }));
+    if (coreCalled)
+        ExpectCoreCallAt(at + 1, device, coreResult, 5);
+    assert(debugLog[ret].function == "NVSDK_NGX_VULKAN_Shutdown1");
+    assert(debugLog[ret].format == std::string("device 0x{0:X}: returning 0x{1:X}"));
+    assert(debugLog[ret].values == std::vector<unsigned long long>({ pointer, NVSDK_NGX_Result_Success }));
+}
+
+// The Vulkan core's slot behind the public getter and both of its consumers. Run before the type checks, so a
+// one-argument slot fails here on behaviour (the core's output is not supplied) and not only on its declaration.
+void VulkanCases()
+{
+    KernelBaseProxy::address = reinterpret_cast<void*>(&CoreVkShutdown);
+    NVNGXProxy::LoadVulkan();
+    NVNGXProxy::_module.VULKAN_Shutdown = &CoreVkAllShutdown;
+    assert(NVNGXProxy::VULKAN_Shutdown1() == nullptr);
+    VkDevice_T device;
+    expectedVk = &device;
+
+    // Uninitialised: neither consumer reaches the core.
+    ShutdownPresentCore(&device);
+    assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
+    assert(vkCalls == 0 && vkAllCalls == 0 && Nvngx_FG::shutdown1Calls == 1 && Nvngx_FG::shutdownCalls == 1);
+    ExpectPublicBracket(0, &device, false); // the host's helper logs nothing of its own; the input brackets its call
+    debugLog.clear();
+
+    NVNGXProxy::_vulkanInited = true;
+    auto vk = NVNGXProxy::VULKAN_Shutdown1();
+    assert(vk != nullptr);
+    // Nothing logged until a device call is made; then the entry and the core's own answer, failure included.
+    assert(debugLog.empty());
+    assert(vk(&device) == 1 && vkCalls == 1 && vkAllCalls == 0);
+    ExpectCoreCallLogged(0, &device, 1, 5);
+    result = 0xBAD00002;
+    assert(vk(&device) == result && vkCalls == 2 && vkAllCalls == 0);
+    ExpectCoreCallLogged(2, &device, 0xBAD00002, 5);
+    assert(vk(nullptr) == result && vkAllCalls == 1 && vkCalls == 2);
+    result = 1;
+    NVNGXProxy::_module.VULKAN_Shutdown = nullptr;
+    assert(vk(nullptr) == NVSDK_NGX_Result_FAIL_NotImplemented && vkAllCalls == 1 && vkCalls == 2);
+    NVNGXProxy::_module.VULKAN_Shutdown = &CoreVkAllShutdown;
+    assert(debugLog.size() == 4); // the all-devices routes log nothing: no device call was made
+
+    // The NR present host: the device-specific entry, the runtime left initialised for its caller to clear.
+    ShutdownPresentCore(&device);
+    assert(vkCalls == 3 && vkAllCalls == 1 && NVNGXProxy::_vulkanInited);
+    ExpectCoreCallLogged(4, &device, 1, 5);
+
+    // The SDK input: the device entry once, the runtime cleared, so the all-devices shutdown it ends in is not repeated.
+    assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
+    assert(vkCalls == 4 && vkAllCalls == 1 && !NVNGXProxy::_vulkanInited);
+    ExpectPublicBracket(6, &device, true);
+    assert(Nvngx_FG::shutdown1Calls == 2 && Nvngx_FG::shutdownCalls == 2 && !State::Instance().nvngxVkInited);
+
+    // A null device from the game selects the all-devices entry instead of dereferencing null inside the core.
+    NVNGXProxy::_vulkanInited = true;
+    assert(NVSDK_NGX_VULKAN_Shutdown1(nullptr) == NVSDK_NGX_Result_Success);
+    assert(vkCalls == 4 && vkAllCalls == 2 && !NVNGXProxy::_vulkanInited);
+    ExpectPublicBracket(10, nullptr, false);
+
+    // A failing core result does not stop the input's cleanup.
+    NVNGXProxy::_vulkanInited = true;
+    result = 0xBAD00002;
+    assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
+    assert(vkCalls == 5 && vkAllCalls == 2 && !NVNGXProxy::_vulkanInited && Nvngx_FG::shutdown1Calls == 4);
+    ExpectPublicBracket(12, &device, true, 0xBAD00002); // the core's failure logged; the public return is not it
+    result = 1;
+
+    // DLSS off: the input leaves the proxy's core alone.
+    NVNGXProxy::_vulkanInited = true;
+    Config::Instance()->DLSSEnabled.value = false;
+    assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
+    assert(vkCalls == 5 && vkAllCalls == 2 && NVNGXProxy::_vulkanInited);
+    ExpectPublicBracket(16, &device, false);
+    Config::Instance()->DLSSEnabled.value = true;
+
+    // A core without the export: nothing exposed, neither consumer calls anything.
+    KernelBaseProxy::address = nullptr;
+    NVNGXProxy::LoadVulkan();
+    assert(NVNGXProxy::VULKAN_Shutdown1() == nullptr);
+    const auto logged = debugLog.size();
+    ShutdownPresentCore(&device);
+    assert(vkCalls == 5 && vkAllCalls == 2 && debugLog.size() == logged); // no call, so no evidence of one
+    NVNGXProxy::_vulkanInited = false;
+    NVNGXProxy::_module.VULKAN_Shutdown = nullptr;
+
+    assert((std::is_same_v<decltype(NVNGXProxy::VULKAN_Shutdown1()), PFN_VULKAN_Shutdown1>));
+    assert((std::is_same_v<decltype(NVNGXProxy::_module.VULKAN_Shutdown1),
+                           NVSDK_NGX_Result (*)(VkDevice, unsigned*)>));
+}
+
 int main()
 {
+    VulkanCases();
     static_assert(std::is_same_v<decltype(NVNGXProxy::D3D12_Shutdown1()), PFN_D3D12_Shutdown1>);
     static_assert(std::is_same_v<decltype(NVNGXProxy::D3D11_Shutdown1()), PFN_D3D11_Shutdown1>);
     static_assert(std::is_same_v<decltype(NVNGXProxy::_module.D3D11_Shutdown1),
@@ -99,6 +227,6 @@ int main()
     custom.shutdown1 = nullptr;
     NVNGXProxy::ShutdownCustomDx12(custom, &device);
     assert(allCalls == 3 && sdkCalls == 1 && deviceCalls == 2 && !custom.dx12Inited);
-    std::cout << "PASS: production core shutdown adapter, writable output, result propagation, null-device routing and "
-                 "custom SDK shutdown\n";
+    std::cout << "PASS: production D3D11/D3D12/Vulkan core shutdown adapters, writable output, result propagation, "
+                 "null-device routing, both Vulkan consumers and custom SDK shutdown\n";
 }
