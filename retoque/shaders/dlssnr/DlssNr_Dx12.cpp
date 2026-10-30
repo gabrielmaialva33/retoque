@@ -30,6 +30,8 @@
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_PrivateSr.h>
 #include <dlssnr/DlssNr_MultiView.h>
+#include <dlssnr/DlssNr_Funnel.h>
+#include <dlssnr/DlssNr_CrashNote.h>
 #include <dxgi1_4.h>
 
 #include "DlssNr_Dx12.h"
@@ -4940,8 +4942,14 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
         return;
     }
 
+    // From here every way out names its outcome (DlssNr_Funnel.h): ran, or one decline. Two atomic adds and three
+    // relaxed stores per evaluate, and none of it with NR off.
+    Funnel::Evaluation funnel(Funnel::Route::D3d12AfterUpscale, GetCurrentThreadId());
+    CrashNote::InstallOnce();
+
     if (isRayReconstruction && !cfg.DlssNrApplyAfterRR.value_or_default())
     {
+        funnel.Declined(Funnel::Decline::RayReconstructionOff);
         ReportSkipOnce("Ray Reconstruction is active; enable ApplyAfterRR to process its output");
         return;
     }
@@ -4955,6 +4963,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     if (cmdList == nullptr || params == nullptr)
     {
         coverage.sample.reason = "no command list or parameter block";
+        funnel.Declined(Funnel::Decline::NoListOrParameters);
         ReportSkipOnce("no command list or no parameter block");
         return;
     }
@@ -4970,6 +4979,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     // model was rebuilt at display size, and rebuilt again at render size the next frame.
     if (dlssNrStage == 1 && !preUpscaleDeclined)
     {
+        funnel.Declined(Funnel::Decline::Stage1BeforeUpscaler);
         ReportSkipOnce("stage 1: the model runs before the upscaler, so the after-upscale pass stands down");
         return;
     }
@@ -5000,6 +5010,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     if (target == nullptr || depth == nullptr || motion == nullptr)
     {
         coverage.sample.reason = "missing output, depth or motion vectors";
+        funnel.Declined(Funnel::Decline::MissingResources);
         ReportSkipOnce(target == nullptr  ? "the parameters carried no output texture"
                        : depth == nullptr ? "the parameters carried no depth"
                                           : "the parameters carried no motion vectors");
@@ -5020,6 +5031,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     if (DlssNr::PresentBoundary::UpscaledDefersToPresent(boundary, PresentHookLive(), g_temporalValid.load()))
     {
         coverage.sample.reason = "deferred to present-time hook";
+        funnel.Declined(Funnel::Decline::DeferredToPresent);
         return;
     }
 
@@ -5035,6 +5047,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
         coverage.sample.reason = why;
         g_upscaleReason = why;
         g_resetOnReturn = true;
+        funnel.Declined(Funnel::Decline::MultiView);
         ReportSkipOnce(why);
         return;
     }
@@ -5054,6 +5067,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     {
         coverage.sample.reason = "command list has no D3D12 device";
         g_upscaleReason = coverage.sample.reason;
+        funnel.Declined(Funnel::Decline::NoDevice);
         ReportSkipOnce("the command list belongs to no D3D12 device");
         return;
     }
@@ -5070,6 +5084,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     {
         coverage.sample.reason = "composition device unavailable or changed";
         g_upscaleReason = coverage.sample.reason;
+        funnel.Declined(Funnel::Decline::PassUnavailable);
         ReportSkipOnce("the pass could not be created");
         return;
     }
@@ -5083,6 +5098,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     const auto desc = target->GetDesc();
     coverage.sample.width = static_cast<uint32_t>(desc.Width);
     coverage.sample.height = desc.Height;
+    funnel.Recording();
     coverage.sample.applied =
         g_compose->Dispatch(cmdList, target, depth, motion, target, frame, timingQueue, &coverage.sample);
     if (coverage.sample.applied)
@@ -5091,6 +5107,10 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     g_upscaleReason = coverage.sample.reason;
     if (coverage.sample.applied)
         ++g_passesRecorded;
+    if (coverage.sample.applied)
+        funnel.Ran(coverage.sample.modelCalled);
+    else
+        funnel.Declined(Funnel::Decline::PassRecordedNothing, coverage.sample.reason);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -5501,6 +5521,8 @@ bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colou
         DlssNr::SessionGuardOff();
         return answer(false, "the pass is disabled");
     }
+
+    CrashNote::InstallOnce();
 
     if (cmdList == nullptr || colour == nullptr || depth == nullptr || motion == nullptr)
         return answer(false, "the host passed a null resource");

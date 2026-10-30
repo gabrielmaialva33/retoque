@@ -14,8 +14,9 @@
 //   Used      what the pass actually ran on: whether it runs, the hook method set and the one in effect, the guides,
 //             the HDR conversion
 //
-// then the settings (the timing contract's settings fields), the last fence-confirmed GPU sample, which is one
-// historical sample and is labelled so, and LSFG. With NR off the report is the build and one line.
+// then the engagement funnel (each route's evaluates and how each ended, DlssNr_Funnel.h), the settings (the timing
+// contract's settings fields), the last fence-confirmed GPU sample, which is one historical sample and is labelled so,
+// and LSFG. With NR off the report is the build and one line.
 //
 // Every absolute path is replaced by <path> (Redact), whatever field it arrived in: a failure reason or LSFG's fallback
 // can name a file under a user's home or Steam library, and the text is meant to be pasted into a public issue.
@@ -27,6 +28,7 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace DlssNr::DiagnosticReport
 {
@@ -69,6 +71,21 @@ struct LsfgState
     std::string fallbackReason;
 };
 
+// One route's engagement ladder (DlssNr::Funnel::Snapshot), named. Every decline the route has, zero or not.
+struct FunnelDecline
+{
+    std::string text;
+    unsigned long long count = 0;
+    std::string detail; // the last reason behind it, when the route keeps one (the pass's own, for "recorded nothing")
+};
+
+struct FunnelRoute
+{
+    std::string name;
+    unsigned long long eligible = 0, ran = 0, modelCalls = 0;
+    std::vector<FunnelDecline> declines;
+};
+
 // Already-fetched values. Strings are copies; an empty string means the getter had nothing to say.
 struct Inputs
 {
@@ -104,6 +121,7 @@ struct Inputs
     bool hdrConverted = false;
     std::string hdrReason;
     std::string settingsContract; // SettingsContractText: TimingContract over the current Config
+    std::vector<FunnelRoute> funnel; // every counted route, in DlssNr::Funnel::Route order
     GpuSample gpu;
     LsfgState lsfg;
 };
@@ -354,6 +372,30 @@ inline std::string Build(const Inputs& in)
         line("HDR conversion: not converting: " + in.hdrReason);
     else
         line(in.hdrSeen ? "HDR conversion: off" : "HDR conversion: none");
+
+    line("");
+    line("== Funnel ==");
+    if (in.funnel.empty())
+        line("No route counted.");
+    else
+        line("Evaluates with NR on since the game started; each ends once: ran the pass, or one decline.");
+    for (const auto& route : in.funnel)
+    {
+        unsigned long long declined = 0;
+        for (const auto& decline : route.declines)
+            declined += decline.count;
+        const long long unaccounted = static_cast<long long>(route.eligible) - static_cast<long long>(route.ran) -
+                                      static_cast<long long>(declined);
+        line(route.name + ": eligible " + std::to_string(route.eligible) + ", ran the pass " +
+             std::to_string(route.ran) + " (model called " + std::to_string(route.modelCalls) + "), declined " +
+             std::to_string(declined) + ", unaccounted " + std::to_string(unaccounted) +
+             (unaccounted > 0
+                  ? " (evaluates in flight when this was read, or a way out of the pass that names no reason)"
+                  : ""));
+        for (const auto& decline : route.declines)
+            line("  " + decline.text + ": " + std::to_string(decline.count) +
+                 (decline.detail.empty() ? "" : " (last: " + decline.detail + ")"));
+    }
 
     line("");
     line("== Settings ==");

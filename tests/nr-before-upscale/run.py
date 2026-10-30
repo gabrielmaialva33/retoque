@@ -39,7 +39,11 @@ owner = between(internal, 'struct NrDeviceOwner\n', 'extern NrDeviceOwner')
 resource_source = (ROOT / 'retoque/shaders/dlssnr/DlssNr_Dx12_Resources.cpp').read_text()
 child_owner = between(resource_source, 'bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)',
                       '// Only the typeless guide families')  # both overloads: lists strict, resources under a wrapper
-unit = '#include "fakes.h"\n' + owner + 'NrDeviceOwner g_nrDeviceOwner;\n' + child_owner + coverage + allocation + resources
+# The engagement funnel (DlssNr_Funnel.h) is pure and compiled as it is; the crash note's install is Win32 and stubbed.
+funnel = ('#include <retoque/dlssnr/DlssNr_Funnel.h>\n'
+          'static unsigned GetCurrentThreadId() { return 1; }\n'
+          'namespace DlssNr::CrashNote { inline void InstallOnce() {} }\n')
+unit = '#include "fakes.h"\n' + funnel + owner + 'NrDeviceOwner g_nrDeviceOwner;\n' + child_owner + coverage + allocation + resources
 spatial = between(source, 'void ReportSpatialContract(', 'DlssNrFrameInfo GatherGuideFrame(')
 unit += '\nnamespace DlssNr {\n' + declaration + spatial + compose + views + after + scope + '\n}\n#include "cases.h"\n'
 (OUT / 'boundary.cpp').write_text(unit)

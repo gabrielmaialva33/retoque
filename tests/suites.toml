@@ -134,6 +134,22 @@ tier = "host"
 timeout = 60
 summary = "Copy NR diagnostics: the report's sections (Detected before Used), determinism, the short NR-off text, frame fields stripped from the settings contract, the historical GPU sample, path redaction, and guards that it is assembled on a click only."
 
+[nr-funnel]
+path = "nr-funnel"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "NR engagement funnel: per-route ladders that balance (eligible - ran - declines = 0) under concurrent counting, constant-initialised and lock-free, and guards that every way out of the D3D12 after-upscale pass names one decline and nothing is counted with NR off."
+
+[nr-crash-note]
+path = "nr-crash-note"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 60
+summary = "NR crash note: the three-line last-chance note formatted by hand with no allocation and no path, the PE export-name reader on malformed images, and guards that the filter installs once with NR on, chains to the one it replaced, never swallows the crash, and is given back on an unload."
+
 [nr-dx11-native-guides]
 path = "nr-dx11-native-guides"
 domain = "nr"

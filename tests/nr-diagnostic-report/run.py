@@ -55,6 +55,10 @@ first_nr = getter.start() if getter else -1
 require(0 <= gate < first_nr, 'with NR off the report returns before any NR, LSFG or timing getter is asked')
 require('GpuTiming::SetEnabled' not in collect and 'RetryAfterFailure' not in collect,
         'the export only reads: it never changes timing or retries the pass')
+require(re.search(r'for \(size_t r = 0; r < DlssNr::Funnel::kRouteCount; \+\+r\)', collect)
+        and 'DlssNr::Funnel::Read(' in collect and 'in.funnel.push_back(' in collect,
+        'the Funnel section reports every route\'s ladder, read once from DlssNr::Funnel')
+require('#include "DlssNr_Funnel.h"' in menu, 'the NR panel includes the funnel header')
 require('NgxInfo::Describe(' not in collect,
         'the export must not call NgxInfo::Describe: it caches its first answer, which LoaderRouteKnownToFault decides '
         'from; use the lookup-only NgxInfo::Described')

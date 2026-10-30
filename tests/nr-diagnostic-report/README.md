@@ -12,13 +12,16 @@ ASan/UBSan and `-Werror`, runs `cases.cpp`, and checks the production call sites
 
 - **Determinism.** The same `Inputs` give the same bytes; a changed input changes them; `\n` only; nothing redacted
   in a report without paths.
-- **No section missing.** Build, Detected, Used, Settings, GPU timing and LSFG once each, in that order, for a full
+- **No section missing.** Build, Detected, Used, Funnel, Settings, GPU timing and LSFG once each, in that order, for a full
   report and for one with every field at its default; every line is present, unknown values read `unknown`/`none`.
 - **Detected before Used.** API, upscaler, model and HDR swapchain sit under Detected; pass, hook method, guides and
   HDR conversion under Used. Under Wine the loader build is not called the driver.
 - **States.** The pass running on D3D12, natively on Vulkan, off with its reason, or waiting; Apply off; each hook
   method and an out-of-range one; HDR converting, declined or absent; the D3D11 route line; LSFG off, active, timed,
   falling back and waiting.
+- **Funnel.** Between Used and Settings: each route's ladder on one line (eligible, ran, model called, declined,
+  unaccounted), every decline with its count (zero included) and its last reason; a positive unaccounted is
+  explained, an impossible one shown signed; no route reads `No route counted.`
 - **Settings.** `StripFrameFields` keeps settings tokens in order and drops every frame field; one per line in the
   report; `unavailable` when there is no contract text.
 - **GPU sample.** Recent only while measuring and under `kRecentSampleMs`; historical otherwise; carried frames named;
@@ -32,7 +35,7 @@ ASan/UBSan and `-Werror`, runs `cases.cpp`, and checks the production call sites
   branch and passes it straight to `SetClipboardText`; the collector returns before any NR, LSFG or timing getter when
   NR is off, never calls `GpuTiming::SetEnabled`, `RetryAfterFailure` or `NgxInfo::Describe`. `SettingsContractText`
   calls the one `TimingContract`, and every frame field `TimingContract` writes is in `kFrameFields`.
-  `NgxInfo::Described` looks up under the lock and never adds or logs.
+  `NgxInfo::Described` looks up under the lock and never adds or logs. The collector reads every route's ladder from `DlssNr::Funnel`.
 
 ## What this does not cover
 
