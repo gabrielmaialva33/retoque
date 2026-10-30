@@ -588,7 +588,7 @@ domain = "lsfg"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
-summary = "Runtime LSFG shader library: DLL discovery (Steam VDF, Wine Z:, override), PE RT_RCDATA SPIR-V extraction, and hash-keyed cache; convert.py Float16 detection (ids 51..98 on the real DLL)."
+summary = "Runtime LSFG shader library: DLL discovery (Steam VDF, Wine Z:, override), PE RT_RCDATA SPIR-V extraction, the pinned 99-id role table (also against LsfgGraph.h), and hash-keyed cache; convert.py Float16 detection (ids 51..98) and derive_ids.py re-derivation of the table on the real DLL."
 
 [lsfg-integration]
 path = "lsfg-integration"

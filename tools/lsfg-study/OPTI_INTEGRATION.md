@@ -89,7 +89,10 @@ this worktree. Two abbreviations:
 
 - **FISC** = `external/FidelityFX-SDK-v2/Kits/FidelityFX/framegeneration/fsr3/dx12/FrameInterpolationSwapchainDX12.{h,cpp}`
   (SDK 2.3.0, MIT per `docs/license.md:507`; checked out in the main tree, not in this worktree).
-- **lsfg-vk** = lsfg-vk v2.0.0 (`2333707`), read at `~/.cache/aur-review/lsfg-vk-src`.
+- **lsfg-vk** = lsfg-vk v2.0.0 (`2333707`, CC BY-NC-ND 4.0) where a citation has no other revision: the historical
+  reading this note was written from. **lsfg-vk GPL** = `PancakeTAS/lsfg-vk@8b0da266` (GPL-3.0-or-later) and
+  **lsfg-vk MIT** = `v1.0.0` (`7113d7d0`), the sources the shipped code now cites
+  (`Licenses/lsfg-vk_ATTRIBUTION.txt`).
 
 ## Read this first: it stays a study
 
@@ -101,9 +104,15 @@ already settled the legal side, and nothing here changes it:
 - **No LS-derived bytes in git.** That covers SPIR-V, HLSL, DXIL, PNGs made by LSFG and `layout.json`. Generated files
   stay in `Tmp/lsfg-study/`, as `tools/lsfg-study/README.md` already does.
 - **Nothing of this merges into `dlss-neural-rendering`.** That branch is mirrored publicly within minutes (CLAUDE.md).
-- The pass graph the harness follows is read from lsfg-vk 2.0.0, which is **CC BY-NC-ND 4.0**
+- The pass graph the harness follows was read from lsfg-vk 2.0.0, which is **CC BY-NC-ND 4.0**
   (`lsfg-vk-pipeline/src/*.cpp` SPDX headers). Reading it for a private study is fine. Publishing code derived from it
   is not. lsfg-vk v1.0.0 (MIT) and the v2.0.0-dev snapshot (GPLv3) are the references that would not have that problem.
+- **Re-cited 2026-10-30 (branch `fix/lsfg-provenance-20261030`, unreviewed).** The id table in
+  `LsfgShaderLibrary.cpp` is re-derived without 2.0.0: roles from lsfg-vk GPL `8b0da266` and MIT `v1.0.0`, ids from the
+  user's DLL (`tools/lsfg-study/derive_ids.py`, pinned by `tests/lsfg-shader-library`). `LsfgGraph.h` and the sampler
+  table cite the same sources. This changes citations, not history: the 2.0.0-derived versions are in published
+  commits from `b76a518c` on, `PIPELINE_V3_1.md` still uses 2.0.0's vocabulary, and the sections below still cite
+  2.0.0 files. The two points above on Lossless Scaling's own shaders and permission are unchanged by any of it.
 
 If this ever became code on a real branch, the note would move to `docs/` first, because DEVELOPMENT.md requires the
 design document before the code.
@@ -364,12 +373,16 @@ On this workstation the install is the default library's `steamapps/common/Lossl
 
 ### 3.2 Extracting the modules
 
-`lsfg-vk.dll` keeps the SPIR-V as `RT_RCDATA` resources. The id table is in `lsfg-vk-pipeline/src/library.cpp`:
+`lsfg-vk.dll` keeps the SPIR-V as `RT_RCDATA` resources. The id table (`LsfgShaderLibrary.cpp`) is derived from the
+DLL itself by `tools/lsfg-study/derive_ids.py`: dataflow between the modules' bindings, descriptor counts, samplers,
+image formats, Float16 capability and image-access counts, against lsfg-vk GPL's and MIT's chain roles:
 
-- Base shaders: mipmaps 0, `generate_8bit` 1, `generate_16bit` 2.
-- 24 core shaders at 3..26. Performance variants are +24, FP16 variants +48.
-- **Mipmaps is a named entry, not an id.** lsfg-vk looks it up as `2147488584` (`0x80001348`). Its high bit marks a
-  name-string offset, so `FindResourceW(MAKEINTRESOURCE(id))` cannot reach it. The two extraction options:
+- Base shaders: mipmaps 0, `generate_8bit` 1 (RGBA8 output), `generate_16bit` 2 (RGBA16 output).
+- 24 core shaders at 3..26 (gamma 3..7, delta 8..12, alpha 13..16, epsilon = lsfg-vk's delta[5..9] 17..21, beta
+  22..26). Performance variants are +24, FP16 variants +48.
+- **Mipmaps is a named entry, not an id.** Its resource directory entry is the name string `"0"` (`0x80001348`). The
+  high bit marks a name-string offset, so `FindResourceW(MAKEINTRESOURCE(id))` cannot reach it. The two extraction
+  options:
   - a small PE walker over the file bytes, which behaves the same on Windows and under Wine;
   - `EnumResourceNamesW`.
 

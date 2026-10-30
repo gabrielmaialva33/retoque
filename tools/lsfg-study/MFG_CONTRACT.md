@@ -90,26 +90,26 @@ uint32_t res = Lsfg::FfxDispatch(params);
 Game presents frame I_t
    │
    ├─► index == 0 (First Generated Frame, t = 1/(K+1)):
-   │     1. Ingest: Copy presentColor -> sourceImageArray[slot]
-   │     2. Pre-Pass (34 dispatches, Stages 0..9):
+   │     1. Ingest: Copy presentColor -> source array, slot iteration % 2 (Graph::source)
+   │     2. Pre-pass (Graph::pre, 34 dispatches):
    │        - mipmaps: 7-level luminance pyramid
-   │        - alpha0..3: 7-scale feature pyramid (pinned in alphaArray[0..6])
-   │        - beta0..4: motion candidate guidance (pinned in betaImageArray)
-   │     3. Main-Pass (66 dispatches, Stages 10..45):
+   │        - alpha0..3: features at all 7 levels (kept for the frame: alpha[0..6])
+   │        - beta0..4: 6-level guidance pyramid (kept for the frame)
+   │     3. Main pass (Graph::main, 66 dispatches):
    │        - gamma0..4, delta0..4, epsilon0..4, generate
    │        - Evaluated with timestamp t_0 = 1/(K+1)
    │        - Writes output_0
    │
    ├─► index == 1 (Second Generated Frame, t = 2/(K+1)):
-   │     1. Ingest SKIPPED (I_{t-1} and I_t remain in sourceImageArray)
-   │     2. Pre-Pass SKIPPED (alphaArray and betaImageArray REUSED directly)
-   │     3. Main-Pass (66 dispatches, Stages 10..45):
+   │     1. Ingest SKIPPED (I_{t-1} and I_t remain in the source array)
+   │     2. Pre-pass SKIPPED (the alpha features and beta pyramid are REUSED directly)
+   │     3. Main pass (66 dispatches):
    │        - Evaluated with timestamp t_1 = 2/(K+1)
    │        - Writes output_1
    │
    ├─► index == 2 (Third Generated Frame for x4, t = 3/(K+1)):
    │     1. Ingest & Pre-Pass SKIPPED
-   │     2. Main-Pass evaluated with t_2 = 3/(K+1) -> writes output_2
+   │     2. Main pass evaluated with t_2 = 3/(K+1) -> writes output_2
    │
    └─► index == count - 1 (Final Generated Frame):
          - Advance history counter (`SourceSlot()` flips for the NEXT base frame pair)
@@ -125,10 +125,10 @@ Game presents frame I_t
 2. **`output`:**
    - Transitioned to `D3D12_RESOURCE_STATE_UNORDERED_ACCESS` for compute writes (or written via DirectOutput format).
    - Fully resolved and transitioned to `outputState` before `RecordGenerated` returns.
-3. **Internal Pinned Resources (`alphaArray`, `betaImageArray`):**
+3. **Pre-pass results kept for the frame (the alpha features and the beta pyramid):**
    - Remain in `D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE` at the end of the pre-pass and stay valid across all subsequent `index > 0` dispatches.
-4. **Intra-stage Concurrency:**
-   - All dispatches within a single stage operate on disjoint subresources and execute concurrently.
+4. **Concurrency within a wave (`LsfgGraph.h` `ScheduleWaves`):**
+   - All dispatches within a single wave operate on disjoint subresources and execute concurrently.
 
 ---
 

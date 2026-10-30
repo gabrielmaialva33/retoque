@@ -44,9 +44,9 @@ class LsfgShaderLibrary
     bool HasModule(uint32_t rid) const;
     std::span<const uint8_t> GetModuleBytecode(uint32_t rid) const;
 
-    // High-level shader name lookup with LSFG 3.1 ID mapping rules:
+    // High-level shader name lookup, by the user's lsfg-vk.dll ids (tools/lsfg-study/derive_ids.py):
     // Base: mipmaps (0), generate_8bit (1), generate_16bit (2)
-    // Core (alpha0..3, beta0..4, gamma0..4, delta0..4, epsilon0..4):
+    // Core (gamma0..4 3..7, delta0..4 8..12, alpha0..3 13..16, epsilon0..4 17..21, beta0..4 22..26):
     //   rid = base_idx + (fp16 ? 48 : 0) + (performance ? 24 : 0)
     static uint32_t ResolveResourceId(std::string_view shaderName, bool fp16, bool performance);
     std::span<const uint8_t> GetShader(std::string_view shaderName, bool fp16, bool performance) const;

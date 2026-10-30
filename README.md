@@ -376,6 +376,8 @@ Retoque stands on other people's work. Full licence texts are in [`Licenses/`](L
 - **[AMD FidelityFX SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK)** (MIT parts): the
   optical flow behind `SynthMotion`.
 - **[dxvk-nvapi](https://github.com/jp7677/dxvk-nvapi)** (jp7677): the NVIDIA Optical Flow headers (MIT).
+- **[lsfg-vk](https://github.com/PancakeTAS/lsfg-vk)** (PancakeTAS): the LSFG 3.1 pass structure the LSFG study
+  follows, from `v1.0.0` (MIT) and `8b0da266` (GPL-3.0-or-later). No Lossless Scaling shader is included.
 - **y4my4my4m**, **RizziU** and **jackra1n**: Linux/Proton fixes from their OptiScaler pull requests
   ([#1138](https://github.com/optiscaler/OptiScaler/pull/1138),
   [#1131](https://github.com/optiscaler/OptiScaler/pull/1131),

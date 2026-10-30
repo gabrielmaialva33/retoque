@@ -62,8 +62,11 @@ DXGI_FORMAT ToDxgi(ImageFormat f, DXGI_FORMAT display)
     return DXGI_FORMAT_UNKNOWN;
 }
 
-// The three samplers lsfg-vk creates (pipeline.cpp), by the register space the converter gave them:
-// space 1 border transparent black, space 2 border opaque white, space 3 clamp to edge. All bilinear.
+// The three samplers of lsfg-vk's GPL-3.0-or-later revision 8b0da266 (lsfg-vk-backend/src/lsfgvk.cpp:382-384,
+// lsfg-vk-common/src/vulkan/sampler.cpp), by the register space the converter gave the user's DLL's bindings:
+// space 1 border transparent black, space 2 border opaque white, space 3 clamp to edge. All bilinear. Which space is
+// which follows from the modules that bind it matching the shader chains that take each sampler
+// (tools/lsfg-study/derive_ids.py).
 bool StaticSamplerFor(uint32_t space, D3D12_STATIC_SAMPLER_DESC& s)
 {
     if (space < 1 || space > 3)

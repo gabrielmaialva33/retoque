@@ -7,6 +7,11 @@ or presented through Retoque's custom multi-frame generation (MFG) swapchain at 
 LSFG shaders and models originate from the user's licensed Lossless Scaling installation (`lsfg-vk.dll`)
 and are not redistributed in this repository.
 
+The pass structure follows lsfg-vk `v1.0.0` (MIT) and `8b0da266` (GPL-3.0-or-later); resource ids, bindings and
+constants are the user's DLL's own interface (`tools/lsfg-study/derive_ids.py`). See
+[`Licenses/lsfg-vk_ATTRIBUTION.txt`](../../Licenses/lsfg-vk_ATTRIBUTION.txt) and the provenance note in
+[`tools/lsfg-study/OPTI_INTEGRATION.md`](../../tools/lsfg-study/OPTI_INTEGRATION.md#read-this-first-it-stays-a-study).
+
 ## Architecture
 
 The integration consists of three primary layers:

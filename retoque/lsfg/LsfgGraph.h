@@ -5,8 +5,19 @@
 //
 // The graph is the one tools/lsfg-study/harness/main.cpp runs and checks against lsfg-vk-cli (72-75 dB in
 // FP32): 34 pre-pass dispatches once per base frame, 66 main-pass dispatches per generated frame
-// (tools/lsfg-study/PIPELINE_V3_1.md). It was read from lsfg-vk 2.0.0 (CC BY-NC-ND 4.0) for a private
-// study; tools/lsfg-study/OPTI_INTEGRATION.md, "Read this first", says why none of this may be published.
+// (tools/lsfg-study/PIPELINE_V3_1.md).
+//
+// Provenance. The structure is lsfg-vk's GPL-3.0-or-later revision 8b0da266 (lsfg-vk-backend/src/lsfgvk.cpp
+// :401-501, src/shaderchains/*.cpp) and MIT v1.0.0 (Licenses/lsfg-vk_ATTRIBUTION.txt): the 7-level R8 pyramid, alpha
+// at every level (half, then quarter extent), beta on the finest alpha with a 6-level R8 result, gamma at levels 0-6,
+// delta and delta[5..9] (epsilon here) at levels 4-6, RGBA16F chain results, generate over the source and the
+// three results, dispatch tiles of 64/8/32/16 pixels, and layer counts that scale by m = performance ? 1 : 2. What
+// those revisions cannot give, because they target Lossless.dll, is lsfg-vk.dll's interface: resource ids, binding
+// numbers (one register space per binding), descriptor counts, the cbuffer and push constants, and the alpha
+// history's three slots per level. Those come from the user's own DLL: reflected at load (numthreads, CBV use, and
+// every SRV/UAV space and count against `pools`, LsfgFrameGen_Dx12.cpp) and offline by
+// tools/lsfg-study/derive_ids.py. The graph was first transcribed from lsfg-vk 2.0.0 (CC BY-NC-ND 4.0) and is
+// re-cited here, not rewritten: tools/lsfg-study/OPTI_INTEGRATION.md, "Read this first", records what that leaves.
 
 #include <algorithm>
 #include <cstdint>
@@ -38,7 +49,7 @@ struct GraphImage
 
 struct GraphPass
 {
-    uint32_t rid = 0;     // resource id of the shader (lsfg-vk's library.cpp numbering, variant applied)
+    uint32_t rid = 0;     // resource id of the shader in lsfg-vk.dll (LsfgShaderLibrary.cpp table, variant applied)
     uint32_t index = 0;   // push constant pc_Iteration: the pyramid level this dispatch works on
     uint32_t special = 0; // push constant pc_FirstIter
     uint32_t groupsX = 0;

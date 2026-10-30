@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC-BY-NC-ND-4.0
+// SPDX-License-Identifier: GPL-3.0-or-later
 #include "pch.h"
 
 #include "LsfgShaderLibrary.h"
@@ -153,8 +153,15 @@ void Sha256Final(Sha256Context* ctx, uint8_t digest[32])
 }
 
 // ============================================================================
-// Core Shader ID Table (from lsfg-vk library.cpp)
+// Core Shader ID Table
 // ============================================================================
+// Quality FP32 resource id of each core role in the user's lsfg-vk.dll, by id. The roles and their wiring are
+// lsfg-vk's GPL-3.0-or-later revision 8b0da266 (lsfg-vk-backend/src/lsfgvk.cpp, src/shaderchains/,
+// src/extraction/shader_registry.cpp) and MIT v1.0.0 (src/extract/extract.cpp); both number shaders by
+// Lossless.dll's resource ids, not these. The ids are the DLL's own interface: the binding each module writes and
+// reads, its descriptor counts, samplers, image formats, workgroup size, Float16 capability and image-access counts.
+// tools/lsfg-study/derive_ids.py re-derives this table from those facts alone and compares it with this file;
+// tests/lsfg-shader-library pins it. epsilon0..4 is lsfg-vk's delta[5..9].
 struct ShaderMapping
 {
     std::string_view name;
@@ -162,11 +169,11 @@ struct ShaderMapping
 };
 
 constexpr std::array<ShaderMapping, 24> kCoreShaders = {
-    { { "alpha0", 13 },   { "alpha1", 14 },   { "alpha2", 15 },   { "alpha3", 16 },  { "beta0", 22 },
-      { "beta1", 23 },    { "beta2", 24 },    { "beta3", 25 },    { "beta4", 26 },   { "gamma0", 3 },
-      { "gamma1", 4 },    { "gamma2", 5 },    { "gamma3", 6 },    { "gamma4", 7 },   { "delta0", 8 },
-      { "delta1", 9 },    { "delta2", 10 },   { "delta3", 11 },   { "delta4", 12 },  { "epsilon0", 17 },
-      { "epsilon1", 18 }, { "epsilon2", 19 }, { "epsilon3", 20 }, { "epsilon4", 21 } }
+    { { "gamma0", 3 },    { "gamma1", 4 },    { "gamma2", 5 },    { "gamma3", 6 },    { "gamma4", 7 },
+      { "delta0", 8 },    { "delta1", 9 },    { "delta2", 10 },   { "delta3", 11 },   { "delta4", 12 },
+      { "alpha0", 13 },   { "alpha1", 14 },   { "alpha2", 15 },   { "alpha3", 16 },   { "epsilon0", 17 },
+      { "epsilon1", 18 }, { "epsilon2", 19 }, { "epsilon3", 20 }, { "epsilon4", 21 }, { "beta0", 22 },
+      { "beta1", 23 },    { "beta2", 24 },    { "beta3", 25 },    { "beta4", 26 } }
 };
 
 // ============================================================================
