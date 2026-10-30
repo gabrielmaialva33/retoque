@@ -109,6 +109,92 @@ source inside the cover, and how close it is to base outside it, and writes
 contract half of [hud-protection.md](../../docs/dlssnr/design/hud-protection.md). The detector
 half needs a moving scene, which this fixture does not have.
 
+**2026-10-30 — ControlMask re-test: written, not yet run.**
+`--mask-ab` now runs the re-test that [hud-protection.md](../../docs/dlssnr/design/hud-protection.md)
+("ControlMask re-test lead") calls for. Two outside sources, not reproduced here, say the mask is RGBA8 with R
+scaling intensity, G local tone and B structure, and that 310.9.16 adds `DLSSNR.MaskBlendMode`. If so, the
+2026-09-27 all-ones masks were expected to change nothing. The mask is now RGBA8 with one value inside the HUD
+cover and one outside it; alpha is unused (255). Every trial still creates its own model, with Reset on frame 0,
+32 frames and identical history. Skin structure is −1 (follows local structure) throughout, as in production.
+
+| block | trials, in run order |
+|---|---|
+| A, `UseAutoMask` 0 | `a0-r0-nosubrect` (R=0, subrect keys never written), `a0-null-r0`, `a0-null-r1`, `a0-r8-zeros` (the old R8 zeros), `a0-ones`, `a0-zeros`, `a0-r0`, `a0-r128`, `a0-r0-hud` (R=0 inside the HUD, ones outside), `a0-g0`, `a0-b0` |
+| A controls, no mask | `a0-int50` (Intensity 0.5), `a0-tone0` (LocalTone 0), `a0-struct0` (LocalStructure 0) |
+| B, `UseAutoMask` 1 | `a1-null`, then `a1-ones-m0..m3` and `a1-b0-m0..m3` (`MaskBlendMode` 0–3) |
+| closing | `a0-null-after`: null again after every mask and blend mode |
+
+- **Every evaluate** writes `ControlMask` and, except in `a0-r0-nosubrect`, the four `ControlMaskSubrect*` keys
+  (base 0,0, the full 1280×720). Block B also writes `MaskBlendMode`. All six keys are read back; the written ones
+  must round-trip, and the `MASK keys` line logs what the block held, including the `Get` result of an unwritten key.
+- **`a0-r0-nosubrect` runs first on purpose.** The capability block belongs to the driver and outlives every
+  feature, and the parameter interface cannot delete a key. After any trial writes the subrect keys, every later
+  trial inherits them. Only the first trial in the process can show what an unwritten subrect does. So the null
+  twins run after one mask, and `a0-null-after` checks that null still means none at the end.
+- **`MaskBlendMode`** stays unwritten until block B, as in production. `a0-null-after` inherits mode 3 with a null
+  mask, which the 310.9.16 parameter read ignores.
+- **Positional tuning:** intensity, local tone and local structure are harness fields now. They are written at
+  create and at every evaluate. Every other mode keeps the old constant 1.
+
+`analyze_mask.py` compares each trial's output with its own source frame (the `before` capture), with its
+unmasked twin, and with the global control its channel is reported to scale. It splits every comparison by the
+HUD cover and prints the acceptance readings below. It writes `artifacts/mask-run/mask-report.json`, which
+includes `mask-model.json`: the model file's path, size, SHA-256 and the preset. Frames 1, 8, 15, 16, 24 and 31
+are analyzed; frame 0 is the ApplyModel=0 control.
+
+Acceptance. These are readings of a run, not a pass/fail of the harness:
+
+1. **Repeat floor.** `a0-null-r0` against `a0-null-r1` is 0/0 in both regions at every frame. Otherwise no other
+   comparison can be read at face value.
+2. **R=0 restores the source.** `a0-r0` equals its source within 1 level everywhere, while `a0-null-r0` differs
+   from its source.
+3. **R=0 inside the HUD only.** `a0-r0-hud` equals its source within 1 level inside the cover. Outside it,
+   `a0-r0-hud` differs from `a0-null-r0` by no more than the repeat floor. The model sees beyond a pixel, so pixels
+   just outside the cover may move; the report gives the values behind the verdict.
+4. **R=128 ≈ Intensity 0.5.** The MAE between `a0-r128` and `a0-int50` is at most 25% of the MAE between
+   `a0-int50` and `a0-null-r0`. That holds in both regions at every frame, and the control must move the picture
+   at all. The 25% is a harness choice; the JSON keeps the ratios.
+5. **B=0 ≈ LocalStructure 0.** The same rule, between `a0-b0` and `a0-struct0`. G=0 against LocalTone 0 is reported
+   the same way, for information only.
+
+Run it once per model. Each run overwrites `artifacts/mask-run`, so copy it aside first, or at least
+`mask-report.json`, `mask-model.json` and `dlssnr-loopback.log`. A run writes about 930 MB of captures.
+
+```bash
+# 310.8.2.0
+LOOPBACK_MODEL=/path/to/310.8.2.0/nvngx_dlssnr.dll python3 tests/dlssnr-loopback/run.py --present-nr --mask-ab
+# 310.9.16 compat build (openNR compat-fp16; preset 0 falls back to the October weights)
+LOOPBACK_MODEL=/path/to/compat-310.9.16/nvngx_dlssnr.dll python3 tests/dlssnr-loopback/run.py --present-nr --mask-ab
+# the same file, preset 1: the September weights on the 310.9.16 runtime
+LOOPBACK_MODEL=/path/to/compat-310.9.16/nvngx_dlssnr.dll python3 tests/dlssnr-loopback/run.py --present-nr --mask-ab --preset 1
+```
+
+Without `LOOPBACK_MODEL`, the kit's model runs. Check `mask-model.json` for which file that was. On an RTX 4090
+the official 310.9.16 build is not expected to create the feature; it needs Blackwell
+([model-310-9-16.md](../../docs/dlssnr/design/model-310-9-16.md)). The preset changes which weights run, so a
+preset 1 run that reports the same `TIMING` as preset 0 should be checked against the model's own log before it is
+read as "the same weights".
+
+**Cost.** The mask loop reads the timestamps the other cost modes use. The harness log has one
+`TIMING trial=... model_ms p10/median/p90` line per trial, and `model_ms` is the NGX evaluate span alone. Compare
+the masked trials with `a0-null-r0` within one run, and the null trials across models. The numbers mean nothing
+with unlocked clocks; see the comment above `timestamps` in `present_nr.h`. Locking them needs
+`sudo nvidia-smi -lgc 2100,2100 && sudo nvidia-smi -lmc 10501`, and `-rgc`/`-rmc` afterwards. That is the
+coordinator's decision, not something the runner does. An unlocked run still answers the image questions.
+
+**A known confound on 310.8.** GrimsVerk reports that 310.8 has no `MaskBlendMode` and turns the automatic
+skin/structure mask off whenever any mask is set. If that holds:
+- block B on 310.8 gives the same output for all four modes;
+- `a1-ones-m*` can differ from `a1-null` because the automatic mask went away, not because all-ones did anything.
+
+Read the `auto on mN vs auto off` rows (`a1-ones-mN` against `a0-ones`, and `a1-b0-mN` against `a0-b0`) before
+reading any `a1-*` against `a1-null`. On 310.9.16 the binary says mode 0 drops the automatic mask too
+([model-310-9-16.md](../../docs/dlssnr/design/model-310-9-16.md)). Block A has the automatic mask off already,
+so it does not have this confound.
+
+What only the GPU can answer: whether any of this moves the picture, on which model, and at what cost. A host
+check proves only that the harness parses and the analyzer reads its own layout.
+
 **2026-09-27 — ControlMask A/B: no observed effect.**
 `python3 tests/dlssnr-loopback/run.py --present-nr --mask-ab` sets `DLSSNR.ControlMask`, a
 resource key the model binary names beside Color/MVec/Depth, over the HUD fixture. It ran thirteen
@@ -116,7 +202,8 @@ trials: masks of all 0, all 1 and over the HUD, in R8_UNORM, R16_FLOAT, R32_FLOA
 automatic mask on and off, and skin structure 0 against local 1 so that a mask-driven difference would
 show. All 416 evaluations succeeded, and every masked output was byte-identical to its unmasked
 twin. `UseAutoMask` alone moved 31–44% of the channels in the same run. See
-[the report](control-mask.md).
+[the report](control-mask.md). That 13-trial table is no longer what `--mask-ab` runs; the 2026-10-30 entry
+above replaced it, and the report keeps its description.
 
 **2026-09-14 — passthrough chroma hypothesis falsified for the step-1 fixture.**
 `--present-nr --composition-ab` compares direct model output with composition, then sweeps
