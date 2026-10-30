@@ -425,6 +425,10 @@ entries, as the rest of the LSFG block now does (`tests/nr-localization` scans `
   entry's last generated frame has been composited (that composition waited for the list that resolved them); frame k
   is done at the end of its own list. CPU: QPC from the game's `Present` handing the frame over (`presentInterpolated`,
   after its back-pressure waits) to each frame's `Present` on the real swapchain.
+- Right after those: `LSFG presenter: last 10.0 s: adaptive shadow (log only): refresh R Hz, V-Sync on/off, target T
+  fps; real cadence B fps (bursts, stalls, hitches, drops); refresh budget B of G generated; delivery A/Q; running xN;
+  XeFG-style xN (reason), MAKO rule xN (reason)`. What an adaptive multiplier would pick; nothing is applied
+  (`MfgAdaptive.h`, [lsfg-adaptive-shadow](../../docs/dlssnr/design/lsfg-adaptive-shadow.md), 2026-10-30).
 - LSFG's own summary counts generated frames, not base frames, and names the multiplier.
 - When the multiplier changes with our presenter: `LSFG presenter: xM from frame F (N generated frame(s) per real
   frame)`, at the configure that hands the swapchain the new N.

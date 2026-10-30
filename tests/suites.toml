@@ -614,6 +614,14 @@ tier = "host"
 timeout = 120
 summary = "LSFG at x3/x4 through the fork of FFX's swapchain (study branch): MfgPacing.h arithmetic under ASan/UBSan (x2 delta equals FFX's, output sets, steady-state schedule, summary), and source guards on the FSRFG routing, the router's forwarding, no FFX interface on the fork, drain-before-free, MIT notices, verbatim bytecode."
 
+[lsfg-adaptive]
+path = "lsfg-adaptive"
+domain = "lsfg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Log-only adaptive LSFG multiplier shadow (phase 1): MfgAdaptive.h under ASan/UBSan with MAKO's refresh-budget vectors, cadence bursts/hitches/drops/stalls, 5% delivery, the 40->30 rejection and 165 Hz V-Sync traces; source guards that the generated-frame count and pacing are untouched."
+
 [nr-hdr-d3d12]
 path = "nr-hdr-d3d12"
 domain = "nr"

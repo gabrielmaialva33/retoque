@@ -25,7 +25,8 @@
 // generated frames per real frame. Function names and order follow the original so the two can be compared
 // function by function. What changed, by function:
 // - presenterThread, compositeSwapChainFrame: loop over the entry's frames instead of FrameType::Count; the presenter
-//   keeps a 10 s present summary (MfgPacing.h PresentWindow) with each frame's latency.
+//   keeps a 10 s present summary (MfgPacing.h PresentWindow) with each frame's latency, and feeds the log-only
+//   adaptive multiplier shadow (MfgAdaptive.h) after each entry's presents.
 // - interpolationThread: every present of an entry is spaced by the real frame time divided by the frames the entry
 //   presents (MfgPacing.h PresentDelta) instead of half of it.
 // - dispatchInterpolationCommands: asks the frame generation callback for N frames into N outputs of this present's
@@ -47,6 +48,7 @@
 #include "MfgSwapChain_Dx12.h"
 
 #include <Logger.h>
+#include <Util.h>
 #include <lsfg/Lsfg.h>
 
 #include <dx12/ffx_api_dx12.h>
@@ -96,6 +98,14 @@ FfxApiResource ResourceFor(ID3D12Resource* resource, uint32_t state) { return ff
 
 double TicksToMs(int64_t ticks, int64_t frequency) { return double(ticks) * 1000.0 / double(frequency); }
 
+// The adaptive shadow's refresh rate, read the way XeFG's Dynamic MFG reads it (XeFG_DynamicMFG::DisplayRefreshFps):
+// at the first entry, every 2 s while unknown, otherwise at a summary (MfgAdaptive.h Shadow::RefreshDue).
+void SampleRefresh(PresentInfo* presenter, double nowSec, bool summary)
+{
+    if (presenter->outputWindow != nullptr && presenter->adaptive.RefreshDue(nowSec, summary))
+        presenter->adaptive.SetRefresh(nowSec, Util::GetActiveRefreshRate(presenter->outputWindow));
+}
+
 void LogPresentWindow(PresentInfo* presenter, int64_t nowQpc, int64_t qpcFrequency)
 {
     auto& w = presenter->window;
@@ -132,6 +142,21 @@ void LogPresentWindow(PresentInfo* presenter, int64_t nowQpc, int64_t qpcFrequen
              "its interpolation started (GPU p50/p99): {}; presented after the game's Present (p50): {}",
              seconds, w.ListsPerEntry(), ready.empty() ? std::string("no GPU timings") : ready,
              shown.empty() ? std::string("none") : shown);
+
+    // The adaptive multiplier shadow (MfgAdaptive.h, phase 1): what a policy would pick. Nothing here is applied.
+    const double nowSec = double(nowQpc) / double(qpcFrequency);
+    SampleRefresh(presenter, nowSec, true);
+    const Adaptive::WindowReport a =
+        presenter->adaptive.CloseWindow(nowSec, Config::Instance()->FramerateLimit.value_or_default());
+    LOG_INFO("LSFG presenter: last {:.1f} s: adaptive shadow (log only): refresh {} Hz, V-Sync {}, target {:.1f} fps; "
+             "real cadence {:.1f} fps (bursts {}, stalls {}, hitches {}, drops {}); refresh budget {} of {} generated "
+             "({:.2f} per real); delivery {}/{} ({}); running x{}{}; XeFG-style x{} ({}), MAKO rule x{} ({})",
+             seconds, a.refreshHz, a.vsync ? "on" : "off", a.advice.targetFps, a.baseFps, a.cadence.bursts,
+             a.cadence.stalls, a.cadence.hitches, a.cadence.drops, a.budgeted, a.generated,
+             a.real ? double(a.budgeted) / double(a.real) : 0.0, a.accepted, a.requested,
+             a.healthy ? "healthy" : "over 5% missed", a.current + 1, a.steady ? ", steady" : "",
+             a.advice.xefgGenerated + 1, Adaptive::WhyText(a.advice.xefgWhy), a.advice.makoGenerated + 1,
+             Adaptive::WhyText(a.advice.makoWhy));
 
     w = {};
     presenter->windowStartQpc = nowQpc;
@@ -306,6 +331,12 @@ DWORD WINAPI presenterThread(LPVOID param)
                         for (uint32_t k = 0; k < entry.generatedFrames; k++)
                             presenter->window.AddReady(k, readyMs[k]);
                     }
+
+                    // The adaptive shadow (log only): the entry's real frame, once its presents are done.
+                    const double handoffSec = double(entry.handoffQpc) / double(qpcFrequency);
+                    presenter->adaptive.OnEntry(handoffSec, entry.numFramesSentForPresentationBase,
+                                                entry.numFramesToPresent, entry.generatedFrames, entry.vsync);
+                    SampleRefresh(presenter, handoffSec, false);
 
                     numFramesSentForPresentation = entry.numFramesSentForPresentationBase + entry.numFramesToPresent;
 
@@ -627,6 +658,8 @@ HRESULT MfgSwapChainDX12::init(HWND hWnd, const DXGI_SWAP_CHAIN_DESC1* desc,
 {
     if (desc == nullptr || queue == nullptr || dxgiFactory == nullptr)
         return E_INVALIDARG;
+
+    presentInfo.outputWindow = hWnd; // before the threads start: the adaptive shadow reads its refresh rate
 
     // store values we modify, to return when application asks for info
     gameBufferCount = std::clamp<UINT>(desc->BufferCount, 1, kMaxBufferCount);

@@ -46,6 +46,7 @@ The integration consists of three primary layers:
 | `presenter/MfgSwapChain_Dx12.{h,cpp}` | D3D12 swapchain wrapper for pacing and generated frame presentation. |
 | `presenter/MfgSwapChain_UiComposition.{h,cpp}` | UI layer blending and HUD protection passes. |
 | `presenter/MfgPacing.h`, `presenter/MfgLatch.h` | Timing calculations, queue latching, and latency bounds. |
+| `presenter/MfgAdaptive.h` | Log-only adaptive multiplier shadow (phase 1): refresh budget, cadence, delivery and advice in the 10 s summary; changes nothing ([design](../../docs/dlssnr/design/lsfg-adaptive-shadow.md), MAKO-derived, GPL-3.0-or-later). |
 | `presenter/MfgSwapChain_Helpers.{h,cpp}` | Command list and DXGI swapchain utilities. |
 
 ## Studies and Design Documentation

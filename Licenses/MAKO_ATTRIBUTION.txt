@@ -1,0 +1,39 @@
+MAKO: adaptive frame-generation pacing rules
+=============================================
+
+retoque/lsfg/presenter/MfgAdaptive.h reimplements, for the LSFG MFG presenter's
+log-only adaptive multiplier shadow, algorithms of MAKO:
+
+  MAKO, Copyright (C) 2025-2026 Eugenio Segala and contributors
+  https://github.com/eugeniosegala/MAKO   (read at commit a321c2a)
+  Licensed under the GNU General Public License, version 3 or any later
+  version (GPL-3.0-or-later).
+
+What is derived from it
+-----------------------
+
+  * RefreshBudget -- FixedRefreshBudget::plan
+    (engine/mako-render/src/presentation_policy.hpp): the interval average,
+    the per-real-frame refresh credit, the one-output carry and the 250 ms
+    gap reset.
+
+  * CadenceEstimator -- the cadence observation of AdaptiveScheduler
+    (engine/mako-render/src/adaptive_scheduler.cpp): burst exclusion at
+    max(3x baseline, 2x target), the 10 fps stall floor, and the three-frame
+    confirmation of a 2x cadence drop held in a shadow estimate.
+
+  * DeliveryWindow -- GeneratedDeliveryWindow
+    (engine/mako-render/src/generated_frame_delivery.hpp): the integer 5%
+    miss tolerance.
+
+  * HigherLoadIsUseful / OutcomeAt -- adaptiveHigherLoadIsUseful and
+    adaptiveLoadOutcome (engine/mako-render/src/adaptive_scheduler.cpp): a
+    higher load must add more output than the real frames it costs, plus 2%
+    of the target from x3.
+
+No MAKO source is copied; the code is rewritten against Retoque's presenter,
+with MAKO's constants. The test vectors in tests/lsfg-adaptive restate MAKO's
+own expectations (engine/mako-render/tests/presentation_policy_tests.cpp and
+adaptive_scheduler_tests.cpp). Retoque is distributed under the GNU General
+Public License version 3 (see LICENSE), with which GPL-3.0-or-later code may be
+combined.
