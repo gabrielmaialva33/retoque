@@ -486,6 +486,14 @@ tier = "host"
 timeout = 120
 summary = "DLSS-NR NvAPI CUDA kernel classification by prefix, FP8 variant detection, and timing aggregation."
 
+[nr-drs-override]
+path = "nr-drs-override"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "The production NvAPI_DRS_GetSetting hook against a fake driver: NR off passes the driver's NR settings through untouched; NR on reports the NR preset selection as off and logs each NR setting once; SR/RR unchanged."
+
 [nr-detail-measure]
 path = "nr-detail-measure"
 domain = "nr"
