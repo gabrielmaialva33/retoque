@@ -4,6 +4,7 @@
 
 #include "DlssNr.h"
 #include "DlssNr_Cadence.h"
+#include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
 #include "DlssNr_Enlarge.h"
 #include "DlssNr_GameProfiles.h"
@@ -864,8 +865,26 @@ void RenderMenu(Config* config, float menuResScale)
         ScopedIndent indent {};
         ImGui::Spacing();
 
+        // Below NR's minimum NVIDIA driver NR is off for this session (DlssNr_DriverGate.h, DLSS Unlocked #60): the
+        // checkbox stays visible, disabled, under the line that says why.
+        const bool driverBlocked = DlssNr::DriverGate::Blocked();
+        if (driverBlocked)
+        {
+            const auto version = DlssNr::DriverGate::DetectedVersion();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.3f, 1.0f));
+            ImGui::TextWrapped(
+                Localization::Tr("Neural Rendering is off for this session: it needs NVIDIA driver %s or "
+                                 "newer (%s or newer recommended), and this one is %s. Your settings "
+                                 "are unchanged."),
+                DlssNr::DriverGate::FormatVersion(DlssNr::DriverGate::kMinimumWindowsDriver).c_str(),
+                DlssNr::DriverGate::FormatVersion(DlssNr::DriverGate::kRecommendedWindowsDriver).c_str(),
+                DlssNr::DriverGate::FormatVersion(version).c_str());
+            ImGui::PopStyleColor();
+        }
+
         bool enabled = config->DlssNrEnabled.value_or_default();
-        if (ImGui::Checkbox(Localization::Label("Enable Neural Rendering"), &enabled))
+        ImGui::BeginDisabled(driverBlocked);
+        if (ImGui::Checkbox(Localization::Label("Enable Neural Rendering"), &enabled) && !driverBlocked)
         {
             // On is the same statement as the session guard's "Enable anyway" (it only sets the value when the guard
             // has nothing standing), so its notice does not outlive the checkbox.
@@ -874,6 +893,7 @@ void RenderMenu(Config* config, float menuResScale)
             else
                 config->DlssNrEnabled = false;
         }
+        ImGui::EndDisabled();
 
         HelpMarker("Synthesises detail in the upscaler's output, before frame generation sees it."
                    "\n\nNeeds two similarly named files beside OptiScaler, one character apart:"
@@ -912,7 +932,7 @@ void RenderMenu(Config* config, float menuResScale)
                 break;
             }
 
-            if (guard.action == SessionGuard::Action::Disable &&
+            if (guard.action == SessionGuard::Action::Disable && !driverBlocked &&
                 ImGui::SmallButton(Localization::Label("Enable anyway")))
             {
                 SessionGuardEnableAnyway();
@@ -951,7 +971,9 @@ void RenderMenu(Config* config, float menuResScale)
         // moment it describes the frame before last.
         if (!enabled)
         {
-            ImGui::TextDisabled(Localization::Tr("Off. The model stays loaded, so turning this back on is immediate."));
+            if (!driverBlocked)
+                ImGui::TextDisabled(
+                    Localization::Tr("Off. The model stays loaded, so turning this back on is immediate."));
         }
         else if (!DlssNr::IsRunning() && !vulkan)
         {
@@ -961,10 +983,14 @@ void RenderMenu(Config* config, float menuResScale)
             {
                 ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.35f, 1.0f), Localization::Tr("Off for this session: %s."),
                                    Localization::Tr(reason));
-                ImGui::SameLine();
+                // Not after the driver gate's refusal: a retry would be refused the same way.
+                if (!DlssNr::DriverGate::Refuses())
+                {
+                    ImGui::SameLine();
 
-                if (ImGui::SmallButton(Localization::Label("Retry")))
-                    DlssNr::RetryAfterFailure();
+                    if (ImGui::SmallButton(Localization::Label("Retry")))
+                        DlssNr::RetryAfterFailure();
+                }
             }
             else if (enabled && routeNotice == nullptr)
                 ImGui::TextUnformatted(Localization::Tr("Waiting for the upscaler to run."));

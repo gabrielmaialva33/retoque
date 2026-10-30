@@ -110,6 +110,14 @@ tier = "host"
 timeout = 60
 summary = "Session guard: the policy table by how the last session ended (normal quit, exit code, exception, device lost, no end seen) and for how long, marker ownership and the probe, unreadable, other-format and read-only cases, the end of the process (fixed buffer, lock tries, nothing after it), config-off, the exact texts, plus guards on the call sites, the exit hook and the project."
 
+[nr-driver-gate]
+path = "nr-driver-gate"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 60
+summary = "NR minimum-driver gate: below NVIDIA 610.88 on native Windows NR is off for the session (volatile, never in the ini), Wine/Proton and an unknown version are not gated, and NGX's FAIL_OutOfDate latches so no loader creates the model past it; the decision header under ASan/UBSan plus guards on the version read, every DlssNrEnabled writer, the menu and the create sites."
+
 [nr-dx11-route]
 path = "nr-dx11-route"
 domain = "nr"
@@ -775,6 +783,14 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "IdentifyGpu skips an indirect display adapter that cannot render (Parsec's virtual display, enumerated with the real GPU's name and ids), so it can no longer become the primary GPU; anything the kernel cannot answer keeps the adapter."
+
+[nvapi-lifetime]
+path = "nvapi-lifetime"
+domain = "platform"
+requires = ["python"]
+tier = "host"
+timeout = 30
+summary = "nvapi64.dll stays loaded once NvAPI_Initialize ran in the two startup NVIDIA checks (IdentifyGpu::queryNvapi, dllmain's isNvidiaViaNvapi): no NvAPI_Unload and no FreeLibrary after it, while paths that never initialise still free it. Source slices only."
 
 [optiscaler-instance-claim]
 path = "optiscaler-instance-claim"

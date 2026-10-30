@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DlssNr_Session.h"
+#include "DlssNr_DriverGate.h"
 #include "DlssNr_ProcessEnd.h"
 
 #include <Config.h>
@@ -270,9 +271,47 @@ SessionGuard::Verdict SessionGuardNotice()
 
 void SessionGuardEnableAnyway()
 {
+    // Turning NR on over the driver gate would start the model on a driver that cannot run it (DLSS Unlocked #60).
+    if (DriverGate::Blocked())
+        return;
+
     if (g_begun)
         TheGuard().Acknowledge();
 
     Config::Instance()->DlssNrEnabled = true;
+}
+
+void ApplyDriverGate(bool nvidia, bool onWine, uint32_t driverVersion)
+{
+    const auto verdict = DriverGate::Resolve(nvidia, onWine, driverVersion);
+    DriverGate::Publish(verdict, driverVersion);
+
+    if (DriverGate::Blocks(verdict))
+    {
+        // Volatile: Config::Reload keeps a value that is already set, and saving writes the user's own one.
+        Config::Instance()->DlssNrEnabled.set_volatile_value(false);
+        LOG_WARN("DLSS-NR: {} (DLSS Unlocked #60: below 610.88 the model hung the GPU)",
+                 DriverGate::BlockedMessage(driverVersion));
+        return;
+    }
+
+    switch (verdict)
+    {
+    case DriverGate::Verdict::Supported:
+        LOG_INFO("DLSS-NR: NVIDIA driver {} meets Neural Rendering's minimum ({})",
+                 DriverGate::FormatVersion(driverVersion),
+                 DriverGate::FormatVersion(DriverGate::kMinimumWindowsDriver));
+        break;
+    case DriverGate::Verdict::Unknown:
+        LOG_INFO("DLSS-NR: NVAPI gave no driver version; Neural Rendering is not gated by version (an NGX "
+                 "FAIL_OutOfDate still stops it)");
+        break;
+    default:
+        if (nvidia)
+            LOG_INFO("DLSS-NR: Wine/Proton, where NVAPI reports Linux driver numbers ({}); not gated by version (an "
+                     "NGX FAIL_OutOfDate still stops it)",
+                     DriverGate::FormatVersion(driverVersion));
+        break;
+    }
 }
 } // namespace DlssNr

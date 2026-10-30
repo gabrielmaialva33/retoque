@@ -21,6 +21,7 @@
 #include <dlssnr/DlssNr_PresentBoundary.h>
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
 #include <dlssnr/DlssNr_DirectRuntime.h>
+#include <dlssnr/DlssNr_DriverGate.h>
 #include <dlssnr/DlssNr_NgxInfo.h>
 #include <dlssnr/DlssNr_PresentColour.h>
 #include <dlssnr/DlssNr_DisplayWhite.h>
@@ -1470,6 +1471,17 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     if (g_nr.feature == nullptr && g_nr.output != nullptr && g_nr.colorCopy != nullptr && g_nr.hdrCopy != nullptr)
     {
+        // Below NR's minimum driver, or after NGX answered FAIL_OutOfDate, no loader creates the model: the forwarder
+        // and ModelLoader=direct call it themselves, and forcing it past that answer hung the GPU (DLSS Unlocked #60).
+        if (DlssNr::DriverGate::Refuses())
+        {
+            g_nr.failed = true;
+            g_nr.reason = DlssNr::DriverGate::Reason();
+            LOG_ERROR("DLSS-NR unavailable: {}", g_nr.reason);
+            device->Release();
+            return false;
+        }
+
         auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
 
         if (!snippet.has_value())
@@ -1531,6 +1543,13 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 g_nr.reason = DlssNr::DirectRuntime::LoadError();
             const auto initResult = (unsigned int) (g_nr.lastInit != nullptr ? *g_nr.lastInit : 0);
             const auto createResult = (unsigned int) (g_nr.lastCreate != nullptr ? *g_nr.lastCreate : 0);
+
+            // FAIL_OutOfDate from the model's own init or create: the driver cannot run it. Latched, so neither a retry
+            // nor a later pass, proxy or loader switch creates it in this process.
+            const bool initOutOfDate = DlssNr::DriverGate::NoteNgxResult(initResult);
+            const bool createOutOfDate = DlssNr::DriverGate::NoteNgxResult(createResult);
+            if (initOutOfDate || createOutOfDate)
+                g_nr.reason = DlssNr::DriverGate::kOutOfDateReason;
 
             // Cast before formatting. These are ints, and "0x{:X}" on a negative int prints
             // 0x-452FFFFF, which no one can decode back to 0xBAD00001.

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DlssNr_DirectRuntime.h"
+#include "DlssNr_DriverGate.h"
 #include "DlssNr_PeScan.h"
 
 #include <Logger.h>
@@ -473,6 +474,12 @@ void* Create(const wchar_t* snippetPath, const wchar_t* dataPath, ID3D12Device* 
              void* capabilityParams, unsigned int width, unsigned int height, int preset, float intensity, int style,
              float localStructure, float localTone, float skinStructure, int useAutoMask, int uiCorrection)
 {
+    // Never past the driver gate or an NGX FAIL_OutOfDate: this loader calls the model itself, so nothing else on its
+    // path asks the driver, and forcing the model past that answer hung the GPU (DLSS Unlocked #60).
+    // DlssNr_DriverGate.h.
+    if (DriverGate::Refuses())
+        return nullptr;
+
     if (!LoadSnippet(snippetPath) || !capabilityParams)
         return nullptr;
 
@@ -480,6 +487,7 @@ void* Create(const wchar_t* snippetPath, const wchar_t* dataPath, ID3D12Device* 
     {
         // The forwarder's application id, so the driver sees the same caller whichever loader runs.
         g_lastInit = Guarded(g_snip.init, 0x24480451ull, dataPath, device, 0x0000015, capabilityParams);
+        DriverGate::NoteNgxResult((unsigned int) g_lastInit);
         g_snip.initialised = (g_lastInit == 1);
         if (!g_snip.initialised)
             return nullptr;
@@ -501,6 +509,9 @@ void* Create(const wchar_t* snippetPath, const wchar_t* dataPath, ID3D12Device* 
 
     void* handle = nullptr;
     g_lastCreate = Guarded(g_snip.create, cmd, 18, capabilityParams, &handle);
+    // A handle beside FAIL_OutOfDate is not a feature to run: abandoned, never evaluated or released.
+    if (DriverGate::NoteNgxResult((unsigned int) g_lastCreate))
+        return nullptr;
     return g_lastCreate == kFaulted ? nullptr : handle;
 }
 

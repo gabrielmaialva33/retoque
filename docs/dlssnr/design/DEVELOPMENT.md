@@ -154,6 +154,22 @@ the most frequent refusal of the second. "Waited" is what the host reported doin
 Invariant checks against this table: it is a statement, not a control, and it exists only while a present host is
 deciding (rule 2); the status line above it never names the guides from `g_temporalValid` (`nr-invariants`, section 6).
 
+### 2.5 Enable Neural Rendering and the driver gate (`DlssNr_Menu.cpp`, `DlssNr_DriverGate.h`)
+
+The top of the panel ([driver-gate.md](driver-gate.md)). "Blocked" is the version gate (native Windows, NVIDIA, a
+known driver below 610.88); "latched" is an NGX `FAIL_OutOfDate` seen on the NR route, on any platform.
+`tests/nr-driver-gate` holds the guards.
+
+| State | Above the checkbox | Enable checkbox | Session guard's "Enable anyway" | Status line |
+|---|---|---|---|---|
+| blocked | amber "Neural Rendering is off for this session: it needs NVIDIA driver 610.88 or newer (616.64 or newer recommended), and this one is X. Your settings are unchanged." | shown, **disabled** | **hidden** | none (the amber line says why) |
+| not blocked, latched | — | as before | as before | "Off for this session: NGX answered FAIL_OutOfDate ..." with **no Retry** |
+| neither | — | as before | as before | as before |
+
+Invariant checks against this table: no control acts while blocked (rule 2): the checkbox is disabled, "Enable anyway"
+and the hotkey refuse, and Retry is hidden whenever the gate refuses the model; the block is volatile, so a saved ini
+keeps the user's own `Enabled` (rule 4 unchanged).
+
 ---
 
 ## 3. Per-change-type review (run BEFORE deploy)
