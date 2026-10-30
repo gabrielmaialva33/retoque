@@ -160,7 +160,9 @@ require(before(run, 'if (DlssNr::DriverGate::Refuses())', 'NVNGXProxy::D3D12_Cre
 require(before(run, 'NVNGXProxy::D3D12_CreateFeature()', 'DlssNr::DriverGate::NoteNgxResult((unsigned int) created)'),
         'the proxy does not latch a FAIL_OutOfDate from NGX')
 
-site = dx12.find('g_nr.feature = g_nr.create(')
+# Whitespace-tolerant: the create may be wrapped across lines (the driver-init gate's scope sits around it).
+match = re.search(r'g_nr\.feature\s*=\s*g_nr\.create\(', dx12)
+site = match.start() if match else -1
 build = dx12.rfind('if (g_nr.feature == nullptr && g_nr.output != nullptr', 0, site)
 require(site > 0 and build > 0, 'the D3D12 model build site moved')
 if site > 0 and build > 0:
