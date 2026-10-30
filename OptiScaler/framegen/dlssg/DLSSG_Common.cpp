@@ -231,6 +231,14 @@ bool DLSSG_Common::SetConstants(int fIndex, uint64_t willDispatchFrame, uint32_t
     if (IsInfiniteDepth())
         cameraFar = std::numeric_limits<float>::infinity();
 
+    // No source supplies these fallback transforms; game constants may replace them below.
+    XMFLOAT4X4 identity;
+    XMStoreFloat4x4(&identity, XMMatrixIdentity());
+    memcpy(&constData.clipToLensClip, &identity, sizeof(sl::float4x4));
+    memcpy(&constData.clipToPrevClip, &identity, sizeof(sl::float4x4));
+    memcpy(&constData.prevClipToClip, &identity, sizeof(sl::float4x4));
+    constData.cameraPinholeOffset = { 0.0f, 0.0f };
+
     if (_cameraPosition[fIndex][0] != 0.0f || _cameraPosition[fIndex][1] != 0.0f || _cameraPosition[fIndex][2] != 0.0f)
     {
         constData.cameraPos.x = _cameraPosition[fIndex][0];
@@ -255,15 +263,6 @@ bool DLSSG_Common::SetConstants(int fIndex, uint64_t willDispatchFrame, uint32_t
         constData.cameraUp = { 0.0f, 0.0f, 1.0f };
         constData.cameraRight = { 0.0f, 1.0f, 0.0f };
         constData.cameraFwd = { 1.0f, 0.0f, 0.0f };
-        constData.cameraPinholeOffset = { 0.0f, 0.0f };
-
-        auto prev = XMMatrixIdentity();
-
-        XMFLOAT4X4 temp;
-        XMStoreFloat4x4(&temp, prev);
-        memcpy(&constData.clipToLensClip, &temp, sizeof(sl::float4x4));
-        memcpy(&constData.clipToPrevClip, &temp, sizeof(sl::float4x4));
-        memcpy(&constData.prevClipToClip, &temp, sizeof(sl::float4x4));
     }
 
     {
@@ -272,17 +271,26 @@ bool DLSSG_Common::SetConstants(int fIndex, uint64_t willDispatchFrame, uint32_t
 
         float vFov = _cameraVFov[fIndex];
 
+        // Keep the reported far plane infinite, but use a finite distant plane for projection math.
+        float projectionFarPlane = cameraFar;
+        if (!std::isfinite(projectionFarPlane) && std::isfinite(cameraNear) && cameraNear > 0.f)
+            projectionFarPlane = std::max(cameraNear * 1.0e6f, 1.0e6f);
+
         // XMMatrixPerspectiveFovRH will fail if input values are incorrect
-        if (cameraNear > 0.f && std::isfinite(cameraFar) && !XMScalarNearEqual(vFov, 0.0f, 0.00001f) &&
+        if (cameraNear > 0.f && std::isfinite(projectionFarPlane) && !XMScalarNearEqual(vFov, 0.0f, 0.00001f) &&
             !XMScalarNearEqual(_cameraAspectRatio[fIndex], 0.0f, 0.00001f))
         {
-            if (XMScalarNearEqual(cameraNear, cameraFar, 0.00001f))
-                cameraFar++;
+            if (XMScalarNearEqual(cameraNear, projectionFarPlane, 0.00001f))
+            {
+                projectionFarPlane++;
+                if (std::isfinite(cameraFar))
+                    cameraFar = projectionFarPlane;
+            }
 
             // A reverse-Z projection for inverted depth, like the game's. DLSSG replacements like Nukem's read near
             // and far back out of it, a regular one loses the far plane to float precision.
-            auto projectionNear = IsInvertedDepth() ? cameraFar : cameraNear;
-            auto projectionFar = IsInvertedDepth() ? cameraNear : cameraFar;
+            auto projectionNear = IsInvertedDepth() ? projectionFarPlane : cameraNear;
+            auto projectionFar = IsInvertedDepth() ? cameraNear : projectionFarPlane;
 
             cameraViewToClip =
                 XMMatrixPerspectiveFovRH(vFov, _cameraAspectRatio[fIndex], projectionNear, projectionFar);

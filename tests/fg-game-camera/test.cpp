@@ -23,7 +23,13 @@ XMMATRIX XMMatrixIdentity()
     m[0].x = m[1].y = m[2].z = m[3].w = 1;
     return m;
 }
-XMMATRIX XMMatrixPerspectiveFovRH(float, float, float, float) { return XMMatrixIdentity(); }
+float projectionNear = 0, projectionFar = 0;
+XMMATRIX XMMatrixPerspectiveFovRH(float, float, float nearPlane, float farPlane)
+{
+    projectionNear = nearPlane;
+    projectionFar = farPlane;
+    return XMMatrixIdentity();
+}
 XMMATRIX XMMatrixInverse(void*, XMMATRIX m) { return m; }
 void XMStoreFloat4x4(XMFLOAT4X4* output, XMMATRIX m) { *output = m; }
 bool XMScalarNearEqual(float a, float b, float eps) { return std::abs(a - b) < eps; }
@@ -54,8 +60,9 @@ struct Backend
 #ifdef HAVE_CAMERA
     DlssgGameCamera<4> _gameCamera;
 #endif
-    bool IsInfiniteDepth() { return false; }
-    bool IsInvertedDepth() { return false; }
+    bool infinite = false, inverted = false;
+    bool IsInfiniteDepth() { return infinite; }
+    bool IsInvertedDepth() { return inverted; }
     sl::Constants Dispatch(uint64_t willDispatchFrame)
     {
         auto fIndex = willDispatchFrame % 4;
@@ -164,7 +171,36 @@ sl::Constants gameCamera()
 int main()
 {
     Backend backend;
+    backend._cameraPosition[0][0] = 4;
+    auto fallback = backend.Dispatch(0);
+    const auto identity = XMMatrixIdentity();
+    assert(std::memcmp(&fallback.clipToLensClip, &identity, sizeof(identity)) == 0);
+    assert(std::memcmp(&fallback.clipToPrevClip, &identity, sizeof(identity)) == 0);
+    assert(std::memcmp(&fallback.prevClipToClip, &identity, sizeof(identity)) == 0);
+    assert(fallback.cameraPinholeOffset.x == 0 && fallback.cameraPinholeOffset.y == 0);
+    backend.infinite = true;
+    for (bool inverted : { false, true })
+    {
+        backend.inverted = inverted;
+        projectionNear = projectionFar = 0;
+        fallback = backend.Dispatch(0);
+        assert(std::isinf(fallback.cameraFar));
+        assert(std::isfinite(projectionNear) && std::isfinite(projectionFar));
+        assert(projectionNear > 0 && projectionFar > 0 && projectionNear != projectionFar);
+        assert((projectionNear > projectionFar) == inverted);
+        assert((inverted ? projectionNear : projectionFar) == 1000000.f);
+        assert(fallback.cameraViewToClip[0].x == 1 && fallback.clipToCameraView[0].x == 1);
+    }
+    backend.infinite = false;
+    backend.inverted = false;
+    backend._cameraFar[0] = 1;
+    fallback = backend.Dispatch(0);
+    assert(fallback.cameraFar == 2 && projectionNear == 1 && projectionFar == 2);
     auto data = gameCamera();
+    Backend positioned;
+    positioned._cameraPosition[1][0] = 4;
+    positioned.Store(1, data);
+    assert(positioned.Dispatch(1).clipToPrevClip[3].x == 7);
     backend.Store(1, data);
     auto output = backend.Dispatch(1);
     assert(output.cameraViewToClip[0].x == 2);

@@ -2,6 +2,7 @@
 """Compile production camera construction and input-frame mapping with real Streamline types."""
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 here = Path(__file__).resolve().parent
@@ -66,3 +67,4 @@ with tempfile.TemporaryDirectory(prefix='retoque-fg-camera-') as directory:
                     '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(repo / 'external/streamline'),
                     '-I', str(repo / 'retoque'), str(cpp), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
+subprocess.run([sys.executable, str(here / 'nvngx_lifetime.py')], check=True)
