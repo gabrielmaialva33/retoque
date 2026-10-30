@@ -518,6 +518,14 @@ tier = "host"
 timeout = 300
 summary = "The NR model loaders' byte-level decisions against synthetic PE64 images (the model's GetModuleFileNameW/A import slots, the NGX loader's feature-18 table), the 616.64 faulting-pairing predicate and driver numbering; the direct runtime held to the forwarder's parameter writes, model calls and fault filter; and, when present on the machine, the real wine _nvngx.dll and nvngx_dlssnr.dll. Runs no model and no NGX."
 
+[nr-model-stats]
+path = "nr-model-stats"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "The model's own VRAM count: the forwarder's dlssnr_query_stats and the direct runtime's QueryStats sliced from their sources and run against a fake parameter block with present, absent, refusing, silent and faulting stats callbacks (64-bit size, sentinel, sticky fault, both loaders identical), DlssNr_ModelStats.h's log text, and the host wiring guards, under ASan/UBSan."
+
 [sl-log-repeat]
 path = "sl-log-repeat"
 domain = "platform"

@@ -595,3 +595,5 @@ Copies a plain-text report of what Neural Rendering detected and what it used --
 Copied to the clipboard.	Copiado para a área de transferência.
 # 2026-10-30: the NR panel's line while the game runs its own NR through Streamline (docs/dlssnr/design/streamline-native-nr.md).
 The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	O jogo roda o próprio NR (DLSS-NR do Streamline), então este passe fica de fora em vez de aplicar o NR duas vezes. Ele volta a rodar 5 s depois que o NR do jogo para.
+# 2026-10-30: the model's own VRAM count beside the status line (docs/dlssnr/design/model-vram-stats.md).
+(model: %llu MiB)	(modelo: %llu MiB)

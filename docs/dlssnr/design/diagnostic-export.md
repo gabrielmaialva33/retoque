@@ -33,7 +33,7 @@ The split:
 | Section | Lines | Source |
 |---|---|---|
 | Build | build, platform (Wine/Proton or native Windows), Neural Rendering on/off | `BuildInfo::ProductName`, `State::isRunningOnLinux` |
-| Detected | graphics API; upscaler feature; D3D11 route line; model file version and size; NGX loader version, its build (named the driver on Windows, the Windows-branch loader build under Proton) and how it routes feature 18; whether the game offers exposure; whether an HDR swapchain was seen | `State`, `Dx11RouteReport`, `NgxInfo::Described`, `GameExposureStatus`, `GetPresentHdrStatus` |
+| Detected | graphics API; upscaler feature; D3D11 route line; model file version and size; the model's own VRAM count at its last D3D12 build, or `not reported` ([model-vram-stats](model-vram-stats.md), added 2026-10-30); NGX loader version, its build (named the driver on Windows, the Windows-branch loader build under Proton) and how it routes feature 18; whether the game offers exposure; whether an HDR swapchain was seen | `State`, `Dx11RouteReport`, `NgxInfo::Described`, `ModelVramBytes`, `GameExposureStatus`, `GetPresentHdrStatus` |
 | Used | Apply the model; whether the pass runs (D3D12, native Vulkan with its frame count, or the failure reason / waiting); the hook method set and the hook status in effect; the present guides line; the HDR conversion | `IsRunning`, `IsRunningVk`, `FramesVk`, `FailureReason`, `HookStatus`, `PresentGuidesLine`, `GetPresentHdrStatus` |
 | Funnel | per counted route: eligible, ran the pass (model called), declined, unaccounted, then every decline with its count; added 2026-10-30 ([engagement-funnel](engagement-funnel.md)) | `Funnel::Read` |
 | Settings | the timing contract's settings fields, one per line | `SettingsContractText` |

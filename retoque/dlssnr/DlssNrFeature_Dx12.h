@@ -373,6 +373,11 @@ bool IsRunning();
 // Why it is not, if it is not. Empty while it is running or has not been tried yet.
 const char* FailureReason();
 
+// The model's own count of the VRAM its features held at the last D3D12 build (its stats callback, read once after the
+// build; docs/dlssnr/design/model-vram-stats.md), while that feature runs. Empty when the model gave none, on native
+// Vulkan, and with the pass off or failed.
+std::optional<unsigned long long> ModelVramBytes();
+
 // The timing contract's text over the current Config, for the NR panel's diagnostic export
 // (docs/dlssnr/design/diagnostic-export.md): TimingContract itself, so the two cannot drift. Its frame fields (stage,
 // sizes, format, ...) are placeholders, which DiagnosticReport::StripFrameFields removes. On a click, never per frame.

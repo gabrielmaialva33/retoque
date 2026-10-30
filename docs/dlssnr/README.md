@@ -57,6 +57,7 @@ These are records, not designs.
 - [comparison-capture.md](design/comparison-capture.md): saving the game's frame and the processed frame of the same frame, with provenance, without stalling it (v1 on D3D12: PNG or PFM, a JSON sidecar, `retoque-captures/`).
 - [diagnostic-export.md](design/diagnostic-export.md): "Copy NR diagnostics", the panel's state as plain text on a click: detected inputs apart from the ones used, the settings contract, the last GPU sample marked historical, LSFG, absolute paths redacted (2026-10-30; host-tested, not yet pressed in a game).
 - [engagement-funnel.md](design/engagement-funnel.md): per-route NR engagement ladders that balance (eligible - ran - declines = 0), shown in the diagnostic export's Funnel section, and a last-chance crash note in OptiScaler's log (code, module+offset, last NR stage, funnel), chained to the previous filter (2026-10-30; host-tested, not yet built with MSVC or crashed in a game).
+- [model-vram-stats.md](design/model-vram-stats.md): the model's own count of the VRAM its features hold, asked through its stats callback after each D3D12 build (RTX Remix's call shape), logged, shown beside the status line and in the diagnostic export (2026-10-30; host-tested, no GPU figure yet).
 
 ## Colour, HDR and image quality
 

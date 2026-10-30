@@ -5,6 +5,7 @@
 #include <dlssnr/DlssNr.h>
 
 #include <dlssnr/DlssNr_Capture.h>
+#include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_PairCaptureDx12.h>
 #include <dlssnr/DlssNr_Proxy.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
@@ -1603,6 +1604,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                  frame.AfterRayReconstruction ? "after Ray Reconstruction"
                                               : (sourceIsTarget ? "after upscale" : "before upscale"),
                  width, height, guideWidth, guideHeight, g_nr.builtPreset, g_nr.builtIntensity, g_nr.builtStyle);
+        // What the model says the build holds in VRAM: one read-only callback, nothing recorded (model-vram-stats.md).
+        ReportModelVram();
         if (!sourceIsTarget)
         {
             g_preCreation.Created(State::Instance().frameCount);
@@ -6066,6 +6069,14 @@ CalibrationReading Calibration()
 bool IsRunning() { return g_nr.feature != nullptr && !g_nr.failed; }
 
 const char* FailureReason() { return g_nr.failed ? g_nr.reason : ""; }
+
+std::optional<unsigned long long> ModelVramBytes()
+{
+    const uint64_t bytes = g_nr.modelVramBytes;
+    if (!DlssNr::ModelStats::Known(bytes) || g_nr.feature == nullptr || g_nr.failed)
+        return std::nullopt;
+    return bytes;
+}
 
 // What the game offers by way of exposure, and what has been read from it. For the menu, so a user
 // can see whether this game supplies one at all without having to read a log.

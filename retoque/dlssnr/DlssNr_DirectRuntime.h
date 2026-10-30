@@ -29,6 +29,11 @@ namespace DlssNr::DirectRuntime
 int QueryScalingRatio(const wchar_t* snippetPath, void* capabilityParams, unsigned int perfQuality, float* outRatio);
 const int* LastRatioStage();
 
+// dlssnr_query_stats: the model's own count of the VRAM its features hold (docs/dlssnr/design/model-vram-stats.md).
+// 1 and outBytes on success; 0 when no callback is published or NGX is not up here; -1 refused, faulted or unwritten.
+int QueryStats(void* capabilityParams, unsigned long long* outBytes);
+const int* LastStatsResult();
+
 void* Create(const wchar_t* snippetPath, const wchar_t* dataPath, ID3D12Device* device, ID3D12GraphicsCommandList* cmd,
              void* capabilityParams, unsigned int width, unsigned int height, int preset, float intensity, int style,
              float localStructure, float localTone, float skinStructure, int useAutoMask, int uiCorrection);

@@ -46,6 +46,12 @@ void setFloat(void* params, const char* name, float v)
     reinterpret_cast<PFN_SetFloat>(vt[g_floatSlot])(params, name, v);
 }
 
+void setULL(void* params, const char* name, unsigned long long v)
+{
+    void** vt = *reinterpret_cast<void***>(params);
+    reinterpret_cast<PFN_SetULL>(vt[VT_SET_ULL])(params, name, v);
+}
+
 void setResourcePtr(void* params, const char* name, void* v)
 {
     void** vt = *reinterpret_cast<void***>(params);
@@ -406,6 +412,73 @@ extern "C"
 
         dlssnr_last_ratio_stage = 5;
         *outRatio = ratio;
+        return 1;
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // The VRAM the model's features hold, by the model's own count.
+    //
+    // The same mechanism as the scaling ratio, published beside it: the model's strings run
+    // DLSSNRGetStatsCallback, DLSSNRComputeScalingRatioCallback, ..., GetStatsCommon, "Error: params pointer
+    // was null", "Error: couldn't find initialized instance", SizeInBytes (310.8.2.0 and 310.9.16.0). NVIDIA's
+    // RTX Remix asks it right after its feature create and reads SizeInBytes as a 64-bit value (dxvk-remix
+    // 09808cc70, queryDlssNeuralRenderingVramAllocation, MIT). Read-only: nothing is created, populated or
+    // recorded.
+    //
+    // Only once NGX is initialised here, since the callback has no instance to count before that. Without
+    // PopulateParameters: the ratio query has already published the callbacks into this block before any
+    // feature existed, and publishing again over a live feature is not something that query showed harmless.
+    //
+    // Returns 1 and writes outBytes on success. 0 when the callback was not published (or NGX is not up
+    // here); -1 when it was published and refused, faulted, or left SizeInBytes unwritten. A fault is sticky,
+    // as for every call into the model. dlssnr_last_stats_result is the callback's own answer.
+    // ---------------------------------------------------------------------------------------------
+
+    using PFN_NrStatsCallback = int(__cdecl*)(void*);
+
+    // Written into SizeInBytes before the callback, so a callback that writes nothing is not read as a size.
+    constexpr unsigned long long kStatsUnwritten = ~0ull;
+
+    __declspec(dllexport) int dlssnr_last_stats_result = 0;
+
+    __declspec(dllexport) int dlssnr_query_stats(void* capabilityParams, unsigned long long* outBytes)
+    {
+        dlssnr_last_stats_result = 0;
+
+        if (!g_snip.initialised || !capabilityParams || !outBytes)
+        {
+            return 0;
+        }
+
+        void** vt = *reinterpret_cast<void***>(capabilityParams);
+        unsigned long long raw = 0;
+
+        if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "DLSSNRGetStatsCallback", &raw) != 1 ||
+            raw == 0)
+        {
+            return 0;
+        }
+
+        setULL(capabilityParams, "SizeInBytes", kStatsUnwritten);
+
+        // Assigned rather than returned, for the same reason every other call through this module is.
+        volatile int result = Guarded(reinterpret_cast<PFN_NrStatsCallback>((void*) raw), capabilityParams);
+        dlssnr_last_stats_result = (int) result;
+
+        if (result != 1)
+        {
+            return -1;
+        }
+
+        unsigned long long bytes = kStatsUnwritten;
+
+        if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "SizeInBytes", &bytes) != 1 ||
+            bytes == kStatsUnwritten)
+        {
+            return -1;
+        }
+
+        *outBytes = bytes;
         return 1;
     }
 

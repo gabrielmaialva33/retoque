@@ -83,11 +83,12 @@ direct_path = 'retoque/dlssnr/DlssNr_DirectRuntime.cpp'
 forwarder = strip_comments((repo / forwarder_path).read_text())
 direct = strip_comments((repo / direct_path).read_text())
 
-write = re.compile(r'\b(set(?:UInt|Float|Resource))\(\s*capabilityParams\s*,\s*("[^"]+")\s*,\s*([^;]+?)\s*\);')
+write = re.compile(r'\b(set(?:UInt|Float|Resource|ULL))\(\s*capabilityParams\s*,\s*("[^"]+")\s*,\s*([^;]+?)\s*\);')
 guarded = re.compile(r'Guarded\(([^;]+?)\);')
 
 pairs = [
     ('dlssnr_query_scaling_ratio(', 'int QueryScalingRatio('),
+    ('dlssnr_query_stats(', 'int QueryStats('),
     ('dlssnr_call_create(', 'void* Create('),
     ('dlssnr_call_evaluate(', 'int Evaluate('),
     ('dlssnr_call_set_extras(', 'void SetExtras('),
@@ -111,10 +112,11 @@ for forwarder_sig, direct_sig in pairs:
     total += len(writes_a)
 
 # The setters behind those writes: same vtable slots on the capability block, same casts.
-for setter in ('void setUInt(', 'void setFloat(', 'void setResource('):
+for setter in ('void setUInt(', 'void setFloat(', 'void setResource(', 'void setULL('):
     if ' '.join(body(forwarder, setter, forwarder_path).split()) != ' '.join(body(direct, setter, direct_path).split()):
         fail(f'{setter} differs between the forwarder and the direct runtime')
-for constant in ('constexpr int VT_SET_UINT = 3;', 'int g_floatSlot = 1;'):
+for constant in ('constexpr int VT_SET_UINT = 3;', 'int g_floatSlot = 1;',
+                 'constexpr unsigned long long kStatsUnwritten = ~0ull;'):
     if constant not in forwarder or constant not in direct:
         fail(f'{constant!r} must be the same in both')
 for export in ('"NVSDK_NGX_D3D12_Init_Ext"', '"NVSDK_NGX_D3D12_CreateFeature"', '"NVSDK_NGX_D3D12_EvaluateFeature"',

@@ -9,8 +9,8 @@
 //
 // The text keeps two things apart that the panel's lines run together:
 //
-//   Detected  what the game and the machine offer: API, upscaler, D3D11 route, model and NGX loader, the game's
-//             exposure, an HDR swapchain
+//   Detected  what the game and the machine offer: API, upscaler, D3D11 route, model and NGX loader, the model's own
+//             VRAM count, the game's exposure, an HDR swapchain
 //   Used      what the pass actually ran on: whether it runs, the hook method set and the one in effect, the guides,
 //             the HDR conversion
 //
@@ -100,6 +100,8 @@ struct Inputs
     bool modelDescribed = false;
     std::string modelVersion;
     unsigned long long modelBytes = 0;
+    bool modelVramKnown = false;           // DlssNr::ModelVramBytes: the model's stats callback after the last build
+    unsigned long long modelVramBytes = 0; // read only when modelVramKnown
     std::string loaderVersion;
     std::string loaderBuild;    // NgxInfo::DriverFromLoaderVersion
     std::string feature18Route; // PeScan::Describe of the loader's feature-18 entry ("routes feature 18 itself ...")
@@ -319,6 +321,15 @@ inline std::string Build(const Inputs& in)
              " bytes");
     else
         line("Model file: not described this session (the D3D12 pass describes it when it builds)");
+    if (in.modelVramKnown)
+    {
+        char mib[32] {};
+        std::snprintf(mib, sizeof(mib), "%.1f MiB", static_cast<double>(in.modelVramBytes) / (1024.0 * 1024.0));
+        line(std::string("Model VRAM: ") + mib + " (" + std::to_string(in.modelVramBytes) +
+             " bytes), the model's own count at its last build");
+    }
+    else
+        line("Model VRAM: not reported (no running D3D12 build the model gave a figure for)");
     if (!in.modelDescribed)
         line("NGX loader: not described this session");
     else if (in.loaderVersion.empty())

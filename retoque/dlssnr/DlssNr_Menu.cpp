@@ -15,6 +15,7 @@
 #include "DlssNr_Looks.h"
 #include "DlssNr_ModelLog.h"
 #include "DlssNr_ModelLogParse.h"
+#include "DlssNr_ModelStats.h"
 #include "DlssNr_NgxInfo.h"
 #include "DlssNr_PresentBoundary.h"
 #include "DlssNr_PresentHdr.h"
@@ -414,6 +415,11 @@ static std::string CollectDiagnosticReport(Config* config)
                 in.feature18Route = DlssNr::PeScan::Describe(ngx->route);
             }
         }
+    }
+    if (const auto vram = DlssNr::ModelVramBytes(); vram.has_value())
+    {
+        in.modelVramKnown = true;
+        in.modelVramBytes = *vram;
     }
     const bool vulkan = DlssNr::IsRunningVk();
     if (!vulkan)
@@ -1185,6 +1191,15 @@ void RenderMenu(Config* config, float menuResScale)
                                    runSuffix);
             else
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), Localization::Tr("Running.%s"), runSuffix);
+
+            // The model's own count of what its D3D12 build holds (model-vram-stats.md); a statement, shown only
+            // when the model gave one.
+            if (const auto vram = vulkan ? std::optional<unsigned long long> {} : DlssNr::ModelVramBytes();
+                vram.has_value())
+            {
+                ImGui::SameLine();
+                ImGui::TextDisabled(Localization::Tr("(model: %llu MiB)"), DlssNr::ModelStats::RoundedMiB(*vram));
+            }
 
             ImGui::SameLine();
             ImGui::TextDisabled(Localization::Tr("(?)"));
