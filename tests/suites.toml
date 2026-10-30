@@ -792,6 +792,14 @@ tier = "host"
 timeout = 120
 summary = "[Libraries] NvngxDlssPath naming a folder (with or without a trailing separator) or the file keeps the file's path, so both NGX path users get the folder; a folder without the file or a missing path leaves the search to run."
 
+[unreal-dlss-search]
+path = "unreal-dlss-search"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Unreal Engine games: nvngx_dlss/dlssd/dlssg.dll missed by the existing searches are looked for in fixed DLSS*/Streamline* plugin folders under the nearest Engine root (project before engine, no recursion); a path already found is kept unchanged."
+
 [fg-dlssg-backbuffer-index]
 path = "fg-dlssg-backbuffer-index"
 domain = "fg"

@@ -39,6 +39,7 @@
 #include <hooks/Wintrust_Hooks.h>
 #include <hooks/Crypt32_Hooks.h>
 #include <misc/InstanceClaim.h>
+#include <misc/UnrealDlssSearch.h>
 #include <hooks/Advapi32_Hooks.h>
 #include <hooks/Streamline_Hooks.h>
 
@@ -1842,6 +1843,22 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(optiDllPath, "nvngx_dlssg.dll");
         if (!State::Instance().NVNGX_DLSSG_Path.has_value())
             State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
+
+        // Unreal Engine plugin folders the searches above do not reach (the exe outside <Project>\Binaries\Win64),
+        // only for a file they did not find (retoque/misc/UnrealDlssSearch.h)
+        for (auto [found, fileName] : { std::pair { &State::Instance().NVNGX_DLSS_Path, L"nvngx_dlss.dll" },
+                                        std::pair { &State::Instance().NVNGX_DLSSD_Path, L"nvngx_dlssd.dll" },
+                                        std::pair { &State::Instance().NVNGX_DLSSG_Path, L"nvngx_dlssg.dll" } })
+        {
+            if (found->has_value())
+                continue;
+
+            if (auto file = UnrealDlssSearch::Find(exePath, fileName); file.has_value())
+            {
+                *found = file->wstring();
+                LOG_INFO(L"{} found in an Unreal Engine plugin folder: {}", fileName, file->wstring());
+            }
+        }
 
         // Not 100% accurate for Nvidia cards without DLSS
         if (Config::Instance()->DLSSEnabled.value_or_default() && possibleNvidia)
