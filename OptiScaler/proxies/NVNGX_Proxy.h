@@ -313,6 +313,8 @@ typedef NVSDK_NGX_Result (*PFN_D3D11_Init_Ext)(unsigned long long InApplicationI
                                                const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo);
 typedef NVSDK_NGX_Result (*PFN_D3D11_Shutdown)(void);
 typedef NVSDK_NGX_Result (*PFN_D3D11_Shutdown1)(ID3D11Device* InDevice);
+// Private driver-core ABI; the public SDK shutdown retains its one-argument signature.
+typedef NVSDK_NGX_Result (*PFN_D3D11_CoreShutdown1)(ID3D11Device* InDevice, unsigned int* OutRemainingCount);
 typedef NVSDK_NGX_Result (*PFN_D3D11_GetParameters)(NVSDK_NGX_Parameter** OutParameters);
 typedef NVSDK_NGX_Result (*PFN_D3D11_AllocateParameters)(NVSDK_NGX_Parameter** OutParameters);
 typedef NVSDK_NGX_Result (*PFN_D3D11_GetCapabilityParameters)(NVSDK_NGX_Parameter** OutParameters);
@@ -449,7 +451,7 @@ struct NvngxModule
     PFN_D3D11_Init_ProjectID D3D11_Init_ProjectID = nullptr;
     PFN_D3D11_Init_Ext D3D11_Init_Ext = nullptr;
     PFN_D3D11_Shutdown D3D11_Shutdown = nullptr;
-    PFN_D3D11_Shutdown1 D3D11_Shutdown1 = nullptr;
+    PFN_D3D11_CoreShutdown1 D3D11_Shutdown1 = nullptr;
     PFN_D3D11_GetParameters D3D11_GetParameters = nullptr;
     PFN_D3D11_AllocateParameters D3D11_AllocateParameters = nullptr;
     PFN_D3D11_GetCapabilityParameters D3D11_GetCapabilityParameters = nullptr;
@@ -593,6 +595,14 @@ class NVNGXProxy
         return _module.D3D12_Shutdown1(device, &remaining);
     }
 
+    static NVSDK_NGX_Result ShutdownDx11Device(ID3D11Device* device)
+    {
+        if (device == nullptr)
+            return _module.D3D11_Shutdown != nullptr ? _module.D3D11_Shutdown() : NVSDK_NGX_Result_FAIL_NotImplemented;
+        unsigned int remaining = 0;
+        return _module.D3D11_Shutdown1(device, &remaining);
+    }
+
     inline static void LogCallback(const char* message, NVSDK_NGX_Logging_Level loggingLevel,
                                    NVSDK_NGX_Feature sourceComponent)
     {
@@ -720,7 +730,7 @@ class NVNGXProxy
             _module.D3D11_Shutdown =
                 (PFN_D3D11_Shutdown) KernelBaseProxy::GetProcAddress_()(_module.dll, "NVSDK_NGX_D3D11_Shutdown");
             _module.D3D11_Shutdown1 =
-                (PFN_D3D11_Shutdown1) KernelBaseProxy::GetProcAddress_()(_module.dll, "NVSDK_NGX_D3D11_Shutdown1");
+                (PFN_D3D11_CoreShutdown1) KernelBaseProxy::GetProcAddress_()(_module.dll, "NVSDK_NGX_D3D11_Shutdown1");
             _module.D3D11_GetParameters = (PFN_D3D11_GetParameters) KernelBaseProxy::GetProcAddress_()(
                 _module.dll, "NVSDK_NGX_D3D11_GetParameters");
             _module.D3D11_AllocateParameters = (PFN_D3D11_AllocateParameters) KernelBaseProxy::GetProcAddress_()(
@@ -955,7 +965,7 @@ class NVNGXProxy
         if (!_dx11Inited)
             return nullptr;
 
-        return _module.D3D11_Shutdown1;
+        return _module.D3D11_Shutdown1 != nullptr ? &ShutdownDx11Device : nullptr;
     }
 
     // DirectX12
