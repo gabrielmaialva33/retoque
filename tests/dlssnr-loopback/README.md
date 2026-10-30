@@ -339,7 +339,8 @@ Waits check removal and actual fence completion after every wake with the origin
 deadline. Timeout/device-removal paths were reviewed, not induced on the live GPU.
 
 Use `--skip-build` to reuse the selected mode's binary in `artifacts/cold-run/` or `artifacts/run/`.
-The compiler-prefix busy guard is preserved. The modes share the suite's Proton runtime prefix and
+Compiler runs hold the shared prefix lease; moving/replay already hold it for the entire fixture.
+The modes share the suite's Proton runtime prefix and
 must run serially. `--dll` still selects the build whose adjacent forwarder is preferred; the cold
 mode does not load that OptiScaler DLL. Bare `--runtime wine` cold execution was not validated.
 
@@ -380,9 +381,11 @@ pass a child's stdout through and a crash discards buffered output. The runner p
 Previously the missing ID prevented that file from being created, while `WINEDEBUG=-all` also
 suppressed the exception trace.
 
-The compiler watchdog matches MSVC paths case-insensitively (`Hostx64/x64/cl.exe` is the local
-spelling), and monitors the wrapper if it has not spawned a compiler. An empty PID match must not
-disable stall recovery indefinitely.
+The compiler uses the owned-process supervisor under the shared prefix lease. Timeouts retain
+the log and terminate only observed owned work; no prefix reset or automatic retry is performed.
+The legacy sweep rejects any failed evaluation and requires a successful evaluation in each step.
+It checks fence signal, event, wait and completed value before reuse; unknown completion terminates
+the process without unwinding GPU objects. Host fakes cover those decisions, not real GPU behavior.
 
 The generated INI selects `OverlayMenu=true`. This is the **swapchain overlay route**, not an
 "enable all menus" switch. The harness has no swapchain, so this avoids the in-upscaler ImGui path.

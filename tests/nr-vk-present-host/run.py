@@ -393,8 +393,13 @@ assert 'dlssnr_vk_shutdown(void* device)' in forwarder
 # null pointer at vkDestroyDevice (2026-10-14).
 assert 'Guarded(g_vk.shutdown1, device, &remaining)' in forwarder
 assert 'using PFN_NrVkShutdown1 = int(__cdecl*)(void*, unsigned int*);' in forwarder
-assert 'using PFN_Shutdown1 = NVSDK_NGX_Result (*)(VkDevice, unsigned int*);' in feature_vk
-assert 'VULKAN_Shutdown1()(' not in code(model) and 'shutdown(device, &remaining);' in feature_vk
+# The core's own entry is reached through NVNGXProxy's adapter, which supplies that count (tests/nr-shutdown runs both);
+# the host keeps the public one-argument signature and no cast of it to the private one.
+core_shutdown = code(function(feature_vk, 'void ShutdownPresentCore(VkDevice device)'))
+assert 'NVNGXProxy::VULKAN_Shutdown1()' in core_shutdown and 'shutdown(device);' in core_shutdown
+assert 'cast' not in core_shutdown and 'unsigned int' not in core_shutdown and 'PFN_' not in core_shutdown
+assert 'reinterpret_cast<PFN_Shutdown1>' not in code(feature_vk)
+assert 'VULKAN_Shutdown1()(' not in code(model)
 
 # HDR conversion is a per-build product, never a present-thread allocation. Its fixed descriptor sets and uniform
 # records are read-only across frames; replacement follows the same completion tickets as the feature and images.

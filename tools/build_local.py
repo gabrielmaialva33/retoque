@@ -191,6 +191,8 @@ def run_step(command, *, cwd, log_path, env=None, inactivity_timeout=90.0,
                                      stdout=log, stderr=subprocess.STDOUT,
                                      close_fds=True, start_new_session=True)
             owned = OwnedProcesses(child)
+            if owned.root_start is None:
+                raise OSError('cannot establish spawned process identity; refusing supervision')
             started = last_progress = time.monotonic()
             previous_cpu = {}
             previous_size = 0
@@ -235,11 +237,26 @@ def run_step(command, *, cwd, log_path, env=None, inactivity_timeout=90.0,
                 if owned is None:
                     owned = OwnedProcesses(child)
                 remaining = owned.cleanup(term_grace, poll_interval)
+                if owned.root_start is None and child.poll() is None:
+                    log.write(b'\n[supervisor] unverified child may still be running; no signal sent\n')
                 if remaining:
                     log.write(f'\n[supervisor] owned processes still present: {sorted(remaining)}\n'.encode())
                     if status == 0:
                         status = 1
     return 128+received[0] if received else status
+
+
+@contextmanager
+def prefix_lease():
+    """Acquire the shared non-reentrant compiler-prefix lock, or fail closed."""
+    runtime = Path(os.environ.get('XDG_RUNTIME_DIR') or f'/run/user/{os.getuid()}')
+    with (runtime / 'msvc-prefix.lock').open('a') as lock:
+        os.set_inheritable(lock.fileno(), False)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise RuntimeError('compiler prefix lock busy') from exc
+        yield
 
 
 def _fingerprint(path):

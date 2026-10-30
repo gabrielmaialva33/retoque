@@ -402,6 +402,8 @@ typedef NVSDK_NGX_Result (*PFN_VULKAN_Init_ProjectID)(const char* InProjectId, N
                                                       const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo);
 typedef NVSDK_NGX_Result (*PFN_VULKAN_Shutdown)(void);
 typedef NVSDK_NGX_Result (*PFN_VULKAN_Shutdown1)(VkDevice InDevice);
+// Private driver-core ABI; the public SDK shutdown retains its one-argument signature.
+typedef NVSDK_NGX_Result (*PFN_VULKAN_CoreShutdown1)(VkDevice InDevice, unsigned int* OutRemainingCount);
 typedef NVSDK_NGX_Result (*PFN_VULKAN_GetParameters)(NVSDK_NGX_Parameter** OutParameters);
 typedef NVSDK_NGX_Result (*PFN_VULKAN_AllocateParameters)(NVSDK_NGX_Parameter** OutParameters);
 typedef NVSDK_NGX_Result (*PFN_VULKAN_GetCapabilityParameters)(NVSDK_NGX_Parameter** OutParameters);
@@ -484,7 +486,7 @@ struct NvngxModule
     PFN_VULKAN_Init_Ext2 VULKAN_Init_Ext2 = nullptr;
     PFN_VULKAN_Init_ProjectID_Ext VULKAN_Init_ProjectID_Ext = nullptr;
     PFN_VULKAN_Shutdown VULKAN_Shutdown = nullptr;
-    PFN_VULKAN_Shutdown1 VULKAN_Shutdown1 = nullptr;
+    PFN_VULKAN_CoreShutdown1 VULKAN_Shutdown1 = nullptr;
     PFN_VULKAN_GetParameters VULKAN_GetParameters = nullptr;
     PFN_VULKAN_AllocateParameters VULKAN_AllocateParameters = nullptr;
     PFN_VULKAN_GetCapabilityParameters VULKAN_GetCapabilityParameters = nullptr;
@@ -601,6 +603,19 @@ class NVNGXProxy
             return _module.D3D11_Shutdown != nullptr ? _module.D3D11_Shutdown() : NVSDK_NGX_Result_FAIL_NotImplemented;
         unsigned int remaining = 0;
         return _module.D3D11_Shutdown1(device, &remaining);
+    }
+
+    static NVSDK_NGX_Result ShutdownVulkanDevice(VkDevice device)
+    {
+        if (device == VK_NULL_HANDLE)
+            return _module.VULKAN_Shutdown != nullptr ? _module.VULKAN_Shutdown()
+                                                      : NVSDK_NGX_Result_FAIL_NotImplemented;
+        // Entry and the core's own answer, which both consumers discard: the evidence that the call was made.
+        LOG_DEBUG("device 0x{0:X}", (uint64_t) device);
+        unsigned int remaining = 0;
+        const auto result = _module.VULKAN_Shutdown1(device, &remaining);
+        LOG_DEBUG("device 0x{0:X}: core result 0x{1:X}, {2} remaining", (uint64_t) device, (UINT) result, remaining);
+        return result;
     }
 
     inline static void LogCallback(const char* message, NVSDK_NGX_Logging_Level loggingLevel,
@@ -770,8 +785,8 @@ class NVNGXProxy
                 _module.dll, "NVSDK_NGX_VULKAN_Init_ProjectID");
             _module.VULKAN_Shutdown =
                 (PFN_VULKAN_Shutdown) KernelBaseProxy::GetProcAddress_()(_module.dll, "NVSDK_NGX_VULKAN_Shutdown");
-            _module.VULKAN_Shutdown1 =
-                (PFN_VULKAN_Shutdown1) KernelBaseProxy::GetProcAddress_()(_module.dll, "NVSDK_NGX_VULKAN_Shutdown1");
+            _module.VULKAN_Shutdown1 = (PFN_VULKAN_CoreShutdown1) KernelBaseProxy::GetProcAddress_()(
+                _module.dll, "NVSDK_NGX_VULKAN_Shutdown1");
             _module.VULKAN_GetParameters = (PFN_VULKAN_GetParameters) KernelBaseProxy::GetProcAddress_()(
                 _module.dll, "NVSDK_NGX_VULKAN_GetParameters");
             _module.VULKAN_AllocateParameters = (PFN_VULKAN_AllocateParameters) KernelBaseProxy::GetProcAddress_()(
@@ -1245,7 +1260,7 @@ class NVNGXProxy
         if (!_vulkanInited)
             return nullptr;
 
-        return _module.VULKAN_Shutdown1;
+        return _module.VULKAN_Shutdown1 != nullptr ? &ShutdownVulkanDevice : nullptr;
     }
 
     static PFN_UpdateFeature UpdateFeature()

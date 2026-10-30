@@ -82,6 +82,8 @@ class LoopbackCleanup(unittest.TestCase):
             shutil.copy2(ROOT/'tests/dlssnr-loopback'/filename, fixture/filename)
         for filename in ('run_all.py', '_suite_result.py'):
             shutil.copy2(ROOT/'tests'/filename, root/'tests'/filename)
+        (root/'tools').mkdir()
+        shutil.copy2(ROOT/'tools/build_local.py', root/'tools/build_local.py')
         return fixture
 
     def entry_code(self, fixture, body):

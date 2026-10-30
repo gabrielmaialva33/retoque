@@ -11,12 +11,14 @@
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
 
+#include "sweep_safety.h"
 #include "nvsdk_ngx.h"
 #include "nvsdk_ngx_params.h"
 
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -63,6 +65,53 @@ static void Check(HRESULT hr, const char* what)
         char buf[256];
         snprintf(buf, sizeof(buf), "%s failed with 0x%08lX", what, (unsigned long) hr);
         throw std::runtime_error(buf);
+    }
+}
+
+static void SweepRecordEvaluation(SweepSafety::Coverage& coverage, NVSDK_NGX_Result result)
+{
+    Require(coverage.evaluation(NVSDK_NGX_SUCCEED(result)), "EvaluateFeature refused");
+}
+
+static void SweepFinishStep(const SweepSafety::Coverage& coverage)
+{
+    Require(coverage.end_step(), "step has no successful evaluations");
+}
+
+// On an unknown completion, do not unwind COM/frame objects still referenced by the GPU.
+static void SweepDrain(ID3D12CommandQueue* queue, ID3D12Fence* fence, HANDLE event, UINT64 value)
+{
+    HRESULT signalResult = E_FAIL, eventResult = E_FAIL;
+    DWORD waitResult = WAIT_FAILED;
+    UINT64 completed = 0;
+    const bool safe = SweepSafety::drain(
+        [&]
+        {
+            signalResult = queue->Signal(fence, value);
+            return SUCCEEDED(signalResult);
+        },
+        [&]
+        {
+            eventResult = fence->SetEventOnCompletion(value, event);
+            return SUCCEEDED(eventResult);
+        },
+        [&]
+        {
+            waitResult = WaitForSingleObject(event, 5000);
+            return waitResult;
+        },
+        [&]
+        {
+            completed = fence->GetCompletedValue();
+            return completed;
+        },
+        value);
+    if (!safe)
+    {
+        Say("FAIL: GPU completion unknown signal=0x%08lX event=0x%08lX wait=%lu completed=%llu target=%llu\n",
+            (unsigned long) signalResult, (unsigned long) eventResult, (unsigned long) waitResult,
+            (unsigned long long) completed, (unsigned long long) value);
+        std::_Exit(1);
     }
 }
 
@@ -620,19 +669,21 @@ int main(int argc, char** argv)
         NVSDK_NGX_Parameter* params = nullptr;
         UINT builtW = 0, builtH = 0, builtOutW = 0, builtOutH = 0;
         unsigned evaluates = 0, creates = 0;
+        SweepSafety::Coverage coverage;
 
         for (const auto& step : steps)
         {
+            coverage.begin_step();
             if (step.w != builtW || step.h != builtH || step.outW != builtOutW || step.outH != builtOutH)
             {
                 if (handle)
                 {
-                    ngx.ReleaseFeature(handle);
+                    Require(NVSDK_NGX_SUCCEED(ngx.ReleaseFeature(handle)), "ReleaseFeature refused");
                     handle = nullptr;
                 }
                 if (params)
                 {
-                    ngx.DestroyParameters(params);
+                    Require(NVSDK_NGX_SUCCEED(ngx.DestroyParameters(params)), "DestroyParameters refused");
                     params = nullptr;
                 }
                 Check(ngx.AllocateParameters(&params) == NVSDK_NGX_Result_Success ? S_OK : E_FAIL,
@@ -648,12 +699,10 @@ int main(int argc, char** argv)
                 Check(alloc->Reset(), "allocator reset");
                 Check(list->Reset(alloc, nullptr), "list reset");
                 r = ngx.CreateFeature(list, NVSDK_NGX_Feature_SuperSampling, params, &handle);
-                list->Close();
+                Check(list->Close(), "list close");
                 ID3D12CommandList* lists[] = { list.p };
                 queue->ExecuteCommandLists(1, lists);
-                queue->Signal(fence, ++fenceValue);
-                fence->SetEventOnCompletion(fenceValue, fenceEvent);
-                WaitForSingleObject(fenceEvent, 5000);
+                SweepDrain(queue, fence, fenceEvent, ++fenceValue);
 
                 Say("  create %ux%u -> %ux%u : 0x%08X\n", step.w, step.h, step.outW, step.outH, (unsigned) r);
                 Require(NVSDK_NGX_SUCCEED(r), "CreateFeature refused");
@@ -684,21 +733,17 @@ int main(int argc, char** argv)
                 params->Set(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, step.h);
 
                 r = ngx.EvaluateFeature(list, handle, params, nullptr);
-                list->Close();
+                Check(list->Close(), "list close");
                 ID3D12CommandList* lists[] = { list.p };
                 queue->ExecuteCommandLists(1, lists);
-                queue->Signal(fence, ++fenceValue);
-                fence->SetEventOnCompletion(fenceValue, fenceEvent);
-                WaitForSingleObject(fenceEvent, 5000);
+                SweepDrain(queue, fence, fenceEvent, ++fenceValue);
                 ++evaluates;
                 PumpMessages();
-                if (!NVSDK_NGX_SUCCEED(r))
-                {
-                    Say("  evaluate %ux%u refused: 0x%08X\n", step.w, step.h, (unsigned) r);
-                    break;
-                }
+                SweepRecordEvaluation(coverage, r);
             }
-            Say("  step done, evaluates so far=%u; releasing frame resources\n", evaluates);
+            SweepFinishStep(coverage);
+            Say("  step done, attempts=%u successes=%u; releasing frame resources\n", coverage.attempts,
+                coverage.successes);
             frame.Release();
         }
 
@@ -708,10 +753,10 @@ int main(int argc, char** argv)
 
         Say("  teardown: ReleaseFeature\n");
         if (handle)
-            ngx.ReleaseFeature(handle);
+            Require(NVSDK_NGX_SUCCEED(ngx.ReleaseFeature(handle)), "ReleaseFeature refused");
         Say("  teardown: DestroyParameters\n");
         if (params)
-            ngx.DestroyParameters(params);
+            Require(NVSDK_NGX_SUCCEED(ngx.DestroyParameters(params)), "DestroyParameters refused");
         Say("  teardown: Shutdown\n");
         r = ngx.Shutdown(device);
         Say("  Shutdown result: 0x%08X\n", (unsigned) r);

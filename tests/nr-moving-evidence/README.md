@@ -7,8 +7,11 @@ known projected motion must agree with the depth/camera oracle, zero or nonfinit
 motion must fail, disabled processing must fail, repeated-output noise must not
 hide the processing effect, and the timing percentiles use nearest rank.
 
-`dlssnr-loopback/test_runner_guard.py` also runs here: run.py's busy guard must see a running `build-local.sh`
-(a bash whose script argument it is) and must not see a shell whose command string merely mentions it.
+Host fakes compile the actual sweep coverage consumers and `SweepDrain`, checking that failure exits
+without unwinding GPU-owned objects. They exercise per-step coverage and fence decisions, including signal,
+event, timeout, wait failure, incomplete completion and device removal. Compiler-entrypoint tests
+exercise lease contention, owned fake processes, unrelated same-name survival, timeout, interruption,
+lock release, failure propagation and retained logs. These do not execute Wine or GPU work.
 
 The actual analyzer is shared with the real moving-scene GPU experiment. These
 checks exercise its decisions on known inputs without Wine, NGX or a GPU; they

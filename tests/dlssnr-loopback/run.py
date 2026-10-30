@@ -5,12 +5,15 @@ Reuses the already-built x64/out/OptiScaler.dll rather than rebuilding the solut
 tests the NR path through the production exports, and rebuilding here would only add a second
 place where the build can stall. Point --dll at another build to test that one instead.
 """
-import argparse, os, shutil, signal, subprocess, sys, time
+import argparse, os, shutil, subprocess, sys
+from contextlib import nullcontext
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'tests'))
+from tools.build_local import prefix_lease, run_step, _build_cpu_progress, _build_waited_cpu_progress
 from _suite_result import result_run
 OUT = HERE / 'artifacts'
 RUN = OUT / 'run'
@@ -31,100 +34,15 @@ def run(args, *, env=None, log=None, timeout=600):
                          + (f'\n  see {log}' if log else ''))
 
 
-def _cpu_ticks(pid):
-    try:
-        f = open(f'/proc/{pid}/stat').read().split()
-        return int(f[13]) + int(f[14])
-    except Exception:
-        return 0
-
-
-def _wine_build_pids():
-    # msvc-wine currently launches Hostx64/x64/cl.exe; Windows path casing is not stable.
-    out = subprocess.run(['pgrep', '-if', r'[h]ostx64.x64.(cl|link)\.exe'], capture_output=True, text=True)
-    return [int(x) for x in out.stdout.split()]
-
-
-def ancestors():
-    """This process and every parent up to init, read from /proc."""
-    pids, pid = set(), os.getpid()
-    while pid > 1 and pid not in pids:
-        pids.add(pid)
-        try:
-            pid = int(Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[1])
-        except (OSError, ValueError, IndexError):
-            break
-    return pids
-
-
-def is_build(proc):
-    """Whether /proc/<pid> is build-local.sh or an MSBuild -- the program itself, never a command line that mentions it.
-
-    Matching command text found shells that had merely mentioned the script, this runner's own parent or another
-    session's idle wrapper, and refused forever (2026-10-20). Wine names a Windows process after its executable, so
-    MSBuild is found by name. build-local.sh runs through env bash, so it is a bash whose script argument is
-    build-local.sh -- not a bash -c whose command string happens to contain it.
-    """
-    try:
-        if (proc / 'comm').read_text().strip().lower() == 'msbuild.exe':
-            return True
-        argv = (proc / 'cmdline').read_bytes().split(b'\0')
-    except OSError:
-        return False
-    names = [Path(a.decode(errors='replace')).name for a in argv[:2]]
-    return names[:1] == ['build-local.sh'] or (len(names) > 1 and names[0] in ('bash', 'sh') and
-                                               names[1] == 'build-local.sh')
-
-
-def build_running():
-    """Whether any process other than this one and its ancestors is a build (is_build)."""
-    mine = ancestors()
-    return any(is_build(proc) for proc in Path('/proc').iterdir() if proc.name.isdigit() and int(proc.name) not in mine)
-
-
-def run_watched(args, *, env, log, attempts=4):
-    """Run a wine-side compiler command, recovering from the msvc-wine stall.
-
-    The stall is not MSBuild's: a bare cl.exe through the msvc-wine wrapper hangs the same way,
-    every process at zero CPU while wineserver spins on a core, and it never resumes. Same shape
-    as build-local.sh's watchdog, same recovery: tear it down, reset the prefix, run again."""
-    args = list(map(str, args))
-    for attempt in range(1, attempts + 1):
-        with open(log, 'wb') as f:
-            p = subprocess.Popen(args, cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
-                                 stdout=f, stderr=subprocess.STDOUT)
-            dead = 0
-            while p.poll() is None:
-                size = Path(log).stat().st_size
-                # A stalled wrapper may never spawn a compiler. Monitor it too rather than
-                # making an empty compiler list disable recovery indefinitely.
-                pids = _wine_build_pids() or [p.pid]
-                before = sum(_cpu_ticks(q) for q in pids)
-                time.sleep(20)
-                after = sum(_cpu_ticks(q) for q in pids)
-                grew = Path(log).stat().st_size != size
-                if p.poll() is None and after == before and not grew:
-                    dead += 1
-                    print(f'  compile attempt {attempt}: stalled sample {dead}/3')
-                else:
-                    dead = 0
-                if dead >= 3:
-                    print(f'  compile attempt {attempt}: hung; resetting wineserver and retrying')
-                    p.kill()
-                    for q in _wine_build_pids():
-                        try:
-                            os.kill(q, signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
-                    time.sleep(2)
-                    subprocess.run(['wineserver', '-k'], env=env)
-                    time.sleep(2)
-                    break
-            else:
-                if p.returncode == 0:
-                    return
-                raise SystemExit(f'FAILED ({p.returncode}): {" ".join(args)}\n  see {log}')
-    raise SystemExit(f'compiler hung {attempts} times; see {log}')
+def run_watched(args, *, env, log, lease_held=False):
+    # A moving/replay fixture already owns the same non-reentrant lease.
+    with nullcontext() if lease_held else prefix_lease():
+        result = run_step(list(map(str, args)), cwd=ROOT, env=env, log_path=log,
+                          inactivity_timeout=90, hard_timeout=600,
+                          cpu_progress_filter=_build_cpu_progress,
+                          waited_cpu_progress_filter=_build_waited_cpu_progress)
+    if result:
+        raise SystemExit(f'compiler failed ({result}); see {log}')
 
 
 def check_nr_coverage():
@@ -419,7 +337,7 @@ def fixture_directory(args):
     return None
 
 
-def main(args=None):
+def main(args=None, *, lease_held=False):
     global RUN
     args = parse_args() if args is None else args
     # The replay records its first corpus with the moving scene, so it stages exactly what that scene needs.
@@ -463,17 +381,12 @@ def main(args=None):
 
     env = dict(os.environ, WINEPREFIX=str(PREFIX), WINEDEBUG='-all')
     if not args.skip_build:
-      # Compiling goes through the same msvc-wine prefix that build-local.sh uses. Two clients on
-      # one wineserver is the condition under which the build has stalled; refuse rather than race.
-      # Running the built harness does not touch that prefix, so --skip-build is exempt.
-      if build_running():
-          raise SystemExit('a solution build is using the msvc-wine prefix; compile after it finishes, or --skip-build')
       run_watched([MSVC / 'cl', '/nologo', '/std:c++20', '/EHsc', '/MD', '/W4',
          '/I' + str(ROOT / 'external/nvngx_dlss_sdk'), HERE / 'harness.cpp',
          '/Fo' + str(OUT / 'harness.obj'),
          '/Fe' + str(RUN / 'dlssnr-loopback.exe'),
          '/link', 'd3d12.lib', 'd3d11.lib', 'dxgi.lib', 'user32.lib', 'd3dcompiler.lib'],
-        env=dict(env, WINE_MSVC_RAW_STDOUT='1'), log=OUT / 'build.log')
+        env=dict(env, WINE_MSVC_RAW_STDOUT='1'), log=OUT / 'build.log', lease_held=lease_held)
     if not (RUN / 'dlssnr-loopback.exe').exists():
         raise SystemExit('no harness binary; run without --skip-build first')
 
@@ -612,6 +525,6 @@ if __name__ == '__main__':
         if fixture is not None:
             import run_moving
             with run_moving.lease(fixture):
-                main(args)
+                main(args, lease_held=True)
         else:
             main(args)

@@ -1615,6 +1615,11 @@ def execute_route(name, dll, redist, files):
         shutil.copy2(library, work / library.name)
     shutil.copyfile(files['built'], work / 'nvngx.dll_dlssnr.dll')
     (work / 'nvngx_dlssnr.dll').symlink_to(files['model'])
+    # OptiScaler disables DLSS when no nvngx_dlss.dll is beside it, and then the application's NGX calls never reach
+    # the driver's core. RETOQUE_VK_ROUTE_SR names a user-owned SR DLL to link here (never copied) so they do; unset,
+    # the case runs as it always has.
+    if os.environ.get('RETOQUE_VK_ROUTE_SR'):
+        (work / 'nvngx_dlss.dll').symlink_to(Path(os.environ['RETOQUE_VK_ROUTE_SR']).resolve(strict=True))
     # OptiScaler's own FSR 2.2 as the game's upscaler: nothing but the model to supply, and the evaluate's path to the
     # after-upscale route is the one every OptiScaler upscaler takes. DLSS stays on, so NGX initialises through the
     # driver's core, as a game's does.

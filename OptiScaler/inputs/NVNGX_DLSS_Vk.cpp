@@ -1190,6 +1190,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)
 
 NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
 {
+    // Entry and return, bracketing any core call this makes (NVNGXProxy::ShutdownVulkanDevice logs its own).
+    LOG_DEBUG("device 0x{0:X}", (uint64_t) InDevice);
     shutdown = true;
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::IsVulkanInited() &&
@@ -1203,5 +1205,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
 
     shutdown = false;
 
-    return NVSDK_NGX_VULKAN_Shutdown();
+    const auto result = NVSDK_NGX_VULKAN_Shutdown();
+    LOG_DEBUG("device 0x{0:X}: returning 0x{1:X}", (uint64_t) InDevice, (UINT) result);
+    return result;
 }
