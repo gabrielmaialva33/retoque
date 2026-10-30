@@ -21,6 +21,7 @@
 #include "DlssNr_ReplayRecorderDx12.h"
 #include "DlssNr_PresentSync.h"
 #include "DlssNr_Session.h"
+#include "DlssNr_SlNativeNr.h"
 #include "DlssNr_WorkingScale.h"
 
 #include <BuildInfo.h>
@@ -1173,6 +1174,15 @@ void RenderMenu(Config* config, float menuResScale)
         {
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.3f, 1.0f));
             ImGui::TextWrapped("%s", Localization::Tr(routeNotice));
+            ImGui::PopStyleColor();
+        }
+
+        // The game runs its own NR through Streamline and every route stands down for it (DlssNr_SlNativeNr.h,
+        // docs/dlssnr/design/streamline-native-nr.md). A statement, never a control: the game's NR is its own setting.
+        if (enabled && DlssNr::SlNativeNr::Instance().Active())
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.75f, 0.3f, 1.0f));
+            ImGui::TextWrapped("%s", Localization::Tr(DlssNr::SlNativeNr::kMenuLine));
             ImGui::PopStyleColor();
         }
 

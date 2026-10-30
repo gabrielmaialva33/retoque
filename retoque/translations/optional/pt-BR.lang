@@ -593,3 +593,5 @@ Colors	Cores
 Copy NR diagnostics	Copiar diagnóstico do NR
 Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths are replaced by <path>. Assembled only when pressed; the report itself is in English.	Copia um relatório em texto simples do que a renderização neural detectou e do que usou -- build, plataforma, rota, guias, configurações, a última amostra de GPU confirmada e o LSFG -- para um relato de bug. Caminhos absolutos são substituídos por <path>. Montado só ao clicar; o relatório em si fica em inglês.
 Copied to the clipboard.	Copiado para a área de transferência.
+# 2026-10-30: the NR panel's line while the game runs its own NR through Streamline (docs/dlssnr/design/streamline-native-nr.md).
+The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	O jogo roda o próprio NR (DLSS-NR do Streamline), então este passe fica de fora em vez de aplicar o NR duas vezes. Ele volta a rodar 5 s depois que o NR do jogo para.

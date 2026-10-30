@@ -20,6 +20,7 @@
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_Session.h>
 #include <dlssnr/DlssNr_RenderSize.h>
+#include <dlssnr/DlssNr_SlNativeNr.h>
 #include <misc/DeferredRelease.h>
 #include <dlssnr/DlssNr_WorkingScale.h>
 
@@ -1180,6 +1181,21 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     if (g_vk.failed)
         return;
+
+    // The game's own NR through Streamline (DlssNr_SlNativeNr.h): stood down before the model is asked for, so this
+    // route's hold on it lapses as on any other stand-down; the history starts over when the game's NR stops.
+    {
+        std::vector<std::string> lines;
+        const char* why =
+            DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), lines, DlssNr::SlNativeNr::NowMs());
+        for (const auto& line : lines)
+            LOG_INFO("{}", line);
+        if (why != nullptr)
+        {
+            g_vkResetOnReturn = true;
+            return;
+        }
+    }
 
     if (g_vkResetOnReturn.exchange(false))
         g_vk.reset = true;
