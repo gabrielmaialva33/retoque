@@ -24,7 +24,9 @@ signals them through pidfds, and retains logs under `x64/logs/<date-pid-id>/`. N
 without build-workload CPU or log growth, or a two-hour hard limit, returns 124 after bounded
 cleanup. An owned wineserver spinning alone does not count as build progress. Detached
 children are tracked only when their ancestry was observed; unknown processes are never
-adopted by name. No automatic prefix-wide reset or retry is performed.
+adopted by name. If the spawned root identity is unavailable, supervision fails; a still-running
+unverified child is reported without signalling it and needs manual investigation. No automatic
+prefix-wide reset or retry is performed.
 
 Both DLLs must exist after successful compilation, and OptiScaler must be refreshed when
 its stamps changed. Both outputs are prepared before publication; each replacement is atomic

@@ -26,6 +26,8 @@ import sys
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+sys.path.insert(0, str(ROOT))
+from tools.build_local import prefix_lease, run_step
 STUDY = Path.home() / 'Projects/personal/OptiScaler_DLSSNR/Tmp/lsfg-study'
 CACHE = Path.home() / '.cache/lsfg-ctxbench'
 MSVC = Path.home() / '.local/opt/msvc/bin/x64'
@@ -36,26 +38,13 @@ LSFG_FILES = ('LsfgFrameGen_Dx12.cpp', 'LsfgFrameGen_Dx12.h', 'LsfgGraph.h', 'Ls
 LSFG_OPTIONAL = ('LsfgShaderLibrary.cpp', 'LsfgShaderLibrary.h', 'LsfgEnvironment.h')
 
 
-def idle():
-    result = subprocess.run(['pgrep', '-af', r'[M]SBuild|[c]l\.exe|[d]xc\.exe|[l]sfg-harness\.exe|[l]sfg-ctxbench\.exe'],
-                            capture_output=True, text=True)
-    if result.returncode != 1:
-        raise RuntimeError('compiler/prefix busy (retry later):\n' + result.stdout)
-
-
 def command(args, env, log, cwd, timeout):
-    idle()
     print('+', ' '.join(map(str, args)), flush=True)
-    # Never pipe Wine output: wineserver may keep the pipe open after the client exits.
-    with log.open('w') as stream:
-        try:
-            result = subprocess.run(list(map(str, args)), env=env, cwd=cwd, stdout=stream, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            subprocess.run(['wineserver', '-k'], env=env, check=False)
-            raise RuntimeError(f'timed out; stopped the prefix; see {log}')
-    if result.returncode:
-        raise RuntimeError(f'exit {result.returncode}: {log}\n' + log.read_text(errors='replace')[-4000:])
+    with prefix_lease():
+        result = run_step(list(map(str, args)), env=env, cwd=cwd, log_path=log,
+                          inactivity_timeout=timeout, hard_timeout=timeout)
+    if result:
+        raise RuntimeError(f'exit {result}: {log}\n' + log.read_text(errors='replace')[-6000:])
 
 
 def main():

@@ -246,6 +246,14 @@ class Supervisor(unittest.TestCase):
                                     log_path=self.root/'step.log', inactivity_timeout=.25,
                                     hard_timeout=2, poll_interval=.03, term_grace=.12, **kw)
 
+    def test_unavailable_root_identity_fails_closed(self):
+        with patch.object(self.module, '_process', return_value=None):
+            result = self.module.run_step([sys.executable, '-c', 'pass'], cwd=self.root,
+                                          log_path=self.root/'identity.log', inactivity_timeout=.5,
+                                          hard_timeout=2, poll_interval=.02, term_grace=.1)
+        self.assertNotEqual(result, 0)
+        self.assertIn('identity', (self.root/'identity.log').read_text())
+
     def test_idle_hang_preserves_log(self):
         started = time.monotonic()
         code = self.run_step("import time; print('last evidence', flush=True); time.sleep(60)")

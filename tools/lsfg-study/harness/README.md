@@ -16,8 +16,9 @@ python tools/lsfg-study/harness/run.py --run-only --multiplier 3 --fp16 /path/to
 Without either mode flag, the script builds and runs. It uses MSVC 14.44/Windows
 SDK through `~/.local/opt/msvc/bin/x64/cl`, the owned
 `~/.local/opt/msvc-wineprefix`, native MSVC runtime and vkd3d-proton from Proton.
-It checks for MSBuild/cl/dxc before each compile/run, redirects Wine output to
-files (no pipes), and stops its Wine server if a command times out.
+Each compile/run holds the shared compiler-prefix lease and writes output to files. On timeout,
+the owned-process supervisor terminates only observed owned processes and retains the log; it does
+not reset the Wine server or retry.
 
 Default artifact root is
 `~/Projects/personal/OptiScaler_DLSSNR/Tmp/lsfg-study/` (`--artifacts` overrides).
