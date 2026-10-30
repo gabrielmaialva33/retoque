@@ -11,11 +11,11 @@
 #include <vector>
 
 // Mirrors dlssnr_forwarder.cpp: the parameter-block setters, the snippet's D3D12 entry points, the fault
-// containment and the five calls the D3D12 host makes. What differs is only where the calls come from
+// containment and the six calls the D3D12 host makes. What differs is only where the calls come from
 // (this module, not a DLL named to pass the caller check) and the caller-path adapter that makes that
 // acceptable to the model. See DlssNr_DirectRuntime.h. tests/nr-model-loader holds this file to the
-// forwarder: every parameter write of the five calls, name, value and order; the Guarded model calls;
-// the setters; and FaultFilter.
+// forwarder: every parameter write of the six calls, name, value and order; the Guarded model calls;
+// the setters; and FaultFilter. tests/nr-model-stats runs both stats queries against the same fakes.
 
 namespace
 {
@@ -53,6 +53,12 @@ void setResource(void* params, const char* name, ID3D12Resource* v)
     reinterpret_cast<PFN_SetULL>(vt[VT_SET_ULL])(params, name, (unsigned long long) v);
 }
 
+void setULL(void* params, const char* name, unsigned long long v)
+{
+    void** vt = *reinterpret_cast<void***>(params);
+    reinterpret_cast<PFN_SetULL>(vt[VT_SET_ULL])(params, name, v);
+}
+
 // ---------------------------------------------------------------------------------------------------
 // The snippet.
 // ---------------------------------------------------------------------------------------------------
@@ -63,6 +69,10 @@ using PFN_NrEvaluate = int(__cdecl*)(ID3D12GraphicsCommandList*, const void*, co
 using PFN_NrRelease = int(__cdecl*)(void*);
 using PFN_NrPopulate = int(__cdecl*)(void*);
 using PFN_NrRatioCallback = int(__cdecl*)(void*);
+using PFN_NrStatsCallback = int(__cdecl*)(void*);
+
+// Written into SizeInBytes before the stats callback, as in the forwarder: no allocation has this size.
+constexpr unsigned long long kStatsUnwritten = ~0ull;
 
 struct Snippet
 {
@@ -84,6 +94,7 @@ int g_lastInit = 0;
 int g_lastCreate = 0;
 int g_lastRatioResult = 0;
 int g_lastRatioStage = 0;
+int g_lastStatsResult = 0;
 
 // ---------------------------------------------------------------------------------------------------
 // The caller-path adapter.
@@ -408,6 +419,7 @@ void ProbeFloat(void* params, const char* name, float value, int slot)
 int* LastInit() { return &g_lastInit; }
 int* LastCreate() { return &g_lastCreate; }
 const int* LastRatioStage() { return &g_lastRatioStage; }
+const int* LastStatsResult() { return &g_lastStatsResult; }
 const char* LoadError() { return g_loadError; }
 
 int FaultState(unsigned long* code, void** address)
@@ -467,6 +479,38 @@ int QueryScalingRatio(const wchar_t* snippetPath, void* capabilityParams, unsign
 
     g_lastRatioStage = 5;
     *outRatio = ratio;
+    return 1;
+}
+
+// The forwarder's dlssnr_query_stats: the model's own count of the VRAM its features hold, after NGX is up here.
+int QueryStats(void* capabilityParams, unsigned long long* outBytes)
+{
+    g_lastStatsResult = 0;
+
+    if (!g_snip.initialised || !capabilityParams || !outBytes)
+        return 0;
+
+    void** vt = *reinterpret_cast<void***>(capabilityParams);
+    unsigned long long raw = 0;
+
+    if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "DLSSNRGetStatsCallback", &raw) != 1 || raw == 0)
+        return 0;
+
+    setULL(capabilityParams, "SizeInBytes", kStatsUnwritten);
+
+    volatile int result = Guarded(reinterpret_cast<PFN_NrStatsCallback>((void*) raw), capabilityParams);
+    g_lastStatsResult = (int) result;
+
+    if (result != 1)
+        return -1;
+
+    unsigned long long bytes = kStatsUnwritten;
+
+    if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "SizeInBytes", &bytes) != 1 ||
+        bytes == kStatsUnwritten)
+        return -1;
+
+    *outBytes = bytes;
     return 1;
 }
 

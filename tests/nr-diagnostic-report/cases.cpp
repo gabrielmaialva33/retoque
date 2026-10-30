@@ -45,6 +45,8 @@ DR::Inputs FullInputs()
     in.modelDescribed = true;
     in.modelVersion = "310.8.0.0";
     in.modelBytes = 165000000;
+    in.modelVramKnown = true;
+    in.modelVramBytes = 851443712; // 812 MiB
     in.loaderVersion = "32.0.16.1691";
     in.loaderBuild = "616.91";
     in.feature18Route = "routes feature 18 itself";
@@ -124,12 +126,15 @@ void NoSectionMissing()
                                   "Apply the model:", "Pass:", "Hook method (setting):", "Hook status:", "Guides:",
                                   "HDR conversion:", "Measurement:", "Last confirmed sample:", "LSFG:" })
             Require(Contains(report, std::string("\n") + label), std::string("line present: ") + label);
+        Require(Contains(report, "\nModel VRAM:"), "line present: Model VRAM:");
     }
 
     // Unknown values say so instead of dropping the line.
     const auto bareText = DR::Build(bare);
     Require(Contains(bareText, "Graphics API: unknown"), "an unset API reads unknown");
     Require(Contains(bareText, "Model file: not described this session"), "an undescribed model says so");
+    Require(Contains(bareText, "Model VRAM: not reported (no running D3D12 build the model gave a figure for)"),
+            "no figure says so");
     Require(Contains(bareText, "Last confirmed sample: none"), "no sample reads none");
 }
 
@@ -141,7 +146,8 @@ void DetectedBeforeUsed()
     Require(detected < used, "Detected comes before Used");
     // What the game offers is detected; what the pass ran on is used.
     for (const auto line : { "Graphics API: D3D12", "Upscaler feature: DLSS 310.4.0", "HDR swapchain: seen (HDR10)",
-                             "Model file: version 310.8.0.0, 165000000 bytes" })
+                             "Model file: version 310.8.0.0, 165000000 bytes",
+                             "Model VRAM: 812.0 MiB (851443712 bytes), the model's own count at its last build" })
     {
         const auto at = text.find(line);
         Require(at != std::string::npos && detected < at && at < used, std::string("in Detected: ") + line);
@@ -345,6 +351,22 @@ void Redaction()
     off.build = "built in /home/someone/src";
     Require(!Contains(DR::Build(off), "someone"), "the NR-off report is redacted too");
 }
+void ModelVram()
+{
+    // The model's own figure, 64-bit, and a known zero kept apart from no figure at all.
+    auto in = FullInputs();
+    in.modelVramBytes = 5ull * 1024 * 1024 * 1024 + 3;
+    Require(Contains(DR::Build(in), "Model VRAM: 5120.0 MiB (5368709123 bytes)"), "a figure above 4 GiB is whole");
+    in.modelVramBytes = 0;
+    Require(Contains(DR::Build(in), "Model VRAM: 0.0 MiB (0 bytes)"), "a reported zero is a figure");
+    in.modelVramKnown = false;
+    in.modelVramBytes = 123;
+    Require(Contains(DR::Build(in), "Model VRAM: not reported") && !Contains(DR::Build(in), "123 bytes"),
+            "an unknown figure prints no stale number");
+    DR::Inputs off;
+    off.modelVramKnown = true;
+    Require(!Contains(DR::Build(off), "Model VRAM"), "the NR-off report stays short");
+}
 } // namespace
 
 int main()
@@ -358,6 +380,7 @@ int main()
     LsfgStates();
     NrOffIsShort();
     Redaction();
+    ModelVram();
 
     if (g_failures != 0)
     {

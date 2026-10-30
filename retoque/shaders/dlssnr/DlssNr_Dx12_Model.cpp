@@ -5,6 +5,7 @@
 #include <dlssnr/DlssNr_DriverInitGate.h>
 #include <dlssnr/DlssNr_Consumers.h>
 #include <dlssnr/DlssNr_ModelLog.h>
+#include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_Session.h>
 #include <proxies/NVNGX_Proxy.h>
 #include <State.h>
@@ -169,6 +170,8 @@ bool EnsureDirectRuntime()
 
     g_nr.queryRatio = &Direct::QueryScalingRatio;
     g_nr.lastRatioStage = Direct::LastRatioStage();
+    g_nr.queryStats = &Direct::QueryStats;
+    g_nr.lastStatsResult = Direct::LastStatsResult();
     g_nr.create = &Direct::Create;
     g_nr.evaluate = &Direct::Evaluate;
     g_nr.release = &Direct::Release;
@@ -230,6 +233,9 @@ bool EnsureForwarder()
     g_nr.queryRatio = (int (*)(const wchar_t*, void*, unsigned int, float*)) GetProcAddress(
         g_nr.forwarder, "dlssnr_query_scaling_ratio");
     g_nr.lastRatioStage = (const int*) GetProcAddress(g_nr.forwarder, "dlssnr_last_ratio_stage");
+    // Optional, like the ratio query: a forwarder from before it has no figure to give, and runs as before.
+    g_nr.queryStats = (int (*)(void*, unsigned long long*)) GetProcAddress(g_nr.forwarder, "dlssnr_query_stats");
+    g_nr.lastStatsResult = (const int*) GetProcAddress(g_nr.forwarder, "dlssnr_last_stats_result");
 
     g_nr.create = (PFN_NrCreate) GetProcAddress(g_nr.forwarder, "dlssnr_call_create");
     g_nr.evaluate = (PFN_NrEvaluate) GetProcAddress(g_nr.forwarder, "dlssnr_call_evaluate");
@@ -406,6 +412,47 @@ void ReportScalingRatios()
     else
         LOG_INFO("DLSS-NR scaling ratio callback not published by this snippet (stage {})",
                  g_nr.lastRatioStage != nullptr ? *g_nr.lastRatioStage : -1);
+}
+
+static_assert(DlssNr::ModelStats::kUnknown == ~0ull, "NrState::modelVramBytes starts at ~0ull, the unknown figure");
+
+// What the model says its features hold in VRAM, asked once after each successful build of the D3D12 feature, under
+// g_nrMutex like the build (docs/dlssnr/design/model-vram-stats.md). One INFO line with the figure; without one, a
+// single DEBUG line for the process, and nothing about the pass changes. The exception is a fault inside the callback,
+// as for every call into the model: both loaders refuse the model from then on, and NoteModelFault says so here, at the
+// call that faulted, rather than at the next evaluate.
+void ReportModelVram()
+{
+    namespace MS = DlssNr::ModelStats;
+    static bool firstBuild = true;
+    static bool unreportedLogged = false;
+
+    g_nr.modelVramBytes = MS::kUnknown;
+
+    unsigned long long bytes = MS::kUnknown;
+    const int rc = g_nr.queryStats == nullptr         ? MS::kNoQuery
+                   : g_nr.capabilityParams == nullptr ? 0
+                                                      : g_nr.queryStats(g_nr.capabilityParams, &bytes);
+    const bool first = firstBuild;
+    firstBuild = false;
+
+    if (rc == 1 && MS::Known(bytes))
+    {
+        g_nr.modelVramBytes = bytes;
+        LOG_INFO("{}", MS::InfoLine(bytes, first));
+        return;
+    }
+
+    const int last = rc != MS::kNoQuery && g_nr.lastStatsResult != nullptr ? *g_nr.lastStatsResult : 0;
+
+    if (!unreportedLogged)
+    {
+        unreportedLogged = true;
+        LOG_DEBUG("{}", MS::Unreported(rc, last));
+    }
+
+    if (last == MS::kModelFaulted)
+        NoteModelFault();
 }
 
 // Works out which vtable slot this parameter block keeps floats in, by writing a known value through

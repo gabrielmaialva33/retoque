@@ -164,6 +164,14 @@ struct NrState
     // The scaling-ratio probe, resolved alongside the other forwarder entry points.
     int (*queryRatio)(const wchar_t*, void*, unsigned int, float*) = nullptr;
     const int* lastRatioStage = nullptr;
+
+    // The model's own count of the VRAM its features hold, asked after each build (ReportModelVram,
+    // docs/dlssnr/design/model-vram-stats.md). Optional: null on a forwarder that predates dlssnr_query_stats.
+    int (*queryStats)(void*, unsigned long long*) = nullptr;
+    const int* lastStatsResult = nullptr;
+    // The last answer, one 64-bit value so the panel never reads half of it; ~0 (DlssNr::ModelStats::kUnknown,
+    // static_assert in DlssNr_Dx12_Model.cpp) when there is none.
+    uint64_t modelVramBytes = ~0ull;
     int* lastInit = nullptr;
     int* lastCreate = nullptr;
 
@@ -704,6 +712,7 @@ void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList);
 bool EnsureForwarder();
 bool NoteModelFault();
 bool EnsureCapabilityParams(ID3D12Device* device);
+void ReportModelVram();
 void SetExtras(const Config& cfg, ID3D12Resource* ui, ID3D12Resource* backbuffer, unsigned int uiWidth,
                unsigned int uiHeight, unsigned int bbWidth, unsigned int bbHeight);
 bool TuningMatchesFeature(const Config& cfg);

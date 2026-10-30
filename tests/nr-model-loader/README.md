@@ -50,11 +50,12 @@ Both come from `retoque/dlssnr/DlssNr_PeScan.h`, which is header-only and free o
    installing it, point `NR_MODEL_DLL` at it.
    On 2026-09-28, with Linux driver 615.71.09 (wine loader **32.0.16.1691**) and model 310.8.2.0:
    the loader *routes feature 18 itself* (table at +0x15fa60), and the model has one W and one A slot.
-3. **Drift** (`run.py`): the direct runtime's `QueryScalingRatio`, `Create`, `Evaluate`, `SetExtras`
-   and `Release` write the same `set{UInt,Float,Resource}(capabilityParams, "NAME", value)` sequence
-   as the forwarder's `dlssnr_query_scaling_ratio`, `dlssnr_call_create`, `dlssnr_call_evaluate`,
-   `dlssnr_call_set_extras` and `dlssnr_call_release`, in the same order and with the same values
-   (63 writes today); make the same `Guarded(...)` model calls (so the same application id and
+3. **Drift** (`run.py`): the direct runtime's `QueryScalingRatio`, `QueryStats`, `Create`, `Evaluate`,
+   `SetExtras` and `Release` write the same `set{UInt,Float,Resource,ULL}(capabilityParams, "NAME", value)`
+   sequence as the forwarder's `dlssnr_query_scaling_ratio`, `dlssnr_query_stats`, `dlssnr_call_create`,
+   `dlssnr_call_evaluate`, `dlssnr_call_set_extras` and `dlssnr_call_release`, in the same order and with
+   the same values (64 writes since the stats query, 2026-10-30; `kStatsUnwritten` is held equal too, and
+   `tests/nr-model-stats` runs both stats queries against the same fakes); make the same `Guarded(...)` model calls (so the same application id and
    `Init_Ext` arguments); use the forwarder's `FaultFilter` verbatim and its `kFaulted`; scope the
    caller alias around the call in `Guarded`; and never `return Guarded(...)` (a tail call).
 4. **Wiring** (`run.py`): `EnsureForwarder` picks `ModelLoader=direct` before loading the forwarder;
