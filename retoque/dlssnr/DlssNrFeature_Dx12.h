@@ -373,6 +373,11 @@ bool IsRunning();
 // Why it is not, if it is not. Empty while it is running or has not been tried yet.
 const char* FailureReason();
 
+// The timing contract's text over the current Config, for the NR panel's diagnostic export
+// (docs/dlssnr/design/diagnostic-export.md): TimingContract itself, so the two cannot drift. Its frame fields (stage,
+// sizes, format, ...) are placeholders, which DiagnosticReport::StripFrameFields removes. On a click, never per frame.
+std::string SettingsContractText();
+
 // What the game offers by way of exposure. Observed every frame whether or not the setting is on, so
 // the menu can say whether turning it on would do anything here.
 struct ExposureStatus

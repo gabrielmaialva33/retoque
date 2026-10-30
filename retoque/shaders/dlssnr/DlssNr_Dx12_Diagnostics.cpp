@@ -923,3 +923,15 @@ void ReportSkipOnce(const char* reason)
     LOG_INFO("DLSS-NR did not run: {}", reason);
 }
 } // namespace DlssNr::Dx12Internal
+
+namespace DlssNr
+{
+// The NR panel's diagnostic export (docs/dlssnr/design/diagnostic-export.md): the one TimingContract over the current
+// Config, on a click. The frame arguments are placeholders, not a frame's; the export strips their fields.
+std::string SettingsContractText()
+{
+    const Config& cfg = *Config::Instance();
+    return Dx12Internal::TimingContract(cfg, cfg.GetDlssNrPassSnapshot(), "none", 0, 0, 0, 0, 0, 0, 0.0f, false, 0, 1,
+                                        0, nullptr);
+}
+} // namespace DlssNr

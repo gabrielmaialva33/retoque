@@ -54,6 +54,7 @@ These are records, not designs.
 - [working-scale-detail-retention.md](design/working-scale-detail-retention.md): the image side of working scale, how much of NR's change and fine detail survives 0.75 and 0.5 on a replayed Cyberpunk clip.
 - [model-cost-across-architectures.md](design/model-cost-across-architectures.md): the same cost on a card that is not Ada.
 - [comparison-capture.md](design/comparison-capture.md): saving the game's frame and the processed frame of the same frame, with provenance, without stalling it (v1 on D3D12: PNG or PFM, a JSON sidecar, `retoque-captures/`).
+- [diagnostic-export.md](design/diagnostic-export.md): "Copy NR diagnostics", the panel's state as plain text on a click: detected inputs apart from the ones used, the settings contract, the last GPU sample marked historical, LSFG, absolute paths redacted (2026-10-30; host-tested, not yet pressed in a game).
 
 ## Colour, HDR and image quality
 
