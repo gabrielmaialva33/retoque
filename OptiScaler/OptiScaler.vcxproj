@@ -986,6 +986,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentBoundary.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SlBoundaryProbe.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SessionGuard.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_DriverGate.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_DirectRuntime.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PeScan.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentColour.h" />

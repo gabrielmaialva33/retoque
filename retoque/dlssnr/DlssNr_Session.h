@@ -2,6 +2,8 @@
 
 #include "DlssNr_SessionGuard.h"
 
+#include <cstdint>
+
 // The session guard as the rest of the process sees it (docs/dlssnr/design/session-guard.md). The decisions are in
 // DlssNr_SessionGuard.h; this layer owns the marker file, the process probe, the exit watch (DlssNr_ProcessEnd.h)
 // and the config write.
@@ -33,4 +35,10 @@ void SessionGuardEnableAnyway();
 
 // The notice text for a verdict, untranslated; the menu runs it through Tr.
 const char* SessionGuardReasonText(const SessionGuard::Verdict& verdict);
+
+// Once, from the GPU worker, when the primary GPU is known: NR's minimum NVIDIA driver (DlssNr_DriverGate.h,
+// docs/dlssnr/design/driver-gate.md). On native Windows with a known driver below 610.88, publishes the block and
+// switches DlssNrEnabled off for this session without touching the ini. Wine/Proton and an unknown version are not
+// gated. Logs the verdict for an NVIDIA GPU.
+void ApplyDriverGate(bool nvidia, bool onWine, uint32_t driverVersion);
 } // namespace DlssNr

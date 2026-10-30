@@ -228,11 +228,20 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
         return;
     }
 
+    // From here on nvapi64.dll stays loaded: no NvAPI_Unload, no FreeLibrary. NvAPI_Initialize leaves driver work
+    // scheduled inside nvapi64_impl.dll, and in a game that never loads nvapi itself (BeamNG.drive on Vulkan) dropping
+    // the last reference let that work run in unloaded code (access violation in a thread-pool thread). From
+    // janblade/OptiScaler-F5-DLSSNR-Multipass d2c06938.
     auto* init = GET_INTERFACE(NvAPI_Initialize, o_NvAPI_QueryInterface);
-    if (!init || init() != NVAPI_OK)
+    if (!init)
+    {
+        NtdllProxy::FreeLibrary_Ldr(nvapiModule);
+        return;
+    }
+
+    if (init() != NVAPI_OK)
     {
         LOG_ERROR("Failed to init NvApi");
-        NtdllProxy::FreeLibrary_Ldr(nvapiModule);
         return;
     }
 
@@ -280,6 +289,15 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
     if (getArchInfo && hPhysicalGpu && getArchInfo(hPhysicalGpu, &gpuInfo.nvidiaArchInfo) != NVAPI_OK)
         LOG_ERROR("Couldn't get GPU Architecture");
 
+    // For the NR driver gate (retoque/dlssnr/DlssNr_DriverGate.h). Under Wine this is dxvk-nvapi's Linux number.
+    auto* getDriverVersion = GET_INTERFACE(NvAPI_SYS_GetDriverAndBranchVersion, o_NvAPI_QueryInterface);
+    NvU32 driverVersion = 0;
+    NvAPI_ShortString branch {};
+    if (getDriverVersion && getDriverVersion(&driverVersion, branch) == NVAPI_OK)
+        gpuInfo.nvidiaDriverVersion = driverVersion;
+    else
+        LOG_WARN("Couldn't get the NVIDIA driver version");
+
     auto* getConnectedDisplayIds = GET_INTERFACE(NvAPI_GPU_GetConnectedDisplayIds, o_NvAPI_QueryInterface);
     NvU32 displayCount = 0;
     if (getConnectedDisplayIds && hPhysicalGpu &&
@@ -288,11 +306,7 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
         gpuInfo.noDisplayConnected = true;
     }
 
-    auto* unload = GET_INTERFACE(NvAPI_Unload, o_NvAPI_QueryInterface);
-    if (!unload || unload() != NVAPI_OK)
-        LOG_ERROR("Failed to unload NvApi");
-
-    NtdllProxy::FreeLibrary_Ldr(nvapiModule);
+    // No NvAPI_Unload and no FreeLibrary: see NvAPI_Initialize above.
 
     // assumes GTX16xx to be capable due to our spoofing
     if (Config::Instance()->DLSSEnabled.value_or_default())

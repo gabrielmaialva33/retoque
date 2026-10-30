@@ -106,6 +106,8 @@ Related, outside that sequence:
 
 - [ngx-driver-616.md](design/ngx-driver-616.md): NVIDIA 616.64 and the loader's own route to feature 18.
 - [ngx-shutdown-order.md](design/ngx-shutdown-order.md): the D3D12 NGX core shutdown ABI.
+- [driver-gate.md](design/driver-gate.md): NR off for the session below NVIDIA 610.88 on native Windows, and no
+  model created after NGX answers `FAIL_OutOfDate` (DLSS Unlocked #60), 2026-10-30.
 - [session-guard.md](design/session-guard.md): keeping NR off for the next launch after a session that ended without closing while NR ran;
   version 2 sees the process end itself (`NtTerminateProcess`), records crashes, exit codes and device removal, and is off by
   default until a game run confirms it.

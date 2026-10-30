@@ -9,6 +9,7 @@
 #include <cfloat>
 
 #include <dlssnr/DlssNr.h>
+#include <dlssnr/DlssNr_DriverGate.h>
 #include "PresentRateMeter.h"
 #include <inputs/FG/XeFG_Inputs_Dx12.h>
 
@@ -2393,6 +2394,18 @@ void MenuCommon::HandleMenuShortcuts(RenderMenuContext& ctx)
         {
             inputFps = false;
             config->ShowFps = !config->ShowFps.value_or_default();
+        }
+
+        if (inputDlssNr && DlssNr::DriverGate::Blocked())
+        {
+            // Toggling would replace the driver gate's volatile off with a real value and start NR on a driver that
+            // cannot run it (retoque/dlssnr/DlssNr_DriverGate.h). Consumed, and says why.
+            inputDlssNr = false;
+            const auto message = DlssNr::DriverGate::BlockedMessage(DlssNr::DriverGate::DetectedVersion());
+            ImGuiToast toast { ImGuiToastType::Warning, 5000 };
+            toast.setTitle("DLSS Neural Rendering");
+            toast.setContent("%s", message.c_str());
+            ImGui::InsertNotification(toast);
         }
 
         if (inputDlssNr)

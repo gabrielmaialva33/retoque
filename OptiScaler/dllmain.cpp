@@ -1029,6 +1029,10 @@ static void CheckWorkingMode()
     // Streamline 2.14 that resolve happens first, so DisableFlipMetering stopped taking effect.
     // Loading it here puts the detour in front of it. Only on Nvidia, and only when something asks,
     // so no process gains nvapi that would not have had it.
+    //
+    // On native NVIDIA the startup check (isNvidiaViaNvapi) now leaves nvapi64.dll loaded once it has
+    // initialised it, so it is already present here and these hooks go in at startup rather than when
+    // the game loads nvapi (the same hooks most games got anyway).
     if (GetDllNameWModule(&nvapiNamesW) != nullptr || (Config::Instance()->DisableFlipMetering.value_or_default() &&
                                                        IdentifyGpu::getPrimaryGpu().vendorId == VendorId::Nvidia))
     {
@@ -1556,6 +1560,10 @@ DWORD WINAPI getGpuInfo(LPVOID hModuleVoid)
 
     auto primaryGpu = IdentifyGpu::getPrimaryGpu();
 
+    // NR's minimum driver (retoque/dlssnr/DlssNr_DriverGate.h): below it NR is off for this session, the ini untouched
+    DlssNr::ApplyDriverGate(primaryGpu.vendorId == VendorId::Nvidia, State::Instance().isRunningOnLinux,
+                            primaryGpu.nvidiaDriverVersion);
+
     // We don't yet know if the GPU supports FSR 4 so hook any AMD
     if (primaryGpu.vendorId == VendorId::AMD)
         Amdxc64Hooks::Init();
@@ -1784,12 +1792,16 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
                 {
                     spdlog::debug("Using Nvidia's nvapi");
                     auto init = GET_INTERFACE(NvAPI_Initialize, o_NvAPI_QueryInterface);
-                    if (init && init() == NVAPI_OK)
+                    if (init)
                     {
-                        nvidiaDetected = true;
+                        nvidiaDetected = init() == NVAPI_OK;
 
-                        if (auto unload = GET_INTERFACE(NvAPI_Unload, o_NvAPI_QueryInterface))
-                            unload();
+                        // nvapi64.dll stays loaded once NvAPI_Initialize ran (no NvAPI_Unload, no FreeLibrary): it
+                        // leaves driver work scheduled inside nvapi64_impl.dll, and in a game that never loads nvapi
+                        // itself (BeamNG.drive on Vulkan) unloading it here let that work crash the game later.
+                        // From janblade/OptiScaler-F5-DLSSNR-Multipass d2c06938.
+                        spdlog::debug("Nvidia detected: {}", nvidiaDetected);
+                        return nvidiaDetected;
                     }
                 }
             }

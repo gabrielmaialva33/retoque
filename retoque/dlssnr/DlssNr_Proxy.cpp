@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "DlssNr_Proxy.h"
 #include "DlssNr_NgxInfo.h"
+#include "DlssNr_DriverGate.h"
 
 #include <Config.h>
 #include <Logger.h>
@@ -234,11 +235,24 @@ unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D1
             return 0;
         }
 
+        // The driver gate (DlssNr_DriverGate.h): below the minimum driver, or once NGX has answered FAIL_OutOfDate.
+        if (DlssNr::DriverGate::Refuses())
+        {
+            g_proxy.failed = true;
+            LOG_ERROR("DLSS-NR (proxy): refused -- {}", DlssNr::DriverGate::Reason());
+            return 0;
+        }
+
         DiscoverFloatSlot(g_proxy.params);
         SetCreationParameters(g_proxy.params, cfg, width, height);
 
         const auto created =
             NVNGXProxy::D3D12_CreateFeature()(cmdList, (NVSDK_NGX_Feature) 18, g_proxy.params, &g_proxy.feature);
+
+        // FAIL_OutOfDate is the driver saying it cannot run NR: latched, so no loader creates the model after it.
+        if (DlssNr::DriverGate::NoteNgxResult((unsigned int) created))
+            LOG_ERROR("DLSS-NR (proxy): {}; no loader will create the model in this process",
+                      DlssNr::DriverGate::kOutOfDateReason);
 
         if (created != NVSDK_NGX_Result_Success || g_proxy.feature == nullptr)
         {
