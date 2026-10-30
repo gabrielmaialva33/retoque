@@ -8,6 +8,7 @@
 #include "DlssNr_VkPresentRegistry.h"
 #include "DlssNr_VkPresentTransport.h"
 #include "DlssNr_Session.h"
+#include "DlssNr_SlNativeNr.h"
 #include "DlssNr_DriverInitGate.h"
 #include "DlssNr_VkRecording.h"
 
@@ -1741,6 +1742,12 @@ NrDecision DecideNr(DeviceTransport& dev, SwapchainTransport& sc, uint32_t workF
         StandDown(dev);
         return refuse(NrSkip::Off, "[DlssNr] Enabled is off");
     }
+
+    // The game's own NR through Streamline (DlssNr_SlNativeNr.h): the frame is carried as the game drew it. The model
+    // is neither claimed nor freed here, and the detector's lines are written after the lock with the device's others.
+    if (const char* why =
+            DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), dev.lines, DlssNr::SlNativeNr::NowMs()))
+        return refuse(NrSkip::GameNr, why);
 
     const auto colour =
         PlanColour(sc.colour.raw, sc.colourSpace, Config::Instance()->DlssNrHdrPresent.value_or_default());

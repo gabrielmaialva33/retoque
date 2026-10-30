@@ -88,6 +88,7 @@ Related, outside that sequence:
 
 - [nr-before-upscale.md](design/nr-before-upscale.md): optional NR before the upscaler (Stage=1).
 - [dx12-robustness.md](design/dx12-robustness.md): the device taken from the command list under a wrapper layer (ReShade), the stand-down for several views in one colour allocation, and Stage 1 declining multi-mip colour (2026-10-30, host-tested only).
+- [streamline-native-nr.md](design/streamline-native-nr.md): standing down on every route while the game runs its own NR through Streamline's `sl.dlss_nr` (feature 1004, Streamline 2.14), with the panel saying so (2026-10-30, host-tested only).
 - [nr-menu-mode.md](design/nr-menu-mode.md): keeping NR running while the upscaler is idle in menus.
 - [present-real-guides.md](design/present-real-guides.md): checking that the guides the present pass reuses belong to the frame being presented (step 0 measured in Crimson Desert; step 1, the rules applied, built and not yet run in a game).
 - [nr-before-dlssg.md](design/nr-before-dlssg.md): running the present pass at the game's Streamline `Present`, before its DLSS-G interpolates, so generated frames carry the edit; NeuRotic's pre-FG adapter as prior art (design).

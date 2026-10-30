@@ -10,6 +10,7 @@
 #include <hooks/Reflex_Hooks.h>
 #include <framegen/dlssg/MfgUnlock.h>
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
+#include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
 #include <hooks/Streamline_DlssgRequest.h>
 #include <hooks/Streamline_LogRepeat.h>
@@ -191,6 +192,10 @@ void StreamlineHooks::streamlineLogCallback(sl::LogType type, const char* msg)
 sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVersion)
 {
     LOG_FUNC();
+
+    // Whether the game asked for its own Neural Rendering (sl.dlss_nr), from its list before anything here edits it.
+    // Recorded only (DlssNr_SlNativeNr.h): an atomic, nothing decided or said.
+    DlssNr::SlNativeNr::OnInit(pref.featuresToLoad, pref.numFeaturesToLoad);
 
     sl::Preferences localPref = pref;
 
@@ -503,6 +508,9 @@ sl::Result StreamlineHooks::hkslSetFeatureLoaded(sl::Feature feature, bool loade
 sl::Result StreamlineHooks::hkslSetTag(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
                                        uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
+    // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).
+    DlssNr::SlNativeNr::OnTags(tags, numTags);
+
     if (renderApi == sl::RenderAPI::eD3D11)
     {
         LOG_ERROR("hkslSetTag doesn't support DX11");
@@ -590,6 +598,9 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
                                                const sl::ResourceTag* resources, uint32_t numResources,
                                                sl::CommandBuffer* cmdBuffer)
 {
+    // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).
+    DlssNr::SlNativeNr::OnTags(resources, numResources);
+
     if (renderApi == sl::RenderAPI::eD3D11)
     {
         LOG_ERROR("hkslSetTagForFrame doesn't support DX11");
@@ -693,7 +704,19 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
         }
     }
 
+    // The game's own Neural Rendering (DlssNr_SlNativeNr.h): its local uplift tags before the call, and whether
+    // Streamline accepted the evaluate after it. Atomics only; NR's routes decide, with NR on.
+    if (feature == DlssNr::SlNativeNr::kFeatureDlssNr && inputs != nullptr)
+    {
+        for (uint32_t i = 0; i < numInputs; i++)
+        {
+            if (inputs[i] != nullptr && inputs[i]->structType == sl::ResourceTag::s_structType)
+                DlssNr::SlNativeNr::OnTags((const sl::ResourceTag*) inputs[i], 1);
+        }
+    }
+
     auto result = o_slEvaluateFeature(feature, frame, inputs, numInputs, cmdBuffer);
+    DlssNr::SlNativeNr::OnEvaluate(feature, result == sl::Result::eOk);
     return result;
 }
 

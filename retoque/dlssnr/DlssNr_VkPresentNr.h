@@ -455,6 +455,7 @@ enum class NrSkip : uint8_t
     RecordFailed,    // recording the pass failed; the frame carried unchanged and the model is off
     Building,        // the model is being built off the present path; the frame carried unchanged
     FrameGeneration, // stage 4: frame generation is active; the pacer experiment's round trip carries it, no NR
+    GameNr,          // the game runs its own NR through Streamline (DlssNr_SlNativeNr.h); the frame carried unchanged
     Count,
 };
 
@@ -490,6 +491,8 @@ inline const char* NrSkipName(NrSkip skip)
         return "model building";
     case NrSkip::FrameGeneration:
         return "frame generation";
+    case NrSkip::GameNr:
+        return "game's own NR";
     default:
         return "none";
     }

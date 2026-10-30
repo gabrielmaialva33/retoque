@@ -254,6 +254,14 @@ tier = "host"
 timeout = 300
 summary = "Portable multi-pass chain helpers."
 
+[nr-sl-native-nr]
+path = "nr-sl-native-nr"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "The game's own Streamline NR (sl.dlss_nr, feature 1004): the detector on synthetic Streamline calls (thirteen rule mutants must fail), the hooks feeding it with atomics, and every D3D12 and Vulkan NR route standing down before the model, with the panel line. Not run in a game."
+
 [nr-pause-frame-gen]
 path = "nr-pause-frame-gen"
 domain = "nr"

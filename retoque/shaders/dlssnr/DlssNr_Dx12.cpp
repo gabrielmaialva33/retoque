@@ -32,6 +32,7 @@
 #include <dlssnr/DlssNr_MultiView.h>
 #include <dlssnr/DlssNr_Funnel.h>
 #include <dlssnr/DlssNr_CrashNote.h>
+#include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dxgi1_4.h>
 
 #include "DlssNr_Dx12.h"
@@ -681,6 +682,18 @@ DlssNr_Dx12::~DlssNr_Dx12()
     }
 }
 
+// The game's own Neural Rendering through Streamline (DlssNr_SlNativeNr.h): while it runs, this pass stands down on
+// every route so the picture is not given NR twice. Each route asks before it spends anything on the frame, and
+// Dispatch asks again as the backstop for any caller. Counted and said by the detector; the game's NR is never touched.
+static const char* GameNrStandDown()
+{
+    std::vector<std::string> lines;
+    const char* why = DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), lines, DlssNr::SlNativeNr::NowMs());
+    for (const auto& line : lines)
+        LOG_INFO("{}", line);
+    return why;
+}
+
 bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                            ID3D12Resource* motion, ID3D12Resource* output, const DlssNrFrameInfo& frame,
                            ID3D12CommandQueue* timingQueue, DlssNr::Detail::CoverageSample* coverage,
@@ -721,6 +734,15 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (PausedWithoutFrameGen(cfg))
     {
         reportSkip("paused: the game turned its frame generation off");
+        return false;
+    }
+
+    // The game's own NR through Streamline, also before any recording, state change or tracking; the history is owed
+    // a reset for when it stops.
+    if (const char* why = GameNrStandDown())
+    {
+        g_resetOnReturn = true;
+        reportSkip(why);
         return false;
     }
 
@@ -4248,6 +4270,15 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         return;
     }
 
+    // The game's own NR through Streamline (DlssNr_SlNativeNr.h): the frame goes out as the game drew it, before
+    // anything is copied for it. The route stays live, so the status line keeps naming it.
+    if (const char* why = GameNrStandDown())
+    {
+        g_resetOnReturn = true;
+        ReportRuntimeStatus(false, why);
+        return;
+    }
+
     // An HDR swapchain is declined before anything is built for it (DlssNr_PresentColour.h), unless HdrPresent is on
     // and it is HDR10 or scRGB, which is converted (docs/dlssnr/design/hdr-present-conversion.md). DecidePresentColour
     // has which colour space each answer is read from.
@@ -5052,6 +5083,16 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
         return;
     }
 
+    // The game's own NR through Streamline (DlssNr_SlNativeNr.h): the same stand-down, nothing recorded.
+    if (const char* why = GameNrStandDown())
+    {
+        coverage.sample.reason = why;
+        g_upscaleReason = why;
+        g_resetOnReturn = true;
+        ReportSkipOnce(why);
+        return;
+    }
+
     if (g_sourceIsPresent.exchange(false))
         g_resetOnReturn = true;
 
@@ -5629,6 +5670,16 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
     // Several views in one colour allocation (DlssNr_MultiView.h): stood down, not declined. Declining would hand the
     // evaluate to the after-upscale pass, which would run the model over every screen of the output.
     if (const char* why = MultiViewStandDown(params, GetResource(params, NVSDK_NGX_Parameter_Color, "DLSSD.Color")))
+    {
+        coverage.sample.reason = why;
+        g_preStatus = why;
+        g_resetOnReturn = true;
+        ReportSkipOnce(why);
+        return;
+    }
+
+    // The game's own NR through Streamline (DlssNr_SlNativeNr.h): stood down, not declined, for the same reason.
+    if (const char* why = GameNrStandDown())
     {
         coverage.sample.reason = why;
         g_preStatus = why;

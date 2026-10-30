@@ -170,6 +170,21 @@ Invariant checks against this table: no control acts while blocked (rule 2): the
 and the hotkey refuse, and Retry is hidden whenever the gate refuses the model; the block is volatile, so a saved ini
 keeps the user's own `Enabled` (rule 4 unchanged).
 
+### 2.6 Status → the game's own NR line (`DlssNr_Menu.cpp`, `DlssNr_SlNativeNr.h`)
+
+One amber, read-only line under the status line ([streamline-native-nr.md](streamline-native-nr.md)). "Latched" is the
+detector's `Active()`: a route asked within 5 s of the game's last Streamline NR evaluate (`kFeatureDLSS_NR`, 1004)
+that Streamline accepted. `tests/nr-sl-native-nr` holds the guards.
+
+| NR | Detector | Line |
+|----|----------|------|
+| off | any | none |
+| on | not latched (no accepted evaluate, only a load request or tags, or quiet for 5 s) | none |
+| on | latched | **`kMenuLine`**: "The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops." |
+
+Invariant checks against this table: a statement, never a control (rule 2): there is no override, because the way
+out is the game's own NR setting, and the pass comes back 5 s after it is turned off. No new config key (rule 4).
+
 ---
 
 ## 3. Per-change-type review (run BEFORE deploy)
