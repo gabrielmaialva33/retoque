@@ -393,6 +393,16 @@ either; that it never surfaces there is an expectation, not something checked. S
 Unlocker's rule as a requirement: after admission fails or `CreateFeature(11)` is refused, hold the game's DLSS-G at
 `eOff` through the Streamline options hook, and log it once.
 
+**Update 2026-10-30: pre-310 providers pass through `dlssg_for_sm86` 0.4.1 unchanged (reported).** The claim comes
+from ShyVortex's `OptiScaler-NR-PreSR-MFG` fork (a fork of `wilsjo2/OptiScaler-DLSSNR-PreSR-Multipass`), commit
+`3da86ef6` (2026-10-29). It says that sdli1995 0.4.1 forwards a pre-310 ("generation A") `nvngx_dlssg.dll` unchanged
+and that NVIDIA's runtime refuses it on RTX 20/30. Games such as Remnant 2 (3.7.10) then request DLSS-G every frame
+and get no generated frames. The commit cites DLSS Unlocked issue #61 (`ShyVortex/dlss-unlocked`, open; RTX 3060 Ti,
+Windows 11, driver 617.42, Remnant 2: frame rate drops and no generated frames appear). The commit adds only a
+classifier header with unit tests ("Nothing calls it yet"). Nothing here has reproduced this. It does not change
+the recommendation. It is another case for the hold-off requirement above. It also means a game's provider version
+must be read before an sm86 result is attributed to the unlocker.
+
 ## Options
 
 ### (a) Port the idea, default off, one exact provider build at a time

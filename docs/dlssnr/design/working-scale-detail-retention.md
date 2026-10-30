@@ -53,3 +53,9 @@ this note measures ours.
   the menu could say.
 - Before any default moves: more clips (non-RR route, a slow and a fast camera), the A/A floor with
   `LOOPBACK_REPLAY_CALIBRATE`, and a visual check of the 0.75 fine band.
+- **Pin the RR provider and preset (added 2026-10-30).** NR's input at the RR placement is Ray Reconstruction's
+  output, so the RR model is part of what is measured. NVIDIA DLSS SDK 310.9.1 (release 2026-09-08) added the RR
+  transformer mode as Preset F. Its `nvsdk_ngx_defs_dlssd.h` moved the "Default model" comment from Preset D (310.7.0)
+  to Preset F ("Default model RR2"). A game or OTA provider update can therefore change the RR model without any
+  setting changing. This note does not record the RR provider build or preset of its clip. Every further clip should
+  record both, and clips compared across scales should use the same pinned provider and preset.

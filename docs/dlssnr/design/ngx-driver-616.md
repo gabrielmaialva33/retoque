@@ -2,7 +2,8 @@
 
 **Status (2026-09-28):** implemented behind no switch — a log line at the first feature build, and a
 refusal on the one route that is exposed (`UseProxy`). Not yet checked in a game. *(See 2026-10-12
-update below: 310.8.2.0 is ShortFuse's patched 310.8.0.0, not an NVIDIA release.)*
+update below: 310.8.2.0 is ShortFuse's patched 310.8.0.0, not an NVIDIA release. 2026-10-30: the installed
+loader is now 32.0.16.1752; see [Loader observed on 2026-10-30](#loader-observed-on-2026-10-30).)*
 
 ## What changed in the driver
 
@@ -111,6 +112,19 @@ mistaken:
   refused if it retained 310.8.0.0. Testing `UseProxy` with 310.8.2.0 or an unverified future model remains
   risky: if the loader's descriptor-heap handling faults, it crashes inside D3D12 on the game thread beyond
   OptiScaler's reach.
+
+## Loader observed on 2026-10-30
+
+Re-read on this workstation on 2026-10-30 (checkout `d5400e84`, clean). The table and log example above stay as
+recorded for 1691.
+- Linux driver **615.78.08** (`nvidia-smi`). `/usr/lib/nvidia/wine/_nvngx.dll` now has file and product version
+  **32.0.16.1752** (PE version resource), SHA-256
+  `dabe18b0dc559750113b589d06f672141c8c49a2a571e0a5a7ca7b3e584a7ac3`.
+- `python3 tests/nr-model-loader/run.py` passed against it and reported `routes feature 18 itself (entry 18 names
+  "dlssnr") (table at +0x15fa60)`. That is the same offset as 1691.
+- `DriverFromLoaderVersion` reads 1752 as "617.52". The first `DLSS-NR NGX:` line should therefore name
+  `32.0.16.1752 (Windows-branch loader build 617.52, ...)`. That is derived from the code, not read from a game log.
+- The forwarder, `ModelLoader=direct` and `UseProxy` checks above were not repeated on 1752.
 
 ## The direct loader
 
