@@ -2,6 +2,7 @@
 
 #include "DlssNr_Dx12_Internal.h"
 #include <Logger.h>
+#include <dlssnr/DlssNr_DeviceMatch.h>
 
 namespace DlssNr::Dx12Internal
 {
@@ -134,6 +135,28 @@ bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)
     if (owner != nullptr)
         owner->Release();
     return matches;
+}
+
+// A resource also belongs to the device when it reports another interface on the same adapter: a wrapper layer
+// (ReShade through [Plugins] LoadReShade, a Streamline proxy) hands out lists of its own and leaves resources
+// unwrapped, so a texture reports the device underneath while the list it is recorded on reports the wrapper. Lists
+// and queues keep the overload above and must be the exact device (DlssNr_DeviceMatch.h).
+bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12Resource* resource)
+{
+    if (device == nullptr || resource == nullptr)
+        return false;
+    ID3D12Device* owner = nullptr;
+    const HRESULT hr = resource->GetDevice(IID_PPV_ARGS(&owner));
+    const auto relation =
+        SUCCEEDED(hr) ? DlssNr::DeviceMatch::Relate(device, owner) : DlssNr::DeviceMatch::Relation::Foreign;
+    static std::atomic<bool> said { false };
+    if (relation == DlssNr::DeviceMatch::Relation::Wrapper && !said.exchange(true))
+        LOG_INFO("DLSS-NR: a resource reports device {} and the command list device {}, on the same adapter (a "
+                 "wrapper layer such as ReShade); NR works on the command list's device",
+                 (void*) owner, (void*) device);
+    if (owner != nullptr)
+        owner->Release();
+    return relation != DlssNr::DeviceMatch::Relation::Foreign;
 }
 
 // Only the typeless guide families translated above are admitted for a typed twin.

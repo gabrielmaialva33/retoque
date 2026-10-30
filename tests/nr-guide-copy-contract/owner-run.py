@@ -18,8 +18,10 @@ def function(text, anchor):
 unit=(HERE/'fakes.h').read_text()+'\n#include <mutex>\n#include <type_traits>\n'
 if 'struct NrDeviceOwner\n' in internal:
     unit+=function(internal,'struct NrDeviceOwner\n')+';\nNrDeviceOwner g_nrDeviceOwner;\n'
-if 'bool DeviceChildBelongsTo(' in resources:
-    unit+=function(resources,'bool DeviceChildBelongsTo(')
+for overload in ('bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)',
+                 'bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12Resource* resource)'):
+    if overload in resources:
+        unit+=function(resources,overload)
 if 'bool PresentGuideCopyCompatible(' in resources:
     unit+=function(resources,'bool PresentGuideCopyCompatible(')
 unit+='''
@@ -63,7 +65,8 @@ template<class F> bool Compose(F fn,ID3D12Device* d) {
 }
 int main(int argc,char**argv) {
     assert(argc==2); const std::string which=argv[1];
-    ID3D12Device a,b;
+    ID3D12Device a,b,wrapper;
+    wrapper.luid=a.luid;wrapper.wraps=&a;
     ID3D12GraphicsCommandList cmd;cmd.device=&a;
     ID3D12Resource color,depth,motion,output,exposure;
     for(auto* r:{&color,&depth,&motion,&output,&exposure})r->device=&a;
@@ -88,6 +91,17 @@ int main(int argc,char**argv) {
         assert(Compose(EnsureCompose,&a));auto* original=g_compose.get();
         assert(!Compose(EnsureCompose,&b));assert(g_compose.get()==original);
         assert(g_compose->_device==&a && b.refs==1);
+    } else if(which=="dispatch-wrapped" || which=="dispatch-wrapped-foreign") {
+        // A wrapper layer's list: the pass lives on the list's device, the game's resources report the one beneath.
+        DlssNr_Dx12 pass("test",&wrapper);cmd.device=&wrapper;
+        if(which=="dispatch-wrapped-foreign")depth.device=&b;
+        const bool accepted=pass.Dispatch(&cmd,&color,&depth,&motion,&output,frame,nullptr,nullptr,nullptr);
+        assert(accepted==(which=="dispatch-wrapped"));assert(cmd.copies==0 && cmd.barriers==0);
+        if(accepted)assert(g_nrDeviceOwner.device==&wrapper);
+    } else if(which=="dispatch-wrapped-list") {
+        // The list is held to the pass's exact device: another interface on the adapter is not enough for a list.
+        DlssNr_Dx12 pass("test",&a);cmd.device=&wrapper;
+        assert(!pass.Dispatch(&cmd,&color,&depth,&motion,&output,frame,nullptr,nullptr,nullptr));
     } else {
         DlssNr_Dx12 pass("test",&a);
         if(which=="dispatch-cmd")cmd.device=&b;
@@ -104,14 +118,15 @@ int main(int argc,char**argv) {
     g_compose.reset();
 '''
 if 'struct NrDeviceOwner\n' in internal:unit+='    g_nrDeviceOwner.Reset();\n'
-unit+='    assert(a.refs==1 && b.refs==1);\n}\n'
+unit+='    assert(a.refs==1 && b.refs==1 && wrapper.refs==1);\n}\n'
 with tempfile.TemporaryDirectory(prefix='retoque-device-owner-') as temp:
     cpp=Path(temp)/'owner.cpp';binary=Path(temp)/'owner';cpp.write_text(unit)
     subprocess.run(['g++','-std=c++20','-O1','-g','-Wall','-Wextra','-Werror','-Wno-unused-parameter',
-                    '-fsanitize=address,undefined','-fno-omit-frame-pointer',str(cpp),'-o',str(binary)],check=True)
+                    '-fsanitize=address,undefined','-fno-omit-frame-pointer','-I'+str(ROOT),str(cpp),'-o',str(binary)],check=True)
     failures=[]
     for name in ('retain','refuse-second','dispatch-cmd','dispatch-depth','dispatch-motion','dispatch-color',
                  'dispatch-output','dispatch-exposure','dispatch-owner','dispatch-valid',
+                 'dispatch-wrapped','dispatch-wrapped-foreign','dispatch-wrapped-list',
                  'capture-cmd','capture-motion','capture-planes','capture-quality','capture-mips',
                  'capture-two-planes','capture-valid','capture-postallocation'):
         r=subprocess.run([str(binary),name])

@@ -446,3 +446,11 @@ these surfaces differ in resolution” rather than “Stage 1 is objectively bet
 quality comparison still needs matched screenshots/video after the upscaler and game post-processing:
 Stage 1's existing pair is **not** that final surface. No final-image or new in-game performance claim
 is made by this kit.
+
+## 2026-10-30: multi-mip colour, wrapped devices, multi-view frames
+
+Stage 1 now declines a colour with more than one mip level (its own reason, counted as a fallback; the after-upscale
+pass serves it): the read scope moved every subresource from one declared state, and the pass's views and copies are of
+one mip. The scope takes its device from the game's command list, so it runs under a wrapper layer such as ReShade, and
+stands down (does not decline) while the game draws several views into one colour allocation. All three are host-tested
+only; see [dx12-robustness.md](dx12-robustness.md).

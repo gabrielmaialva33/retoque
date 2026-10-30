@@ -28,6 +28,7 @@
 #include <dlssnr/DlssNr_SwapchainColour.h>
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_PrivateSr.h>
+#include <dlssnr/DlssNr_MultiView.h>
 #include <dxgi1_4.h>
 
 #include "DlssNr_Dx12.h"
@@ -907,7 +908,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const bool timingEnabled = timingSettings.Enabled && !useProxy;
     ID3D12Device* timingDevice = nullptr;
     if (timingEnabled)
-        target->GetDevice(IID_PPV_ARGS(&timingDevice));
+        cmdList->GetDevice(IID_PPV_ARGS(&timingDevice));
     DlssNr::GpuTiming::Metadata initialTiming {};
     initialTiming.evaluationId = timingEnabled ? ++g_timingEvaluations : 0;
     initialTiming.presentId = observedFrame;
@@ -930,11 +931,13 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     Barrier(cmdList, target, outputArrival, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+    // The device behind the list being recorded, not the output's: NGX and D3D12Core dereference the list's, and a
+    // wrapper layer leaves the two different (DlssNr_DeviceMatch.h). The prefix above held the list to _device.
     ID3D12Device* device = nullptr;
 
-    if (FAILED(target->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+    if (FAILED(cmdList->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
     {
-        reportSkip("the output texture belongs to no D3D12 device");
+        reportSkip("the command list belongs to no D3D12 device");
         return false;
     }
 
@@ -4283,12 +4286,15 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         return;
     }
 
+    // The pass records on a list of its own and submits it to this queue, so the list is made on the queue's device.
+    // Under a wrapper layer the backbuffer reports the device underneath (DlssNr_DeviceMatch.h); jlrouzies' 6724d677
+    // submits on a queue of the device its lists were made on for the same reason.
     ID3D12Device* device = nullptr;
 
-    if (FAILED(backbuffer->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+    if (FAILED(queue->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
     {
         backbuffer->Release();
-        ReportSkipOnce("the backbuffer belongs to no D3D12 device");
+        ReportSkipOnce("the present queue belongs to no D3D12 device");
         return;
     }
 
@@ -4306,11 +4312,11 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         return;
     }
 
-    if (!DeviceChildBelongsTo(device, queue) || !EnsureCompose(device))
+    if (!DeviceChildBelongsTo(device, backbuffer) || !EnsureCompose(device))
     {
         backbuffer->Release();
         device->Release();
-        ReportSkipOnce("the present queue or composition cache belongs to another device");
+        ReportSkipOnce("the backbuffer or composition cache belongs to another device");
         return;
     }
 
@@ -4856,6 +4862,53 @@ static void RecordReplayFrame(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Para
     DlssNr::ReplayRecorder::AtBoundary(cmdList, target, outputState, depth, depthState, motion, motionState, facts);
 }
 
+// Several views in one colour allocation within a frame (DlssNr_MultiView.h; janblade's 1105908f, detector only):
+// a multi-monitor or split-screen layout. One model and one history cannot serve several pictures, so every evaluate of
+// such a frame is stood down, counted, and the layout's arrival and departure are logged. Both D3D12 seams ask; the
+// detector counts one view once. Read-only on the parameter block; the frame is the observed present.
+static DlssNr::MultiView::Detector s_multiViews;
+
+static const char* MultiViewStandDown(NVSDK_NGX_Parameter* params, ID3D12Resource* colour)
+{
+    if (params == nullptr || colour == nullptr)
+        return nullptr;
+
+    const D3D12_RESOURCE_DESC desc = colour->GetDesc();
+    unsigned int width = 0, height = 0, baseX = 0, baseY = 0;
+    params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Width, &width);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Render_Subrect_Dimensions_Height, &height);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, &baseX);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, &baseY);
+
+    // No rectangle given: the whole allocation.
+    if (width == 0 && height == 0)
+    {
+        width = static_cast<unsigned int>(desc.Width);
+        height = desc.Height;
+    }
+
+    DlssNr::MultiView::Seen seen;
+    seen.allocWidth = desc.Width;
+    seen.allocHeight = desc.Height;
+    seen.allocFormat = static_cast<uint32_t>(desc.Format);
+    seen.rect = { baseX, baseY, width, height };
+    const auto result = s_multiViews.Note(State::Instance().frameCount, seen);
+
+    if (result.latchedNow)
+        LOG_WARN("DLSS-NR: the game draws several views into one {}x{} colour allocation (a multi-monitor or "
+                 "split-screen layout; this view {}x{} at {},{}); NR stands down on every evaluate while it does",
+                 seen.allocWidth, seen.allocHeight, width, height, baseX, baseY);
+    if (result.unlatchedNow)
+        LOG_INFO("DLSS-NR: one view per frame again; NR runs as usual ({} evaluates were stood down)",
+                 result.standDowns);
+    if (result.verdict != DlssNr::MultiView::Verdict::StandDown)
+        return nullptr;
+
+    if (result.standDowns == 1 || result.standDowns % 3600 == 0)
+        LOG_INFO("DLSS-NR: {} evaluates stood down so far for a multi-view layout", result.standDowns);
+    return "several views are drawn into one colour allocation (multi-monitor or split screen); NR stands down";
+}
+
 // Reads the game's parameter block and runs the pass on what it finds.
 //
 // This is the call site's job, not the pass's. A caller that has the resources in hand -- a
@@ -4964,24 +5017,38 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     g_upscaleApplied = false;
     g_upscaleReason = coverage.sample.reason;
 
+    // Several views in one colour allocation (DlssNr_MultiView.h): nothing is recorded on any of them, and the history
+    // is owed a reset for when the layout ends.
+    if (const char* why = MultiViewStandDown(params, GetResource(params, NVSDK_NGX_Parameter_Color, "DLSSD.Color")))
+    {
+        coverage.sample.reason = why;
+        g_upscaleReason = why;
+        g_resetOnReturn = true;
+        ReportSkipOnce(why);
+        return;
+    }
+
     if (g_sourceIsPresent.exchange(false))
         g_resetOnReturn = true;
 
     // The upscaler's inputs are at render resolution while colour and output are at display
     // resolution; the model takes that as a subrect per resource, which the pass reads from the
     // resources themselves.
+    //
+    // The device is the command list's: the model is created and evaluated on it, and under a wrapper layer the
+    // output reports the device underneath instead (DlssNr_DeviceMatch.h).
     ID3D12Device* device = nullptr;
 
-    if (FAILED(target->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+    if (FAILED(cmdList->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
     {
-        coverage.sample.reason = "output has no D3D12 device";
+        coverage.sample.reason = "command list has no D3D12 device";
         g_upscaleReason = coverage.sample.reason;
-        ReportSkipOnce("the output texture belongs to no D3D12 device");
+        ReportSkipOnce("the command list belongs to no D3D12 device");
         return;
     }
 
     // The pass is the object, so the caller holds it. Built once, on the device the frame is on.
-    const bool composeReady = DeviceChildBelongsTo(device, cmdList) && DeviceChildBelongsTo(device, depth) &&
+    const bool composeReady = DeviceChildBelongsTo(device, target) && DeviceChildBelongsTo(device, depth) &&
                               DeviceChildBelongsTo(device, motion) &&
                               (frame.ExposureTexture == nullptr ||
                                DeviceChildBelongsTo(device, static_cast<ID3D12Resource*>(frame.ExposureTexture))) &&
@@ -5427,14 +5494,15 @@ bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colou
     if (cmdList == nullptr || colour == nullptr || depth == nullptr || motion == nullptr)
         return answer(false, "the host passed a null resource");
 
+    // The host's list decides the device; its colour may report the device under a wrapper (DlssNr_DeviceMatch.h).
     ID3D12Device* device = nullptr;
-    if (FAILED(colour->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+    if (FAILED(cmdList->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
     {
-        ReportSkipOnce("the present host's colour belongs to no D3D12 device");
-        return answer(false, "the colour belongs to no D3D12 device");
+        ReportSkipOnce("the present host's command list belongs to no D3D12 device");
+        return answer(false, "the command list belongs to no D3D12 device");
     }
 
-    const bool composeReady = DeviceChildBelongsTo(device, cmdList) && DeviceChildBelongsTo(device, depth) &&
+    const bool composeReady = DeviceChildBelongsTo(device, colour) && DeviceChildBelongsTo(device, depth) &&
                               DeviceChildBelongsTo(device, motion) &&
                               (frame.ExposureTexture == nullptr ||
                                DeviceChildBelongsTo(device, static_cast<ID3D12Resource*>(frame.ExposureTexture))) &&
@@ -5522,6 +5590,17 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
     if (cmdList == nullptr || params == nullptr)
     {
         coverage.sample.reason = "no command list or parameter block";
+        return;
+    }
+
+    // Several views in one colour allocation (DlssNr_MultiView.h): stood down, not declined. Declining would hand the
+    // evaluate to the after-upscale pass, which would run the model over every screen of the output.
+    if (const char* why = MultiViewStandDown(params, GetResource(params, NVSDK_NGX_Parameter_Color, "DLSSD.Color")))
+    {
+        coverage.sample.reason = why;
+        g_preStatus = why;
+        g_resetOnReturn = true;
+        ReportSkipOnce(why);
         return;
     }
 
@@ -5645,6 +5724,18 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         }
     }
 
+    // A colour with a mip chain. The read scope below moves every subresource from the one state the game declared,
+    // while a game that builds the chain may leave the other mips elsewhere, and the pass's views and copies are of
+    // one mip. hhkbble's 08fa575e admits typed multi-mip colour by transitioning only mip 0; that is not proved for
+    // every use here (the encode's views, NGX's own, the captures), so this stage declines it and the after-upscale
+    // pass serves the evaluate (docs/dlssnr/design/dx12-robustness.md). Counted as a fallback with its own reason.
+    if (colourDesc.MipLevels != 1)
+    {
+        decline("before the upscaler: the game's colour has several mip levels; the pass reads and moves one-mip "
+                "colour only, so the after-upscale pass serves instead");
+        return;
+    }
+
     if (colourDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || colourDesc.SampleDesc.Count != 1 ||
         colourDesc.DepthOrArraySize != 1 || (colourDesc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) ||
         colourDesc.Width > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION || IsTypeless(colourDesc.Format))
@@ -5664,11 +5755,13 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
         return;
     }
 
+    // The game's list decides the device the model and the scratch are made on; under a wrapper layer the colour
+    // reports the device underneath (DlssNr_DeviceMatch.h), which the check below accepts and nothing else.
     ID3D12Device* device = nullptr;
 
-    if (FAILED(colour->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+    if (FAILED(cmdList->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
     {
-        report("before the upscaler: the colour belongs to no D3D12 device");
+        report("before the upscaler: the command list belongs to no D3D12 device");
         return;
     }
 
@@ -5690,7 +5783,7 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
 
     {
         std::lock_guard<std::mutex> lock(g_nrMutex);
-        if (!DeviceChildBelongsTo(device, cmdList) || !DeviceChildBelongsTo(device, depth) ||
+        if (!DeviceChildBelongsTo(device, colour) || !DeviceChildBelongsTo(device, depth) ||
             !DeviceChildBelongsTo(device, motion) || !g_nrDeviceOwner.Accept(device))
         {
             device->Release();

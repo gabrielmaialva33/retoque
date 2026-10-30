@@ -15,6 +15,8 @@
 #include "retoque/dlssnr/DlssNr_Coverage.h"
 #include "retoque/dlssnr/DlssNr_Chain.h"
 #include "retoque/dlssnr/DlssNr_PresentBoundary.h"
+#include "retoque/dlssnr/DlssNr_DeviceMatch.h"
+#include "retoque/dlssnr/DlssNr_MultiView.h"
 #define FMT_HEADER_ONLY
 #include "external/spdlog/include/spdlog/fmt/bundled/format.h"
 
@@ -22,6 +24,8 @@
 // Vulkan/D3D12/NGX execution is intentionally not simulated as a performance or GPU-safety claim.
 inline std::vector<std::string> infoLogs;
 #define LOG_INFO(...) infoLogs.push_back(fmt::format(__VA_ARGS__))
+inline std::vector<std::string> warnLogs;
+#define LOG_WARN(...) warnLogs.push_back(fmt::format(__VA_ARGS__))
 #define LOG_DEBUG(...) ((void) 0)
 #define FAILED(x) ((x) < 0)
 #define SUCCEEDED(x) ((x) >= 0)
@@ -122,8 +126,19 @@ struct ID3D12Resource : ID3D12DeviceChild
         return device ? 0 : -1;
     }
 };
+struct LUID
+{
+    unsigned long LowPart = 0;
+    long HighPart = 0;
+};
+inline unsigned long nextFakeAdapter = 0x1000;
+// Every fake device is on an adapter of its own unless a test says otherwise. A wrapper (ReShade's proxy) shares the
+// adapter of the device it wraps, and what it creates reports that device, as ReShade's unwrapped resources do.
 struct ID3D12Device
 {
+    LUID luid { ++nextFakeAdapter, 0 };
+    ID3D12Device* wraps = nullptr;
+    LUID GetAdapterLuid() { return luid; }
     bool allocationFails = false, formatSupported = true;
     unsigned allocations = 0;
     std::vector<std::unique_ptr<ID3D12Resource>> owned;
@@ -144,7 +159,7 @@ struct ID3D12Device
             *out = nullptr;
             return -1;
         }
-        owned.push_back(std::make_unique<ID3D12Resource>(ID3D12Resource { *desc, this, state }));
+        owned.push_back(std::make_unique<ID3D12Resource>(ID3D12Resource { *desc, wraps ? wraps : this, state }));
         *out = owned.back().get();
         return 0;
     }
@@ -277,7 +292,8 @@ struct DlssNr_Dx12
     static inline int modelResult = 1;
     static inline unsigned calls = 0;
     static inline DlssNrFrameInfo lastFrame;
-    DlssNr_Dx12(const char*, ID3D12Device*) {}
+    static inline ID3D12Device* createdOn = nullptr;
+    DlssNr_Dx12(const char*, ID3D12Device* device) { createdOn = device; }
     bool Dispatch(ID3D12GraphicsCommandList*, ID3D12Resource* color, ID3D12Resource* depth, ID3D12Resource* motion,
                   ID3D12Resource* output, const DlssNrFrameInfo& frame, ID3D12CommandQueue*,
                   DlssNr::Detail::CoverageSample* coverage = nullptr, DlssNr::Chain::RecordingLease* = nullptr)

@@ -856,6 +856,22 @@ tier = "host"
 timeout = 120
 summary = "ReadableGuide retires incompatible copy shapes while reusing successful candidate formats."
 
+[nr-wrapped-device]
+path = "nr-wrapped-device"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "D3D12 NR takes its device from the command list or queue; resources may report the device under a wrapper layer (same adapter), lists may not. Rule and production overloads under ASan/UBSan, route source guards with mutants. No D3D12 or ReShade."
+
+[nr-multi-view]
+path = "nr-multi-view"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "Several views in one colour allocation within a frame: the detector on synthetic sub-rectangles (seven rule mutants must fail), and both D3D12 seams standing down before any loan or recording. Detector only; no per-view model."
+
 [mfg-provider-capacity]
 path = "mfg-provider-capacity"
 domain = "fg"

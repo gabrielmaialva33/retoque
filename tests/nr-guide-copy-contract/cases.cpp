@@ -109,6 +109,27 @@ int main(int argc, char** argv)
         assert(ReadableGuide(&device, &cmd, &source, &clone) == nullptr);
         assert(allocations == 0 && cmd.copies == 0 && cmd.barriers == 0);
     }
+    // 2026-10-30: a wrapper layer's list (ReShade through LoadReShade) on the device the game's guide reports. The
+    // clone is made and copied through the wrapper, kept across frames, and a guide on another adapter is refused.
+    else if (name == "wrapped-device")
+    {
+        ID3D12Device wrapper;
+        wrapper.luid = device.luid;
+        wrapper.wraps = &device;
+        cmd.device = &wrapper;
+        auto* readable = ReadableGuide(&wrapper, &cmd, &source, &clone);
+        assert(readable && readable == clone && cmd.copies == 1);
+        const auto count = allocations;
+        for (unsigned frame = 0; frame < 3; ++frame)
+            assert(ReadableGuide(&wrapper, &cmd, &source, &clone) == clone);
+        assert(allocations == count && retired.empty() && cmd.copies == 4);
+        ID3D12Device elsewhere;
+        ID3D12Resource foreign;
+        foreign.device = &elsewhere;
+        ID3D12Resource* other = nullptr;
+        assert(ReadableGuide(&wrapper, &cmd, &foreign, &other) == nullptr && other == nullptr);
+        assert(wrapper.refs == 1 && device.refs == 1 && elsewhere.refs == 1);
+    }
     else if (name == "allocation-and-passthrough")
     {
         device.failAllocation = true;

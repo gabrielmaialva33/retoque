@@ -717,7 +717,11 @@ void Barrier(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* res, D3D12_RESO
              D3D12_RESOURCE_STATES to);
 DXGI_FORMAT TypedGuideFormat(DXGI_FORMAT f);
 bool IsTypeless(DXGI_FORMAT f);
+// Lists and queues: the exact device. Resources: that device or another interface on its adapter, which is what a
+// wrapper layer leaves them reporting (DlssNr_DeviceMatch.h). Overload resolution picks the resource rule for any
+// ID3D12Resource*, so a resource handed over as an ID3D12DeviceChild* is held to the strict one.
 bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child);
+bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12Resource* resource);
 DXGI_FORMAT GuideCopyFamily(DXGI_FORMAT format);
 bool GuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source, const D3D12_RESOURCE_DESC& clone);
 bool PresentGuideCopyCompatible(ID3D12Device* device, const D3D12_RESOURCE_DESC& source,

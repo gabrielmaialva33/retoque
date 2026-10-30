@@ -10,6 +10,11 @@ This identity deliberately survives the current partial `Shutdown`: capability p
 
 `EnsureCompose` returns an explicit success value, consumed by all callers. Direct dispatch checks the command list, colour, depth, motion, output and optional exposure against the pass device before tracking, timing, barriers or writes. Before-upscale admission checks devices before tracking, parking or allocating a clone. Exposure is checked before read-state transitions. The actual Present submission queue must match the backbuffer device before obtaining a command list.
 
+2026-10-30: the device each route admits is now its command list's (the present pass: its queue's), and a resource
+may report another interface on the same adapter, which is what a wrapper layer such as ReShade leaves it reporting;
+lists and queues stay held to the exact device. The present queue no longer has to match the backbuffer's device; the
+backbuffer has to belong to the queue's. See [dx12-robustness.md](dx12-robustness.md), section 1.
+
 ## Whole-resource guide copies
 
 `GuideCopyCompatible` verifies full shape, mip and array counts, known DXGI type family, sample count and quality, and successful nonzero/equal plane counts from `D3D12_FEATURE_FORMAT_INFO`. `DeviceChildBelongsTo` validates the command list, source and any reusable clone and releases temporary `GetDevice` references.

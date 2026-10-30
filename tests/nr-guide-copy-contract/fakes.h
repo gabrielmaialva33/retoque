@@ -1,5 +1,7 @@
+#include <atomic>
 #include <cassert>
 #include <cstdint>
+#include "retoque/dlssnr/DlssNr_DeviceMatch.h"
 #include <iostream>
 #include <memory>
 #include <set>
@@ -119,8 +121,20 @@ struct ID3D12Resource : ID3D12DeviceChild
     auto GetDesc() { return desc; }
 };
 static unsigned allocations = 0;
+struct LUID
+{
+    unsigned long LowPart = 0;
+    long HighPart = 0;
+};
+inline unsigned long nextFakeAdapter = 0x1000;
+// Each fake device is on its own adapter unless a case says otherwise. A wrapper (ReShade's proxy) shares the adapter
+// of the device it wraps, and what it creates reports that device, as ReShade leaves resources unwrapped.
 struct ID3D12Device
 {
+    LUID luid { ++nextFakeAdapter, 0 };
+    ID3D12Device* wraps = nullptr;
+    LUID GetAdapterLuid() { return luid; }
+    ID3D12Device* Underlying() { return wraps ? wraps : this; }
     unsigned refs = 1;
     bool failAllocation = false, failFormatInfo = false, wrongPlanes = false;
     int allowedOnly = -1;
@@ -154,7 +168,7 @@ struct ID3D12Device
             desc->Format == DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS)
             return E_FAIL;
         *out = new ID3D12Resource;
-        (*out)->device = this;
+        (*out)->device = Underlying();
         (*out)->desc = *desc;
         return S_OK;
     }
@@ -177,7 +191,9 @@ struct ID3D12GraphicsCommandList : ID3D12DeviceChild
         assert(a.MipLevels == b.MipLevels && a.DepthOrArraySize == b.DepthOrArraySize);
         assert(a.SampleDesc.Count == b.SampleDesc.Count && a.SampleDesc.Quality == b.SampleDesc.Quality);
         assert(ExpectedFamily(a.Format) == ExpectedFamily(b.Format) && "cross-family CopyResource");
-        assert(device == src->device && device == dst->device && "cross-device CopyResource");
+        // A wrapper's list records onto the device it wraps; anything else is a cross-device copy.
+        assert(device->Underlying() == src->device->Underlying() && device->Underlying() == dst->device->Underlying() &&
+               "cross-device CopyResource");
         ++copies;
     }
 };

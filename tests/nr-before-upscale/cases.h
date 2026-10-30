@@ -42,6 +42,10 @@ struct Fixture
         for (auto& totals : g_coverageLogged)
             totals = {};
         infoLogs.clear();
+        warnLogs.clear();
+        DlssNr_Dx12::createdOn = nullptr;
+        DlssNr::s_multiViews.Reset();
+        DlssNr::g_resetOnReturn = false;
         Stable();
     }
     ~Fixture()
@@ -694,6 +698,144 @@ int main()
         assert(DlssNr_Dx12::lastFrame.DisplayWidth == 0 && g_pre.width == 1280);
         ++checks;
     }
+    // 2026-10-30, docs/dlssnr/design/dx12-robustness.md. A wrapper layer (ReShade through [Plugins] LoadReShade) hands
+    // the pass a command list whose device is the wrapper while every resource reports the device underneath. The
+    // pass follows the list: the model, the scratch and the cache owner are the list's device.
+    {
+        Fixture f;
+        ID3D12Device wrapper;
+        wrapper.luid = f.device.luid;
+        wrapper.wraps = &f.device;
+        f.cmd.device = &wrapper;
+        {
+            ScopedPreUpscale p(&f.cmd, &f.params, true);
+            assert(p.Swapped() && !p.Declined());
+        }
+        assert(DlssNr_Dx12::createdOn == &wrapper && g_preDevice == &wrapper && g_nrDeviceOwner.device == &wrapper);
+        assert(wrapper.allocations == 1 && f.device.allocations == 0 && DlssNr_Dx12::calls == 1);
+        f.Restored();
+        ++checks;
+    }
+    {
+        Fixture f;
+        ID3D12Device wrapper;
+        wrapper.luid = f.device.luid;
+        wrapper.wraps = &f.device;
+        f.cmd.device = &wrapper;
+        f.cfg.DlssNrStage = 0;
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false, false);
+        assert(DlssNr_Dx12::calls == 1 && DlssNr_Dx12::createdOn == &wrapper && g_nrDeviceOwner.device == &wrapper);
+        ++checks;
+    }
+    // A list on the right adapter does not let a resource from another adapter in, in either route.
+    for (unsigned stage : { 0u, 1u })
+    {
+        Fixture f;
+        ID3D12Device wrapper, elsewhere;
+        wrapper.luid = f.device.luid;
+        wrapper.wraps = &f.device;
+        f.cmd.device = &wrapper;
+        f.cfg.DlssNrStage = stage;
+        (stage == 0 ? f.output : f.color).device = &elsewhere;
+        if (stage == 1)
+        {
+            ScopedPreUpscale p(&f.cmd, &f.params, true);
+            assert(!p.Swapped());
+        }
+        else
+            DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false, false);
+        assert(DlssNr_Dx12::calls == 0 && f.cmd.barriers == 0 && trackingCalls == 0);
+        assert(wrapper.allocations == 0 && f.device.allocations == 0 && elsewhere.allocations == 0);
+        assert(g_compose == nullptr && g_nrDeviceOwner.device == nullptr);
+        ++checks;
+    }
+
+    // Colour with a mip chain before the upscaler: the pass would transition every subresource from the one state the
+    // game declared for the texture, and its views and copies are of one mip. Declined, said, counted as a fallback,
+    // and nothing is touched; the after-upscale pass serves the evaluate.
+    for (unsigned mips : { 2u, 11u })
+    {
+        Fixture f;
+        f.color.desc.MipLevels = mips;
+        bool declined = false;
+        {
+            ScopedPreUpscale p(&f.cmd, &f.params, true);
+            assert(!p.Swapped() && p.Declined());
+            declined = p.Declined();
+        }
+        assert(f.device.allocations == 0 && f.cmd.barriers == 0 && trackingCalls == 0 && DlssNr_Dx12::calls == 0);
+        assert(f.params.sets == 0 && g_coverage[1].totals.fallback == 1);
+        assert(std::string(g_preStatus.load()).find("mip levels") != std::string::npos);
+        f.Restored();
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, declined, false);
+        assert(DlssNr_Dx12::calls == 1 && g_coverage[2].totals.calls == 1);
+        ++checks;
+    }
+
+    // Several views drawn into one colour allocation (DlssNr_MultiView.h): two screens and the combined picture,
+    // through the production seams, in both stages. Once the layout is found (the second frame's second view), no
+    // evaluate reaches the pass, borrows the scratch or hands the frame to the other seam; each is counted and the
+    // history is owed a reset for when the layout ends.
+    for (unsigned stage : { 0u, 1u })
+    {
+        Fixture f;
+        f.cfg.DlssNrStage = stage;
+        const unsigned views[3][4] = { { 0, 0, 640, 720 }, { 640, 0, 640, 720 }, { 0, 0, 1280, 720 } };
+        unsigned stoodDown = 0;
+        for (uint64_t present = 200; present < 260; ++present)
+        {
+            State::Instance().frameCount = present;
+            for (unsigned v = 0; v < 3; ++v)
+            {
+                f.params.numbers["Width"] = views[v][2];
+                f.params.numbers["Height"] = views[v][3];
+                f.params.numbers["X"] = views[v][0];
+                f.params.numbers["Y"] = views[v][1];
+                const bool found = present > 201 || (present == 201 && v > 0);
+                const auto calls = DlssNr_Dx12::calls;
+                const auto barriers = f.cmd.barriers;
+                const auto sets = f.params.sets;
+                DlssNr::g_resetOnReturn = false;
+                bool declined = false;
+                if (stage == 1)
+                {
+                    ScopedPreUpscale p(&f.cmd, &f.params, true);
+                    declined = p.Declined();
+                    if (found)
+                        assert(!p.Swapped() && !declined);
+                }
+                DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, declined, false);
+                if (found)
+                {
+                    ++stoodDown;
+                    assert(DlssNr_Dx12::calls == calls && f.cmd.barriers == barriers && f.params.sets == sets);
+                    assert(DlssNr::g_resetOnReturn.load());
+                    assert(std::string(DlssNr::g_upscaleReason.load()).find("several views") != std::string::npos);
+                }
+                f.Restored();
+            }
+        }
+        assert(stoodDown == 3 * 58 + 2);
+        // One stand-down per evaluate: the first seam to ask stands it down and the other never runs the pass.
+        assert(DlssNr::s_multiViews.StandDowns() == stoodDown);
+        assert(warnLogs.size() == 1 && warnLogs[0].find("several views") != std::string::npos);
+        ++checks;
+    }
+    // One view per frame, its size moving every frame: never a layout, every evaluate reaches the pass.
+    {
+        Fixture f;
+        f.cfg.DlssNrStage = 0;
+        for (uint64_t present = 300; present < 400; ++present)
+        {
+            State::Instance().frameCount = present;
+            f.params.numbers["Width"] = 1000 + static_cast<unsigned>(present % 200);
+            f.params.numbers["Height"] = 600 + static_cast<unsigned>(present % 100);
+            DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false, false);
+        }
+        assert(DlssNr_Dx12::calls == 100 && DlssNr::s_multiViews.StandDowns() == 0 && warnLogs.empty());
+        ++checks;
+    }
+
     assert(checks >= 56 && "ZERO COVERAGE");
     std::printf("PASS: %u boundary cases; allocation-failure and DRS loops: 1000 each\n", checks);
 }
