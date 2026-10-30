@@ -254,6 +254,14 @@ tier = "host"
 timeout = 300
 summary = "Command-list submission lifetime model that gates resource release."
 
+[nr-vk-bridge-route]
+path = "nr-vk-bridge-route"
+domain = "nr"
+requires = ["python"]
+tier = "host"
+timeout = 60
+summary = "Vulkan after-upscale NR runs once per frame on a bridged upscaler: every backend FeatureProvider_Vk creates an IFeature_VkwDx12 feature for (whose Evaluate already runs NR on the D3D12 side) is in the Vulkan input's bridged list, no native one is, and the bridge still runs NR; each rule first fails on a planted violation. Read off the source, no compiler or device."
+
 [nr-vk-extensions]
 path = "nr-vk-extensions"
 domain = "nr"
