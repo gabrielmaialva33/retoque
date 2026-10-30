@@ -6,6 +6,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <stdexcept>
+#include <thread>
 #include <cstring>
 template <typename... T> void testLog(T&&...) {}
 #define LOG_TRACE(...) testLog(__VA_ARGS__)

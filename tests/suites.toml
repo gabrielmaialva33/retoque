@@ -638,6 +638,14 @@ tier = "host"
 timeout = 120
 summary = "Actual NGX signature hooks and independent XeSS/XeFG/XeLL library config read/save behavior."
 
+[upscaler-menu-lock]
+path = "upscaler-menu-lock"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "The D3D12 upscalers' shared legacy menu under one lock: a delayed destructor waits for the running feature's draw, two destructors and a creation race safely; every use of the menu is under ImguiMutex."
+
 [fg-locks]
 path = "fg-locks"
 domain = "fg"
@@ -645,6 +653,22 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Production resize/release FG lock pairing through mutable settings, FG replacement, null inputs and exceptions."
+
+[fg-present-reentry]
+path = "fg-present-reentry"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "The wrapped swapchain's present lock with real threads: SetFullscreenState/ResizeBuffers/ResizeBuffers1 re-entered from Present or Present1 (and from the FG present's FG mutex) on the same thread do not wait for themselves; other threads still wait, except upstream's unchanged owner-4 nvngx DLSS-G rule."
+
+[fg-command-objects]
+path = "fg-command-objects"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "DLSSG/XeFG CreateObjects failing at every creation call leave no partial set and rebuild it; getters refuse a missing slot; a HUD-less format change restarts FG once; guards on DLSSG's input barrier and the shared FG fences' ownership."
 
 [fg-tag-extents]
 path = "fg-tag-extents"

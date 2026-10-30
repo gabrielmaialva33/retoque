@@ -364,7 +364,10 @@ Retoque stands on other people's work. Full licence texts are in [`Licenses/`](L
   (wilsjo2, GPL-3.0): the direct model loader, DLSS enlargement and the peripheral compression
   integration.
 - **[OptiScaler-F5-DLSSNR-Multipass](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass)**
-  (janblade, GPL-3.0): "Measure detail", per-thread scopes, and the model cadence and ViT-skip ideas.
+  (janblade, GPL-3.0): "Measure detail", per-thread scopes, the model cadence and ViT-skip ideas, and the
+  shared D3D12 menu lock.
+- **ShyVortex** (via hhkbble's OptiScaler) and **[HelixSR-Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)**
+  (lonewolf0622, GPL-3.0): the alt-tab present re-entry fix and FG object lifetime fixes, adapted.
 - **[scottmudge's OptiScaler_DLSSNR](https://github.com/scottmudge/OptiScaler_DLSSNR)**: the present hook
   and descriptor reuse, rewritten here.
 - **[Skynizz](https://github.com/Skynizz/optiscaler-dlss5)**, **hhkbble** and **sqmq13**: the exposure

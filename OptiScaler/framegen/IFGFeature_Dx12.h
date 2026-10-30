@@ -118,6 +118,10 @@ class IFGFeature_Dx12 : public virtual IFGFeature
     virtual void ReleaseObjects() = 0;
     virtual void CreateObjects(ID3D12Device* InDevice) = 0;
 
+    // After CreateObjects: releases a partly created set of UI / SC command objects, so the next request creates
+    // the whole set again instead of using a missing slot. False when it had to.
+    bool DropIncompleteCommandObjects();
+
   public:
     virtual void* FrameGenerationContext() = 0;
     virtual void* SwapchainContext() = 0;

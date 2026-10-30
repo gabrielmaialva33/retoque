@@ -833,7 +833,10 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::SetFullscreenState(BOOL Fullsc
 #ifdef USE_LOCAL_MUTEX
         // dlssg calls this from present it seems
         // don't try to get a mutex when present owns it while dlssg mod is enabled
-        if (!(_localMutex.getOwner() == 4 && State::Instance().activeFgNvngx != FGNvngxReplacement::None))
+        // nor when this thread's own Present/Present1 holds it: DXGI delivered a window message (alt-tab, resize)
+        // inside present and the game called back from its window procedure; the mutex is not recursive
+        if (!_localMutex.isHeldByCurrentThread() &&
+            !(_localMutex.getOwner() == 4 && State::Instance().activeFgNvngx != FGNvngxReplacement::None))
         {
             OwnedLockGuard lock(_localMutex, 3);
         }
@@ -841,8 +844,10 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::SetFullscreenState(BOOL Fullsc
         if (Config::Instance()->FGUseMutexForSwapchain.value_or_default())
         {
 
+            // Not the FG present's own mutex (owner 2) when it re-entered here on its thread
             if (State::Instance().currentFG != nullptr && State::Instance().currentFG->IsActive() &&
-                State::Instance().currentFG->Mutex.getOwner() != 3)
+                State::Instance().currentFG->Mutex.getOwner() != 3 &&
+                !State::Instance().currentFG->Mutex.isHeldByCurrentThread())
             {
                 LOG_TRACE("Waiting ffxMutex 3, current: {}", State::Instance().currentFG->Mutex.getOwner());
                 State::Instance().currentFG->Mutex.lock(3);
@@ -889,16 +894,20 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
 #ifdef USE_LOCAL_MUTEX
     // dlssg calls this from present it seems
     // don't try to get a mutex when present owns it while dlssg mod is enabled
-    if (!(_localMutex.getOwner() == 4 && State::Instance().activeFgNvngx != FGNvngxReplacement::None))
+    // nor when this thread's own Present/Present1 holds it (window procedure re-entry, see SetFullscreenState)
+    if (!_localMutex.isHeldByCurrentThread() &&
+        !(_localMutex.getOwner() == 4 && State::Instance().activeFgNvngx != FGNvngxReplacement::None))
     {
         OwnedLockGuard lock(_localMutex, 1);
     }
 #endif
 
     // FG objects live for the process; keep the acquired mutex even if currentFG or the setting changes.
+    // A resize re-entered from the FG present on its own thread already holds it (owner 2): never wait for itself.
     std::optional<OwnedLockGuard> swapchainLock;
-    if (auto* fg = State::Instance().currentFG;
-        fg != nullptr && Config::Instance()->FGUseMutexForSwapchain.value_or_default())
+    if (auto* fg = State::Instance().currentFG; fg != nullptr &&
+                                                Config::Instance()->FGUseMutexForSwapchain.value_or_default() &&
+                                                !fg->Mutex.isHeldByCurrentThread())
     {
         LOG_TRACE("Waiting ffxMutex 3, current: {}", fg->Mutex.getOwner());
         swapchainLock.emplace(fg->Mutex, 3);
@@ -1324,7 +1333,9 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
 #ifdef USE_LOCAL_MUTEX
     // dlssg calls this from present it seems
     // don't try to get a mutex when present owns it while dlssg mod is enabled
-    if (!(_localMutex.getOwner() == 4 && State::Instance().activeFgNvngx != FGNvngxReplacement::None))
+    // nor when this thread's own Present/Present1 holds it (window procedure re-entry, see SetFullscreenState)
+    if (!_localMutex.isHeldByCurrentThread() &&
+        !(_localMutex.getOwner() == 4 && State::Instance().activeFgNvngx != FGNvngxReplacement::None))
     {
         OwnedLockGuard lock(_localMutex, 2);
     }
@@ -1338,9 +1349,11 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
     }
 
     // The output and setting can change while the real swapchain resizes.
+    // Not when the FG present re-entered here on its own thread and already holds it (see ResizeBuffers).
     std::optional<OwnedLockGuard> swapchainLock;
     if (auto* fg = State::Instance().currentFG; State::Instance().activeFgOutput == FGOutput::FSRFG && fg != nullptr &&
-                                                Config::Instance()->FGUseMutexForSwapchain.value_or_default())
+                                                Config::Instance()->FGUseMutexForSwapchain.value_or_default() &&
+                                                !fg->Mutex.isHeldByCurrentThread())
     {
         LOG_TRACE("Waiting ffxMutex 3, current: {}", fg->Mutex.getOwner());
         swapchainLock.emplace(fg->Mutex, 3);
