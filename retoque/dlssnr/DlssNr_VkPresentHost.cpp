@@ -8,6 +8,7 @@
 #include "DlssNr_VkPresentRegistry.h"
 #include "DlssNr_VkPresentTransport.h"
 #include "DlssNr_Session.h"
+#include "DlssNr_DriverInitGate.h"
 #include "DlssNr_VkRecording.h"
 
 #include <Config.h>
@@ -3706,6 +3707,12 @@ std::vector<uint32_t> TimestampBits(VkPhysicalDevice physical)
 VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCreateInfo* info,
                                    const VkAllocationCallbacks* allocator, VkDevice* device)
 {
+    // This hook runs below OptiScaler's, which holds the driver-init gate across its call down
+    // (DlssNr_DriverInitGate.h). Its own code -- the registry, the transport lock after the call -- runs outside the
+    // gate, and only the call down inside it: vkDestroyDevice takes g_vkMutex under the transport lock and the
+    // after-upscale route takes the gate under g_vkMutex, so holding the gate here while waiting for the transport lock
+    // would close a cycle. First, so it gives the gate back to the hook above last.
+    DlssNr::DriverInitGate::OwnCode ownCode;
     void* const returnAddress = _ReturnAddress();
     const bool internal = Internal();
     HostActivity activity("vkCreateDevice");
@@ -3801,7 +3808,13 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
         }
     }
 
-    const VkResult result = o_CreateDevice(physical, edited ? &withExtensions : info, allocator, device);
+    VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+    {
+        DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::DeviceCreate,
+                                           Config::Instance()->DlssNrEnabled.value_or_default(),
+                                           "vkCreateDevice (present host)");
+        result = o_CreateDevice(physical, edited ? &withExtensions : info, allocator, device);
+    }
 
     if (edited && result != VK_SUCCESS)
         LOG_WARN("DLSS-NR Vulkan present host: vkCreateDevice returned {} with the model's extensions ({}) and {}",

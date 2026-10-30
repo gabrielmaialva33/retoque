@@ -169,7 +169,8 @@ retirement_names = ['void ParkNrFeature(', 'void ParkNrResource(', 'void ParkNrS
 enlarge_names = ['void PublishEnlarge(', 'DlssNr::Enlarge::Decision PlanEnlarge(',
                  'void FailEnlarge(', 'void BuildEnlarger(', 'ID3D12Resource* EnlargeEdit(']
 retry_names = ['void RetryAfterFailure()', 'void RetryEnlargement()', 'Enlarge::Status EnlargeStatus()']
-host = ('#include "host_fakes.h"\nnamespace DlssNr::Dx12Internal\n{\n' +
+host = ('#include "host_fakes.h"\n#include <dlssnr/DlssNr_DriverInitGate.h>  // as DlssNr_Dx12_Enlarge.cpp\n'
+        'namespace DlssNr::Dx12Internal\n{\n' +
         definition(model, 'const char* NgxResultName(unsigned int r)') +
         shared_type('NrEnlarger') + shared_type('NrRetired') + shared_type('EnlargeSession') +
         shared_type('EnlargeFrame') + storage('std::vector<NrRetired> g_nrRetired;') +

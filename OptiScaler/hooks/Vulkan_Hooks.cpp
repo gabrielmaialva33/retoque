@@ -26,6 +26,7 @@
 
 #include <dlssnr/DlssNr_VkExtensions.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
+#include <dlssnr/DlssNr_DriverInitGate.h>
 #include <hooks/Vulkan_OwnedDeviceRequest.h>
 #include <unordered_map>
 
@@ -738,7 +739,13 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
             }
         }
 
-        result = o_vkCreateDevice(physicalDevice, &localCreateInfo, pAllocator, pDevice);
+        {
+            // With NR on, never at the same moment as the model's NGX calls: the driver can freeze the two against
+            // each other (retoque/dlssnr/DlssNr_DriverInitGate.h). NR off, the call is what it was.
+            DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::DeviceCreate,
+                                               Config::Instance()->DlssNrEnabled.value_or_default(), "vkCreateDevice");
+            result = o_vkCreateDevice(physicalDevice, &localCreateInfo, pAllocator, pDevice);
+        }
     }
 
     if (Config::Instance()->DlssNrEnabled.value_or_default())

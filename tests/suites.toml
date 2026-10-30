@@ -880,6 +880,22 @@ tier = "host"
 timeout = 300
 summary = "Vulkan recording epochs, bounded slots, production dispatch/teardown and lifecycle forwarding under sanitizers; no GPU."
 
+[nr-driver-init-gate]
+path = "nr-driver-init-gate"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "The driver-init gate (DlssNr_DriverInitGate.h) on real threads under ASan/UBSan: exclusion, re-entry, OwnCode letting only device-create holds go, the bound, and the vkCreateDevice/vkDestroyDevice/route chain finishing; mutation controls; source guards that every vkCreateDevice call down (NR on only) and every NGX init, core bring-up and feature creation of the model takes it, with the locks held there checked against the documented order."
+
+[nr-vk-min-extent]
+path = "nr-vk-min-extent"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "No Vulkan NR model below kDlssNrMinExtent: the shared decision, the present host's count and line for the refusal, and source guards that the after-upscale route (counted, logged), the admission and the builder refuse before building anything."
+
 [fg-qualification]
 path = "fg-qualification"
 domain = "fg"
