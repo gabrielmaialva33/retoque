@@ -2331,6 +2331,15 @@
     <ClCompile Include="..\retoque\dlssnr\DlssNr_ProcessEnd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_CrashNote.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_CrashNote.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_Funnel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>

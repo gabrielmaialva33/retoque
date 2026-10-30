@@ -836,6 +836,15 @@ int main()
         ++checks;
     }
 
+    // The engagement funnel (DlssNr_Funnel.h) over every evaluate above, through the real EvaluateAfterUpscale: each one
+    // with NR on ended exactly one way -- ran, or one named decline -- so the ladder balances.
+    {
+        const auto ladder = DlssNr::Funnel::Read(DlssNr::Funnel::Route::D3d12AfterUpscale);
+        assert(ladder.eligible > 0 && ladder.ran > 0 && ladder.Declined() > 0);
+        assert(ladder.Balanced() && "an evaluate left EvaluateAfterUpscale without a named outcome");
+        ++checks;
+    }
+
     assert(checks >= 56 && "ZERO COVERAGE");
     std::printf("PASS: %u boundary cases; allocation-failure and DRS loops: 1000 each\n", checks);
 }

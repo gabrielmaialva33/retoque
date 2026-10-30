@@ -52,6 +52,7 @@
 #include <version_check.h>
 #include <misc/IdentifyGpu.h>
 #include <dlssnr/DlssNr_Session.h>
+#include <dlssnr/DlssNr_CrashNote.h>
 #include <dlssnr/DlssNr_GameProfiles.h>
 #include <sha1/sha1.hpp>
 
@@ -2057,6 +2058,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         // of it. Only an explicit FreeLibrary of this DLL (lpReserved == NULL) takes the cleanup below.
         if (lpReserved != nullptr)
             break;
+
+        // An unload: the NR crash note's filter must not outlive the code it points into.
+        DlssNr::CrashNote::Uninstall();
 
         // Unhooking and cleaning stuff causing issues during shutdown.
         // Disabled for now to check if it cause any issues

@@ -83,10 +83,19 @@ DR::Inputs FullInputs()
     in.lsfg.width = 3840;
     in.lsfg.height = 2160;
     in.lsfg.gpuMs = 1.5;
+    DR::FunnelRoute route;
+    route.name = "D3D12 after the upscaler";
+    route.eligible = 1200;
+    route.ran = 1100;
+    route.modelCalls = 1080;
+    route.declines = { { "deferred to the present-time pass", 60, "" },
+                       { "the pass recorded nothing", 40, "it is still building" },
+                       { "several views in one colour allocation", 0, "" } };
+    in.funnel.push_back(route);
     return in;
 }
 
-const std::vector<std::string_view> kSections = { "== Build ==",    "== Detected ==",   "== Used ==",
+const std::vector<std::string_view> kSections = { "== Build ==",    "== Detected ==",   "== Used ==", "== Funnel ==",
                                                   "== Settings ==", "== GPU timing ==", "== LSFG ==" };
 
 void Deterministic()
@@ -268,6 +277,41 @@ void LsfgStates()
     Require(Contains(DR::Build(in), "LSFG: off"), "lsfg off");
 }
 
+// The engagement funnel (docs/dlssnr/design/engagement-funnel.md): what each route was offered and how each offer
+// ended, with the balance that says whether every way out was counted.
+void FunnelSection()
+{
+    const auto text = DR::Build(FullInputs());
+    const auto from = text.find("== Funnel ==");
+    const auto to = text.find("== Settings ==");
+    Require(text.find("== Used ==") < from && from < to, "the funnel sits between Used and Settings");
+    const auto section = text.substr(from, to - from);
+    Require(Contains(section, "\nD3D12 after the upscaler: eligible 1200, ran the pass 1100 (model called 1080), "
+                              "declined 100, unaccounted 0\n"),
+            "the route's ladder on one line: " + section);
+    Require(Contains(section, "\n  deferred to the present-time pass: 60\n"), "each decline on its own line");
+    Require(Contains(section, "\n  the pass recorded nothing: 40 (last: it is still building)\n"),
+            "the pass's own last reason follows its decline");
+    Require(Contains(section, "\n  several views in one colour allocation: 0\n"),
+            "a decline that never happened is still listed, so two reports diff line for line");
+    Require(!Contains(section, "in flight"), "a balanced ladder needs no explanation");
+
+    auto leak = FullInputs();
+    leak.funnel[0].eligible = 1203;
+    const auto leaking = DR::Build(leak);
+    Require(Contains(leaking, "declined 100, unaccounted 3 (evaluates in flight when this was read, or a way out of "
+                              "the pass that names no reason)"),
+            "an unbalanced ladder says what the difference can mean: " + leaking);
+
+    DR::Inputs bare;
+    bare.nrEnabled = true;
+    Require(Contains(DR::Build(bare), "== Funnel ==\nNo route counted.\n"), "no route reads as such");
+
+    auto over = FullInputs();
+    over.funnel[0].eligible = 10;
+    Require(Contains(DR::Build(over), "unaccounted -1190"), "an impossible count is shown signed, not wrapped");
+}
+
 void NrOffIsShort()
 {
     DR::Inputs off = FullInputs();
@@ -385,6 +429,7 @@ int main()
     SettingsAreSettings();
     GpuSampleMarking();
     LsfgStates();
+    FunnelSection();
     NrOffIsShort();
     Redaction();
 

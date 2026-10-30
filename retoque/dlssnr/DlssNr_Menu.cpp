@@ -7,6 +7,7 @@
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
+#include "DlssNr_Funnel.h"
 #include "DlssNr_Enlarge.h"
 #include "DlssNr_GameProfiles.h"
 #include "DlssNr_ExposureScan.h"
@@ -451,6 +452,29 @@ static std::string CollectDiagnosticReport(Config* config)
         in.hookStatus = status;
     in.guidesLine = DlssNr::PresentGuidesLine();
     in.settingsContract = DlssNr::SettingsContractText();
+
+    // The engagement funnel: one lock-free read per route.
+    for (size_t r = 0; r < DlssNr::Funnel::kRouteCount; ++r)
+    {
+        const auto route = static_cast<DlssNr::Funnel::Route>(r);
+        const auto ladder = DlssNr::Funnel::Read(route);
+        DR::FunnelRoute out;
+        out.name = DlssNr::Funnel::RouteName(route);
+        out.eligible = ladder.eligible;
+        out.ran = ladder.ran;
+        out.modelCalls = ladder.modelCalls;
+        for (size_t d = 0; d < DlssNr::Funnel::kDeclineCount; ++d)
+        {
+            const auto decline = static_cast<DlssNr::Funnel::Decline>(d);
+            DR::FunnelDecline row;
+            row.text = DlssNr::Funnel::DeclineText(decline);
+            row.count = ladder.declines[d];
+            if (decline == DlssNr::Funnel::Decline::PassRecordedNothing && ladder.lastPassReason != nullptr)
+                row.detail = ladder.lastPassReason;
+            out.declines.push_back(row);
+        }
+        in.funnel.push_back(out);
+    }
 
     const bool nativeVulkan =
         vulkan || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
