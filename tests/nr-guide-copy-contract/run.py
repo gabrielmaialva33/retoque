@@ -19,7 +19,12 @@ def function(signature):
     raise AssertionError('unterminated production function: '+signature)
 
 unit = (HERE / "fakes.h").read_text()
-for signature in ('DXGI_FORMAT TypedGuideFormat(', 'bool IsTypeless(', 'bool DeviceChildBelongsTo(',
+# The resource overload (2026-10-30, a resource under a wrapper layer) is taken when present, so a source without it
+# fails the wrapper cases on behaviour rather than on a missing anchor.
+RESOURCE_RULE = 'bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12Resource* resource)'
+for signature in ('DXGI_FORMAT TypedGuideFormat(', 'bool IsTypeless(',
+                  'bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)',
+                  *((RESOURCE_RULE,) if RESOURCE_RULE in source else ()),
                   'DXGI_FORMAT GuideCopyFamily(', 'bool GuideCopyCompatible(',
                   'ID3D12Resource* CreateGuideClone(', 'ID3D12Resource* ReadableGuide('):
     unit += function(signature)
@@ -28,10 +33,11 @@ with tempfile.TemporaryDirectory(prefix="retoque-guide-copy-contract-") as folde
     cpp, binary = Path(folder) / "cases.cpp", Path(folder) / "cases"
     cpp.write_text(unit)
     subprocess.run(["g++", "-std=c++20", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
-                    "-fsanitize=address,undefined", "-fno-omit-frame-pointer", str(cpp), "-o", str(binary)], check=True)
+                    "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-I" + str(ROOT), str(cpp), "-o", str(binary)],
+                   check=True)
     cases = ('shape', 'format-change', 'fallback-family-r24', 'fallback-family-r32g8',
              'legal-fallback', 'plane-query-failure', 'plane-mismatch',
-             'same-family-two-planes', 'device-change', 'mixed-device', 'allocation-and-passthrough')
+             'same-family-two-planes', 'device-change', 'mixed-device', 'wrapped-device', 'allocation-and-passthrough')
     failures = []
     for case in cases:
         result = subprocess.run([str(binary), case])

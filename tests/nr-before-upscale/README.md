@@ -128,3 +128,13 @@ for, which cover both stages:
 - the point-sample mapping the resample shader repeats.
 
 Like the rest of this suite, it does not execute the shader.
+
+2026-10-30 ([dx12-robustness.md](../../docs/dlssnr/design/dx12-robustness.md)): the fake devices carry an adapter LUID
+and can wrap one another, as ReShade's proxies do. Both stages run under a wrapper's command list with the model, the
+scratch and the cache owner on the list's device, and refuse a resource from another adapter behind it before any
+barrier, tracking or allocation. Colour with 2 or 11 mip levels is declined at Stage 1 with nothing touched and served
+by the after-upscale pass. Two screens plus the combined picture in one colour allocation run through the production
+seams in both stages: from the second frame's second view no evaluate reaches the pass, borrows the scratch or is handed
+on, each owes a history reset and is counted, and the warning is said once; one view with a moving resolution never
+stands down. The multi-view region is extracted from production; a source without it gets the pre-detector stub, so
+the cases fail on behaviour.

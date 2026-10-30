@@ -29,3 +29,10 @@ quality, Windows hardware behavior or latency. Native Windows/RTX3060 qualificat
 remains pending. `nr-before-upscale` separately tests actual entrypoint refusals before
 state normalization and scratch allocation, while retaining its strict state-restoration
 simulation and existing small format vocabulary.
+
+2026-10-30 ([dx12-robustness.md](../../docs/dlssnr/design/dx12-robustness.md)): the fake devices carry an adapter LUID
+and may wrap one another; a wrapper's resources report the device beneath, and a copy is cross-device unless both
+sides resolve to one device. `wrapped-device` makes and reuses a guide clone through a wrapper's list and refuses a
+guide from another adapter. `owner-run.py` adds `dispatch-wrapped` (a pass on the wrapper accepts the game's resources
+on the device beneath), `dispatch-wrapped-foreign` (not from another adapter) and `dispatch-wrapped-list` (a pass on
+the real device still refuses the wrapper's list: lists are held to the exact device).
