@@ -8,6 +8,7 @@ ROOT = HERE.parents[1]
 main = (ROOT/'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
 internal = (ROOT/'retoque/shaders/dlssnr/DlssNr_Dx12_Internal.h').read_text()
 resources = (ROOT/'retoque/shaders/dlssnr/DlssNr_Dx12_Resources.cpp').read_text()
+guides = (ROOT/'retoque/shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp').read_text()
 def function(text, anchor):
     start=text.index(anchor); brace=text.index('{', start); depth=0
     for i in range(brace,len(text)):
@@ -45,14 +46,14 @@ unit+=function(main,anchor)
 dispatch=main[main.index('bool DlssNr_Dx12::Dispatch('):main.index('    g_activePasses = 0;',main.index('bool DlssNr_Dx12::Dispatch('))]
 unit+=dispatch+'    return true;\n}\n'
 unit+='struct GuideCapture { ID3D12Resource* depth=nullptr;ID3D12Resource* motion=nullptr; };\n'
-capture=main[main.index('static bool CaptureGuides('):main.index('    struct AllocFailKey',main.index('static bool CaptureGuides('))]
+capture=guides[guides.index('static bool CaptureGuides('):guides.index('    struct AllocFailKey',guides.index('static bool CaptureGuides('))]
 unit+=capture+'    device->Release();return true;\n}\n'
 unit+='struct { unsigned invalidations=0; void InvalidateSlot(size_t slot) { assert(slot==2);++invalidations; } } g_presentGuideRing;\n'
 unit+='bool RejectUnusableClone() { ID3D12Resource d,m; struct {ID3D12Resource* depth;ID3D12Resource* motion;} clone{&d,&m}; bool copyCompatible=false;size_t slot=2; (void)clone;(void)copyCompatible;(void)slot;\n'
 post_anchor='    if (clone.depth != nullptr && clone.motion != nullptr && !copyCompatible)'
-if post_anchor in main:
-    begin=main.index(post_anchor)
-    unit+=main[begin:main.index('    if (clone.depth == nullptr || clone.motion == nullptr)',begin)]
+assert post_anchor in guides, 'clone rejection guard missing'
+begin=guides.index(post_anchor)
+unit+=guides[begin:guides.index('    if (clone.depth == nullptr || clone.motion == nullptr)',begin)]
 unit+='    return true; }\n'
 
 unit+='''

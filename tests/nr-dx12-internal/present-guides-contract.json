@@ -1,0 +1,32 @@
+{
+  "base": "dd2a589108652870a702313678cf67cf8a98ced7",
+  "definitions": {
+    "CreatePresentGuideClone": "58e183ca39d0795580502a72296516156047ede315ccd19b5d232800b4318d16",
+    "EvaluateOutput": "278bfe3c2ba0dd403b9b0c28b6ac591cf162b20e3b3474101060bca5b06c5c35",
+    "D3D12OutputExtent": "f6c80faa6bbdb08428a73ebf5acdc57b5093e3b32efd7067ac9e60d970899c73",
+    "StampPresentGuide": "7e6e885262fe74d1693b3e34f6d724bec419cbf9d79874598308402b04a94026",
+    "NoteBridgePresentedExtent": "5292ee04a77bfb02db5bc277b9a2b5eecede8172ecb175724f8d417f5c7d5fdb",
+    "PresentGuidePresenter": "164b371f9848fb030bad56eaf51632f3bc9ed2709e36aeace2ae6861629cbd25",
+    "AskGuideIdentity": "f217fa455980c3db749c60ca416cb122a314cfe58a82c6779618e92582c7ccba",
+    "CountGuideIdentity": "7124b9dc5f65a13c1029c146df2c7dc3ec5504bfe98f211e6aa9b701e6d1d733",
+    "NoteGuideSource": "eb89e0031f82e3d50d21c69ec64c67b3edeb1f9ed1ff06a52fa7082ef3d5c5d5",
+    "AskPresentPassGuides": "4dae4144f5e3109d0043f4aef23b42a3293e3cd14d5d623e8f252886cfb7cf67",
+    "CountPresentPassGuides": "d4186f5d12dbbfd70fedacb6f1850a28c1ec3a6fb0a046a4cf4440d98b2ede72",
+    "NotePresentPassGuideSource": "890d51ea334e9d66c3f20a096855264a2128cd4754c732a934e5c710d1965b54",
+    "NotePresentGuideWaiting": "d7298fc633b7128782b9bc448f1672e7591b6f317cc44366d6626d08951dfdf0",
+    "AskBridgeGuides": "134aee42e9972c968852ec03835ecee346c7767349c248ae5e95e3ed91b360e7",
+    "CountBridgeGuides": "9e88dc2832e0aa38c65ebf84633e5954dfd12ad470ed7b7bcd690382da2757f2",
+    "NotePresentGuideFallback": "1c82cf03480e8953b5a3f8479f281ece6402aacaca34295bf279bd6cb504aa81",
+    "RecentGuideStatus": "996b652cdd99f1744e0baf5402808ca81a2e9c136434a4ff9a7fdaa77796db84",
+    "RecentGuideFallback": "b42fc14599e98adb5484c9108edca748850c2fd1437080340a4ee235b52f1dfb",
+    "RecentGuideSource": "9a8b4fcb95ca57d180ad715df7d52608fea89fba95faa02183d74546012b5b31",
+    "PresentGuidesLine": "afc687708a0a31e25ae033201fc2dee7137c35e9b714decc1c4cd1c86aa131cd",
+    "CaptureGuides": "55726b5bdb2aff5b01b88464bb9c72ac032813daf4ae2b72f418a9d357678f1d",
+    "CaptureTemporal": "b6fdfe0107c5faa01760267aa47e7cf9524aa6dcb726882886e13d87dd4d0518",
+    "CaptureBridgedGuides": "2c5aa0fbce7a041bb136b1d52d4f00407b2e7cf660abccf639c28e22859d7288",
+    "BridgePresentedExtent": "54f5070415377afeb4bed383139aaff83eb87ce8a3f10de293f5ec4b7eab86c3",
+    "ReadCapturedGuides": "a506cd359707aee2d9666c034b27742de8124e52d84f285da043f296e380aa1c",
+    "CapturedPresentGuides": "1f15450505924c33a513ae6e718eb1b0772b223665df81a3da2cdf80713a6a66",
+    "AbandonCapturedGuides": "318ded03521048b5ad586a0f20a66e9157850f4765e39b0b54593adfda79a90c"
+  }
+}

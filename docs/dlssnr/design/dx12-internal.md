@@ -1,10 +1,10 @@
-# D3D12 renderer: shared state contract (split step 1)
+# D3D12 renderer: shared state contract
 
-The Phase 5 extraction starts with declarations only. `DlssNr_Dx12_Internal.h`
+Split step 1 began with declarations only. `DlssNr_Dx12_Internal.h`
 contains shared data types and `extern` state in `DlssNr::Dx12Internal`.
 Every object remains defined in `DlssNr_Dx12.cpp`, at its original point in the
 construction/destruction sequence. Present-route objects use qualified definitions
-inside the enclosing `DlssNr` namespace. Public APIs and function bodies do not move.
+inside the enclosing `DlssNr` namespace. Later steps move functions while retaining public APIs and bodies.
 
 No singleton, inline variable, allocation, reset, lock or resource-lifetime policy is
 introduced. Function-local statics stay in their original functions. Stateful RAII
@@ -21,8 +21,8 @@ retain their existing nested publication locks. Shutdown remains in the owner TU
 
 Source-region host fixtures read moved types from the header through the explicit
 `renderer_with_internal_types()` helper; the ordinary source concatenator still
-returns only CPP units. Fake-host present glue drops only the namespace qualification
-of definitions because its test namespace is artificial. The independent link smoke
+returns only CPP units. Fake-host present glue removes private namespace wrappers and definition qualifications
+because its test namespace is artificial. The independent link smoke
 checks the shared-state declaration contract across separately compiled consumers.
 These fakes do not validate GPU behavior or native Windows D3D12 rules.
 
@@ -48,3 +48,13 @@ retirement from its explicit Lifetime owner while retaining core shutdown/retry.
 The function-owner registry guards every moved definition; the state identity
 suite continues to pin the original shared storage/initializers. Acceptance adds
 all four original-DLL in-flight replay modes to the 19 synchronous variants.
+
+## Step 8: present-guide unit
+
+`DlssNr_Dx12_PresentGuides.cpp` owns present guide cloning, capture, identity,
+status and bridge consumption. Private shared helpers and `GuideAsk` belong to
+`DlssNr::Dx12Internal`; public feature entry points remain in `DlssNr`. `NowMs`
+has one definition in core. Shared storage and initialization order stay in core,
+as do present orchestration, shutdown and temporal release. Bodies and local
+statics remain unchanged; the baseline body and owner contracts and fake-host
+identity/copy fixtures check the extraction without asserting live GPU behavior.

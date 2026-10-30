@@ -712,3 +712,57 @@ must agree with the selected trajectory. The C++ renderer and moving-plan text
 format are unchanged; the forward plan retains its original bytes. The reverse
 profile is another trajectory of the same opaque scene, with the same exposure
 and resolution limits described above.
+
+## Bounded DLL-backed D3D12 present-guide probe
+
+`present_guides_probe.py` runs the existing `--moving-scene --moving-present` harness with an isolated
+`HookMethod=2`, `RequireDlss=true` configuration. Each invocation requires a previously nonexistent output
+folder and a prebuilt harness. The probe passes `--moving-present-delay-ms 30`, which sleeps for 30 ms after each
+`Present`, to let the identity consumer complete its two-second window. The harness option is off by default,
+accepts only integer values 1–100, and requires `--moving-scene --moving-present`; the 80 evaluations and 16
+captures are unchanged. The probe records the harness hash and exact arguments and requires the delay marker,
+so an older harness is rejected. It checks Wine's native loader trace for the staged
+`OptiScaler.dll`, requires 80 evaluations and 16 harness captures, and rejects a run unless the DLL reports both
+a present guide snapshot admitted and a positive D3D12 identity count for game guides used. A fresh output
+folder and invocation timestamps reject earlier logs; missing/changed DLLs and missing or zero coverage fail.
+The fixture uses the same compiler/GPU lease and process supervision as `run_moving.py`; launch it only after the
+coordinator admits the serial GPU/Proton run. It does not build anything.
+
+The 16 `moving.json` readbacks are captured in `Host::Frame` **before** `swapchain->Present`. The swapchain is
+not populated from the moving scene's output. Thus these readbacks are not present-output or pixel-equivalence
+evidence. The admission/identity messages establish a real D3D12 present consumed captured guides, not that all
+27 moved functions ran, that all route decisions were exercised, or that the image is correct. This test does
+not drive the D3D11 bridge, native Windows, games, resize, visual quality, or performance. A PASS remains
+conditional on the admitted runtime execution; host unit tests do not execute the DLL.
+
+`compare` verifies two independently created PASS records and their logs, requires matching harness, model, SR,
+core, shader and Proton hashes, and reports DLL hashes and guide-use counts. Forwarders may differ with their
+corresponding binaries. It is a coverage comparison, not a pixel comparison. See `run --help` and `compare --help`;
+`python3 tests/dlssnr-loopback/test_present_guides_probe.py` checks rejection of absent DLL, wrong loaded module,
+zero guide coverage and stale evidence without Wine or GPU.
+
+## Native D3D11 to bridge DLL-backed probe
+
+`dx11_present_harness.cpp` loads the selected OptiScaler DLL, obtains its public
+`CreateDXGIFactory2` and `NVSDK_NGX_D3D11_*` exports, creates a hardware D3D11 device and
+640x360 wrapped swapchain, and performs 200 evaluations and presents over at least six seconds.
+The four textures are deterministic fixed inputs, including zero motion. The test builds no shader,
+does not use a game and does not assert image quality. A failed NGX or graphics call fails the
+harness; no fallback is accepted as a success.
+
+Run a separately precompiled harness through `dx11_present_probe.py`, with a fresh `--out` directory
+and the selected DLL plus matching forwarder. The runner writes a test-local INI with native DLSS,
+NR enabled, `HookMethod=2` and no FG, uses the existing fixture lease, hashes its inputs and validates
+the native DLL loader trace, complete 200/200/6-second marker, actual DLSS selection, absence of
+creation failure/backend change, a positive native D3D11 `carried` counter and a positive
+`D3D11 bridge` identity `used` counter. Missing, stale or zero evidence is FAIL. Some Proton/driver
+combinations may refuse native D3D11 DLSS: retain that FAIL and its logs; it is not bridge coverage.
+
+`python3 tests/nr-moving-evidence/run.py` includes host-only negative controls for both D3D12 and
+D3D11 evidence validators. They do not compile or run this harness and do not establish runtime
+support, exact GPU data, native Windows behavior, game compatibility, visual quality, or performance.
+
+The D3D11 harness flushes its stage log around initialization, feature creation and each
+cleanup boundary. `LOOP-COMPLETE` records the 200 evaluations/presents separately; only
+the final `PASS` after cleanup can satisfy the runner. Its Wine trace enables `+seh` and
+`+loaddll` to help locate a crash; a completed loop followed by failure remains FAIL.

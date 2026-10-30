@@ -44,3 +44,9 @@ The 2026-10-27 changes are explicit device/copy hardening, not a new extraction 
 Only the two intentionally changed resource-body hashes are updated. The four new helper
 hashes freeze the added contract; behavioral RED/GREEN is in `nr-guide-copy-contract`.
 No production declaration/definition was reordered to satisfy this fixture.
+
+`present-guides-contract.json` pins the 27 moved function bodies to `dd2a5891`,
+with token boundaries preserved and linkage/formatting normalized. Each definition
+must occur exactly once in the present-guide unit. Negative controls cover missing
+and duplicate definitions, decision and tracking changes; the state and resource
+hashes above remain independent and unchanged.

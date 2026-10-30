@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import present_identity_glue  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -43,11 +43,7 @@ def refuse_if_prefix_busy():
 
 def glue_unit():
     # The same slice tests/nr-present-guide-identity/run.py compiles with g++.
-    renderer = renderer_source()
-    start = 'struct PresentGuideIdentityState\n'
-    assert renderer.count(start) == 1, 'production boundary changed'
-    begin = renderer.index(start)
-    glue = renderer[begin:renderer.index('static void ReleasePresentTemporal()', begin)].replace('Dx12Internal::', '')
+    glue = present_identity_glue()
     unit = OUT / 'glue.cpp'
     unit.write_text((CASES / 'glue_fakes.h').read_text() + '\nnamespace DlssNr\n{\n' + glue + '\n} // namespace DlssNr\n' +
                     (CASES / 'glue_cases.h').read_text())

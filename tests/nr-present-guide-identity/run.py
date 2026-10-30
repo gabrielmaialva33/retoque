@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
-from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from nr_sources import present_identity_glue, renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
@@ -62,7 +62,28 @@ assert includes == sorted(['#include "DlssNr_PresentGuideRing.h"', '#include <ar
                            '#include <cstddef>', '#include <cstdint>', '#include <string>']), includes
 assert '#include <dlssnr/DlssNr_PresentGuideIdentity.h>' in renderer
 
-glue = between(renderer, 'struct PresentGuideIdentityState\n', 'static void ReleasePresentTemporal()').replace('Dx12Internal::', '')
+# The fixture must reject missing and duplicate shared declarations instead of selecting the first.
+from unittest.mock import patch
+import nr_sources
+original_core = nr_sources.renderer_with_internal_types()
+original_header = nr_sources.renderer_internal_header()
+for source, anchor in (("core", "struct PresentGuideIdentityState\n"),
+                       ("core", "PresentGuideIdentityState Dx12Internal::g_guideIdentity;"),
+                       ("header", "struct GuideAsk\n"),
+                       ("core", "std::atomic<uint64_t> Dx12Internal::g_bridgePresentedExtent")):
+    original = original_core if source == "core" else original_header
+    assert original.count(anchor) == 1
+    for altered in (original.replace(anchor, "", 1), original + "\n" + original[original.index(anchor):]):
+        with patch.object(nr_sources, "renderer_with_internal_types", return_value=altered if source == "core" else original_core), \
+             patch.object(nr_sources, "renderer_internal_header", return_value=altered if source == "header" else original_header):
+            try:
+                present_identity_glue()
+            except AssertionError:
+                pass
+            else:
+                raise AssertionError(f"fixture accepted missing/duplicate {anchor}")
+
+glue = present_identity_glue()
 
 # The glue reads the ring and never changes it: it never picks, records, invalidates or tracks a slot, never touches a
 # clone's read bookkeeping, and never writes a flag the pass decides on. Its one write outside its own state is the
@@ -88,7 +109,7 @@ ask_fn = function(renderer, 'static GuideAsk AskGuideIdentity(')
 assert ask_fn.index('if (g_presentGuideRing.NewestRecordedSequence() == 0)\n        return ask;') < ask_fn.index('AtPresent(')
 assert 'ask.present.enforceLag = enforceLag;' in ask_fn
 assert 'return AskGuideIdentity(g_guideIdentity.present, device, presenter, width, height, picked, boundary);' in \
-    function(renderer, 'static GuideAsk AskPresentPassGuides(')
+    function(renderer, 'GuideAsk AskPresentPassGuides(')
 assert 'return AskGuideIdentity(g_guideIdentity.bridge, device, presenter, width, height, picked, false);' in \
     function(renderer, 'static GuideAsk AskBridgeGuides(')
 
@@ -198,7 +219,7 @@ assert renderer.count('StampPresentGuide(') == 2  # its definition and its one c
 assert renderer.count('CaptureGuides(cmdList, source, frame);') == 1
 assert renderer.count('return CaptureGuides(cmdList, source, GatherGuideFrame(params));') == 1
 assert renderer.count('CaptureGuides(') == 3  # its definition and its two producers
-temporal = function(renderer, 'static void CaptureTemporal(')
+temporal = function(renderer, 'void CaptureTemporal(')
 assert 'D3D12OutputExtent(params, &outputWidth, &outputHeight);' in temporal
 assert 'cfg.DepthResourceBarrier.value_or(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)' in temporal
 assert renderer.count('CaptureTemporal(cmdList, params, frame);') == 1

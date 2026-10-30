@@ -176,3 +176,49 @@ for name, expected in resource_contract['definitions'].items():
 assert 'uint64_t g_nrScratchGeneration = 1;' in units['DlssNr_Dx12.cpp']
 assert 'bool DescriptorReuseAvailable()' in units['DlssNr_Dx12.cpp']
 print('PASS: resource helper baselines and explicit hardening updates pinned; scratch generation/descriptor reuse remain in core')
+
+# Every extracted present-guide body remains the base body; linkage and whitespace may differ.
+present_contract = json.loads((HERE / 'present-guides-contract.json').read_text())
+present_owner = 'DlssNr_Dx12_PresentGuides.cpp'
+from present_contract import definition_pattern, present_body, present_digest  # noqa: E402
+def check_present(name, expected, candidates):
+    pattern = definition_pattern(name)
+    homes = [unit for unit, text in candidates.items() for _ in pattern.finditer(text)]
+    assert homes == [present_owner], f'{name}: expected one in {present_owner}, found {homes}'
+    assert present_digest(present_body(candidates[present_owner], name)) == expected, f'{name}: base body changed'
+assert present_digest('int f() { return a - -b; }') != present_digest('int f() { return a--b; }')
+assert present_digest('int f() { return x + +y; }') != present_digest('int f() { return x++y; }')
+assert present_digest('int f(){return a - -b;}') == present_digest('int f ( ) { return a - - b ; }')
+check_present('CaptureGuides', present_contract['definitions']['CaptureGuides'],
+              {**units, present_owner: units[present_owner] + '\nif (CaptureGuides(x)) { }\n'})
+for name, expected in present_contract['definitions'].items():
+    check_present(name, expected, units)
+# Private helpers are defined in Dx12Internal; feature APIs stay in DlssNr.
+public_present = {'CaptureBridgedGuides', 'BridgePresentedExtent', 'CapturedPresentGuides',
+                  'AbandonCapturedGuides', 'NotePresentGuideFallback', 'PresentGuidesLine'}
+private_prefix = 'namespace Dx12Internal\n{\n'
+for name in present_contract['definitions']:
+    position = definition_pattern(name).search(units[present_owner]).start()
+    is_private = units[present_owner][position - len(private_prefix):position] == private_prefix
+    assert is_private == (name not in public_present), f'{name} has the wrong namespace'
+assert header.index('namespace DlssNr::Dx12Internal\n{') < header.index('struct GuideAsk\n') < \
+       header.index('} // namespace DlssNr::Dx12Internal')
+assert units['DlssNr_Dx12.cpp'].count('long long Dx12Internal::NowMs()') == 1
+# The contract must reject missing/duplicate definitions and changed copy/track decisions.
+body = present_body(units[present_owner], 'CaptureGuides')
+expected = present_contract['definitions']['CaptureGuides']
+for candidate in (units[present_owner].replace(body, '', 1), units[present_owner] + '\n' + body,
+                  units[present_owner].replace('if (!trackedNow)', 'if (trackedNow)', 1),
+                  units[present_owner].replace('DlssNr::Submission::Track(cmdList, clone.writeUsage) &&',
+                                               'DlssNr::Submission::Track(cmdList, clone.writeUsage) ||', 1),
+                  units[present_owner].replace(
+                      'DlssNr::Submission::Track(cmdList, clone.writeUsage) &&\n                            DlssNr::Submission::Track(cmdList, clone.captureWriteUsage)',
+                      'DlssNr::Submission::Track(cmdList, clone.captureWriteUsage) &&\n                            DlssNr::Submission::Track(cmdList, clone.writeUsage)', 1)):
+    assert candidate != units[present_owner]
+    try:
+        check_present('CaptureGuides', expected, {**units, present_owner: candidate})
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError('present-guide negative control escaped')
+print(f'PASS: {len(present_contract["definitions"])} present-guide owners and immutable bodies; missing/duplicate/decision/tracking order mutations rejected')

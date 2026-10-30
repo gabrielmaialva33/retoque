@@ -44,6 +44,7 @@ struct ID3D12Device
         return --refs;
     }
 };
+struct IDXGISwapChain3;
 struct ID3D12DeviceChild
 {
 };
@@ -192,6 +193,11 @@ struct Ring
 } // namespace PresentGuides
 namespace PresentGuideIdentity
 {
+struct Decision {};
+struct Present {};
+struct Status {};
+enum class Outcome {};
+enum class Source {};
 struct Tracker
 {
 };

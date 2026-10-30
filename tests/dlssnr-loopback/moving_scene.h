@@ -407,7 +407,7 @@ struct Host
 // corpusFrames > 0 is --moving-corpus N: N frames, all captured, for offline replay's first corpus.
 static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* queue, ID3D12CommandAllocator* alloc,
                 ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event, HWND window, bool present,
-                unsigned corpusFrames = 0, const char* planPath = nullptr)
+                unsigned corpusFrames = 0, const char* planPath = nullptr, unsigned presentDelayMs = 0)
 {
     // Keep all GPU-owned objects outside the try block. A failed/unknown fence cannot unwind them.
     Host host { device, queue, alloc, list, fence, event };
@@ -451,7 +451,11 @@ static void Run(const char* dllPath, ID3D12Device* device, ID3D12CommandQueue* q
         {
             host.Frame(frame);
             if (present)
+            {
                 Check(swapchain->Present(0, 0), "moving cadence Present");
+                if (presentDelayMs != 0)
+                    Sleep(presentDelayMs);
+            }
         }
         // Present hooks may submit overlay work. Drain it before teardown; never time it as EvaluateFeature.
         if (present)

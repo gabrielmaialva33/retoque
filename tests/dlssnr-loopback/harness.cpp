@@ -345,7 +345,8 @@ int main(int argc, char** argv)
 
         // --cold-size takes a value, which is not a DLL path either.
         if (argument == "--cold-size" || argument == "--cold-ui-correction" || argument == "--cold-core-sdk" ||
-            argument == "--replay-nr" || argument == "--moving-corpus" || argument == "--moving-plan")
+            argument == "--replay-nr" || argument == "--moving-corpus" || argument == "--moving-plan" ||
+            argument == "--moving-present-delay-ms")
         {
             ++i;
             continue;
@@ -362,9 +363,10 @@ int main(int argc, char** argv)
     unsigned coldWidth = 640, coldHeight = 360;
     int coldUiCorrection = 0;
     unsigned coldCoreSdk = 0;
-    const char* replayPlan = nullptr; // --replay-nr PLAN (offline-replay-seam.md)
-    unsigned corpusFrames = 0;        // --moving-corpus N: the moving scene, every frame captured
-    const char* movingPlan = nullptr; // --moving-plan PLAN: optional actual pose/clock sequence
+    const char* replayPlan = nullptr;  // --replay-nr PLAN (offline-replay-seam.md)
+    unsigned corpusFrames = 0;         // --moving-corpus N: the moving scene, every frame captured
+    const char* movingPlan = nullptr;  // --moving-plan PLAN: optional actual pose/clock sequence
+    unsigned movingPresentDelayMs = 0; // default off; bounded and used only after a present
     const bool coldLoadOptiScaler = hasFlag("--cold-load-optiscaler");
     const bool coldDeviceFromD3D11 = hasFlag("--cold-device-from-d3d11");
     const bool coldSiblingSnippets = hasFlag("--cold-sibling-snippets");
@@ -407,6 +409,30 @@ int main(int argc, char** argv)
     {
         Require(!hasFlag("--moving-plan") || (movingPlan && corpusFrames > 0),
                 "--moving-plan needs a path and --moving-corpus N");
+        bool sawPresentDelay = false;
+        for (int i = 1; i < argc; ++i)
+        {
+            if (std::string(argv[i]) != "--moving-present-delay-ms")
+                continue;
+            Require(!sawPresentDelay && i + 1 < argc, "present delay needs one value, once");
+            sawPresentDelay = true;
+            const char* value = argv[++i];
+            Require(*value != '\0', "present delay must be an integer from 1 to 100");
+            for (const char* digit = value; *digit; ++digit)
+            {
+                Require(*digit >= '0' && *digit <= '9', "present delay must be an integer from 1 to 100");
+                const unsigned n = static_cast<unsigned>(*digit - '0');
+                Require(movingPresentDelayMs <= (100 - n) / 10, "present delay exceeds 100 ms");
+                movingPresentDelayMs = movingPresentDelayMs * 10 + n;
+            }
+            Require(movingPresentDelayMs >= 1 && movingPresentDelayMs <= 100,
+                    "present delay must be an integer from 1 to 100");
+        }
+        Require(!sawPresentDelay || (hasFlag("--moving-scene") && hasFlag("--moving-present")),
+                "present delay requires --moving-scene and --moving-present");
+        if (sawPresentDelay)
+            Say("MOVING-PRESENT delay_ms=%u\n", movingPresentDelayMs);
+
         Say("dlssnr-loopback: driving the production NR path\n");
         HWND window = MakeWindow();
         Say("  window %p created and pumping\n", (void*) window);
@@ -514,7 +540,7 @@ int main(int argc, char** argv)
         if (hasFlag("--moving-scene") || corpusFrames > 0)
         {
             MovingScene::Run(dllPath, device, queue, alloc, list, fence, fenceEvent, window,
-                             hasFlag("--moving-present"), corpusFrames, movingPlan);
+                             hasFlag("--moving-present"), corpusFrames, movingPlan, movingPresentDelayMs);
             DestroyWindow(window);
             CloseHandle(fenceEvent);
             return 0;

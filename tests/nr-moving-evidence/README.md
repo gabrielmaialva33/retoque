@@ -13,3 +13,8 @@ hide the processing effect, and the timing percentiles use nearest rank.
 The actual analyzer is shared with the real moving-scene GPU experiment. These
 checks exercise its decisions on known inputs without Wine, NGX or a GPU; they
 cannot establish rendering or model correctness.
+
+The D3D12 present-guide and native D3D11 bridge probe validators also run here. Their
+synthetic host cases reject missing/wrong DLLs, stale logs, zero guide coverage, wrong
+consumer and incomplete or failed runtime reports. These checks do not execute a DLL,
+Wine, NGX or a GPU; a real probe run is separately required.

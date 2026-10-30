@@ -2172,6 +2172,9 @@
     <ClCompile Include="..\retoque\dlssnr\DlssNr_ReplayRecorder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_PresentGuides.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Inputs.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

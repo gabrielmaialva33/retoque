@@ -85,6 +85,7 @@ experiment.
 | `DlssNr_PresentGuideIdentity.h` | whether a capture in the present guide ring (`DlssNr_PresentGuideRing.h`) is the frame being presented: the stamp, the eight rules, the presenting-swapchain registry, and step 0's per-window record. Log only for now; `../../docs/dlssnr/design/present-real-guides.md`, tested by `tests/nr-present-guide-identity` |
 | `DlssNr_Enlarge.h` | Transfer 2's rules as pure functions: what the resolve is sent and why, the Vulkan 2 -> 1 mapping, the menu's index table, when the private SR's history resets; `../../docs/dlssnr/design/dlss-enlargement.md`, tested by `tests/nr-enlarge` |
 | `DlssNr_PrivateSr.h/.cpp` | Transfer 2's private DLSS Super Resolution, the NGX half: its own parameter table and handle through `NVNGXProxy`, created and evaluated with wilsjo2's parameters |
+| `shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp` | D3D12 present guide capture, identity and bridge consumption; shared state remains in the core renderer |
 | `shaders/dlssnr/DlssNr_Dx12.h/.cpp` | the pass: forwarder loading, feature lifetime, the evaluate path, encode/resolve orchestration, capture |
 | `shaders/dlssnr/DlssNr_Common.h` | the constant buffer, shared by the host and the shader |
 | `shaders/dlssnr/precompile/dlssnr.hlsl` | **the live shader**: encode (scale and sRGB-encode with a soft knee), area downsample, resolve (RenoDX's two-branch composition, OkLab hue correction, AP1 clamp, the guard) |

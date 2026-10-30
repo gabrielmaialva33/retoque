@@ -13,7 +13,7 @@ ASan/UBSan and `-Werror`, the runner does two things.
 
 1. **Source guards** on the transport (`retoque/dlssnr/DlssNr_Dx11Guides.cpp`), its one call site
    (`NoteDx11Evaluate` in `NVNGX_DLSS_Dx11.cpp`, through `DlssNr_Dx11Upscaler.h`), the capture core it shares with
-   the D3D12 route (`CaptureBridgedGuides` and `GatherGuideFrame` in `DlssNr_Dx12.cpp`), the present host's half
+   the D3D12 route (`CaptureBridgedGuides` in `DlssNr_Dx12_PresentGuides.cpp` and `GatherGuideFrame` in `DlssNr_Dx12_Inputs.cpp`), the present host's half
    (the presented size published in `CapturedPresentGuides`) and shutdown.
 2. **`decide.cpp`** compiles the production header `retoque/dlssnr/DlssNr_Dx11Guides.h`.
 

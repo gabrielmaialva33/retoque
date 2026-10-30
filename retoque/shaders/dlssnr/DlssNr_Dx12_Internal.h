@@ -31,6 +31,7 @@
 #include <vector>
 
 struct DXGI_QUERY_VIDEO_MEMORY_INFO;
+struct IDXGISwapChain3;
 class OS_Dx12;
 class DlssNr_Stabilizer_Dx12;
 class DlssNr_UiMask_Dx12;
@@ -827,6 +828,24 @@ bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height,
 void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,
                                     unsigned int workHeight, const DlssNr::FormatTwin::Transfer& transfer);
 void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked);
+// One present's question to the identity rules, and the facts it was asked with, which the record needs again.
+struct GuideAsk
+{
+    DlssNr::PresentGuideIdentity::Decision decision {};
+    DlssNr::PresentGuideIdentity::Present present {};
+    bool asked = false; // false: the ring never recorded, so there was nothing to identify and nothing was marked
+};
+long long NowMs();
+const void* PresentGuidePresenter(IDXGISwapChain3* swapchain);
+GuideAsk AskPresentPassGuides(ID3D12Device* device, const void* presenter, unsigned int width, unsigned int height,
+                              size_t picked, bool boundary);
+void CountPresentPassGuides(const GuideAsk& ask, size_t picked, DlssNr::PresentGuideIdentity::Outcome outcome);
+bool NotePresentPassGuideSource(bool game, bool routeStarts);
+void NotePresentGuideWaiting();
+bool RecentGuideStatus(DlssNr::PresentGuideIdentity::Status* status);
+DlssNr::PresentGuideIdentity::Source RecentGuideSource(const DlssNr::PresentGuideIdentity::Status& status);
+void CaptureTemporal(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params, const DlssNrFrameInfo& frame);
+
 } // namespace DlssNr::Dx12Internal
 
 // Functions one renderer unit defines and another calls, with the unit that defines them. Public entry points keep

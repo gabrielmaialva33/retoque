@@ -35,7 +35,7 @@ and [LSFG module](../retoque/lsfg/README.md) for file-level entrypoints.
 ## Renderer boundaries
 
 The D3D12 split already has an explicit [shared-state contract](dlssnr/design/dx12-internal.md).
-The following responsibility units are implemented; this organizational change does not move their code.
+The following responsibility units are implemented. Extraction records distinguish source/build checks from live-route qualification.
 
 | Unit | Owns |
 |---|---|
@@ -47,11 +47,13 @@ The following responsibility units are implemented; this organizational change d
 | `DlssNr_Dx12_Enlarge.cpp` | Private reconstruction of the NR contribution |
 | `DlssNr_Dx12_Lifetime.cpp` | Admission, retirement, parking and related decisions |
 | `DlssNr_Dx12_Diagnostics.cpp` | Reporting and diagnostics |
+| `DlssNr_Dx12_PresentGuides.cpp` | Present-guide cloning, capture, identity, status and bridge consumption; shared storage stays in core |
 
-All these files remain under `retoque/shaders/dlssnr/`. Further present/guide/synth-motion extraction is a future
-change, not part of the documentation/traceability work. Do not replace proven synchronization with generic
-ownership abstractions during a move. Preserve source-slice tests while gradually making smaller real units
-compilable; [test support](../tests/_support/nr_sources.py) documents the existing bridge.
+All these files remain under `retoque/shaders/dlssnr/`. Further present-orchestration and synth-motion extraction
+is future work. The [present-guide extraction review](superpowers/reviews/2026-10-29-present-guides-extraction.md)
+records source/build/fixture checks and the remaining candidate runtime qualification. Do not replace proven
+synchronization with generic ownership abstractions during a move. Preserve source-slice tests while gradually
+making smaller real units compilable; [test support](../tests/_support/nr_sources.py) documents the existing bridge.
 
 ## Configuration, state and ownership
 

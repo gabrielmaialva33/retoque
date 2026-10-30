@@ -9,13 +9,13 @@ Step 1 of `docs/dlssnr/design/present-real-guides.md`: the identity layer for th
 present reads a capture only when every rule accepts it, and falls back to zero or synthesized guides otherwise. The
 runner does three things, under g++ C++20, ASan/UBSan and `-Werror`.
 
-1. **Source guards** on the renderer (`retoque/shaders/dlssnr/DlssNr_Dx12.cpp`), the bridge host, the menu and the
+1. **Source guards** on the renderer units, the bridge host, the menu and the
    feature header, checked first.
 2. **`decide.cpp`** compiles the production header `retoque/dlssnr/DlssNr_PresentGuideIdentity.h` with the production
    ring `retoque/dlssnr/DlssNr_PresentGuideRing.h`.
-3. **The glue as the renderer has it**: the block from `struct PresentGuideIdentityState` up to
-   `ReleasePresentTemporal` is sliced out of the renderer, compiled after `glue_fakes.h` and run by `glue_cases.h`. A
-   glue that grows a dependency stops compiling here.
+3. **The glue as the renderer has it**: `present_identity_glue()` assembles the unique state definitions from core,
+   `GuideAsk` from the internal header, and the identity functions from `DlssNr_Dx12_PresentGuides.cpp`. It compiles
+   them after `glue_fakes.h` and runs `glue_cases.h`; missing or duplicate anchors are rejected.
 
 ## What this covers
 

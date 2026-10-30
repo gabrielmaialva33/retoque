@@ -44,3 +44,40 @@ def renderer_with_internal_types():
 
     return re.sub(r"// Internal type: (\w+) \(DlssNr_Dx12_Internal.h\)",
                   declaration, renderer_source())
+
+
+def present_identity_glue():
+    """Assemble uniquely owned production declarations and glue for host fixtures."""
+    import re
+    core = renderer_with_internal_types()
+    header = renderer_internal_header()
+    guide = (RENDERER / "DlssNr_Dx12_PresentGuides.cpp").read_text()
+
+    def unique(text, pattern, label):
+        matches = list(re.finditer(pattern, text, re.M))
+        assert len(matches) == 1, f"expected one {label}, found {len(matches)}"
+        return matches[0]
+
+    state_start = unique(core, r"^struct PresentGuideIdentityState$", "identity state").start()
+    identity = unique(core, r"^PresentGuideIdentityState Dx12Internal::g_guideIdentity;", "identity storage")
+    status = unique(core, r"^std::atomic<uint64_t> Dx12Internal::g_guideStatus\b[^;]*;", "status storage")
+    status_at = unique(core, r"^std::atomic<long long> Dx12Internal::g_guideStatusAtMs\b[^;]*;", "status clock")
+    fallback = unique(core, r"^std::atomic<uint8_t> Dx12Internal::g_guideFallback\b[^;]*;", "fallback state")
+    assert state_start < identity.start() < status.start() < status_at.start() < fallback.start()
+    state = core[state_start:fallback.end()]
+    ask = unique(header, r"^struct GuideAsk\n\{[\s\S]*?^\};", "GuideAsk").group()
+    bridge = unique(core, r"^std::atomic<uint64_t> Dx12Internal::g_bridgePresentedExtent\b[^;]*;", "bridge extent").group() + "\n"
+    start = unique(guide, r"^static DlssNr::PresentGuideIdentity::Stamp EvaluateOutput\(", "glue start").start()
+    end = unique(guide, r"^struct GuideCapture$", "glue end").start()
+    assert start < end
+    prefix = "namespace Dx12Internal\n{\n"
+    assert guide[start - len(prefix):start] == prefix
+    start -= len(prefix)
+    assert guide[end - len(prefix):end] == prefix
+    end -= len(prefix)
+    body = guide[start:end]
+    marker = "// GuideAsk is declared in DlssNr_Dx12_Internal.h."
+    assert body.count(marker) == 1, "expected one GuideAsk marker"
+    body = body.replace(marker, ask)
+    body = body.replace("namespace Dx12Internal\n{\n", "").replace("} // namespace Dx12Internal\n", "")
+    return (state + bridge + body).replace("Dx12Internal::", "")
