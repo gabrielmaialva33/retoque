@@ -96,5 +96,22 @@ if dll.is_file():
         print(f"FAIL real lsfg-vk.dll: Float16 modules are {fp16}, expected 51..98")
         sys.exit(1)
     print("real lsfg-vk.dll: Float16 declared by exactly ids 51..98")
+
+    # The id -> role table, re-derived from the DLL's interface and lsfg-vk's GPL/MIT roles, against the source.
+    import derive_ids  # noqa: E402
+
+    try:
+        derived = derive_ids.derive(modules)
+    except derive_ids.DeriveError as error:
+        print(f"FAIL real lsfg-vk.dll: derive_ids: {error}")
+        sys.exit(1)
+    problems = derive_ids.compare(derived, derive_ids.expected_from_source())
+    if problems:
+        for line in problems:
+            print(f"FAIL real lsfg-vk.dll: {line}")
+        sys.exit(1)
+    layout_only = sorted(rid for rid, v in derived.items() if v["evidence"] == "layout")
+    print(f"real lsfg-vk.dll: derive_ids table equals LsfgShaderLibrary ({len(derived)} ids; "
+          f"quality/performance by layout only: {len(layout_only)})")
 else:
     print("real lsfg-vk.dll: skipped (not installed)")

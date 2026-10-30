@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "lsfg/LsfgEnvironment.h"
+#include "lsfg/LsfgGraph.h"
 #include "lsfg/LsfgShaderLibrary.h"
 #include "lsfg/LsfgShaderSource.h"
 
@@ -173,6 +174,69 @@ void TestShaderIdResolution()
     std::cout << "  PASS: TestShaderIdResolution\n";
 }
 
+// The whole id -> role table, sorted by id and written out here rather than read from kCoreShaders
+// (LsfgShaderLibrary.cpp), so a rewrite of that table cannot change what any name resolves to. run.py re-derives the
+// same table from the user's lsfg-vk.dll, when it is installed, with tools/lsfg-study/derive_ids.py.
+void TestShaderIdTablePinned()
+{
+    // Quality FP32 id of each core role is 3 + its index here; performance variants +24, FP16 variants +48.
+    constexpr std::array<std::string_view, 24> kCoreByRid = {
+        "gamma0",   "gamma1",   "gamma2",   "gamma3", "gamma4", "delta0", "delta1",   "delta2",
+        "delta3",   "delta4",   "alpha0",   "alpha1", "alpha2", "alpha3", "epsilon0", "epsilon1",
+        "epsilon2", "epsilon3", "epsilon4", "beta0",  "beta1",  "beta2",  "beta3",    "beta4",
+    };
+
+    std::set<uint32_t> seen;
+    for (uint32_t i = 0; i < kCoreByRid.size(); ++i)
+    {
+        for (bool fp16 : { false, true })
+        {
+            for (bool performance : { false, true })
+            {
+                const uint32_t expected = 3 + i + (performance ? 24 : 0) + (fp16 ? 48 : 0);
+                const uint32_t rid = LsfgShaderLibrary::ResolveResourceId(kCoreByRid[i], fp16, performance);
+                if (rid != expected)
+                {
+                    std::cerr << "  FAIL: " << kCoreByRid[i] << " fp16=" << fp16 << " performance=" << performance
+                              << " resolves to " << rid << ", pinned " << expected << "\n";
+                }
+                assert(rid == expected);
+                assert(seen.insert(rid).second);
+
+                // LsfgGraph.h dispatches by id, with its own variant helper (note its argument order).
+                assert(Lsfg::VariantRid(3 + i, performance, fp16) == rid);
+                assert(Lsfg::BaseShader(rid) == 3 + i);
+            }
+        }
+    }
+
+    // Base shaders have no performance or FP16 variants. "generate" picks the 16-bit-output module for FP16.
+    for (bool fp16 : { false, true })
+    {
+        for (bool performance : { false, true })
+        {
+            assert(LsfgShaderLibrary::ResolveResourceId("mipmaps", fp16, performance) == 0);
+            assert(LsfgShaderLibrary::ResolveResourceId("generate_8bit", fp16, performance) == 1);
+            assert(LsfgShaderLibrary::ResolveResourceId("generate_16bit", fp16, performance) == 2);
+            assert(LsfgShaderLibrary::ResolveResourceId("generate", fp16, performance) == (fp16 ? 2u : 1u));
+            assert(Lsfg::VariantRid(0, performance, fp16) == 0);
+            assert(Lsfg::VariantRid(1, performance, fp16) == 1);
+            assert(Lsfg::VariantRid(2, performance, fp16) == 2);
+        }
+    }
+    seen.insert({ 0, 1, 2 });
+    assert(seen.size() == kTotalShaderCount && *seen.rbegin() == kTotalShaderCount - 1);
+
+    // Nothing else resolves, including lsfg-vk's own spellings of the same roles (delta[5..9] is epsilon0..4 here).
+    for (std::string_view name :
+         { "", "alpha4", "beta5", "gamma5", "delta5", "epsilon5", "delta[5]", "p_alpha0", "Gamma0", "generate_hdr" })
+    {
+        assert(LsfgShaderLibrary::ResolveResourceId(name, false, false) == UINT32_MAX);
+    }
+
+    std::cout << "  PASS: TestShaderIdTablePinned (99 ids)\n";
+}
+
 void TestCacheManagement(const std::filesystem::path& tmpDir)
 {
     LsfgShaderLibrary lib;
@@ -316,6 +380,7 @@ int main(int argc, char** argv)
     TestDiscovery_XdgDataHome();
     TestDiscovery_OverrideAndFixPath();
     TestShaderIdResolution();
+    TestShaderIdTablePinned();
     TestCacheManagement(tmpDir);
     TestSelection_Logic();
     TestRealDllParsing();

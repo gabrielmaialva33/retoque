@@ -161,10 +161,10 @@ class Context_Dx12
     // Multi-frame generation contract:
     // Records generated frame `index` (0-based: 0 .. count - 1) of `count` total generated frames
     // for the current base frame pair into `output`.
-    // - index == 0: ingests presentColor, executes pre-pass (Stages 0..9) + main-pass (Stages 10..45) at
-    //   timestamp 1/(count+1), writing to output.
-    // - index > 0: executes ONLY the main-pass (Stages 10..45) at timestamp (index+1)/(count+1), reusing the
-    //   pinned pre-pass feature images (alphaArray, betaImageArray) from index 0.
+    // - index == 0: ingests presentColor, executes the pre-pass (Graph::pre, 34 dispatches) and the main pass
+    //   (Graph::main, 66 dispatches) at timestamp 1/(count+1), writing to output.
+    // - index > 0: executes ONLY the main pass at timestamp (index+1)/(count+1), reusing the pre-pass results
+    //   (the alpha features and the beta pyramid) from index 0.
     // Output resource is restored to `outputState`.
     bool RecordGenerated(ID3D12GraphicsCommandList* list, ID3D12Resource* presentColor,
                          D3D12_RESOURCE_STATES presentState, uint32_t index, uint32_t count, ID3D12Resource* output,

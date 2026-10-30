@@ -1,5 +1,16 @@
 # LSFG 3.1 Pass Graph Specification (lsfg-vk 2.0.0 on D3D12)
 
+> **Provenance (2026-10-30).** This spec was written from lsfg-vk 2.0.0 (CC BY-NC-ND 4.0) and still uses its
+> vocabulary. The shipped code no longer cites it: the id table, `LsfgGraph.h` and the samplers cite lsfg-vk
+> `8b0da266` (GPL-3.0-or-later), `v1.0.0` (MIT) and the user's own DLL (`README.md`, `derive_ids.py`). The binding
+> numbers and descriptor counts in section 3 and the `cb_*`/`pc_*` names in section 5 are the user's DLL's interface.
+> A neutral rewrite would have to replace: the title; the stage numbering (`Stages 0..45`, `Command List 0/1`, about
+> 120 lines across sections 1, 2, 5, 6 and 7); section 2's 101-image manifest (symbolic names such as `alpha0_ff_0`,
+> `sourceImageArray`, `betaImageArray`, the Pinned/Transient segments, `ExtentOp`, lifetimes), which is 2.0.0's pipeline
+> signature, by images described from `LsfgGraph.h` `BuildGraph`; the image names in section 3's binding table;
+> section 5 "Multi-Frame Generation (x3, x4) State, Reuse & Cost Model" (2.0.0 `lsfgvk.cpp`, `pipeline.cpp`,
+> `v3_1.cpp`); and section 8 "How `lsfg-vk-cli debug` Consumes Images" (2.0.0 `debug.cpp`).
+
 ## 1. Overview and Architecture
 
 Lossless Scaling Frame Generation (LSFG 3.1) is an optical-flow based frame interpolation model executing entirely within compute shaders. It receives two consecutive input frames $I_{t-1}$ and $I_t$ (provided as a 2-layer 2D texture array) and synthesizes intermediate frame(s) at normalized timestamp $t \in (0, 1)$.

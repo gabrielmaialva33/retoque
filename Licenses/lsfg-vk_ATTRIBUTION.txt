@@ -1,0 +1,58 @@
+lsfg-vk: the LSFG 3.1 pass structure
+====================================
+
+retoque/lsfg/ (LsfgGraph.h, LsfgShaderLibrary.cpp, LsfgFrameGen_Dx12.cpp) and
+tools/lsfg-study/derive_ids.py run Lossless Scaling's frame generation from the
+user's own lsfg-vk.dll. No lsfg-vk source file is copied. Retoque uses facts
+about the pass structure from two lsfg-vk revisions:
+
+  lsfg-vk v1.0.0 (MIT), commit 7113d7d02da9fc9df5cb3b03230d1f7de86f7056
+  https://github.com/PancakeTAS/lsfg-vk/tree/v1.0.0
+    src/extract/extract.cpp: the chain names alpha[0..3], beta[0..4],
+    gamma[0..4], delta[0..9], their performance variants, and mipmaps and
+    generate without performance variants.
+
+  lsfg-vk, GPL-3.0-or-later (SPDX headers of each file),
+  commit 8b0da2661c6f3473a7fccc8ba643880050e71642
+  https://github.com/PancakeTAS/lsfg-vk/tree/8b0da2661c6f3473a7fccc8ba643880050e71642
+    lsfg-vk-backend/src/lsfgvk.cpp: chain wiring, pyramid levels, the three
+    samplers; src/shaderchains/*.cpp: inputs, outputs, image formats and
+    dispatch tiles; src/extraction/shader_registry.cpp: sampled and storage
+    image counts per role for quality and performance;
+    lsfg-vk-common/src/vulkan/sampler.cpp: sampler filtering and borders.
+
+Both revisions number shaders by Lossless.dll's resource ids. lsfg-vk.dll's
+ids, bindings and constant layout come from the user's own DLL, reflected at
+run time and by tools/lsfg-study/derive_ids.py. Retoque's epsilon0..4 is
+lsfg-vk's delta[5..9].
+
+lsfg-vk 2.0.0 and later are CC BY-NC-ND 4.0. They are not a source for this
+code. Lossless Scaling's shaders and models are not part of Retoque and are
+never redistributed.
+
+The MIT notice of v1.0.0 is reproduced below. The GPL-3.0 text is LICENSE at
+the repository root.
+
+---------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2025 lsfg-vk
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
