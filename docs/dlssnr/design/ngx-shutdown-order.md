@@ -42,6 +42,8 @@ recording, resource retirement, descriptors, shader inputs, configuration or UI.
 new synchronization or GPU-lifetime guarantee is claimed. Other graphics APIs retain
 their existing declarations; their private ABI has not been established here.
 
+For the later D3D11 change, see [D3D11 core shutdown adapter](#d3d11-core-shutdown-adapter--2026-10-30).
+
 An earlier experiment releasing NR features, snippet and capability parameters before
 core shutdown reached its cleanup log but reproduced the same invalid write. Those
 production changes were reverted. The patch and logs remain only in ignored local
@@ -61,3 +63,25 @@ with normal process exit. The harness compiler recovered one Wine stall automati
 Evidence, binary hashes and the source patch are in `x64/dispatch-validation/core-abi/`.
 This validates one installed driver/runtime and this harness, not every driver,
 concurrent device teardown, in-process NGX reinitialization or game behavior.
+
+## D3D11 core shutdown adapter — 2026-10-30
+
+For the inspected core version 32.0.16.1752 (SHA-256
+`dabe18b0dc559750113b589d06f672141c8c49a2a571e0a5a7ca7b3e584a7ac3`),
+D3D11 `Shutdown1` writes through its second argument at RVA `0x3b8b4`. The earlier
+reproduction crashed after 200 evaluations/presents with both tested DLLs. This is
+evidence for that core, not a public ABI guarantee across versions.
+
+The D3D11 raw slot and loader use a private two-argument type; the public getter
+keeps the one-argument SDK type and returns an adapter with initialized writable
+storage. Null devices use the all-devices export or return NotImplemented. This
+changes neither custom SDK interfaces nor resource lifetime policy.
+
+`tests/nr-shutdown` compiles the production D3D11 types, slot, loader assignment,
+adapter and getter against host fakes with ASan/UBSan. It checks result propagation,
+initialization, absent exports and null devices as well as the writable output.
+These checks do not execute the fixed DLL, a driver, GPU, Proton or a game. The
+separate fix-only runtime validation passed 200 evaluations and presents, returned
+from Shutdown1 and all releases, and exited with code 0; the baseline failed with
+the same inputs. See the [validation review](../../superpowers/reviews/2026-10-30-dx11-core-shutdown.md) for
+combined results and remaining limits.

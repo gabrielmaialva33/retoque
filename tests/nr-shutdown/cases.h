@@ -23,9 +23,45 @@ unsigned SdkDeviceShutdown(ID3D12Device* device)
     return result;
 }
 
+unsigned dx11Calls = 0, dx11AllCalls = 0;
+ID3D11Device* expectedDx11 = nullptr;
+unsigned CoreDx11Shutdown(ID3D11Device* device, unsigned* remaining)
+{
+    assert(device == expectedDx11 && device != nullptr);
+    assert(remaining != nullptr && *remaining == 0);
+    *remaining = 9;
+    ++dx11Calls;
+    return result;
+}
+unsigned CoreDx11AllShutdown() { ++dx11AllCalls; return result; }
+
 int main()
 {
     static_assert(std::is_same_v<decltype(NVNGXProxy::D3D12_Shutdown1()), PFN_D3D12_Shutdown1>);
+    static_assert(std::is_same_v<decltype(NVNGXProxy::D3D11_Shutdown1()), PFN_D3D11_Shutdown1>);
+    static_assert(std::is_same_v<decltype(NVNGXProxy::_module.D3D11_Shutdown1),
+                                 NVSDK_NGX_Result (*)(ID3D11Device*, unsigned*)>);
+    KernelBaseProxy::address = reinterpret_cast<void*>(&CoreDx11Shutdown);
+    NVNGXProxy::LoadDx11();
+    NVNGXProxy::_module.D3D11_Shutdown = &CoreDx11AllShutdown;
+    assert(NVNGXProxy::D3D11_Shutdown1() == nullptr);
+    NVNGXProxy::_dx11Inited = true;
+    auto dx11 = NVNGXProxy::D3D11_Shutdown1();
+    assert(dx11 != nullptr);
+    ID3D11Device dx11Device;
+    expectedDx11 = &dx11Device;
+    assert(dx11(&dx11Device) == 1 && dx11Calls == 1 && dx11AllCalls == 0);
+    result = 0xBAD00002;
+    assert(dx11(&dx11Device) == result && dx11Calls == 2 && dx11AllCalls == 0);
+    assert(dx11(nullptr) == result && dx11AllCalls == 1 && dx11Calls == 2);
+    result = 1;
+    assert(dx11(nullptr) == 1 && dx11AllCalls == 2 && dx11Calls == 2);
+    NVNGXProxy::_module.D3D11_Shutdown = nullptr;
+    assert(dx11(nullptr) == NVSDK_NGX_Result_FAIL_NotImplemented);
+    assert(dx11AllCalls == 2 && dx11Calls == 2);
+    KernelBaseProxy::address = nullptr;
+    NVNGXProxy::LoadDx11();
+    assert(NVNGXProxy::D3D11_Shutdown1() == nullptr);
     NVNGXProxy::_module.D3D12_Shutdown1 = &CoreDeviceShutdown;
     NVNGXProxy::_module.D3D12_Shutdown = &CoreAllShutdown;
     assert(NVNGXProxy::D3D12_Shutdown1() == nullptr);
