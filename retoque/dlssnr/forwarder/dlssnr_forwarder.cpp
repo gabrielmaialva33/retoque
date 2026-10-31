@@ -9,7 +9,11 @@
 // preset callbacks a feature expects at create time. The core exports no Set/Get helpers (they are
 // static-library inlines), so it is driven through its vtable. NVSDK_NGX_Parameter declares eight Set
 // overloads then eight Get overloads, in this order: ULL, float, double, uint, int, ID3D11Resource*,
-// ID3D12Resource*, void*.
+// ID3D12Resource*, void*. MSVC lays each overload group out in reverse, so the slots run the other way: setters
+// 0 void*, 1 ID3D12Resource*, 2 ID3D11Resource*, 3 int, 4 unsigned int, 5 double, 6 float, 7 unsigned long long,
+// and each getter eight above its setter (checked 2026-10-31 against every name the model reads,
+// docs/dlssnr/design/parameter-slots.md). The block keeps the type a value was written with: int and unsigned int
+// convert, a pointer and a number do not.
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -19,13 +23,14 @@ namespace
 {
 
 // Slot indices confirmed by round-tripping values through the live block: a setter at N is read back by
-// the getter at N+8. The unsigned setter is slot 3 (a feature create driven through it succeeds) and the
-// resource getter answers at slot 8, so resources are written through slot 0 -- the 64-bit setter, which
-// is what a resource handle is. Writing them through the typed D3D12 setter left them unset.
+// the getter at N+8. VT_SET_ULL is the void* setter, whatever its name says, and the model reads every resource
+// through the void* getter at 8, so resources are written through slot 0. VT_SET_UINT is Set(int): the model reads
+// most integers as int (getter 11) and six (Width, Height, the node masks, PerfQualityValue, Style) as unsigned int
+// (getter 12), which the block converts to. Writing resources through the typed D3D12 setter left them unset.
 constexpr int VT_SET_ULL = 0;
-// Where the float setter actually lives. The public header declares it at slot 1, and this block --
-// the driver's own, not the header's implementation -- does not keep a float there: every float written
-// to slot 1 reads back as FAIL_UnsupportedParameter while every uint lands. The host discovers the real
+// Where the float setter actually lives. The public header declares it at slot 1, which under MSVC's reverse
+// layout is Set(ID3D12Resource*): every float written to slot 1 reads back as FAIL_UnsupportedParameter while
+// every uint lands. It is slot 6 on every driver seen so far. The host discovers the real
 // slot by round-tripping a value and sets it here before anything else is written.
 int g_floatSlot = 1;
 constexpr int VT_SET_UINT = 3;

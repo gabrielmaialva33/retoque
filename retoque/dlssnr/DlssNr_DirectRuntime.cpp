@@ -24,6 +24,8 @@ namespace
 // The capability block's setters, driven through its vtable exactly as the forwarder drives them.
 // ---------------------------------------------------------------------------------------------------
 
+// Named as the forwarder names them; under MSVC's reverse overload layout VT_SET_ULL is the void* setter and
+// VT_SET_UINT is Set(int). See the forwarder's header and docs/dlssnr/design/parameter-slots.md.
 constexpr int VT_SET_ULL = 0;
 int g_floatSlot = 1; // set by the host once it has round-tripped a value (SetFloatSlot)
 constexpr int VT_SET_UINT = 3;

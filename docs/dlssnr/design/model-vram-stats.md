@@ -67,6 +67,24 @@ Remix's `NVSDK_NGX_Parameter_GetULL` reaches, is slot 15. Slots 0/8, which the f
 slot 8. Both loaders now clear and read the size through 7/15; `tests/nr-model-stats` types its fake block the same way
 and writes the size through slot 7, as the model does.
 
+## 310.8.2.0 against 310.9.16.0 (2026-10-31)
+
+The same `tests/dlssnr-loopback` default sweep, twice, changing only the model (`LOOPBACK_MODEL`, linked, never
+copied): the kit's 310.8.2.0 (`6eb209e7…`) and a game's 310.9.16.0 (`cdfa6c1e…`). Both ran preset 0, intensity 1,
+style 0, the forwarder loader, Proton on an RTX 4090. Three builds each, in the same order:
+
+| Build | Size (target, guides) | 310.8.2.0 | 310.9.16.0 | Change |
+|---|---|---:|---:|---:|
+| 1st | 3440x1440, 2292x960 | 803908096 B (767 MiB) | 605776896 B (578 MiB) | -24.6% |
+| 2nd | 2560x1080, 1706x720 | 1247838208 B (1190 MiB) | 939405312 B (896 MiB) | -24.7% |
+| 3rd | 3440x1440, 2292x960 | 1247838208 B (1190 MiB) | 939405312 B (896 MiB) | -24.7% |
+
+The second and third figures are aggregates: the second build's figure exceeds the first by 444 MB (310.8.2.0), 0.55 of
+it, close to the 0.56 pixel ratio of 2560x1080 to 3440x1440, so the count looks like the sum of the live features with
+one still being retired. By the model's own count the October set uses about a quarter less than the August one at the
+same size and preset, a little more than NVIDIA's "about 20%". One sweep per model, one preset, synthetic content: no
+game, no other preset, no other GPU.
+
 ## Invariants
 
 - NR off: nothing changes; the query is reached only from a successful build.
