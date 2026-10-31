@@ -83,7 +83,7 @@ direct_path = 'retoque/dlssnr/DlssNr_DirectRuntime.cpp'
 forwarder = strip_comments((repo / forwarder_path).read_text())
 direct = strip_comments((repo / direct_path).read_text())
 
-write = re.compile(r'\b(set(?:UInt|Float|Resource|ULL))\(\s*capabilityParams\s*,\s*("[^"]+")\s*,\s*([^;]+?)\s*\);')
+write = re.compile(r'\b(set(?:UInt|Float|Resource|ULL|U64))\(\s*capabilityParams\s*,\s*("[^"]+")\s*,\s*([^;]+?)\s*\);')
 guarded = re.compile(r'Guarded\(([^;]+?)\);')
 
 pairs = [
@@ -112,10 +112,11 @@ for forwarder_sig, direct_sig in pairs:
     total += len(writes_a)
 
 # The setters behind those writes: same vtable slots on the capability block, same casts.
-for setter in ('void setUInt(', 'void setFloat(', 'void setResource(', 'void setULL('):
+for setter in ('void setUInt(', 'void setFloat(', 'void setResource(', 'void setULL(', 'void setU64('):
     if ' '.join(body(forwarder, setter, forwarder_path).split()) != ' '.join(body(direct, setter, direct_path).split()):
         fail(f'{setter} differs between the forwarder and the direct runtime')
-for constant in ('constexpr int VT_SET_UINT = 3;', 'int g_floatSlot = 1;',
+for constant in ('constexpr int VT_SET_UINT = 3;', 'constexpr int VT_SET_U64 = 7;',
+                 'constexpr int VT_GET_U64 = VT_SET_U64 + 8;', 'int g_floatSlot = 1;',
                  'constexpr unsigned long long kStatsUnwritten = ~0ull;'):
     if constant not in forwarder or constant not in direct:
         fail(f'{constant!r} must be the same in both')

@@ -1,8 +1,11 @@
 # The model's own VRAM count
 
 Status: built 2026-10-30 on `feat/nr-vram-stats-20261030`; host-tested by `tests/nr-model-stats`,
-`tests/nr-model-loader` and `tests/nr-diagnostic-report`. **Not built with MSVC and not run on a GPU**: no figure in
-this note was produced by the model, and nothing here says what it will report.
+`tests/nr-model-loader` and `tests/nr-diagnostic-report`. As first built it never produced a figure (see "The slot the
+size is written through"). After the 2026-10-31 fix, one synthetic run only: the `tests/dlssnr-loopback` default sweep
+(Proton, RTX 4090, forwarder loader, model `6eb209e7…`) logged 767 MiB (803908096 bytes) at the first build and
+1190 MiB (1247838208 bytes) at the two later builds. No game, no `ModelLoader=direct`, no other model version or
+preset; nothing here says what 310.9.16.0 reports.
 
 ## Why
 
@@ -43,13 +46,26 @@ allocation, queried at feature creation. Excludes Remix-managed input/output tex
 
 | Where | What |
 |---|---|
-| `dlssnr_query_stats` (forwarder), `DirectRuntime::QueryStats` | Only once NGX is initialised in that loader. Read `DLSSNRGetStatsCallback` through the block's 64-bit getter (slot 8, as the ratio callback is read); write `~0` into `SizeInBytes`; call the callback through `Guarded`; read `SizeInBytes` back as 64 bits. 1 with the size; 0 when no callback is published; -1 when it refused, faulted or left the size unwritten. No `PopulateParameters`: the ratio query published the callbacks before any feature existed, and publishing again over a live feature is not something it showed harmless. |
+| `dlssnr_query_stats` (forwarder), `DirectRuntime::QueryStats` | Only once NGX is initialised in that loader. Read `DLSSNRGetStatsCallback` through the block's pointer getter (slot 8, as the ratio callback is read); write `~0` into `SizeInBytes` through the unsigned 64-bit setter (slot 7); call the callback through `Guarded`; read `SizeInBytes` back through the unsigned 64-bit getter (slot 15). 1 with the size; 0 when no callback is published; -1 when it refused, faulted or left the size unwritten. No `PopulateParameters`: the ratio query published the callbacks before any feature existed, and publishing again over a live feature is not something it showed harmless. |
 | `ReportModelVram` (`DlssNr_Dx12_Model.cpp`) | Called once after each successful D3D12 build, after the "DLSS-NR running" line, under `g_nrMutex`. One INFO line with a figure: `DLSS-NR: the model's feature uses N MiB (B bytes, its own count)`; at a later build "features ... at this build; a feature still being retired may be in it". Without a figure, one DEBUG line for the process saying why (old forwarder, no callback, refused with its code, no size, fault). |
 | `DlssNr::ModelVramBytes()` | The last figure while that feature runs; empty on native Vulkan, with the pass off or failed, or when the model gave none. |
 | Panel status line | "(model: N MiB)" after "Running." on D3D12, only when there is a figure: a statement, never a control (DEVELOPMENT.md rule 2). pt-BR entry added. |
 | Copy NR diagnostics | Detected: `Model VRAM: N.N MiB (B bytes), the model's own count at its last build`, or `Model VRAM: not reported (...)` ([diagnostic-export](diagnostic-export.md)). |
 
 The pure text is `retoque/dlssnr/DlssNr_ModelStats.h`.
+
+## The slot the size is written through (2026-10-31)
+
+The first build asked through the wrong pair. A loopback run at `LogLevel=1` (`tests/dlssnr-loopback`, default sweep,
+model `6eb209e7…`, five creates) logged `no VRAM figure from the model (its stats callback answered without a size)`:
+the callback answered success and the size read back was not there. The model's `GetStatsCommon` (disassembled
+read-only) asks the feature for its count, then writes `SizeInBytes` through the parameter block's vtable offset
+`0x38`, slot 7. MSVC lays a class's overloaded virtuals out in reverse declaration order, which is also why the float
+setter is discovered at slot 6 rather than the header's 1: slot 7 is `Set(unsigned long long)` and its getter, the one
+Remix's `NVSDK_NGX_Parameter_GetULL` reaches, is slot 15. Slots 0/8, which the fork calls its 64-bit pair, are the
+`void*` pair; the driver's block keeps the type a value was written with, so the figure was never visible through
+slot 8. Both loaders now clear and read the size through 7/15; `tests/nr-model-stats` types its fake block the same way
+and writes the size through slot 7, as the model does.
 
 ## Invariants
 

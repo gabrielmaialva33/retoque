@@ -72,11 +72,13 @@ direct_query = body(direct, 'int QueryStats(', direct_path)
 forwarder_slice = '\n'.join([
     constant(forwarder, 'kStatsUnwritten', forwarder_path),
     body(forwarder, 'void setULL(', forwarder_path),
+    body(forwarder, 'void setU64(', forwarder_path),
     forwarder_query.replace('__declspec(dllexport) ', '', 1),
 ])
 direct_slice = '\n'.join([
     constant(direct, 'kStatsUnwritten', direct_path),
     body(direct, 'void setULL(', direct_path),
+    body(direct, 'void setU64(', direct_path),
     direct_query,
     body(direct, 'const int* LastStatsResult()', direct_path),
 ])
@@ -88,6 +90,7 @@ for path, source in ((forwarder_path, forwarder), (direct_path, direct)):
                         'using PFN_GetULL = int(__thiscall*)(void*, const char*, unsigned long long*);',
                         'using PFN_SetULL = void(__thiscall*)(void*, const char*, unsigned long long);',
                         'constexpr int VT_SET_ULL = 0;', 'constexpr int VT_GET_ULL = VT_SET_ULL + 8;',
+                        'constexpr int VT_SET_U64 = 7;', 'constexpr int VT_GET_U64 = VT_SET_U64 + 8;',
                         'constexpr int kFaulted = static_cast<int>(0xBAD0FA17u);'):
         require(declaration in clean, f'{path} no longer declares {declaration!r}; the harness assumes it')
 require(constant(forwarder, 'kStatsUnwritten', forwarder_path) == constant(direct, 'kStatsUnwritten', direct_path)
@@ -105,6 +108,13 @@ for path, query in ((forwarder_path, forwarder_query), (direct_path, direct_quer
                       r'capabilityParams\);', clean),
             f'{path}: the callback is called through Guarded, assigned to a volatile (never a tail call)')
     require(re.search(r'return\s+Guarded\(', clean) is None, f'{path}: a Guarded call is returned directly')
+    # The model writes SizeInBytes through the block's unsigned 64-bit setter (slot 7), so the sentinel goes through
+    # the same setter and the figure comes back through its getter (slot 15), never the pointer pair at 0/8.
+    require('setU64(capabilityParams, "SizeInBytes", kStatsUnwritten);' in clean
+            and re.search(r'vt\[VT_GET_U64\]\)\(capabilityParams, "SizeInBytes", &bytes\)', clean)
+            and 'setULL(capabilityParams, "SizeInBytes"' not in clean
+            and not re.search(r'vt\[VT_GET_ULL\]\)\(capabilityParams, "SizeInBytes"', clean),
+            f'{path}: SizeInBytes is cleared and read through the unsigned 64-bit pair (slots 7/15)')
 
 harness = (here / 'cases.cpp').read_text(encoding='utf-8')
 for marker in ('// @@FORWARDER@@', '// @@DIRECT@@'):

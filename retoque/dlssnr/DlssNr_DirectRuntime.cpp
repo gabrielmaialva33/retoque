@@ -27,6 +27,13 @@ namespace
 constexpr int VT_SET_ULL = 0;
 int g_floatSlot = 1; // set by the host once it has round-tripped a value (SetFloatSlot)
 constexpr int VT_SET_UINT = 3;
+// The unsigned 64-bit pair. MSVC lays a class's overloaded virtuals out in reverse declaration order, which is why the
+// float setter is found at slot 6 rather than the header's 1: the eight setters run void*, ID3D12Resource*,
+// ID3D11Resource*, int, unsigned int, double, float, unsigned long long. The model writes SizeInBytes through slot 7
+// (its GetStatsCommon calls through vtable offset 0x38) and Remix reads it with NVSDK_NGX_Parameter_GetULL, slot 15;
+// the 0/8 pair is the pointer one, and a value written through one type is not read back through the other.
+constexpr int VT_SET_U64 = 7;
+constexpr int VT_GET_U64 = VT_SET_U64 + 8;
 constexpr int VT_GET_ULL = VT_SET_ULL + 8;
 
 using PFN_SetULL = void(__thiscall*)(void*, const char*, unsigned long long);
@@ -57,6 +64,12 @@ void setULL(void* params, const char* name, unsigned long long v)
 {
     void** vt = *reinterpret_cast<void***>(params);
     reinterpret_cast<PFN_SetULL>(vt[VT_SET_ULL])(params, name, v);
+}
+
+void setU64(void* params, const char* name, unsigned long long v)
+{
+    void** vt = *reinterpret_cast<void***>(params);
+    reinterpret_cast<PFN_SetULL>(vt[VT_SET_U64])(params, name, v);
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -496,7 +509,7 @@ int QueryStats(void* capabilityParams, unsigned long long* outBytes)
     if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "DLSSNRGetStatsCallback", &raw) != 1 || raw == 0)
         return 0;
 
-    setULL(capabilityParams, "SizeInBytes", kStatsUnwritten);
+    setU64(capabilityParams, "SizeInBytes", kStatsUnwritten);
 
     volatile int result = Guarded(reinterpret_cast<PFN_NrStatsCallback>((void*) raw), capabilityParams);
     g_lastStatsResult = (int) result;
@@ -506,7 +519,7 @@ int QueryStats(void* capabilityParams, unsigned long long* outBytes)
 
     unsigned long long bytes = kStatsUnwritten;
 
-    if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "SizeInBytes", &bytes) != 1 ||
+    if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_U64])(capabilityParams, "SizeInBytes", &bytes) != 1 ||
         bytes == kStatsUnwritten)
         return -1;
 

@@ -1,8 +1,11 @@
 // tests/nr-model-stats: the model's own VRAM figure (docs/dlssnr/design/model-vram-stats.md).
 //
 // The forwarder's dlssnr_query_stats and the direct runtime's QueryStats are sliced out of their sources by run.py and
-// compiled here, each in a namespace of its own, against a fake parameter block (the driver block's vtable: the 64-bit
-// setter at slot 0, its getter at slot 8) and fake stats callbacks: present, absent, refusing, silent and faulting.
+// compiled here, each in a namespace of its own, against a fake parameter block and fake stats callbacks: present,
+// absent, refusing, silent and faulting. The block is typed as the driver's is: MSVC lays a class's overloaded virtuals
+// out in reverse declaration order, so the pointer setter is slot 0 (getter 8) and the unsigned 64-bit setter slot 7
+// (getter 15), and a value read through the other type's getter is not there. The reporting callback writes SizeInBytes
+// through slot 7, as nvngx_dlssnr.dll's GetStatsCommon does (its call through vtable offset 0x38).
 // The two run the same cases and must give the same answers. Guarded is a stand-in: the shipped one is SEH and is held
 // verbatim to the forwarder by tests/nr-model-loader; this one turns a thrown FakeFault into the same sticky refusal.
 //
@@ -37,32 +40,61 @@ void Require(bool condition, const std::string& what)
 constexpr int kNgxSuccess = 1;
 constexpr int kNgxInvalidParameter = static_cast<int>(0xBAD00005u);
 
+// One entry per name, typed by the setter that wrote it: setting a name through one type drops it from the other.
 struct FakeBlock
 {
     void** vt = nullptr; // first, as the driver's block keeps its vtable
-    std::map<std::string, unsigned long long> ull;
+    // Set(void*), slot 0 / Get(void**), slot 8.
+    std::map<std::string, unsigned long long> ptr;
+    // Set(unsigned long long), slot 7 / Get(unsigned long long*), slot 15.
+    std::map<std::string, unsigned long long> u64;
     std::vector<std::string> calls; // "set NAME", "get NAME", "callback"
     bool getterFails = false;
 };
 
-void FakeSetULL(void* self, const char* name, unsigned long long value)
+void Set(FakeBlock* block, std::map<std::string, unsigned long long>& into,
+         std::map<std::string, unsigned long long>& other, const char* name, unsigned long long value)
 {
-    auto* block = static_cast<FakeBlock*>(self);
     block->calls.push_back(std::string("set ") + name);
-    block->ull[name] = value;
+    other.erase(name);
+    into[name] = value;
 }
 
-int FakeGetULL(void* self, const char* name, unsigned long long* out)
+int Get(FakeBlock* block, const std::map<std::string, unsigned long long>& from, const char* name,
+        unsigned long long* out)
 {
-    auto* block = static_cast<FakeBlock*>(self);
     block->calls.push_back(std::string("get ") + name);
     if (block->getterFails)
         return kNgxInvalidParameter;
-    const auto found = block->ull.find(name);
-    if (found == block->ull.end())
+    const auto found = from.find(name);
+    if (found == from.end())
         return kNgxInvalidParameter;
     *out = found->second;
     return kNgxSuccess;
+}
+
+void FakeSetPtr(void* self, const char* name, unsigned long long value)
+{
+    auto* block = static_cast<FakeBlock*>(self);
+    Set(block, block->ptr, block->u64, name, value);
+}
+
+int FakeGetPtr(void* self, const char* name, unsigned long long* out)
+{
+    auto* block = static_cast<FakeBlock*>(self);
+    return Get(block, block->ptr, name, out);
+}
+
+void FakeSetU64(void* self, const char* name, unsigned long long value)
+{
+    auto* block = static_cast<FakeBlock*>(self);
+    Set(block, block->u64, block->ptr, name, value);
+}
+
+int FakeGetU64(void* self, const char* name, unsigned long long* out)
+{
+    auto* block = static_cast<FakeBlock*>(self);
+    return Get(block, block->u64, name, out);
 }
 
 // Slots the stats query has no business touching are null, so a call through one fails the run under ASan.
@@ -70,8 +102,10 @@ void* g_vtable[16] = {};
 
 void InstallVtable()
 {
-    g_vtable[0] = reinterpret_cast<void*>(&FakeSetULL);
-    g_vtable[8] = reinterpret_cast<void*>(&FakeGetULL);
+    g_vtable[0] = reinterpret_cast<void*>(&FakeSetPtr);
+    g_vtable[7] = reinterpret_cast<void*>(&FakeSetU64);
+    g_vtable[8] = reinterpret_cast<void*>(&FakeGetPtr);
+    g_vtable[15] = reinterpret_cast<void*>(&FakeGetU64);
 }
 
 // --- Fake stats callbacks -------------------------------------------------------------------------------------------
@@ -91,7 +125,9 @@ int CbReports(void* params)
     g_seenParams = params;
     auto* block = static_cast<FakeBlock*>(params);
     block->calls.push_back("callback");
-    block->ull["SizeInBytes"] = kReported;
+    // Through the block's own slot 7, as the model's GetStatsCommon writes it; logged as the model's write.
+    reinterpret_cast<void (*)(void*, const char*, unsigned long long)>(block->vt[7])(params, "SizeInBytes", kReported);
+    block->calls.pop_back();
     return kNgxSuccess;
 }
 
@@ -125,6 +161,8 @@ unsigned long long Address(int (*callback)(void*))
 
 constexpr int VT_SET_ULL = 0;
 constexpr int VT_GET_ULL = VT_SET_ULL + 8;
+constexpr int VT_SET_U64 = 7;
+constexpr int VT_GET_U64 = VT_SET_U64 + 8;
 constexpr int kFaulted = static_cast<int>(0xBAD0FA17u);
 using PFN_SetULL = void(__thiscall*)(void*, const char*, unsigned long long);
 using PFN_GetULL = int(__thiscall*)(void*, const char*, unsigned long long*);
@@ -201,7 +239,7 @@ FakeBlock NewBlock(int (*callback)(void*))
     FakeBlock block;
     block.vt = g_vtable;
     if (callback != nullptr)
-        block.ull["DLSSNRGetStatsCallback"] = Address(callback);
+        block.ptr["DLSSNRGetStatsCallback"] = Address(callback);
     return block;
 }
 
@@ -263,7 +301,7 @@ std::vector<Outcome> Cases(const Loader& loader)
     }
     {
         auto block = NewBlock(nullptr);
-        block.ull["DLSSNRGetStatsCallback"] = 0;
+        block.ptr["DLSSNRGetStatsCallback"] = 0;
         const auto o = Run(loader, block);
         all.push_back(o);
         Require(o.rc == 0 && o.callbackCalls == 0, n + "a null callback is 'not published'");
@@ -309,7 +347,7 @@ std::vector<Outcome> Cases(const Loader& loader)
     // Silent: claims success, writes nothing. The sentinel is what tells it from a zero.
     {
         auto block = NewBlock(&CbSilent);
-        block.ull["SizeInBytes"] = 777; // a stale figure from something else sharing the block
+        block.u64["SizeInBytes"] = 777; // a stale figure from something else sharing the block
         const auto o = Run(loader, block);
         all.push_back(o);
         Require(o.rc == -1, n + "success without a size is -1, not a stale or zero size");
