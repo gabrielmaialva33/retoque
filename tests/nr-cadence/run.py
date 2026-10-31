@@ -54,6 +54,16 @@ assert srv == list(range(int(re.search(r'kSrvCount = (\d+)', pass_h).group(1))))
 assert uav == list(range(int(re.search(r'kUavCount = (\d+)', pass_h).group(1))))
 assert pass_cpp.count('kNullSrv[]') == 1 and pass_cpp.count('kNullUav[]') == 1
 
+# The smoothed model frame's fade stops before the fill where the carry accepts nothing (its value there is zero
+# whatever the fill was); every other caller of the carry runs it whole. rule.cpp holds the values equal.
+fade_body = rule[rule.index('CR_FN float3 CadenceFade('):]
+fade_body = fade_body[:fade_body.index('\n}\n')]
+assert 'CadenceCarryEdit(px, py, acc, P, true)' in fade_body, 'CadenceFade must ask the carry to stop where nothing is kept'
+assert len(re.findall(r'CadenceCarryEdit\([^;]*,\s*true\)', strip_comments(rule) + strip_comments(shader))) == 1
+carry_body = rule[rule.index('CR_FN CadenceCarry CadenceCarryEdit('):]
+carry_body = carry_body[:carry_body.index('\n}\n')]
+assert carry_body.index('if (stopWhenRejected && w <= 0.0f)') < carry_body.index('if (w < 0.5f)')
+
 # The shader runs the rule header, and defines every hook the header reads.
 assert '#include "dlssnr_cadence_rule.h"' in shader
 needed = set(re.findall(r'\b(CR_[A-Z_]+)\b', strip_comments(rule)))

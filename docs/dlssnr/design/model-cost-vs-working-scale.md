@@ -82,14 +82,18 @@ The same measurement as the table above, on the October weight set, taken with n
 built-in benchmark (`-skipStartScreen -benchmark` for those launches only), once per point, `[DlssNr] GpuTiming=true`,
 `GpuTimingInterval=30`, `RRWorkingScale` set per run in the game's `OptiScaler.ini` and the file restored byte for byte
 afterwards. Build `cf4b4db3`, `nvngx_dlssnr.dll` 310.9.16.0, after-Ray-Reconstruction route, 3440x1440, DLSS
-multi-frame generation on, RTX 4090, driver 615.78, GE-Proton11-11. Parsed with the anchored pattern below.
+multi-frame generation on, RTX 4090, driver 615.78, GE-Proton11-11. Parsed with the anchored pattern below, on the
+samples where the model ran (`passes=1/1`): the game's `Cadence=4` makes some sampled evaluations carry the last
+answer instead (`carried=true`, `passes=0/1`, `model_ms=0`), 3 to 5 per point, left out here. Those carried
+evaluations cost 0.41, 0.57, 0.77 and 1.00 ms outside the model at the four scales, more than a model frame's own
+outside work.
 
 | working scale | model | Mpx | n | p10 | median | p90 | p99 | outside | 310.8 median | change | model's VRAM |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 0.25 | 860x360 | 0.31 | 71 | 1.34 | **1.34** | 1.35 | 1.35 | 0.347 | 2.32 | -42% | 244 MiB |
-| 0.50 | 1720x720 | 1.24 | 71 | 1.72 | **1.73** | 1.74 | 1.74 | 0.396 | 2.90 | -40% | 313 MiB |
-| 0.75 | 2580x1080 | 2.79 | 68 | 2.57 | **2.59** | 2.60 | 3.11 | 0.423 | 4.37 | -41% | 440 MiB |
-| 1.00 | 3440x1440 | 4.95 | 67 | 3.61 | **3.63** | 3.85 | 3.87 | 0.440 | 6.36 | -43% | 578 MiB |
+| 0.25 | 860x360 | 0.31 | 67 | 1.34 | **1.34** | 1.35 | 1.35 | 0.346 | 2.32 | -42% | 244 MiB |
+| 0.50 | 1720x720 | 1.24 | 66 | 1.72 | **1.73** | 1.74 | 1.74 | 0.350 | 2.90 | -40% | 313 MiB |
+| 0.75 | 2580x1080 | 2.79 | 64 | 2.58 | **2.59** | 2.60 | 3.11 | 0.422 | 4.37 | -41% | 440 MiB |
+| 1.00 | 3440x1440 | 4.95 | 64 | 3.61 | **3.63** | 3.85 | 3.87 | 0.440 | 6.36 | -43% | 578 MiB |
 
 By its own GPU span the October set costs about 41% less than the September one at every scale, more than NVIDIA's
 "about 20%" VRAM claim would suggest for speed (its own VRAM count fell about 25%, see
@@ -100,8 +104,31 @@ so the curve still flattens as the model gets small, less than it did on 310.8. 
 
 Not the same conditions as the September table: a different driver (615.78 against 615.71), a later build, and the
 benchmark's fixed path rather than free play (this note found scene content barely matters). `outside_model_ms`
-roughly doubled, 0.20 to 0.44 ms; the fork's own passes around the model have grown since `85bef821`, and that
-difference is the fork's, not the model's. One run per point.
+roughly doubled, 0.20 to 0.44 ms. That window holds the fork's work around the model, which has grown since
+`85bef821` (model cadence with smoothing and adaptation, enabled in this game's settings, did not exist then), but the
+driver and the model changed too, so the whole difference is not shown to be the fork's. One run per point.
+
+### What is outside the model, by A/B (2026-10-31)
+
+Same benchmark and setup as the table above, working scale 1.0, `GpuTimingInterval=31`, one run per variant, each a
+single key changed from the game's settings (`Cadence=4`, `CadenceSmoothing=true`, `CadenceAdaptive=true`,
+`WhitePointSource=2`). Model frames only (`passes=1/1`); carried evaluations listed apart.
+
+| Variant | Benchmark average | Model | Outside, model frames | Carried (outside) |
+|---|---:|---:|---:|---|
+| the game's settings | 106.6 fps | 3.62 | **0.445** | 4 (1.12) |
+| `Cadence=1` | 106.4 | 3.64 | **0.223** | none |
+| `CadenceSmoothing=false` | 105.8 | 3.63 | 0.451 | 3 (0.94) |
+| `CadenceAdaptive=false` (fixed 4) | 106.8 | 3.61 | **2.846** | 49 (1.28) |
+| `WhitePointSource=0` (no exposure scan) | 105.5 | 3.63 | 0.439 | 3 (0.95) |
+| `TransferStrength=0` (resolve returns early) | 106.2 | 3.63 | 0.382 | 2 (0.94) |
+
+The model cadence's own work on model frames, which did not exist at `85bef821`, is about 0.22 ms of the 0.44, paid
+even while adaptation holds the interval at 1 (here all but a handful of evaluations); with `Cadence=1` the window
+is back to September's 0.20-0.22. The exposure scan is within noise; the resolve's arithmetic is about 0.06 ms. A
+fixed cadence of 4 made the model frame after carried ones far dearer; its cause, the smoothing fade, and a change
+that removes part of it are in [cadence-smoothing](cadence-smoothing.md). No variant moved the benchmark average
+beyond about one frame per second except smoothing off at fixed cadence 4 (110.8).
 
 ## The cost law
 

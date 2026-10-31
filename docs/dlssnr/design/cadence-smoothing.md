@@ -180,6 +180,32 @@ Off (and at Cadence = 1): nothing. On, with a cadence running:
 - **Model frame after carried ones:** model motion, then after the model: fade (the carry's synthesis once more, against
   the outgoing edit), record, coarse, light, limit, apply.
 
+### Measured in a game, and the fade's early stop (2026-10-31)
+
+Cyberpunk 2077's built-in benchmark, 3440x1440, after-Ray-Reconstruction route at working scale 1.0, 310.9.16.0, DLSS
+multi-frame generation on, RTX 4090, GE-Proton11-11; started, read and restored by an agent, one run per variant;
+`GpuTiming=true`, `GpuTimingInterval=31`. `outside_model_ms` on the model frames (`passes=1/1`) at a fixed cadence of 4
+(`CadenceAdaptive=false`):
+
+| Variant | Build | Median | Range | Benchmark average |
+|---|---|---:|---|---:|
+| smoothing on | `cf4b4db3` | 2.85 ms | 1.33-5.65 | 106.8 fps |
+| smoothing off | `cf4b4db3` | 0.69 ms | 0.62-0.72 | 110.8 fps |
+| smoothing on, fade stopping early | this change | 1.72 ms | 1.32-2.42 | 109.0 fps |
+
+Carried frames cost the same with smoothing on or off (about 1.25 ms), so the model frame's extra was the fade, and it
+followed the scene (four links of motion, the most disocclusion of the walk). The fade multiplies the whole carry by its
+acceptance, and where nothing is accepted the carry still read the 16-tap edit and, being a disocclusion, the fill's
+four rings of eight. `CadenceCarryEdit` now takes `stopWhenRejected`: the fade passes true and gets a zero carry there
+without either being read; every other caller passes false and gets the carry whole. The value is the same at every
+pixel (`tests/nr-cadence` compares it with the whole-carry formula over an occluder, a hole nothing matches and
+interface over both, with rejected, partly and fully accepted pixels in each); the change is where the work stops.
+
+With adaptation on (this game's setting), the interval stayed at 1 for all but 3 or 4 sampled evaluations and the
+model frame's outside time was 0.444-0.445 ms before and after: the fade rarely runs there. The remaining 1.0 ms over
+smoothing off is the fade on accepted pixels and the light/limit/apply passes; not attempted.
+
+
 ## Refusals, resets, toggles
 
 Smoothing runs only on a running cadence's frames: a scheduled model frame fades, a carried frame walks and is limited.

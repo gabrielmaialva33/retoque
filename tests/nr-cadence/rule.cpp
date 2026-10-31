@@ -926,6 +926,78 @@ void Limiter_HoldsAReGradeToTheRate()
 }
 } // namespace
 
+// The fade, as it was computed before it stopped early: the whole carry, then multiplied by its acceptance. Kept here
+// as the reference the production CadenceFade must equal at every pixel.
+float3 ReferenceFade(int px, int py, float2 acc, float3 answer, const CadenceParams& P)
+{
+    const float3 c = CR_PROXY_NOW(px, py);
+    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P, false);
+    const float3 carried = CadenceClampAnswer(c, c + carry.add);
+    float keep = carry.accept;
+    if (P.haveUi != 0)
+        keep = keep * (1.0f - saturate(CR_UI(px, py)));
+    const float3 fade = (carried - answer) * keep;
+    return CadenceFinite3(fade) ? fade : float3(0.0f, 0.0f, 0.0f);
+}
+
+// Where the carry accepts nothing (w = 0) the fade is zero whatever the fill was, so CadenceFade stops before the
+// fill's 32 taps (measured: the smoothed model frame after carried ones cost 1.3-5.7 ms outside the model in
+// Cyberpunk at 3440x1440, against 0.6-0.7 ms without smoothing). Same value at every pixel of scenes that have
+// rejected, partly accepted and accepted pixels: an occluder, a hole nothing matches, and interface over them.
+void Fade_StopsWhereNothingIsCarriedAndAgreesEverywhere()
+{
+    int rejected = 0, partial = 0, accepted = 0, compared = 0;
+    auto compare = [&](Machine& m, const Image<float3>& answer)
+    {
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x)
+            {
+                const float2 acc = CadenceChainStep(x, y, false, m.P);
+                const float w = CadenceCarryEdit(x, y, acc, m.P, false).accept;
+                rejected += w <= 0.0f;
+                partial += w > 0.0f && w < 0.5f;
+                accepted += w >= 0.5f;
+                const float3 got = CadenceFade(x, y, acc, answer.At(x, y), m.P);
+                const float3 want = ReferenceFade(x, y, acc, answer.At(x, y), m.P);
+                assert(got.x == want.x && got.y == want.y && got.z == want.z);
+                ++compared;
+            }
+    };
+    for (int ui = 0; ui <= 1; ++ui)
+    {
+        Machine m;
+        Occluded(0);
+        m.Record(Model(g_proxyNow));
+        for (int k = 1; k <= 3; ++k)
+        {
+            Occluded(k);
+            m.Step(k == 1);
+        }
+        g_ui.Resize(W, H, 0.0f);
+        for (int x = 20; x < 50; ++x)
+            g_ui.Ref(x, kOccY + 2) = x % 3 == 0 ? 1.0f : 0.5f;
+        m.P.haveUi = ui;
+        compare(m, Drifted(g_proxyNow, 0.03f));
+
+        Machine h;
+        Pan(0.0f, 0.0f, 0, 0.9f);
+        h.Record(Drifted(g_proxyNow, 0.0f));
+        Pan(0.0f, 0.0f, 1, 0.9f);
+        for (int y = 25; y < 35; ++y)
+            for (int x = 40; x < 50; ++x)
+            {
+                g_depthNow.Ref(x, y) = 0.1f;
+                g_proxyNow.Ref(x, y) = float3(0.2f, 0.25f, 0.6f);
+            }
+        h.Step(true);
+        h.P.haveUi = ui;
+        compare(h, Drifted(g_proxyNow, -0.04f));
+    }
+    assert(rejected > 0 && partial > 0 && accepted > 0);
+    assert(compared == 4 * W * H);
+    ++g_cases;
+}
+
 int main()
 {
     Rules_DepthMismatch();
@@ -945,15 +1017,17 @@ int main()
     Fade_IsMovedWithTheSurface();
     Fade_TakesTheNewAnswerAtOnceWhereTheCarryHadNoSurface();
     Fade_LeavesTheInterfaceToTheModel();
+    Fade_StopsWhereNothingIsCarriedAndAgreesEverywhere();
     Limiter_Rule();
     Limiter_LightAndGainAgree();
     Limiter_HoldsAReGradeToTheRate();
-    if (g_cases != 20)
+    if (g_cases != 21)
         return 2;
     std::printf("PASS %d rule cases over synthetic sequences: still scene exact, integer pan exact and sub-pixel pan "
                 "within interpolation, chain off the picture, occluder restarts the chain, no match no fill, UI kept; "
                 "smoothing: weight 0 is the carry to the bit, the walk in equal steps and moved with the surface, a "
-                "disocclusion and the interface take the answer at once, the light limiter's rule, space and rate\n",
+                "disocclusion and the interface take the answer at once, the fade stops where nothing is carried and "
+                "agrees with the whole carry everywhere, the light limiter's rule, space and rate\n",
                 g_cases);
     return 0;
 }

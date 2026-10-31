@@ -301,6 +301,8 @@ CR_FN float3 CadenceCoarse(int lx, int ly, CadenceParams P)
 // frame showed this surface, and a fill where it did not (BeliyG3, PwTReproject, without the older passes, the
 // expected depth and the silhouette rules). acc is this frame's chain at the pixel. accept is how much of add is
 // the moved edit rather than the fill, before UI protection; qx, qy are where it was read, held inside the image.
+// stopWhenRejected: a caller that weighs the whole carry by its acceptance (the fade) gets add = 0 where nothing is
+// accepted, without the edit or the fill being read; every other caller passes false and gets the carry whole.
 struct CadenceCarry
 {
     float3 add;
@@ -309,7 +311,7 @@ struct CadenceCarry
     float qy;
 };
 
-CR_FN CadenceCarry CadenceCarryEdit(int px, int py, float2 acc, CadenceParams P)
+CR_FN CadenceCarry CadenceCarryEdit(int px, int py, float2 acc, CadenceParams P, bool stopWhenRejected)
 {
     const float W = (float) P.width;
     const float H = (float) P.height;
@@ -365,6 +367,18 @@ CR_FN CadenceCarry CadenceCarryEdit(int px, int py, float2 acc, CadenceParams P)
 
     const float qcx = clamp(qx, 0.5f, W - 0.5f);
     const float qcy = clamp(qy, 0.5f, H - 0.5f);
+
+    // Nothing accepted: a caller that multiplies the carry by w gets zero whatever the edit and the fill would have
+    // been, so neither the 16-tap edit nor the fill's four rings of eight are read.
+    if (stopWhenRejected && w <= 0.0f)
+    {
+        CadenceCarry none;
+        none.add = float3(0.0f, 0.0f, 0.0f);
+        none.accept = 0.0f;
+        none.qx = qcx;
+        none.qy = qcy;
+        return none;
+    }
     float3 edit = CadenceResidualCatmullRom(qcx, qcy, P);
 
     // The fill: the model's local tone where the vectors point, scaled by the brightness now over then -- the
@@ -454,7 +468,7 @@ CR_FN float3 CadenceClampAnswer(float3 c, float3 o)
 CR_FN float3 CadenceSynthesize(int px, int py, float2 acc, CadenceParams P)
 {
     const float3 c = CR_PROXY_NOW(px, py);
-    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P);
+    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P, false);
     return CadenceClampAnswer(c, c + carry.add);
 }
 
@@ -477,8 +491,11 @@ CR_FN float3 CadenceSynthesize(int px, int py, float2 acc, CadenceParams P)
 // model stores nothing.
 CR_FN float3 CadenceFade(int px, int py, float2 acc, float3 answer, CadenceParams P)
 {
+    // Weighed below by the carry's acceptance: where that is zero the fade is zero, so the carry stops early there.
     const float3 c = CR_PROXY_NOW(px, py);
-    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P);
+    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P, true);
+    if (carry.accept <= 0.0f)
+        return float3(0.0f, 0.0f, 0.0f);
     const float3 carried = CadenceClampAnswer(c, c + carry.add);
     float keep = carry.accept;
     if (P.haveUi != 0)
@@ -513,7 +530,7 @@ CR_FN float3 CadenceFadeBilinear(float px_, float py_, CadenceParams P)
 CR_FN float3 CadenceSynthesizeFaded(int px, int py, float2 acc, float weight, CadenceParams P)
 {
     const float3 c = CR_PROXY_NOW(px, py);
-    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P);
+    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P, false);
     float3 add = carry.add;
     if (weight > 0.0f)
     {
