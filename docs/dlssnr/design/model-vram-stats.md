@@ -80,6 +80,11 @@ style 0, the forwarder loader, Proton on an RTX 4090. Three builds each, in the 
 | 2nd | 2560x1080, 1706x720 | 1247838208 B (1190 MiB) | 939405312 B (896 MiB) | -24.7% |
 | 3rd | 3440x1440, 2292x960 | 1247838208 B (1190 MiB) | 939405312 B (896 MiB) | -24.7% |
 
+In a game, once: Cyberpunk 2077's built-in benchmark (`-skipStartScreen -benchmark` for that launch only, build
+`cf4b4db3`, 310.9.16.0, after Ray Reconstruction at 3440x1440 with DLSS multi-frame generation on; started and read by
+an agent) logged 605776896 B (578 MiB) at its build, the same bytes as the loopback's 310.9.16.0 at the same size and
+preset. The benchmark averaged 106 fps and exited on its own.
+
 The second and third figures are aggregates: the second build's figure exceeds the first by 444 MB (310.8.2.0), 0.55 of
 it, close to the 0.56 pixel ratio of 2560x1080 to 3440x1440, so the count looks like the sum of the live features with
 one still being retired. By the model's own count the October set uses about a quarter less than the August one at the
