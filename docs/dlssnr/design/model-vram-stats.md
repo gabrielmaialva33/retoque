@@ -105,6 +105,10 @@ the callback, through `Guarded`, before the shared query. A refused populate lea
 | `nr-route-quiet` | present host (3 builds) | 632x446 | 327555200 B (312 MiB) each |
 | `nr-route-quiet` | after-upscale route (3 builds) | 1280x720 | 400296448 B (382 MiB) each |
 
+In a game, once: DOOM Eternal on build `cf4b4db3` (GE-Proton11-11, windowed, its title screen; started, read and
+closed by an agent, no play), the Vulkan present host's first build logged 362235576 B (345 MiB) at 841x671, with no
+error line in OptiScaler's log over about 10,000 presents.
+
 These are aggregates over whatever the model holds when asked, and the Vulkan figures do not follow the D3D12 ones'
 roughly per-pixel slope: 312 MiB at 0.28 MP here against 767 MiB at 4.95 MP on D3D12. What the Vulkan path allocates
 beyond the features' working images is not known. Read them as the model's count, not as a cost per pixel.
