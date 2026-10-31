@@ -44,6 +44,35 @@ this note measures ours.
 - In linear RGB the fine band at 0.75 has *more* energy than at full scale (1.28): the enlarged edit is not a weaker
   copy of the full one but a different one in the fine band. A visual check is needed before reading that as detail.
 
+## A second clip and the A/A floor (2026-10-31)
+
+- Clip: Cyberpunk 2077's built-in benchmark, recorded by the replay recorder 30 s after NR started (one launch with
+  `-skipStartScreen -benchmark`, started and triggered by an agent with nobody at the machine), 53 frames at
+  3440x1440 after Ray Reconstruction, multi-frame generation on, finalized, then given a 40-frame held warmup
+  (`tools.replay.hold`) so every clip frame is scored. The RR provider and preset were not pinned: the game's own.
+- Replay: build `2da82e81`, the game's own `nvngx_dlssnr.dll` 310.9.16.0 linked through `LOOPBACK_MODEL`, RTX 4090,
+  GE-Proton11-11; variants off / `RRWorkingScale` 1.0, 0.75, 0.5 at `Cadence=1`, and `LOOPBACK_REPLAY_CALIBRATE=5`
+  repeats of 1.0. Same metric and tool as above; medians over the scored frames.
+- **The A/A floor is exact.** All five repeats of 1.0 produced the same output as the reference, every metric 1.000:
+  on this replay the pass is deterministic, so the scale differences below are the scale's, not noise.
+
+| log2 luminance | 0.75, this clip | 0.75, first clip | 0.50, this clip | 0.50, first clip |
+|---|---:|---:|---:|---:|
+| Whole change, kept | 1.03 | 0.98 | 1.05 | 0.88 |
+| Whole change, corr | 0.90 | 0.91 | 0.59 | 0.62 |
+| Fine detail, kept | 0.72 | 0.70 | 0.42 | 0.34 |
+| Fine detail, corr | 0.66 | 0.68 | 0.31 | 0.30 |
+
+In linear RGB the fine band at 0.75 again carries a little more energy than at full scale (1.15; whole change 1.16).
+Two clips, two scenes, nine days apart, agree to within 0.05 at 0.75. A visual look at two frames (a dotted floor and
+a patterned ceiling, the 480x270 window with the most full-scale edit, shown 2x): 0.75 is close to 1.0 with the
+finest pattern a little softer; 0.5 loses more of it. One reader's look, not a study.
+
+The cost side moved since the first clip: by the GPU span in the game's own benchmark
+([model-cost-vs-working-scale](model-cost-vs-working-scale.md)), 310.9.16.0 costs 3.63 ms at 1.0, 2.59 ms at 0.75
+and 1.73 ms at 0.5 on a 4090 at 3440x1440, so 0.75 over 0.5 is about 0.86 ms for roughly 0.3 more of the fine
+detail's correlation.
+
 ## What it means for the defaults (not decided here)
 
 - **RTX 40 and later, RR placement** (`RRWorkingScale`, 0.5 on every card): 0.75 keeps twice the fine detail of 0.5 for
