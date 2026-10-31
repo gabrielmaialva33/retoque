@@ -55,6 +55,27 @@ place produce the same median within 3%. The inference is a fixed-size workload;
 not change it. Anyone measuring this again does not need to reproduce a scene — half a minute anywhere
 is a sample.
 
+### Frame time in the built-in benchmark, 310.9.16.0 (2026-10-31)
+
+A different kind of number, not comparable with the GPU spans above: what the whole frame took, from Cyberpunk's own
+benchmark (`-skipStartScreen -benchmark` for those launches only), started and read by an agent with nobody at the
+machine. Build `cf4b4db3`, `nvngx_dlssnr.dll` 310.9.16.0, after-Ray-Reconstruction route at 3440x1440 (working 1.0),
+DLSS multi-frame generation on (about four presents per render), dynamic resolution off, GE-Proton11-11, RTX 4090,
+driver 615.78. NR was switched off in the second run with its toggle key (F7, sent through a virtual uinput keyboard)
+12 s into the benchmark, so the comparison uses the frames after 14 s of each run's own frame-time clock (the
+benchmark path is the same every run).
+
+| Run | NR | Benchmark average | Rendered frame time after 14 s (mean / p99) |
+|---|---|---:|---|
+| 1 | on | 106.1 fps | 37.38 / 43.46 ms |
+| 2 | off from 12 s | 119.8 fps | 33.01 / 39.29 ms |
+| 3 | on | 105.2 fps | 37.75 / 43.62 ms |
+
+The two NR-on runs agree to 0.4 ms, so the pass adds about 4.5 ms to a rendered frame here (about 12% of the
+displayed rate). That is a frame-time difference with frame generation in the loop, not the model's GPU span; it
+is smaller than the 6.36 ms span measured on 310.8 above, which is consistent with the later weight set being
+cheaper but does not measure it. `GpuTiming` was off.
+
 ## The cost law
 
 Fitting the three points at 0.50, 0.75 and 1.00:
