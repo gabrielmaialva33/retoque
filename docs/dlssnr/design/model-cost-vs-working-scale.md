@@ -76,6 +76,33 @@ displayed rate). That is a frame-time difference with frame generation in the lo
 is smaller than the 6.36 ms span measured on 310.8 above, which is consistent with the later weight set being
 cheaper but does not measure it. `GpuTiming` was off.
 
+### 310.9.16.0, the same four points (2026-10-31)
+
+The same measurement as the table above, on the October weight set, taken with nobody at the machine: Cyberpunk's
+built-in benchmark (`-skipStartScreen -benchmark` for those launches only), once per point, `[DlssNr] GpuTiming=true`,
+`GpuTimingInterval=30`, `RRWorkingScale` set per run in the game's `OptiScaler.ini` and the file restored byte for byte
+afterwards. Build `cf4b4db3`, `nvngx_dlssnr.dll` 310.9.16.0, after-Ray-Reconstruction route, 3440x1440, DLSS
+multi-frame generation on, RTX 4090, driver 615.78, GE-Proton11-11. Parsed with the anchored pattern below.
+
+| working scale | model | Mpx | n | p10 | median | p90 | p99 | outside | 310.8 median | change | model's VRAM |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.25 | 860x360 | 0.31 | 71 | 1.34 | **1.34** | 1.35 | 1.35 | 0.347 | 2.32 | -42% | 244 MiB |
+| 0.50 | 1720x720 | 1.24 | 71 | 1.72 | **1.73** | 1.74 | 1.74 | 0.396 | 2.90 | -40% | 313 MiB |
+| 0.75 | 2580x1080 | 2.79 | 68 | 2.57 | **2.59** | 2.60 | 3.11 | 0.423 | 4.37 | -41% | 440 MiB |
+| 1.00 | 3440x1440 | 4.95 | 67 | 3.61 | **3.63** | 3.85 | 3.87 | 0.440 | 6.36 | -43% | 578 MiB |
+
+By its own GPU span the October set costs about 41% less than the September one at every scale, more than NVIDIA's
+"about 20%" VRAM claim would suggest for speed (its own VRAM count fell about 25%, see
+[model-vram-stats](model-vram-stats.md)). A line through all four points is `model_ms = 1.16 + 0.501 x Mpx`; the
+same three-point fit as below (0.50 to 1.00, `1.10 + 0.512 x Mpx`) predicts 1.25 ms at 0.25 against 1.34 measured,
+so the curve still flattens as the model gets small, less than it did on 310.8. The model's VRAM grows about
+72 MiB per Mpx over a floor of about 225 MiB.
+
+Not the same conditions as the September table: a different driver (615.78 against 615.71), a later build, and the
+benchmark's fixed path rather than free play (this note found scene content barely matters). `outside_model_ms`
+roughly doubled, 0.20 to 0.44 ms; the fork's own passes around the model have grown since `85bef821`, and that
+difference is the fork's, not the model's. One run per point.
+
 ## The cost law
 
 Fitting the three points at 0.50, 0.75 and 1.00:
