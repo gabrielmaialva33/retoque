@@ -303,6 +303,8 @@ extern "C"
         PFN_NrVkEvaluate evaluate = nullptr;
         PFN_NrRelease release = nullptr;
         PFN_NrVkShutdown1 shutdown1 = nullptr;
+        // NVSDK_NGX_VULKAN_PopulateParameters_Impl: publishes the stats and scaling-ratio callbacks into a block.
+        int(__cdecl* populate)(void*) = nullptr;
         // The device NGX was initialised on. NGX binds to a device, so a new one needs its own init: a single
         // "initialised" flag answered 1 for the replacement device without initialising NGX on it.
         void* initialisedDevice = nullptr;
@@ -329,6 +331,7 @@ extern "C"
         g_vk.evaluate = (PFN_NrVkEvaluate) GetProcAddress(g_vk.module, "NVSDK_NGX_VULKAN_EvaluateFeature");
         g_vk.release = (PFN_NrRelease) GetProcAddress(g_vk.module, "NVSDK_NGX_VULKAN_ReleaseFeature");
         g_vk.shutdown1 = (PFN_NrVkShutdown1) GetProcAddress(g_vk.module, "NVSDK_NGX_VULKAN_Shutdown1");
+        g_vk.populate = (int(__cdecl*)(void*)) GetProcAddress(g_vk.module, "NVSDK_NGX_VULKAN_PopulateParameters_Impl");
 
         return g_vk.create != nullptr && g_vk.evaluate != nullptr;
     }
@@ -451,6 +454,14 @@ extern "C"
     // Returns 1 and writes outBytes on success. 0 when the callback was not published (or NGX is not up
     // here); -1 when it was published and refused, faulted, or left SizeInBytes unwritten. A fault is sticky,
     // as for every call into the model. dlssnr_last_stats_result is the callback's own answer.
+    //
+    // Vulkan asks through dlssnr_vk_query_stats, the same query gated on NGX being up on a Vulkan device here. The
+    // model publishes a stats callback per API, each from that API's PopulateParameters_Impl, and no Vulkan block the
+    // host uses carries one (the after-upscale route allocates its own; the present host's capability block was seen
+    // without it, 2026-10-31). So a Vulkan block without the callback is populated first. The Vulkan populate
+    // (310.8.2.0 and 310.9.16.0, read off the binaries) checks its caller's module path, like every snippet entry, and
+    // then writes exactly two values, DLSSNRGetStatsCallback and DLSSNRComputeScalingRatioCallback, both through the
+    // void* setter: nothing a live feature reads.
     // ---------------------------------------------------------------------------------------------
 
     using PFN_NrStatsCallback = int(__cdecl*)(void*);
@@ -460,11 +471,11 @@ extern "C"
 
     __declspec(dllexport) int dlssnr_last_stats_result = 0;
 
-    __declspec(dllexport) int dlssnr_query_stats(void* capabilityParams, unsigned long long* outBytes)
+    int QueryStatsOn(bool initialised, void* capabilityParams, unsigned long long* outBytes)
     {
         dlssnr_last_stats_result = 0;
 
-        if (!g_snip.initialised || !capabilityParams || !outBytes)
+        if (!initialised || !capabilityParams || !outBytes)
         {
             return 0;
         }
@@ -499,6 +510,33 @@ extern "C"
 
         *outBytes = bytes;
         return 1;
+    }
+
+    __declspec(dllexport) int dlssnr_query_stats(void* capabilityParams, unsigned long long* outBytes)
+    {
+        return QueryStatsOn(g_snip.initialised, capabilityParams, outBytes);
+    }
+
+    __declspec(dllexport) int dlssnr_vk_query_stats(void* capabilityParams, unsigned long long* outBytes)
+    {
+        const bool initialised = g_vk.initialisedDevice != nullptr;
+
+        if (initialised && capabilityParams && outBytes && g_vk.populate != nullptr)
+        {
+            void** vt = *reinterpret_cast<void***>(capabilityParams);
+            unsigned long long raw = 0;
+
+            if (reinterpret_cast<PFN_GetULL>(vt[VT_GET_ULL])(capabilityParams, "DLSSNRGetStatsCallback", &raw) != 1 ||
+                raw == 0)
+            {
+                // Assigned rather than returned, like every call into the model. A fault is sticky and is what the
+                // host reports; a refusal leaves the block without the callback and the query answers 0.
+                volatile int populated = Guarded(g_vk.populate, capabilityParams);
+                (void) populated;
+            }
+        }
+
+        return QueryStatsOn(initialised, capabilityParams, outBytes);
     }
 
     // ---------------------------------------------------------------------------------------------

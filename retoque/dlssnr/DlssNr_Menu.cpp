@@ -416,12 +416,12 @@ static std::string CollectDiagnosticReport(Config* config)
             }
         }
     }
-    if (const auto vram = DlssNr::ModelVramBytes(); vram.has_value())
+    const bool vulkan = DlssNr::IsRunningVk();
+    if (const auto vram = vulkan ? DlssNr::ModelVramBytesVk() : DlssNr::ModelVramBytes(); vram.has_value())
     {
         in.modelVramKnown = true;
         in.modelVramBytes = *vram;
     }
-    const bool vulkan = DlssNr::IsRunningVk();
     if (!vulkan)
     {
         const auto exposure = DlssNr::GameExposureStatus();
@@ -1192,10 +1192,9 @@ void RenderMenu(Config* config, float menuResScale)
             else
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), Localization::Tr("Running.%s"), runSuffix);
 
-            // The model's own count of what its D3D12 build holds (model-vram-stats.md); a statement, shown only
+            // The model's own count of what this path's build holds (model-vram-stats.md); a statement, shown only
             // when the model gave one.
-            if (const auto vram = vulkan ? std::optional<unsigned long long> {} : DlssNr::ModelVramBytes();
-                vram.has_value())
+            if (const auto vram = vulkan ? DlssNr::ModelVramBytesVk() : DlssNr::ModelVramBytes(); vram.has_value())
             {
                 ImGui::SameLine();
                 ImGui::TextDisabled(Localization::Tr("(model: %llu MiB)"), DlssNr::ModelStats::RoundedMiB(*vram));

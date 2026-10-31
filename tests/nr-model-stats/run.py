@@ -67,13 +67,16 @@ direct_path = 'retoque/dlssnr/DlssNr_DirectRuntime.cpp'
 forwarder = read(forwarder_path)
 direct = read(direct_path)
 
-forwarder_query = body(forwarder, '__declspec(dllexport) int dlssnr_query_stats(', forwarder_path)
+forwarder_query = body(forwarder, 'int QueryStatsOn(', forwarder_path)
+forwarder_exports = [body(forwarder, '__declspec(dllexport) int ' + name + '(', forwarder_path)
+                     for name in ('dlssnr_query_stats', 'dlssnr_vk_query_stats')]
 direct_query = body(direct, 'int QueryStats(', direct_path)
 forwarder_slice = '\n'.join([
     constant(forwarder, 'kStatsUnwritten', forwarder_path),
     body(forwarder, 'void setULL(', forwarder_path),
     body(forwarder, 'void setU64(', forwarder_path),
-    forwarder_query.replace('__declspec(dllexport) ', '', 1),
+    forwarder_query,
+    *[export.replace('__declspec(dllexport) ', '', 1) for export in forwarder_exports],
 ])
 direct_slice = '\n'.join([
     constant(direct, 'kStatsUnwritten', direct_path),
@@ -115,6 +118,20 @@ for path, query in ((forwarder_path, forwarder_query), (direct_path, direct_quer
             and 'setULL(capabilityParams, "SizeInBytes"' not in clean
             and not re.search(r'vt\[VT_GET_ULL\]\)\(capabilityParams, "SizeInBytes"', clean),
             f'{path}: SizeInBytes is cleared and read through the unsigned 64-bit pair (slots 7/15)')
+
+# Each export is the shared query behind its own API's gate, and nothing else.
+require(' '.join(strip_comments(forwarder_exports[0]).split()).endswith(
+            '{ return QueryStatsOn(g_snip.initialised, capabilityParams, outBytes); }'),
+        'dlssnr_query_stats is the shared query gated on NGX being up for D3D12 in the forwarder')
+vk_export = ' '.join(strip_comments(forwarder_exports[1]).split())
+require('const bool initialised = g_vk.initialisedDevice != nullptr;' in vk_export
+        and vk_export.endswith('return QueryStatsOn(initialised, capabilityParams, outBytes); }')
+        and 'volatile int populated = Guarded(g_vk.populate, capabilityParams);' in vk_export
+        and 'return Guarded' not in vk_export,
+        'dlssnr_vk_query_stats populates a block without the callback through Guarded, then runs the shared query '
+        'gated on NGX being up on a Vulkan device')
+require('GetProcAddress(g_vk.module, "NVSDK_NGX_VULKAN_PopulateParameters_Impl")' in strip_comments(forwarder),
+        'the forwarder resolves the Vulkan populate from the snippet')
 
 harness = (here / 'cases.cpp').read_text(encoding='utf-8')
 for marker in ('// @@FORWARDER@@', '// @@DIRECT@@'):
@@ -187,6 +204,37 @@ collect = body(menu, 'static std::string CollectDiagnosticReport(Config* config)
 require('in.modelVramBytes' in collect, 'the diagnostic export carries the figure')
 require(collect.find('in.modelVramBytes') > collect.find('if (!in.nrEnabled)'),
         'with NR off the export does not ask for the figure')
+
+# Native Vulkan: the same query through the forwarder's Vulkan export, asked after each route's build.
+vk_path = 'retoque/dlssnr/DlssNrFeature_Vk.cpp'
+vk = strip_comments(read(vk_path))
+load_fwd = body(vk, 'const char* LoadForwarderShared()', vk_path)
+require('GetProcAddress(g_fwd.module, "dlssnr_vk_query_stats")' in load_fwd
+        and not re.search(r'queryStats\s*==\s*nullptr\)\s*return', load_fwd),
+        'the Vulkan loader resolves dlssnr_vk_query_stats, optionally')
+ask = body(vk, 'uint64_t AskModelVramVk(', vk_path)
+require('g_fwd.queryStats(params, &bytes)' in ask and ask.count('LOG_INFO(') == 1 and ask.count('LOG_DEBUG(') == 1
+        and 'LOG_ERROR' not in ask and 'LOG_WARN' not in ask and 'Fail(' not in ask,
+        'AskModelVramVk: one INFO line on a figure, one DEBUG line otherwise, and it never fails the route itself')
+require(vk.count('AskModelVramVk(') == 3, 'the Vulkan query is asked from exactly two build sites')
+up_at = vk.find('LOG_INFO("DLSS-NR Vulkan: feature up at')
+after_at = vk.find('g_vk.modelVramBytes = AskModelVramVk(g_vk.capabilityParams, "after upscale");')
+require(0 <= vk.find('if (g_vk.feature == nullptr)', vk.find('g_fwd.create((void*) cmdBuffer')) < up_at < after_at,
+        'the after-upscale route asks only after its feature was built')
+require(re.match(r'\s*if \(NoteModelFault\(\)\)\s*return;', vk[after_at + len('g_vk.modelVramBytes = AskModelVramVk('
+                                                                         'g_vk.capabilityParams, "after upscale");'):]),
+        'a fault inside the stats callback stops the after-upscale route right after the query')
+require('std::atomic<uint64_t> modelVramBytes' in vk and 'g_vk.modelVramBytes.load()' in vk,
+        'the Vulkan figure is atomic: the menu reads it on the presenting thread')
+submit_at = vk.find('if (submitted == VK_SUCCESS)')
+present_at = vk.find('AskModelVramVk(params, "present host");')
+require(0 <= submit_at < present_at < vk.find('if (submitted == VK_NOT_READY)'),
+        'the present host asks only once the build\'s GPU work has completed')
+require(vk.count('g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;') == 3,
+        'the after-upscale figure is forgotten wherever its feature is released or abandoned')
+vk_api = body(vk, 'std::optional<unsigned long long> ModelVramBytesVk()', vk_path)
+require('IsRunningVk()' in vk_api, 'the Vulkan figure is shown only while that path runs')
+require(menu.count('DlssNr::ModelVramBytesVk()') == 2, 'the Vulkan figure is read by the status line and the export')
 
 pack = read('retoque/translations/optional/pt-BR.lang')
 require('(model: %llu MiB)\t' in pack, 'the status line\'s figure has a pt-BR entry')

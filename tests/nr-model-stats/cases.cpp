@@ -192,14 +192,33 @@ struct
 {
     bool initialised = false;
 } g_snip;
+struct
+{
+    void* initialisedDevice = nullptr;
+    int (*populate)(void*) = nullptr;
+} g_vk;
+int g_vkDevice = 0; // stands for the VkDevice NGX was initialised on
 int dlssnr_last_stats_result = 0;
 FAKE_GUARDED
 // @@FORWARDER@@
 int Query(void* params, unsigned long long* out) { return dlssnr_query_stats(params, out); }
+int QueryVk(void* params, unsigned long long* out) { return dlssnr_vk_query_stats(params, out); }
 int LastResult() { return dlssnr_last_stats_result; }
+// Each API's export is opened only by its own gate: the other one is left shut, so an export that read the wrong gate
+// answers 0 in the cases that expect a figure.
 void Reset(bool initialised)
 {
     g_snip.initialised = initialised;
+    g_vk.initialisedDevice = nullptr;
+    g_faulted = false;
+    dlssnr_last_stats_result = 12345;
+}
+// For the shared cases the Vulkan populate is absent, so the Vulkan query must answer exactly as the others do.
+void ResetVk(bool initialised)
+{
+    g_snip.initialised = false;
+    g_vk.initialisedDevice = initialised ? &g_vkDevice : nullptr;
+    g_vk.populate = nullptr;
     g_faulted = false;
     dlssnr_last_stats_result = 12345;
 }
@@ -376,16 +395,103 @@ std::vector<Outcome> Cases(const Loader& loader)
     return all;
 }
 
+// --- The Vulkan populate ---------------------------------------------------------------------------------------------
+
+int g_populateCalls = 0;
+
+// What NVSDK_NGX_VULKAN_PopulateParameters_Impl does to a block: the stats callback through the void* setter (slot 0).
+int FakePopulate(void* params)
+{
+    ++g_populateCalls;
+    auto* block = static_cast<FakeBlock*>(params);
+    reinterpret_cast<void (*)(void*, const char*, unsigned long long)>(block->vt[0])(params, "DLSSNRGetStatsCallback",
+                                                                                     Address(&CbReports));
+    block->calls.back() = "populate";
+    return kNgxSuccess;
+}
+
+int FakePopulateRefuses(void* params)
+{
+    ++g_populateCalls;
+    static_cast<FakeBlock*>(params)->calls.push_back("populate");
+    return kNgxInvalidParameter;
+}
+
+int FakePopulateFaults(void* params)
+{
+    ++g_populateCalls;
+    static_cast<FakeBlock*>(params)->calls.push_back("populate");
+    throw FakeFault {};
+}
+
+void VulkanPopulates()
+{
+    InstallVtable();
+    const std::string n = "forwarder (Vulkan): ";
+    const auto run = [](int (*populate)(void*), bool initialised, FakeBlock& block, unsigned long long& out)
+    {
+        Forwarder::ResetVk(initialised);
+        Forwarder::g_vk.populate = populate;
+        g_populateCalls = 0;
+        g_callbackCalls = 0;
+        out = 0xABCDu;
+        return Forwarder::QueryVk(&block, &out);
+    };
+    unsigned long long out = 0;
+
+    {
+        auto block = NewBlock(nullptr);
+        const int rc = run(&FakePopulate, true, block, out);
+        Require(rc == 1 && out == kReported, n + "a block without the callback is populated, then reports");
+        const std::vector<std::string> expected = { "get DLSSNRGetStatsCallback",
+                                                    "populate",
+                                                    "get DLSSNRGetStatsCallback",
+                                                    "set SizeInBytes",
+                                                    "callback",
+                                                    "get SizeInBytes" };
+        Require(block.calls == expected, n + "look, populate, then the shared query -- in that order");
+    }
+    {
+        auto block = NewBlock(&CbReports);
+        const int rc = run(&FakePopulate, true, block, out);
+        Require(rc == 1 && g_populateCalls == 0, n + "a block that already has the callback is not populated again");
+    }
+    {
+        auto block = NewBlock(nullptr);
+        const int rc = run(&FakePopulate, false, block, out);
+        Require(rc == 0 && g_populateCalls == 0 && block.calls.empty(),
+                n + "nothing is populated or read before NGX is up on a Vulkan device here");
+    }
+    {
+        auto block = NewBlock(nullptr);
+        const int rc = run(&FakePopulateRefuses, true, block, out);
+        Require(rc == 0 && g_callbackCalls == 0 && out == 0xABCDu, n + "a refused populate is 'not published'");
+    }
+    {
+        auto block = NewBlock(nullptr);
+        const int rc = run(&FakePopulateFaults, true, block, out);
+        Require(rc == 0 && out == 0xABCDu, n + "a faulting populate leaves no figure");
+        auto again = NewBlock(&CbReports);
+        g_callbackCalls = 0;
+        Require(Forwarder::QueryVk(&again, &out) == -1 && g_callbackCalls == 0,
+                n + "after a fault in the populate nothing enters the model again");
+    }
+}
+
 void BothLoadersAgree()
 {
     InstallVtable();
     const Loader forwarder { "forwarder", &Forwarder::Query, &Forwarder::LastResult, &Forwarder::Reset };
+    const Loader vulkan { "forwarder (Vulkan)", &Forwarder::QueryVk, &Forwarder::LastResult, &Forwarder::ResetVk };
     const Loader direct { "direct", &Direct::Query, &Direct::LastResult, &Direct::Reset };
     const auto a = Cases(forwarder);
+    const auto v = Cases(vulkan);
     const auto b = Cases(direct);
-    Require(a.size() == b.size(), "both loaders ran the same cases");
+    Require(a.size() == b.size() && v.size() == b.size(), "all three queries ran the same cases");
     for (size_t i = 0; i < a.size() && i < b.size(); ++i)
         Require(a[i] == b[i], "the forwarder and the direct runtime answer case " + std::to_string(i) + " the same");
+    for (size_t i = 0; i < v.size() && i < b.size(); ++i)
+        Require(v[i] == b[i], "the forwarder's Vulkan query answers case " + std::to_string(i) + " as the others do");
 }
 
 // --- DlssNr_ModelStats.h --------------------------------------------------------------------------------------------
@@ -438,6 +544,7 @@ void Lines()
 int main()
 {
     BothLoadersAgree();
+    VulkanPopulates();
     MiBText();
     Lines();
 

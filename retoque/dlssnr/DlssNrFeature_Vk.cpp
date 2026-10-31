@@ -18,6 +18,7 @@
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_Exposure.h>
 #include <dlssnr/DlssNr_ModelLog.h>
+#include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_Session.h>
 #include <dlssnr/DlssNr_RenderSize.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
@@ -97,6 +98,11 @@ struct Forwarder
     PFN_VkEvaluate evaluate = nullptr;
     PFN_VkRelease release = nullptr;
 
+    // The model's own VRAM count (dlssnr_vk_query_stats) and the callback's last answer. Optional: null on a forwarder
+    // that predates the Vulkan query, which only costs the figure.
+    int (*queryStats)(void*, unsigned long long*) = nullptr;
+    const int* lastStatsResult = nullptr;
+
     // The forwarder's record of a fault caught inside the model. Null on a forwarder that predates it.
     int (*faultState)(unsigned long*, void**) = nullptr;
 
@@ -128,6 +134,11 @@ struct VkState
     bool ngxInitialised = false;
     void* feature = nullptr;
     NVSDK_NGX_Parameter* capabilityParams = nullptr;
+
+    // The model's own count of the VRAM its features hold, asked after this route's feature build; ~0 (unknown) until
+    // it gives one, and forgotten with the feature (model-vram-stats.md). Atomic: written under g_vkMutex on the
+    // route's thread, read by the menu and the diagnostic export on the presenting thread without it.
+    std::atomic<uint64_t> modelVramBytes { DlssNr::ModelStats::kUnknown };
 
     // What the model writes, the proxy it is shown, and the frame as the upscaler left it.
     OwnedImage output;
@@ -357,6 +368,37 @@ bool NoteModelFault()
 
     Fail("the model faulted inside its own code; off for this session");
     return true;
+}
+
+// What the model says its features hold in VRAM, asked once after a successful Vulkan feature build, on the block that
+// build used (model-vram-stats.md). One INFO line with the figure, naming the route; without one, a single DEBUG line
+// for the process. The figure covers every feature the model holds, D3D12 or Vulkan, on either route. Returns it, or
+// kUnknown. A fault inside the callback is sticky in the forwarder like any other: the caller reports it as its route
+// reports a fault.
+uint64_t AskModelVramVk(NVSDK_NGX_Parameter* params, const char* route)
+{
+    namespace MS = DlssNr::ModelStats;
+    static std::atomic<bool> asked { false };
+    static std::atomic<bool> unreportedLogged { false };
+
+    unsigned long long bytes = MS::kUnknown;
+    const int rc = g_fwd.queryStats == nullptr ? MS::kNoQuery
+                   : params == nullptr         ? 0
+                                               : g_fwd.queryStats(params, &bytes);
+    const bool first = !asked.exchange(true);
+
+    if (rc == 1 && MS::Known(bytes))
+    {
+        LOG_INFO("{} [Vulkan, {}]", MS::InfoLine(bytes, first), route);
+        return bytes;
+    }
+
+    const int last = rc != MS::kNoQuery && g_fwd.lastStatsResult != nullptr ? *g_fwd.lastStatsResult : 0;
+
+    if (!unreportedLogged.exchange(true))
+        LOG_DEBUG("{} [Vulkan, {}]", MS::Unreported(rc, last), route);
+
+    return MS::kUnknown;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -771,6 +813,8 @@ const char* LoadForwarderShared()
     g_fwd.setFloatSlot = (PFN_NrSetFloatSlot) GetProcAddress(g_fwd.module, "dlssnr_call_set_float_slot");
     g_fwd.probeFloat = (PFN_NrProbeFloat) GetProcAddress(g_fwd.module, "dlssnr_call_probe_float");
     g_fwd.shutdown = (int(__cdecl*)(void*)) GetProcAddress(g_fwd.module, "dlssnr_vk_shutdown");
+    g_fwd.queryStats = (int (*)(void*, unsigned long long*)) GetProcAddress(g_fwd.module, "dlssnr_vk_query_stats");
+    g_fwd.lastStatsResult = (const int*) GetProcAddress(g_fwd.module, "dlssnr_last_stats_result");
 
     if (g_fwd.init == nullptr || g_fwd.create == nullptr || g_fwd.evaluate == nullptr)
         return g_fwd.failure = "the forwarder is missing its Vulkan entry points";
@@ -1140,6 +1184,14 @@ bool IsRunningVk() { return g_vk.feature != nullptr && !g_vk.failed; }
 const char* FailureReasonVk() { return g_vk.failed ? g_vk.reason : ""; }
 
 unsigned long long FramesVk() { return g_vk.frames; }
+
+std::optional<unsigned long long> ModelVramBytesVk()
+{
+    const uint64_t bytes = g_vk.modelVramBytes.load();
+    if (!DlssNr::ModelStats::Known(bytes) || !IsRunningVk())
+        return std::nullopt;
+    return bytes;
+}
 
 bool ExposureOfferedVk() { return g_vk.exposureOffered; }
 
@@ -1558,6 +1610,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             g_fwd.release(g_vk.feature);
             g_vk.feature = nullptr;
         }
+        g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;
 
         const VkFormat working = VK_FORMAT_R16G16B16A16_SFLOAT;
 
@@ -1952,6 +2005,10 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
         LOG_INFO("DLSS-NR Vulkan: feature up at {}x{} (frame {}x{})", workWidth, workHeight, width, height);
         g_vk.reset = true;
+
+        g_vk.modelVramBytes = AskModelVramVk(g_vk.capabilityParams, "after upscale");
+        if (NoteModelFault())
+            return;
     }
 
     const VkImageSubresourceRange colourRange = colour->Resource.ImageViewInfo.SubresourceRange;
@@ -2280,6 +2337,7 @@ void FreeRouteObjects()
         g_fwd.release(g_vk.feature);
 
     g_vk.feature = nullptr;
+    g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;
 
     DestroyImage(g_vk.output);
     DestroyImage(g_vk.proxy);
@@ -2360,6 +2418,7 @@ void ShutdownVk(bool deviceAlive)
         g_vk.superDown.release();
         g_vk.nrScaler = Scaler::Count;
         g_vk.feature = nullptr;
+        g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;
         g_vk.capabilityParams = nullptr;
         g_vk.queryPool = VK_NULL_HANDLE;
         g_vk.output = OwnedImage {};
@@ -3067,6 +3126,9 @@ void RunBuild(PresentBuildJob& job)
         dropPool();
         job.Say("the model's feature is up at " + std::to_string(k.workWidth) + "x" + std::to_string(k.workHeight) +
                 " (frame " + std::to_string(k.width) + "x" + std::to_string(k.height) + ")");
+        // Logged only. A fault inside the callback is reported by the host's next call into the model, which the
+        // forwarder then refuses.
+        AskModelVramVk(params, "present host");
         return;
     }
 

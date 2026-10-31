@@ -88,7 +88,7 @@ guarded = re.compile(r'Guarded\(([^;]+?)\);')
 
 pairs = [
     ('dlssnr_query_scaling_ratio(', 'int QueryScalingRatio('),
-    ('dlssnr_query_stats(', 'int QueryStats('),
+    ('int QueryStatsOn(', 'int QueryStats('),
     ('dlssnr_call_create(', 'void* Create('),
     ('dlssnr_call_evaluate(', 'int Evaluate('),
     ('dlssnr_call_set_extras(', 'void SetExtras('),

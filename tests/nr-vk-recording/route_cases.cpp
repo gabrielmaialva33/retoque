@@ -1,6 +1,7 @@
 #include <vulkan/vulkan.h>
 #include "SysUtils.h"
 #include <dlssnr/DlssNr_VkRecording.h>
+#include <dlssnr/DlssNr_ModelStats.h>
 #include <set>
 #include <cstdint>
 #include <functional>
@@ -119,6 +120,7 @@ struct State
     VkDevice device = VK_NULL_HANDLE;
     void* feature = nullptr;
     Params* capabilityParams = nullptr;
+    uint64_t modelVramBytes = DlssNr::ModelStats::kUnknown; // atomic in production; the fixture reassigns State
     OwnedImage output, proxy, proxySmall, outputNative, keep, meter, depthMatched, motionMatched, depthRetired,
         motionRetired;
     Guide guideMatch;

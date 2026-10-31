@@ -48,7 +48,8 @@ allocation, queried at feature creation. Excludes Remix-managed input/output tex
 |---|---|
 | `dlssnr_query_stats` (forwarder), `DirectRuntime::QueryStats` | Only once NGX is initialised in that loader. Read `DLSSNRGetStatsCallback` through the block's pointer getter (slot 8, as the ratio callback is read); write `~0` into `SizeInBytes` through the unsigned 64-bit setter (slot 7); call the callback through `Guarded`; read `SizeInBytes` back through the unsigned 64-bit getter (slot 15). 1 with the size; 0 when no callback is published; -1 when it refused, faulted or left the size unwritten. No `PopulateParameters`: the ratio query published the callbacks before any feature existed, and publishing again over a live feature is not something it showed harmless. |
 | `ReportModelVram` (`DlssNr_Dx12_Model.cpp`) | Called once after each successful D3D12 build, after the "DLSS-NR running" line, under `g_nrMutex`. One INFO line with a figure: `DLSS-NR: the model's feature uses N MiB (B bytes, its own count)`; at a later build "features ... at this build; a feature still being retired may be in it". Without a figure, one DEBUG line for the process saying why (old forwarder, no callback, refused with its code, no size, fault). |
-| `DlssNr::ModelVramBytes()` | The last figure while that feature runs; empty on native Vulkan, with the pass off or failed, or when the model gave none. |
+| `DlssNr::ModelVramBytes()` | The last figure while that feature runs; empty with the pass off or failed, or when the model gave none. |
+| `dlssnr_vk_query_stats` (forwarder), `AskModelVramVk`, `DlssNr::ModelVramBytesVk()` | Native Vulkan, since 2026-10-31: the same query behind NGX being up on a Vulkan device, populating the block first when it lacks the callback (below). Asked after the after-upscale route's build (kept for the panel and the export while that route runs) and after the present host's build has executed on the GPU (logged only). |
 | Panel status line | "(model: N MiB)" after "Running." on D3D12, only when there is a figure: a statement, never a control (DEVELOPMENT.md rule 2). pt-BR entry added. |
 | Copy NR diagnostics | Detected: `Model VRAM: N.N MiB (B bytes), the model's own count at its last build`, or `Model VRAM: not reported (...)` ([diagnostic-export](diagnostic-export.md)). |
 
@@ -85,6 +86,29 @@ one still being retired. By the model's own count the October set uses about a q
 same size and preset, a little more than NVIDIA's "about 20%". One sweep per model, one preset, synthetic content: no
 game, no other preset, no other GPU.
 
+## Native Vulkan (2026-10-31)
+
+The model publishes its stats callback only from each API's `PopulateParameters_Impl`, and no Vulkan block the host uses
+had it: the after-upscale route allocates its own block, and the present host's capability block answered "no stats
+callback" in a first GPU run. Nothing in the fork calls the Vulkan populate. Read off 310.8.2.0 and 310.9.16.0 (two
+independent reads), the Vulkan populate checks its caller's module path and then writes exactly two values,
+`DLSSNRGetStatsCallback` and `DLSSNRComputeScalingRatioCallback`, through the `void*` setter, so `dlssnr_vk_query_stats` populates a block that lacks
+the callback, through `Guarded`, before the shared query. A refused populate leaves the query at 0; a fault is sticky.
+
+`tests/vulkan-present-host` (`nr-control`, `nr-route-quiet` with the SR linked; GE-Proton11-11, RTX 4090, kit model
+310.8.2.0, Khronos validation on, 0 host errors) logged, at every one of their builds:
+
+| Case | Site | Size | Figure |
+|---|---|---|---|
+| `nr-control` | present host, 1st build | 632x446 | 327555200 B (312 MiB) |
+| `nr-control` | present host, after a resize | 517x389 | 508624712 B (485 MiB, a feature retiring) |
+| `nr-route-quiet` | present host (3 builds) | 632x446 | 327555200 B (312 MiB) each |
+| `nr-route-quiet` | after-upscale route (3 builds) | 1280x720 | 400296448 B (382 MiB) each |
+
+These are aggregates over whatever the model holds when asked, and the Vulkan figures do not follow the D3D12 ones'
+roughly per-pixel slope: 312 MiB at 0.28 MP here against 767 MiB at 4.95 MP on D3D12. What the Vulkan path allocates
+beyond the features' working images is not known. Read them as the model's count, not as a cost per pixel.
+
 ## Invariants
 
 - NR off: nothing changes; the query is reached only from a successful build.
@@ -102,8 +126,6 @@ game, no other preset, no other GPU.
 - The count is the model's, at the moment of asking. Remix calls it an aggregate: with the bounded chain, extra pass
   features are built later and are not in the first figure; after a rebuild, a feature still retiring may be in it.
 - It excludes the fork's own surfaces (proxies, copies, guide resamples), as Remix's excludes its textures.
-- Native Vulkan (after-upscale route and present host) does not ask yet: it would need the same query on the Vulkan
-  parameter block, in two build sites, one of them on a builder thread.
 - The call comes right after `CreateFeature` recorded into a command list that has not executed yet. Remix does the
   same; whether the model counts allocations at create or at first execution is not known.
 

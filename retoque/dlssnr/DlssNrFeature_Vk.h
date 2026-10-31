@@ -53,6 +53,10 @@ const char* FailureReasonVk();
 // through yet" apart from "running", and the D3D12 counters say nothing about this path.
 unsigned long long FramesVk();
 
+// The model's own count of the VRAM its features hold, asked after this path's feature build (model-vram-stats.md);
+// empty while the path is not running or when the model gave no figure.
+std::optional<unsigned long long> ModelVramBytesVk();
+
 // What the pass last cost on the GPU, in milliseconds, or nothing if it has not been measured yet.
 // A timestamp pair either side of the whole pass, read three frames later so the query is retired.
 std::optional<double> LastGpuTimeVk();
