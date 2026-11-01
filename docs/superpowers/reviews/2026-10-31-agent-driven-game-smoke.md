@@ -39,6 +39,27 @@ numbers below, no native Windows.
 before this build. The same model and scale gave the same bytes across games: 578 MiB at 1.0 in Cyberpunk and
 Starfield, 313 MiB at 0.5 in The Witcher 3 and in Cyberpunk's scale sweep.
 
+## 2026-11-01: build `175bc188`, the D3D11 routes and RRWorkingScale=auto
+
+Same method and machine, OptiScaler `175bc188` (`RRWorkingScale=auto` now 1.0 on Ada,
+[working-scale-auto.md](../../dlssnr/design/working-scale-auto.md#rrworkingscale-follows-the-same-rule-2026-11-01)),
+forwarder unchanged. The workstation's screen lock had to be lifted first; with it up, the focus guard refused every
+input, as intended.
+
+| Game | API | NR route | What ran | What the log shows | Model VRAM | OptiScaler errors |
+|---|---|---|---|---|---:|---:|
+| The Witcher 3 (DX12) | D3D12 | after Ray Reconstruction, `RRWorkingScale=auto` | save continued, walked in Novigrad | working size 3440x1440 at scale 1.00 (was 1720x720 at 0.50 on `2da82e81`); 1093 model evaluations, 0 failed | 578 MiB | 0 |
+| Divinity: Original Sin 2 (DX11) | D3D11 bridge | present host, no upscaler, motion synthesized | Larian launcher, save continued, camera panned | `bridge 1 hosts the neural pass`; the model ran on every base frame handed to it (e.g. 83 of 83 per 2 s) | 578 MiB | 0 |
+| Sons Of The Forest | D3D11 native DLSS | after upscale, present host on the game's own guides | save loaded, walked at night | `carrying the game's depth (format 19) and motion (format 33)`; `using the upscaler's own depth and motion, not the zero guides`; 3073 of 3073 evaluates carried per 30 s, 0 not | 578 MiB | 0 |
+
+Divinity's one error-level line (`LoadLibraryCheckW Trying to load dll as nvngx_dlssg`) is in its 2026-10-14 and
+2026-10-19 logs too. Divinity asked to confirm its quit and was answered in-game; the others exited on the close
+request. All three exited, The Witcher 3's `OptiScaler.ini` was restored byte for byte (`LogToFile` was set for the
+run); the other two already logged to file and were not changed.
+
+This fills the D3D11 bridge and native D3D11 guide rows of the route matrix for this build, on one machine under
+Proton. Still not covered here: a no-upscaler present title (PCSX2) and native Windows.
+
 The measurements taken through the Cyberpunk benchmark are recorded where they belong:
 [model cost by scale and the outside-the-model A/B](../../dlssnr/design/model-cost-vs-working-scale.md),
 [the cadence fade change](../../dlssnr/design/cadence-smoothing.md),
@@ -47,8 +68,8 @@ The measurements taken through the Cyberpunk benchmark are recorded where they b
 
 ## Limits
 
-- One short session per game, one machine; no D3D11 bridge, native D3D11 guides or no-upscaler present title in this
-  set (the route matrix in [maintenance](../../maintenance.md#validation-route-matrix) lists them).
+- One short session per game, one machine; the 2026-10-31 set had no D3D11 title (added 2026-11-01 above) and no
+  no-upscaler present title (the route matrix in [maintenance](../../maintenance.md#validation-route-matrix) lists them).
 - Driving by screenshots and fixed inputs reaches play, not difficult play: no combat, no long sessions, no menus
   beyond what loading a save needs. OptiScaler's own overlay opened in The Witcher 3 but could not be navigated by
   the mouse there (the game holds the pointer).
