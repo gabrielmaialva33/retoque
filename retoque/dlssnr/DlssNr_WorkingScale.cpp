@@ -137,4 +137,10 @@ float WorkingScale()
     return configured.has_value() ? configured.value() : AutoWorkingScale();
 }
 
+float RRWorkingScale()
+{
+    const auto& configured = Config::Instance()->DlssNrRRWorkingScale;
+    return configured.has_value() ? configured.value() : AutoWorkingScale();
+}
+
 } // namespace DlssNr

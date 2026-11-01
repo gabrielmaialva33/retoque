@@ -60,3 +60,13 @@ subprocess.run(['g++', '-std=c++20', '-g', '-O1', '-fno-omit-frame-pointer',
                 '-I' + str(ROOT / 'retoque'), '-I' + str(ROOT / 'OptiScaler'), str(HERE / 'guide_match_cases.cpp'),
                 '-o', str(OUT / 'guide_match')], check=True)
 subprocess.run([str(OUT / 'guide_match')], check=True)
+
+# RRWorkingScale=auto follows the GPU like WorkingScale (docs/dlssnr/design/working-scale-auto.md): the renderer
+# reads the resolver, not the declared default, and an explicit value survives a save on a card where auto is 0.5.
+config_h = (ROOT / 'OptiScaler/Config.h').read_text(encoding='utf-8-sig')
+scale_cpp = (ROOT / 'retoque/dlssnr/DlssNr_WorkingScale.cpp').read_text()
+assert 'CustomOptional<float, SoftDefault> DlssNrRRWorkingScale { 1.0f };' in config_h
+assert 'frame.AfterRayReconstruction ? DlssNr::RRWorkingScale() : DlssNr::WorkingScale()' in source
+assert 'DlssNrRRWorkingScale.value_or_default()' not in source
+rr = between(scale_cpp, 'float RRWorkingScale()', '\n}\n')
+assert 'DlssNrRRWorkingScale' in rr and 'AutoWorkingScale()' in rr, 'RRWorkingScale auto must resolve per GPU'

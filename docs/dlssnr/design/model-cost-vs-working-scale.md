@@ -172,6 +172,10 @@ the model's area by four again and returns 0.58 ms. That is image quality spent 
 
 `DlssNrRRWorkingScale` already defaults to 0.5. This measurement says the default was right.
 
+*2026-11-01:* that conclusion is about cost with model 310.8. With 310.9.16 the same machine costs 3.63 ms at 1.0
+(table above), and `RRWorkingScale=auto` now resolves per GPU: 1.0 on Ada and later, 0.5 on RTX 20/30
+([working-scale-auto.md](working-scale-auto.md#rrworkingscale-follows-the-same-rule-2026-11-01)).
+
 ## What this settles
 
 **1. Host-side optimisation of this pass is not worth doing.** `outside_model_ms` is ~0.20 ms against

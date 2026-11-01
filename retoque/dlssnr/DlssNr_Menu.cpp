@@ -1447,17 +1447,26 @@ void RenderMenu(Config* config, float menuResScale)
                 // the commit waits.
                 static float pendingRrScale = -1.0f;
 
-                float rrScale =
-                    pendingRrScale >= 0.0f ? pendingRrScale : config->DlssNrRRWorkingScale.value_or_default();
+                // What the route will use, as with "Model resolution" below: auto depends on the GPU.
+                const bool autoRrScale = !config->DlssNrRRWorkingScale.has_value();
+                float rrScale = pendingRrScale >= 0.0f ? pendingRrScale : DlssNr::RRWorkingScale();
 
                 if (ImGui::SliderFloat(Localization::Label("RR Working scale###nrRRWorkingScale"), &rrScale, 0.25f,
-                                       2.0f, "%.2fx"))
+                                       2.0f, autoRrScale && pendingRrScale < 0.0f ? "%.2fx (auto)" : "%.2fx"))
                     pendingRrScale = rrScale;
 
                 if (ImGui::IsItemDeactivatedAfterEdit() && pendingRrScale >= 0.0f)
                 {
                     config->DlssNrRRWorkingScale = std::clamp(pendingRrScale, 0.25f, 2.0f);
                     pendingRrScale = -1.0f;
+                }
+
+                if (!autoRrScale && pendingRrScale < 0.0f)
+                {
+                    ImGui::SameLine();
+
+                    if (ImGui::SmallButton(Localization::Label("Auto###nrRRWorkingScaleAuto")))
+                        config->DlssNrRRWorkingScale = std::optional<float> {};
                 }
 
                 if (rrScale > 1.001f)

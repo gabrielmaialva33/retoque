@@ -37,4 +37,8 @@ float AutoWorkingScale();
 // Not clamped -- each route applies its own bounds.
 float WorkingScale();
 
+// [DlssNr] RRWorkingScale, the model's scale on the ray-reconstruction route, resolved the same way:
+// the configured value, or AutoWorkingScale() for auto. Until 2026-11-01 auto was a flat 0.5 here.
+float RRWorkingScale();
+
 } // namespace DlssNr

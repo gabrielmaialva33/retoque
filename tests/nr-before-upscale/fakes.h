@@ -417,6 +417,11 @@ inline float WorkingScale()
     const auto& scale = Config::Instance()->DlssNrWorkingScale;
     return scale.has_value() ? *scale : 1.0f;
 }
+inline float RRWorkingScale()
+{
+    const auto& scale = Config::Instance()->DlssNrRRWorkingScale;
+    return scale.has_value() ? *scale : 1.0f;
+}
 } // namespace DlssNr
 
 namespace DlssNr::GpuTiming

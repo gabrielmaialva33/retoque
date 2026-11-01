@@ -1214,10 +1214,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // the model runs reduced and cheaper; above 1 it SUPERSAMPLES -- the proxy is upscaled to a larger
     // working size so the model denoises a super-native input, which the resolve then samples back down.
     // Capped at 2x: cost grows with the area and NGX acceptance above native is what this probe tests.
-    // WorkingScale=auto depends on the GPU this device is on; see DlssNr_WorkingScale.h.
+    // WorkingScale=auto and RRWorkingScale=auto depend on the GPU this device is on; see DlssNr_WorkingScale.h.
     DlssNr::NoteAdapter(device->GetAdapterLuid());
-    const float configuredWorkScale =
-        frame.AfterRayReconstruction ? cfg.DlssNrRRWorkingScale.value_or_default() : DlssNr::WorkingScale();
+    const float configuredWorkScale = frame.AfterRayReconstruction ? DlssNr::RRWorkingScale() : DlssNr::WorkingScale();
     // The upper bound is 1.0 for a caller with no real motion: above native the model refuses zero
     // guides (see DlssNrFrameInfo::AllowSupersampling), so clamping here turns a would-be refusal of
     // the user's chosen scale into the nearest size that runs, silently and every frame.

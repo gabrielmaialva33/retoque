@@ -339,7 +339,10 @@ class Config
     // Optional NR after native Ray Reconstruction (DX12).
     CustomOptional<bool> DlssNrApplyAfterRR { false };
     CustomOptional<unsigned int> DlssNrRRPasses { 1 };
-    CustomOptional<float> DlssNrRRWorkingScale { 0.5f };
+    // Unset (auto) follows the same GPU rule as WorkingScale: read it through DlssNr::RRWorkingScale()
+    // (dlssnr/DlssNr_WorkingScale.h). SoftDefault for the same reason: an explicit 1.0 on a card where
+    // auto is 0.5 must survive a save. docs/dlssnr/design/working-scale-auto.md has the change.
+    CustomOptional<float, SoftDefault> DlssNrRRWorkingScale { 1.0f };
     // docs/dlssnr/design/pause-without-frame-gen.md: skip the pass while the game has turned its own DLSS-G off
     // (menus, cutscenes), once it was seen on. Never while our menu is open.
     CustomOptional<bool> DlssNrPauseWithoutFrameGen { false };

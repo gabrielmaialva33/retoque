@@ -75,6 +75,9 @@ detail's correlation.
 
 ## What it means for the defaults (not decided here)
 
+*2026-11-01:* decided for the RR placement in [working-scale-auto.md](working-scale-auto.md#rrworkingscale-follows-the-same-rule-2026-11-01):
+`RRWorkingScale=auto` is now 1.0 on Ada and later and stays 0.5 on RTX 20/30. The non-RR route is unchanged.
+
 - **RTX 40 and later, RR placement** (`RRWorkingScale`, 0.5 on every card): 0.75 keeps twice the fine detail of 0.5 for
   ~1.9 ms on a 4090 at 3440x1440. That is the strongest candidate for a change, but it is one clip and one scene.
 - **RTX 20/30** (`WorkingScale=auto` 0.5): the 3060 already pays ~18 ms at 0.5 at 1440p (`working-scale-auto.md`); 0.75

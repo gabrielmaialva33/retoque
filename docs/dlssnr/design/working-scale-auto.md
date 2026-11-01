@@ -22,7 +22,8 @@ on an RTX 20 or 30 card and switches the pass on starts there, before they find 
 | Not identified | 1.0, as before |
 
 There is no new key. An explicit `WorkingScale` wins everywhere, as it always did.
-`RRWorkingScale` is not touched: its default is already 0.5 on every card.
+`RRWorkingScale` was not touched at first (a flat 0.5 on every card). Since 2026-11-01 its `auto`
+follows the same table; see [below](#rrworkingscale-follows-the-same-rule-2026-11-01).
 
 The key is now declared `SoftDefault`. Under the ordinary rule, a value equal to the declared default
 of 1.0 is saved back as `auto`, which was harmless while auto was 1.0 everywhere. On a card where
@@ -38,7 +39,7 @@ with the operating system and driver also different. The 3060 is three to four t
 general compute, so architecture accounts for something like 7x of it. A 3090 against a 4060 would
 land somewhere else. The text says "an RTX 3060 measured", not "RTX 30 costs".
 
-It is also where the rest of the defaults already sit. `RRWorkingScale` defaults to 0.5, and the
+It is also where the rest of the defaults already sat at the time. `RRWorkingScale` defaulted to 0.5, and the
 default enlargement (`Transfer=1`, matched residual) is the one that removes the colour shift at 50%.
 
 A value chosen to hit a pixel budget, dependent on the output resolution, was considered and left out.
@@ -58,6 +59,32 @@ and 8.5 %. That is their claim: the card, the model build and the metric's defin
 nothing here has reproduced it. Another session is measuring retention against scale with the offline replay
 ([offline-replay.md](offline-replay.md)). Until those numbers are in, auto stays at 0.5 on RTX 20/30, and this note
 does not choose between cost and detail.
+
+## `RRWorkingScale` follows the same rule (2026-11-01)
+
+`[DlssNr] RRWorkingScale=auto`, the model's scale on the ray-reconstruction route, was a flat 0.5 on every card.
+It now resolves through the same `AutoWorkingScale()` as `WorkingScale`: **1.0 on Ada and later and on an
+unidentified GPU, 0.5 on Turing and Ampere.** The renderer and the menu read `DlssNr::RRWorkingScale()`; the key is
+`SoftDefault` for the same reason as `WorkingScale`, and the RR slider gained the same "(auto)" reading and **Auto**
+button. An explicit value wins, as before.
+
+Why the flat 0.5 was dropped on Ada. It was chosen on cost with model 310.8, where 1.0 cost 6.36 ms at 3440x1440 on
+the 4090 against 2.90 ms at 0.5 ([model-cost-vs-working-scale.md](model-cost-vs-working-scale.md)). Model 310.9.16
+costs 3.63 ms at 1.0 and 1.73 ms at 0.5 on the same machine (578 and 313 MiB of model VRAM). In exchange, 0.5 kept
+0.42 of the fine detail of 1.0 on a replayed after-RR clip, and 0.75 kept 0.72
+([working-scale-detail-retention.md](working-scale-detail-retention.md)). The user chose full resolution on Ada,
+which is also what `WorkingScale=auto` already gives there.
+
+What it costs and what it does not settle:
+
+- **Ada with `ApplyAfterRR=true` and `RRWorkingScale=auto` pays about +1.9 ms per frame** (4090, 3440x1440,
+  310.9.16) and +265 MiB. With a 310.8 model it is about +3.5 ms. The route itself stays opt-in: `ApplyAfterRR`
+  defaults to false.
+- **RTX 20 and 30 do not change**: auto is still 0.5 there.
+- A config saved before this change with the old default 0.5 wrote `auto`, not 0.5, so such an ini now gets 1.0 on
+  Ada. Set `RRWorkingScale=0.5` to keep the old cost.
+- The adapter line in the log names `WorkingScale` only; the RR working size is in the `DLSS-NR working size:` line.
+- Not measured on a card below Ada on this route, and no image-quality judgement beyond the retention note above.
 
 ## Which GPU, and how it is identified
 
