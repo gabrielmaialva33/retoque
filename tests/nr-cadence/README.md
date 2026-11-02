@@ -92,3 +92,24 @@ and insufficient coverage, threshold boundaries, calm recovery, stale/duplicate
 feedback, suspension with chained model motion and smoothing disabled at interval
 1. Source guards require the separate probe slot and exact submission certificate.
 These are host policy tests, not evidence of GPU image quality.
+
+## Deferred coarse regression
+
+The orchestration fixture compiles the production `Base`, `Record`, `Probe`, `Carry`, `ModelMotion` and `Fade`
+bodies verbatim against a bounded host command/resource sink. Its dispatch sink executes the production HLSL
+`PixelModes` verbatim with texture accesses mapped to arrays; it counts residual/coarse reads and emulates half
+texture stores. Frozen 73fad086 carry/pixel rules supply the independent reference, rather than calling the
+new acceptance implementation to build expected results.
+
+The sequences cover Record -> Probe -> Record -> first Carry, and a partial model failure -> production scheduler
+Drop -> new Record -> first Carry, plus a downstream Show failure after Carry recorded chain/synthesis followed
+by Drop and a fresh model/first Carry. These use distinct histories and odd-sized coarse blocks. They require no unused
+coarse dispatch, exactly one before the first consumption, reuse on later carries, no commands on a refused
+Carry, and output equality with the eager baseline. Probe feedback must remain equal without residual/coarse
+bindings or reads (including nonfinite history/motion and interface samples). This does not emulate GPU execution,
+shader compilation, resource lifetime or driver behavior; those still require the planned shader/replay validation.
+
+Acceptance extraction additionally compares the production `CadenceAccept` with frozen `LegacyCarryEdit` over
+fractional pan, occlusion, no-match, finite/nonfinite displacement and all pixels including borders; rejected,
+partial and fully accepted populations must all be present. Residual/coarse counters bracket only the new rule.
+The Fade reference also uses the frozen carry, so a shared acceptance regression cannot affect both sides.

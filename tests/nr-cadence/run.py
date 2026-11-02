@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from orchestration import run as run_orchestration
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
 from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
@@ -217,3 +218,5 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-nr-cadence-') as directory:
                         '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-I', str(retoque), '-I', str(opti),
                         str(here / f'{name}.cpp'), '-o', binary], check=True)
         subprocess.run([binary], check=True)
+
+    run_orchestration(root, Path(directory))

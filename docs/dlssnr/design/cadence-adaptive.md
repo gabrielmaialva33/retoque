@@ -56,6 +56,10 @@ pixels, and do not dilute foreground motion with far-plane background. Mean
 rejection uses the same sampled valid geometry. Too few samples or nonfinite
 values refuse reuse. These are sampled estimates, not full-frame coverage.
 
+The probe evaluates `CadenceAccept`, the same acceptance calculation used by carry, without reading or binding
+residual or coarse-residual textures. Coarse preparation can therefore wait for the first actual carry without
+changing probe feedback or the policy's recovery from interval 1.
+
 Initial conservative thresholds are explicit policy, not measured universal
 quality limits: at >=1 px/frame or >=15% rejection, interval 1; between 0.25 and
 1 px/frame, at most interval 2; below 0.25 and below the rejection threshold,

@@ -334,20 +334,11 @@ bool DlssNr_Cadence_Dx12::Record(ID3D12GraphicsCommandList* InCmdList, const Fra
         Run(InCmdList, Base(0, InFrame), srvs, uavs, (_width + kThreads - 1) / kThreads,
             (_height + kThreads - 1) / kThreads);
     }
-    // The transitions double as the wait for the writes: the coarse pass reads the edit next.
+    // Restore the snapshots for the probe and the first carry; transitions also order the history writes.
     Transition(InCmdList, _residual, kWrite, kRest);
     Transition(InCmdList, _proxyThen, kWrite, kRest);
     Transition(InCmdList, _depthThen, kWrite, kRest);
 
-    Transition(InCmdList, _residualLow, kRest, kWrite);
-    {
-        ID3D12Resource* const srvs[kSrvCount] = { nullptr, nullptr, nullptr, nullptr,
-                                                  nullptr, nullptr, nullptr, _residual };
-        ID3D12Resource* const uavs[kUavCount] = { _residualLow };
-        Run(InCmdList, Base(1, InFrame), srvs, uavs, (_lowWidth + kThreads - 1) / kThreads,
-            (_lowHeight + kThreads - 1) / kThreads);
-    }
-    Transition(InCmdList, _residualLow, kWrite, kRest);
     return true;
 }
 
@@ -358,6 +349,21 @@ bool DlssNr_Cadence_Dx12::Carry(ID3D12GraphicsCommandList* InCmdList, const Fram
         InFrame.depth == nullptr || InFrame.motion == nullptr)
     {
         return false;
+    }
+
+    // The scheduler's first carry consumes the latest Record. Model-only runs may replace that history without
+    // ever reading its coarse fill; defer this unchanged reduction until here. Later carries and Fade reuse it.
+    if (InChainStart)
+    {
+        Transition(InCmdList, _residualLow, kRest, kWrite);
+        {
+            ID3D12Resource* const srvs[kSrvCount] = { nullptr, nullptr, nullptr, nullptr,
+                                                      nullptr, nullptr, nullptr, _residual };
+            ID3D12Resource* const uavs[kUavCount] = { _residualLow };
+            Run(InCmdList, Base(1, InFrame), srvs, uavs, (_lowWidth + kThreads - 1) / kThreads,
+                (_lowHeight + kThreads - 1) / kThreads);
+        }
+        Transition(InCmdList, _residualLow, kWrite, kRest);
     }
 
     // One link: the chain as of the last carried frame (none on the first) extended by this frame's vectors.
@@ -628,8 +634,8 @@ void DlssNr_Cadence_Dx12::Probe(ID3D12GraphicsCommandList* cmd, const Frame& fra
                                               history && !chainStart ? _chain[_current] : nullptr,
                                               history ? _depthThen : nullptr,
                                               history ? _proxyThen : nullptr,
-                                              history ? _residual : nullptr,
-                                              history ? _residualLow : nullptr,
+                                              nullptr,
+                                              nullptr,
                                               ui };
     ID3D12Resource* const uavs[kUavCount] = { probe.grid };
     Transition(cmd, probe.grid, kRest, kWrite);

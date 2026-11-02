@@ -67,6 +67,18 @@ template <class T> struct Image
 Image<float> g_depthNow, g_depthThen, g_ui;
 Image<float3> g_proxyNow, g_proxyThen, g_residual, g_low, g_fade;
 Image<float2> g_motion, g_chain;
+// Load counters exercise the production rule's dependency boundary.
+size_t g_residualReads = 0, g_lowReads = 0;
+float3 ReadResidual(int x, int y)
+{
+    ++g_residualReads;
+    return g_residual.At(x, y);
+}
+float3 ReadLow(int x, int y)
+{
+    ++g_lowReads;
+    return g_low.At(x, y);
+}
 } // namespace
 
 #define CR_FN inline
@@ -78,11 +90,12 @@ Image<float2> g_motion, g_chain;
 #define CR_PROXY_THEN(ax_, ay_) g_proxyThen.At(ax_, ay_)
 #define CR_MOTION(ax_, ay_) g_motion.At(ax_, ay_)
 #define CR_CHAIN_PREV(ax_, ay_) g_chain.At(ax_, ay_)
-#define CR_RESIDUAL(ax_, ay_) g_residual.At(ax_, ay_)
-#define CR_RESIDUAL_LOW(ax_, ay_) g_low.At(ax_, ay_)
+#define CR_RESIDUAL(ax_, ay_) ReadResidual(ax_, ay_)
+#define CR_RESIDUAL_LOW(ax_, ay_) ReadLow(ax_, ay_)
 #define CR_UI(ax_, ay_) g_ui.At(ax_, ay_)
 #define CR_FADE(ax_, ay_) g_fade.At(ax_, ay_)
 #include <shaders/dlssnr/precompile/dlssnr_cadence_rule.h>
+#include "legacy_carry.h"
 
 namespace
 {
@@ -931,7 +944,7 @@ void Limiter_HoldsAReGradeToTheRate()
 float3 ReferenceFade(int px, int py, float2 acc, float3 answer, const CadenceParams& P)
 {
     const float3 c = CR_PROXY_NOW(px, py);
-    const CadenceCarry carry = CadenceCarryEdit(px, py, acc, P, false);
+    const CadenceCarry carry = LegacyCarryEdit(px, py, acc, P, false);
     const float3 carried = CadenceClampAnswer(c, c + carry.add);
     float keep = carry.accept;
     if (P.haveUi != 0)
@@ -998,8 +1011,61 @@ void Fade_StopsWhereNothingIsCarriedAndAgreesEverywhere()
     ++g_cases;
 }
 
+// The new shared acceptance must equal the independent pre-extraction carry, including motion and rejection.
+// Counting only its own calls proves it never depends on residual/coarse, even on the paths the probe needs.
+void Acceptance_AgreesWithLegacyWithoutReadingHistoryEdit()
+{
+    unsigned rejected = 0, partial = 0, accepted = 0;
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    const float inf = std::numeric_limits<float>::infinity();
+    const auto compare = [&](const CadenceParams& params)
+    {
+        for (int y = 0; y < H; ++y)
+            for (int x = 0; x < W; ++x)
+                for (const float2 acc : { CadenceChainStep(x, y, false, params), float2(0.375f, -0.625f),
+                                          float2(4.5f, 1.25f), float2(nan, 2.0f), float2(inf, -inf) })
+                {
+                    const auto residualBefore = g_residualReads, coarseBefore = g_lowReads;
+                    const auto actual = CadenceAccept(x, y, acc, params);
+                    assert(g_residualReads == residualBefore && g_lowReads == coarseBefore);
+                    const auto legacy = LegacyCarryEdit(x, y, acc, params, false);
+                    assert(actual.weight == legacy.accept && actual.qx == legacy.qx && actual.qy == legacy.qy);
+                    rejected += legacy.accept == 0.0f;
+                    partial += legacy.accept > 0.0f && legacy.accept < 1.0f;
+                    accepted += legacy.accept == 1.0f;
+                }
+    };
+    Machine m;
+    Pan(0, 0, 0);
+    m.Record(Model(g_proxyNow));
+    Pan(0.375f, -0.625f, 1);
+    m.Step(true);
+    compare(m.P);
+    Occluded(0);
+    m.Record(Model(g_proxyNow));
+    for (int k = 1; k <= 3; ++k)
+    {
+        Occluded(k);
+        m.Step(k == 1);
+    }
+    compare(m.P);
+    Pan(0, 0, 0, 0.9f);
+    m.Record(Model(g_proxyNow));
+    for (int y = 25; y < 35; ++y)
+        for (int x = 40; x < 50; ++x)
+        {
+            g_depthNow.Ref(x, y) = 0.1f;
+            g_proxyNow.Ref(x, y) = { 0.2f, 0.25f, 0.6f };
+        }
+    m.Step(true);
+    compare(m.P);
+    assert(rejected > 0 && partial > 0 && accepted > 0);
+    ++g_cases;
+}
+
 int main()
 {
+    Acceptance_AgreesWithLegacyWithoutReadingHistoryEdit();
     Rules_DepthMismatch();
     Rules_ColourGate();
     Rules_CatmullRomIsExactAtTexelsAndNeverRings();
@@ -1021,7 +1087,7 @@ int main()
     Limiter_Rule();
     Limiter_LightAndGainAgree();
     Limiter_HoldsAReGradeToTheRate();
-    if (g_cases != 21)
+    if (g_cases != 22)
         return 2;
     std::printf("PASS %d rule cases over synthetic sequences: still scene exact, integer pan exact and sub-pixel pan "
                 "within interpolation, chain off the picture, occluder restarts the chain, no match no fill, UI kept; "
