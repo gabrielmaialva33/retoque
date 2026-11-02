@@ -311,14 +311,20 @@ struct CadenceCarry
     float qy;
 };
 
-CR_FN CadenceCarry CadenceCarryEdit(int px, int py, float2 acc, CadenceParams P, bool stopWhenRejected)
+// Acceptance does not depend on the stored edit or coarse fill. Keep its arithmetic shared with the probe.
+struct CadenceAcceptance
+{
+    float weight;
+    float qx;
+    float qy;
+};
+
+CR_FN CadenceAcceptance CadenceAccept(int px, int py, float2 acc, CadenceParams P)
 {
     const float W = (float) P.width;
     const float H = (float) P.height;
     const float cx = (float) px + 0.5f;
     const float cy = (float) py + 0.5f;
-    const float3 c = CR_PROXY_NOW(px, py);
-    const float dc = CR_DEPTH_NOW(px, py);
 
     float2 d = acc;
     if (!CadenceFinite2(d))
@@ -368,6 +374,25 @@ CR_FN CadenceCarry CadenceCarryEdit(int px, int py, float2 acc, CadenceParams P,
     const float qcx = clamp(qx, 0.5f, W - 0.5f);
     const float qcy = clamp(qy, 0.5f, H - 0.5f);
 
+    CadenceAcceptance result;
+    result.weight = w;
+    result.qx = qcx;
+    result.qy = qcy;
+    return result;
+}
+
+CR_FN CadenceCarry CadenceCarryEdit(int px, int py, float2 acc, CadenceParams P, bool stopWhenRejected)
+{
+    const CadenceAcceptance accepted = CadenceAccept(px, py, acc, P);
+    const float w = accepted.weight;
+    const float qcx = accepted.qx;
+    const float qcy = accepted.qy;
+    const float3 c = CR_PROXY_NOW(px, py);
+    const float dc = CR_DEPTH_NOW(px, py);
+    const float W = (float) P.width;
+    const float H = (float) P.height;
+    const float cx = (float) px + 0.5f;
+    const float cy = (float) py + 0.5f;
     // Nothing accepted: a caller that multiplies the carry by w gets zero whatever the edit and the fill would have
     // been, so neither the 16-tap edit nor the fill's four rings of eight are read.
     if (stopWhenRejected && w <= 0.0f)

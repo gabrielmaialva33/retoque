@@ -171,8 +171,8 @@ void PixelModes(uint3 id)
             if (gProbeHistory != 0)
             {
                 const float2 acc = CadenceChainStep(x, y, gChainStart != 0, P);
-                const CadenceCarry carry = CadenceCarryEdit(x, y, acc, P, false);
-                sample = float4(length(motion) * (1080.0 / float(gHeight)), 1.0 - carry.accept, 1.0, 0.0);
+                const CadenceAcceptance accepted = CadenceAccept(x, y, acc, P);
+                sample = float4(length(motion) * (1080.0 / float(gHeight)), 1.0 - accepted.weight, 1.0, 0.0);
             }
         }
         gOut0[id.xy] = sample;

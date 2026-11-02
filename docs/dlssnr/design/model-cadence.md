@@ -1,9 +1,13 @@
 # Model cadence — run the model every Nth frame and carry its edit in between
 
-Status: implemented on D3D12, **off by default**, **measured in the synthetic moving fixture on 2026-10-20** ([results](cadence-adaptive.md)); not game-validated. Native Vulkan has
-no implementation and the menu does not offer it there. The carry is a subset port of BeliyG3's
-`optimizer-fps-dlss5` (MIT, `Licenses/OptimizerFps_LICENSE.txt`); what was taken and what was left is
-listed below.
+Status: implemented on D3D12, **off by default**. Initial synthetic moving-fixture
+measurements are in [adaptive cadence](cadence-adaptive.md). The scoped
+[2026-11-01 RTX 4090 replay and game comparison](cadence-deferred-coarse.md)
+qualifies deferred coarse construction with the tested adaptive configuration;
+the image-stability tradeoffs below still apply. Native Vulkan has no implementation
+and the menu does not offer it there. The carry is a subset port of BeliyG3's
+`optimizer-fps-dlss5` (MIT, `Licenses/OptimizerFps_LICENSE.txt`); what was taken and
+what was left is listed below.
 
 Since 2026-10-13 a running cadence can be smoothed (`[DlssNr] CadenceSmoothing`, off until measured): each new answer
 is walked in from the carried one over the interval, and the light of what the cadence shows is rate-limited. That is the one place
@@ -69,16 +73,22 @@ alternate long and short, and it is off by default.
 
 All at the model's working size W×H, in the encoded proxy space the model reads.
 
-**Recorded on a model frame**, only when the model call and every requested extra pass succeeded,
-right after the final answer becomes readable and before the resolve:
+**Cadence history.** On a model frame, only when the model call and every requested extra pass succeeded,
+`Record` stores the residual, proxy and depth after the final answer becomes readable and before the resolve:
 
 | Surface | Format | What |
 |---|---|---|
 | residual | RGBA16F | final answer − proxy (`modelInput`) |
 | proxy snapshot | RGBA16F | the proxy the model saw, for the colour test |
 | depth snapshot | R32F | `depthForModel` resampled to W×H, for the depth test |
-| coarse residual | RGBA16F, ⌈W/16⌉×⌈H/16⌉ | the residual averaged over 16×16 blocks, for the fill |
-| chain ×2 | R32G32F | displacement back to the residual's frame, work pixels |
+| coarse residual | RGBA16F, ⌈W/16⌉×⌈H/16⌉ | the stored residual averaged over 16×16 blocks, prepared on the first carry |
+| chain ×2 | R32G32F | displacement back to the residual's frame, extended on carried frames |
+
+The first carry after a successful `Record` builds the coarse residual before any consumer reads it; later carries
+and the outgoing edit's fade reuse it. A run of model-only frames can replace the stored edit without computing
+an unused coarse texture. The adaptive probe reads the shared acceptance rule, which needs neither residual
+texture. The reduction still reads the stored RGBA16F residual in the same order; its arithmetic and quantization
+are unchanged.
 
 32-bit chain because vectors in pixels reach the thousands, where 16-bit float has lost the
 sub-pixel (the guide-match comment). About 36 bytes per working pixel: ~133 MB at a 2560×1440

@@ -174,11 +174,14 @@ Off (and at Cadence = 1): nothing. On, with a cadence running:
 
 - **Memory:** the fade and the shown answer, RGBA16F at the working size (+16 bytes per working pixel: +56 MB at a
   2560x1440 working size, +127 MB at 3840x2160), a 16x16 RG32F grid and a 4x1 R32F state. The cadence object's
-  descriptor heaps and constant buffers go from 48 to 112 slots (sixteen frames at up to seven dispatches).
-- **Carried frame:** chain, synthesize (into the shown answer), light, limit, apply: five dispatches instead of two.
+  descriptor heaps and constant buffers retain 112 slots, the original sixteen-frame budget of seven dispatches.
+- **Carried frame:** the first carry after a model frame prepares the coarse residual, then runs chain, synthesize
+  (into the shown answer), light, limit and apply: six dispatches. Later carries reuse coarse and use five.
   Light reads a quarter of two working-size textures; limit is one thread group; apply reads one texture and writes one.
 - **Model frame after carried ones:** model motion, then after the model: fade (the carry's synthesis once more, against
-  the outgoing edit), record, coarse, light, limit, apply.
+  the outgoing edit), record, light, limit and apply: six dispatches. Since 2026-11-01, coarse preparation is deferred
+  to the first carry that consumes the new record; model-only sequences avoid that work. This moves cost to the first
+  carry when reuse occurs, so its timing must be measured separately from later carries.
 
 ### Measured in a game, and the fade's early stop (2026-10-31)
 

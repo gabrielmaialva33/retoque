@@ -24,8 +24,8 @@
 #include <shaders/Shader_Dx12.h>
 #include <shaders/Shader_Dx12Utils.h>
 
-// Up to seven dispatches a frame (a smoothed model frame: model motion, fade, record, coarse, light, limit, apply),
-// reused round-robin with no fence: sixteen frames of coverage, as the stabilizer keeps for one.
+// Up to six dispatches a frame: model motion, fade, record, light, limit, apply on a smoothed model frame;
+// coarse moves to its first Carry. Keep 112 round-robin slots (at least sixteen frames of coverage), no new fence.
 #define DLSSNR_CADENCE_NUM_OF_HEAPS 112
 
 class DlssNr_Cadence_Dx12 : public Shader_Dx12
@@ -194,12 +194,12 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     void Probe(ID3D12GraphicsCommandList* cmd, const Frame& frame, ID3D12Resource* ui, bool history, bool chainStart,
                uint64_t present, int64_t ms);
 
-    // A model frame: keep the model's final answer minus its proxy, the proxy, the depth and the coarse edit.
+    // A model frame: keep the model's final answer minus its proxy, the proxy and depth. The first Carry builds coarse.
     // InAnswer is the answer at the working size, readable.
     bool Record(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InAnswer);
 
-    // A carried frame: one link of the chain, then the proxy plus the moved edit into InOut -- the surface the
-    // model writes, in its format, which arrives in UNORDERED_ACCESS and is left there. InUiAlpha may be null. With
+    // A carried frame: prepare coarse on InChainStart, then one chain link and the moved edit into InOut -- the surface
+    // the model writes, in its format, which arrives in UNORDERED_ACCESS and is left there. InUiAlpha may be null. With
     // smoothing, the walk's share of the stored fade is added, and under the limiter the answer goes through Show.
     bool Carry(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, bool InChainStart, ID3D12Resource* InUiAlpha,
                const Smooth& InSmooth, ID3D12Resource* InOut);
