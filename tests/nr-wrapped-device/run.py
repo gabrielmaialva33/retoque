@@ -74,7 +74,7 @@ def check(renderer, resources, internal):
     present = body(renderer, 'void RunPresentPass(')
     taken = present.index('queue->GetDevice(IID_PPV_ARGS(&device))')
     assert taken < present.index('DeviceChildBelongsTo(device, backbuffer)') < present.index('EnsureCompose(device)')
-    assert taken < present.index('GetPresentCommandList(device, slot)'), 'the list is made on the queue\'s device'
+    assert taken < present.index('GetPresentCommandList(device, slot'), 'the list is made on the queue\'s device'
     assert 'DeviceChildBelongsTo(device, queue)' not in present
 
     # Lists and queues stay strict; only a resource may report the device under a wrapper.

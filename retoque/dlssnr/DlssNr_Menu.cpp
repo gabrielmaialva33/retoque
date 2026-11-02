@@ -522,6 +522,9 @@ static std::string CollectDiagnosticReport(Config* config)
             result.boundary = source.metadata.boundary;
             result.hdr = source.metadata.hdr;
             result.nrRecorded = source.metadata.nrRecorded;
+            result.dispatchMarked = source.dispatchMarked;
+            result.dispatchCallMs = source.dispatchCallMs;
+            result.outsideDispatchMs = source.outsideDispatchMs;
             return result;
         };
         in.gpu.present = region(sample.present);
@@ -589,6 +592,11 @@ static void RenderGpuTimingReadout()
                            m.outputHeight);
         if (present)
         {
+            if (value.dispatchMarked)
+                ImGui::TextWrapped(Localization::Tr("Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)"),
+                                   value.dispatchCallMs, value.outsideDispatchMs);
+            else
+                ImGui::TextWrapped(Localization::Tr("No Dispatch call in this recording: total only"));
             if (m.guideSequence)
                 ImGui::TextWrapped(Localization::Tr("Game capture %llu, age at selection %llu ms"),
                                    static_cast<unsigned long long>(m.guideSequence),

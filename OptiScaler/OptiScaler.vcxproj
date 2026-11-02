@@ -977,6 +977,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\misc\Localization.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_GpuTiming.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_GpuTimingModel.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentCpuTiming.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Submission.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_WorkingScale.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SubmissionModel.h" />

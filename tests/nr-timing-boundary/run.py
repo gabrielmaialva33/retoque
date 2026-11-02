@@ -86,6 +86,25 @@ def present_region_guards(source):
     gate = capture.index('if (Config::Instance()->DlssNrGpuTimingRequested())')
     assert gate < capture.index('GetDlssNrGpuTimingSettings()') < capture.index('captureTiming.emplace(')
     assert capture.index('g_presentGuideRing.CommitRecord(') < capture.index('captureTiming->Finish(true);')
+    # CPU stream (DlssNr_PresentCpuTiming.h): gated like the regions, no new clock reads, submitted presents only.
+    assert 'const bool cpuTimed = cfg.DlssNrGpuTimingRequested() && !cfg.DlssNrUseProxy.value_or_default();' in present
+    assert present.count('steady_clock::now()') == 2  # PresentSync's own wait log, which predates the CPU stream
+    assert 'GetPresentCommandList(device, slot, cpuTimed ? &cpuSample[DlssNr::PresentCpu::Wait::Allocator] : nullptr)' \
+        in present
+    assert re.search(r'DlssNr::PresentCpu::Timed\(cpuTimed \? &cpuSample\[DlssNr::PresentCpu::Wait::SynthIdle\] : nullptr,'
+                     r'\s*\[\] \{ return WaitPresentListsIdle\(2000\); \}\)', present)
+    assert present.count('WaitPresentListsIdle(') == 1
+    assert present.index('cpuSample.recordMs =') < present.index('SubmitPresentList(queue, slot)') < \
+        present.index('cpuSample.submitMs =')
+    assert 'if (cpuTimed && executed && g_presentCpu.Add(' in present
+    assert present.index('WaitForSingleObject(g_presentList.fenceEvent, 1000)') < present.index('g_presentCpu.Add(')
+    # The route's split: marks immediately around the one Dispatch call, the region lent by RunPresentPass.
+    evaluate = between(source, 'bool EvaluateAtPresent(', 'ScopedPreUpscale::ScopedPreUpscale(')
+    assert evaluate.count('g_compose->Dispatch(') == 1
+    assert re.search(r'if \(route != nullptr\)\n\s*route->BeforeDispatch\(\);\n\s*const bool recorded = '
+                     r'g_compose->Dispatch\([^;]*;\n\s*if \(route != nullptr\)\n\s*route->AfterDispatch\(\);', evaluate)
+    assert evaluate.count('route->BeforeDispatch();') == evaluate.count('route->AfterDispatch();') == 1
+    assert present.count('EvaluateAtPresent(') == 1 and 'presentTiming ? &*presentTiming : nullptr);' in present
 
 
 present_region_guards(renderer)
@@ -98,6 +117,18 @@ mutants = {
     'ungated route settings': lambda s: s.replace('if (routeTimingArmed)\n        routeTimingSettings =',
                                                   'routeTimingSettings =', 1),
     'ungated capture settings': lambda s: s.replace('if (Config::Instance()->DlssNrGpuTimingRequested())', 'if (true)', 1),
+    'dispatch end unmarked': lambda s: s.replace('route->AfterDispatch();', ';', 1),
+    'dispatch begin after the call': lambda s: s.replace(
+        '    if (route != nullptr)\n        route->BeforeDispatch();\n', '', 1).replace(
+        'route->AfterDispatch();', 'route->BeforeDispatch();\n        route->AfterDispatch();', 1),
+    'route not lent': lambda s: s.replace('presentTiming ? &*presentTiming : nullptr);', 'nullptr);', 1),
+    'cpu stream ungated': lambda s: s.replace(
+        'cpuTimed ? &cpuSample[DlssNr::PresentCpu::Wait::Allocator] : nullptr',
+        '&cpuSample[DlssNr::PresentCpu::Wait::Allocator]', 1),
+    'unguarded clock read': lambda s: s.replace('    cpuSample.recordMs =',
+                                                '    (void) std::chrono::steady_clock::now();\n    cpuSample.recordMs =', 1),
+    'dropped present counted': lambda s: s.replace('if (cpuTimed && executed && g_presentCpu.Add(',
+                                                   'if (cpuTimed && g_presentCpu.Add(', 1),
     'capture finish before commit': lambda s: s.replace('g_presentGuideRing.CommitRecord(',
                                                         'captureTiming->Finish(true);\n    g_presentGuideRing.CommitRecord(', 1),
 }

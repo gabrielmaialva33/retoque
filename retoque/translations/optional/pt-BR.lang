@@ -611,6 +611,8 @@ Guide capture uses a separate producer recording. Do not add it to a Present sam
 Present and guide capture each count their own eligible regions.	O Present e a captura dos guias contam suas regiões elegíveis separadamente.
 Present route GPU	Rota Present na GPU
 Guide capture GPU	Captura dos guias na GPU
+Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)	Chamada do Dispatch %.3f ms, fora do Dispatch %.3f ms (mesma gravação)
+No Dispatch call in this recording: total only	Nenhuma chamada do Dispatch nesta gravação: só o total
 game depth + motion	profundidade e movimento do jogo
 zero depth + synthesized motion	profundidade zerada e movimento sintetizado
 zero depth + motion	profundidade e movimento zerados

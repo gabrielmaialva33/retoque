@@ -280,6 +280,14 @@ void GpuSampleMarking()
     Require(!Contains(regions, "0.375 ms") && Contains(regions, "includes Dispatch") &&
                 Contains(regions, "separate producer") && Contains(regions, "CPU waits"),
             "no misleading sums or CPU cost");
+    Require(Contains(regions, "  No Dispatch call in this recording: total only"), "unmarked route says total only");
+    in.gpu.present.dispatchMarked = true;
+    in.gpu.present.dispatchCallMs = 0.200;
+    in.gpu.present.outsideDispatchMs = 0.050;
+    const auto split = DR::Build(in);
+    Require(Contains(split, "  Dispatch call 0.200 ms, outside Dispatch 0.050 ms (same recording)") &&
+                !Contains(split, "total only"),
+            "route split from the same recording");
     in.gpu.present.valid = false;
     Require(Contains(DR::Build(in), "Present route GPU: no confirmed sample"), "no route sample is explicit");
     in.gpu.instrumented = false;

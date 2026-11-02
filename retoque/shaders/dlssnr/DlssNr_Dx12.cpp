@@ -45,6 +45,7 @@
 #include <proxies/NVNGX_Proxy.h>
 #include <hooks/D3D12_Hooks.h>
 #include <dlssnr/DlssNr_GpuTiming.h>
+#include <dlssnr/DlssNr_PresentCpuTiming.h>
 #include <dlssnr/DlssNr_LogRate.h>
 #include <dlssnr/DlssNr_ZeroGuides.h>
 #include <dlssnr/DlssNr_RenderSize.h>
@@ -3813,7 +3814,12 @@ static bool EnsurePresentList(ID3D12Device* device)
     return true;
 }
 
-static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, unsigned int slot)
+// The Present route's CPU windows (DlssNr_PresentCpuTiming.h), fed only while GpuTiming is on.
+static DlssNr::PresentCpu::Accumulator g_presentCpu;
+
+// allocatorWait, when given, times the existing wait for the slot's previous list; nothing else changes.
+static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, unsigned int slot,
+                                                        DlssNr::PresentCpu::WaitSample* allocatorWait = nullptr)
 {
     if (g_presentList.list[0] == nullptr && !EnsurePresentList(device))
         return nullptr;
@@ -3826,7 +3832,13 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
             if (SUCCEEDED(g_presentList.fence->SetEventOnCompletion(g_presentList.fenceValue[slot],
                                                                     g_presentList.fenceEvent)))
             {
-                const DWORD wait = WaitForSingleObject(g_presentList.fenceEvent, 5000);
+                DWORD wait = WAIT_FAILED;
+                DlssNr::PresentCpu::Timed(allocatorWait,
+                                          [&]
+                                          {
+                                              wait = WaitForSingleObject(g_presentList.fenceEvent, 5000);
+                                              return wait == WAIT_OBJECT_0;
+                                          });
                 if (wait != WAIT_OBJECT_0)
                     LOG_WARN("DLSS-NR present: allocator wait returned {} (slot {})", (unsigned) wait, slot);
             }
@@ -4368,7 +4380,12 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     }
 
     const unsigned int slot = index % PresentList::kSlots;
-    ID3D12GraphicsCommandList* list = GetPresentCommandList(device, slot);
+    // CPU stream, separate from the GPU regions: with GpuTiming off no clock is read for it.
+    const bool cpuTimed = cfg.DlssNrGpuTimingRequested() && !cfg.DlssNrUseProxy.value_or_default();
+    DlssNr::PresentCpu::Sample cpuSample;
+    ID3D12GraphicsCommandList* list =
+        GetPresentCommandList(device, slot, cpuTimed ? &cpuSample[DlssNr::PresentCpu::Wait::Allocator] : nullptr);
+    const auto cpuRecordStart = DlssNr::PresentCpu::Mark(cpuTimed);
 
     if (list == nullptr)
     {
@@ -4735,7 +4752,9 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             g_presentMotion = new SynthMotionGuide();
 
         // Built for another extent: a present list still in flight may read what it holds.
-        if (g_presentMotion->NeedsRebuild(width, height, bbDesc.Format) && WaitPresentListsIdle(2000))
+        if (g_presentMotion->NeedsRebuild(width, height, bbDesc.Format) &&
+            DlssNr::PresentCpu::Timed(cpuTimed ? &cpuSample[DlssNr::PresentCpu::Wait::SynthIdle] : nullptr,
+                                      [] { return WaitPresentListsIdle(2000); }))
             g_presentMotion->Release();
 
         if (auto* synthesized = g_presentMotion->Record(device, list, g_bbCopy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -4767,7 +4786,8 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     if (presentHdr && !hdrDecoded)
         reason = "the HDR conversion could not record its decode";
     else
-        recorded = EvaluateAtPresent(list, presentHdr ? g_hdrWork : g_bbCopy, depth, motion, frame, queue, &reason);
+        recorded = EvaluateAtPresent(list, presentHdr ? g_hdrWork : g_bbCopy, depth, motion, frame, queue, &reason,
+                                     presentTiming ? &*presentTiming : nullptr);
     if (recorded)
         ++g_passesRecorded;
 
@@ -4839,7 +4859,10 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         presentTiming->SetMetadata(presentTimingMetadata);
         presentTiming->Finish(true); // Includes copy-back/restores; the certificate still has to prove submission.
     }
+    cpuSample.recordMs = DlssNr::PresentCpu::SinceMs(cpuTimed, cpuRecordStart);
+    const auto cpuSubmitStart = DlssNr::PresentCpu::Mark(cpuTimed);
     const bool executed = SubmitPresentList(queue, slot);
+    cpuSample.submitMs = DlssNr::PresentCpu::SinceMs(cpuTimed, cpuSubmitStart);
     const bool convertedHdr = presentHdr && executed && writeBack == g_hdrOut;
     if (presentHdr)
         NotePresentHdr(presentProfile, convertedHdr ? nullptr : "HDR conversion did not produce a submitted frame",
@@ -4898,12 +4921,19 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             const DWORD wait = WaitForSingleObject(g_presentList.fenceEvent, 1000);
             const double waitedMs =
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - waitStart).count();
+            if (cpuTimed)
+                cpuSample[DlssNr::PresentCpu::Wait::PresentSync] = { true, wait == WAIT_OBJECT_0, waitedMs };
 
             if (wait != WAIT_OBJECT_0)
                 LOG_WARN("DLSS-NR present: completion wait returned {} after {:.1f} ms (slot {})", (unsigned) wait,
                          waitedMs, slot);
         }
     }
+
+    // A submitted present only; one INFO line per closed window. Never added to a GPU sample.
+    DlssNr::PresentCpu::Window cpuWindow;
+    if (cpuTimed && executed && g_presentCpu.Add(cpuSample, DlssNr::PresentCpu::Clock::now(), &cpuWindow))
+        LOG_INFO("{}", DlssNr::PresentCpu::Format(cpuWindow, DlssNr::GpuTiming::GetSnapshot().runId));
 
     backbuffer->Release();
     device->Release();
@@ -5596,7 +5626,7 @@ DlssNrFrameInfo PresentFrameDefaults(bool reset, PresentColour colour)
 
 bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                        ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue,
-                       const char** outReason)
+                       const char** outReason, DlssNr::GpuTiming::Region* route)
 {
     const auto answer = [outReason](bool recorded, const char* reason)
     {
@@ -5644,7 +5674,11 @@ bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colou
     sample.width = static_cast<uint32_t>(desc.Width);
     sample.height = desc.Height;
 
+    if (route != nullptr)
+        route->BeforeDispatch();
     const bool recorded = g_compose->Dispatch(cmdList, colour, depth, motion, colour, frame, timingQueue, &sample);
+    if (route != nullptr)
+        route->AfterDispatch();
 
     if (recorded)
         return answer(true, "composition recorded at present, with no upscaler in the frame");

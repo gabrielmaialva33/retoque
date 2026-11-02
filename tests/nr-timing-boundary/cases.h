@@ -194,6 +194,16 @@ int main()
     assert(ImGui::Contains("Present route GPU: 0.250 ms") && ImGui::Contains("historical sample 9, 1.5 s"));
     assert(ImGui::Contains("game depth + motion") && ImGui::Contains("capture 12, age at selection 4 ms"));
     assert(ImGui::Contains("includes Dispatch") && ImGui::Contains("CPU waits"));
+    assert(ImGui::Contains("No Dispatch call in this recording: total only") && !ImGui::Contains("Dispatch call 0"));
+    ++cases;
+    published.present.dispatchMarked = true;
+    published.present.dispatchCallMs = 0.200;
+    published.present.outsideDispatchMs = 0.050;
+    ImGui::Clear();
+    RenderGpuTiming(&cfg, false);
+    assert(ImGui::Contains("Dispatch call 0.200 ms, outside Dispatch 0.050 ms (same recording)") &&
+           !ImGui::Contains("total only"));
+    published.present.dispatchMarked = false;
     ++cases;
     published.present.metadata.guides = DlssNr::GpuTiming::GuideSource::SynthesizedMotion;
     published.present.metadata.guideSequence = 0;
@@ -228,6 +238,6 @@ int main()
     RenderGpuTiming(&cfg, false);
     assert(!cfg.settings.Enabled && ImGui::sliderCalls == 0 && !ImGui::Contains("Last confirmed"));
     ++cases;
-    assert(cases == 36);
+    assert(cases == 37);
     std::printf("PASS %d timing boundary metadata/UI cases\n", cases);
 }

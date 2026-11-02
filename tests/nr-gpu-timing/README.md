@@ -6,7 +6,7 @@ Run from the repository root:
 python3 tests/nr-gpu-timing/run.py
 ```
 
-The runner builds with Clang ASan/UBSan and executes two binaries (the runtime binary also runs cadence, HDR conversion and Present/capture region cases, each in a fresh process). Nonzero exit, any sanitizer
+The runner builds with Clang ASan/UBSan and executes three binaries (the runtime binary also runs cadence, HDR conversion, Present/capture region and route split cases, each in a fresh process; the third is the Present CPU stream). Nonzero exit, any sanitizer
 finding, wrong case count or zero instrumented queries/maps fails the run loudly.
 
 - Portable production certificate and timestamp decoding: 31 cases plus 3000 epoch cycles. These
@@ -35,6 +35,14 @@ finding, wrong case count or zero instrumented queries/maps fails the run loudly
   failures; full Present pool leaves Evaluation and capture capacity; disable drains only certified
   safe resources; device loss retains uncertain slots. Logs retain argument evaluation in the host
   stub, so instrumentation expressions are compiled instead of erased by the fake logger.
+- The Present route split (`--region-split`, 6 cases, scripted per-timestamp ticks): prefix 10 / Dispatch 100
+  / suffix 20 gives route 0.130, Dispatch call 0.100, outside 0.030 ms from one recording; zero prefix and
+  suffix stay valid; a route without Dispatch publishes its total only; a begin without end, an end without
+  begin, a repeated begin and marks on a capture region are discarded unmapped; an Evaluation nested inside
+  the Dispatch marks keeps its own sample; marks on a disabled region record nothing.
+- The Present route CPU stream (`present_cpu.cpp`, a third binary, 4 cases): 5 s windows, waits counted
+  only when attempted, failures (timeout or API error, not separated) kept, the INFO line's fields, and the untimed path running each wait once
+  without a clock read.
 
 The fake GPU deliberately writes timestamps synchronously. Thus these tests prove host admission,
 query accounting, immutable sample metadata, publication gating and retention decisions, **not** real

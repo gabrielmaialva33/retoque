@@ -53,6 +53,9 @@ struct GpuRegionSample
     uint32_t guideWidth = 0, guideHeight = 0, outputWidth = 0, outputHeight = 0;
     std::string guides;
     bool boundary = false, hdr = false, nrRecorded = false;
+    // Present only: the same recording's split around the Dispatch call; unmarked means total only.
+    bool dispatchMarked = false;
+    double dispatchCallMs = 0.0, outsideDispatchMs = 0.0;
 };
 
 // GpuTiming::Snapshot, the fields the export names.
@@ -481,6 +484,16 @@ inline std::string Build(const Inputs& in)
                  ", output " + std::to_string(sample.outputWidth) + "x" + std::to_string(sample.outputHeight));
             if (present)
             {
+                if (sample.dispatchMarked)
+                {
+                    char split[160] {};
+                    std::snprintf(split, sizeof(split),
+                                  "  Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)",
+                                  sample.dispatchCallMs, sample.outsideDispatchMs);
+                    line(split);
+                }
+                else
+                    line("  No Dispatch call in this recording: total only");
                 line("  Observed Present " + std::to_string(sample.presentId) + ", boundary " +
                      (sample.boundary ? "yes" : "no") + ", HDR " + (sample.hdr ? "yes" : "no") + ", NR recorded " +
                      (sample.nrRecorded ? "yes" : "no"));
