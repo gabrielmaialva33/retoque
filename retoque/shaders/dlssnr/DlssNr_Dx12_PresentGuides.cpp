@@ -609,6 +609,25 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         return false;
     }
 
+    // With GpuTiming off nothing below reads the timing settings (a mutex) or fills metadata.
+    std::optional<DlssNr::GpuTiming::Region> captureTiming;
+    DlssNr::GpuTiming::RegionMetadata captureMetadata;
+    if (Config::Instance()->DlssNrGpuTimingRequested())
+    {
+        const auto& cfg = *Config::Instance();
+        const auto timingSettings = cfg.GetDlssNrGpuTimingSettings();
+        if (timingSettings.Enabled && !cfg.DlssNrUseProxy.value_or_default())
+        {
+            captureMetadata.guides = DlssNr::GpuTiming::GuideSource::Game;
+            captureMetadata.guideWidth = static_cast<uint32_t>(depthDesc.Width);
+            captureMetadata.guideHeight = depthDesc.Height;
+            captureMetadata.outputWidth = source.output.outputWidth;
+            captureMetadata.outputHeight = source.output.outputHeight;
+            captureTiming.emplace(cmdList, DlssNr::GpuTiming::RegionKind::GuideCapture, captureMetadata, true,
+                                  timingSettings.Interval);
+        }
+    }
+
     // Transitions around copy: game guide to COPY_SOURCE, clone to COPY_DEST, copy mip 0, restore states
     const auto depthArrival = source.depthState;
     const auto motionArrival = source.motionState;
@@ -650,6 +669,12 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
     StampPresentGuide(slot, stamp, frame, clone.width, clone.height);
     g_presentGuideRing.CommitRecord(slot, clone.width, clone.height, frame.DepthInverted, NowMs(),
                                     &clone.captureWriteUsage, &clone);
+    if (captureTiming)
+    {
+        captureMetadata.guideSequence = g_presentGuideRing.GetSlot(slot).sequence;
+        captureTiming->SetMetadata(captureMetadata);
+        captureTiming->Finish(true);
+    }
     g_temporalValid = true;
     return true;
 }

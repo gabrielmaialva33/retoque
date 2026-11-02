@@ -504,6 +504,28 @@ static std::string CollectDiagnosticReport(Config* config)
         in.gpu.passes = sample.actualPasses;
         in.gpu.cadence = sample.metadata.cadence;
         in.gpu.carried = sample.metadata.carried;
+        const auto region = [](const GpuTiming::RegionSnapshot& source)
+        {
+            DR::GpuRegionSample result;
+            result.valid = source.valid;
+            result.totalMs = source.totalMs;
+            result.sampleId = source.sampleId;
+            result.ageMs = source.sampleAgeMs;
+            result.presentId = source.metadata.presentId;
+            result.guideSequence = source.metadata.guideSequence;
+            result.guideAgeMs = source.metadata.guideAgeMs;
+            result.guideWidth = source.metadata.guideWidth;
+            result.guideHeight = source.metadata.guideHeight;
+            result.outputWidth = source.metadata.outputWidth;
+            result.outputHeight = source.metadata.outputHeight;
+            result.guides = GpuTiming::GuideSourceLabel(source.metadata.guides);
+            result.boundary = source.metadata.boundary;
+            result.hdr = source.metadata.hdr;
+            result.nrRecorded = source.metadata.nrRecorded;
+            return result;
+        };
+        in.gpu.present = region(sample.present);
+        in.gpu.capture = region(sample.capture);
     }
 
     const auto lsfg = Lsfg::GetStatus();
@@ -548,6 +570,42 @@ static void RenderGpuTimingReadout()
                                             "encode (sample %llu, %.1f s since recording)"),
                            sample.conversionMs, sample.conversionDecodeMs, sample.conversionEncodeMs,
                            static_cast<unsigned long long>(sample.conversionSampleId), sample.conversionAgeMs / 1000.0);
+    const auto region = [](const char* name, const GpuTiming::RegionSnapshot& value, bool present)
+    {
+        if (!value.valid)
+        {
+            ImGui::TextDisabled(Localization::Tr("%s: no confirmed sample (pending %u, discarded %llu; %s)"),
+                                Localization::Tr(name), value.pending, static_cast<unsigned long long>(value.discarded),
+                                Localization::Tr(value.reason));
+            return;
+        }
+        ImGui::TextWrapped(Localization::Tr("%s: %.3f ms (historical sample %llu, %.1f s since recording)"),
+                           Localization::Tr(name), value.totalMs, static_cast<unsigned long long>(value.sampleId),
+                           value.sampleAgeMs / 1000.0);
+        const auto& m = value.metadata;
+        ImGui::TextWrapped(Localization::Tr("Guides: %s; capture %llu; guide extent %ux%u, output %ux%u"),
+                           Localization::Tr(GpuTiming::GuideSourceLabel(m.guides)),
+                           static_cast<unsigned long long>(m.guideSequence), m.guideWidth, m.guideHeight, m.outputWidth,
+                           m.outputHeight);
+        if (present)
+        {
+            if (m.guideSequence)
+                ImGui::TextWrapped(Localization::Tr("Game capture %llu, age at selection %llu ms"),
+                                   static_cast<unsigned long long>(m.guideSequence),
+                                   static_cast<unsigned long long>(m.guideAgeMs));
+            ImGui::TextWrapped(Localization::Tr("Observed Present %llu; boundary %s, HDR %s, NR recorded %s"),
+                               static_cast<unsigned long long>(m.presentId),
+                               Localization::Tr(m.boundary ? "yes" : "no"), Localization::Tr(m.hdr ? "yes" : "no"),
+                               Localization::Tr(m.nrRecorded ? "yes" : "no"));
+            ImGui::TextWrapped(Localization::Tr("GPU route includes Dispatch and HDR conversion. "
+                                                "CPU waits and submission are excluded."));
+        }
+        else
+            ImGui::TextWrapped(Localization::Tr("Guide capture uses a separate producer recording. "
+                                                "Do not add it to a Present sample."));
+    };
+    region("Present route GPU", sample.present, true);
+    region("Guide capture GPU", sample.capture, false);
     if (!sample.valid)
     {
         ImGui::TextDisabled(Localization::Tr("No confirmed GPU sample yet."));
@@ -597,7 +655,10 @@ static void RenderGpuTiming(Config* config, bool nativeVulkan)
                "against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded."
                "\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, "
                "composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, "
-               "and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.");
+               "and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time."
+               "\n\nD3D12 Present and guide capture have independent samples at the same interval. The Present "
+               "route includes its copies, guide preparation, Dispatch and HDR conversion; CPU waits are excluded. "
+               "The native Vulkan and D3D11 Present hosts do not have this route bracket.");
     GpuTiming::SetEnabled(settings.Enabled && config->DlssNrEnabled.value_or_default());
     if (!settings.Enabled)
     {
@@ -611,6 +672,7 @@ static void RenderGpuTiming(Config* config, bool nativeVulkan)
     ImGui::TextWrapped(Localization::Tr("The first eligible evaluation is sampled, then every %u evaluations. "
                                         "An evaluation is not necessarily a presentation frame."),
                        static_cast<unsigned>(interval));
+    ImGui::TextWrapped(Localization::Tr("Present and guide capture each count their own eligible regions."));
     RenderGpuTimingReadout();
 }
 

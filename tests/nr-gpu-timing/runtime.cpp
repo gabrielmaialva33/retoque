@@ -270,7 +270,8 @@ int ConversionCases()
     Execute(lists[2]);
     Seal(lists[2]);
     GpuTiming::Poll();
-    assert(GpuTiming::GetSnapshot().discarded == discardedBefore + 1 && GpuTiming::GetSnapshot().conversionSampleId == 1);
+    assert(GpuTiming::GetSnapshot().discarded == discardedBefore + 1 &&
+           GpuTiming::GetSnapshot().conversionSampleId == 1);
     ++cases;
 
     // Interval 3 on its own count: eligible conversions 4 and 7 of this run record (samples 4 and 5), 5 and 6 do not
@@ -306,6 +307,7 @@ int ConversionCases()
     std::cout << "PASS " << cases << " production HDR conversion timing cases\n";
     return 0;
 }
+#include "regions.h"
 } // namespace
 namespace DlssNr::Submission
 {
@@ -328,6 +330,8 @@ int main(int argc, char** argv)
         return CadenceCases();
     if (argc == 2 && std::strcmp(argv[1], "--conversion") == 0)
         return ConversionCases();
+    if (argc == 2 && std::strcmp(argv[1], "--regions") == 0)
+        return RegionCases();
     unsigned cases = 0;
     std::array<Device, 4> devices;
     std::array<List, 40> lists;

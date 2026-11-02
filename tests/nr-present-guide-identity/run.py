@@ -144,7 +144,8 @@ assert 'return;' in skip_body
 count = ('const auto guideOutcome = DlssNr::PresentGuideIdentity::OutcomeOf(guides.decision, temporalValid);\n'
          '    CountPresentPassGuides(guides, pickedSlot, guideOutcome);')
 assert present.count(count) == 1
-assert present.index('trackedSlot = usableSlot;') < present.index(count) < present.index('nrLock.unlock();\n\n    static ZeroGuides')
+assert present.index('trackedSlot = usableSlot;') < present.index(count) < \
+       present.index('nrLock.unlock();', present.index('bool gameGuidesHold = false;'))
 # The newest capture refused is decided on, like one used: the skip above then covers the presents after it. Only the
 # newest: a refused older pick leaves a newer capture to the next present.
 mark = ('if (guideOutcome == DlssNr::PresentGuideIdentity::Outcome::Refused &&\n'

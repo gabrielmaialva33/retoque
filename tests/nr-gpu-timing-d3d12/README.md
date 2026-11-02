@@ -21,6 +21,12 @@ same queue and a second queue is rejected; Reset with the GPU blocked by a test 
 does not publish; releasing that gate permits publication. The test may poll/sleep on
 its orchestration thread; production timing collection must not wait for the GPU.
 
+The same mandatory cases now nest an independent Present Region around the Evaluation. A capture
+Region is submitted separately on the second queue and cannot change the Evaluation/Present
+counters. Its accepted timestamp duration and frozen metadata are required. Both region kinds
+participate in the disabled negative control. The harness resolves the actual D3D12 adapter LUID
+through DXGI and records its name/PCI identity, refusing a software adapter.
+
 Passing requires at least two accepted samples, both replay rejections, actual hooked
 executions and allocations, positive timestamp durations, and a separate disabled-only
 negative control that exits nonzero with ZERO COVERAGE. Source/binary hash mismatch

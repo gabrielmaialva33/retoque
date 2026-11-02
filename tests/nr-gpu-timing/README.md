@@ -6,7 +6,7 @@ Run from the repository root:
 python3 tests/nr-gpu-timing/run.py
 ```
 
-The runner builds with Clang ASan/UBSan and executes two binaries (the runtime binary also runs cadence cases and HDR conversion cases, each in a fresh process). Nonzero exit, any sanitizer
+The runner builds with Clang ASan/UBSan and executes two binaries (the runtime binary also runs cadence, HDR conversion and Present/capture region cases, each in a fresh process). Nonzero exit, any sanitizer
 finding, wrong case count or zero instrumented queries/maps fails the run loudly.
 
 - Portable production certificate and timestamp decoding: 31 cases plus 3000 epoch cycles. These
@@ -28,6 +28,13 @@ finding, wrong case count or zero instrumented queries/maps fails the run loudly
   disabled, a decode and an encode published as their own sample beside the evaluation's without touching the
   evaluation counters, a frame with no encode freed with neither a sample nor a discard, an open bracket discarded,
   its own count of eligible conversions at the interval, and a slot it used reused by an ordinary evaluation (6 cases).
+
+- Independent Present/capture regions (`--regions`, 13 cases): disabled inactivity; nested Present +
+  Evaluation + HDR using distinct queries; no Map before both seal and completion; producer-queue
+  frequency; frozen source/sequence/age; newest-recorded wins; per-kind sampling; abort/replay/Track/Map
+  failures; full Present pool leaves Evaluation and capture capacity; disable drains only certified
+  safe resources; device loss retains uncertain slots. Logs retain argument evaluation in the host
+  stub, so instrumentation expressions are compiled instead of erased by the fake logger.
 
 The fake GPU deliberately writes timestamps synchronously. Thus these tests prove host admission,
 query accounting, immutable sample metadata, publication gating and retention decisions, **not** real

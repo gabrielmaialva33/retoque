@@ -3,6 +3,7 @@ int main()
     Config defaults;
     auto settings = defaults.GetDlssNrGpuTimingSettings();
     assert(!settings.Enabled && settings.Interval == 30);
+    assert(!defaults.DlssNrGpuTimingRequested());
     CSimpleIniA blank;
     defaults.Read(blank);
     assert(!defaults.GetDlssNrGpuTimingSettings().Enabled);
@@ -62,11 +63,17 @@ int main()
     restored.Read(fromDisk);
     assert(restored.GetDlssNrGpuTimingSettings().Enabled);
     assert(restored.GetDlssNrGpuTimingSettings().Interval == 17);
+    assert(restored.DlssNrGpuTimingRequested()); // INI on arms the producers' lock-free check, cold, no menu.
+    restored.SetDlssNrGpuTimingEnabled(false);
+    assert(!restored.DlssNrGpuTimingRequested());
+    restored.SetDlssNrGpuTimingEnabled(true);
+    assert(restored.DlssNrGpuTimingRequested());
     restored.SetDlssNrGpuTimingEnabled(false);
     restored.Save(fromDisk);
     Config disabled;
     disabled.Read(fromDisk);
     assert(!disabled.GetDlssNrGpuTimingSettings().Enabled);
+    assert(!disabled.DlssNrGpuTimingRequested());
     assert(disabled.GetDlssNrGpuTimingSettings().Interval == 17);
 
     // Existing CustomOptional semantics preserve a runtime edit across Reload.

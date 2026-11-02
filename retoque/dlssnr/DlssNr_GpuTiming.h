@@ -33,6 +33,60 @@ struct DiscardCount
     uint64_t count = 0;
 };
 
+enum class RegionKind : uint8_t
+{
+    Present,
+    GuideCapture
+};
+
+enum class GuideSource : uint8_t
+{
+    Unknown,
+    Game,
+    SynthesizedMotion,
+    Zero
+};
+
+inline const char* GuideSourceLabel(GuideSource source)
+{
+    switch (source)
+    {
+    case GuideSource::Game:
+        return "game depth + motion";
+    case GuideSource::SynthesizedMotion:
+        return "zero depth + synthesized motion";
+    case GuideSource::Zero:
+        return "zero depth + motion";
+    default:
+        return "unknown";
+    }
+}
+
+struct RegionMetadata
+{
+    uint64_t presentId = 0;     // Observed Present ordinal, never an engine frame ID.
+    uint64_t guideSequence = 0; // Ring capture sequence; zero without a selected capture.
+    uint64_t guideAgeMs = 0;    // At selection, not the age when this sample is collected.
+    uint32_t guideWidth = 0, guideHeight = 0;
+    uint32_t outputWidth = 0, outputHeight = 0;
+    GuideSource guides = GuideSource::Unknown;
+    bool boundary = false;
+    bool hdr = false;
+    bool nrRecorded = false; // Route reached an evaluation that recorded work; not a model-call count.
+};
+
+struct RegionSnapshot
+{
+    bool valid = false;
+    uint64_t eligible = 0, attempted = 0, sampled = 0, accepted = 0, discarded = 0;
+    uint32_t pending = 0, waitingReset = 0, waitingGpu = 0, waitingNotification = 0, retained = 0;
+    uint64_t sampleId = 0, sampleAgeMs = 0;
+    uint32_t sampleInterval = 1;
+    double totalMs = 0.0;
+    RegionMetadata metadata {};
+    const char* reason = "no-sample";
+};
+
 struct Snapshot
 {
     bool enabled = false;
@@ -57,6 +111,7 @@ struct Snapshot
     uint64_t conversionSampleId = 0;
     uint64_t conversionAgeMs = 0;
     double conversionMs = 0.0, conversionDecodeMs = 0.0, conversionEncodeMs = 0.0;
+    RegionSnapshot present {}, capture {};
 };
 
 // Collection never waits for GPU completion. Pending resources survive disable and teardown.
@@ -104,6 +159,24 @@ class Conversion
     // success: the decode and the encode each recorded between their brackets. A frame the pass did not run on has
     // no encode; it is neither a sample nor a discard, and its slot is freed silently. The destructor finishes
     // unsuccessfully if nothing else did.
+    void Finish(bool success);
+};
+
+// One continuous GPU region. Present contains Dispatch and HDR Conversion; GuideCapture belongs to its producer
+// list. Neither is added to another sample. Each kind has its own bounded pool and eligible-event sampling phase.
+// Finish BEFORE closing, dropping or submitting the list. The destructor rejects an unfinished scope.
+class Region
+{
+    void* slot = nullptr;
+    ID3D12GraphicsCommandList* list = nullptr;
+
+  public:
+    Region(ID3D12GraphicsCommandList* commandList, RegionKind kind, const RegionMetadata& metadata, bool enabled,
+           uint32_t interval);
+    ~Region();
+    Region(const Region&) = delete;
+    Region& operator=(const Region&) = delete;
+    void SetMetadata(const RegionMetadata& metadata);
     void Finish(bool success);
 };
 } // namespace DlssNr::GpuTiming

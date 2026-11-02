@@ -61,4 +61,53 @@ subprocess.run(['g++', '-std=c++20', '-g', '-O1', '-fno-omit-frame-pointer',
                 '-I' + str(root), str(out / 'boundary.cpp'), '-o', str(out / 'boundary')], check=True)
 subprocess.run([str(out / 'boundary')], check=True)
 
+
+# D3D12 Present route and guide-capture regions (docs/dlssnr/design/gpu-timing.md). No host fixture executes
+# RunPresentPass or CaptureGuides, so these are source-order guards, each proven by a mutant it must reject below.
+# They keep EndQuery/ResolveQueryData on a still-open list and the never-enabled path free of the settings mutex.
+import re  # noqa: E402
+
+
+def present_region_guards(source):
+    present = between(source, 'void RunPresentPass(', '// ReportSpatialContract, GatherGuideFrame')
+    capture = between(source, 'static bool CaptureGuides(', 'void CaptureTemporal(')
+    assert 'const bool routeTimingArmed = cfg.DlssNrGpuTimingRequested();' in present
+    assert present.count('GetDlssNrGpuTimingSettings()') == 2  # the gated route read and the existing HDR one
+    assert 'if (routeTimingArmed)\n        routeTimingSettings = cfg.GetDlssNrGpuTimingSettings();' in present
+    first_begin = present.index('beginPresentTiming();')
+    assert present.count('presentTiming->Finish(true);') == 1
+    finish = present.index('presentTiming->Finish(true);')
+    assert finish < present.index('SubmitPresentList(queue, slot)'), 'Finish must precede Close/Execute'
+    drops = [m.start() for m in re.finditer(r'DropPresentList\(slot\);', present) if m.start() > first_begin]
+    guarded = [m.end() for m in re.finditer(r'presentTiming\.reset\(\);[^\n]*\n\s*DropPresentList\(slot\);', present)]
+    assert drops and len(drops) == len(guarded), 'every drop after the region began resolves it first'
+    assert all(any(abs(g - d) < 40 for g in guarded) for d in drops)
+    assert capture.count('GetDlssNrGpuTimingSettings()') == 1
+    gate = capture.index('if (Config::Instance()->DlssNrGpuTimingRequested())')
+    assert gate < capture.index('GetDlssNrGpuTimingSettings()') < capture.index('captureTiming.emplace(')
+    assert capture.index('g_presentGuideRing.CommitRecord(') < capture.index('captureTiming->Finish(true);')
+
+
+present_region_guards(renderer)
+mutants = {
+    'finish after submit': lambda s: s.replace('presentTiming->Finish(true);', '', 1).replace(
+        'SubmitPresentList(queue, slot);', 'SubmitPresentList(queue, slot);\n    presentTiming->Finish(true);', 1),
+    'drop without reset': lambda s: s.replace('presentTiming.reset();', '', 1),
+    'reset after drop': lambda s: re.sub(r'(presentTiming\.reset\(\);[^\n]*\n)(\s*)(DropPresentList\(slot\);)',
+                                         r'\2\3\n\2presentTiming.reset();', s, count=1),
+    'ungated route settings': lambda s: s.replace('if (routeTimingArmed)\n        routeTimingSettings =',
+                                                  'routeTimingSettings =', 1),
+    'ungated capture settings': lambda s: s.replace('if (Config::Instance()->DlssNrGpuTimingRequested())', 'if (true)', 1),
+    'capture finish before commit': lambda s: s.replace('g_presentGuideRing.CommitRecord(',
+                                                        'captureTiming->Finish(true);\n    g_presentGuideRing.CommitRecord(', 1),
+}
+for name, mutate in mutants.items():
+    mutated = mutate(renderer)
+    assert mutated != renderer, f'mutant did not apply: {name}'
+    try:
+        present_region_guards(mutated)
+    except (AssertionError, ValueError):  # a missing anchor rejects the mutant too
+        continue
+    raise SystemExit(f'FAIL: placement guard accepted the mutant: {name}')
+print(f"PASS Present/capture region placement guards; {len(mutants)} mutants rejected")
 print("PASS production timing placement guards")

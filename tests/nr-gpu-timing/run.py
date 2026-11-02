@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory(prefix="nr-gpu-timing-") as directory:
     subprocess.run([str(runtime)], check=True)
     subprocess.run([str(runtime), "--cadence"], check=True)
     subprocess.run([str(runtime), "--conversion"], check=True)
+    subprocess.run([str(runtime), "--regions"], check=True)
 
 source = (ROOT / "retoque/dlssnr/DlssNr_Submission.cpp").read_text()
 batch = source.split("Batch::Batch(", 1)[1].split("void Batch::Submitted()", 1)[0]

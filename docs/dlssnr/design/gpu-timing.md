@@ -89,3 +89,64 @@ other renderer reads. Sampling phase is global over eligible evaluations and per
 and interval changes. The latest displayed sample is the highest recorded sample ID that has been
 accepted, not whichever fence happened to finish last. Its age starts at CPU recording, and a separate
 collection age is available.
+
+## D3D12 Present and guide capture (2026-11-01)
+
+The opt-in setting also admits two independent `Region` streams. Each has an eight-slot pool,
+eligible/attempted/recorded/accepted/discarded counters and a sampling phase of its own. These pools
+do not consume the sixteen Evaluation/Conversion slots. `AnySampled` and the collector include
+regions even if no Evaluation has ever run. The existing Submission certificate and actual queue
+frequency govern publication/reuse; no additional wait, flush or fence is introduced by Region.
+Its Track may activate the existing submission tracking and its normal post-execution Signal.
+
+| Region | GPU bracket | Excluded / interpretation |
+|---|---|---|
+| Present route | Before zero-guide clear when needed, otherwise before the first backbuffer barrier; through copy-in, HDR decode, synthesized motion, EvaluateAtPresent, motion restoration, HDR encode and final copy-back/restores | CPU resource preparation, list acquisition, submission, PresentSync wait, queue delay before the first marker, display scanout; native D3D11/Vulkan Present hosts are not covered |
+| Guide capture | Both mip-0 depth/motion copies with their transition/restoration barriers, on the producer list | Original engine production and any D3D11 transport before the shared D3D12 CaptureGuides core; capture cost does not prove that a Present selected it |
+
+The Present sample includes Dispatch and HDR Conversion when they run, including their recorded
+query-resolution work. **Do not add them to the Present total.** This first slice uses two timestamps
+and does not report an outside-Dispatch subtraction. The last Evaluation sample can belong to a
+different recording. Guide capture may be on another queue/frame and is never added automatically
+to the Present duration. Instrumentation has overhead; these are opt-in queue elapsed samples,
+not FPS, CPU wait cost, end-to-end frame latency or a benchmark result.
+
+Every region owns a copy of its metadata. Present records the resources actually selected after
+identity and read-tracking admission, and records synthesized motion only if it actually returned a
+resource. Source labels mean inputs delivered by this host to EvaluateAtPresent, not a claim about
+the model's final resources after guide transforms or a model call on a cadence-carried frame.
+`nrRecorded` says that EvaluateAtPresent returned recorded work. It can be false on a submitted
+copy-only route; that route still has a real GPU cost. A dropped list never publishes as executed.
+
+The metadata includes the observed Present ordinal (not an engine frame ID), ring capture sequence,
+age at selection, depth-guide allocation extent, output extent, boundary/HDR flags and source enum.
+Sequence is local to the current guide-ring lifetime and can restart after Reset; it is not a global
+join key. Sample ID is independently monotonic per timing stream. Age in the UI is measured since
+CPU recording, while guide age is the frozen value at selection. Use fixed settings and external
+DLL/model identities for comparisons; region samples do not inherit the last Evaluation contract.
+
+Finish resolves initialized timestamps before SubmitPresentList or DropPresentList closes the
+recording. Destruction before an explicit successful Finish rejects the region. The collector skips
+recording slots and only reads metadata after Finish publishes it under the timing mutex. Lock order
+remains renderer/NR state -> timing -> Submission; collection never calls the renderer.
+
+### Observable states
+
+| State | Panel / export | Rendering |
+|---|---|---|
+| Measurement off | Panel says off; export may retain historical samples | RunPresentPass and CaptureGuides check `Config::DlssNrGpuTimingRequested()`, a lock-free mirror stored at the INI read and in `SetDlssNrGpuTimingEnabled`, before anything else: no settings read (a mutex), no metadata fill, no region admission, allocations or queries |
+| Native Vulkan / proxy | Timing unavailable on this backend | No region instrumentation |
+| Enabled, no confirmed region | Explicit no-sample line; panel shows pending/discarded and reason | Never treated as zero GPU cost |
+| Region confirmed, Evaluation absent | Region shown independently with historical ID/age and input guides | No invented model measurement |
+| Source changes after a recorded sample | The sample keeps its original source, sequence and age | Current guide status remains separate |
+| Pool full, tracking failure, replay or invalid readback | Region discarded; previous confirmed sample remains historical | Rendering and guide admission continue |
+| Disable/device loss with pending work | Only certified reusable allocations released; unsafe work retained in bounded pools | No query-completion wait |
+
+Behavioral host coverage is in `tests/nr-gpu-timing/regions.h`, with UI/export cases in
+`nr-timing-boundary` and `nr-diagnostic-report`. No host fixture executes RunPresentPass or CaptureGuides:
+`nr-timing-boundary` guards the Finish-before-Submit/reset-before-Drop order and both mirror gates in
+source, and rejects six mutants of them. `nr-gpu-timing-config` checks the mirror after a cold INI read and
+after each runtime toggle, so capture-only collection starts without an Evaluation or the menu. That is an order check, not an execution of the route. The real D3D12 harness adds nested Present and
+separate producer capture regions, replay and blocked-GPU checks. Its GPU buffer copies do not
+exercise RunPresentPass, the NGX model or a game. Build/runtime evidence and review are recorded in
+`docs/superpowers/reviews/2026-11-01-present-route-timing.md`.

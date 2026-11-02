@@ -4,6 +4,7 @@
 #include "State.h"
 #include "dlssnr/DlssNr_PassSettings.h"
 
+#include <atomic>
 #include <mutex>
 
 #include <optional>
@@ -699,6 +700,10 @@ class Config
     CustomOptional<bool> DlssNrGpuTiming { false };
     CustomOptional<uint32_t> DlssNrGpuTimingInterval { 30 };
     DlssNrGpuTimingSettings GetDlssNrGpuTimingSettings() const;
+    // Lock-free mirror of DlssNrGpuTiming, stored wherever the setting is written. Per-frame call sites check it
+    // before taking the settings lock, so with timing off they read nothing and fill no sample metadata. A hint
+    // only: GetDlssNrGpuTimingSettings() stays authoritative.
+    bool DlssNrGpuTimingRequested() const { return _dlssNrGpuTimingRequested.load(std::memory_order_relaxed); }
     void SetDlssNrGpuTimingEnabled(bool enabled);
     void SetDlssNrGpuTimingInterval(uint32_t interval);
 
@@ -1306,6 +1311,7 @@ class Config
 
   private:
     mutable std::mutex _dlssNrPassSettingsMutex;
+    std::atomic<bool> _dlssNrGpuTimingRequested { false };
     DlssNr::PassConfig::Overrides _dlssNrPassOverrides;
     DlssNrResolvedPassSettings DlssNrMasterSettingsUnlocked() const;
 
