@@ -222,7 +222,10 @@ Build `4fa5912b`, God Hand from the save state, WorkingScale 0.5, synthesized mo
 - **After:** the rim is gone. On the coat and sand, UiProtection on and off look alike.
 - **Not yet measured:** HUD recall in a moving scene.
 
-## The mask macros: every pixel protected (found 2026-09-28, not fixed)
+## The mask macros: every pixel protected (found and fixed 2026-09-28)
+
+Historical defect, fixed in `64517b4c`. The findings below describe the shader before that fix; they do not
+qualify the corrected mask's HUD recall.
 
 Found while building synthesized frame generation's copy of this mask (synthesized-frame-generation.md, "The
 HUD: near depth and a UI layer"). That copy, run on a real device in `tests/synth-motion-d3d12`, marked
@@ -247,14 +250,14 @@ hands the rule, and this pass has it too.
     taken as evidence about it.
 - **Why the tests missed it.** `tests/nr-uimask-rule` includes the same rule, but its macros are plain
   function calls (`Prot(x, y)`) with no swizzle to substitute. It tests the rule, not the macros.
-- **The fix,** not applied because this branch had to leave DLSS-NR byte-identical: name the parameters
+- **The proposed fix (historical),** initially deferred because that branch kept DLSS-NR byte-identical: name the parameters
   anything but `x` and `y`, as frame generation's `synth_overlay_detect.hlsl` does. For example,
   `#define UM_PROT(px, py) AccPrevAt(int2(px, py)).x`, and the same for the other three. Then rebuild
   `DlssNr_UiMask_Shader.h`, and look at UiProtection in PCSX2 again: it will start protecting only what the
   rule finds.
 - **Guard.** `tests/fg-synth-policy` refuses the hazard in any shader that includes the rule. It listed this
   file as the one known exception until the fix below.
-- **Fixed** on 2026-09-28: all four macros take `px_, py_`, and `DlssNr_UiMask_Shader.cso`/`.h` were rebuilt
+- **Fixed** on 2026-09-28 in `64517b4c`: all four macros take `px_, py_`, and `DlssNr_UiMask_Shader.cso`/`.h` were rebuilt
   with the command in the shader's header (dxc `cs_6_0 -O3 -Qstrip_debug -Qstrip_reflect`). In the
   disassembly, `fadd` of a ±1/±2 constant fell from 21 to 1, and the exception is gone from the guard.
   Everything this note says UiProtection measured before the fix was measured with the defect.

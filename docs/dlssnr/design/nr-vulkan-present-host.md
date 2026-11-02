@@ -1572,7 +1572,10 @@ called from the watchdog's own thread, outside every host lock).
   the model runs once its product is adopted.
 - An independent read-only review.
 
-## Stage 5: synthesized motion at the Vulkan present (design, 2026-10-15)
+## Stage 5: synthesized motion at the Vulkan present (implemented; design dated 2026-10-15)
+
+The Vulkan estimator was implemented in `d8aeb1db` and integrated into the present host in `c2396535`.
+The original design below is retained; implementation does not by itself qualify a current build or game.
 
 ### Why
 
