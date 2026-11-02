@@ -85,6 +85,10 @@ struct RegionSnapshot
     double totalMs = 0.0;
     RegionMetadata metadata {};
     const char* reason = "no-sample";
+    // Present only, from the same recording: [begin, before Dispatch, after Dispatch, end]. Unmarked (the route never
+    // reached Dispatch) publishes the total alone. Never outside_model: that one is inside Dispatch's own sample.
+    bool dispatchMarked = false;
+    double dispatchCallMs = 0.0, outsideDispatchMs = 0.0;
 };
 
 struct Snapshot
@@ -177,6 +181,10 @@ class Region
     Region(const Region&) = delete;
     Region& operator=(const Region&) = delete;
     void SetMetadata(const RegionMetadata& metadata);
+    // Present only, immediately around the Dispatch call, once each and in order. Anything else (twice, end without
+    // begin, begin without end, a capture region) discards the sample; it never stamps out of order.
+    void BeforeDispatch();
+    void AfterDispatch();
     void Finish(bool success);
 };
 } // namespace DlssNr::GpuTiming

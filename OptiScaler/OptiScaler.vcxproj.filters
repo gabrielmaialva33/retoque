@@ -2004,6 +2004,9 @@
     <ClInclude Include="..\retoque\dlssnr\DlssNr_GpuTimingModel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentCpuTiming.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Submission.h">
       <Filter>Header Files</Filter>
     </ClInclude>

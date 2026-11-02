@@ -16,6 +16,11 @@
 #include <shaders/synth_motion/SynthMotion_Handoff.h>
 #include <nvsdk_ngx.h>
 
+namespace DlssNr::GpuTiming
+{
+class Region;
+}
+
 struct ID3D11DeviceContext;
 
 // DLSS 5 Neural Rendering, run over the upscaler's output.
@@ -162,9 +167,13 @@ std::string PresentGuidesLine();
 // frame" and "the model refused to exist" are different events with different consequences, and a
 // bare bool reported them identically -- a run meant to test whether the model would be created once
 // read a decline as a refusal and would have eliminated the wrong hypothesis.
+//
+// route, when given, is the caller's Present route timing region (GpuTiming.h): it is marked immediately before and
+// after the Dispatch call so the route's GPU time splits into the Dispatch call and the work around it. Borrowed for
+// this call only.
 bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                        ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue = nullptr,
-                       const char** outReason = nullptr);
+                       const char** outReason = nullptr, DlssNr::GpuTiming::Region* route = nullptr);
 
 // Where a caller that owns its guides must leave them, so the pass transitions them from where they
 // actually are. It reads config keys written for a game's own buffers; a host that guessed the

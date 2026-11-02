@@ -153,6 +153,7 @@ struct RegionSlot : Slot
 {
     RegionKind kind = RegionKind::Present;
     RegionMetadata regionMetadata {};
+    uint8_t dispatchMarks = 0; // 0 none, 1 before Dispatch, 2 both
 };
 std::array<std::array<RegionSlot, 8>, 2> regionSlots {};
 std::array<Clock::time_point, 2> regionRecordedAt {};
@@ -201,13 +202,15 @@ void DropRegion(RegionKind kind, const char* reason, RegionSlot* slot = nullptr)
 
 void CollectRegion(RegionSlot& slot, const Detail::Certificate& certificate)
 {
-    if (!slot.successful || slot.malformed || slot.queryCount != 2)
+    const bool marked = slot.dispatchMarks == 2;
+    const uint32_t expected = marked ? 4u : 2u;
+    if (!slot.successful || slot.malformed || slot.dispatchMarks == 1 || slot.queryCount != expected)
     {
         DropRegion(slot.kind, "incomplete-region", &slot);
         return;
     }
     void* mapped = nullptr;
-    const D3D12_RANGE range { 0, 2 * sizeof(uint64_t) };
+    const D3D12_RANGE range { 0, expected * sizeof(uint64_t) };
     const auto result = slot.readback->Map(0, &range, &mapped);
     if (FAILED(result) || !mapped)
     {
@@ -219,12 +222,24 @@ void CollectRegion(RegionSlot& slot, const Detail::Certificate& certificate)
         DropRegion(slot.kind, "readback-map-failed", &slot);
         return;
     }
-    uint64_t values[2] {};
-    std::memcpy(values, mapped, sizeof(values));
+    uint64_t values[4] {};
+    std::memcpy(values, mapped, expected * sizeof(uint64_t));
     const D3D12_RANGE written { 0, 0 };
     slot.readback->Unmap(0, &written);
-    double duration = 0.0;
-    if (!Detail::DecodeBrackets(values, 2, certificate.frequency, &duration, 1))
+    double duration = 0.0, dispatchCall = 0.0, outsideDispatch = 0.0;
+    bool decoded = false;
+    if (marked)
+    {
+        // The Evaluation layout with one inner pair: route, Dispatch call, and the explicit gaps around it.
+        Detail::Durations split;
+        decoded = Detail::Decode(values, 4, 1, certificate.frequency, split);
+        duration = split.totalMs;
+        dispatchCall = split.modelMs;
+        outsideDispatch = split.outsideModelMs;
+    }
+    else
+        decoded = Detail::DecodeBrackets(values, 2, certificate.frequency, &duration, 1);
+    if (!decoded)
     {
         DropRegion(slot.kind, "invalid-timestamps", &slot);
         return;
@@ -238,6 +253,9 @@ void CollectRegion(RegionSlot& slot, const Detail::Certificate& certificate)
         state.sampleInterval = slot.interval;
         state.totalMs = duration;
         state.metadata = slot.regionMetadata;
+        state.dispatchMarked = marked;
+        state.dispatchCallMs = dispatchCall;
+        state.outsideDispatchMs = outsideDispatch;
         state.reason = "confirmed";
         regionRecordedAt[RegionIndex(slot.kind)] = slot.recordedAt;
     }
@@ -246,14 +264,16 @@ void CollectRegion(RegionSlot& slot, const Detail::Certificate& certificate)
     {
         const auto& m = slot.regionMetadata;
         LOG_INFO("DLSS-NR gpu timing region confirmed: run={} region={} sample={} total_ms={:.6f} "
-                 "present={} guide_sequence={} guide_age_ms={} guides=\"{}\" guide_extent={}x{} output={}x{} "
+                 "dispatch_marked={} dispatch_call_ms={:.6f} outside_dispatch_ms={:.6f} present={} guide_sequence={} "
+                 "guide_age_ms={} guides=\"{}\" guide_extent={}x{} output={}x{} "
                  "boundary={} hdr={} nr_recorded={} queue={} fence={} frequency_hz={} interval={} "
                  "eligible={} attempted={} accepted={} discarded={} unit=eligible-regions "
                  "proof=sealed-single-execution-fence",
-                 snapshot.runId, RegionLabel(slot.kind), slot.id, duration, m.presentId, m.guideSequence, m.guideAgeMs,
-                 GuideSourceLabel(m.guides), m.guideWidth, m.guideHeight, m.outputWidth, m.outputHeight, m.boundary,
-                 m.hdr, m.nrRecorded, certificate.queue, certificate.fence, certificate.frequency, slot.interval,
-                 state.eligible, state.attempted, state.accepted, state.discarded);
+                 snapshot.runId, RegionLabel(slot.kind), slot.id, duration, marked, dispatchCall, outsideDispatch,
+                 m.presentId, m.guideSequence, m.guideAgeMs, GuideSourceLabel(m.guides), m.guideWidth, m.guideHeight,
+                 m.outputWidth, m.outputHeight, m.boundary, m.hdr, m.nrRecorded, certificate.queue, certificate.fence,
+                 certificate.frequency, slot.interval, state.eligible, state.attempted, state.accepted,
+                 state.discarded);
     }
     catch (...)
     {
@@ -891,6 +911,7 @@ Region::Region(ID3D12GraphicsCommandList* commandList, RegionKind kind, const Re
     available->id = ++state.sampled;
     available->interval = interval;
     available->queryCount = 0;
+    available->dispatchMarks = 0;
     available->occupied = available->recording = true;
     available->malformed = available->successful = available->reported = false;
     ++state.pending;
@@ -904,6 +925,34 @@ void Region::SetMetadata(const RegionMetadata& metadata)
     // While recording, the collector skips this slot; Finish publishes it under the timing mutex.
     if (slot)
         static_cast<RegionSlot*>(slot)->regionMetadata = metadata;
+}
+
+void Region::BeforeDispatch()
+{
+    if (!slot)
+        return;
+    auto& current = *static_cast<RegionSlot*>(slot);
+    if (current.kind != RegionKind::Present || current.dispatchMarks != 0 || current.queryCount != 1)
+    {
+        current.malformed = true;
+        return;
+    }
+    Stamp(current, list);
+    current.dispatchMarks = 1;
+}
+
+void Region::AfterDispatch()
+{
+    if (!slot)
+        return;
+    auto& current = *static_cast<RegionSlot*>(slot);
+    if (current.kind != RegionKind::Present || current.dispatchMarks != 1 || current.queryCount != 2)
+    {
+        current.malformed = true;
+        return;
+    }
+    Stamp(current, list);
+    current.dispatchMarks = 2;
 }
 
 void Region::Finish(bool success)

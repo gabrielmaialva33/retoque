@@ -1,3 +1,4 @@
+#include <vector>
 #include "retoque/dlssnr/DlssNr_GpuTiming.h"
 #include "retoque/dlssnr/DlssNr_Submission.h"
 #include "retoque/dlssnr/DlssNr_GpuTimingModel.h"
@@ -13,6 +14,9 @@ unsigned heaps = 0, buffers = 0, maps = 0, queries = 0, resolves = 0, tracks = 0
 unsigned heapFrees = 0, bufferFrees = 0;
 bool failTrack = false, failMap = false;
 uint64_t clockTick = 100;
+// Optional per-query steps for split cases; empty keeps the default 10 ticks per timestamp.
+std::vector<uint64_t> tickSteps;
+size_t tickCursor = 0;
 Submission::Detail::Model submission;
 std::array<uint64_t, Submission::Detail::MaxQueues> completed {};
 auto completedValue = [](size_t q) { return completed[q]; };
@@ -91,7 +95,15 @@ struct List : ID3D12GraphicsCommandList
     {
         ++queries;
         assert(query < 8);
-        static_cast<Heap*>(h)->ticks[query] = clockTick += 10;
+        uint64_t step = 10;
+        if (tickCursor < tickSteps.size())
+            step = tickSteps[tickCursor++];
+        if (tickCursor >= tickSteps.size())
+        {
+            tickSteps.clear(); // Consumed: the next assignment starts from its first step.
+            tickCursor = 0;
+        }
+        static_cast<Heap*>(h)->ticks[query] = clockTick += step;
         static_cast<Heap*>(h)->initialized[query] = true;
     }
     void ResolveQueryData(ID3D12QueryHeap* h, int, UINT begin, UINT count, ID3D12Resource* resource,
@@ -308,6 +320,7 @@ int ConversionCases()
     return 0;
 }
 #include "regions.h"
+#include "region_split.h"
 } // namespace
 namespace DlssNr::Submission
 {
@@ -332,6 +345,8 @@ int main(int argc, char** argv)
         return ConversionCases();
     if (argc == 2 && std::strcmp(argv[1], "--regions") == 0)
         return RegionCases();
+    if (argc == 2 && std::strcmp(argv[1], "--region-split") == 0)
+        return RegionSplitCases();
     unsigned cases = 0;
     std::array<Device, 4> devices;
     std::array<List, 40> lists;

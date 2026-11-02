@@ -105,9 +105,14 @@ Its Track may activate the existing submission tracking and its normal post-exec
 | Guide capture | Both mip-0 depth/motion copies with their transition/restoration barriers, on the producer list | Original engine production and any D3D11 transport before the shared D3D12 CaptureGuides core; capture cost does not prove that a Present selected it |
 
 The Present sample includes Dispatch and HDR Conversion when they run, including their recorded
-query-resolution work. **Do not add them to the Present total.** This first slice uses two timestamps
-and does not report an outside-Dispatch subtraction. The last Evaluation sample can belong to a
-different recording. Guide capture may be on another queue/frame and is never added automatically
+query-resolution work. **Do not add them to the Present total.** The last Evaluation sample can belong
+to a different recording, so the route is split from its own recording instead (2026-11-02):
+EvaluateAtPresent marks the lent Present region immediately before and after the one
+`g_compose->Dispatch` call, giving four timestamps. The log line and panel report `dispatch_call_ms`
+and `outside_dispatch_ms` (the work around that call: clears, copies, synthesized motion, HDR,
+restores) beside the total. A route that never reached Dispatch publishes its total alone
+(`dispatch_marked=false`); a mark out of order, repeated or on a capture region discards the sample.
+`outside_dispatch_ms` is not the Evaluation's `outside_model_ms`, which is inside Dispatch. Guide capture may be on another queue/frame and is never added automatically
 to the Present duration. Instrumentation has overhead; these are opt-in queue elapsed samples,
 not FPS, CPU wait cost, end-to-end frame latency or a benchmark result.
 
@@ -142,7 +147,22 @@ remains renderer/NR state -> timing -> Submission; collection never calls the re
 | Pool full, tracking failure, replay or invalid readback | Region discarded; previous confirmed sample remains historical | Rendering and guide admission continue |
 | Disable/device loss with pending work | Only certified reusable allocations released; unsafe work retained in bounded pools | No query-completion wait |
 
-Behavioral host coverage is in `tests/nr-gpu-timing/regions.h`, with UI/export cases in
+### CPU stream (2026-11-02)
+
+`DlssNr_PresentCpuTiming.h` keeps the route's CPU side apart from every GPU sample. With GpuTiming on,
+RunPresentPass times, with the steady clock, the list recording (acquired to just before submit), the
+`SubmitPresentList` call and the three waits it already had: allocator reuse (5 s bound), the
+synthesized-motion rebuild's idle wait (2 s) and PresentSync (1 s), each with attempted/failures (a timeout or an API error: the existing waits return one bool, so the
+two are not separated).
+Submitted presents only, aggregated per 5 s window into one INFO line, `DLSS-NR present cpu window:`
+(mean/max; waits over the presents that waited). Recording contains the synth idle wait and
+PresentSync comes after the submit: overlapping subsets, never summed and never added to GPU time.
+No wait, fence, signal or timeout was added or changed; with GpuTiming off the route reads no clock
+for it. The panel and export do not show it yet; the log is the record.
+
+Behavioral host coverage is in `tests/nr-gpu-timing/regions.h` and `region_split.h` (the four-stamp
+split: prefix/Dispatch/suffix arithmetic, zero gaps, unmarked totals, malformed marks, a nested
+Evaluation), `present_cpu.cpp` (windows, waits, formatting, the untimed path), with UI/export cases in
 `nr-timing-boundary` and `nr-diagnostic-report`. No host fixture executes RunPresentPass or CaptureGuides:
 `nr-timing-boundary` guards the Finish-before-Submit/reset-before-Drop order and both mirror gates in
 source, and rejects six mutants of them. `nr-gpu-timing-config` checks the mirror after a cold INI read and
