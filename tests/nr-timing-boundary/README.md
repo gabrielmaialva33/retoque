@@ -2,7 +2,7 @@
 
 Run `python3 tests/nr-timing-boundary/run.py` from the repository root. The runner extracts the
 production metadata builder and timing menu, compiles them with strict host fakes under ASan/UBSan,
-and requires all 29 cases to execute. An assertion, compilation error, sanitizer report, or missing
+and requires all 36 cases to execute. An assertion, compilation error, sanitizer report, or missing
 source anchor is failure. Production declaration records are extracted from `DlssNr_GpuTiming.h`.
 
 The executable checks configuration generations, stage, working-size and HDR/format changes, per-pass overrides,
@@ -11,6 +11,10 @@ Vulkan/proxy paths, disabled measurement, enabling, interval edits, no confirmed
 sample age since recording and cadence, and disabling with an old sample present. No current-frame or averaged-cost
 claim is permitted for the historical sample. The HDR present conversion's sample (its decode and encode, outside the
 dispatch) is its own line, shown beside the evaluation's and before any evaluation is confirmed.
+Present/capture samples are also independently visible before any Evaluation is confirmed. Cases
+check historical identity, game/synthesized/zero guide labels, capture age only for a selected
+capture, independent durations without addition, and an explicit absent region.
+
 
 Source guards also require the production timing scope to begin before the first output barrier,
 markers to surround each NGX call individually, successful completion to be armed after explicit

@@ -166,7 +166,7 @@ Stabilizer tolerance	Tolerância do estabilizador
 Fence-confirmed GPU timing	Tempo de GPU confirmado por fence
 Confirmed timing is available on the D3D12 NR path and its bridges. This backend is not instrumented.	O tempo confirmado está disponível no caminho D3D12 do NR e nas suas pontes. Este backend não é instrumentado.
 Measure NR on the GPU	Medir o NR na GPU
-Each published sample belongs to one NR evaluation and one observed queue submission. It is read only after that submission completes and the command-list recording is sealed against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded.\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.	Cada amostra publicada pertence a uma avaliação do NR e a um envio de fila observado. Ela só é lida depois que esse envio termina e a gravação da command list está selada contra reexecução. Nenhuma espera na GPU é introduzida. Amostras sem suporte ou ambíguas são descartadas.\n\nO intervalo cobre os comandos de GPU dentro do Dispatch do NR, incluindo cópias, chamadas ao modelo, composição e restauração de recursos. A preparação antes do upscaler feita pelo chamador, o upscaler e a geração de quadros ficam fora desse intervalo. O tempo decorrido na fila não é tempo puro de kernel ocupado.
+Each published sample belongs to one NR evaluation and one observed queue submission. It is read only after that submission completes and the command-list recording is sealed against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded.\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.\n\nD3D12 Present and guide capture have independent samples at the same interval. The Present route includes its copies, guide preparation, Dispatch and HDR conversion; CPU waits are excluded. The native Vulkan and D3D11 Present hosts do not have this route bracket.	Cada amostra publicada pertence a uma avaliação do NR e a um envio de fila observado. Ela só é lida depois que esse envio termina e a gravação da command list está selada contra reexecução. Nenhuma espera na GPU é introduzida. Amostras sem suporte ou ambíguas são descartadas.\n\nO intervalo cobre os comandos de GPU dentro do Dispatch do NR, incluindo cópias, chamadas ao modelo, composição e restauração de recursos. A preparação antes do upscaler feita pelo chamador, o upscaler e a geração de quadros ficam fora desse intervalo. O tempo decorrido na fila não é tempo puro de kernel ocupado.\n\nO Present D3D12 e a captura dos guias têm amostras independentes no mesmo intervalo. A rota Present inclui suas cópias, preparação dos guias, Dispatch e conversão HDR; as esperas da CPU ficam de fora. Os hosts Present de Vulkan nativo e D3D11 não têm esta medição da rota.
 Measurement off. Pending samples may still be retained safely.	Medição desligada. Amostras pendentes ainda podem ser mantidas com segurança.
 Sample every N eligible evaluations	Amostrar a cada N avaliações elegíveis
 The first eligible evaluation is sampled, then every %u evaluations. An evaluation is not necessarily a presentation frame.	A primeira avaliação elegível é amostrada, depois uma a cada %u avaliações. Uma avaliação não é necessariamente um quadro apresentado.
@@ -599,3 +599,22 @@ Copied to the clipboard.	Copiado para a área de transferência.
 The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	O jogo roda o próprio NR (DLSS-NR do Streamline), então este passe fica de fora em vez de aplicar o NR duas vezes. Ele volta a rodar 5 s depois que o NR do jogo para.
 # 2026-10-30: the model's own VRAM count beside the status line (docs/dlssnr/design/model-vram-stats.md).
 (model: %llu MiB)	(modelo: %llu MiB)
+
+# 2026-11-01: independent historical Present and guide-capture GPU samples.
+%s: no confirmed sample (pending %u, discarded %llu; %s)	%s: nenhuma amostra confirmada (pendentes %u, descartadas %llu; %s)
+%s: %.3f ms (historical sample %llu, %.1f s since recording)	%s: %.3f ms (amostra histórica %llu, %.1f s desde a gravação)
+Guides: %s; capture %llu; guide extent %ux%u, output %ux%u	Guias: %s; captura %llu; tamanho do guia %ux%u, saída %ux%u
+Game capture %llu, age at selection %llu ms	Captura do jogo %llu, idade na seleção %llu ms
+Observed Present %llu; boundary %s, HDR %s, NR recorded %s	Present observado %llu; limite do jogo %s, HDR %s, NR gravado %s
+GPU route includes Dispatch and HDR conversion. CPU waits and submission are excluded.	A rota na GPU inclui o Dispatch e a conversão HDR. Esperas da CPU e envio ficam de fora.
+Guide capture uses a separate producer recording. Do not add it to a Present sample.	A captura dos guias usa uma gravação separada do produtor. Não a some a uma amostra do Present.
+Present and guide capture each count their own eligible regions.	O Present e a captura dos guias contam suas regiões elegíveis separadamente.
+Present route GPU	Rota Present na GPU
+Guide capture GPU	Captura dos guias na GPU
+game depth + motion	profundidade e movimento do jogo
+zero depth + synthesized motion	profundidade zerada e movimento sintetizado
+zero depth + motion	profundidade e movimento zerados
+unknown	desconhecido
+no-sample	sem amostra
+yes	sim
+no	não

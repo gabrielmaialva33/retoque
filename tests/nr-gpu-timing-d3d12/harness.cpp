@@ -2,6 +2,7 @@
 #include "DlssNr_GpuTiming.h"
 #include "DlssNr_Submission.h"
 #include <detours/detours.h>
+#include <dxgi1_4.h>
 #include <resource_tracking/ResTrack_dx12.h>
 #include <wrl/client.h>
 #include <cstdio>
@@ -95,6 +96,15 @@ struct Fixture
     Fixture()
     {
         Hr(D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device)), "create hardware D3D12 device");
+        ComPtr<IDXGIFactory4> factory;
+        ComPtr<IDXGIAdapter1> adapter;
+        Hr(CreateDXGIFactory1(IID_PPV_ARGS(&factory)), "DXGI factory for adapter identity");
+        Hr(factory->EnumAdapterByLuid(device->GetAdapterLuid(), IID_PPV_ARGS(&adapter)), "identify D3D12 adapter");
+        DXGI_ADAPTER_DESC1 adapterDesc {};
+        Hr(adapter->GetDesc1(&adapterDesc), "describe D3D12 adapter");
+        Check((adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0, "hardware adapter required");
+        std::printf("D3D12 adapter: %ls (vendor=%04x device=%04x)\n", adapterDesc.Description, adapterDesc.VendorId,
+                    adapterDesc.DeviceId);
         D3D12_COMMAND_QUEUE_DESC queueDesc {};
         for (auto& queue : queues)
             Hr(device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&queue)), "create direct queue");
@@ -162,6 +172,11 @@ struct Recording
         metadata.contractHash = 1;
         metadata.stage = "after";
         std::strcpy(metadata.modelIdentity, "harness-copy-not-NGX");
+        Timing::RegionMetadata routeMetadata {};
+        routeMetadata.presentId = id;
+        routeMetadata.guides = Timing::GuideSource::Zero;
+        routeMetadata.nrRecorded = true;
+        Timing::Region route(list.Get(), Timing::RegionKind::Present, routeMetadata, enabled, 1);
         {
             Timing::Evaluation sample(fixture.device.Get(), list.Get(), metadata, enabled, 1);
             sample.ModelBegin();
@@ -170,7 +185,19 @@ struct Recording
             sample.ModelEnd();
             sample.Finish(1, true);
         }
+        route.Finish(true);
         Hr(list->Close(), "close sampled list");
+    }
+    void RecordCapture(Fixture& fixture, bool enabled)
+    {
+        Timing::RegionMetadata metadata {};
+        metadata.guideSequence = 17;
+        metadata.guides = Timing::GuideSource::Game; // Synthetic metadata; the workload is only a GPU buffer copy.
+        Timing::Region capture(list.Get(), Timing::RegionKind::GuideCapture, metadata, enabled, 1);
+        for (unsigned i = 0; i != 128; ++i)
+            list->CopyResource(fixture.destination.Get(), fixture.source.Get());
+        capture.Finish(true);
+        Hr(list->Close(), "close guide capture region");
     }
     void Submit(Fixture& fixture, unsigned queue)
     {
@@ -205,6 +232,12 @@ int main(int argc, char** argv)
             fixture.Complete(0);
             off.Seal();
             Timing::Poll();
+            Recording offCapture(fixture);
+            offCapture.RecordCapture(fixture, false);
+            offCapture.Submit(fixture, 1);
+            fixture.Complete(1);
+            offCapture.Seal();
+            Timing::Poll();
             Check(queryHeaps == 0 && readbacks == 0 && hookInstalls == 0 && !DlssNr::Submission::Active(),
                   "OFF allocated timing resources or installed submission tracking");
         }
@@ -218,7 +251,9 @@ int main(int argc, char** argv)
             normal.Submit(fixture, 0);
             fixture.Complete(0);
             Timing::Poll();
-            Check(Timing::GetSnapshot().accepted == baselineAccepted, "published replayable epoch before Reset");
+            Check(Timing::GetSnapshot().accepted == baselineAccepted &&
+                      Timing::GetSnapshot().present.accepted == baselineAccepted,
+                  "published replayable epoch before Reset");
             normal.Seal();
             Timing::Poll();
             auto snapshot = Timing::GetSnapshot();
@@ -226,8 +261,27 @@ int main(int argc, char** argv)
                   "ZERO COVERAGE: normal submission did not produce exactly one valid sample");
             Check(snapshot.totalMs > 0 && snapshot.modelMs > 0 && snapshot.otherMs >= 0,
                   "invalid real timestamp durations");
+            Check(snapshot.present.valid && snapshot.present.accepted == baselineAccepted + 1 &&
+                      snapshot.present.totalMs > 0 && snapshot.present.metadata.presentId == 2 &&
+                      snapshot.present.metadata.guides == Timing::GuideSource::Zero,
+                  "ZERO COVERAGE: nested Present region missing or wrong metadata");
         }
         ++baselineAccepted;
+        {
+            Recording capture(fixture);
+            capture.RecordCapture(fixture, true);
+            capture.Submit(fixture, 1);
+            fixture.Complete(1);
+            Timing::Poll();
+            Check(!Timing::GetSnapshot().capture.valid, "capture published before Reset");
+            capture.Seal();
+            Timing::Poll();
+            const auto sample = Timing::GetSnapshot();
+            Check(sample.capture.valid && sample.capture.accepted == 1 && sample.capture.totalMs > 0 &&
+                      sample.capture.metadata.guideSequence == 17 && sample.accepted == baselineAccepted &&
+                      sample.present.accepted == baselineAccepted,
+                  "ZERO COVERAGE: producer capture missing or contaminated Evaluation/Present");
+        }
         for (unsigned secondQueue : { 0u, 1u })
         {
             Recording replay(fixture);
@@ -240,7 +294,8 @@ int main(int argc, char** argv)
             replay.Seal();
             Timing::Poll();
             const auto snapshot = Timing::GetSnapshot();
-            Check(snapshot.accepted == baselineAccepted && snapshot.discarded > discarded,
+            Check(snapshot.accepted == baselineAccepted && snapshot.discarded > discarded &&
+                      snapshot.present.accepted == baselineAccepted && snapshot.present.discarded > 0,
                   "replay on one/two queues was not rejected");
         }
         {
@@ -256,18 +311,25 @@ int main(int argc, char** argv)
             waiting.Seal();
             Timing::Poll();
             const auto pending = Timing::GetSnapshot();
-            const bool withheld = pending.accepted == baselineAccepted && pending.pending > 0;
+            const bool withheld = pending.accepted == baselineAccepted && pending.pending > 0 &&
+                                  pending.present.accepted == baselineAccepted && pending.present.waitingGpu > 0;
             Hr(fixture.gate->Signal(1), "release test queue gate");
             fixture.Complete(0);
             Check(withheld, "Reset authorized timestamp publication while GPU was blocked");
             Timing::Poll();
-            Check(Timing::GetSnapshot().accepted == baselineAccepted + 1, "completed delayed sample not accepted");
+            Check(Timing::GetSnapshot().accepted == baselineAccepted + 1 &&
+                      Timing::GetSnapshot().present.accepted == baselineAccepted + 1,
+                  "completed delayed sample not accepted");
         }
         const auto result = Timing::GetSnapshot();
         Check(result.accepted >= 2 && result.discarded >= 2 && executedBatches >= 6 && queryHeaps > 0 && readbacks > 0,
               "ZERO COVERAGE: mandatory cases did not execute");
         Check(Reason(result, "replayed-recording") >= 1 && Reason(result, "multiple-queues") >= 1,
               "replay or multiple-queue rejection reason missing");
+        Check(result.present.accepted == 2 && result.present.discarded == 2 && result.capture.accepted == 1,
+              "ZERO COVERAGE: Region cases did not execute");
+        std::printf("PASS: independent Present and producer capture regions; present_ms=%.6f capture_ms=%.6f\n",
+                    result.present.totalMs, result.capture.totalMs);
         std::printf("PASS: OFF, normal, replay same queue, replay second queue, Reset-before-GPU; accepted=%llu "
                     "discarded=%llu batches=%llu heaps=%llu readbacks=%llu\n",
                     result.accepted, result.discarded, executedBatches, queryHeaps, readbacks);

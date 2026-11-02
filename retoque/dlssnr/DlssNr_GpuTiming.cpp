@@ -148,7 +148,165 @@ bool Allocate(Slot& slot, ID3D12Device* device)
     return true;
 }
 
-bool AnySampled() { return snapshot.sampled != 0 || conversionSampled != 0; }
+// Separate pools prevent route/capture telemetry from consuming Evaluation/Conversion slots.
+struct RegionSlot : Slot
+{
+    RegionKind kind = RegionKind::Present;
+    RegionMetadata regionMetadata {};
+};
+std::array<std::array<RegionSlot, 8>, 2> regionSlots {};
+std::array<Clock::time_point, 2> regionRecordedAt {};
+std::array<Clock::time_point, 2> regionDiscardLog {};
+
+size_t RegionIndex(RegionKind kind) { return kind == RegionKind::Present ? 0u : 1u; }
+RegionSnapshot& RegionState(RegionKind kind)
+{
+    return kind == RegionKind::Present ? snapshot.present : snapshot.capture;
+}
+const char* RegionLabel(RegionKind kind) { return kind == RegionKind::Present ? "present" : "guide-capture"; }
+
+void ReleaseIdleRegions()
+{
+    for (auto& pool : regionSlots)
+        for (auto& slot : pool)
+            if (!slot.occupied)
+                ReleaseSafe(slot);
+}
+
+void DropRegion(RegionKind kind, const char* reason, RegionSlot* slot = nullptr)
+{
+    if (slot && slot->reported)
+        return;
+    if (slot)
+        slot->reported = true;
+    auto& state = RegionState(kind);
+    ++state.discarded;
+    state.reason = reason;
+    const auto now = Clock::now();
+    auto& last = regionDiscardLog[RegionIndex(kind)];
+    if (state.discarded != 1 && now - last < std::chrono::seconds(5))
+        return;
+    last = now;
+    try
+    {
+        LOG_INFO("DLSS-NR gpu timing region discard: run={} region={} sample={} reason={} accepted={} discarded={} "
+                 "pending={} unit=eligible-regions",
+                 snapshot.runId, RegionLabel(kind), slot ? slot->id : 0, reason, state.accepted, state.discarded,
+                 state.pending);
+    }
+    catch (...)
+    {
+    }
+}
+
+void CollectRegion(RegionSlot& slot, const Detail::Certificate& certificate)
+{
+    if (!slot.successful || slot.malformed || slot.queryCount != 2)
+    {
+        DropRegion(slot.kind, "incomplete-region", &slot);
+        return;
+    }
+    void* mapped = nullptr;
+    const D3D12_RANGE range { 0, 2 * sizeof(uint64_t) };
+    const auto result = slot.readback->Map(0, &range, &mapped);
+    if (FAILED(result) || !mapped)
+    {
+        if (SUCCEEDED(result))
+        {
+            const D3D12_RANGE written { 0, 0 };
+            slot.readback->Unmap(0, &written);
+        }
+        DropRegion(slot.kind, "readback-map-failed", &slot);
+        return;
+    }
+    uint64_t values[2] {};
+    std::memcpy(values, mapped, sizeof(values));
+    const D3D12_RANGE written { 0, 0 };
+    slot.readback->Unmap(0, &written);
+    double duration = 0.0;
+    if (!Detail::DecodeBrackets(values, 2, certificate.frequency, &duration, 1))
+    {
+        DropRegion(slot.kind, "invalid-timestamps", &slot);
+        return;
+    }
+    auto& state = RegionState(slot.kind);
+    ++state.accepted;
+    if (!state.valid || slot.id > state.sampleId)
+    {
+        state.valid = true;
+        state.sampleId = slot.id;
+        state.sampleInterval = slot.interval;
+        state.totalMs = duration;
+        state.metadata = slot.regionMetadata;
+        state.reason = "confirmed";
+        regionRecordedAt[RegionIndex(slot.kind)] = slot.recordedAt;
+    }
+    slot.reported = true;
+    try
+    {
+        const auto& m = slot.regionMetadata;
+        LOG_INFO("DLSS-NR gpu timing region confirmed: run={} region={} sample={} total_ms={:.6f} "
+                 "present={} guide_sequence={} guide_age_ms={} guides=\"{}\" guide_extent={}x{} output={}x{} "
+                 "boundary={} hdr={} nr_recorded={} queue={} fence={} frequency_hz={} interval={} "
+                 "eligible={} attempted={} accepted={} discarded={} unit=eligible-regions "
+                 "proof=sealed-single-execution-fence",
+                 snapshot.runId, RegionLabel(slot.kind), slot.id, duration, m.presentId, m.guideSequence, m.guideAgeMs,
+                 GuideSourceLabel(m.guides), m.guideWidth, m.guideHeight, m.outputWidth, m.outputHeight, m.boundary,
+                 m.hdr, m.nrRecorded, certificate.queue, certificate.fence, certificate.frequency, slot.interval,
+                 state.eligible, state.attempted, state.accepted, state.discarded);
+    }
+    catch (...)
+    {
+    }
+}
+
+void PollRegionsLocked()
+{
+    for (size_t i = 0; i < regionSlots.size(); ++i)
+    {
+        auto& state = i == 0 ? snapshot.present : snapshot.capture;
+        state.pending = state.waitingReset = state.waitingGpu = state.waitingNotification = state.retained = 0;
+        for (auto& slot : regionSlots[i])
+        {
+            if (!slot.occupied)
+                continue;
+            ++state.pending;
+            if (slot.recording)
+                continue;
+            const auto certificate = Submission::TimingCertificate(slot.usage);
+            if (!certificate.terminal)
+            {
+                if (std::strcmp(certificate.reason, "waiting-reset") == 0)
+                    ++state.waitingReset;
+                else if (std::strcmp(certificate.reason, "waiting-gpu") == 0)
+                    ++state.waitingGpu;
+                else
+                    ++state.waitingNotification;
+                continue;
+            }
+            if (!certificate.reusable)
+                ++state.retained;
+            if (!certificate.accepted)
+                DropRegion(slot.kind, certificate.reason, &slot);
+            else if (!slot.reported)
+                CollectRegion(slot, certificate);
+            if (certificate.reusable)
+            {
+                slot.usage = {};
+                slot.occupied = false;
+                if (!snapshot.enabled)
+                    ReleaseSafe(slot);
+                --state.pending;
+            }
+        }
+    }
+}
+
+bool AnySampled()
+{
+    return snapshot.sampled != 0 || conversionSampled != 0 || snapshot.present.sampled != 0 ||
+           snapshot.capture.sampled != 0;
+}
 
 // A confirmed Conversion slot: two brackets, decode and encode, published beside the evaluation's sample.
 void CollectConversion(Slot& slot, const Detail::Certificate& certificate)
@@ -207,6 +365,7 @@ void CollectConversion(Slot& slot, const Detail::Certificate& certificate)
 
 void PollLocked()
 {
+    PollRegionsLocked();
     snapshot.pending = 0;
     snapshot.waitingReset = snapshot.waitingGpu = snapshot.waitingNotification = snapshot.retained = 0;
     for (auto& slot : slots)
@@ -369,9 +528,12 @@ void SetEnabled(bool enabled)
     if (AnySampled())
         PollLocked();
     if (!enabled)
+    {
+        ReleaseIdleRegions();
         for (auto& slot : slots)
             if (!slot.occupied)
                 ReleaseSafe(slot);
+    }
 }
 
 Snapshot GetSnapshot()
@@ -388,6 +550,12 @@ Snapshot GetSnapshot()
     if (result.conversionValid)
         result.conversionAgeMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - conversionRecordedAt).count();
+    if (result.present.valid)
+        result.present.sampleAgeMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - regionRecordedAt[0]).count();
+    if (result.capture.valid)
+        result.capture.sampleAgeMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - regionRecordedAt[1]).count();
     return result;
 }
 
@@ -404,6 +572,7 @@ Evaluation::Evaluation(ID3D12Device* device, ID3D12GraphicsCommandList* commandL
         PollLocked();
     if (!enabled)
     {
+        ReleaseIdleRegions();
         for (auto& candidate : slots)
             if (!candidate.occupied)
                 ReleaseSafe(candidate);
@@ -559,6 +728,7 @@ Conversion::Conversion(ID3D12Device* device, ID3D12GraphicsCommandList* commandL
         PollLocked();
     if (!enabled)
     {
+        ReleaseIdleRegions();
         for (auto& candidate : slots)
             if (!candidate.occupied)
                 ReleaseSafe(candidate);
@@ -666,4 +836,91 @@ void Conversion::Finish(bool success)
 }
 
 Conversion::~Conversion() { Finish(false); }
+
+Region::Region(ID3D12GraphicsCommandList* commandList, RegionKind kind, const RegionMetadata& metadata, bool enabled,
+               uint32_t interval)
+{
+    if (!enabled || (kind != RegionKind::Present && kind != RegionKind::GuideCapture))
+        return;
+    everEnabled.store(true, std::memory_order_relaxed);
+    std::lock_guard lock(mutex);
+    snapshot.enabled = true;
+    if (AnySampled())
+        PollLocked();
+    if (!snapshot.runId)
+        snapshot.runId = static_cast<uint64_t>(Clock::now().time_since_epoch().count()) ^ GetCurrentProcessId();
+    auto& state = RegionState(kind);
+    interval = std::clamp(interval, 1u, 10000u);
+    if ((state.eligible++ % interval) != 0)
+        return;
+    ++state.attempted;
+    if (!commandList || commandList->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT)
+    {
+        DropRegion(kind, "unsupported-command-list");
+        return;
+    }
+    auto& pool = regionSlots[RegionIndex(kind)];
+    auto available = std::find_if(pool.begin(), pool.end(), [](const auto& item) { return !item.occupied; });
+    if (available == pool.end())
+    {
+        DropRegion(kind, "pool-full");
+        return;
+    }
+    ID3D12Device* recordingDevice = nullptr;
+    if (FAILED(commandList->GetDevice(IID_PPV_ARGS(&recordingDevice))) || !recordingDevice)
+    {
+        DropRegion(kind, "recording-device-unavailable");
+        return;
+    }
+    const bool allocated = Allocate(*available, recordingDevice);
+    recordingDevice->Release();
+    if (!allocated)
+    {
+        DropRegion(kind, "query-allocation-failed");
+        return;
+    }
+    if (!Submission::Track(commandList, available->usage))
+    {
+        DropRegion(kind, Submission::LastRefusal());
+        available->usage = {};
+        return;
+    }
+    available->kind = kind;
+    available->regionMetadata = metadata;
+    available->recordedAt = Clock::now();
+    available->id = ++state.sampled;
+    available->interval = interval;
+    available->queryCount = 0;
+    available->occupied = available->recording = true;
+    available->malformed = available->successful = available->reported = false;
+    ++state.pending;
+    slot = &*available;
+    list = commandList;
+    Stamp(*available, list);
+}
+
+void Region::SetMetadata(const RegionMetadata& metadata)
+{
+    // While recording, the collector skips this slot; Finish publishes it under the timing mutex.
+    if (slot)
+        static_cast<RegionSlot*>(slot)->regionMetadata = metadata;
+}
+
+void Region::Finish(bool success)
+{
+    if (!slot)
+        return;
+    auto& current = *static_cast<RegionSlot*>(slot);
+    Stamp(current, list);
+    list->ResolveQueryData(current.heap, D3D12_QUERY_TYPE_TIMESTAMP, 0, current.queryCount, current.readback, 0);
+    std::lock_guard lock(mutex);
+    current.successful = success;
+    current.recording = false;
+    if (!success)
+        DropRegion(current.kind, "incomplete-region", &current);
+    slot = nullptr;
+    list = nullptr;
+}
+
+Region::~Region() { Finish(false); }
 } // namespace DlssNr::GpuTiming

@@ -43,6 +43,18 @@ enum class Pass : uint8_t
     RunningVulkan, // the native Vulkan pass
 };
 
+// Independent, historical GPU regions. All labels are owned values supplied by the menu snapshot.
+struct GpuRegionSample
+{
+    bool valid = false;
+    double totalMs = 0.0;
+    uint64_t sampleId = 0, ageMs = 0;
+    uint64_t presentId = 0, guideSequence = 0, guideAgeMs = 0;
+    uint32_t guideWidth = 0, guideHeight = 0, outputWidth = 0, outputHeight = 0;
+    std::string guides;
+    bool boundary = false, hdr = false, nrRecorded = false;
+};
+
 // GpuTiming::Snapshot, the fields the export names.
 struct GpuSample
 {
@@ -59,6 +71,7 @@ struct GpuSample
     uint32_t passes = 0;
     uint32_t cadence = 1;
     bool carried = false;
+    GpuRegionSample present, capture;
 };
 
 // Lsfg::Status.
@@ -122,7 +135,7 @@ struct Inputs
     std::string guidesLine; // PresentGuidesLine
     bool hdrConverted = false;
     std::string hdrReason;
-    std::string settingsContract; // SettingsContractText: TimingContract over the current Config
+    std::string settingsContract;    // SettingsContractText: TimingContract over the current Config
     std::vector<FunnelRoute> funnel; // every counted route, in DlssNr::Funnel::Route order
     GpuSample gpu;
     LsfgState lsfg;
@@ -448,6 +461,38 @@ inline std::string Build(const Inputs& in)
         line("Contract generation " + std::to_string(g.settingsGeneration) + ", hash " + hash +
              " (the INFO log's contract line for it has the full text)");
         line("One sample, not the current frame's cost or an average.");
+    }
+
+    if (g.instrumented)
+    {
+        const auto region = [&](const char* name, const GpuRegionSample& sample, bool present)
+        {
+            if (!sample.valid)
+            {
+                line(std::string(name) + ": no confirmed sample");
+                return;
+            }
+            char numbers[160] {};
+            std::snprintf(numbers, sizeof(numbers), ": historical sample %llu, %.1f s old, %.3f ms",
+                          static_cast<unsigned long long>(sample.sampleId), sample.ageMs / 1000.0, sample.totalMs);
+            line(std::string(name) + numbers);
+            line("  Guides: " + OrText(sample.guides, "unknown") + ", capture " + std::to_string(sample.guideSequence) +
+                 ", guide extent " + std::to_string(sample.guideWidth) + "x" + std::to_string(sample.guideHeight) +
+                 ", output " + std::to_string(sample.outputWidth) + "x" + std::to_string(sample.outputHeight));
+            if (present)
+            {
+                line("  Observed Present " + std::to_string(sample.presentId) + ", boundary " +
+                     (sample.boundary ? "yes" : "no") + ", HDR " + (sample.hdr ? "yes" : "no") + ", NR recorded " +
+                     (sample.nrRecorded ? "yes" : "no"));
+                if (sample.guideSequence)
+                    line("  Capture age at selection: " + std::to_string(sample.guideAgeMs) + " ms");
+                line("  GPU route includes Dispatch and HDR conversion; CPU waits and submission are excluded.");
+            }
+            else
+                line("  Guide capture is on a separate producer recording; do not add it to a Present sample.");
+        };
+        region("Present route GPU", g.present, true);
+        region("Guide capture GPU", g.capture, false);
     }
 
     line("");

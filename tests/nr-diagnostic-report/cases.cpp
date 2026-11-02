@@ -262,6 +262,26 @@ void GpuSampleMarking()
     Require(Contains(DR::Build(in), ", carried frame (no model call)"), "carried frame named");
     in.gpu.valid = false;
     Require(Contains(DR::Build(in), "Last confirmed sample: none"), "no sample");
+    in.gpu.present.valid = true;
+    in.gpu.present.totalMs = 0.250;
+    in.gpu.present.sampleId = 9;
+    in.gpu.present.ageMs = 1500;
+    in.gpu.present.guides = "zero depth + synthesized motion";
+    in.gpu.capture.valid = true;
+    in.gpu.capture.totalMs = 0.125;
+    in.gpu.capture.sampleId = 3;
+    in.gpu.capture.guideSequence = 11;
+    const auto regions = DR::Build(in);
+    Require(Contains(regions, "Present route GPU: historical sample 9, 1.5 s old, 0.250 ms") &&
+                Contains(regions, "Guide capture GPU: historical sample 3"),
+            "independent historical region samples");
+    Require(Contains(regions, "zero depth + synthesized motion") && Contains(regions, "capture 11"),
+            "effective provenance survives export without a Dispatch sample");
+    Require(!Contains(regions, "0.375 ms") && Contains(regions, "includes Dispatch") &&
+                Contains(regions, "separate producer") && Contains(regions, "CPU waits"),
+            "no misleading sums or CPU cost");
+    in.gpu.present.valid = false;
+    Require(Contains(DR::Build(in), "Present route GPU: no confirmed sample"), "no route sample is explicit");
     in.gpu.instrumented = false;
     const auto vk = DR::Build(in);
     Require(Contains(vk, "Measurement: not instrumented on this route (native Vulkan or the driver proxy)"),

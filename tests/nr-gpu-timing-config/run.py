@@ -37,6 +37,12 @@ declarations = header[header.index('    struct DlssNrGpuTimingSettings'):header.
 methods = implementation[implementation.index('Config::DlssNrGpuTimingSettings Config::GetDlssNrGpuTimingSettings'):implementation.index('DlssNrResolvedPassSettings Config::DlssNrMasterSettingsUnlocked')]
 read = '\n'.join(statement(implementation, f'DlssNr{key}.set_from_config(')
                  for key in ('GpuTiming', 'GpuTimingInterval'))
+# The lock-free mirror is stored right after the INI read; take that exact statement too.
+mirror_anchor = '_dlssNrGpuTimingRequested.store('
+assert implementation.count(mirror_anchor) == 2, 'mirror stored at the INI read and in SetDlssNrGpuTimingEnabled'
+read_start = implementation.index('DlssNrGpuTiming.set_from_config(')
+assert implementation.index(mirror_anchor, read_start) < implementation.index('DlssNrGpuTimingInterval.set_from_config(', read_start)
+read += '\n' + statement(implementation[read_start:], mirror_anchor)
 # The interval expressions contain a lambda; extract balanced SetValue calls rather than
 # stopping at that lambda's semicolon. Nothing substitutes the production serializer.
 save = []
@@ -50,7 +56,8 @@ for key in ('GpuTiming', 'GpuTimingInterval'):
         end += 1
     save.append(implementation[start:end + 1])
 
-source = '''#include <concepts>
+source = '''#include <atomic>
+#include <concepts>
 #include <format>
 #include <optional>
 #include <mutex>
@@ -69,7 +76,7 @@ void Read(CSimpleIniA& ini) { const std::lock_guard lock(_dlssNrPassSettingsMute
 void Save(CSimpleIniA& ini) { auto* config = this; const std::lock_guard lock(_dlssNrPassSettingsMutex);
 ''' + '\n'.join(save) + '''
 }
-private: mutable std::mutex _dlssNrPassSettingsMutex;
+private: mutable std::mutex _dlssNrPassSettingsMutex; std::atomic<bool> _dlssNrGpuTimingRequested { false };
 };
 ''' + methods + (root / 'tests/nr-gpu-timing-config/cases.cpp').read_text()
 

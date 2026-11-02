@@ -4442,6 +4442,17 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     DlssNrFrameInfo frame {};
     bool temporalValid = false;
     unsigned long long temporalSeq = 0;
+    // With GpuTiming off the route reads no timing settings (a mutex) and fills no sample metadata.
+    const bool routeTimingArmed = cfg.DlssNrGpuTimingRequested();
+    DlssNr::GpuTiming::RegionMetadata presentTimingMetadata;
+    if (routeTimingArmed)
+    {
+        presentTimingMetadata.presentId = g_presentFlip;
+        presentTimingMetadata.outputWidth = presentTimingMetadata.guideWidth = width;
+        presentTimingMetadata.outputHeight = presentTimingMetadata.guideHeight = height;
+        presentTimingMetadata.boundary = boundary;
+        presentTimingMetadata.hdr = presentHdr;
+    }
 
     static bool s_loggedSameQueue = false;
     static bool s_loggedCompleted = false;
@@ -4521,6 +4532,15 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             frame.MotionState = (int) D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
             temporalValid = (depth != nullptr && motion != nullptr);
             temporalSeq = g_presentGuideRing.GetSlot(usableSlot).sequence;
+            if (temporalValid && routeTimingArmed)
+            {
+                const auto& selected = g_presentGuideRing.GetSlot(usableSlot);
+                presentTimingMetadata.guideSequence = selected.sequence;
+                presentTimingMetadata.guideAgeMs =
+                    selected.capturedAtMs > 0 && nowMs > selected.capturedAtMs ? nowMs - selected.capturedAtMs : 0;
+                presentTimingMetadata.guideWidth = clone.width;
+                presentTimingMetadata.guideHeight = clone.height;
+            }
         }
         else
         {
@@ -4568,6 +4588,17 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         gameGuidesHold = NotePresentPassGuideSource(temporalValid, !g_sourceIsPresent.load());
 
     nrLock.unlock();
+
+    Config::DlssNrGpuTimingSettings routeTimingSettings {};
+    if (routeTimingArmed)
+        routeTimingSettings = cfg.GetDlssNrGpuTimingSettings();
+    std::optional<DlssNr::GpuTiming::Region> presentTiming;
+    const auto beginPresentTiming = [&]()
+    {
+        if (!presentTiming && routeTimingSettings.Enabled && !cfg.DlssNrUseProxy.value_or_default())
+            presentTiming.emplace(list, DlssNr::GpuTiming::RegionKind::Present, presentTimingMetadata, true,
+                                  routeTimingSettings.Interval);
+    };
 
     static ZeroGuides s_dummyGuides;
     // The clear below is a one-way UNORDERED_ACCESS -> NON_PIXEL_SHADER_RESOURCE transition recorded once; the guides
@@ -4620,6 +4651,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             LOG_ERROR("DLSS-NR present: {}", g_nr.reason);
             return;
         }
+        beginPresentTiming(); // First GPU work on the zero-guide route, including the one-time clear.
         dummyClearRecorded = s_dummyGuides.RecordClear(list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         depth = s_dummyGuides.Depth();
         motion = s_dummyGuides.Motion();
@@ -4649,6 +4681,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
 
     const D3D12_RESOURCE_STATES bbState = D3D12_RESOURCE_STATE_PRESENT;
 
+    beginPresentTiming(); // First GPU work with captured game guides; already started on the zero-guide route.
     Barrier(list, backbuffer, bbState, D3D12_RESOURCE_STATE_COPY_SOURCE);
     Barrier(list, g_bbCopy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyResource(g_bbCopy, backbuffer);
@@ -4716,6 +4749,11 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     // What a frame without the game's guides ran on, for the status (HookStatus, the menu's guides line).
     if (!temporalValid)
         NotePresentGuideFallback(motion != s_dummyGuides.Motion());
+    if (presentTiming)
+        presentTimingMetadata.guides = temporalValid ? DlssNr::GpuTiming::GuideSource::Game
+                                       : motion != s_dummyGuides.Motion()
+                                           ? DlssNr::GpuTiming::GuideSource::SynthesizedMotion
+                                           : DlssNr::GpuTiming::GuideSource::Zero;
 
     if (fgHook)
         g_lastFgFlip = g_presentFlip;
@@ -4750,7 +4788,8 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             g_presentGuideClones[trackedSlot].presentReadUsage = savedPresentReadUsage;
             g_presentGuideClones[trackedSlot].readTracked = savedReadTracked;
         }
-        hdrTiming.reset(); // resolves on the list while it is still open
+        hdrTiming.reset();     // resolves on the list while it is still open
+        presentTiming.reset(); // Reject and resolve before DropPresentList closes this recording.
         DropPresentList(slot);
         SettlePresentMotion(false);
         settleDummyGuides(false);
@@ -4794,6 +4833,12 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     Barrier(list, backbuffer, D3D12_RESOURCE_STATE_COPY_DEST, bbState);
     Barrier(list, writeBack, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
+    if (presentTiming)
+    {
+        presentTimingMetadata.nrRecorded = recorded;
+        presentTiming->SetMetadata(presentTimingMetadata);
+        presentTiming->Finish(true); // Includes copy-back/restores; the certificate still has to prove submission.
+    }
     const bool executed = SubmitPresentList(queue, slot);
     const bool convertedHdr = presentHdr && executed && writeBack == g_hdrOut;
     if (presentHdr)

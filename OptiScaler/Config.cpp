@@ -55,6 +55,7 @@ void Config::SetDlssNrGpuTimingEnabled(bool enabled)
 {
     const std::lock_guard lock(_dlssNrPassSettingsMutex);
     DlssNrGpuTiming = enabled;
+    _dlssNrGpuTimingRequested.store(DlssNrGpuTiming.value_or_default(), std::memory_order_relaxed);
 }
 
 void Config::SetDlssNrGpuTimingInterval(uint32_t interval)
@@ -520,6 +521,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             {
                 const std::lock_guard lock(_dlssNrPassSettingsMutex);
                 DlssNrGpuTiming.set_from_config(DlssNr::PassConfig::Bool(ini.GetValue("DlssNr", "GpuTiming")));
+                _dlssNrGpuTimingRequested.store(DlssNrGpuTiming.value_or_default(), std::memory_order_relaxed);
                 DlssNrGpuTimingInterval.set_from_config(
                     DlssNr::PassConfig::UInt(ini.GetValue("DlssNr", "GpuTimingInterval"), UINT32_MAX)
                         .transform([](uint32_t interval) { return std::clamp(interval, 1u, 10000u); }));

@@ -40,6 +40,12 @@ The split:
 | GPU timing | measurement on/off or not instrumented; the last fence-confirmed sample marked **recent** (measurement on and younger than 2 s) or **historical**, its sample, stage, model size, passes, cadence and contract generation/hash; "One sample, not the current frame's cost or an average." | `GpuTiming::GetSnapshot` |
 | LSFG | off; active at a size, with its cost when measured; enabled with its fallback reason; or waiting | `Lsfg::GetStatus` |
 
+Since 2026-11-01 the GPU section also reports separate historical Present-route and guide-capture
+samples (or explicit no-sample lines), even before any Evaluation sample is confirmed. Their
+source/sequence/age and extents belong to the measured recording. Present includes Dispatch/HDR;
+capture belongs to its producer. No durations are summed. CPU waits are excluded. See
+[gpu-timing.md](gpu-timing.md#d3d12-present-and-guide-capture-2026-11-01) for scope and provenance limits.
+
 Detected is what the game and the machine offer; Used is what the pass ran on. The panel's guides line mixes the two
 (the guides used, and how many the identity rules refused); it is reported whole under Used, because that is what it
 answers. Lines are always present: a value that is not known reads `unknown`, `none` or `not described this session`,

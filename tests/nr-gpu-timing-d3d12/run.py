@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -42,6 +43,18 @@ def command(args, *, env, logfile, cwd=ROOT, timeout=300, expected=0):
                            + logfile.read_text(errors='replace')[-5000:])
 
 
+def stage_binary(source, destination):
+    # Proton binaries can be read-only (0555). Replace our staged copy atomically on repeat builds,
+    # preserving the installed source's permissions and never writing through an existing mapping.
+    with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as temporary:
+        staged = Path(temporary.name)
+    try:
+        shutil.copy2(source, staged)
+        staged.replace(destination)
+    finally:
+        staged.unlink(missing_ok=True)
+
+
 def build():
     build_prefix = OUT / 'build-prefix'
     if not build_prefix.exists():
@@ -61,12 +74,12 @@ def build():
     if RUNTIME is None:
         raise RuntimeError('no installed Proton with vkd3d-proton')
     for name in ('d3d12.dll', 'd3d12core.dll'):
-        shutil.copy2(RUNTIME / name, work / name)
+        stage_binary(RUNTIME / name, work / name)
     redists = sorted(MSVC.parents[1].glob('VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT'))
     if not redists:
         raise RuntimeError('native MSVC x64 runtime missing')
     for dll in redists[-1].glob('*.dll'):
-        shutil.copy2(dll, work / dll.name)
+        stage_binary(dll, work / dll.name)
     (OUT / 'manifest.json').write_text(json.dumps({
         'sources': sources(),
         'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
@@ -90,6 +103,8 @@ def execute():
     command(['wine', work / 'nr-timing-harness.exe'], env=env, cwd=work, logfile=OUT / 'run.log', timeout=120)
     if 'PASS: OFF, normal, replay same queue, replay second queue, Reset-before-GPU;' not in (OUT / 'run.log').read_text():
         raise RuntimeError('missing explicit mandatory-case PASS')
+    if 'PASS: independent Present and producer capture regions;' not in (OUT / 'run.log').read_text():
+        raise RuntimeError('missing explicit Region coverage PASS')
     command(['wine', work / 'nr-timing-harness.exe', '--zero-coverage'], env=env, cwd=work,
             logfile=OUT / 'negative.log', timeout=60, expected=1)
     if 'ZERO COVERAGE:' not in (OUT / 'negative.log').read_text():
