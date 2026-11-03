@@ -183,26 +183,19 @@ def check(s):
     assert fg_gate < note_only
     fg_block = attach[fg_gate:note_only]
     assert 'NoteOnly' not in fg_block, 'a note-only hook in the FG input branch'
-    assert 's_slSetTagDetour = hkslSetTag;' in fg_block and 's_slSetTagForFrameDetour = hkslSetTagForFrame;' in fg_block
+    assert 'AttachInterposerHook(&(PVOID&) o_slSetTag, (PVOID) hkslSetTag);' in fg_block
     note_block = body(attach[note_only:], 'else if (nrOn)')
-    for line in ('DetourAttach(&(PVOID&) o_slSetTag, hkslSetTagNoteOnly);',
-                 's_slSetTagDetour = hkslSetTagNoteOnly;',
-                 'DetourAttach(&(PVOID&) o_slSetTagForFrame, hkslSetTagForFrameNoteOnly);',
-                 's_slSetTagForFrameDetour = hkslSetTagForFrameNoteOnly;'):
+    for line in ('AttachInterposerHook(&(PVOID&) o_slSetTag, (PVOID) hkslSetTagNoteOnly);',
+                 'AttachInterposerHook(&(PVOID&) o_slSetTagForFrame, (PVOID) hkslSetTagForFrameNoteOnly);'):
         assert line in note_block, f'the note-only install lost: {line}'
     assert 'hkslSetConstants' not in note_block, 'the note-only branch hooks more than the tags'
-    assert attach.count('NoteOnly') == 4
+    assert attach.count('NoteOnly') == 2
 
-    # --- Detach: the detour that was attached.
-    unhook = body(hooks, 'void StreamlineHooks::unhookInterposer()')
-    assert 'DetourDetach(&(PVOID&) o_slSetTag, s_slSetTagDetour != nullptr ? s_slSetTagDetour : hkslSetTag);' in unhook
-    assert re.search(r'DetourDetach\(&\(PVOID&\) o_slSetTagForFrame,\s*s_slSetTagForFrameDetour != nullptr \? '
-                     r's_slSetTagForFrameDetour : hkslSetTagForFrame\);', unhook)
-    assert hooks.count('s_slSetTagDetour = nullptr;') >= 3, 'a cleared original keeps its recorded detour'
-    # The note-only path attaches no slSetConstants hook, so it detaches none (a failed detach aborts the transaction).
-    assert re.search(r'const bool noteOnlyTags =\s*s_slSetTagDetour == hkslSetTagNoteOnly \|\| '
-                     r's_slSetTagForFrameDetour == hkslSetTagForFrameNoteOnly;', unhook)
-    assert 'if (o_slSetConstants && !noteOnlyTags)\n        DetourDetach(&(PVOID&) o_slSetConstants, hkslSetConstants);' in unhook
+    # --- Detach: exactly what was attached, whichever tag hooks those were (tests/sl-interposer-unhook).
+    unhook = body(hooks, 'bool StreamlineHooks::unhookInterposer()')
+    live = '\n'.join(line for line in unhook.splitlines() if not line.strip().startswith('//'))
+    assert 's_interposerHooks.DetachAll(' in live and 'DetourDetach(&(PVOID&) o_' not in live, \
+        'the unhook detaches exports it did not attach'
 
     # --- Said by the D3D12 status line, after its two-second gate, and by the Vulkan after-upscale route.
     status = body(s['renderer'], 'void ReportRuntimeStatus(bool passRecorded, const char* skipReason)')
@@ -226,7 +219,8 @@ SOURCE_MUTANTS = {
                           'DlssNr::SlTagInventory::Instance().Arm();'),
     'note-only with NR off': ('hooks', '                else if (nrOn)\n                {\n                    // No Streamline FG',
                               '                else\n                {\n                    // No Streamline FG'),
-    'detach the wrong detour': ('hooks', 's_slSetTagDetour != nullptr ? s_slSetTagDetour : hkslSetTag', 'hkslSetTag'),
+    'detach what was not attached': ('hooks', '    s_interposerHooks.DetachAll(',
+                                     '    DetourDetach(&(PVOID&) o_slSetConstants, hkslSetConstants);\n    s_interposerHooks.DetachAll('),
     'note-only edits the tags': ('hooks', '    NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);\n'
                                  '    return o_slSetTag(viewport, tags, numTags, cmdBuffer);',
                                  '    NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);\n'
@@ -237,7 +231,6 @@ SOURCE_MUTANTS = {
                             '(resource.type == sl::ResourceType::eCount)'),
     'DLSSG polarity': ('hooks', 'State::Instance().activeFgInput == FGInput::DLSSG)\n                {\n                    if (o_slSetTag != nullptr)',
                        'State::Instance().activeFgInput != FGInput::DLSSG)\n                {\n                    if (o_slSetTag != nullptr)'),
-    'constants detached on note-only': ('hooks', 'if (o_slSetConstants && !noteOnlyTags)', 'if (o_slSetConstants)'),
     'buffer width as pixels': ('hooks', '                shape = {};\n                shape.buffer = true;\n                return;\n', ''),
     'second read for the line': ('header', '        line = Describe(now);', '        line = Describe();'),
     'evaluate unarmed': ('hooks', 'if (inputs != nullptr && DlssNr::SlTagInventory::Instance().Armed())',

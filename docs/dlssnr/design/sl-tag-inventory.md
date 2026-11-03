@@ -48,11 +48,9 @@ valid until Present only sometimes (both kinds of lifecycle seen).
   `hkslSetTagForFrameNoteOnly` are installed in their place. They note and forward the call untouched: none of
   upstream's tag handling (the FG input report, the Cyberpunk HUD-less state quirk, the skip of DLSS-only tag
   sets) runs. They also feed `DlssNr_SlNativeNr.h`'s tag observation, which upstream's hooks fed only with a
-  Streamline FG input. `unhookInterposer` detaches whichever detour was attached, and, on the note-only path,
-  no `slSetConstants` hook. Nothing attached one, and detaching an export that was never attached fails the
-  whole Detours transaction. With nothing recorded (NR off and no Streamline FG input), upstream's unhook is
-  unchanged: it still detaches the tag and constants exports it never attached. That upstream defect is left
-  as it is, so that NR off stays identical.
+  Streamline FG input. `unhookInterposer` detaches exactly the detours that were attached, whichever tag hooks
+  those were ([sl-interposer-unhook.md](../../linux-proton/sl-interposer-unhook.md), which since 2026-11-03 also
+  fixes the upstream defect of detaching exports that were never attached).
 - **Armed** at hook time when `[DlssNr] Enabled` is true, and fixed for the session.
   - Started with NR off: no new detour, nothing noted, no line, as before.
   - Started with NR on and NR turned off in the menu: the hooks keep noting until the process ends (a few
@@ -77,11 +75,11 @@ valid until Present only sometimes (both kinds of lifecycle seen).
 `tests/nr-sl-tag-inventory`:
 
 - the header under ASan/UBSan, with 16 rule mutants;
-- source guards with 12 mutants on:
+- source guards with 11 mutants on:
   - arming and installing only with NR on;
   - the FG-input gate's whole expression;
   - note-only hooks that do nothing but note and forward;
   - `GetDesc` only on D3D12 textures and buffers, with buffers said as buffers;
-  - detach matching attach, including no `slSetConstants` detach on the note-only path;
+  - the unhook detaching only what was attached (the record is tested by `tests/sl-interposer-unhook`);
   - the line and its signature taken from one read;
   - where the line is said.
