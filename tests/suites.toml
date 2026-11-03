@@ -262,6 +262,14 @@ tier = "host"
 timeout = 300
 summary = "The game's own Streamline NR (sl.dlss_nr, feature 1004): the detector on synthetic Streamline calls (thirteen rule mutants must fail), the hooks feeding it with atomics, and every D3D12 and Vulkan NR route standing down before the model, with the panel line. Not run in a game."
 
+[nr-sl-tag-inventory]
+path = "nr-sl-tag-inventory"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Which buffers the game tags for Streamline, log only: the inventory on synthetic tags (sixteen rule mutants must fail), the hooks noting with NR on only (note-only hooks forward untouched without a Streamline FG input, detach matches attach), and the line said by the D3D12 status and the Vulkan after-upscale route. Not run in a game."
+
 [nr-pause-frame-gen]
 path = "nr-pause-frame-gen"
 domain = "nr"

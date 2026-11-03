@@ -308,6 +308,17 @@ class StreamlineHooks
                                          const sl::ResourceTag* resources, uint32_t numResources,
                                          sl::CommandBuffer* cmdBuffer);
 
+    // Retoque: with NR on and no Streamline FG input, the tag calls are only noted (DlssNr_SlTagInventory.h,
+    // DlssNr_SlNativeNr.h) and forwarded untouched; hkslSetTag/hkslSetTagForFrame are not installed then.
+    static sl::Result hkslSetTagNoteOnly(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
+                                         uint32_t numTags, sl::CommandBuffer* cmdBuffer);
+    static sl::Result hkslSetTagForFrameNoteOnly(const sl::FrameToken& frame, const sl::ViewportHandle& viewport,
+                                                 const sl::ResourceTag* resources, uint32_t numResources,
+                                                 sl::CommandBuffer* cmdBuffer);
+    // Which detour is attached to each tag call, so unhookInterposer detaches that one.
+    inline static decltype(&slSetTag) s_slSetTagDetour = nullptr;
+    inline static decltype(&slSetTagForFrame) s_slSetTagForFrameDetour = nullptr;
+
     static sl::Result hkslEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame,
                                           const sl::BaseStructure** inputs, uint32_t numInputs,
                                           sl::CommandBuffer* cmdBuffer);
@@ -402,6 +413,8 @@ class StreamlineHooks
     VALIDATE_MEMBER_HOOK(hkslEvaluateFeature_sl1, decltype(&sl1::slEvaluateFeature))
     VALIDATE_MEMBER_HOOK(hkslSetTag, decltype(&slSetTag))
     VALIDATE_MEMBER_HOOK(hkslSetTagForFrame, decltype(&slSetTagForFrame))
+    VALIDATE_MEMBER_HOOK(hkslSetTagNoteOnly, decltype(&slSetTag))
+    VALIDATE_MEMBER_HOOK(hkslSetTagForFrameNoteOnly, decltype(&slSetTagForFrame))
     VALIDATE_MEMBER_HOOK(hkslEvaluateFeature, decltype(&slEvaluateFeature))
     VALIDATE_MEMBER_HOOK(hkslAllocateResources, decltype(&slAllocateResources))
     VALIDATE_MEMBER_HOOK(hkslGetNativeInterface, decltype(&slGetNativeInterface))
