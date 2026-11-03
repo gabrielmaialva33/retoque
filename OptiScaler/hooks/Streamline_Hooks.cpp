@@ -12,6 +12,7 @@
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dlssnr/DlssNr_SlTagInventory.h>
+#include <hooks/DetourRecord.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
 #include <hooks/Streamline_DlssgRequest.h>
 #include <hooks/Streamline_LogRepeat.h>
@@ -2266,7 +2267,17 @@ void StreamlineHooks::applyMenuDlssgInterlock(sl::DLSSGOptions& options, bool dl
 
 // SL INTERPOSER
 
-void StreamlineHooks::unhookInterposer()
+// The interposer hooks really attached, by the transaction that committed them (retoque/hooks/DetourRecord.h). Read
+// and changed only by hookInterposer, and unhookInterposer from it, while s_interposerSwap is held.
+static Retoque::Hooks::DetourRecord s_interposerHooks;
+static std::atomic<bool> s_interposerSwap { false };
+
+static void AttachInterposerHook(PVOID* target, PVOID detour)
+{
+    s_interposerHooks.Attach([](void** t, void* d) { return DetourAttach(t, d); }, target, detour);
+}
+
+bool StreamlineHooks::unhookInterposer()
 {
     LOG_FUNC();
 
@@ -2276,39 +2287,9 @@ void StreamlineHooks::unhookInterposer()
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
 
-    // The detour attached at hook time, or upstream's as before when none was recorded. The note-only path attaches
-    // no slSetConstants hook, so it detaches none: detaching an export that was never attached fails the whole
-    // transaction. With nothing recorded (NR off, no Streamline FG input) upstream's unconditional detaches stay.
-    const bool noteOnlyTags =
-        s_slSetTagDetour == hkslSetTagNoteOnly || s_slSetTagForFrameDetour == hkslSetTagForFrameNoteOnly;
-
-    if (o_slSetTag)
-        DetourDetach(&(PVOID&) o_slSetTag, s_slSetTagDetour != nullptr ? s_slSetTagDetour : hkslSetTag);
-
-    if (o_slSetTagForFrame)
-        DetourDetach(&(PVOID&) o_slSetTagForFrame,
-                     s_slSetTagForFrameDetour != nullptr ? s_slSetTagForFrameDetour : hkslSetTagForFrame);
-
-    if (o_slSetConstants && !noteOnlyTags)
-        DetourDetach(&(PVOID&) o_slSetConstants, hkslSetConstants);
-
-    if (o_slEvaluateFeature)
-        DetourDetach(&(PVOID&) o_slEvaluateFeature, hkslEvaluateFeature);
-
-    if (o_slInit)
-        DetourDetach(&(PVOID&) o_slInit, hkslInit);
-
-    if (o_slInit_sl1)
-        DetourDetach(&(PVOID&) o_slInit_sl1, hkslInit_sl1);
-
-    if (o_slSetTag_sl1)
-        DetourDetach(&(PVOID&) o_slSetTag_sl1, hkslSetTag_sl1);
-
-    if (o_slSetConstants_interposer_sl1)
-        DetourDetach(&(PVOID&) o_slSetConstants_interposer_sl1, hkslSetConstants_sl1);
-
-    if (o_slEvaluateFeature_sl1)
-        DetourDetach(&(PVOID&) o_slEvaluateFeature_sl1, hkslEvaluateFeature_sl1);
+    // Exactly the detours hookInterposer attached, newest first (retoque/hooks/DetourRecord.h). Detaching one that
+    // was never attached fails the whole transaction, which used to leave every hook in place.
+    s_interposerHooks.DetachAll([](void** target, void* detour) { return DetourDetach(target, detour); });
 
     // if (o_logCallback)
     //     DetourDetach(&(PVOID&) o_logCallback, streamlineLogCallback);
@@ -2316,6 +2297,7 @@ void StreamlineHooks::unhookInterposer()
     //     DetourDetach(&(PVOID&) o_logCallback_sl1, streamlineLogCallback);
 
     auto detourResult = DetourTransactionCommit();
+    s_interposerHooks.Detached(detourResult == NO_ERROR);
     if (detourResult != NO_ERROR)
     {
         LOG_ERROR("DetourTransactionCommit error: {:X}", detourResult);
@@ -2326,8 +2308,6 @@ void StreamlineHooks::unhookInterposer()
         o_slInit_sl1 = nullptr;
         o_slSetTag = nullptr;
         o_slSetTagForFrame = nullptr;
-        s_slSetTagDetour = nullptr;
-        s_slSetTagForFrameDetour = nullptr;
         o_slEvaluateFeature = nullptr;
         o_slSetConstants = nullptr;
         o_slSetTag_sl1 = nullptr;
@@ -2337,6 +2317,7 @@ void StreamlineHooks::unhookInterposer()
         o_logCallback_sl1 = nullptr;
         hookedInterposerModule = nullptr;
     }
+    return detourResult == NO_ERROR;
 }
 
 // Call it just after sl.interposer's load or if sl.interposer is already loaded
@@ -2350,6 +2331,21 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
         return;
     }
 
+    // One interposer swap at a time (docs/linux-proton/sl-interposer-unhook.md): the record, the originals and the
+    // hooked module change together. Never waited for: a caller can be inside DllMain under the loader lock, and the
+    // thread holding the swap may need that lock. A second caller meanwhile leaves its interposer unhooked, and says
+    // so.
+    bool idle = false;
+    if (!s_interposerSwap.compare_exchange_strong(idle, true))
+    {
+        LOG_WARN("Streamline: another sl.interposer is being hooked on another thread; this one is left unhooked");
+        return;
+    }
+    struct SwapDone
+    {
+        ~SwapDone() { s_interposerSwap.store(false); }
+    } swapDone;
+
     // Interposer needs this or it might end in an infinite loop calling itself
     if (hookedInterposerModule == slInterposer)
         return;
@@ -2359,9 +2355,14 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
     auto owner = State::GetOwner();
     State::DisableChecks(owner, "sl.interposer");
 
-    if (o_slSetTag || o_slInit || o_slInit_sl1 || o_slSetTag_sl1 || o_slSetConstants_interposer_sl1 ||
-        o_slEvaluateFeature_sl1)
-        unhookInterposer();
+    // A second interposer: the first one's hooks come off first. If they cannot, this one is not hooked: hooking it
+    // would overwrite the originals the first one's still-attached hooks call.
+    if (s_interposerHooks.Size() != 0 && !unhookInterposer())
+    {
+        LOG_ERROR("Streamline: the previous sl.interposer's hooks could not be removed; this one is left unhooked");
+        State::EnableChecks(owner);
+        return;
+    }
 
     // After unhookInterposer, it resets hookedInterposerModule
     hookedInterposerModule = slInterposer;
@@ -2428,80 +2429,74 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                 LOG_TRACE("Hooking v2");
                 std::lock_guard<std::mutex> detoursLock(g_detoursTransactionMutex);
                 DetourTransactionBegin();
+                s_interposerHooks.Begin();
                 DetourUpdateThread(GetCurrentThread());
 
-                DetourAttach(&(PVOID&) o_slInit, hkslInit);
+                AttachInterposerHook(&(PVOID&) o_slInit, (PVOID) hkslInit);
 
                 if (o_slEvaluateFeature != nullptr)
-                    DetourAttach(&(PVOID&) o_slEvaluateFeature, hkslEvaluateFeature);
+                    AttachInterposerHook(&(PVOID&) o_slEvaluateFeature, (PVOID) hkslEvaluateFeature);
 
                 // With NR on, which tags the game sets is recorded (DlssNr_SlTagInventory.h); fixed at hook time.
                 const bool nrOn = Config::Instance()->DlssNrEnabled.value_or_default();
                 if (nrOn)
                     DlssNr::SlTagInventory::Instance().Arm();
 
-                s_slSetTagDetour = nullptr;
-                s_slSetTagForFrameDetour = nullptr;
-
                 if (State::Instance().activeFgInput == FGInput::NvngxFG ||
                     State::Instance().activeFgInput == FGInput::DLSSG)
                 {
                     if (o_slSetTag != nullptr)
                     {
-                        DetourAttach(&(PVOID&) o_slSetTag, hkslSetTag);
-                        s_slSetTagDetour = hkslSetTag;
+                        AttachInterposerHook(&(PVOID&) o_slSetTag, (PVOID) hkslSetTag);
                     }
 
                     if (o_slSetTagForFrame != nullptr)
                     {
-                        DetourAttach(&(PVOID&) o_slSetTagForFrame, hkslSetTagForFrame);
-                        s_slSetTagForFrameDetour = hkslSetTagForFrame;
+                        AttachInterposerHook(&(PVOID&) o_slSetTagForFrame, (PVOID) hkslSetTagForFrame);
                     }
 
                     if (o_slSetConstants != nullptr)
-                        DetourAttach(&(PVOID&) o_slSetConstants, hkslSetConstants);
+                        AttachInterposerHook(&(PVOID&) o_slSetConstants, (PVOID) hkslSetConstants);
                 }
                 else if (nrOn)
                 {
                     // No Streamline FG input: the tag calls are only noted and forwarded untouched.
                     if (o_slSetTag != nullptr)
                     {
-                        DetourAttach(&(PVOID&) o_slSetTag, hkslSetTagNoteOnly);
-                        s_slSetTagDetour = hkslSetTagNoteOnly;
+                        AttachInterposerHook(&(PVOID&) o_slSetTag, (PVOID) hkslSetTagNoteOnly);
                     }
 
                     if (o_slSetTagForFrame != nullptr)
                     {
-                        DetourAttach(&(PVOID&) o_slSetTagForFrame, hkslSetTagForFrameNoteOnly);
-                        s_slSetTagForFrameDetour = hkslSetTagForFrameNoteOnly;
+                        AttachInterposerHook(&(PVOID&) o_slSetTagForFrame, (PVOID) hkslSetTagForFrameNoteOnly);
                     }
                 }
 
                 if (State::Instance().activeFgInput == FGInput::DLSSG)
                 {
                     if (o_slIsFeatureSupported != nullptr)
-                        DetourAttach(&(PVOID&) o_slIsFeatureSupported, hkslIsFeatureSupported);
+                        AttachInterposerHook(&(PVOID&) o_slIsFeatureSupported, (PVOID) hkslIsFeatureSupported);
 
                     if (o_slIsFeatureLoaded != nullptr)
-                        DetourAttach(&(PVOID&) o_slIsFeatureLoaded, hkslIsFeatureLoaded);
+                        AttachInterposerHook(&(PVOID&) o_slIsFeatureLoaded, (PVOID) hkslIsFeatureLoaded);
 
                     if (o_slGetFeatureRequirements != nullptr)
-                        DetourAttach(&(PVOID&) o_slGetFeatureRequirements, hkslGetFeatureRequirements);
+                        AttachInterposerHook(&(PVOID&) o_slGetFeatureRequirements, (PVOID) hkslGetFeatureRequirements);
 
                     if (o_slGetFeatureVersion != nullptr)
-                        DetourAttach(&(PVOID&) o_slGetFeatureVersion, hkslGetFeatureVersion);
+                        AttachInterposerHook(&(PVOID&) o_slGetFeatureVersion, (PVOID) hkslGetFeatureVersion);
 
                     if (o_slGetFeatureFunction != nullptr)
-                        DetourAttach(&(PVOID&) o_slGetFeatureFunction, hkslGetFeatureFunction);
+                        AttachInterposerHook(&(PVOID&) o_slGetFeatureFunction, (PVOID) hkslGetFeatureFunction);
 
                     if (o_slSetFeatureLoaded != nullptr)
-                        DetourAttach(&(PVOID&) o_slSetFeatureLoaded, hkslSetFeatureLoaded);
+                        AttachInterposerHook(&(PVOID&) o_slSetFeatureLoaded, (PVOID) hkslSetFeatureLoaded);
 
                     if (o_slAllocateResources != nullptr)
-                        DetourAttach(&(PVOID&) o_slAllocateResources, hkslAllocateResources);
+                        AttachInterposerHook(&(PVOID&) o_slAllocateResources, (PVOID) hkslAllocateResources);
 
                     if (o_slFreeResources != nullptr)
-                        DetourAttach(&(PVOID&) o_slFreeResources, hkslFreeResources);
+                        AttachInterposerHook(&(PVOID&) o_slFreeResources, (PVOID) hkslFreeResources);
                 }
 
                 // if (o_slGetNativeInterface != nullptr)
@@ -2511,13 +2506,12 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                 //     DetourAttach(&(PVOID&) o_slSetD3DDevice, hkslSetD3DDevice);
 
                 auto detourResult = DetourTransactionCommit();
+                s_interposerHooks.Committed(detourResult == NO_ERROR);
                 if (detourResult != NO_ERROR)
                 {
                     LOG_ERROR("Failed to hook sl.interposer v2: {:X}", detourResult);
                     o_slSetTag = nullptr;
                     o_slSetTagForFrame = nullptr;
-                    s_slSetTagDetour = nullptr;
-                    s_slSetTagForFrameDetour = nullptr;
                     o_slInit = nullptr;
                     o_slEvaluateFeature = nullptr;
                     o_slAllocateResources = nullptr;
@@ -2553,24 +2547,26 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                 LOG_TRACE("Hooking v1");
                 std::lock_guard<std::mutex> detoursLock(g_detoursTransactionMutex);
                 DetourTransactionBegin();
+                s_interposerHooks.Begin();
                 DetourUpdateThread(GetCurrentThread());
 
                 if (o_slInit_sl1)
-                    DetourAttach(&(PVOID&) o_slInit_sl1, hkslInit_sl1);
+                    AttachInterposerHook(&(PVOID&) o_slInit_sl1, (PVOID) hkslInit_sl1);
 
                 if (IsSL1AndFGActive())
                 {
                     if (o_slSetTag_sl1)
-                        DetourAttach(&(PVOID&) o_slSetTag_sl1, hkslSetTag_sl1);
+                        AttachInterposerHook(&(PVOID&) o_slSetTag_sl1, (PVOID) hkslSetTag_sl1);
 
                     if (o_slSetConstants_interposer_sl1)
-                        DetourAttach(&(PVOID&) o_slSetConstants_interposer_sl1, hkslSetConstants_sl1);
+                        AttachInterposerHook(&(PVOID&) o_slSetConstants_interposer_sl1, (PVOID) hkslSetConstants_sl1);
 
                     if (o_slEvaluateFeature_sl1)
-                        DetourAttach(&(PVOID&) o_slEvaluateFeature_sl1, hkslEvaluateFeature_sl1);
+                        AttachInterposerHook(&(PVOID&) o_slEvaluateFeature_sl1, (PVOID) hkslEvaluateFeature_sl1);
                 }
 
                 auto detourResult = DetourTransactionCommit();
+                s_interposerHooks.Committed(detourResult == NO_ERROR);
                 if (detourResult != NO_ERROR)
                 {
                     LOG_ERROR("Failed to hook sl.interposer v1: {:X}", detourResult);

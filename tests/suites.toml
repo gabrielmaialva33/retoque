@@ -270,6 +270,14 @@ tier = "host"
 timeout = 300
 summary = "[DlssNr] ModelFile: the rule on a fake filesystem (twelve rule mutants must fail), auto unchanged at every loader, UseProxy keeping the driver's file and refusing a named one, identity by path and the four config points frozen at start-up. Not run in a game."
 
+[sl-interposer-unhook]
+path = "sl-interposer-unhook"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Streamline interposer unhook detaches only what was attached: the detour record on a fake Detours that poisons a transaction like the real one (six rule mutants must fail), and hookInterposer/unhookInterposer read off the source (eight mutants). Not run in a game."
+
 [nr-sl-tag-inventory]
 path = "nr-sl-tag-inventory"
 domain = "nr"

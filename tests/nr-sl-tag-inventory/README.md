@@ -34,11 +34,11 @@ Source guards check:
 - the evaluate's inputs noted while armed, before the call;
 - arming and the note-only hooks only with NR on, and the note-only hooks only without a Streamline FG input (the
   gate's whole expression);
-- detach matching attach, with no `slSetConstants` detach on the note-only path;
+- the unhook detaching only what was attached (the record itself is tested by `tests/sl-interposer-unhook`);
 - the line said after the D3D12 status gate and on the Vulkan after-upscale route;
 - the design record.
 
-Twelve source mutants must each fail a guard.
+Eleven source mutants must each fail a guard.
 
 Not proved here:
 

@@ -151,7 +151,8 @@ class StreamlineHooks
     static unsigned int dlssgOptionsGeneration();
     static unsigned int reflexOptionsGeneration();
 
-    static void unhookInterposer();
+    // False when the detach transaction failed: the hooks it recorded are still attached.
+    static bool unhookInterposer();
     static void hookInterposer(HMODULE slInterposer);
     static inline HMODULE hookedInterposerModule = nullptr;
 
@@ -315,9 +316,6 @@ class StreamlineHooks
     static sl::Result hkslSetTagForFrameNoteOnly(const sl::FrameToken& frame, const sl::ViewportHandle& viewport,
                                                  const sl::ResourceTag* resources, uint32_t numResources,
                                                  sl::CommandBuffer* cmdBuffer);
-    // Which detour is attached to each tag call, so unhookInterposer detaches that one.
-    inline static decltype(&slSetTag) s_slSetTagDetour = nullptr;
-    inline static decltype(&slSetTagForFrame) s_slSetTagForFrameDetour = nullptr;
 
     static sl::Result hkslEvaluateFeature(sl::Feature feature, const sl::FrameToken& frame,
                                           const sl::BaseStructure** inputs, uint32_t numInputs,

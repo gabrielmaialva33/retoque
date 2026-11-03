@@ -147,8 +147,8 @@ def check(s):
     # The two hooks the signal rests on are installed whatever the frame-generation input (slSetTag is not).
     attach = body(hooks, 'void StreamlineHooks::hookInterposer(HMODULE slInterposer)')
     fg_gate = attach.index('if (State::Instance().activeFgInput == FGInput::NvngxFG ||')
-    assert attach.index('DetourAttach(&(PVOID&) o_slInit, hkslInit);') < fg_gate
-    assert attach.index('DetourAttach(&(PVOID&) o_slEvaluateFeature, hkslEvaluateFeature);') < fg_gate
+    assert attach.index('AttachInterposerHook(&(PVOID&) o_slInit, (PVOID) hkslInit);') < fg_gate
+    assert attach.index('AttachInterposerHook(&(PVOID&) o_slEvaluateFeature, (PVOID) hkslEvaluateFeature);') < fg_gate
 
     # --- D3D12: one helper, asked by every route before any recording, and by Dispatch as the backstop.
     renderer = s['renderer']

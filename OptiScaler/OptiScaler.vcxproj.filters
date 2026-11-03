@@ -2067,6 +2067,9 @@
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SlTagInventory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\hooks\DetourRecord.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\dlssnr\DlssNr_DirectRuntime.h">
       <Filter>Header Files</Filter>
     </ClInclude>
