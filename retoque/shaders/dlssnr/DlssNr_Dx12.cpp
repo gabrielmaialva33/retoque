@@ -35,6 +35,7 @@
 #include <dlssnr/DlssNr_Funnel.h>
 #include <dlssnr/DlssNr_CrashNote.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
+#include <dlssnr/DlssNr_SlTagInventory.h>
 #include <dxgi1_4.h>
 
 #include "DlssNr_Dx12.h"
@@ -4198,6 +4199,10 @@ void ReportRuntimeStatus(bool passRecorded, const char* skipReason)
     lastRender = renderCount;
     lastPasses = passCount;
     lastAt = now;
+
+    // Which buffers the game tags for Streamline, said when that changes (DlssNr_SlTagInventory.h; log only).
+    if (std::string tags; DlssNr::SlTagInventory::Instance().TakeLine(tags, DlssNr::SlTagInventory::NowMs()))
+        LOG_INFO("{}", tags);
 
     if (renders == 0 && presents == 0)
         return;

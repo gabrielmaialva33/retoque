@@ -136,6 +136,12 @@ def check(s):
         hook = body(hooks, signature)
         tags = hook.index('DlssNr::SlNativeNr::OnTags(')
         assert tags < hook.index('return o_'), f'{name} returns before noting its tags'
+    # With NR on and no Streamline FG input, the note-only tag hooks stand in for those two (DlssNr_SlTagInventory.h).
+    for name, signature in (('slSetTag', 'sl::Result StreamlineHooks::hkslSetTagNoteOnly('),
+                            ('slSetTagForFrame', 'sl::Result StreamlineHooks::hkslSetTagForFrameNoteOnly(')):
+        hook = body(hooks, signature)
+        tags = hook.index('DlssNr::SlNativeNr::OnTags(')
+        assert tags < hook.index('return o_'), f'the note-only {name} hook does not note its tags'
     for name, part in (('init', init), ('evaluate', evaluate)):
         assert 'AskInto(' not in part and 'StandDown' not in part, f'the {name} hook decides'
     # The two hooks the signal rests on are installed whatever the frame-generation input (slSetTag is not).
@@ -264,6 +270,9 @@ mutants = {
         'hooks', 'DlssNr::SlNativeNr::OnEvaluate(feature, result == sl::Result::eOk);',
         'DlssNr::SlNativeNr::OnEvaluate(feature, true);'),
     'tags not noted': mutate('hooks', 'DlssNr::SlNativeNr::OnTags(tags, numTags);', ''),
+    'tags not noted, FG input hook': mutate(
+        'hooks', "    // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).\n"
+        '    DlssNr::SlNativeNr::OnTags(tags, numTags);', ''),
     'hook decides': mutate('hooks', 'DlssNr::SlNativeNr::OnEvaluate(feature, result == sl::Result::eOk);',
                            'DlssNr::SlNativeNr::OnEvaluate(feature, result == sl::Result::eOk);\n    '
                            'DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), lines, 0);'),

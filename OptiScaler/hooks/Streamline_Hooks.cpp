@@ -11,6 +11,7 @@
 #include <framegen/dlssg/MfgUnlock.h>
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
+#include <dlssnr/DlssNr_SlTagInventory.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
 #include <hooks/Streamline_DlssgRequest.h>
 #include <hooks/Streamline_LogRepeat.h>
@@ -505,11 +506,58 @@ sl::Result StreamlineHooks::hkslSetFeatureLoaded(sl::Feature feature, bool loade
     return o_slSetFeatureLoaded(feature, loaded);
 }
 
+// Which buffers the game tags, recorded only while NR is on (DlssNr_SlTagInventory.h). On D3D12 the resource's own
+// description gives the size and format, which Streamline does not require the game to fill in.
+static void NoteTagInventory(const sl::ResourceTag* tags, uint32_t count, uint32_t via, sl::RenderAPI api)
+{
+    auto& inventory = DlssNr::SlTagInventory::Instance();
+    if (!inventory.Armed())
+        return;
+    DlssNr::SlTagInventory::NoteTags(
+        inventory, tags, count, via,
+        [api](const sl::Resource& resource, DlssNr::SlTagInventory::Shape& shape)
+        {
+            // Only the two resource types whose native pointer is an ID3D12Resource.
+            if (api != sl::RenderAPI::eD3D12 ||
+                (resource.type != sl::ResourceType::eTex2d && resource.type != sl::ResourceType::eBuffer))
+                return;
+            const auto desc = static_cast<ID3D12Resource*>(resource.native)->GetDesc();
+            if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+            {
+                // A buffer's width is bytes, not pixels: said as a buffer, with no image size.
+                shape = {};
+                shape.buffer = true;
+                return;
+            }
+            shape.width = desc.Width > 0xFFFFFFFFull ? 0xFFFFFFFFu : static_cast<uint32_t>(desc.Width);
+            shape.height = desc.Height;
+            shape.format = static_cast<uint32_t>(desc.Format);
+        });
+}
+
+sl::Result StreamlineHooks::hkslSetTagNoteOnly(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
+                                               uint32_t numTags, sl::CommandBuffer* cmdBuffer)
+{
+    DlssNr::SlNativeNr::OnTags(tags, numTags);
+    NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);
+    return o_slSetTag(viewport, tags, numTags, cmdBuffer);
+}
+
+sl::Result StreamlineHooks::hkslSetTagForFrameNoteOnly(const sl::FrameToken& frame, const sl::ViewportHandle& viewport,
+                                                       const sl::ResourceTag* resources, uint32_t numResources,
+                                                       sl::CommandBuffer* cmdBuffer)
+{
+    DlssNr::SlNativeNr::OnTags(resources, numResources);
+    NoteTagInventory(resources, numResources, DlssNr::SlTagInventory::kViaSetTagForFrame, renderApi);
+    return o_slSetTagForFrame(frame, viewport, resources, numResources, cmdBuffer);
+}
+
 sl::Result StreamlineHooks::hkslSetTag(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
                                        uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
     // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).
     DlssNr::SlNativeNr::OnTags(tags, numTags);
+    NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);
 
     if (renderApi == sl::RenderAPI::eD3D11)
     {
@@ -600,6 +648,7 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
 {
     // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).
     DlssNr::SlNativeNr::OnTags(resources, numResources);
+    NoteTagInventory(resources, numResources, DlssNr::SlTagInventory::kViaSetTagForFrame, renderApi);
 
     if (renderApi == sl::RenderAPI::eD3D11)
     {
@@ -701,6 +750,17 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
                     State::Instance().slFGInputs.reportResource(*tag, cmdBuffer, (uint32_t) frame);
                 }
             }
+        }
+    }
+
+    // Tags passed as the evaluate's own inputs, recorded only while NR is on (DlssNr_SlTagInventory.h).
+    if (inputs != nullptr && DlssNr::SlTagInventory::Instance().Armed())
+    {
+        for (uint32_t i = 0; i < numInputs; i++)
+        {
+            if (inputs[i] != nullptr && inputs[i]->structType == sl::ResourceTag::s_structType)
+                NoteTagInventory((const sl::ResourceTag*) inputs[i], 1, DlssNr::SlTagInventory::kViaEvaluate,
+                                 renderApi);
         }
     }
 
@@ -2216,13 +2276,20 @@ void StreamlineHooks::unhookInterposer()
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
 
+    // The detour attached at hook time, or upstream's as before when none was recorded. The note-only path attaches
+    // no slSetConstants hook, so it detaches none: detaching an export that was never attached fails the whole
+    // transaction. With nothing recorded (NR off, no Streamline FG input) upstream's unconditional detaches stay.
+    const bool noteOnlyTags =
+        s_slSetTagDetour == hkslSetTagNoteOnly || s_slSetTagForFrameDetour == hkslSetTagForFrameNoteOnly;
+
     if (o_slSetTag)
-        DetourDetach(&(PVOID&) o_slSetTag, hkslSetTag);
+        DetourDetach(&(PVOID&) o_slSetTag, s_slSetTagDetour != nullptr ? s_slSetTagDetour : hkslSetTag);
 
     if (o_slSetTagForFrame)
-        DetourDetach(&(PVOID&) o_slSetTagForFrame, hkslSetTagForFrame);
+        DetourDetach(&(PVOID&) o_slSetTagForFrame,
+                     s_slSetTagForFrameDetour != nullptr ? s_slSetTagForFrameDetour : hkslSetTagForFrame);
 
-    if (o_slSetConstants)
+    if (o_slSetConstants && !noteOnlyTags)
         DetourDetach(&(PVOID&) o_slSetConstants, hkslSetConstants);
 
     if (o_slEvaluateFeature)
@@ -2259,6 +2326,8 @@ void StreamlineHooks::unhookInterposer()
         o_slInit_sl1 = nullptr;
         o_slSetTag = nullptr;
         o_slSetTagForFrame = nullptr;
+        s_slSetTagDetour = nullptr;
+        s_slSetTagForFrameDetour = nullptr;
         o_slEvaluateFeature = nullptr;
         o_slSetConstants = nullptr;
         o_slSetTag_sl1 = nullptr;
@@ -2366,17 +2435,46 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                 if (o_slEvaluateFeature != nullptr)
                     DetourAttach(&(PVOID&) o_slEvaluateFeature, hkslEvaluateFeature);
 
+                // With NR on, which tags the game sets is recorded (DlssNr_SlTagInventory.h); fixed at hook time.
+                const bool nrOn = Config::Instance()->DlssNrEnabled.value_or_default();
+                if (nrOn)
+                    DlssNr::SlTagInventory::Instance().Arm();
+
+                s_slSetTagDetour = nullptr;
+                s_slSetTagForFrameDetour = nullptr;
+
                 if (State::Instance().activeFgInput == FGInput::NvngxFG ||
                     State::Instance().activeFgInput == FGInput::DLSSG)
                 {
                     if (o_slSetTag != nullptr)
+                    {
                         DetourAttach(&(PVOID&) o_slSetTag, hkslSetTag);
+                        s_slSetTagDetour = hkslSetTag;
+                    }
 
                     if (o_slSetTagForFrame != nullptr)
+                    {
                         DetourAttach(&(PVOID&) o_slSetTagForFrame, hkslSetTagForFrame);
+                        s_slSetTagForFrameDetour = hkslSetTagForFrame;
+                    }
 
                     if (o_slSetConstants != nullptr)
                         DetourAttach(&(PVOID&) o_slSetConstants, hkslSetConstants);
+                }
+                else if (nrOn)
+                {
+                    // No Streamline FG input: the tag calls are only noted and forwarded untouched.
+                    if (o_slSetTag != nullptr)
+                    {
+                        DetourAttach(&(PVOID&) o_slSetTag, hkslSetTagNoteOnly);
+                        s_slSetTagDetour = hkslSetTagNoteOnly;
+                    }
+
+                    if (o_slSetTagForFrame != nullptr)
+                    {
+                        DetourAttach(&(PVOID&) o_slSetTagForFrame, hkslSetTagForFrameNoteOnly);
+                        s_slSetTagForFrameDetour = hkslSetTagForFrameNoteOnly;
+                    }
                 }
 
                 if (State::Instance().activeFgInput == FGInput::DLSSG)
@@ -2418,6 +2516,8 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                     LOG_ERROR("Failed to hook sl.interposer v2: {:X}", detourResult);
                     o_slSetTag = nullptr;
                     o_slSetTagForFrame = nullptr;
+                    s_slSetTagDetour = nullptr;
+                    s_slSetTagForFrameDetour = nullptr;
                     o_slInit = nullptr;
                     o_slEvaluateFeature = nullptr;
                     o_slAllocateResources = nullptr;

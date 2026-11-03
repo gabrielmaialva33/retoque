@@ -22,6 +22,7 @@
 #include <dlssnr/DlssNr_Session.h>
 #include <dlssnr/DlssNr_RenderSize.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
+#include <dlssnr/DlssNr_SlTagInventory.h>
 #include <misc/DeferredRelease.h>
 #include <dlssnr/DlssNr_WorkingScale.h>
 
@@ -1242,6 +1243,9 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), lines, DlssNr::SlNativeNr::NowMs());
         for (const auto& line : lines)
             LOG_INFO("{}", line);
+        // Which buffers the game tags for Streamline, said when that changes (DlssNr_SlTagInventory.h; log only).
+        if (std::string tags; DlssNr::SlTagInventory::Instance().TakeLine(tags, DlssNr::SlTagInventory::NowMs()))
+            LOG_INFO("{}", tags);
         if (why != nullptr)
         {
             g_vkResetOnReturn = true;

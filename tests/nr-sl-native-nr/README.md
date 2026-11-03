@@ -18,13 +18,13 @@ behaviour before the detector (NR runs on top of the game's), must fail those ca
 constant may be caught by the compiler.
 
 Source guards read the hooks (slInit noted before OptiScaler edits the preferences; the evaluate noted after
-Streamline answered, as `eOk`; the tag hooks noting before any return; no hook decides; slInit and slEvaluateFeature
+Streamline answered, as `eOk`; the tag hooks, and the note-only ones installed with NR on and no Streamline FG input, noting before any return; no hook decides; slInit and slEvaluateFeature
 attached outside the frame-generation gate), the D3D12 routes (`EvaluateAfterUpscale`, `ScopedPreUpscale` standing
 down rather than declining, `RunPresentPass` before any copy, and `Dispatch` as the backstop beside
 `PausedWithoutFrameGen`, before any recording), the Vulkan after-upscale route (before the model is claimed), the
 Vulkan present host (`NrSkip::GameNr` before the claim, no log under its lock, nothing freed), the panel line (only
 with NR on, never a control, in the pt-BR pack), the vendored 2.11.1 headers (not edited) and the design record.
-Sixteen source mutants must each fail a guard.
+Seventeen source mutants must each fail a guard.
 
 Not proved here: that any game drives its NR through `slEvaluateFeature(1004)` (the public SDK has no `sl_dlss_nr.h`),
 that an accepted evaluate means NR rendered, the picture in NBA 2K27, Portal RTX or Hogwarts Legacy, or anything on a
