@@ -73,6 +73,7 @@ experiment.
 | `DlssNr_Proxy.h/.cpp` | the experiment in reaching the model through the driver core instead of the forwarder; see `../../docs/history/FORWARDER_INVESTIGATION.md` |
 | `forwarder/` | the caller-gate shim, built by `dlssnr_forwarder.vcxproj` into the release layout |
 | `DlssNr_DirectRuntime.h/.cpp` | `ModelLoader=direct`: the forwarder's D3D12 calls made from OptiScaler.dll, passing the caller check through the model's own `GetModuleFileNameW/A` imports (wilsjo2's technique); `../../docs/history/FORWARDER_INVESTIGATION.md` |
+| `DlssNr_ModelFile.h/.cpp`, `DlssNr_ModelFileFind.h` | `[DlssNr] ModelFile`: the start-up configuration, named-file resolution, labels and loaded-module lookup; `auto` keeps the legacy search at each loader, and UseProxy stays separate (refused while a file is named); `../../docs/dlssnr/design/model-file.md`, tested by `tests/nr-model-file` |
 | `DlssNr_DiagnosticReport.h` | the panel's "Copy NR diagnostics" text: `Inputs` (values the menu already reads, fetched on the click), `Build` (Build, Detected, Used, Settings, GPU timing and LSFG sections; NR off is the build and one line), `StripFrameFields` (the timing contract's settings only) and `Redact` (absolute paths to `<path>`); standard library only; `../../docs/dlssnr/design/diagnostic-export.md`, tested by `tests/nr-diagnostic-report` |
 | `DlssNr_Funnel.h` | the engagement funnel: per route, evaluates eligible with NR on, ran, and each named decline, balancing to zero; lock-free, constant-initialised, read by the diagnostic export and the crash note; only the D3D12 after-upscale route is counted so far; `../../docs/dlssnr/design/engagement-funnel.md`, tested by `tests/nr-funnel` |
 | `DlssNr_CrashNote.h/.cpp` | the last-chance crash note: an unhandled-exception filter installed at the first evaluate with NR on, chained to the one it replaced, writing three lines (code, module+offset by export name, last NR stage, funnel) to OptiScaler's log through a handle opened at install, without allocating; the formatting is the header; given back on an unload by `dllmain.cpp`; `../../docs/dlssnr/design/engagement-funnel.md`, tested by `tests/nr-crash-note` |
@@ -94,6 +95,8 @@ experiment.
 | `DlssNr_Enlarge.h` | Transfer 2's rules as pure functions: what the resolve is sent and why, the Vulkan 2 -> 1 mapping, the menu's index table, when the private SR's history resets; `../../docs/dlssnr/design/dlss-enlargement.md`, tested by `tests/nr-enlarge` |
 | `DlssNr_DeviceMatch.h` | which device a resource belongs to under a wrapper layer (ReShade, Streamline proxies): the D3D12 routes take their device from the command list or queue, and a resource may report another interface on the same adapter; after jlrouzies' `1c63318d` / `6724d677` (GPL-3.0); `../../docs/dlssnr/design/dx12-robustness.md`, tested by `tests/nr-wrapped-device` |
 | `DlssNr_SlNativeNr.h` | the game's own NR through Streamline 2.14's `sl.dlss_nr` (feature 1004; constants cited from Streamline v2.14.1, not in the vendored 2.11.1): the hooks note an accepted evaluate, a load request and the uplift tags; every route stands down while the game's NR runs and for 5 s after, counted and logged, with a panel line. Header-only; `../../docs/dlssnr/design/streamline-native-nr.md`, tested by `tests/nr-sl-native-nr` |
+| `DlssNr_SlTagInventory.h` | which buffers the game tags for Streamline: a process-latched, log-only observation of its declarations, armed at hook time with NR on; it validates no contents and supplies no HUD-less or UI-alpha composition; `../../docs/dlssnr/design/sl-tag-inventory.md`, tested by `tests/nr-sl-tag-inventory` |
+| `DlssNr_GpuTiming.h/.cpp`, `DlssNr_PresentCpuTiming.h` | `[DlssNr] GpuTiming`: independent fence-confirmed GPU sample regions (Dispatch/model, Present and its Dispatch split, guide capture, HDR conversion), each with its own pool and sampling phase, and a separate steady-clock CPU stream of the Present route's recording, submission and existing waits; never sum nested/overlapping regions or add CPU waits to GPU time; `../../docs/dlssnr/design/gpu-timing.md`, tested by `tests/nr-gpu-timing` and `tests/nr-timing-boundary` |
 | `DlssNr_MultiView.h` | several views in one colour allocation within a frame (multi-monitor, split screen): detected, and every evaluate stood down, counted; janblade's `1105908f` detector only (GPL-3.0), no view pick or per-view model; `../../docs/dlssnr/design/dx12-robustness.md`, tested by `tests/nr-multi-view` |
 | `DlssNr_PrivateSr.h/.cpp` | Transfer 2's private DLSS Super Resolution, the NGX half: its own parameter table and handle through `NVNGXProxy`, created and evaluated with wilsjo2's parameters |
 | `shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp` | D3D12 present guide capture, identity and bridge consumption; shared state remains in the core renderer |
@@ -101,6 +104,7 @@ experiment.
 | `shaders/dlssnr/DlssNr_Common.h` | the constant buffer, shared by the host and the shader |
 | `shaders/dlssnr/precompile/dlssnr.hlsl` | **the live shader**: encode (scale and sRGB-encode with a soft knee), area downsample, resolve (RenoDX's two-branch composition, OkLab hue correction, AP1 clamp, the guard) |
 | `shaders/dlssnr/precompile/DlssNr_Shader.h`, `DlssNr_Shader_Vk.h` | that shader compiled, as bytes (D3D12 and Vulkan). The other passes' bytecode sits beside it, one `DlssNr_<Pass>_Shader.h` each: `Cadence`, `DetailStats`, `Guides`, `MotionProbe`, `PeripheryColour`, `PeripheryGuides`, `PeripheryUnpack`, `PresentHdr`, `Pulse`, `Stabilizer`, `UiMask` (the optional ones are made from their `.hlsl` by the command at the top of each) |
+| `shaders/dlssnr/precompile/DlssNr_OriginalInTarget_Shader.h` | the D3D12-only keepless permutation of `dlssnr.hlsl` (`NR_ORIGINAL_IN_TARGET`), chosen per frame by the gate in `DlssNr_Dx12.cpp`: the encode omits `gKeep` and the resolve reads the original from `gTarget`. The default DXIL and SPIR-V remain separate and unchanged; `../../docs/dlssnr/design/original-in-target.md`, tested by `tests/nr-dispatch` and `tests/nr-invariants` |
 | `shaders/dlssnr/DlssNr_Stabilizer_Dx12.h/.cpp`, `precompile/dlssnr_stabilizer.hlsl` | the output stabilizer, off by default; `../../docs/dlssnr/design/output-stabilizer.md` |
 | `shaders/dlssnr/DlssNr_PresentHdr_Dx12.h/.cpp`, `precompile/dlssnr_present_hdr.hlsl` | HDR10 and scRGB at present (`[DlssNr] HdrPresent`, off by default): the decode into linear Rec.709 before the composition and the encode back with the original as reference after it, on the D3D12 present route and the D3D11 bridge (not Vulkan); DXIL only, the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/hdr-present-conversion.md` |
 | `DlssNr_Cadence.h`, `shaders/dlssnr/DlssNr_Cadence_Dx12.h/.cpp`, `precompile/dlssnr_cadence.hlsl`, `precompile/dlssnr_cadence_rule.h` | model cadence, off by default: the model every Nth frame, its edit carried along the motion in between, and its smoothing (each new answer walked in over the interval, the shown light rate-limited); the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/model-cadence.md`, `../../docs/dlssnr/design/cadence-smoothing.md` |
@@ -176,8 +180,12 @@ zlib). `Licenses/RTXRemix_ATTRIBUTION.txt` carries both texts and says which par
 
 The model's snippet resolves the module that owns its caller's return address and refuses any whose
 path does not contain `nvngx.dll`. The forwarder (`nvngx.dll_dlssnr.dll`, ~115 KB) exists only to
-satisfy that check; every NGX call to the model originates from it. It contains no NVIDIA code, is
-part of the solution, and builds with everything else.
+satisfy that check. It contains no NVIDIA code, is part of the solution, and builds with everything else.
+
+The forwarder satisfies the model's caller-path check on the default D3D12 route and on native Vulkan.
+`ModelLoader=direct` makes the D3D12 calls from OptiScaler and adapts the model's caller-path imports; that
+route needs no forwarder. The D3D11 probe still uses the forwarder. `ModelFile` selects the user-supplied
+model file at startup; it does not select the caller module.
 
 ## Design notes worth knowing before changing anything
 
@@ -229,18 +237,28 @@ part of the solution, and builds with everything else.
   Model cadence (`../../docs/dlssnr/design/model-cadence.md`) is not that either, and does hit this dead end in motion: it
   is an FPS option that moves the last answer onto the frames between model calls, stores and carries no blend of
   two answers, and is off by default because it costs stability in motion. Its smoothing
-  (`../../docs/dlssnr/design/cadence-smoothing.md`, on whenever the cadence runs) is the one place two answers meet in
+  (`../../docs/dlssnr/design/cadence-smoothing.md`) is the one place two answers meet in
   a pixel: what is shown walks from one answer to the next over the interval, finite and never fed back, gated by the
   carry's acceptance -- the experiment `model-cadence.md` deferred, measured with the pulse metric.
+  CadenceSmoothing is separately opt-in (default false) and acts only while cadence is active. When enabled, the
+  shown contribution walks toward the new answer over the interval; the stored model edit/history is not a
+  temporal blend.
 - **The model's own UI correction went with it.** It only ever acted on a UI layer the game tagged
   through Streamline, which almost no title does, and it could not be shown to change anything when
   one did. Removing it removed the Streamline tag hook as well, so the module no longer touches that
   file at all. The model is created with the parameter at its own default.
+  Since then (2026-11-03 source), Streamline hooks observe the game's native NR and maintain a log-only tag
+  inventory (`DlssNr_SlNativeNr.h`, `DlssNr_SlTagInventory.h`). They do not yet supply the planned
+  HUD-less/UI-alpha composition paths.
 - **HUD detection was tried and removed.** Measured with grain, chromatic aberration and depth of
   field all off, a static HUD pixel still scored 0.31 on the "did not change" test, because game
   interfaces are translucent and animated. Separation from the world was 2.5:1 — not a detector at
   any threshold. The interface is safe because the pass runs before it is drawn, not because
   anything looks for it.
+  That last sentence holds only where the pass runs before the HUD is drawn. HUD handling depends on
+  placement and the available mask/input. A Present pass sees the already composed frame and may edit the
+  HUD; running before frame generation does not mean running before HUD drawing. The rejected heuristic HUD
+  detector remains rejected.
 - **The split pipeline was removed.** It ran Ray Reconstruction at 1:1, the model on that frame,
   then an internal Super Resolution pass to the target size, to give the model a real temporal
   accumulator behind it. It was removed once the plain path did the same job — but note that the

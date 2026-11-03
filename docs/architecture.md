@@ -8,7 +8,7 @@ not universal compatibility or performance; those are bounded by the [capability
 | Area | Responsibility | Boundary to preserve |
 |---|---|---|
 | `OptiScaler/` | Upstream proxy/loading, hooks, config, input/output providers and overlay integration | Keep upstream paths and minimize fork-owned changes |
-| `retoque/dlssnr/` | NR public API, runtime/model integration, routing, guides, capture, status and menu | External call sites remain narrow; NR off is inert |
+| `retoque/dlssnr/` | NR public API, runtime/model integration, routing, guides, capture, status and menu | External call sites remain narrow; NR off is inert. The Streamline tag inventory, once armed at Streamline hook time (start-up) with NR on, keeps noting tags after NR is turned off in the menu; no NR rendering results from it ([sl-tag-inventory](dlssnr/design/sl-tag-inventory.md)) |
 | `retoque/shaders/dlssnr/` | GPU pass orchestration, D3D12 execution units and embedded shader sources/bytecode | CPU/HLSL layout and submission/lifetime contracts |
 | `retoque/shaders/synth_motion/` | Shared motion estimation used by NR and synthesized FG | No duplicate estimation when the consumers share a frame |
 | `retoque/lsfg/` | LSFG dispatch graph, library loading, UI and MFG presenter | User supplies licensed shader/model data; no redistribution |

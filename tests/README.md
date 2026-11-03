@@ -20,7 +20,7 @@ python3 tests/run_all.py --domain nr,transport --strict
 python3 tests/run_all.py --list --domain fg --format markdown
 python3 tests/run_all.py --only nr-menu,nr-multipass -v
 python3 tests/run_all.py --strict --report /tmp/retoque-results.json
-python3 tests/<name>/run.py         # one suite, unchanged, no driver involved
+python3 tests/<name>/run.py         # one suite; follow its README, tier and prerequisites
 ```
 
 `run_all.py` never replaces a suite. It reads `suites.toml`, decides what can run
@@ -345,7 +345,9 @@ production headers or source slices with local fakes under AddressSanitizer and 
   restarting the chain, no match no fill, UI protection. Smoothing (`docs/dlssnr/design/cadence-smoothing.md`):
   the walk's weights and per-frame decisions, weight 0 equal to the carry to the bit, a drift arriving in equal
   steps and moved with the surface, disocclusions and the interface taking the answer at once, the light
-  limiter's rule, space and rate. Source guards on the pass. No GPU, no shader.
+  limiter's rule, space and rate. The first-carry coarse-history orchestration
+  (`docs/dlssnr/design/cadence-deferred-coarse.md`) against legacy pixel/reference controls. Source guards on the
+  pass. No GPU, no shader.
 - `nr-dispatch` — composition constants, descriptor slots and partial initialization cleanup.
 - `nr-enlarge` — Transfer 2, the model's edit enlarged by a private DLSS Super Resolution: the
   decision table (what the resolve is sent and why, supersampling and Vulkan included), the carrier
@@ -354,7 +356,8 @@ production headers or source slices with local fakes under AddressSanitizer and 
   D3D12 fakes that chain every barrier. No GPU, NGX or shader.
 - `nr-gpu-timing` — portable timing validation, plus the duplicate-execution
   guard at the submission boundary, and the HDR present conversion's own sample (its decode and encode,
-  outside the Dispatch interval).
+  outside the Dispatch interval). Also independent Present/guide-capture GPU regions, the four-stamp Present
+  split and the separate Present CPU stream under host fakes; these do not prove native D3D12 behavior.
 - `nr-gpu-timing-config` — the Config GPU-timing transactions and their INI
   expressions.
 - `nr-invariants` — the `DEVELOPMENT.md` §4 guards against the live tree: config
@@ -387,6 +390,8 @@ production headers or source slices with local fakes under AddressSanitizer and 
   slots (for `ModelLoader=direct`) and the NGX loader's feature-18 table (the 616.64 route), against
   synthetic PE64 images and, when present, this machine's real `_nvngx.dll` and model; the 616.64
   faulting-pairing predicate; and the direct runtime held to the forwarder's writes. Runs no model.
+- `nr-model-file` — `[DlssNr] ModelFile`: the startup selection rule, auto preservation, named refusal, labels
+  and source wiring; backend loading remains a runtime boundary.
 - `nr-multipass` — portable multi-pass chain helpers.
 - `nr-pass-config` — the pass-settings codec and the four-point Config round trip
   for the master keys.
@@ -409,10 +414,12 @@ production headers or source slices with local fakes under AddressSanitizer and 
   streak and nothing else is; still, grainy scenery beside a swaying silhouette is never protected
   (the rim the first slice left in PCSX2); a vanished glyph loses its protection at once.
 - `nr-shutdown` — the private NGX core shutdown adapter and its public calling contract.
+- `nr-sl-tag-inventory` — the Streamline tag inventory: declaration accumulation, lifecycles, packing/snapshot
+  and hook wiring; it does not establish game-buffer content or Present readability.
 - `nr-submission` — the command-list submission lifetime model that gates
   resource release.
 - `nr-timing-boundary` — timing metadata and UI boundary, and where the timing
-  markers sit.
+  markers sit. Also the Present split placement/labels and its separation from CPU waits.
 - `nr-vk-extensions` — the Vulkan device-extension merge the NR hook hands `vkCreateDevice`,
   compiled against the real Vulkan headers: `VK_KHR_` and `VK_EXT_buffer_device_address` never
   leave it together, and the one the game asked for is the one kept.

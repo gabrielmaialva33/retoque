@@ -69,8 +69,9 @@ Do not assume the main branch still points where another session left it; inspec
 | [2026-10-30](linux-proton/upstream-20261030.md) | Custom DLSSG libraries, Vulkan FFX nvngx FG and extended DLL search |
 | [2026-11-03](linux-proton/upstream-20261103.md) | Plugin API, occluded swapchain creation and Pascal FSR4 pipeline retry |
 
-The archived [patch table](history/maintainer-notes-20261029.md#linux--proton-patches) preserves earlier decisions,
-including ports deliberately not taken. Check current source before reusing its open-PR status.
+The archived [patch table](history/maintainer-notes-20261029.md#linux--proton-patches-this-forks-own-layer)
+preserves earlier decisions, including ports deliberately not taken. Check current source before reusing its
+open-PR status.
 
 ## Validation route matrix
 

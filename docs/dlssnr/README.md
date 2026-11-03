@@ -23,6 +23,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 - [model-cadence.md](design/model-cadence.md): run the model every Nth frame and carry its edit along the motion vectors in between.
 - [look-model-half-rate.md](design/look-model-half-rate.md): offline bilateral look-model experiment; better fast motion than plain hold, worse stable/recovery fidelity; no production port recommended yet.
 - [cadence-smoothing.md](design/cadence-smoothing.md): walk each new answer in over the interval and rate-limit the shown light, against the cadence's pulse.
+- [cadence-deferred-coarse.md](design/cadence-deferred-coarse.md): build the unchanged coarse history at the first carry, not each Record; dated replay/game comparison, first-carry cost and limits, with no demonstrated overall FPS gain (2026-11-01).
 - [model-310-9-16.md](design/model-310-9-16.md): NVIDIA's October weight set (310.9.16), where the file comes from, what the preset selects, and the panel line that reports which set the model built.
 - [vit-skip.md](design/vit-skip.md): kernel-variant profiling of the model and a proposal to skip its ViT bottleneck on alternating frames.
 - [dispatch-cpu-overhead.md](design/dispatch-cpu-overhead.md): persistent mapping of the upload buffers and CBV setup for the composition pass.
@@ -45,7 +46,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 
 These are records, not designs.
 
-- [gpu-timing.md](design/gpu-timing.md): the contract for fence-confirmed NR GPU timing.
+- [gpu-timing.md](design/gpu-timing.md): the contract for fence-confirmed NR GPU timing: Dispatch/model, Present/capture/HDR GPU intervals, the Present split around Dispatch, and the separate CPU recording/submission/wait stream.
 - [detail-measure.md](design/detail-measure.md): the in-game "Measure detail" metric, ported from janblade's fork.
 - [pulse-metric.md](design/pulse-metric.md): the light step per frame, model frames against carried ones: model cadence's pulse as a number.
 - [zero-motion-detection.md](design/zero-motion-detection.md): the game's motion vectors read all zero in a moving scene, found by a sparse probe and treated as zero guides under `ZeroGuideReset`.
