@@ -3,6 +3,7 @@
 #include "Config.h"
 
 #include "Util.h"
+#include "dlssnr/DlssNr_ModelFile.h"
 
 #include "nvapi/fakenvapi.h"
 #include <misc/IdentifyGpu.h>
@@ -42,10 +43,23 @@ static inline bool isFloat(const std::string& str, float& value)
     return (iss >> value) && iss.eof();
 }
 
+// [DlssNr] ModelFile: nullopt for auto (also empty or blank), the value as written otherwise.
+static std::optional<std::string> NamedModelFile(const char* value)
+{
+    const std::string text = value != nullptr ? value : "";
+    if (DlssNr::ModelFile::IsAuto(text))
+        return std::nullopt;
+    return text;
+}
+
 Config::Config()
 {
     absoluteFileName = Util::DllPath().parent_path() / fileName;
     Reload(absoluteFileName);
+
+    // [DlssNr] ModelFile as the first load left it, the default when that load failed; never changed after, so no
+    // later reload or menu save makes a loader use another file in this process (retoque/dlssnr/DlssNr_ModelFile.h).
+    _dlssNrModelFileAtStart = DlssNrModelFile.value_or_default();
 }
 
 Config::DlssNrGpuTimingSettings Config::GetDlssNrGpuTimingSettings() const
@@ -468,6 +482,11 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrMatchGuides.set_from_config(readBool("DlssNr", "MatchGuides"));
             DlssNrRenderMotionScale.set_from_config(readBool("DlssNr", "RenderMotionScale"));
             DlssNrSynthMotionSource.set_from_config(readString("DlssNr", "SynthMotionSource", true));
+            {
+                // Not through readString: that writes the value into the log's parameter list, and this may be a
+                // path of the user's own. The loaders read the value frozen by the constructor.
+                DlssNrModelFile.set_from_config(NamedModelFile(ini.GetValue("DlssNr", "ModelFile", "auto")));
+            }
             DlssNrPresentSync.set_from_config(readBool("DlssNr", "PresentSync"));
             DlssNrHdrPresent.set_from_config(readBool("DlssNr", "HdrPresent"));
             DlssNrTransferStrength.set_from_config(readFloat("DlssNr", "TransferStrength"));
@@ -1910,6 +1929,7 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->DlssNrRenderMotionScale.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SynthMotionSource",
                      Instance()->DlssNrSynthMotionSource.value_for_config_or("auto").c_str());
+        ini.SetValue("DlssNr", "ModelFile", Instance()->DlssNrModelFile.value_for_config_or("auto").c_str());
         ini.SetValue("DlssNr", "PresentSync", GetBoolValue(Instance()->DlssNrPresentSync.value_for_config()).c_str());
         ini.SetValue("DlssNr", "HdrPresent", GetBoolValue(Instance()->DlssNrHdrPresent.value_for_config()).c_str());
         ini.SetValue("DlssNr", "TransferStrength",

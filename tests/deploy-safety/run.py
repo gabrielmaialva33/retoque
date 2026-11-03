@@ -609,18 +609,54 @@ def release_wrapper_passthrough(tmp):
 
 
 @case
+def uninstall_never_touches_a_model_an_older_receipt_lists(tmp):
+    # A deploy before 2026-11-03 copied a renamed model or a DlssNrModels file as a support file and recorded it;
+    # the receipt even lists a backup and a rename of model copies. --uninstall must leave every one in place.
+    src = make_src(tmp, 'oldreceipt')
+    game = make_game(tmp)
+    deploy_ok(game, src=src)
+    renamed = game / 'OptiScaler' / 'nvngx_dlssnr_310.8.dll'
+    folder = game / 'OptiScaler' / 'DlssNrModels' / '310.8' / 'nvngx_dlssnr.dll'
+    moved = game / 'nvngx_dlssnr_moved.dll'
+    kept = game / '.retoque' / 'backup' / 'old' / 'nvngx_dlssnr_old.dll'
+    for path, data in ((renamed, b'renamed model'), (folder, b'model folder'), (moved, b'moved model'),
+                       (kept, b'backed-up model')):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    lines = [f'file\t{sha(renamed)}\tOptiScaler/nvngx_dlssnr_310.8.dll',
+             f'file\t{sha(folder)}\tOptiScaler/DlssNrModels/310.8/nvngx_dlssnr.dll',
+             f'backup\t{sha(kept)}\tnvngx_dlssnr_old.dll\t.retoque/backup/old/nvngx_dlssnr_old.dll',
+             f'rename\t{sha(moved)}\tnvngx_dlssnr_original.dll\tnvngx_dlssnr_moved.dll']
+    path = game / '.retoque' / 'receipt.txt'
+    path.write_text(path.read_text() + '\n'.join(lines) + '\n')
+    r = run(game, '--uninstall')
+    expect(r.returncode == 0, 'uninstall with model lines in the receipt')
+    for p in (renamed, folder, moved, kept):
+        expect(p.exists(), f'{p.name} left in place')
+    expect(not (game / 'nvngx_dlssnr_old.dll').exists() and not (game / 'nvngx_dlssnr_original.dll').exists(),
+           'no model restored or renamed back')
+    expect("NVIDIA's model, never removed" in r.stdout, 'the model lines are said')
+
+
+@case
 def release_support_files_and_parent_refusal(tmp):
     src = make_src(tmp, 'support')
     support = src / 'OptiScaler' / 'D3D12_OptiScaler'
     support.mkdir(parents=True)
     (support / 'D3D12Core.dll').write_bytes(PE + b'core')
     (src / 'OptiScaler' / 'nvngx_dlssnr.dll').write_bytes(b'model must not copy')
+    # Copies [DlssNr] ModelFile can name are the model too: a renamed one and a DlssNrModels folder.
+    (src / 'OptiScaler' / 'NVNGX_DLSSNR_310.8.dll').write_bytes(b'renamed model must not copy')
+    (src / 'OptiScaler' / 'DlssNrModels' / '310.8').mkdir(parents=True)
+    (src / 'OptiScaler' / 'DlssNrModels' / '310.8' / 'nvngx_dlssnr.dll').write_bytes(b'model folder must not copy')
     game = make_game(tmp)
     deploy_ok(game, src=src)
     rel = 'OptiScaler/D3D12_OptiScaler/D3D12Core.dll'
     expect((game / rel).exists(), 'release support DLL copied')
     expect(rel in receipt(game)['files'], 'support file recorded')
     expect(not (game / 'OptiScaler/nvngx_dlssnr.dll').exists(), 'model not copied')
+    expect(not (game / 'OptiScaler/NVNGX_DLSSNR_310.8.dll').exists(), 'renamed model not copied')
+    expect(not (game / 'OptiScaler/DlssNrModels').exists(), 'model folder not copied')
     expect(run(game, '--uninstall').returncode == 0, 'uninstall')
     expect(not (game / rel).exists(), 'support DLL removed')
     shutil.rmtree(game / 'OptiScaler')

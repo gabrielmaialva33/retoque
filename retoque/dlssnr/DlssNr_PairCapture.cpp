@@ -14,6 +14,7 @@
 #include "DlssNr_Readback.h"
 #include "DlssNr_Submission.h"
 #include "DlssNr_NgxInfo.h"
+#include "DlssNr_ModelFileFind.h"
 #include "DlssNrFeature_Dx12.h"
 
 #include <BuildInfo.h>
@@ -334,7 +335,8 @@ const ModelFacts& ModelFactsOnce()
         asked = true;
         try
         {
-            if (const auto path = NgxInfo::FindModel(); path.has_value())
+            // The model Retoque's loaders use ([DlssNr] ModelFile), the one the capture was made with.
+            if (const auto path = ModelFile::Find(Util::DllPath().remove_filename()); path.has_value())
             {
                 const auto& ngx = NgxInfo::Describe(*path);
                 facts->version = Version(ngx.modelVersion);

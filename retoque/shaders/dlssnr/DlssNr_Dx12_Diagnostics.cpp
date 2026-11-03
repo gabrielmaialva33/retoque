@@ -10,6 +10,7 @@
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_PairCaptureDx12.h>
 #include <dlssnr/DlssNr_Proxy.h>
+#include <dlssnr/DlssNr_ModelFileFind.h>
 #include <dlssnr/DlssNr_ExposureMatch.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/DlssNr_Replay.h>
@@ -87,7 +88,7 @@ const std::string& TimingModelIdentity()
     static const std::string identity = []
     {
         wchar_t buffer[32768] {};
-        const auto module = GetModuleHandleW(L"nvngx_dlssnr.dll");
+        const auto module = DlssNr::ModelFile::LoadedModule();
         const auto count = module ? GetModuleFileNameW(module, buffer, _countof(buffer)) : 0;
         if (!count || count >= _countof(buffer))
             return std::string("loaded-model-unidentified");
@@ -102,7 +103,7 @@ const std::string& TimingModelIdentity()
                                        version.minor, version.patch, version.reserved);
         LOG_INFO("DLSS-NR timing model-file: path={} label={} size_known={} mtime_known={} version_known={} "
                  "identity=file-attributes-not-content-hash; hash the installed model externally before/after A/B",
-                 path.string(), label, !sizeError, !timeError, hasVersion);
+                 DlssNr::ModelFile::Display(path), label, !sizeError, !timeError, hasVersion);
         return label;
     }();
     return identity;

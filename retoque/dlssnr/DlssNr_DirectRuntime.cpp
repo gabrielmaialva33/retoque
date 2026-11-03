@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "DlssNr_DirectRuntime.h"
 #include "DlssNr_DriverGate.h"
+#include "DlssNr_ModelFileFind.h"
 #include "DlssNr_PeScan.h"
 
 #include <Logger.h>
@@ -328,7 +329,8 @@ bool LoadSnippet(const wchar_t* path)
     {
         g_snip.loadFailed = true;
         g_loadError = "nvngx_dlssnr.dll would not load";
-        LOG_ERROR("DLSS-NR direct: {} would not load (error {})", wstring_to_string(path), GetLastError());
+        const DWORD error = GetLastError();
+        LOG_ERROR("DLSS-NR direct: {} would not load (error {})", DlssNr::ModelFile::Display(path), error);
         return false;
     }
 

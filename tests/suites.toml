@@ -262,6 +262,14 @@ tier = "host"
 timeout = 300
 summary = "The game's own Streamline NR (sl.dlss_nr, feature 1004): the detector on synthetic Streamline calls (thirteen rule mutants must fail), the hooks feeding it with atomics, and every D3D12 and Vulkan NR route standing down before the model, with the panel line. Not run in a game."
 
+[nr-model-file]
+path = "nr-model-file"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "[DlssNr] ModelFile: the rule on a fake filesystem (twelve rule mutants must fail), auto unchanged at every loader, UseProxy keeping the driver's file and refusing a named one, identity by path and the four config points frozen at start-up. Not run in a game."
+
 [nr-sl-tag-inventory]
 path = "nr-sl-tag-inventory"
 domain = "nr"

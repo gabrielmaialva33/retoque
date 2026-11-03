@@ -108,7 +108,10 @@ class ReleaseEvidence(unittest.TestCase):
 
     def test_unsafe_paths_collisions_and_model_redistribution_fail(self):
         bad_names = ('../outside.dll', '/absolute.dll', 'C:/bad.dll', 'a\\bad.dll', 'a//bad.dll',
-                     'a/./bad.dll', 'optiscaler.DLL', 'nested/NVNGX_DLSSNR.DLL')
+                     'a/./bad.dll', 'optiscaler.DLL', 'nested/NVNGX_DLSSNR.DLL',
+                     # copies [DlssNr] ModelFile can name: a renamed model and a DlssNrModels folder
+                     'OptiScaler/nvngx_dlssnr_310.8.dll', 'DlssNrModels/310.8/nvngx_dlssnr.dll',
+                     'OptiScaler/dlssnrmodels/a/model.bin')
         for name in bad_names:
             self.make_zip([(name, b'bad')])
             with self.subTest(name=name), self.assertRaises(ValueError):

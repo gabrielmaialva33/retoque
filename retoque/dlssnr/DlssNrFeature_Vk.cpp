@@ -17,6 +17,7 @@
 #include <dlssnr/DlssNr_VkPresentModel.h>
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_Exposure.h>
+#include <dlssnr/DlssNr_ModelFileFind.h>
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_Session.h>
@@ -1166,14 +1167,10 @@ void SetVulkanTransfer(DlssNrConstants& encode, const Config& cfg)
     encode.Transfer = Enlarge::VulkanTransfer(cfg.DlssNrTransfer.value_or_default());
 }
 
+// [DlssNr] ModelFile, or the default search as always (DlssNr_ModelFileFind.h).
 std::optional<std::filesystem::path> FindSnippet()
 {
-    auto snippet = Util::FindFilePath(Util::DllPath().remove_filename(), "nvngx_dlssnr.dll");
-
-    if (!snippet.has_value())
-        snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
-
-    return snippet;
+    return DlssNr::ModelFile::Find(Util::DllPath().remove_filename());
 }
 
 } // namespace
@@ -1476,7 +1473,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
         if (!snippet.has_value())
         {
-            Fail("nvngx_dlssnr.dll was not found beside OptiScaler or the game");
+            Fail(DlssNr::ModelFile::NotFoundReason());
             return;
         }
 
@@ -2820,7 +2817,7 @@ void RunBuild(PresentBuildJob& job)
 
         auto snippet = FindSnippet();
         if (!snippet.has_value())
-            return stop("nvngx_dlssnr.dll was not found beside OptiScaler or the game");
+            return stop(DlssNr::ModelFile::NotFoundReason());
 
         // Before init and the first build, so the model's own account of them is in the log.
         DlssNr::ModelLog::Install(*snippet);

@@ -604,6 +604,13 @@ class Config
     // until direct has been measured in games. See dlssnr/DlssNr_DirectRuntime.h.
     CustomOptional<NrModelLoader> DlssNrModelLoader { NrModelLoader::Forwarder };
 
+    // Which model file Retoque's loaders use (retoque/dlssnr/DlssNr_ModelFile.h): auto is nvngx_dlssnr.dll found as
+    // always; otherwise a file name or relative path beside OptiScaler or the game, or an absolute path. Read at
+    // start-up only (DlssNrModelFileAtStart); a change applies at the next start. Not written to the log's
+    // parameter list, since it may be a path of the user's own.
+    CustomOptional<std::string> DlssNrModelFile { std::string("auto") };
+    const std::string& DlssNrModelFileAtStart() const { return _dlssNrModelFileAtStart; }
+
     // Look for the exposure the game computed but never handed to the upscaler.
     //
     // Off by default, and it has to be. Reading a resource the game owns means assuming what state
@@ -1342,6 +1349,9 @@ class Config
     void ReadOverlaySettings(bool assign);
     void WriteOverlaySettings();
 
+    // [DlssNr] ModelFile as the constructor's load left it; never changed after (DlssNrModelFile is the editable
+    // value).
+    std::string _dlssNrModelFileAtStart = "auto";
     std::optional<std::string> readString(std::string section, std::string key, bool lowercase = false);
     std::optional<std::wstring> readWString(std::string section, std::string key, bool lowercase = false);
     std::optional<float> readFloat(std::string section, std::string key);

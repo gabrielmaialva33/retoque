@@ -2058,6 +2058,12 @@
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SlNativeNr.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_ModelFile.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_ModelFileFind.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SlTagInventory.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -2230,6 +2236,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_NgxInfo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_ModelFile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Session.cpp">

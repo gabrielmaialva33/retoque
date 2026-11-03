@@ -733,6 +733,15 @@ Add-Case 'model_is_never_touched' {
     $game2 = New-Game $tmp @{} 'second [x]'
     $r = Install-Ok $game2 -Src $src2
     Expect (-not (Test-Path -LiteralPath (Join-Path $game2 'OptiScaler/nvngx_dlssnr.dll')) -and $r.Out.Contains('is never copied')) 'a model in the release is not copied'
+    # Copies [DlssNr] ModelFile can name are the model too: a renamed one and a DlssNrModels folder.
+    $src3 = New-Src $tmp 'v3'
+    [IO.File]::WriteAllText((Join-Path $src3 'OptiScaler/nvngx_dlssnr_310.8.dll'), 'a renamed model')
+    [void][IO.Directory]::CreateDirectory((Join-Path $src3 'OptiScaler/DlssNrModels/310.8'))
+    [IO.File]::WriteAllText((Join-Path $src3 'OptiScaler/DlssNrModels/310.8/nvngx_dlssnr.dll'), 'a model folder')
+    $game3 = New-Game $tmp @{} 'third'
+    $r = Install-Ok $game3 -Src $src3
+    Expect (-not (Test-Path -LiteralPath (Join-Path $game3 'OptiScaler/nvngx_dlssnr_310.8.dll'))) 'a renamed model in the release is not copied'
+    Expect (-not (Test-Path -LiteralPath (Join-Path $game3 'OptiScaler/DlssNrModels'))) 'a model folder in the release is not copied'
 }
 
 Add-Case 'installer_run_from_the_extracted_release_in_the_game_folder' {

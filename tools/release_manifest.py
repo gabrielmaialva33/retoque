@@ -123,7 +123,10 @@ def archive_inventory(path: Path) -> dict:
                 kind = stat.S_IFMT(mode)
                 if kind not in (0, stat.S_IFREG, stat.S_IFDIR) or entry.flag_bits & 1:
                     raise ValueError('archive contains a symlink, special file or encrypted member')
-                if parts[-1].casefold() == 'nvngx_dlssnr.dll':
+                # With the copies [DlssNr] ModelFile is documented to name: nvngx_dlssnr*.dll and DlssNrModels.
+                leaf = parts[-1].casefold()
+                if ((leaf.startswith('nvngx_dlssnr') and leaf.endswith('.dll'))
+                        or any(p.casefold() == 'dlssnrmodels' for p in parts[:-1])):
                     raise ValueError('NVIDIA model must never ship in a release')
                 if entry.is_dir():
                     continue

@@ -486,7 +486,8 @@ record_site = body_of(code_cpp, 'void AtRecordSite(')
 for token in ('FindModel', 'Describe(', 'TimingModelIdentity', 'file_size', 'exists('):
     if token in record_site:
         fail(f'AtRecordSite calls {token}: file work belongs on the writer thread')
-if 'NgxInfo::FindModel()' not in body_of(code_cpp, 'const ModelFacts& ModelFactsOnce()'):
+# The model Retoque's loaders use ([DlssNr] ModelFile, docs/dlssnr/design/model-file.md), found on the writer thread.
+if 'ModelFile::Find(Util::DllPath().remove_filename())' not in body_of(code_cpp, 'const ModelFacts& ModelFactsOnce()'):
     fail("the model's facts must be found on the writer thread (ModelFactsOnce)")
 
 # The writer: the folder is checked before anything is computed, and the cap runs only after the pair was written, so a

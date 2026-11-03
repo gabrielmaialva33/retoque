@@ -669,6 +669,16 @@ plan_ini() {
     done
 }
 
+# NVIDIA's model, and the copies [DlssNr] ModelFile is documented to name (docs/dlssnr/design/model-file.md): any
+# nvngx_dlssnr*.dll and anything under a DlssNrModels folder. Never copied, removed, restored or renamed here, even
+# when an older receipt lists one. A model under another name, outside DlssNrModels, is the user's to keep apart.
+is_model_path() {
+    local rel=${1,,}
+    case ${rel##*/} in nvngx_dlssnr*.dll) return 0 ;; esac
+    case /$rel in */dlssnrmodels/*) return 0 ;; esac
+    return 1
+}
+
 # Release support files (FSR, XeSS, Agility); never traverse a target directory link.
 # The repository's OptiScaler/ is source code, so only the supplied release folder is copied.
 plan_support() {
@@ -677,7 +687,8 @@ plan_support() {
     while IFS= read -r -d '' file; do
         rel=${file#"${SRC_DIR}/"}
         safe_rel "$rel" || { refuse 4 "unsafe support path: $rel"; continue; }
-        case ${rel,,} in */nvngx_dlssnr.dll|*.disabled) continue ;; esac
+        is_model_path "$rel" && continue
+        case ${rel,,} in *.disabled) continue ;; esac
         parent=${rel%/*} prefix='' bad=0
         local -a components=()
         IFS=/ read -r -a components <<< "$parent"
@@ -884,7 +895,9 @@ uninstall() {
     # Files first: ours come out only while they are still what this script wrote.
     for rel in "${FILE_ORDER[@]}"; do
         path="${TARGET_DIR}/${rel}"
-        if ! exists "$rel"; then
+        if is_model_path "$rel"; then
+            plan forget-file "$rel" '' '' "${rel}: NVIDIA's model, never removed by this script; left in place"
+        elif ! exists "$rel"; then
             plan forget-file "$rel" '' '' "${rel}: already gone"
         elif [[ -f $path && ! -L $path && $(sha_of "$path") == "${FILE_SHA[$rel]}" ]]; then
             plan remove "$rel" '' '' "remove ${rel}"
@@ -897,7 +910,9 @@ uninstall() {
     for (( i = ${#BACKUPS[@]} - 1; i >= 0; i-- )); do
         line=${BACKUPS[i]}
         IFS=$'\t' read -r sha rel copy <<< "$line"
-        if ! exists "$copy"; then
+        if is_model_path "$rel" || is_model_path "$copy"; then
+            plan forget-backup "$line" '' '' "${rel}: NVIDIA's model, never restored or moved by this script"
+        elif ! exists "$copy"; then
             plan forget-backup "$line" '' '' "${rel}: its copy ${copy} is gone, nothing to restore"
         elif exists_after "$rel"; then
             echo "[!] ${rel}: not restored, a file is still there; the earlier one stays at ${copy}"
@@ -910,7 +925,9 @@ uninstall() {
     for (( i = ${#RENAMES[@]} - 1; i >= 0; i-- )); do
         line=${RENAMES[i]}
         IFS=$'\t' read -r sha from to <<< "$line"
-        if exists_after "$from"; then
+        if is_model_path "$from" || is_model_path "$to"; then
+            plan forget-rename "$line" '' '' "${to}: NVIDIA's model, never renamed by this script"
+        elif exists_after "$from"; then
             if exists "$to"; then
                 echo "[!] ${to}: not renamed back, ${from} is in the way"
             else
@@ -1068,7 +1085,7 @@ deploy() {
     fi
     if (( ENABLE_NR )); then echo '    Neural Rendering requested: [DlssNr] Enabled=true.'; fi
     if [[ ! -f ${TARGET_DIR}/nvngx_dlssnr.dll ]]; then
-        echo '    Supply your own nvngx_dlssnr.dll beside the game; the model is not included.'
+        echo '    Supply your own nvngx_dlssnr.dll beside the game (or name another copy with [DlssNr] ModelFile); the model is not included.'
     fi
     echo "    Receipt: ${RECEIPT}"
     echo "      (undo with: $0 --uninstall \"${TARGET_DIR}\")"
