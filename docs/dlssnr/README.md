@@ -94,6 +94,7 @@ Related, outside that sequence:
 - [dx12-robustness.md](design/dx12-robustness.md): the device taken from the command list under a wrapper layer (ReShade), the stand-down for several views in one colour allocation, and Stage 1 declining multi-mip colour (2026-10-30, host-tested only).
 - [streamline-native-nr.md](design/streamline-native-nr.md): standing down on every route while the game runs its own NR through Streamline's `sl.dlss_nr` (feature 1004, Streamline 2.14), with the panel saying so (2026-10-30, host-tested only).
 - [sl-tag-inventory.md](design/sl-tag-inventory.md): which buffers the game tags for Streamline and whether its HUD-less colour or UI alpha would be valid at Present, said in one log line with NR on (2026-11-03, log only, host-tested only).
+- [guide-fidelity-probe.md](design/guide-fidelity-probe.md): measuring whether the game's motion explains the picture at present, designed and reviewed, parked with the contracts it still lacks (2026-11-03, not built).
 - [nr-menu-mode.md](design/nr-menu-mode.md): keeping NR running while the upscaler is idle in menus.
 - [present-real-guides.md](design/present-real-guides.md): checking that the guides the present pass reuses belong to the frame being presented (step 0 measured in Crimson Desert; step 1, the rules applied, built and not yet run in a game).
 - [nr-before-dlssg.md](design/nr-before-dlssg.md): running the present pass at the game's Streamline `Present`, before its DLSS-G interpolates, so generated frames carry the edit; NeuRotic's pre-FG adapter as prior art (design).
