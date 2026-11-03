@@ -371,7 +371,7 @@ HRESULT DxgiFactoryWrappedCalls::CreateSwapChain(IDXGIFactory* realFactory, Wrap
             State::Instance().skipDxgiLoadChecks = false;
         }
 
-        if (result == S_OK)
+        if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
         {
             State::Instance().currentSwapchainDesc = localDesc;
             State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
@@ -788,7 +788,7 @@ HRESULT DxgiFactoryWrappedCalls::CreateSwapChainForHwnd(IDXGIFactory2* realFacto
             State::Instance().skipDxgiLoadChecks = false;
         }
 
-        if (result == S_OK)
+        if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
         {
             State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
 
@@ -909,7 +909,7 @@ HRESULT DxgiFactoryWrappedCalls::CreateSwapChainForCoreWindow(IDXGIFactory2* rea
         realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, &localDesc, pRestrictToOutput, ppSwapChain);
     State::Instance().skipDxgiLoadChecks = false;
 
-    if (result == S_OK)
+    if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
     {
         // check for SL proxy
         IDXGISwapChain* realSC = nullptr;

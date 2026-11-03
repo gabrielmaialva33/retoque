@@ -67,6 +67,7 @@ Do not assume the main branch still points where another session left it; inspec
 | [2026-10-27](linux-proton/upstream-20261027.md) | Internal Vulkan creation, dynamic FG and overlay changes |
 | [2026-10-29](linux-proton/upstream-20261029.md) | Custom upscaler libraries, SDK 2.4 and NGX compatibility |
 | [2026-10-30](linux-proton/upstream-20261030.md) | Custom DLSSG libraries, Vulkan FFX nvngx FG and extended DLL search |
+| [2026-11-03](linux-proton/upstream-20261103.md) | Plugin API, occluded swapchain creation and Pascal FSR4 pipeline retry |
 
 The archived [patch table](history/maintainer-notes-20261029.md#linux--proton-patches) preserves earlier decisions,
 including ports deliberately not taken. Check current source before reusing its open-PR status.
