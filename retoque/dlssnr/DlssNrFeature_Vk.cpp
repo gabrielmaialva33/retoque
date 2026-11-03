@@ -13,6 +13,7 @@
 #include <dlssnr/DlssNr_VkModelOwner.h>
 #include <dlssnr/DlssNr_VkRecording.h>
 #include <dlssnr/DlssNr_VkMeterReadback.h>
+#include <dlssnr/DlssNr_VkMotionProbe.h>
 #include <dlssnr/DlssNr_VkPresentBuild.h>
 #include <dlssnr/DlssNr_VkPresentModel.h>
 #include <dlssnr/DlssNr_Enlarge.h>
@@ -30,6 +31,7 @@
 #include <shaders/dlssnr/DlssNr_Vk.h>
 #include <shaders/dlssnr/DlssNr_GuideMatch.h>
 #include <shaders/dlssnr/DlssNr_GuideMatch_Vk.h>
+#include <shaders/dlssnr/DlssNr_MotionProbe_Vk.h>
 #include <shaders/dlssnr/DlssNr_Scaler_Vk.h>
 #include <shaders/synth_motion/SynthMotion_Vk.h>
 #include <shaders/dlssnr/DlssNr_PresentHdr_Vk.h>
@@ -248,6 +250,26 @@ struct VkState
     unsigned long long meterFrames = 0; // Diagnostic count, never a completion or reuse condition.
     VkMeterReadback::Ring meterPending;
     uint64_t meterAcceptedSerial = 0;
+
+    // Zero-motion detection (docs/dlssnr/design/zero-motion-detection.md, "Vulkan"), only with ZeroGuideReset on: the
+    // probe's pass, made once per device; per readback slot a 32x32 grid and a host-visible buffer, both exclusive to
+    // the recording that reserved the slot; and what the route keeps between evaluates (DlssNr_VkMotionProbe.h). With
+    // the key off none of it is made, pinned or recorded.
+    struct MotionProbeState
+    {
+        DlssNr_MotionProbe_Vk pass;
+        OwnedImage grid[VkMotionProbe::kSlots];
+        VkBuffer readback[VkMotionProbe::kSlots] = {};
+        VkDeviceMemory memory[VkMotionProbe::kSlots] = {};
+        void* mapped[VkMotionProbe::kSlots] = {};
+        VkMotionProbe::Readbacks readbacks;
+
+        uint64_t evaluates = 0;    // evaluates the probe was asked about: its sequence, and what Due() counts
+        bool on = false;           // ZeroGuideReset at the last evaluate with NR on
+        std::string deviceFailure; // why the pass or its objects cannot be made on this device
+        uint64_t refused = 0;      // evaluates the probe could not observe
+        uint64_t policyResets = 0; // history dropped on the verdict
+    } motionProbe;
 };
 
 // The grid the meter writes, and the size of one readback. 8 * 8 * sizeof(float).
@@ -1159,6 +1181,331 @@ void SayGuideRefusal(const char* why, uint32_t workWidth, uint32_t workHeight)
         workWidth, workHeight, why);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Zero-motion detection (docs/dlssnr/design/zero-motion-detection.md, "Vulkan"). Reached only with ZeroGuideReset on,
+// except the three that end the probe's objects with the route's (ForgetMotionProbe, AbandonMotionProbeReadbacks,
+// DestroyMotionProbe), which find nothing to do when the key never was. All under g_vkMutex; none waits for the GPU.
+// ---------------------------------------------------------------------------------------------
+
+// A slot is usable once its grid, buffer, memory and mapping all exist. Mapping proves nothing about completion: a slot
+// is read only once its recording retired (DlssNr_VkMotionProbe.h).
+bool MotionProbeSlotReady(uint32_t slot)
+{
+    const auto& probe = g_vk.motionProbe;
+    return probe.grid[slot].Valid() && probe.readback[slot] != VK_NULL_HANDLE && probe.memory[slot] != VK_NULL_HANDLE &&
+           probe.mapped[slot] != nullptr;
+}
+
+uint32_t MotionProbeReadyMask()
+{
+    uint32_t mask = 0;
+    for (uint32_t slot = 0; slot < VkMotionProbe::kSlots; ++slot)
+        if (MotionProbeSlotReady(slot))
+            mask |= uint32_t { 1 } << slot;
+    return mask;
+}
+
+// The verdict loses its authority (DlssNr_VkMotionProbe.h, Lose); said when it held.
+void LoseMotionVerdict(const char* why)
+{
+    if (g_vk.motionProbe.readbacks.Lose())
+        LOG_INFO(
+            "DLSS-NR Vulkan motion probe: the verdict on the game's motion vectors is dropped ({}); the model keeps "
+            "its history until new probes find them all zero again",
+            why);
+}
+
+// An evaluate the probe cannot observe: counted, the verdict dropped (it would otherwise go on acting on a field nobody
+// is looking at), and each reason said once for the session.
+void RefuseMotionProbe(const char* why)
+{
+    static std::vector<std::string> said;
+
+    ++g_vk.motionProbe.refused;
+    LoseMotionVerdict("the probe cannot observe these frames");
+
+    if (std::find(said.begin(), said.end(), why) != said.end())
+        return;
+
+    said.emplace_back(why);
+    LOG_INFO("DLSS-NR Vulkan motion probe: {}; the game's motion vectors are not checked on these frames", why);
+}
+
+// One slot's grid and readback buffer on this device. Never recorded yet, so what a failed attempt made is freed at
+// once, unless the device was lost on the way, which abandons it as every other object of a lost device is. Only a
+// whole slot is published.
+bool CreateMotionProbeSlot(uint32_t slot, bool& lost)
+{
+    auto& probe = g_vk.motionProbe;
+
+    if (!probe.grid[slot].Valid() &&
+        !CreateImageOn(g_vk.device, g_vk.physicalDevice, probe.grid[slot], DlssNr::MotionProbe::kGrid,
+                       DlssNr::MotionProbe::kGrid, DlssNr::MotionProbe::Vk::kGridFormat, true, &lost))
+    {
+        if (lost)
+            probe.grid[slot] = OwnedImage {};
+        return false;
+    }
+
+    if (probe.readback[slot] != VK_NULL_HANDLE)
+        return true;
+
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+    void* mapped = nullptr;
+
+    VkBufferCreateInfo info {};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = DlssNr::MotionProbe::Vk::kReadbackBytes;
+    info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult result = vkCreateBuffer(g_vk.device, &info, nullptr, &buffer);
+    if (result != VK_SUCCESS)
+    {
+        lost = result == VK_ERROR_DEVICE_LOST;
+        return false;
+    }
+
+    VkMemoryRequirements req {};
+    vkGetBufferMemoryRequirements(g_vk.device, buffer, &req);
+
+    // 16 KB read on the CPU per probe: a cached type where the device has one. Coherent always, as the meter's: the
+    // copy's transfer-to-host barrier is the whole visibility argument, with no invalidate.
+    VkMemoryAllocateInfo alloc {};
+    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc.allocationSize = req.size;
+    alloc.memoryTypeIndex = FindMemoryTypeIndex(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+                                                                        VK_MEMORY_PROPERTY_HOST_CACHED_BIT);
+    if (alloc.memoryTypeIndex == UINT32_MAX)
+        alloc.memoryTypeIndex = FindMemoryTypeIndex(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    result = alloc.memoryTypeIndex == UINT32_MAX ? VK_ERROR_FEATURE_NOT_PRESENT
+                                                 : vkAllocateMemory(g_vk.device, &alloc, nullptr, &memory);
+    // A failed allocation transfers no ownership; its output is unspecified and never freed.
+    const bool allocated = result == VK_SUCCESS;
+    if (result == VK_SUCCESS)
+        result = vkBindBufferMemory(g_vk.device, buffer, memory, 0);
+    if (result == VK_SUCCESS)
+        result = vkMapMemory(g_vk.device, memory, 0, DlssNr::MotionProbe::Vk::kReadbackBytes, 0, &mapped);
+
+    if (result != VK_SUCCESS)
+    {
+        lost = result == VK_ERROR_DEVICE_LOST;
+        if (!lost)
+        {
+            if (allocated)
+                vkFreeMemory(g_vk.device, memory, nullptr);
+            vkDestroyBuffer(g_vk.device, buffer, nullptr);
+        }
+        return false;
+    }
+
+    probe.readback[slot] = buffer;
+    probe.memory[slot] = memory;
+    probe.mapped[slot] = mapped;
+    return true;
+}
+
+// The pass and every slot on this device: nullptr when they are up, otherwise why not. A failure stands for the device
+// (tried again after a device change or a hand-back), as the D3D12 probe keeps a failed pass rather than rebuild it on
+// every frame.
+const char* MakeMotionProbe()
+{
+    auto& probe = g_vk.motionProbe;
+
+    if (!probe.deviceFailure.empty())
+        return probe.deviceFailure.c_str();
+
+    if (!probe.pass.Ready())
+    {
+        std::string why;
+        if (const char* unsupported = DlssNr_MotionProbe_Vk::Unsupported(g_vk.physicalDevice))
+            why = unsupported;
+        else if (!probe.pass.Create(g_vk.device, g_vk.physicalDevice, why) && probe.pass.Lost())
+            why += " (the device is lost)";
+
+        if (!probe.pass.Ready())
+        {
+            probe.deviceFailure = "the probe could not be built on this device: " + why;
+            return probe.deviceFailure.c_str();
+        }
+
+        LOG_INFO(
+            "DLSS-NR Vulkan motion probe: up (push constants {} bytes, {} push descriptors, {} readback slots of {} "
+            "bytes)",
+            sizeof(DlssNr::MotionProbe::Vk::Push), DlssNr::MotionProbe::Vk::kPushDescriptors, VkMotionProbe::kSlots,
+            DlssNr::MotionProbe::Vk::kReadbackBytes);
+    }
+
+    for (uint32_t slot = 0; slot < VkMotionProbe::kSlots; ++slot)
+    {
+        if (MotionProbeSlotReady(slot))
+            continue;
+
+        bool lost = false;
+        if (!CreateMotionProbeSlot(slot, lost))
+        {
+            probe.deviceFailure = lost ? "the device was lost while the probe's readbacks were allocated"
+                                       : "the probe's grids or readback buffers could not be allocated on this device";
+            return probe.deviceFailure.c_str();
+        }
+    }
+
+    return nullptr;
+}
+
+// What the probe does with this evaluate, decided before the frame's first command.
+struct MotionProbePlan
+{
+    bool observable = false; // the probe can read this frame's guides; without that the verdict does not act
+    bool due = false;        // a probe is recorded on this evaluate if a slot is free
+    uint64_t seq = 0;        // this evaluate in the probe's count
+    DlssNr::MotionProbe::Shape shape {};
+};
+
+// CPU only, every fallible step of the probe's: the bytecode, the recording (one execution at a time), the regions, the
+// game's views, the pass and slots made on this device. Anything that stops it is a refusal, which drops the verdict.
+// Never refuses NR.
+MotionProbePlan PrepareMotionProbe(const VkRecording::Ticket& recording, const NVSDK_NGX_Resource_VK& depth,
+                                   const NVSDK_NGX_Resource_VK& motion, const DlssNr::GuideMatch::Region& depthRegion,
+                                   const DlssNr::GuideMatch::Region& motionRegion, bool motionLowResolution)
+{
+    auto& probe = g_vk.motionProbe;
+    MotionProbePlan plan;
+    plan.seq = probe.evaluates++;
+
+    const char* why = [&]() -> const char*
+    {
+        if (!DlssNr_MotionProbe_Vk::Available())
+            return "this build carries no probe shader";
+        if (const char* refusal = VkMotionProbe::RecordingRefusal(recording.reuse))
+            return refusal;
+        if (const char* refusal = DlssNr::GuideMatch::Vk::RegionRefusal(depthRegion, motionRegion))
+            return refusal;
+        if (depth.Type != NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW ||
+            motion.Type != NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW ||
+            depth.Resource.ImageViewInfo.ImageView == VK_NULL_HANDLE ||
+            motion.Resource.ImageViewInfo.ImageView == VK_NULL_HANDLE)
+            return "the game's depth or motion is not an image view";
+        if (const char* failure = MakeMotionProbe())
+            return failure;
+        return probe.pass.InputRefusal(
+            depth.Resource.ImageViewInfo.Format, depth.Resource.ImageViewInfo.SubresourceRange,
+            motion.Resource.ImageViewInfo.Format, motion.Resource.ImageViewInfo.SubresourceRange);
+    }();
+
+    if (why != nullptr)
+    {
+        RefuseMotionProbe(why);
+        return plan;
+    }
+
+    plan.observable = true;
+
+    if (probe.readbacks.Stale(plan.seq))
+        LoseMotionVerdict("no probe has been read back for a while: the game holds every readback");
+
+    plan.due = DlssNr::MotionProbe::Due(plan.seq);
+    plan.shape = DlssNr::MotionProbe::Vk::ShapeOf(depthRegion, motionRegion, motionLowResolution);
+    return plan;
+}
+
+// Whether this evaluate drops the model's history for the game's dead motion vectors: DlssNr_MotionProbe.h's rule, with
+// the verdict only while the probe observes these frames and the verdict was formed on this device, recently.
+bool MotionProbePolicyReset(VkDevice device, const MotionProbePlan& plan, bool zeroGuideReset, bool gameAskedReset)
+{
+    return plan.observable &&
+           g_vk.motionProbe.readbacks.PolicyReset((uint64_t) device, plan.seq, zeroGuideReset, gameAskedReset);
+}
+
+// Admission, after the generation pin and before the frame's first command (V-06): a slot pinned to this recording, its
+// buffer set to the sentinel. Every slot still held skips this probe; never a wait.
+std::optional<VkMeterReadback::Reservation> ReserveMotionProbe(const VkRecording::Ticket& recording,
+                                                               const MotionProbePlan& plan)
+{
+    auto& probe = g_vk.motionProbe;
+    auto reservation = probe.readbacks.Reserve(recording, MotionProbeReadyMask(), probe.mapped, plan.seq, plan.shape);
+
+    static bool saidHeld = false;
+    if (!reservation && !saidHeld)
+    {
+        saidHeld = true;
+        LOG_INFO(
+            "DLSS-NR Vulkan motion probe: every readback is still held by a command buffer the game has not reset; "
+            "probes are skipped until one is");
+    }
+
+    return reservation;
+}
+
+// The slots whose recordings retired, fed to the detector in recording order (same device only: the caller checks).
+void ConsumeMotionProbe(bool zeroGuideReset)
+{
+    auto& probe = g_vk.motionProbe;
+    probe.readbacks.Consume(
+        (uint64_t) g_vk.device, probe.mapped, MotionProbeReadyMask(),
+        [zeroGuideReset](DlssNr::MotionProbe::Event event, const DlssNr::MotionProbe::Reading& reading)
+        { LOG_INFO("{}", DlssNr::MotionProbe::EventLine(event, reading, zeroGuideReset)); });
+}
+
+// The device is gone, or nothing proves its work done: every handle forgotten without a call, the pending slots with
+// them (ForgetDevice is not completion evidence), and the verdict with the device it was read on.
+void ForgetMotionProbe()
+{
+    auto& probe = g_vk.motionProbe;
+    probe.readbacks.Abandon();
+    for (uint32_t slot = 0; slot < VkMotionProbe::kSlots; ++slot)
+    {
+        probe.grid[slot] = OwnedImage {};
+        probe.readback[slot] = VK_NULL_HANDLE;
+        probe.memory[slot] = VK_NULL_HANDLE;
+        probe.mapped[slot] = nullptr;
+    }
+    probe.pass.Abandon();
+    probe.deviceFailure.clear();
+    LoseMotionVerdict("the device it was read on is gone");
+}
+
+// A drained teardown is about to free the slots: their metadata goes first, so a pin retired by the registry forgetting
+// the device is never taken for a completed probe.
+void AbandonMotionProbeReadbacks() { g_vk.motionProbe.readbacks.Abandon(); }
+
+// On a live device, once nothing the GPU runs can still use them (FreeRouteObjects' callers prove it, and every probe
+// pin sits on a ticket that also pins the generation): the buffers freed, the grids and the pass through
+// DeferredRelease as the guide resample's are, the verdict dropped with the objects it was read through.
+void DestroyMotionProbe()
+{
+    auto& probe = g_vk.motionProbe;
+    probe.readbacks.Abandon();
+    for (uint32_t slot = 0; slot < VkMotionProbe::kSlots; ++slot)
+    {
+        if (g_vk.device != VK_NULL_HANDLE)
+        {
+            if (probe.memory[slot] != VK_NULL_HANDLE && probe.mapped[slot] != nullptr)
+                vkUnmapMemory(g_vk.device, probe.memory[slot]);
+            if (probe.readback[slot] != VK_NULL_HANDLE)
+                vkDestroyBuffer(g_vk.device, probe.readback[slot], nullptr);
+            if (probe.memory[slot] != VK_NULL_HANDLE)
+                vkFreeMemory(g_vk.device, probe.memory[slot], nullptr);
+        }
+        probe.readback[slot] = VK_NULL_HANDLE;
+        probe.memory[slot] = VK_NULL_HANDLE;
+        probe.mapped[slot] = nullptr;
+        RetireImage(probe.grid[slot]);
+    }
+    if (probe.pass.Ready() && probe.pass.Device() != VK_NULL_HANDLE)
+    {
+        const VkDevice owner = probe.pass.Device();
+        DeferredRelease::Enqueue([retired = probe.pass]() mutable { retired.Destroy(); }, (uint64_t) owner);
+    }
+    probe.pass.Abandon();
+    probe.deviceFailure.clear();
+    LoseMotionVerdict("the route freed its objects on the device");
+}
+
 // Both Vulkan routes set the encode's Transfer here. Transfer 2's private DLSS is D3D12 only: sent as is, the shader
 // would decode this path's plain answer as the carrier that DLSS writes; it runs matched residual instead
 // (docs/dlssnr/design/dlss-enlargement.md).
@@ -1322,6 +1669,23 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // synchronized recording retirement permits consumption; elapsed frames do not prove completion.
     if (g_vk.device == device)
         ConsumeMeterReadback();
+
+    // Zero-motion detection (zero-motion-detection.md, "Vulkan"): with ZeroGuideReset off nothing of the probe runs, as
+    // on D3D12. Switched on again, a probe from before is not compared with a new one: the verdict starts over.
+    const bool zeroGuideReset = cfg.DlssNrZeroGuideReset.value_or_default();
+    if (zeroGuideReset != g_vk.motionProbe.on)
+    {
+        g_vk.motionProbe.on = zeroGuideReset;
+        if (zeroGuideReset)
+        {
+            g_vk.motionProbe.readbacks.Invalidate();
+            LoseMotionVerdict("ZeroGuideReset was off in between");
+        }
+    }
+
+    // The same rule as the meter's: only slots of the same device, only once their recordings retired.
+    if (zeroGuideReset && g_vk.device == device)
+        ConsumeMotionProbe(zeroGuideReset);
 
     // Said when it moves by more than a fiftieth, not every frame. Enough to see in a log that the
     // number is the game's and that it tracks the scene, without a line per frame.
@@ -1793,19 +2157,20 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     // The game asking the upscaler to forget its history -- a cut, a teleport, a load. Same omission
     // as the D3D12 path had: the model's history was only ever reset by things that happened to us,
     // never by anything that happened in the game.
+    // Kept for the motion probe's rule below, which leaves a reset the game asked for to the game.
+    unsigned int gameReset = 0;
+    const bool gameAskedReset =
+        params->Get(NVSDK_NGX_Parameter_Reset, &gameReset) == NVSDK_NGX_Result_Success && gameReset != 0;
+
+    if (gameAskedReset)
     {
-        unsigned int gameReset = 0;
+        g_vk.reset = true;
 
-        if (params->Get(NVSDK_NGX_Parameter_Reset, &gameReset) == NVSDK_NGX_Result_Success && gameReset != 0)
-        {
-            g_vk.reset = true;
+        static unsigned long long resets = 0;
+        ++resets;
 
-            static unsigned long long resets = 0;
-            ++resets;
-
-            if (resets <= 3 || resets % 100 == 0)
-                LOG_INFO("DLSS-NR Vulkan: the game asked for a history reset ({} so far)", resets);
-        }
+        if (resets <= 3 || resets % 100 == 0)
+            LOG_INFO("DLSS-NR Vulkan: the game asked for a history reset ({} so far)", resets);
     }
 
     // The guides the model is handed, and the motion-vector scale with them (reduced-scale-guides-vk.md; fix 1 and fix
@@ -1926,6 +2291,29 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
             LOG_INFO("DLSS-NR Vulkan: residual limit off");
     }
 
+    // Zero-motion detection: what the probe does with this frame, decided before its first command, and the verdict
+    // applied as ZeroGuideReset applies to zero guides -- only while the probe observes these frames and the verdict
+    // was formed on this device (DlssNr_VkMotionProbe.h). The game's regions, not the resampled copies. A reset the
+    // game asked for this frame stays the game's, and its counter above never counts this one.
+    MotionProbePlan probePlan;
+    if (zeroGuideReset)
+    {
+        probePlan = PrepareMotionProbe(*recording, *depth, *motion, depthRegion, motionRegion, lowResolutionMotion);
+
+        const bool deadMotionReset = MotionProbePolicyReset(device, probePlan, zeroGuideReset, gameAskedReset);
+        if (deadMotionReset)
+        {
+            g_vk.reset = true;
+
+            const uint64_t count = ++g_vk.motionProbe.policyResets;
+            if (count <= 3 || count % 100 == 0)
+                LOG_INFO(
+                    "DLSS-NR Vulkan: model history dropped on the game's all-zero motion vectors, as ZeroGuideReset "
+                    "asks ({} so far)",
+                    count);
+        }
+    }
+
     // Encode + optional resample fallback + optional exposure meter + resolve. Reserve all four
     // before feature creation, which may itself record GPU work into this command buffer.
     auto composition = g_vk.pass->Reserve(cmdBuffer, 4);
@@ -1981,6 +2369,11 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     if (wpSource == 1 && exposure != nullptr && exposure->Type == NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW &&
         exposure->Resource.ImageViewInfo.ImageView != VK_NULL_HANDLE && g_vk.meter.Valid())
         meterRecording = ReserveMeterReadback(*recording);
+
+    // The motion probe's admission, on the same ticket as the generation pin: no probe pin outlives the generation's.
+    std::optional<VkMeterReadback::Reservation> probeRecording;
+    if (zeroGuideReset && probePlan.due)
+        probeRecording = ReserveMotionProbe(*recording, probePlan);
 
     BeginRouteRecording();
 
@@ -2155,6 +2548,19 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
             g_vk.meterFrames++;
         }
+    }
+
+    // The motion probe: the game's depth and motion, in their regions and before anything of ours resamples them, read
+    // into this recording's own slot and copied to its buffer, read once the recording retires. Bound in
+    // SHADER_READ_ONLY_OPTIMAL, as the guide resample binds them at the same point; only users of ZeroGuideReset rely
+    // on that layout here. A frame whose encode failed above records no probe: its slot retires holding the sentinel.
+    if (probeRecording)
+    {
+        auto& probe = g_vk.motionProbe;
+        const uint32_t slot = probeRecording->slot;
+        probe.pass.Record(cmdBuffer, depth->Resource.ImageViewInfo.ImageView, motion->Resource.ImageViewInfo.ImageView,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, depthRegion, motionRegion, probe.grid[slot].image,
+                          probe.grid[slot].view, probe.readback[slot]);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -2349,6 +2755,7 @@ void FreeRouteObjects()
     g_vk.meterAcceptedSerial = 0;
     DestroyImage(g_vk.meter);
     DestroyMeterReadback();
+    DestroyMotionProbe();
     // The guide resample's objects through DeferredRelease, not destroyed here: the drain that proved the submitted
     // work done says nothing of an evaluate recorded and not yet submitted (V-02). The pass is a plain handle bundle,
     // copied into its release.
@@ -2403,6 +2810,7 @@ void ShutdownVk(bool deviceAlive)
     if (!deviceAlive)
     {
         ForgetMeterReadback();
+        ForgetMotionProbe();
         // Only CPU metadata is held by these leases. Abandon GPU objects below without invoking their destructors.
         VkRecording::Recordings().ForgetDevice((uint64_t) g_vk.device);
         g_vk.recording = std::make_shared<uint8_t>(0);
@@ -2547,9 +2955,15 @@ void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::s
         if (g_vk.device == device)
         {
             if (forgetOnly)
+            {
                 ForgetMeterReadback();
+                ForgetMotionProbe();
+            }
             else
+            {
                 g_vk.meterPending.Abandon(); // Drained teardown below will destroy the still-owned allocations.
+                AbandonMotionProbeReadbacks();
+            }
         }
         VkRecording::Recordings().ForgetDevice((uint64_t) device);
 

@@ -387,6 +387,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_UiMask_Shader.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_Guides_Shader.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_Guides_Shader_Vk.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_MotionProbe_Shader_Vk.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Cadence_Dx12.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\dlssnr_cadence_rule.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_Cadence_Shader.h" />
@@ -398,6 +399,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Pulse_Dx12.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Pulse.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Vk.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_MotionProbe.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SceneCut.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_PresentHdr_Dx12.h" />
@@ -908,6 +910,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_DetailStats_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Pulse_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.cpp" />
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Vk.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_PresentHdr_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\synth_motion\SynthMotion_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\synth_motion\SynthMotion_Vk.cpp" />
@@ -1030,6 +1033,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCapture.cpp" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkRecording.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMeterReadback.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMotionProbe.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPresentRegistry.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPresentTransport.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPresentHost.h" />

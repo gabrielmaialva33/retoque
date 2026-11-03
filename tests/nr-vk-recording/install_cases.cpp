@@ -281,6 +281,23 @@ void ObserverSuccessBoundaries()
     Check(!R().Current(1, Key(buffer)), "pool destruction must remove allocation records");
 }
 
+// The independent observers pass Begin's flags on as the wDx12 wrapper does: the zero-motion probe reads them.
+void ObserverBeginFlagsReachTheTicket()
+{
+    HookDevice(device);
+    auto buffer = AllocateThrough(device, 0);
+    VkCommandBufferBeginInfo begin {};
+    Check(Through<PFN_vkBeginCommandBuffer>(1, 0)(buffer, &begin) == VK_SUCCESS, "Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Serial, "a Begin without SIMULTANEOUS_USE is serial");
+    begin.flags = kSimultaneousUseBit;
+    Check(Through<PFN_vkBeginCommandBuffer>(1, 1)(buffer, &begin) == VK_SUCCESS, "Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Simultaneous,
+          "a Begin with SIMULTANEOUS_USE is simultaneous");
+    Check(Through<PFN_vkBeginCommandBuffer>(1, 0)(buffer, nullptr) == VK_SUCCESS, "Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Unknown, "a Begin without its info stays unknown");
+    Through<PFN_vkFreeCommandBuffers>(4, 0)(device, pool, 1, &buffer);
+}
+
 void InstallRemainsOptIn()
 {
     Config::Instance()->DlssNrEnabled.value = false;
@@ -452,6 +469,7 @@ int main()
         { "independent-export-procedure-coverage", InstallCoversExportAndProcedure },
         { "multiple-targets-aliases", MultipleTargetsAndAliases },
         { "observer-success-boundaries", ObserverSuccessBoundaries },
+        { "observer-begin-flags-reach-ticket", ObserverBeginFlagsReachTheTicket },
         { "host-install-opt-in", InstallRemainsOptIn },
         { "detour-failure-own-address", FailedDetourAndOwnAddresses },
         { "observer-allocation-failure", ObserverAllocationFailure },

@@ -15,11 +15,34 @@
 namespace DlssNr::VkRecording
 {
 using Handle = uint64_t;
+
+// What a recording's Begin said about running more than once at a time, as its observer passed it on: whether
+// VkCommandBufferBeginInfo carried VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT. Without that bit Vulkan forbids a
+// second execution while one is pending, so the recording's executions follow one another. Unknown when the observer
+// did not pass the flags on. Read by the Vulkan zero-motion probe (zero-motion-detection.md, "Vulkan"), which writes a
+// grid exclusive to the recording and records nowhere it cannot show that.
+enum class Reuse : uint8_t
+{
+    Unknown,
+    Serial,
+    Simultaneous,
+};
+
+// VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT. This header carries no Vulkan types; DlssNr_MotionProbe_Vk.cpp holds
+// the two equal.
+constexpr uint32_t kSimultaneousUseBit = 0x00000004;
+
+constexpr Reuse ReuseOf(bool known, uint32_t usageFlags)
+{
+    return !known ? Reuse::Unknown : (usageFlags & kSimultaneousUseBit) != 0 ? Reuse::Simultaneous : Reuse::Serial;
+}
+
 struct Ticket
 {
     Handle device = 0;
     Handle buffer = 0;
     uint64_t epoch = 0;
+    Reuse reuse = Reuse::Unknown; // the recording's, not part of its identity
 };
 
 // This registry observes successful Vulkan lifecycle calls; it never issues them. A recording keeps its pins
@@ -66,6 +89,7 @@ class Registry
         Handle pool = 0;
         uint64_t epoch = 0;
         bool recording = false;
+        Reuse reuse = Reuse::Unknown;
         std::unique_ptr<PinBatch> pins;
     };
 
@@ -140,6 +164,7 @@ class Registry
                 record.pool = pool;
                 record.epoch = 0;
                 record.recording = false;
+                record.reuse = Reuse::Unknown;
             }
         }
         catch (const std::bad_alloc&)
@@ -148,7 +173,8 @@ class Registry
         }
     }
 
-    void Begin(Handle buffer)
+    // `reuse` is what the Begin's flags said (ReuseOf); an observer that does not pass them on leaves it Unknown.
+    void Begin(Handle buffer, Reuse reuse = Reuse::Unknown)
     {
         RetiredPins retired;
         {
@@ -162,6 +188,7 @@ class Registry
             retired.Take(std::move(record.pins));
             record.recording = _nextEpoch != 0;
             record.epoch = _nextEpoch;
+            record.reuse = reuse;
             // After the last representable epoch, refuse new recordings instead of reusing old ticket values.
             if (_nextEpoch != 0)
                 ++_nextEpoch;
@@ -259,7 +286,7 @@ class Registry
         const auto it = _records->find(buffer);
         if (it == _records->end() || it->second.device != device || !it->second.recording)
             return std::nullopt;
-        return Ticket { device, buffer, it->second.epoch };
+        return Ticket { device, buffer, it->second.epoch, it->second.reuse };
     }
 
     bool Pin(const Ticket& ticket, const std::vector<std::shared_ptr<void>>& pins)
