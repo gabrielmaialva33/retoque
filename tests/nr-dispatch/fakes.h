@@ -8,6 +8,8 @@ constexpr unsigned kRing = 64;
 #include <atomic>
 #include <cstring>
 #include <iostream>
+#include <iterator>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -22,7 +24,9 @@ using HRESULT = int;
 enum DXGI_FORMAT
 {
     DXGI_FORMAT_UNKNOWN = 0,
+    DXGI_FORMAT_R32G32B32A32_FLOAT = 2,
     DXGI_FORMAT_R16G16B16A16_FLOAT = 10,
+    DXGI_FORMAT_R11G11B10_FLOAT = 26,
     DXGI_FORMAT_R8G8B8A8_TYPELESS = 27,
     DXGI_FORMAT_R8G8B8A8_UNORM = 28,
 };
@@ -44,6 +48,8 @@ struct GUID
 };
 #define LOG_ERROR(...) ((void) 0)
 #define LOG_DEBUG(...) ((void) 0)
+#define LOG_INFO(...) ((void) 0)
+using BOOL = int;
 #define IID_PPV_ARGS(value) value
 #define _countof(value) (sizeof(value) / sizeof((value)[0]))
 
@@ -55,6 +61,43 @@ constexpr int D3D12_HEAP_TYPE_UPLOAD = 1;
 constexpr int D3D12_HEAP_FLAG_NONE = 0;
 constexpr int D3D12_RESOURCE_STATE_GENERIC_READ = 1;
 constexpr unsigned char DlssNr_cso[] = { 1 };
+// The keepless permutation (docs/dlssnr/design/original-in-target.md): its own bytes, so the fakes can tell the two
+// pipelines apart by what each was built from.
+constexpr unsigned char DlssNr_OriginalInTarget_cso[] = { 2 };
+struct ID3D12PipelineState
+{
+    const void* bytecode = nullptr;
+};
+constexpr int D3D12_FEATURE_D3D12_OPTIONS = 0;
+constexpr int D3D12_FEATURE_FORMAT_SUPPORT = 2;
+struct D3D12_FEATURE_DATA_D3D12_OPTIONS
+{
+    BOOL TypedUAVLoadAdditionalFormats = 0;
+};
+enum D3D12_FORMAT_SUPPORT1
+{
+    D3D12_FORMAT_SUPPORT1_NONE = 0
+};
+enum D3D12_FORMAT_SUPPORT2
+{
+    D3D12_FORMAT_SUPPORT2_NONE = 0,
+    D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD = 0x40
+};
+struct D3D12_FEATURE_DATA_FORMAT_SUPPORT
+{
+    DXGI_FORMAT Format;
+    D3D12_FORMAT_SUPPORT1 Support1;
+    D3D12_FORMAT_SUPPORT2 Support2;
+};
+namespace DeferredRelease
+{
+inline unsigned released = 0;
+template <typename T> void Release(T*& object)
+{
+    released += object != nullptr;
+    object = nullptr;
+}
+} // namespace DeferredRelease
 
 struct D3D12_STATIC_SAMPLER_DESC
 {
@@ -188,6 +231,27 @@ struct ID3D12Device
 {
     int failCreateAt = -1, failMapAt = -1, nullMapAt = -1;
     bool failRoot = false, failPipeline = false, failHeaps = false;
+    // TypedUAVLoadAdditionalFormats, the formats answering UAV_TYPED_LOAD, a permutation build failure, and how many
+    // format questions were asked (each format once: the answer is cached).
+    bool typedLoads = true, failOriginalInTargetPipeline = false;
+    std::set<int> typedLoadFormats { DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT };
+    unsigned formatQueries = 0;
+    std::vector<std::unique_ptr<ID3D12PipelineState>> pipelines;
+    HRESULT CheckFeatureSupport(int feature, void* data, UINT size)
+    {
+        if (feature == D3D12_FEATURE_D3D12_OPTIONS)
+        {
+            assert(size == sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS));
+            static_cast<D3D12_FEATURE_DATA_D3D12_OPTIONS*>(data)->TypedUAVLoadAdditionalFormats = typedLoads;
+            return S_OK;
+        }
+        assert(feature == D3D12_FEATURE_FORMAT_SUPPORT && size == sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT));
+        ++formatQueries;
+        auto* support = static_cast<D3D12_FEATURE_DATA_FORMAT_SUPPORT*>(data);
+        support->Support2 =
+            typedLoadFormats.count(support->Format) ? D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD : D3D12_FORMAT_SUPPORT2_NONE;
+        return S_OK;
+    }
     unsigned creates = 0, cbvWrites = 0, srvWrites = 0, uavWrites = 0;
     std::vector<std::unique_ptr<ID3D12Resource>> resources;
     std::array<D3D12_CONSTANT_BUFFER_VIEW_DESC, kRing> cbvs {};
@@ -240,7 +304,11 @@ struct ID3D12GraphicsCommandList
         heap = heaps[0];
     }
     void SetComputeRootSignature(void*) {}
-    void SetPipelineState(void*) {}
+    std::vector<const void*> pipelines; // the bytecode each recorded pass's pipeline was built from
+    void SetPipelineState(void* pipeline)
+    {
+        pipelines.push_back(pipeline ? static_cast<ID3D12PipelineState*>(pipeline)->bytecode : nullptr);
+    }
     void SetComputeRootDescriptorTable(unsigned root, unsigned slot) { assert(root == 0 && slot == heap->slot); }
     void Dispatch(UINT x, UINT y, UINT z)
     {
@@ -274,9 +342,14 @@ class Shader_Dx12
     {
         return !device->failRoot;
     }
-    bool CreateComputePipeline(ID3D12Device* device, void**, const void*, size_t, const char*)
+    template <typename Pipeline>
+    bool CreateComputePipeline(ID3D12Device* device, Pipeline** pipeline, const void* bytecode, size_t, const char*)
     {
-        return !device->failPipeline;
+        if (device->failPipeline || (bytecode == DlssNr_OriginalInTarget_cso && device->failOriginalInTargetPipeline))
+            return false;
+        device->pipelines.push_back(std::make_unique<ID3D12PipelineState>(ID3D12PipelineState { bytecode }));
+        *pipeline = device->pipelines.back().get();
+        return true;
     }
     bool InitHeaps(ID3D12Device* device, FrameDescriptorHeap* heaps, size_t count)
     {

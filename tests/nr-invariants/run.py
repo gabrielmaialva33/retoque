@@ -211,6 +211,8 @@ def header_text(path):
 create_header = root / 'OptiScaler/shaders/shader_tools/create_header.py'
 targets = [
     ('DlssNr_Shader.cso', 'DlssNr_Shader.h', 'DlssNr_cso', b'DXBC'),
+    # The keepless permutation of dlssnr.hlsl (-D NR_ORIGINAL_IN_TARGET, docs/dlssnr/design/original-in-target.md).
+    ('DlssNr_OriginalInTarget_Shader.cso', 'DlssNr_OriginalInTarget_Shader.h', 'DlssNr_OriginalInTarget_cso', b'DXBC'),
     ('DlssNr_Shader_Vk.spv', 'DlssNr_Shader_Vk.h', 'dlssnr_spv', bytes.fromhex('03022307')),
     ('DlssNr_Stabilizer_Shader.cso', 'DlssNr_Stabilizer_Shader.h', 'DlssNr_Stabilizer_cso', b'DXBC'),
 ]

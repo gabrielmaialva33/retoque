@@ -424,11 +424,12 @@ poll = dispatch.find('DlssNr::PairCapture::Poll();')
 if poll < 0 or not dispatch.index('NotePulsePresent(State::Instance().frameCount);') < poll < dispatch.index(
         'return false;'):
     fail('PairCapture::Poll() must come right after NotePulsePresent, before the first return in Dispatch')
-site = dispatch.find('if (wrote && DlssNr::PairCapture::Wanted())')
+site = dispatch.find('if (wrote && !originalInTarget && DlssNr::PairCapture::Wanted())')
 if 'g_capture.isActive() || DlssNr::PairCapture::Wanted()' not in re.sub(r'\s+', ' ', dispatch):
     fail('a frame that may carry the capture must be labelled capture_active in the GPU timing metadata')
-if site < 0 or dispatch.count('if (wrote && DlssNr::PairCapture::Wanted())') != 1:
-    fail('the record site must be guarded by `wrote && DlssNr::PairCapture::Wanted()`, once')
+if site < 0 or dispatch.count('if (wrote && !originalInTarget && DlssNr::PairCapture::Wanted())') != 1:
+    fail('the record site must be guarded by `wrote && !originalInTarget && DlssNr::PairCapture::Wanted()`, once '
+         '(original-in-target.md: a keepless frame has no hdrCopy to record)')
 elif site < dispatch.index('g_nr.stabilizer->Dispatch('):
     fail('the copies must be recorded after the stabilizer, the last write to the target')
 else:

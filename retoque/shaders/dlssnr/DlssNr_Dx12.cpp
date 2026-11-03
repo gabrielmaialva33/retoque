@@ -5,6 +5,7 @@
 #include <dlssnr/DlssNr.h>
 
 #include <dlssnr/DlssNr_Capture.h>
+#include <misc/DeferredRelease.h>
 #include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_PairCaptureDx12.h>
 #include <dlssnr/DlssNr_Proxy.h>
@@ -64,6 +65,7 @@
 #include <vector>
 #include <chrono>
 #include "precompile/DlssNr_Shader.h"
+#include "precompile/DlssNr_OriginalInTarget_Shader.h"
 #include <shaders/output_scaling/OS_Dx12.h>
 #include "DlssNr_Stabilizer_Dx12.h"
 #include "DlssNr_UiMask_Dx12.h"
@@ -572,6 +574,20 @@ DlssNr_Dx12::DlssNr_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_Dx
         return;
     }
 
+    // The keepless permutation is an optimisation, never a requirement: without the device capability, or if its
+    // pipeline will not build, the default pipeline keeps doing everything it did.
+    D3D12_FEATURE_DATA_D3D12_OPTIONS options {};
+    const bool typedLoads =
+        SUCCEEDED(InDevice->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+        options.TypedUAVLoadAdditionalFormats;
+    if (typedLoads && !CreateComputePipeline(InDevice, &_originalInTargetPipeline, DlssNr_OriginalInTarget_cso,
+                                             sizeof(DlssNr_OriginalInTarget_cso), nullptr))
+        _originalInTargetPipeline = nullptr;
+    LOG_INFO("[{0}] original read in place: {1}", _name,
+             _originalInTargetPipeline != nullptr ? "available"
+             : typedLoads                         ? "pipeline failed, keep copy used"
+                                                  : "no typed UAV loads on this device, keep copy used");
+
     if (!InitHeaps(InDevice, _frameHeaps, DLSSNR_NUM_OF_HEAPS))
         return;
 
@@ -589,9 +605,13 @@ DlssNr_Dx12::DlssNr_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_Dx
 bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssNrConstants& InConstants,
                                ID3D12Resource* InSource, ID3D12Resource* InModel, ID3D12Resource* InOriginal,
                                ID3D12Resource* InMotion, ID3D12Resource* InPrevEdit, ID3D12Resource* OutTarget,
-                               ID3D12Resource* OutKeep)
+                               ID3D12Resource* OutKeep, bool originalInTarget)
 {
     if (!_init || InCmdList == nullptr || _device == nullptr || InSource == nullptr || OutTarget == nullptr)
+        return false;
+    // Never half a frame on the permutation: the encode that skipped the keep and the resolve that reads the
+    // target are decided together by Dispatch, and a missing pipeline refuses rather than falling back silently.
+    if (originalInTarget && _originalInTargetPipeline == nullptr)
         return false;
 
     const uint32_t slot = _heapIndex;
@@ -654,7 +674,7 @@ bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssN
     ID3D12DescriptorHeap* heaps[] = { currentHeap.GetHeapCSU() };
     InCmdList->SetDescriptorHeaps(_countof(heaps), heaps);
     InCmdList->SetComputeRootSignature(_rootSignature);
-    InCmdList->SetPipelineState(_pipelineState);
+    InCmdList->SetPipelineState(originalInTarget ? _originalInTargetPipeline : _pipelineState);
     InCmdList->SetComputeRootDescriptorTable(0, currentHeap.GetTableGPUStart());
 
     // Sized from the constants rather than from a resource, because the pass that shrinks the proxy
@@ -666,8 +686,31 @@ bool DlssNr_Dx12::DispatchPass(ID3D12GraphicsCommandList* InCmdList, const DlssN
     return true;
 }
 
+bool DlssNr_Dx12::OriginalInTargetUsable(DXGI_FORMAT format)
+{
+    if (_originalInTargetPipeline == nullptr || static_cast<unsigned>(format) >= std::size(_typedLoad))
+        return false;
+    // Float formats only: their SRV load and typed UAV load are the same value bit for bit. UNORM/sRGB views of the
+    // two kinds may decode differently, and a typeless resource would need the view's translation repeated here.
+    if (format != DXGI_FORMAT_R16G16B16A16_FLOAT && format != DXGI_FORMAT_R32G32B32A32_FLOAT &&
+        format != DXGI_FORMAT_R11G11B10_FLOAT)
+        return false;
+    auto& known = _typedLoad[static_cast<unsigned>(format)];
+    if (known == 0)
+    {
+        D3D12_FEATURE_DATA_FORMAT_SUPPORT support { format, D3D12_FORMAT_SUPPORT1_NONE, D3D12_FORMAT_SUPPORT2_NONE };
+        const bool loads =
+            _device != nullptr &&
+            SUCCEEDED(_device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) &&
+            (support.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD) != 0;
+        known = loads ? 1 : 2;
+    }
+    return known == 1;
+}
+
 DlssNr_Dx12::~DlssNr_Dx12()
 {
+    DeferredRelease::Release(_originalInTargetPipeline);
     for (uint32_t i = 0; i < DLSSNR_NUM_OF_HEAPS; ++i)
     {
         auto& buffer = _constantBuffers[i];
@@ -2146,13 +2189,35 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // The encode reads the source's top-left width x height. That is the whole source on the
     // after-upscale path; on the before-upscale path the source may be a dynamic-resolution game's
     // full allocation, of which the render subrect -- the target's size -- is what was drawn.
+    // Original read in place (docs/dlssnr/design/original-in-target.md): when the frame is edited in place and
+    // nothing but the resolve reads the keep, the encode skips writing hdrCopy and the resolve reads the frame from
+    // the target, which still holds it. Decided once, here, for the encode and the resolve together; every other
+    // reader of hdrCopy below also checks it, so a request arriving mid-frame waits one frame instead of reading a
+    // stale keep. Resources, views and barriers are the same either way: only the shader permutation changes.
+    bool originalInTarget = sourceIsTarget && cfg.DlssNrCompare.value_or_default() == 0 &&
+                            !(cfg.DlssNrStabilizerStrength.value_or_default() > 0.0f) && !g_capture.isActive() &&
+                            !DlssNr::PairCapture::Wanted() && !cfg.DlssNrPulseMetric.value_or_default() &&
+                            !DlssNr::ExposureScan::MeterWanted() && OriginalInTargetUsable(desc.Format);
+    if (originalInTarget)
+    {
+        std::lock_guard<std::mutex> lock(g_detailMeasure.mutex);
+        originalInTarget = !g_detailMeasure.wanted;
+    }
+    static bool s_originalInTargetSaid = false;
+    if (originalInTarget && !s_originalInTargetSaid)
+    {
+        s_originalInTargetSaid = true;
+        LOG_INFO("DLSS-NR: original read in place, no keep copy written ({}x{}, DXGI format {}); once per process",
+                 width, height, static_cast<int>(desc.Format));
+    }
+
     if (sourceIsTarget)
         Barrier(cmdList, target, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
     {
         ReadResourceScope exposureRead(cmdList, exposureTex, exposureBarrierState);
         DispatchPass(cmdList, encodeParams, source, nullptr, nullptr, nullptr, exposureTex, g_nr.colorCopy,
-                     g_nr.hdrCopy);
+                     g_nr.hdrCopy, originalInTarget);
     }
 
     if (sourceIsTarget)
@@ -2867,6 +2932,10 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         resolveParams.ReversibleMode = cfg.DlssNrReversibleMode.value_or_default();
         resolveParams.ApplyModel = cfg.DlssNrApplyModel.value_or_default() ? 1u : 0u;
         resolveParams.CompareMode = cfg.DlssNrCompare.value_or_default();
+        // Side by side samples the original at another pixel, which the target cannot give back once threads write
+        // it. A comparison switched on after the encode chose to read in place waits for the next frame.
+        if (originalInTarget)
+            resolveParams.CompareMode = 0;
         resolveParams.CompareSplit = cfg.DlssNrCompareSplit.value_or_default();
         resolveParams.CompareZoom = std::max(1.0f, cfg.DlssNrCompareZoom.value_or_default());
         resolveParams.CompareSwap = cfg.DlssNrCompareSwap.value_or_default() ? 1u : 0u;
@@ -3145,7 +3214,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         {
             ReadResourceScope exposureRead(cmdList, exposureTex, exposureBarrierState);
             wrote = DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, motionIn,
-                                 exposureTex, target, nullptr);
+                                 exposureTex, target, nullptr, originalInTarget);
         }
         Barrier(cmdList, finalOutput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -3176,7 +3245,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // composition used -- not colorCopy, the model's proxy, whose knee flattens every stop above white
         // while the resolve takes those highlights from hdrCopy. And only over a frame the resolve actually
         // wrote; otherwise there is no answer to hold. Off and before-upscale were parked at the top.
-        if (stabilizerStrength > 0.0f && !beforeUpscale && wrote)
+        if (stabilizerStrength > 0.0f && !beforeUpscale && wrote && !originalInTarget)
         {
             // HDR10 at present: the creep's unit is a PQ code, the format the frame goes out in, not the work
             // texture's.
@@ -3225,7 +3294,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // upscaler produced it, and the edited frame is the output itself. The write happens a few
         // frames later, once the GPU is certainly past these copies -- this path has no fence of its
         // own.
-        if (g_capture.isActive())
+        if (g_capture.isActive() && !originalInTarget)
         {
             // "Before" is hdrCopy, the encode's keep: the frame value for value, the one the pass read (the held
             // frame while Hold is on), on every route. The in-place routes used to record colorCopy, which is the
@@ -3243,7 +3312,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Only a frame the resolve wrote. Idle, one relaxed load; the description is built only when one is wanted.
         // Describing the frame allocates; like the timing metadata above, a throw must not leave the frame, so the
         // capture is withdrawn with a reason instead.
-        if (wrote && DlssNr::PairCapture::Wanted())
+        if (wrote && !originalInTarget && DlssNr::PairCapture::Wanted())
         {
             try
             {
@@ -3341,7 +3410,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             g_detailMeasure.status.running = g_detailMeasure.wanted;
         }
 
-        if (g_detailMeasure.wanted && wrote && DlssNr_DetailStats_Dx12::Available())
+        if (g_detailMeasure.wanted && wrote && !originalInTarget && DlssNr_DetailStats_Dx12::Available())
         {
             if (!g_detailMeasure.running)
             {
@@ -3491,8 +3560,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // what is shown. The same reduction is the exposure scan's meter when its match wants one ([DlssNr] ScanMatch);
     // with both off it builds and records nothing.
     UpdatePulse(cmdList, device, cfg.DlssNrPulseMetric.value_or_default(), DlssNr::ExposureScan::MeterWanted(), target,
-                g_nr.hdrCopy, wrote, width, height, static_cast<uint32_t>(desc.Format), cadenceInputs.requested,
-                cadenceInputs.smoothing, DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default()),
+                g_nr.hdrCopy, wrote && !originalInTarget, width, height, static_cast<uint32_t>(desc.Format),
+                cadenceInputs.requested, cadenceInputs.smoothing,
+                DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default()),
                 DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default()), cadence.cadence, carried, observedFrame,
                 std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
 

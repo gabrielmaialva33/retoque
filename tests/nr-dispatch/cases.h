@@ -12,6 +12,56 @@ void PrimeRing(DlssNr_Dx12& shader, ID3D12GraphicsCommandList& cmd, ID3D12Resour
     }
 }
 
+// The keepless permutation (docs/dlssnr/design/original-in-target.md): built only with the device capability, used
+// only for a float format the device loads as a typed UAV, and never half a frame -- a pass asking for it without the
+// pipeline records nothing.
+void OriginalInTargetPermutation()
+{
+    DlssNrConstants constants {};
+    constants.Width = 16;
+    constants.Height = 16;
+    {
+        ID3D12Device device;
+        ID3D12GraphicsCommandList cmd;
+        ID3D12Resource source, target;
+        DlssNr_Dx12 shader("keepless", &device);
+        assert(shader.IsInit() && device.pipelines.size() == 2);
+        assert(shader.OriginalInTargetUsable(DXGI_FORMAT_R16G16B16A16_FLOAT));
+        assert(shader.OriginalInTargetUsable(DXGI_FORMAT_R16G16B16A16_FLOAT) && device.formatQueries == 1);
+        assert(!shader.OriginalInTargetUsable(DXGI_FORMAT_R11G11B10_FLOAT) && device.formatQueries == 2);
+        assert(!shader.OriginalInTargetUsable(DXGI_FORMAT_R11G11B10_FLOAT) && device.formatQueries == 2);
+        // UNORM and typeless are refused before the device is asked: their SRV and UAV reads may differ.
+        assert(!shader.OriginalInTargetUsable(DXGI_FORMAT_R8G8B8A8_UNORM));
+        assert(!shader.OriginalInTargetUsable(DXGI_FORMAT_R8G8B8A8_TYPELESS) && device.formatQueries == 2);
+        assert(!shader.OriginalInTargetUsable(static_cast<DXGI_FORMAT>(4096)));
+
+        assert(shader.DispatchPass(&cmd, constants, &source, nullptr, nullptr, nullptr, nullptr, &target, &target));
+        assert(
+            shader.DispatchPass(&cmd, constants, &source, nullptr, nullptr, nullptr, nullptr, &target, &target, true));
+        assert(cmd.pipelines.size() == 2 && cmd.pipelines[0] == DlssNr_cso &&
+               cmd.pipelines[1] == DlssNr_OriginalInTarget_cso);
+        // Same views either way: only the pipeline differs.
+        assert(cmd.recorded.size() == 2);
+    }
+    assert(DeferredRelease::released >= 1);
+    for (unsigned variant = 0; variant < 2; ++variant)
+    {
+        ID3D12Device device;
+        device.typedLoads = variant != 0;
+        device.failOriginalInTargetPipeline = variant != 0;
+        ID3D12GraphicsCommandList cmd;
+        ID3D12Resource source, target;
+        DlssNr_Dx12 shader("no keepless", &device);
+        assert(shader.IsInit()); // The default pipeline is all the pass needs.
+        assert(!shader.OriginalInTargetUsable(DXGI_FORMAT_R16G16B16A16_FLOAT) && device.formatQueries == 0);
+        assert(
+            !shader.DispatchPass(&cmd, constants, &source, nullptr, nullptr, nullptr, nullptr, &target, &target, true));
+        assert(cmd.recorded.empty() && cmd.pipelines.empty());
+        assert(shader.DispatchPass(&cmd, constants, &source, nullptr, nullptr, nullptr, nullptr, &target, &target));
+        assert(cmd.pipelines.size() == 1 && cmd.pipelines[0] == DlssNr_cso);
+    }
+}
+
 // One more pass over the ring, answering how many views it had to write.
 struct Written
 {
@@ -255,11 +305,17 @@ int main()
     DlssNr_Dx12 noDevice("no device", nullptr);
     assert(!noDevice.IsInit());
     ReshapingRetiresDescriptors();
+    OriginalInTargetPermutation();
     ScratchAllocationRetiresDescriptors();
     ReplacedGameResourceRetiresDescriptors();
     SaturatedGenerationStopsReuse();
 
-    std::cout << "PASS: production dispatch, 145 passes over a " << kRing << "-slot ring, isolated ring slots, fixed "
-                 "CBVs, " << 3 * kRing + 4 << " initialization failures, descriptor reuse retired by 6 reshapes, by "
-                 "allocation, by a replaced game resource and by saturation\n";
+    std::cout
+        << "PASS: production dispatch, 145 passes over a " << kRing
+        << "-slot ring, isolated ring slots, fixed "
+           "CBVs, "
+        << 3 * kRing + 4
+        << " initialization failures, descriptor reuse retired by 6 reshapes, by "
+           "allocation, by a replaced game resource and by saturation; the keepless permutation built, chosen and "
+           "refused only as its device and format allow\n";
 }

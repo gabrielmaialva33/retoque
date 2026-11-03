@@ -138,8 +138,19 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
     uint32_t _numThreadsX = 8;
     uint32_t _numThreadsY = 8;
 
+    // The NR_ORIGINAL_IN_TARGET permutation (docs/dlssnr/design/original-in-target.md): the encode writes no keep and
+    // the resolve reads the frame from the target. Its DXIL requires TypedUAVLoadAdditionalFormats, so it is built
+    // only on a device that has it; null otherwise, and the default pipeline is all there is.
+    ID3D12PipelineState* _originalInTargetPipeline = nullptr;
+    // Per DXGI format: 0 unknown, 1 typed UAV loads supported, 2 not.
+    uint8_t _typedLoad[256] = {};
+
   public:
     DlssNr_Dx12(std::string InName, ID3D12Device* InDevice);
+
+    // Whether this frame's target can be read as its own original: the permutation exists, the format is one whose
+    // SRV and typed UAV loads return the same values (float formats only), and the device loads it as a typed UAV.
+    bool OriginalInTargetUsable(DXGI_FORMAT format);
     ~DlssNr_Dx12();
 
     // The pass. Resources in, and nothing read from anywhere the caller cannot see.
@@ -177,5 +188,7 @@ class DlssNr_Dx12 : public Shader_Dx12, public DlssNr_Common
                       // Vestigial. Fed to the slot the removed edit accumulator read its history from;
                       // nothing reads it now and every caller passes nullptr. Kept only so the binding
                       // table keeps its shape -- not evidence that temporal accumulation exists.
-                      ID3D12Resource* InPrevEdit, ID3D12Resource* OutTarget, ID3D12Resource* OutKeep);
+                      ID3D12Resource* InPrevEdit, ID3D12Resource* OutTarget, ID3D12Resource* OutKeep,
+                      // The encode and the resolve of one frame pass the same value; anything else refuses.
+                      bool originalInTarget = false);
 };
