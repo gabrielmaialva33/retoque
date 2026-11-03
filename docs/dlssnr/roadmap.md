@@ -24,10 +24,9 @@ Do not overwrite a newer field record with this planning snapshot; link the new 
 | Priority | Candidate | Next decision / evidence needed |
 |---|---|---|
 | 1 | Revisit ViT reuse | Reconcile [vit-skip](design/vit-skip.md) with the newer reference implementation; profile on target hardware, especially Ampere, before a port. Include cuts, resize and total-frame cost |
-| 2 | User-facing diagnostic export and effective-state explanation | Reuse current NGX/route/guide facts; separate detected inputs from inputs actually used. This is a future in-game feature, not the release sidecar added by repository tooling |
-| 3 | Adaptive LSFG multiplier | Establish presenter's runtime baseline first; measure real FPS, latency and pacing, not only generated FPS. Respect V-Sync target limits without changing VRR. A log-only [shadow](design/lsfg-adaptive-shadow.md) (phase 1, 2026-10-30 branch) records that baseline; its runtime traces come before any acting phase |
-| 4 | Evaluate RR scale 0.75 on Ada | Extend the [retention study](design/working-scale-detail-retention.md) beyond one clip; A/A calibration, visual review, non-RR and varied motion. Pin and record the RR provider and preset: SDK 310.9.1 made RR Preset F the default. Defaults stay unchanged |
-| 5 | Additional temporal / private-reconstruction ideas | Compare against existing Stage/Transfer behavior and [rejected measurements](design/look-model-half-rate.md); only a demonstrated gap earns a new experiment |
+| 2 | Adaptive LSFG multiplier | Establish presenter's runtime baseline first; measure real FPS, latency and pacing, not only generated FPS. Respect V-Sync target limits without changing VRR. A log-only [shadow](design/lsfg-adaptive-shadow.md) (phase 1, 2026-10-30 branch) records that baseline; its runtime traces come before any acting phase |
+| 3 | Evaluate RR scale 0.75 on Ada | Extend the [retention study](design/working-scale-detail-retention.md) beyond one clip; A/A calibration, visual review, non-RR and varied motion. Pin and record the RR provider and preset: SDK 310.9.1 made RR Preset F the default. Defaults stay unchanged |
+| 4 | Additional temporal / private-reconstruction ideas | Compare against existing Stage/Transfer behavior and [rejected measurements](design/look-model-half-rate.md); only a demonstrated gap earns a new experiment |
 
 ## Implemented paths with remaining coverage work
 
@@ -43,12 +42,19 @@ External sm86 operation has actual target-hardware field records, including a 20
 That does not finish the separate native Retoque provider plan; see [mfg-rtx20-30](design/mfg-rtx20-30.md).
 Windows fixture runs, native Windows game runs and a release's binary qualification remain distinct.
 
+Diagnostic export is implemented ([diagnostic-export](design/diagnostic-export.md)). Next work is a current-binary
+in-game check of "Copy NR diagnostics": detected versus used inputs, pending/stale timing, NR off and redaction.
+Host coverage does not validate the clipboard result in a running game.
+
 ## Parked or deliberately not promoted
 
 Real depth without an upscaler remains gated on the value experiment in
 [present-depth-without-upscaler](design/present-depth-without-upscaler.md), not on implementing a scanner first.
 `Stage=1` is not promoted to the default from a single [before-upscale measurement](design/stage-before-upscale-measured.md).
 The tested adaptive cadence and half-rate look model were not promoted; preserve their negative results.
+The guide-fidelity probe is designed and parked, not implemented. Its temporal pairing, ordering, source continuity
+and recording/readback lifetime contracts must close before implementation; see
+[guide-fidelity-probe](design/guide-fidelity-probe.md). It supplies no current guide-quality verdict.
 Ten-pass chains, unrelated capture/character-inspector features and closed reference DLLs are not adopted simply
 because another project advertises them.
 

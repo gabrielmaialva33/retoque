@@ -429,7 +429,7 @@ class Config
     // Smoothing for model cadence, on its own frames only: a new model answer is walked in from the carried edit over
     // the whole interval instead of replacing it at once, and the mean light of what the cadence shows may move by at
     // most 1.5 stops a second while the frame's own light holds still. Display only; the stored edit and the model's
-    // history stay the model's own. On by default -- it only acts once Cadence is above 1, which is off by default.
+    // history stay the model's own. Off by default, and it only acts once Cadence is above 1, also off by default.
     // See docs/dlssnr/design/cadence-smoothing.md.
     CustomOptional<bool> DlssNrCadenceSmoothing { false };
     // Adaptive cadence: Cadence becomes the longest interval, shortened when sampled motion or rejected carry is high
@@ -698,7 +698,8 @@ class Config
     CustomOptional<uint32_t> DlssNrPasses { 1 };
     CustomOptional<bool> DlssNrIndividualPassSettings { false };
 
-    // Opt-in timestamp collection. Interval counts eligible NR evaluations, not presented frames.
+    // Opt-in timestamp collection. Interval counts each GPU timing stream's own eligible events (NR evaluations,
+    // Present-route recordings, guide captures), never presented frames; the Present CPU stream does not use it.
     struct DlssNrGpuTimingSettings
     {
         bool Enabled = false;
