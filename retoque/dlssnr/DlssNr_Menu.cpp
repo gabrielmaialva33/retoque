@@ -17,6 +17,7 @@
 #include "DlssNr_ModelLogParse.h"
 #include "DlssNr_ModelStats.h"
 #include "DlssNr_NgxInfo.h"
+#include "DlssNr_ModelFileFind.h"
 #include "DlssNr_PresentBoundary.h"
 #include "DlssNr_PresentHdr.h"
 #include "DlssNr_PairCapture.h"
@@ -29,6 +30,7 @@
 #include <BuildInfo.h>
 #include <Config.h>
 #include <State.h>
+#include <Util.h>
 #include <lsfg/Lsfg.h>
 #include <menu/menu_common.h>
 #include <shaders/dlssnr/DlssNr_Periphery.h>
@@ -392,7 +394,11 @@ static std::string CollectDiagnosticReport(Config* config)
         in.upscaler = state.currentFeature->Name();
     if (const char* route = DlssNr::Dx11Route::ReportText(DlssNr::Dx11RouteReport()))
         in.dx11Route = route;
-    if (const auto model = DlssNr::NgxInfo::FindModel(); model.has_value())
+    // The model Retoque's loaders use: the file [DlssNr] ModelFile names, else the default as before
+    // (docs/dlssnr/design/model-file.md). A named file resolves with two file checks, never a search.
+    if (const auto model = DlssNr::ModelFile::Explicit() ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())
+                                                         : DlssNr::NgxInfo::FindModel();
+        model.has_value())
     {
         if (const auto ngx = DlssNr::NgxInfo::Described(*model); ngx.has_value())
         {

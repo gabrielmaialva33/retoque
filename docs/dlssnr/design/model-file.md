@@ -54,8 +54,12 @@ Otherwise it would run the default model under a setting that names another one.
 
 Two places identified the loaded model by base name: the NgxInfo model line and the timing identity. A game can
 have its own `nvngx_dlssnr.dll` loaded under the same base name, and `GetModuleHandleW` then picks either. Under a
-named file, both now look the module up by the named file's full path. Under `auto` they look it up by base name,
-as before.
+named file, both now look the module up by the full path of the **first** named file found, which is the one the
+loaders load and keep for the process. A later resolution that lands elsewhere (a file moved meanwhile) does not
+change it (2026-11-03 follow-up). Under `auto` they look it up by base name, as before.
+
+The "Copy NR diagnostics" report describes the named file too; under `auto` it describes the default file, as
+before. Until this follow-up it described the default file in both cases.
 
 ## Install and release tools
 

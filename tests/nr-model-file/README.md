@@ -26,12 +26,14 @@ Source guards read the production tree and check:
 - auto is the old search, from each site's own folder, with the old reason text;
 - the two D3D12 create sites, the scaling ratios, the D3D11 probe, Vulkan and the pair capture ask the resolver;
 - UseProxy keeps the driver's file and refuses a named one before its gate and its create;
-- identity and log labels follow the named file, and a named model is looked up by its full path;
+- identity and log labels follow the named file; a named model is looked up by the full path of the first file
+  found, and a later resolution does not move it;
+- the diagnostics report describes the named model;
 - paths are made from UTF-8, not through the code page;
 - the four config points, frozen by the constructor and kept out of the log's parameter list;
 - the design record.
 
-Eleven source mutants must each fail a guard.
+Thirteen source mutants must each fail a guard.
 
 Not proved here: that a renamed model loads and runs through the forwarder, the direct runtime or Vulkan, that
 the model's caller checks accept it, MSVC compilation (the Release build covers that), or native Windows.

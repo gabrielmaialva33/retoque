@@ -95,6 +95,7 @@ Related, outside that sequence:
 - [dx12-robustness.md](design/dx12-robustness.md): the device taken from the command list under a wrapper layer (ReShade), the stand-down for several views in one colour allocation, and Stage 1 declining multi-mip colour (2026-10-30, host-tested only).
 - [streamline-native-nr.md](design/streamline-native-nr.md): standing down on every route while the game runs its own NR through Streamline's `sl.dlss_nr` (feature 1004, Streamline 2.14), with the panel saying so (2026-10-30, host-tested only).
 - [model-file.md](design/model-file.md): `[DlssNr] ModelFile` names the model file Retoque's loaders use, for A/B runs; a named file that is missing never falls back, UseProxy is refused with one (2026-11-03, host-tested only).
+- [model-file-menu.md](design/model-file-menu.md): a menu list of the model files found, designed and reviewed, parked with the review's simpler shape (2026-11-03, not built).
 - [sl-tag-inventory.md](design/sl-tag-inventory.md): which buffers the game tags for Streamline and whether its HUD-less colour or UI alpha would be valid at Present, said in one log line with NR on (2026-11-03, log only, host-tested only).
 - [guide-fidelity-probe.md](design/guide-fidelity-probe.md): measuring whether the game's motion explains the picture at present, designed and reviewed, parked with the contracts it still lacks (2026-11-03, not built).
 - [nr-menu-mode.md](design/nr-menu-mode.md): keeping NR running while the upscaler is idle in menus.
