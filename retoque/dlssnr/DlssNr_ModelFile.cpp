@@ -17,7 +17,7 @@ namespace
 {
 std::mutex g_lock;             // the lines below and the resolved name; a leaf
 std::string g_refusal;         // set once per process, from the frozen setting, never shrunk: c_str() stays valid
-std::filesystem::path g_named; // the last named file found, for LoadedModule and Display
+std::filesystem::path g_named; // the first named file found, for LoadedModule
 std::string g_label;
 bool g_saidFound = false;
 bool g_saidRefused = false;
@@ -63,8 +63,13 @@ std::optional<std::filesystem::path> Find(const std::filesystem::path& siteFolde
         }
         else
         {
-            g_named = named.path;
-            g_label = named.label;
+            // The first file found is the one the loaders load and keep for the process (they load once); a later
+            // Find that lands elsewhere (a file moved meanwhile) does not change which module is ours.
+            if (g_named.empty())
+            {
+                g_named = named.path;
+                g_label = named.label;
+            }
             if (!g_saidFound)
             {
                 g_saidFound = true;

@@ -84,6 +84,7 @@ PRODUCTION = [p for d in ('retoque', 'OptiScaler') for p in (ROOT / d).rglob('*'
 
 sources = {
     'glue': read('retoque/dlssnr/DlssNr_ModelFile.cpp'),
+    'menu': read('retoque/dlssnr/DlssNr_Menu.cpp'),
     'rule': read('retoque/dlssnr/DlssNr_ModelFile.h'),
     'renderer': read('retoque/shaders/dlssnr/DlssNr_Dx12.cpp'),
     'model': read('retoque/shaders/dlssnr/DlssNr_Dx12_Model.cpp'),
@@ -139,6 +140,13 @@ def check(s, tree):
     assert 'DlssNr::ModelFile::Find(Util::DllPath().remove_filename())' in snippet
     assert s['vk'].count('DlssNr::ModelFile::NotFoundReason()') == 2, 'a Vulkan refusal keeps the default text'
     assert 'ModelFile::Find(Util::DllPath().remove_filename())' in s['pair'], 'the capture describes another model'
+    # The diagnostics report describes the named model; under auto, the default file as before.
+    assert re.search(r'const auto model = DlssNr::ModelFile::Explicit\(\) \? DlssNr::ModelFile::Find\(Util::DllPath\(\)'
+                     r'\.remove_filename\(\)\)\s*: DlssNr::NgxInfo::FindModel\(\);', s['menu']), \
+        'the diagnostics report describes the default file under a named one'
+    # The module identity is the first named file found, the one the loaders loaded; a later Find does not move it.
+    assert re.search(r'if \(g_named\.empty\(\)\)\s*\{\s*g_named = named\.path;', s['glue']), \
+        'a later Find changes which module is taken for the loaded model'
 
     # --- The driver's route keeps the driver's file, and is refused when a file is named.
     model = body(s['ngx'], 'std::optional<std::filesystem::path> FindModel()')
@@ -202,6 +210,9 @@ SOURCE_MUTANTS = {
     'full path in the direct error': ('direct', 'DlssNr::ModelFile::Display(path), error', 'wstring_to_string(path), error'),
     'auto from another folder': ('glue', 'auto snippet = Util::FindFilePath(siteFolder, kDefaultName);',
                                  'auto snippet = Util::FindFilePath(OptiFolder(), kDefaultName);'),
+    'diagnostics on the default file': ('menu', 'DlssNr::ModelFile::Explicit() ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())',
+                                        'false ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())'),
+    'identity follows the last Find': ('glue', '            if (g_named.empty())\n', '            if (true)\n'),
     'Vulkan default text': ('vk', '            Fail(DlssNr::ModelFile::NotFoundReason());',
                             '            Fail("nvngx_dlssnr.dll was not found beside OptiScaler or the game");'),
 }
