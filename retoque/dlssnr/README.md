@@ -123,7 +123,12 @@ cd retoque/shaders/dlssnr/precompile
 ../../../../OptiScaler/shaders/shader_tools/dxc.exe -spirv -T cs_6_0 -E CSMain -O3 -Qstrip_debug -D VK_MODE -Cc -Vi dlssnr.hlsl -Fo DlssNr_Shader_Vk.spv
 python ../../../../OptiScaler/shaders/shader_tools/create_header.py DlssNr_Shader.cso DlssNr_Shader.h DlssNr_cso
 python ../../../../OptiScaler/shaders/shader_tools/create_header.py DlssNr_Shader_Vk.spv DlssNr_Shader_Vk.h dlssnr_spv
+../../../../OptiScaler/shaders/shader_tools/dxc.exe -T cs_6_0 -E CSMain -O3 -Qstrip_debug -Qstrip_reflect -D NR_ORIGINAL_IN_TARGET dlssnr.hlsl -Fo DlssNr_OriginalInTarget_Shader.cso
+python ../../../../OptiScaler/shaders/shader_tools/create_header.py DlssNr_OriginalInTarget_Shader.cso DlssNr_OriginalInTarget_Shader.h DlssNr_OriginalInTarget_cso
 ```
+
+The last two build the D3D12-only keepless permutation (`../../docs/dlssnr/design/original-in-target.md`); the
+default build must stay byte-identical when the shader changes for it.
 
 On Linux run `dxc.exe` under the msvc-wine prefix (`WINEPREFIX=~/.local/opt/msvc-wineprefix wine
 ...`), and not while a build is using it. The committed `.cso` is DXIL from dxc `cs_6_0`; an older

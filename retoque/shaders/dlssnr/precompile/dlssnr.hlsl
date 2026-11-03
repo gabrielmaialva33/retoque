@@ -246,6 +246,20 @@ RWTexture2D<float4> gKeep     : register(u1);  // encode: the frame value for va
 #endif
 SamplerState        gLinear   : register(s0);  // so the edit can be read at a different size
 
+// The frame the resolve composes over, at this thread's own pixel. The default build reads the encode's keep.
+// NR_ORIGINAL_IN_TARGET is a D3D12-only permutation (DlssNr_OriginalInTarget_Shader.h): its encode writes no keep
+// and its resolve reads the frame from the target itself, which still holds it -- nothing writes the target between
+// the encode and the resolve, and each thread reads its own pixel before writing it. The host uses it only where that
+// holds (same resource in and out, a float format, no side-by-side comparison, no other reader of the keep); see
+// docs/dlssnr/design/original-in-target.md.
+// A macro, not a function: the default build then expands to exactly the load it always had, so its DXIL and SPIR-V
+// stay byte-identical.
+#ifdef NR_ORIGINAL_IN_TARGET
+#define NR_ORIGINAL_AT(p) gTarget[p]
+#else
+#define NR_ORIGINAL_AT(p) gOriginal.Load(int3(p, 0))
+#endif
+
 // The picture white point. Sources 0 (paper white) and 2 (scan) resolve it on the CPU and pass it in
 // gWhitePoint; source 1 (the game's own exposure) also passes a CPU value in gWhitePoint as a fallback,
 // but when the exposure texture is bound (D3D12) it is recomputed HERE from the live exposure --
@@ -776,7 +790,9 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         // value, signs included. Scene-linear HDR carries negative channels after a wide-gamut transform,
         // and scRGB carries them by definition; clamping them here took them out of the frame even with
         // the model's edit at zero. Only what the model is shown below has to be non-negative light.
+#ifndef NR_ORIGINAL_IN_TARGET
         gKeep[id.xy] = source;
+#endif
 
         // Some games hand DLSS a frame that has already been through their tonemapper. The game says
         // which in its own DLSS creation flags, and converting one that needs no conversion is pure
@@ -862,7 +878,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     // not always x; and the replace decodes and the colour boost above 1 never reduced to the frame at all.
     if (gCompareMode == 0 && gDebugView == 0 && gTransferStrength <= 0.0)
     {
-        gTarget[id.xy] = gOriginal.Load(int3(id.xy, 0));
+        gTarget[id.xy] = NR_ORIGINAL_AT(id.xy);
         return;
     }
 
@@ -881,8 +897,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     // Under Transfer 2 the model slot holds a carrier, where 0.5 is "no change"; the carrier encode already
     // made an empty answer neutral, so there is nothing to test here.
     const bool emptyModel = gTransfer != 2 && all(modelDirect <= 1e-5);
-    float4 originalSample = gCompareMode == 1 ? gOriginal.SampleLevel(gLinear, cmpUv, 0)
-                                              : gOriginal.Load(int3(id.xy, 0));
+    float4 originalSample = gCompareMode == 1 ? gOriginal.SampleLevel(gLinear, cmpUv, 0) : NR_ORIGINAL_AT(id.xy);
 
     // All three pictures have to share a scale before their luminances can be compared. The proxy and
     // the model come back from an sRGB decode, so they sit in 0..1 where 1 is the white point; the

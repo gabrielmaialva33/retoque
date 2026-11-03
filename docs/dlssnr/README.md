@@ -26,6 +26,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 - [model-310-9-16.md](design/model-310-9-16.md): NVIDIA's October weight set (310.9.16), where the file comes from, what the preset selects, and the panel line that reports which set the model built.
 - [vit-skip.md](design/vit-skip.md): kernel-variant profiling of the model and a proposal to skip its ViT bottleneck on alternating frames.
 - [dispatch-cpu-overhead.md](design/dispatch-cpu-overhead.md): persistent mapping of the upload buffers and CBV setup for the composition pass.
+- [original-in-target.md](design/original-in-target.md): the D3D12 permutation that writes no keep copy and reads the original from the target when the frame is edited in place.
 - [descriptor-reuse.md](design/descriptor-reuse.md): keeping each ring slot's SRV/UAV descriptors until their key changes.
 - [bounded-chain.md](design/bounded-chain.md): the one-to-three-pass D3D12 model chain and its contract.
 - [network-scale.md](design/network-scale.md): `DLSSNR.ScalingRatio`, measured 2026-10-20: ignored by the unmodified 310.8 and 310.9.16 runtimes (output byte-identical at 0.5 and 0.85); not shipped.
