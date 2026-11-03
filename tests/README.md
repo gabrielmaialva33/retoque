@@ -184,6 +184,13 @@ production headers or source slices with local fakes under AddressSanitizer and 
   Source guards: constants equal the cbuffer, one grid and one sampling on both sides, optional bytecode, the probe
   recorded once in `Dispatch` on the game's readable guides before the resample, the rule applied where the frame's
   reset is read, never a CPU wait, parked and freed. No GPU, no shader compile.
+- `nr-vk-zero-motion` — zero-motion detection on the Vulkan after-upscale route (`docs/dlssnr/design/zero-motion-detection.md`,
+  "Vulkan"): the production route state (`DlssNr_VkMotionProbe.h`) with the real ring, registry and detector, the
+  production pass against recording Vulkan fakes, and the route's probe functions extracted verbatim, under ASan/UBSan:
+  the command stream, None/None/Dead then Alive, the sentinel over an old valid grid, recording order, saturation and
+  staleness, Dead on one device then a stable failure on another with no policy reset, refusals, exclusive slots.
+  Source guards on the shader's `VK_MODE` block, the push block, the V-06 order behind `ZeroGuideReset`, no CPU wait,
+  the route's ends and the project; seventeen planted mutants. No GPU, no shader compile.
 - `nr-scene-cut` — scene-cut detection, phase 1 (`docs/dlssnr/design/scene-cut-detection.md`): the pure rule in
   `DlssNr_SceneCut.h`, not yet called by the renderer. Synthetic 16x16 grids in the pulse pass's layout: static,
   pans, zoom, hard cuts (a 100-pair recall floor), flashes, an explosion, muzzle flashes, fades and a dissolve; the

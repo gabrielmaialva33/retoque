@@ -2124,6 +2124,9 @@
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMeterReadback.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMotionProbe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Scaler_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -2173,6 +2176,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\retoque\dlssnr\DlssNr_MotionProbe.h">
@@ -2269,6 +2275,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_MotionProbe_Vk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_PresentHdr_Dx12.cpp">

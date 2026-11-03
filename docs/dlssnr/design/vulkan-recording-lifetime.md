@@ -14,6 +14,12 @@ A fork-owned, standard-library-only registry associates device, pool and command
 
 Successful Begin (implicit reset), ResetCommandBuffer and ResetCommandPool remove the previous recording's leases. FreeCommandBuffers and DestroyCommandPool remove records after forwarding. End preserves leases while closing admission. Submission and fence completion never release a lease: legal resubmission remains possible. Failed Vulkan operations leave the registry unchanged. Reused handles cannot admit stale tickets.
 
+A successful Begin also records what its flags said about re-execution (`VkRecording::Reuse`: serial without
+`VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT`, simultaneous with it, unknown when an observer does not pass the flags
+on), and the ticket carries it; it is not part of the ticket's identity. Nothing in the lifecycle depends on it; the
+Vulkan zero-motion probe reads it to record only into recordings that cannot run twice at once
+([zero-motion-detection.md](zero-motion-detection.md), "Vulkan"). Allocate forgets it.
+
 The existing Vulkan_wDx12 wrappers observe the application lifecycle, including exported and proc-address paths. The opt-in Vulkan present host also installs independent lifecycle observers through its existing multi-target detour mechanism, so marker/SkipHooks modes retain the same protection without enabling the old bundle. Host-owned command buffers explicitly report operations that use trampolines. Unknown command buffers remain inadmissible.
 
 References removed under the registry mutex are destroyed after unlocking. This permits lease destructors to reenter and avoids inversions with the route mutex. Device invalidation removes all epochs only at a real device-destruction boundary or after marking resources abandoned.

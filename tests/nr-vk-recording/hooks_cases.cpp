@@ -407,6 +407,43 @@ void HostBypassLifecycle()
           "host Free must retain until forwarding, retire and clear the caller's handle");
 }
 
+// What each Begin said about simultaneous use reaches the recording's ticket (the Vulkan zero-motion probe records only
+// into a recording that runs one execution at a time); a Begin whose flags were not passed on stays Unknown.
+void BeginFlagsReachTheTicket()
+{
+    VkCommandBufferAllocateInfo info {};
+    info.commandPool = pool;
+    info.commandBufferCount = 1;
+    VkCommandBuffer buffer = nullptr;
+    Check(Vulkan_wDx12::hk_vkAllocateCommandBuffers(device, &info, &buffer) == VK_SUCCESS, "allocation must pass");
+    VkCommandBufferBeginInfo begin {};
+    Check(Vulkan_wDx12::hk_vkBeginCommandBuffer(buffer, &begin) == VK_SUCCESS, "Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Serial,
+          "a game Begin without SIMULTANEOUS_USE must reach the ticket as serial");
+    begin.flags = kSimultaneousUseBit | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    Check(Vulkan_wDx12::hk_vkBeginCommandBuffer(buffer, &begin) == VK_SUCCESS, "Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Simultaneous,
+          "a game Begin with SIMULTANEOUS_USE must reach the ticket as simultaneous");
+    Check(Vulkan_wDx12::hk_vkBeginCommandBuffer(buffer, nullptr) == VK_SUCCESS, "Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Unknown, "a Begin without its info stays unknown");
+    begin.flags = 0;
+    driver.beginResult = VK_ERROR_UNKNOWN;
+    Vulkan_wDx12::hk_vkBeginCommandBuffer(buffer, &begin);
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Unknown,
+          "a failed Begin must leave the recording, and what it said, unchanged");
+    driver.beginResult = VK_SUCCESS;
+    R().Begin(Key(buffer));
+    Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Unknown,
+          "an observer that passes no flags must not inherit the previous Begin's");
+
+    DeviceTransport dev;
+    auto own = AllocateCommandBuffer(dev, 3);
+    Check(own != nullptr && Begin(dev, own), "host Begin must pass");
+    Check(R().Current(Key(device), Key(own))->reuse == Reuse::Serial,
+          "the host's own one-time-submit recordings are serial");
+    FreeCommandBuffer(dev, 3, own);
+}
+
 void HostRecordingEndSites()
 {
     DeviceTransport dev;
@@ -637,6 +674,7 @@ int main()
         { "game-end-virtual", GameEndAndVirtualBuffers },
         { "game-reset-free-pool", GameResetFreeAndPool },
         { "host-bypass-lifecycle", HostBypassLifecycle },
+        { "begin-flags-reach-ticket", BeginFlagsReachTheTicket },
         { "host-end-sites", HostRecordingEndSites },
         { "double-notifications", DoubleNotificationsAreHarmless },
         { "allocation-failure-boundary", AllocationFailureDoesNotCrossBoundary },

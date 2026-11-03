@@ -606,6 +606,14 @@ tier = "host"
 timeout = 120
 summary = "Zero-motion detection's CPU half (the probe grid read out, depth moved past TAA jitter, two readings of an all-zero field in a moving scene before the verdict, one non-zero sample ending it, shape and gap starting over, the ZeroGuideReset rule) and source guards on its pass and its wiring in Dispatch."
 
+[nr-vk-zero-motion]
+path = "nr-vk-zero-motion"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 900
+summary = "Zero-motion detection on the Vulkan after-upscale route: the production route state with the real ring, registry and detector, the production pass against recording Vulkan fakes and the route's probe functions extracted verbatim, under ASan/UBSan (the command stream, None/None/Dead then Alive, the sentinel over an old valid grid, recording order, saturation and staleness, Dead on device A then a stable failure on B with no policy reset, refused recordings, exclusive slots); source guards on the VK_MODE block, the push block, the V-06 order behind ZeroGuideReset, no CPU wait, the route's ends and the project; seventeen planted mutants (incl. probes pending across a lost verdict, failed layout creates). No GPU."
+
 [nr-scene-cut]
 path = "nr-scene-cut"
 domain = "nr"

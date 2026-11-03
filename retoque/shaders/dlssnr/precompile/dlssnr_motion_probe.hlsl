@@ -14,7 +14,44 @@
 //   python3 ../../../../OptiScaler/shaders/shader_tools/create_header.py DlssNr_MotionProbe_Shader.cso DlssNr_MotionProbe_Shader.h DlssNr_MotionProbe_cso
 // DlssNr_MotionProbe_Dx12.cpp picks the header up through __has_include; without it the probe reports itself
 // unavailable and no verdict ever forms.
+//
+// Also built as SPIR-V for the Vulkan after-upscale route (DlssNr_MotionProbe_Vk.cpp, which includes its header through
+// __has_include as well; docs/dlssnr/design/zero-motion-detection.md, "Vulkan"):
+//   dxc.exe -spirv -T cs_6_0 -E CSMain -O3 -Qstrip_debug -D VK_MODE dlssnr_motion_probe.hlsl -Fo DlssNr_MotionProbe_Shader_Vk.spv
+//   python3 ../../../../OptiScaler/shaders/shader_tools/create_header.py DlssNr_MotionProbe_Shader_Vk.spv DlssNr_MotionProbe_Shader_Vk.h dlssnr_motion_probe_spv
+// Everything VK_MODE adds is under it, so the DXIL above is the same bytes with or without it. Under VK_MODE the
+// constants are a push-constant block (DlssNr::MotionProbe::Vk::Push: recorded into the command buffer, nothing a host
+// write can race), the reads are sampled images at bindings 0 and 1 of set 0, the grid a storage image at 2.
 
+#ifdef VK_MODE
+// The D3D12 cbuffer's eight scalars, in its order, as one push-constant block of 32 bytes.
+struct ProbeParams
+{
+    uint DepthBaseX;
+    uint DepthBaseY;
+    uint DepthWidth;
+    uint DepthHeight;
+    uint MotionBaseX;
+    uint MotionBaseY;
+    uint MotionWidth;
+    uint MotionHeight;
+};
+
+[[vk::push_constant]] ProbeParams gParams;
+
+#define gDepthBaseX gParams.DepthBaseX
+#define gDepthBaseY gParams.DepthBaseY
+#define gDepthWidth gParams.DepthWidth
+#define gDepthHeight gParams.DepthHeight
+#define gMotionBaseX gParams.MotionBaseX
+#define gMotionBaseY gParams.MotionBaseY
+#define gMotionWidth gParams.MotionWidth
+#define gMotionHeight gParams.MotionHeight
+
+[[vk::binding(0, 0)]] Texture2D<float> gDepth;
+[[vk::binding(1, 0)]] Texture2D<float2> gMotion;
+[[vk::binding(2, 0)]] [[vk::image_format("rgba32f")]] RWTexture2D<float4> gGrid; // as the D3D12 u0 below
+#else
 cbuffer Params : register(b0)
 {
     uint gDepthBaseX;
@@ -30,6 +67,7 @@ cbuffer Params : register(b0)
 Texture2D<float>    gDepth  : register(t0);
 Texture2D<float2>   gMotion : register(t1);
 RWTexture2D<float4> gGrid   : register(u0); // per cell: (depth, depth slope, non-zero motion samples, motion samples)
+#endif
 
 static const uint kGrid = 32;
 static const uint kMotionTaps = 4;

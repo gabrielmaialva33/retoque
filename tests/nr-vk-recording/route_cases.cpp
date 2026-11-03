@@ -28,7 +28,14 @@ struct Counts
     unsigned feature = 0, images = 0, retired = 0, pass = 0, parameters = 0, query = 0, meter = 0, guide = 0, owner = 0,
              session = 0;
     unsigned waits = 0, deviceGone = 0;
-    unsigned Freed() const { return feature + images + retired + pass + parameters + query + meter + guide; }
+    // The motion probe's three ends (zero-motion-detection.md, "Vulkan"): its objects freed on a drained device,
+    // forgotten without a call, and its readback metadata dropped before a drained teardown frees them. Its own suite,
+    // nr-vk-zero-motion, holds what each does; this one holds where the route calls them.
+    unsigned probeDestroyed = 0, probeForgotten = 0, probeAbandoned = 0;
+    unsigned Freed() const
+    {
+        return feature + images + retired + pass + parameters + query + meter + guide + probeDestroyed;
+    }
 } g_counts;
 struct OwnedImage
 {
@@ -60,6 +67,15 @@ void RetireImage(OwnedImage& image)
     }
 }
 void DestroyMeterReadback() { ++g_counts.meter; }
+void DestroyMotionProbe() { ++g_counts.probeDestroyed; }
+void ForgetMotionProbe() { ++g_counts.probeForgotten; }
+// Order matters on the drained path: the metadata must go before the registry's forgetting retires their pins.
+bool g_probeAbandonedBeforeForget = false;
+void AbandonMotionProbeReadbacks()
+{
+    ++g_counts.probeAbandoned;
+    g_probeAbandonedBeforeForget = DlssNr::VkRecording::Recordings().Current(1, 11).has_value();
+}
 struct Pass;
 std::set<Pass*> g_livePasses;
 std::set<void*> g_liveFeatures, g_liveParameters;
@@ -262,8 +278,9 @@ void FreeRetainsEveryRecording()
     FreeRouteObjects();
     DeferredRelease::Drain();
     Check(g_counts.feature == 1 && g_counts.images == 6 && g_counts.retired == 4 && g_counts.pass == 3 &&
-              g_counts.parameters == 1 && g_counts.query == 1 && g_counts.guide == 1,
+              g_counts.parameters == 1 && g_counts.query == 1 && g_counts.guide == 1 && g_counts.probeDestroyed == 1,
           "last recording retirement must allow real route teardown exactly once");
+    Check(g_counts.probeForgotten == 0, "a drained teardown frees the probe's objects; it does not forget them");
     Check(g_vk.feature == nullptr && !g_vk.pass && g_vk.device == VK_NULL_HANDLE,
           "unreferenced route must finish teardown");
 }
@@ -359,6 +376,8 @@ void AbandonedDevice(bool throughDeviceGone)
         ShutdownVk(false);
     Check(g_counts.Freed() == 0 && g_counts.waits == 0 && DeferredRelease::pending.empty(),
           "abandoned device must not invoke GPU release/destroy/wait or enqueue deferred GPU callbacks");
+    Check(g_counts.probeForgotten >= 1 && g_counts.probeDestroyed == 0,
+          "abandonment must forget the motion probe's objects without a call");
     Check(g_vk.device == VK_NULL_HANDLE && g_vk.feature == nullptr && g_vk.capabilityParams == nullptr && !g_vk.pass &&
               !g_vk.superUp && !g_vk.superDown,
           "abandonment must forget route handles without running their GPU destructors");
@@ -378,6 +397,25 @@ void AbandonedDevice(bool throughDeviceGone)
     Check(!registry.Current(1, 11) && g_counts.Freed() == 0 && g_counts.waits == 0 && DeferredRelease::pending.empty(),
           "late callbacks after abandonment must remain CPU-only and inadmissible");
     registry.ForgetDevice(2);
+}
+void DrainedDeviceGoneAbandonsProbeReadbacksFirst()
+{
+    Seed();
+    Cleanup cleanup;
+    auto& registry = VkRecording::Recordings();
+    registry.ForgetDevice(1);
+    registry.Allocate(1, 5, { 11 });
+    registry.Begin(11);
+    const auto ticket = registry.Current(1, 11);
+    Check(ticket && registry.Pin(*ticket, { g_vk.recording }), "the recording must pin the generation");
+    g_probeAbandonedBeforeForget = false;
+    std::vector<std::string> lines;
+    AfterUpscaleDeviceGone(H<VkDevice>(1), false, lines);
+    Check(g_counts.probeAbandoned == 1 && g_probeAbandonedBeforeForget,
+          "a drained device-gone must drop the probe's readback metadata before ForgetDevice retires its pins");
+    Check(g_counts.probeDestroyed == 1 && g_counts.probeForgotten == 0,
+          "a drained device-gone frees the probe's objects once, after the drain, and does not merely forget them");
+    registry.ForgetDevice(1);
 }
 void OwnImageLayoutAfterDiscard()
 {
@@ -412,6 +450,8 @@ int main()
         { "v02-owned-image-layout-after-recording-discard", OwnImageLayoutAfterDiscard },
         { "v02-shutdown-abandon-invalidates-without-gpu-callbacks", [] { AbandonedDevice(false); } },
         { "v02-device-gone-abandon-invalidates-without-gpu-callbacks", [] { AbandonedDevice(true); } },
+        { "zero-motion-drained-device-gone-abandons-probe-readbacks-first",
+          DrainedDeviceGoneAbandonsProbeReadbacksFirst },
     };
     for (auto [name, run] : cases)
         try

@@ -199,6 +199,34 @@ if len(failures) == before:
     print(f'PASS: {len(push_cpp)} ordered 4-byte push constants ({len(push_cpp) * 4} bytes) match between '
           'DlssNr::GuideMatch::Vk::Push, GuideParams and the D3D12 cbuffer of dlssnr_guides.hlsl')
 
+# The Vulkan motion probe (zero-motion-detection.md, "Vulkan"): DlssNr::MotionProbe::Vk::Push, the shader's ProbeParams
+# under VK_MODE and the D3D12 cbuffer of dlssnr_motion_probe.hlsl are one ordered list of 4-byte scalars, within the
+# guaranteed 128 bytes.
+before = len(failures)
+probe_vk = (nr / 'shaders/dlssnr/DlssNr_MotionProbe_Vk.h').read_text()
+probe_hlsl = (nr / 'shaders/dlssnr/precompile/dlssnr_motion_probe.hlsl').read_text()
+probe_push_cpp = [(t.replace('uint32_t', 'uint'), n.lower()) for t, n in
+                  re.findall(r'\b(uint32_t|float)\s+(\w+)\s*;', re.sub(r'//[^\n]*', '', body(probe_vk, 'struct Push')))]
+probe_push_hlsl = [(t, n.lower()) for t, n in
+                   re.findall(r'\b(uint|float)\s+(\w+)\s*;',
+                              re.sub(r'//[^\n]*', '', body(probe_hlsl, 'struct ProbeParams')))]
+probe_cb = [(t, n[1:].lower()) for t, n in
+            re.findall(r'\b(uint|float)\s+(\w+)\s*;', re.sub(r'//[^\n]*', '', body(probe_hlsl, 'cbuffer Params')))]
+if not probe_push_cpp:
+    fail('no fields parsed from DlssNr::MotionProbe::Vk::Push')
+elif probe_push_cpp != probe_push_hlsl:
+    fail(f'DlssNr::MotionProbe::Vk::Push {probe_push_cpp} and ProbeParams in dlssnr_motion_probe.hlsl '
+         f'{probe_push_hlsl} differ')
+elif probe_push_hlsl != probe_cb:
+    fail(f'ProbeParams {probe_push_hlsl} and the D3D12 cbuffer of dlssnr_motion_probe.hlsl {probe_cb} differ')
+elif len(probe_push_cpp) * 4 > 128:
+    fail(f'the motion probe\'s push constants are {len(probe_push_cpp) * 4} bytes, over the guaranteed 128')
+if '[[vk::push_constant]] ProbeParams gParams;' not in probe_hlsl:
+    fail('dlssnr_motion_probe.hlsl declares no [[vk::push_constant]] ProbeParams block')
+if len(failures) == before:
+    print(f'PASS: {len(probe_push_cpp)} ordered 4-byte push constants ({len(probe_push_cpp) * 4} bytes) match between '
+          'DlssNr::MotionProbe::Vk::Push, ProbeParams and the D3D12 cbuffer of dlssnr_motion_probe.hlsl')
+
 # --- 3. Headers are the committed bytecode --------------------------------------------------------
 
 before = len(failures)
@@ -250,6 +278,12 @@ if (precompile / 'DlssNr_MotionProbe_Shader.cso').exists():
     targets.append(('DlssNr_MotionProbe_Shader.cso', 'DlssNr_MotionProbe_Shader.h', 'DlssNr_MotionProbe_cso', b'DXBC'))
 elif (precompile / 'DlssNr_MotionProbe_Shader.h').exists():
     fail('DlssNr_MotionProbe_Shader.h is committed without DlssNr_MotionProbe_Shader.cso beside it')
+# Its SPIR-V for the Vulkan after-upscale route (DlssNr_MotionProbe_Vk.cpp), optional in the same way.
+if (precompile / 'DlssNr_MotionProbe_Shader_Vk.spv').exists():
+    targets.append(('DlssNr_MotionProbe_Shader_Vk.spv', 'DlssNr_MotionProbe_Shader_Vk.h', 'dlssnr_motion_probe_spv',
+                    bytes.fromhex('03022307')))
+elif (precompile / 'DlssNr_MotionProbe_Shader_Vk.h').exists():
+    fail('DlssNr_MotionProbe_Shader_Vk.h is committed without DlssNr_MotionProbe_Shader_Vk.spv beside it')
 # The HDR present conversion (hdr-present-conversion.md). Optional bytecode like the pulse metric's: without it the
 # conversion reports itself unavailable and HDR swapchains stay declined; the pair is checked once committed.
 if (precompile / 'DlssNr_PresentHdr_Shader.cso').exists():

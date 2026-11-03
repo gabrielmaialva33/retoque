@@ -6637,7 +6637,9 @@ VkResult Vulkan_wDx12::hk_vkBeginCommandBuffer(VkCommandBuffer commandBuffer,
 
     const auto result = o_vkBeginCommandBuffer(commandBuffer, pBeginInfo);
     if (result == VK_SUCCESS)
-        DlssNr::VkRecording::Recordings().Begin((uint64_t) commandBuffer);
+        DlssNr::VkRecording::Recordings().Begin(
+            (uint64_t) commandBuffer,
+            DlssNr::VkRecording::ReuseOf(pBeginInfo != nullptr, pBeginInfo != nullptr ? pBeginInfo->flags : 0));
     return result;
 }
 

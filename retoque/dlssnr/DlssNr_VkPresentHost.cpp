@@ -1001,7 +1001,7 @@ bool Begin(DeviceTransport& dev, VkCommandBuffer buffer)
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (dev.fn.beginCommandBuffer(buffer, &begin) != VK_SUCCESS)
         return false;
-    DlssNr::VkRecording::Recordings().Begin((uint64_t) buffer);
+    DlssNr::VkRecording::Recordings().Begin((uint64_t) buffer, DlssNr::VkRecording::ReuseOf(true, begin.flags));
     return true;
 }
 
@@ -3347,7 +3347,8 @@ VkResult VKAPI_CALL hkRecordingBeginCommandBuffer(VkCommandBuffer buffer, const 
 {
     const VkResult result = g_recordingBegin.next[S](buffer, info);
     if (result == VK_SUCCESS)
-        DlssNr::VkRecording::Recordings().Begin(H(buffer));
+        DlssNr::VkRecording::Recordings().Begin(
+            H(buffer), DlssNr::VkRecording::ReuseOf(info != nullptr, info != nullptr ? info->flags : 0));
     return result;
 }
 

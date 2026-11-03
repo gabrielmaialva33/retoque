@@ -24,6 +24,9 @@ be notified. `Begin` covers the implicit reset of an old executable recording. A
 not authorize recording. A ticket is valid only for its device, buffer and current open recording epoch.
 End, queue submission and GPU completion are not retirement events: executable recordings may be
 submitted again. Valid reset/free notifications establish that the old recording cannot execute again.
+`Begin` also carries what the flags said about re-execution (`Reuse`: serial, simultaneous, or unknown when an observer
+passes none); the ticket reports it for the Vulkan zero-motion probe. `begin-flags-reach-ticket` and
+`observer-begin-flags-reach-ticket` hold the wDx12 wrapper, the present host's observer and its own Begin to it.
 
 The caller must stop admissions and prove device safety, or mark its GPU objects abandoned, before
 `ForgetDevice`. This helper issues no Vulkan calls and does not decide whether GPU destruction is safe.
@@ -166,6 +169,10 @@ lost device. The test records those fake heap allocations before the call and
 reclaims them directly **after** its assertions, solely to keep LeakSanitizer
 useful. That test cleanup does not change or substitute the production
 abandonment policy, and it is not counted as behavior of the abandoned route.
+
+The route's three motion-probe ends (`ForgetMotionProbe`, `AbandonMotionProbeReadbacks`, `DestroyMotionProbe`) are
+counted fakes here: forgotten on both abandonment paths without a call, freed once by a drained teardown, and on a
+drained device-gone dropped before the registry forgets the device. What each does is `tests/nr-vk-zero-motion`'s.
 
 These cases demonstrate the after-upscale route's abandoned-device boundary.
 They do not execute an actual lost device or independently exercise the Vulkan
