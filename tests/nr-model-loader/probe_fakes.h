@@ -110,6 +110,18 @@ inline std::optional<std::filesystem::path> FindFilePath(const std::filesystem::
     return "fixture/model.dll";
 }
 } // namespace Util
+// [DlssNr] ModelFile at auto: the search the probe has always made (retoque/dlssnr/DlssNr_ModelFile.cpp; the rule and
+// its other answers are tests/nr-model-file's).
+namespace DlssNr::ModelFile
+{
+inline std::optional<std::filesystem::path> Find(const std::filesystem::path& siteFolder)
+{
+    auto snippet = Util::FindFilePath(siteFolder, "nvngx_dlssnr.dll");
+    if (!snippet.has_value())
+        snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+    return snippet;
+}
+} // namespace DlssNr::ModelFile
 namespace DlssNr::Dx12Internal
 {
 struct NrState

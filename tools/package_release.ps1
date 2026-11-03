@@ -115,7 +115,9 @@ Copy-Item "$root/README.md" "$stage/README.md" -Force
 if (-not (Test-Path "$stage/Licenses/RenoDX_ATTRIBUTION.txt")) {
     throw 'REFUSING: RenoDX attribution is missing'
 }
-if (Get-ChildItem $stage -Recurse -File | Where-Object { $_.Name -ieq 'nvngx_dlssnr.dll' }) {
+# With the copies [DlssNr] ModelFile is documented to name: nvngx_dlssnr*.dll and DlssNrModels.
+if (Get-ChildItem $stage -Recurse -File | Where-Object {
+        $_.Name -ilike 'nvngx_dlssnr*.dll' -or ($_.FullName.Replace('\', '/').Split('/') -icontains 'DlssNrModels') }) {
     throw 'REFUSING: NVIDIA model must never ship'
 }
 

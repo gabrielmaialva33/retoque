@@ -7,12 +7,12 @@
     "bool EnsureForwarder()": "e69535ce98a5e4fd2819827d1ad48a8ed2609053940037746afe4f8dae9d2905",
     "bool NoteModelFault()": "301fde34ac811679b98074fcc87728a678d64743ea3c1c5c4158c862b3bd88b4",
     "bool EnsureCapabilityParams(ID3D12Device* device)": "3fa06d54c6e43880a136f9cb97ddb6dbb821803d96f632270cb4b95ee7246d05",
-    "void ReportScalingRatios()\n{": "602089ec3141a8e6e175a908947e83783614a00662b74cf7625c53efac825827",
+    "void ReportScalingRatios()\n{": "8a6a69c414010ef8755fc6eae93af8f82d294e19289a34c081ef96636801f7e8",
     "void DiscoverFloatSlot(NVSDK_NGX_Parameter* params)\n{": "de233b918fcd40a0e42520d2305ab42ecea9d72c808d9b38dbe65baa93e390f4",
     "void SetExtras(const Config& cfg,": "693b78b3cf78ea646f718d80fdd9c919defa9abfa1402e50e08b25193c99aecc",
     "bool TuningMatchesFeature(const Config& cfg)": "ba464e6ba22bfd6cce0f4af026f80d6d90b1dab2967953986d5067f6db0897ab",
     "void RecordBuiltTuning(const Config& cfg)": "26283708061dbca966f0174677656754c64b6509e2f612d2f4976b69f10f3162",
-    "void ProbeD3D11(void* d3d11Device)": "2454f1c305e91fbe2fa778a2bd3f727099444d8d1819870931de2ca5145c6f41"
+    "void ProbeD3D11(void* d3d11Device)": "c5db77934245eb86abfb202d8ad8eb1b951ad13361de152a08694aa013446b5a"
   },
   "reviewed_changes": [
     "2026-10-30: ProbeProxyDispatch, EnsureCapabilityParams and ProbeD3D11 take the driver-init gate around their NGX create/init calls (retoque/dlssnr/DlssNr_DriverInitGate.h; tests/nr-driver-init-gate)",

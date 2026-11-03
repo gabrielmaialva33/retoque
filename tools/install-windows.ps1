@@ -262,7 +262,13 @@ function Test-SafeRel([string]$Rel) {
     return $full.StartsWith($script:Game + $Sep, $PathCompare)
 }
 
-function Test-ModelPath([string]$Rel) { [IO.Path]::GetFileName($Rel.Replace('/', $Sep)) -ieq $ModelName }
+# NVIDIA's model, and the copies [DlssNr] ModelFile is documented to name: nvngx_dlssnr*.dll and DlssNrModels.
+function Test-ModelPath([string]$Rel) {
+    $name = [IO.Path]::GetFileName($Rel.Replace('/', $Sep))
+    if ($name -ilike 'nvngx_dlssnr*.dll') { return $true }
+    foreach ($part in $Rel.Replace('\', '/').Split('/')) { if ($part -ieq 'DlssNrModels') { return $true } }
+    return $false
+}
 
 function New-TempPath([string]$Prefix) {
     $chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -872,7 +878,7 @@ function Test-ModelInPlace {
     if ([IO.File]::Exists((Get-FullPath $ModelName))) {
         Write-Line "[=] ${ModelName}: present, left as it is"
     } else {
-        Write-Line "[!] $ModelName is not in this folder. Neural Rendering needs NVIDIA's model there; this installer never ships or copies it, so put your own copy beside the game's executable."
+        Write-Line "[!] $ModelName is not in this folder. Neural Rendering needs NVIDIA's model there (or another copy named by [DlssNr] ModelFile); this installer never ships or copies it, so put your own copy beside the game's executable."
     }
 }
 

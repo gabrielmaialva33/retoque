@@ -36,6 +36,7 @@
 #include <dlssnr/DlssNr_CrashNote.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dlssnr/DlssNr_SlTagInventory.h>
+#include <dlssnr/DlssNr_ModelFileFind.h>
 #include <dxgi1_4.h>
 
 #include "DlssNr_Dx12.h"
@@ -1555,15 +1556,13 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             return false;
         }
 
-        auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
-
-        if (!snippet.has_value())
-            snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+        // [DlssNr] ModelFile, or the default search as always (DlssNr_ModelFileFind.h).
+        auto snippet = DlssNr::ModelFile::Find(g_dllDir);
 
         if (!snippet.has_value())
         {
             g_nr.failed = true;
-            g_nr.reason = "nvngx_dlssnr.dll was not found beside OptiScaler or the game";
+            g_nr.reason = DlssNr::ModelFile::NotFoundReason();
             LOG_ERROR("DLSS-NR unavailable: {}", g_nr.reason);
             device->Release();
             return false;
@@ -1708,9 +1707,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 break;
             if (!g_nr.passPing)
                 g_nr.passPing = CreateScratch(device, desc.Format, workWidth, workHeight);
-            auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
-            if (!snippet)
-                snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+            auto snippet = DlssNr::ModelFile::Find(g_dllDir);
             g_nr.creation[i] = {};
             if (!g_nr.passPing || !snippet || !DlssNr::Submission::Track(cmdList, g_nr.creation[i]))
             {

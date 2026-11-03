@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "DlssNr_NgxInfo.h"
+#include "DlssNr_ModelFileFind.h"
 
 #include <Logger.h>
 #include <State.h>
@@ -111,7 +112,7 @@ const Snapshot& Describe(const std::filesystem::path& modelPath)
                                            timeError ? 0 : mtime.time_since_epoch().count(), s.modelVersion[0],
                                            s.modelVersion[1], s.modelVersion[2], s.modelVersion[3]);
 
-    s.loadedModel = ModulePath(GetModuleHandleW(L"nvngx_dlssnr.dll"));
+    s.loadedModel = ModulePath(DlssNr::ModelFile::LoadedModule());
 
     const auto nvapiModule = GetModuleHandleW(L"nvapi64.dll");
     const auto nvapiPath = ModulePath(nvapiModule);
@@ -129,10 +130,10 @@ const Snapshot& Describe(const std::filesystem::path& modelPath)
                                 : std::format(" (driver {})", driver);
     LOG_INFO("DLSS-NR NGX: loader {} version {}{}; it {}", s.loaderPath.empty() ? "(none)" : s.loaderPath.string(),
              VersionText(s.loaderVersion), driverText, PeScan::Describe(s.route));
-    LOG_INFO("DLSS-NR NGX: model {} version {}, {} bytes, identity {}; {}", modelPath.string(),
+    LOG_INFO("DLSS-NR NGX: model {} version {}, {} bytes, identity {}; {}", DlssNr::ModelFile::Display(modelPath),
              VersionText(s.modelVersion), s.modelBytes, modelIdentity,
              s.loadedModel.empty() ? std::string("not loaded in this process yet")
-                                   : std::format("already loaded from {}", s.loadedModel.string()));
+                                   : std::format("already loaded from {}", DlssNr::ModelFile::Display(s.loadedModel)));
     LOG_INFO("DLSS-NR NGX: nvapi {}; {}", nvapiText, nvapiStatus);
 
     if (PeScan::KnownFaultingPairing(s.route, s.modelVersion))
@@ -152,6 +153,8 @@ std::optional<Snapshot> Described(const std::filesystem::path& modelPath)
     return std::nullopt;
 }
 
+// The driver route's model (UseProxy's gate): the default file the driver itself would find, whatever
+// [DlssNr] ModelFile says -- the driver cannot be told a file. Retoque's loaders use DlssNr::ModelFile::Find.
 std::optional<std::filesystem::path> FindModel()
 {
     auto found = Util::FindFilePath(Util::DllPath().remove_filename(), "nvngx_dlssnr.dll");

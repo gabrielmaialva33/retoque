@@ -4,6 +4,7 @@
 #include <dlssnr/DlssNr_DirectRuntime.h>
 #include <dlssnr/DlssNr_DriverInitGate.h>
 #include <dlssnr/DlssNr_Consumers.h>
+#include <dlssnr/DlssNr_ModelFileFind.h>
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_Session.h>
@@ -373,10 +374,7 @@ void ReportScalingRatios()
     if (g_nr.queryRatio == nullptr || g_nr.capabilityParams == nullptr)
         return;
 
-    auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
-
-    if (!snippet.has_value())
-        snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+    auto snippet = DlssNr::ModelFile::Find(g_dllDir);
 
     if (!snippet.has_value())
         return;
@@ -570,10 +568,7 @@ void ProbeD3D11(void* d3d11Device)
         return;
     }
 
-    auto snippet = Util::FindFilePath(g_dllDir, "nvngx_dlssnr.dll");
-
-    if (!snippet.has_value())
-        snippet = Util::FindFilePath(Util::ExePath().remove_filename(), "nvngx_dlssnr.dll");
+    auto snippet = DlssNr::ModelFile::Find(g_dllDir);
 
     if (!snippet.has_value())
         return;

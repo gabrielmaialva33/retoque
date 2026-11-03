@@ -2,6 +2,7 @@
 #include "DlssNr_Proxy.h"
 #include "DlssNr_NgxInfo.h"
 #include "DlssNr_DriverGate.h"
+#include "DlssNr_ModelFileFind.h"
 
 #include <Config.h>
 #include <Logger.h>
@@ -218,6 +219,18 @@ unsigned int Run(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D1
             LOG_INFO("DLSS-NR (proxy): re-init at SDK 0x15 returned 0x{:X} (idempotent -- this does "
                      "not change the app id or SDK version the core is running with)",
                      (unsigned int) initResult);
+        }
+
+        // The driver loads the model it finds itself; it cannot be told [DlssNr] ModelFile. With a file named there,
+        // this route would run another model than the one asked for, and the known-fault gate below would judge
+        // the wrong file: refused, so an A/B run never compares the default with itself.
+        if (DlssNr::ModelFile::Explicit())
+        {
+            g_proxy.failed = true;
+            LOG_ERROR("DLSS-NR (proxy): refused -- [DlssNr] ModelFile names a model file, and the driver's route "
+                      "loads the model it finds itself. Set UseProxy=false to run the named file through the "
+                      "forwarder or ModelLoader=direct");
+            return 0;
         }
 
         // From NVIDIA 616.64 this call no longer answers "no NR here" (0xBAD0000B): the loader routes
