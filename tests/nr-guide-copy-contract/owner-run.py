@@ -15,7 +15,7 @@ def function(text, anchor):
         depth+=(text[i]=='{')-(text[i]=='}')
         if depth==0:return text[start:i+1]+'\n'
     raise AssertionError(anchor)
-unit=(HERE/'fakes.h').read_text()+'\n#include <mutex>\n#include <type_traits>\n'
+unit=(HERE/'fakes.h').read_text()+'\n#include <mutex>\n#include <type_traits>\n#include "retoque/dlssnr/DlssNr_Pictures.h"\n'
 if 'struct NrDeviceOwner\n' in internal:
     unit+=function(internal,'struct NrDeviceOwner\n')+';\nNrDeviceOwner g_nrDeviceOwner;\n'
 for overload in ('bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)',
@@ -27,8 +27,10 @@ if 'bool PresentGuideCopyCompatible(' in resources:
 unit+='''
 std::mutex g_nrMutex;
 struct Config { static Config* Instance() { static Config c; return &c; } };
-struct { bool failed=false; } g_nr;
-struct DlssNrFrameInfo { bool GameGuides=false; unsigned RenderSubrectWidth=1, RenderSubrectHeight=1; void* ExposureTexture=nullptr; };
+struct { bool failed=false; bool reset=false; } g_nr;
+struct DlssNrFrameInfo { bool GameGuides=false; unsigned RenderSubrectWidth=1, RenderSubrectHeight=1; void* ExposureTexture=nullptr; uint64_t PictureEpoch=0; };
+// The main-picture epoch gate (DlssNr_Pictures.h; tests/nr-main-picture covers it): no epoch here, so never Restart.
+DlssNr::Pictures::EpochGate g_pictureEpoch; void InvalidateExposureMeter() {}
 namespace DlssNr { namespace Detail { struct CoverageSample { const char* reason=""; }; }
 namespace Chain { struct RecordingLease {}; } namespace PairCapture { void Poll() {} } }
 struct State { unsigned frameCount=1; static State& Instance() { static State s; return s; } };

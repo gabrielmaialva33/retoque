@@ -992,6 +992,14 @@ tier = "host"
 timeout = 180
 summary = "Several views in one colour allocation within a frame: the detector on synthetic sub-rectangles (seven rule mutants must fail), and both D3D12 seams standing down before any loan or recording. Detector only; no per-view model."
 
+[nr-main-picture]
+path = "nr-main-picture"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "A game with several live DLSS features: NR follows one main picture and leaves the others as they are. The rule and its glue on fake parameters under ASan/UBSan (30 rule and glue mutants must fail, including picture epochs), and source guards on the four NR seams, the epoch consumers under their locks and the release hook (21 mutants). No D3D12, Vulkan, NGX or game."
+
 [mfg-provider-capacity]
 path = "mfg-provider-capacity"
 domain = "fg"

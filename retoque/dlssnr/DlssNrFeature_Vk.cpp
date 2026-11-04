@@ -21,6 +21,7 @@
 #include <dlssnr/DlssNr_ModelFileFind.h>
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_ModelStats.h>
+#include <dlssnr/DlssNr_PictureGate.h>
 #include <dlssnr/DlssNr_Session.h>
 #include <dlssnr/DlssNr_RenderSize.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
@@ -308,6 +309,8 @@ bool RouteRecordingBusy() { return g_vk.recording.use_count() > 1; }
 // runs, so switching NR back on starts the model's history over instead of resuming the one from
 // before. Same rule as g_resetOnReturn on the D3D12 side.
 std::atomic<bool> g_vkResetOnReturn { false };
+// The picture epoch the Vulkan model's history belongs to (DlssNr_Pictures.h). Under g_vkMutex.
+DlssNr::Pictures::EpochGate g_vkPictureEpoch;
 
 // Whether the last evaluate's buffer was linear HDR. For the menu, which offers highlight recovery only where it
 // can act; the same as g_lastLinearHdr on the D3D12 side.
@@ -1562,6 +1565,17 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         physicalDevice == VK_NULL_HANDLE)
         return;
 
+    // Another of the game's DLSS pictures (DlssNr_PictureGate.h): left as it is before the recordings, the meter or the
+    // model see it. Without this a preview's refused evaluate could reset the world's history on every frame.
+    const auto pictureColour = [params]
+    {
+        NVSDK_NGX_Resource_VK* input = nullptr;
+        params->Get(NVSDK_NGX_Parameter_Color, (void**) &input);
+        return input != nullptr ? (uintptr_t) input->Resource.ImageViewInfo.Image : uintptr_t(0);
+    };
+    if (DlssNr::Pictures::Ask(params, pictureColour).role == DlssNr::Pictures::Role::Aside)
+        return;
+
     std::lock_guard<std::mutex> lock(g_vkMutex);
 
     const auto recording = VkRecording::Recordings().Current((uint64_t) device, (uint64_t) cmdBuffer);
@@ -1599,6 +1613,23 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     if (g_vkResetOnReturn.exchange(false))
         g_vk.reset = true;
+
+    // Which of the game's DLSS pictures this is (DlssNr_Pictures.h), decided under g_vkMutex from the evaluate's epoch:
+    // a newer picture starts the history and the exposure meter over, one since replaced is refused.
+    switch (g_vkPictureEpoch.Consume(DlssNr::Pictures::EvaluateEpoch(params)))
+    {
+    case DlssNr::Pictures::Consumed::Stale:
+        return;
+    case DlssNr::Pictures::Consumed::Restart:
+        g_vk.reset = true;
+        g_vk.gameExposure = 0.0f;
+        g_vk.meterFrames = 0;
+        g_vk.meterPending.Invalidate();
+        g_vk.exposureLatch.Reset();
+        break;
+    default:
+        break;
+    }
 
     const uint32_t wpSource = cfg.DlssNrWhitePointSource.value_or_default();
     if (DlssNr::Exposure::InvalidateOnSourceChange(g_vk.exposureSettingWasOn, wpSource))

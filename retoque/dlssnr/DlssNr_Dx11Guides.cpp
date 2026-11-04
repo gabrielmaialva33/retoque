@@ -3,6 +3,7 @@
 #include "DlssNr_Dx11Guides.h"
 #include "DlssNrFeature_Dx12.h"
 #include "DlssNr_Dred.h"
+#include "DlssNr_PictureGate.h"
 #include "DlssNr_Submission.h"
 
 #include <Config.h>
@@ -609,6 +610,13 @@ void CarryNativeDx11Guides(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* pa
 
     // Nothing is looked at -- not the context, not the parameters -- on any other route.
     if (Dx11Guides::Decide(in) == Reason::NotWanted || context == nullptr || params == nullptr)
+        return;
+
+    // Another of the game's DLSS pictures (DlssNr_PictureGate.h): its guides are not the picture NR follows, and are
+    // not carried to the present host. A D3D12 bridge in this evaluate may have judged it already; that answer stands.
+    if (Pictures::Ask(params, [params]
+                      { return reinterpret_cast<uintptr_t>(D3D11Resource(params, NVSDK_NGX_Parameter_Color)); })
+            .role == Pictures::Role::Aside)
         return;
 
     in.evaluated = evaluated;

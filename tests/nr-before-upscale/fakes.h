@@ -254,6 +254,8 @@ struct NVSDK_NGX_Parameter
     }
 };
 #include "retoque/dlssnr/DlssNr_RenderSize.h"
+#include "retoque/dlssnr/DlssNr_RenderGeometry.h"
+#include "retoque/dlssnr/DlssNr_PictureGate.h"
 template <typename T> struct Option : std::optional<T>
 {
     T value_or_default() const { return this->value_or(T {}); }

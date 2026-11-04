@@ -32,6 +32,7 @@
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_PrivateSr.h>
 #include <dlssnr/DlssNr_MultiView.h>
+#include <dlssnr/DlssNr_PictureGate.h>
 #include <dlssnr/DlssNr_Funnel.h>
 #include <dlssnr/DlssNr_CrashNote.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
@@ -212,6 +213,8 @@ std::atomic<const char*> g_chainStatus { "Single pass (master settings)" };
 // history of whatever was on screen when it was switched off. Atomic because the entry points that
 // see "off" do not take the lock Dispatch runs under.
 std::atomic<bool> g_resetOnReturn { false };
+// The picture epoch the model's history belongs to (DlssNr_Pictures.h). Under g_nrMutex.
+DlssNr::Pictures::EpochGate g_pictureEpoch;
 
 // Whether the buffer the last Dispatch worked on was linear HDR (the colour transform on). For the menu,
 // which offers highlight recovery only where it can act. False until something has run.
@@ -791,6 +794,23 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         g_resetOnReturn = true;
         reportSkip(why);
         return false;
+    }
+
+    // Which of the game's DLSS pictures this frame is (DlssNr_Pictures.h). Decided here, under g_nrMutex, from the
+    // epoch the frame carries: whatever order evaluates and presents reach this lock in, the first frame of a newer
+    // picture starts the model's history and the exposure meter over, and a frame of a picture since replaced is
+    // refused. A frame no rule judged (epoch 0) changes nothing.
+    switch (g_pictureEpoch.Consume(frame.PictureEpoch))
+    {
+    case DlssNr::Pictures::Consumed::Stale:
+        reportSkip("a frame of a DLSS picture the game has since replaced as the one NR follows");
+        return false;
+    case DlssNr::Pictures::Consumed::Restart:
+        g_nr.reset = true;
+        InvalidateExposureMeter();
+        break;
+    default:
+        break;
     }
 
     if (frame.GameGuides && (!frame.RenderSubrectWidth || !frame.RenderSubrectHeight))
@@ -5103,6 +5123,16 @@ static const char* MultiViewStandDown(NVSDK_NGX_Parameter* params, ID3D12Resourc
     return "several views are drawn into one colour allocation (multi-monitor or split screen); NR stands down";
 }
 
+// Which of the game's DLSS pictures an evaluate is (DlssNr_PictureGate.h), identified by the colour allocation it
+// reads. The parameters are read only when there is an evaluate to judge.
+static Pictures::Role PictureRole(NVSDK_NGX_Parameter* params)
+{
+    return Pictures::Ask(
+               params, [params]
+               { return reinterpret_cast<uintptr_t>(GetResource(params, NVSDK_NGX_Parameter_Color, "DLSSD.Color")); })
+        .role;
+}
+
 // Reads the game's parameter block and runs the pass on what it finds.
 //
 // This is the call site's job, not the pass's. A caller that has the resources in hand -- a
@@ -5127,6 +5157,16 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     // relaxed stores per evaluate, and none of it with NR off.
     Funnel::Evaluation funnel(Funnel::Route::D3d12AfterUpscale, GetCurrentThreadId());
     CrashNote::InstallOnce();
+
+    // Another of the game's DLSS pictures (DlssNr_PictureGate.h): left as it is before any other way out reports on it,
+    // and before the coverage, the settling gates, the meter or the model see it. A stage-1 scope may have judged this
+    // evaluate already; that answer stands. A change of the picture followed is acted on by Dispatch, under its lock,
+    // from the epoch the frame carries.
+    if (PictureRole(params) == Pictures::Role::Aside)
+    {
+        funnel.Declined(Funnel::Decline::OtherPicture);
+        return;
+    }
 
     if (isRayReconstruction && !cfg.DlssNrApplyAfterRR.value_or_default())
     {
@@ -5782,6 +5822,12 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
     }
 
     if (!enabled || stage != 1)
+        return;
+
+    // Another of the game's DLSS pictures (DlssNr_PictureGate.h): left as it is, and not declined -- the after-upscale
+    // pass would otherwise run over it. Before any other way out reports on it, and before the coverage, the render
+    // count and the status the followed picture's frames own.
+    if (PictureRole(params) == Pictures::Role::Aside)
         return;
 
     // Present owns the frame whatever the stage; the menu hides Stage under Present for that reason.

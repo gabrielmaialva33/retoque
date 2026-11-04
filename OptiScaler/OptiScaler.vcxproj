@@ -1004,6 +1004,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ModelFile.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ModelFileFind.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SlTagInventory.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_Pictures.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PictureGate.h" />
     <ClInclude Include="..\retoque\hooks\DetourRecord.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_DirectRuntime.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PeScan.h" />

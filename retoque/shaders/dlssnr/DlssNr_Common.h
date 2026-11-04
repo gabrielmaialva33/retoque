@@ -238,6 +238,10 @@ struct DlssNrFrameInfo
     // Zero is allowed for host-owned after-upscale frames, whose output supplies the reference.
     unsigned int DisplayWidth = 0;
     unsigned int DisplayHeight = 0;
+
+    // Which of the game's DLSS pictures the frame is (retoque/dlssnr/DlssNr_Pictures.h), read when its guides are
+    // gathered, so a frame captured for the present keeps its picture. 0: no picture rule judged the evaluate.
+    uint64_t PictureEpoch = 0;
 };
 
 struct alignas(256) DlssNrConstants

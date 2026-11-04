@@ -836,6 +836,94 @@ int main()
         ++checks;
     }
 
+    // Two of the game's DLSS features in each frame (DlssNr_Pictures.h): the world and a smaller preview on its own
+    // colour allocation, through the production seams in both stages and in either order. The world runs every frame;
+    // the preview reaches no pass, borrows no scratch, is never declined to the other seam, and leaves the world's
+    // status, coverage and history flag as they were. Releasing the preview changes nothing for the world.
+    for (unsigned stage : { 0u, 1u })
+        for (bool previewFirst : { false, true })
+        {
+            Fixture f;
+            f.cfg.DlssNrStage = stage;
+            ID3D12Resource previewColor { {}, &f.device }, previewOutput { {}, &f.device };
+            NVSDK_NGX_Parameter preview = f.params;
+            preview.typed["Color"] = &previewColor;
+            preview.typed["Output"] = &previewOutput;
+            preview.numbers["NVSDK_Width"] = 512;
+            preview.numbers["NVSDK_Height"] = 512;
+            preview.numbers["OutWidth"] = 1024;
+            preview.numbers["OutHeight"] = 1024;
+            using namespace DlssNr::RenderGeometry;
+            const auto worldKey = Key(Api::D3D12, 41), previewKey = Key(Api::D3D12, 42);
+            Remember(worldKey, ReadCreation(&f.params));
+            Remember(previewKey, ReadCreation(&preview));
+            auto evaluate = [&](uint64_t key, NVSDK_NGX_Parameter& params)
+            {
+                Scope geometry(true, key, &params);
+                bool declined = false;
+                if (stage == 1)
+                {
+                    ScopedPreUpscale p(&f.cmd, &params, true);
+                    declined = p.Declined();
+                    if (key == previewKey)
+                        assert(!p.Swapped() && !declined);
+                }
+                DlssNr::EvaluateAfterUpscale(&f.cmd, &params, nullptr, declined, false);
+            };
+            const auto asideBefore = DlssNr::Pictures::g_asideEvaluates.load();
+            unsigned previewRan = 0;
+            const auto previewState = previewColor.state;
+            for (uint64_t present = 500; present < 550; ++present)
+            {
+                State::Instance().frameCount = present;
+                if (previewFirst && present == 500)
+                {
+                    // The preview evaluates first from the start: it is main until the clearly larger world takes over
+                    // on its first evaluate, and is left aside from then on.
+                    const auto before = DlssNr_Dx12::calls;
+                    evaluate(previewKey, preview);
+                    previewRan = DlssNr_Dx12::calls - before; // stage 1 may still be settling on its size
+                    assert(DlssNr::Pictures::Instance().Main() == previewKey);
+                    f.Stable(); // the world's size has been seen for 500 ms, as after a real takeover
+                    evaluate(worldKey, f.params);
+                    assert(DlssNr::Pictures::Instance().Main() == worldKey);
+                }
+                else if (previewFirst)
+                {
+                    const auto calls = DlssNr_Dx12::calls;
+                    const auto barriers = f.cmd.barriers;
+                    const auto reason = DlssNr::g_upscaleReason.load();
+                    const auto sets = preview.sets;
+                    DlssNr::g_resetOnReturn = false;
+                    evaluate(previewKey, preview);
+                    assert(DlssNr_Dx12::calls == calls && f.cmd.barriers == barriers && preview.sets == sets);
+                    assert(!DlssNr::g_resetOnReturn.load() && DlssNr::g_upscaleReason.load() == reason);
+                    evaluate(worldKey, f.params);
+                }
+                else
+                {
+                    evaluate(worldKey, f.params);
+                    const auto calls = DlssNr_Dx12::calls;
+                    const auto barriers = f.cmd.barriers;
+                    const auto coverage = g_coverage[stage == 1 ? 1 : 0].totals.calls;
+                    const auto reason = DlssNr::g_upscaleReason.load();
+                    DlssNr::g_resetOnReturn = false;
+                    evaluate(previewKey, preview);
+                    assert(DlssNr_Dx12::calls == calls && f.cmd.barriers == barriers);
+                    assert(g_coverage[stage == 1 ? 1 : 0].totals.calls == coverage);
+                    assert(!DlssNr::g_resetOnReturn.load() && DlssNr::g_upscaleReason.load() == reason);
+                }
+                assert(preview.typed["Color"] == &previewColor && previewColor.state == previewState);
+            }
+            assert(DlssNr_Dx12::calls == 50 + previewRan);
+            assert(DlssNr::Pictures::g_asideEvaluates.load() - asideBefore == (previewFirst ? 49 : 50));
+            Forget(previewKey);
+            evaluate(worldKey, f.params);
+            assert(DlssNr_Dx12::calls == 51 + previewRan);
+            Forget(worldKey);
+            ++checks;
+        }
+
     // The engagement funnel (DlssNr_Funnel.h) over every evaluate above, through the real EvaluateAfterUpscale: each one
     // with NR on ended exactly one way -- ran, or one named decline -- so the ladder balances.
     {

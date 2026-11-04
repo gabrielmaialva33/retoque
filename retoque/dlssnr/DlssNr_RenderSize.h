@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 
 #if __has_include(<nvsdk_ngx.h>)
 #include <nvsdk_ngx.h>
@@ -76,6 +77,12 @@ struct Binding
     const NVSDK_NGX_Parameter* params = nullptr;
     RenderSize render, display;
     const std::atomic_bool* stale = nullptr;
+    // The feature this evaluate is (RenderGeometry::Key), and which picture it is, judged once per evaluate by the
+    // first NR seam that asks (DlssNr_PictureGate.h): a pre-upscale scope and its after-upscale fallback agree.
+    uint64_t key = 0;
+    mutable bool judged = false;
+    mutable uint8_t role = 0;
+    mutable uint64_t epoch = 0; // the picture epoch of a Main or ViewOfMain judgement, else 0
 };
 inline thread_local const Binding* active = nullptr;
 inline bool Compatible(const Binding& binding, const NVSDK_NGX_Parameter* params)

@@ -26,6 +26,7 @@
 #include <vector>
 
 #define LOG_INFO(...) ((void) 0)
+#include <dlssnr/DlssNr_PictureGate.h> // GatherGuideFrame's picture epoch
 
 static int failures = 0;
 static int checks = 0;
