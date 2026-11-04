@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DlssNr_Pictures.h"
 #include "DlssNr_RenderSize.h"
 #include <cstdint>
 #include <memory>
@@ -53,8 +54,12 @@ inline void Remember(uint64_t key, Creation creation)
 }
 inline void Forget(uint64_t key)
 {
-    std::lock_guard lock(recordsMutex);
-    records.erase(key);
+    {
+        std::lock_guard lock(recordsMutex);
+        records.erase(key);
+    }
+    // The game released this feature: if NR followed it, the next picture takes over (DlssNr_Pictures.h).
+    Pictures::Instance().Release(key);
 }
 class Scope
 {
@@ -92,7 +97,7 @@ class Scope
         }
         if (!record)
             return;
-        binding = { params, record->creation.render, record->creation.display, &record->stale };
+        binding = { params, record->creation.render, record->creation.display, &record->stale, key };
         Observe();
         active = &binding;
     }

@@ -10,6 +10,7 @@
 #include <dlssnr/DlssNr_Exposure.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/DlssNr_LogRate.h>
+#include <dlssnr/DlssNr_PictureGate.h>
 #include <dlssnr/DlssNr_RenderSize.h>
 #include <dlssnr/DlssNr_WorkingScale.h>
 
@@ -109,6 +110,8 @@ DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)
     frame.DepthInverted = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
     frame.ColourIsLinearHdr = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_IsHDR) != 0;
     frame.MotionVectorsLowResolution = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
+    // The picture this evaluate is, judged by the seam that asked first (DlssNr_PictureGate.h).
+    frame.PictureEpoch = DlssNr::Pictures::EvaluateEpoch(params);
 
     // The game telling the upscaler to forget everything it has accumulated: a cut, a teleport, a
     // load. Every upscaler in this tree reads it and this pass did not, so the model's history was

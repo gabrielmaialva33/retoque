@@ -194,7 +194,9 @@ def check(s):
     vk = body(s['vk'], 'void EvaluateAfterUpscaleVk(')
     asked = vk.index('DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), lines, DlssNr::SlNativeNr::NowMs())')
     assert vk.index('if (g_vk.failed)') < asked < vk.index('if (g_vkResetOnReturn.exchange(false))')
-    assert asked < vk.index('ClaimModelForAfterUpscale(device)') and asked < vk.index('params->Get(')
+    # The game's resources are read after it; the main-picture gate's colour read comes before (main-picture.md).
+    assert asked < vk.index('ClaimModelForAfterUpscale(device)') and asked < vk.index(
+        'params->Get(NVSDK_NGX_Parameter_Output')
     stand = vk[asked:vk.index('if (g_vkResetOnReturn.exchange(false))')]
     assert re.search(r'if \(why != nullptr\)\s*\{\s*g_vkResetOnReturn = true;\s*return;\s*\}', stand), \
         'the Vulkan route does not return on the stand-down'

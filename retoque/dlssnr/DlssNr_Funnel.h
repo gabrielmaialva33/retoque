@@ -52,6 +52,7 @@ enum class Decline : uint8_t
     PassUnavailable,      // the composition could not be built on this device, or its inputs are on another
     PassRecordedNothing,  // the pass was asked and recorded nothing: building, failed, paused, a refused frame
     GameOwnNr,            // the game runs its own NR through Streamline (DlssNr_SlNativeNr.h)
+    OtherPicture,         // another of the game's DLSS pictures, left as it is (DlssNr_Pictures.h)
     Count
 };
 inline constexpr size_t kDeclineCount = static_cast<size_t>(Decline::Count);
@@ -119,6 +120,8 @@ inline const char* DeclineTag(Decline decline)
         return "pass_recorded_nothing";
     case Decline::GameOwnNr:
         return "game_own_nr";
+    case Decline::OtherPicture:
+        return "other_game_picture";
     default:
         return "unknown";
     }
@@ -149,6 +152,8 @@ inline const char* DeclineText(Decline decline)
         return "the pass recorded nothing";
     case Decline::GameOwnNr:
         return "the game runs its own NR (Streamline)";
+    case Decline::OtherPicture:
+        return "another of the game's DLSS pictures, left as it is";
     default:
         return "unknown";
     }

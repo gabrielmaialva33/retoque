@@ -58,6 +58,8 @@ Each stand-down is counted (the coverage reason, the session total logged at the
 history a reset; the layout's arrival is a warning, its departure an info line. There is no setting, so no control
 and no configuration key.
 
+Since 2026-11-04 the views are judged after the main-picture rule ([main-picture.md](main-picture.md)): a feature on main's colour allocation is a view of main and still reaches this detector; a separate picture on its own allocation is left aside before it.
+
 **Not taken.** The view pick (`MultiViewTarget`), and the per-view models that followed in `358bc0cb`: one model per
 screen is a different design with its own memory and lifetime questions, and nothing has measured it.
 
