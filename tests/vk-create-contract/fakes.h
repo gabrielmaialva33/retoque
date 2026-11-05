@@ -677,3 +677,31 @@ extern "C"
         FakeGetPhysicalDeviceProperties(physicalDevice, &pProperties->properties);
     }
 }
+
+// The observer is a post-create collaborator here; its internal opt-in/Detours behavior has its own suite.
+// Deep-copy the effective request while the hook still owns it, including nested/interleaved creates.
+namespace DlssNr::VkPre::Runtime
+{
+struct ObservedCreate
+{
+    Received request;
+    uint32_t apiVersion = 0;
+};
+inline std::mutex observedMutex;
+inline std::unordered_map<VkDevice, ObservedCreate> observed;
+inline void Install(VkDevice device, const VkDeviceCreateInfo* info, uint32_t apiVersion)
+{
+    std::lock_guard lock(observedMutex);
+    observed.emplace(device, ObservedCreate { Copy(info), apiVersion });
+}
+inline std::optional<ObservedCreate> Take(VkDevice device)
+{
+    std::lock_guard lock(observedMutex);
+    auto it = observed.find(device);
+    if (it == observed.end())
+        return std::nullopt;
+    auto result = it->second;
+    observed.erase(it);
+    return result;
+}
+} // namespace DlssNr::VkPre::Runtime

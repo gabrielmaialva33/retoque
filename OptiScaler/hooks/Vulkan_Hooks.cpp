@@ -21,6 +21,7 @@
 
 #include <spoofing/Vulkan_Spoofing.h>
 #include <hudfix/Hudfix_Vk.h>
+#include <dlssnr/DlssNr_VkPreRuntime.h>
 
 #include <vulkan/vulkan.h>
 
@@ -748,6 +749,11 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
                                                Config::Instance()->DlssNrEnabled.value_or_default(), "vkCreateDevice");
             result = o_vkCreateDevice(physicalDevice, &localCreateInfo, pAllocator, pDevice);
         }
+
+        // Observe while deviceFeatures and nrExtensions still own the effective request's pointers.
+        // The driver-init gate is already released; installation must not run under it.
+        if (result == VK_SUCCESS && !ScopedSkipVulkanHooks::Active() && !State::Instance().creatingD3DDevice)
+            DlssNr::VkPre::Runtime::Install(*pDevice, &localCreateInfo, requestedApiVersion);
     }
 
     if (Config::Instance()->DlssNrEnabled.value_or_default())

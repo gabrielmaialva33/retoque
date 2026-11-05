@@ -138,7 +138,9 @@ struct State
     Params* capabilityParams = nullptr;
     uint64_t modelVramBytes = DlssNr::ModelStats::kUnknown; // atomic in production; the fixture reassigns State
     OwnedImage output, proxy, proxySmall, outputNative, keep, meter, depthMatched, motionMatched, depthRetired,
-        motionRetired;
+        motionRetired, preScratch;
+    std::optional<unsigned> preSource;
+    VkRecording::Ticket preLastRecording {};
     Guide guideMatch;
     std::string guideMatchDeviceFailure, guideMatchSizeFailure, guideMatchTransient;
     unsigned guideMatchFailures = 0;
@@ -254,6 +256,9 @@ void Seed()
     g_vk.motionMatched.id = 8;
     g_vk.depthRetired.id = 9;
     g_vk.motionRetired.id = 10;
+    g_vk.preScratch.id = 11;
+    g_vk.preSource = 1;
+    g_vk.preLastRecording = { 1, 11, 1 };
     g_vk.pass = std::make_unique<Pass>();
     g_vk.superUp = std::make_unique<Pass>();
     g_vk.superDown = std::make_unique<Pass>();
@@ -274,6 +279,8 @@ void CheckAlive(void* feature, Pass* pass)
           "recorded generation was destroyed or scheduled for destruction while still referenced");
     Check(g_vk.feature == feature && g_vk.pass.get() == pass && g_vk.device == H<VkDevice>(1),
           "busy generation must preserve its feature, pass and device");
+    Check(g_vk.preScratch.id == 11 && g_vk.preSource && g_vk.preLastRecording.epoch != 0,
+          "busy generation must retain the pre-stage scratch and identity");
 }
 void FreeRetainsEveryRecording()
 {
@@ -291,12 +298,14 @@ void FreeRetainsEveryRecording()
     recordingB.reset();
     FreeRouteObjects();
     DeferredRelease::Drain();
-    Check(g_counts.feature == 1 && g_counts.images == 6 && g_counts.retired == 4 && g_counts.pass == 3 &&
+    Check(g_counts.feature == 1 && g_counts.images == 7 && g_counts.retired == 4 && g_counts.pass == 3 &&
               g_counts.parameters == 1 && g_counts.query == 1 && g_counts.guide == 1 && g_counts.probeDestroyed == 1,
           "last recording retirement must allow real route teardown exactly once");
     Check(g_counts.probeForgotten == 0, "a drained teardown frees the probe's objects; it does not forget them");
     Check(g_vk.feature == nullptr && !g_vk.pass && g_vk.device == VK_NULL_HANDLE,
           "unreferenced route must finish teardown");
+    Check(!g_vk.preScratch.id && !g_vk.preSource && !g_vk.preLastRecording.epoch,
+          "teardown must clear pre-stage scratch and identity");
 }
 void HandBackMustNotFinishOwnerEarly()
 {
@@ -396,6 +405,8 @@ void AbandonedDevice(bool throughDeviceGone)
     Check(g_vk.device == VK_NULL_HANDLE && g_vk.feature == nullptr && g_vk.capabilityParams == nullptr && !g_vk.pass &&
               !g_vk.superUp && !g_vk.superDown,
           "abandonment must forget route handles without running their GPU destructors");
+    Check(!g_vk.preScratch.id && !g_vk.preSource && !g_vk.preLastRecording.epoch,
+          "abandonment must forget pre-stage scratch and identity without GPU calls");
     Check(generation.expired(), "abandonment must release the old generation's recording pins");
     Check(!registry.Current(1, 11) && !registry.Current(1, 12) && registry.Current(2, 21).has_value(),
           "abandonment must invalidate only this device's recording registry entries");

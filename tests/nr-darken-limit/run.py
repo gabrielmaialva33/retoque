@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from cpp_source import function, mutate_function
 from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
 
 here = Path(__file__).resolve().parent
@@ -27,7 +28,26 @@ assert gate < live.index('if (showOriginal)', gate)
 renderer = renderer_source()
 vulkan = (root / 'retoque/dlssnr/DlssNrFeature_Vk.cpp').read_text()
 assert 'resolveParams.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());' in renderer
-assert vulkan.count('encode.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());') == 2
+floor = 'encode.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());'
+routes = ('EvaluateAfterUpscaleVk', 'RecordPreUpscaleVk', 'VkPresentModel::Record')
+
+
+def check_vulkan(text):
+    for route in routes:
+        code = function(text, route)
+        assert code.count(floor) == 1, route + ': one configured darkening floor'
+        assert code.index(floor) < code.index('DlssNrConstants resolve = encode;'), route + ': resolve inherits floor'
+    assert text.count(floor) == len(routes), 'unreviewed floor site'
+
+
+check_vulkan(vulkan)
+for route in routes:
+    try:
+        check_vulkan(mutate_function(vulkan, route, floor, 'encode.MinRatio = 0.0f;'))
+    except AssertionError:
+        continue
+    raise AssertionError('floor mutant survived: ' + route)
+print('PASS: configured MinRatio reaches resolve in post, pre and present; 3 independent mutants rejected')
 assert 'minRatio == other.minRatio' in renderer
 assert 'float minRatio = 0.0f;' in renderer
 luma = re.search(r'(?:static )?const float3 kLuma = [^;]+;', shader).group(0)

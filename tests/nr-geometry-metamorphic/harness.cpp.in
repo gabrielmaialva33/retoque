@@ -345,6 +345,33 @@ static void VulkanPlan(VkPlanResult& out, NVSDK_NGX_Parameter* params, const uin
     out = { true, guides, depthRegion, motionRegion, handed };
 }
 
+static bool VulkanPrePlan(VkPlanResult& out, NVSDK_NGX_Parameter* params, const uint32_t width, const uint32_t height,
+                          uint32_t guideWidth, uint32_t guideHeight, const uint32_t motionAllocationWidth,
+                          const uint32_t motionAllocationHeight, const uint32_t workWidth, const uint32_t workHeight,
+                          const uint32_t displayWidth, const uint32_t displayHeight)
+{
+    const FakeConfig& cfg = g_config;
+    struct
+    {
+        bool reset = false;
+        struct
+        {
+            bool active = false;
+        } guideRefusal;
+        uint32_t frameRefusals = 0;
+    } g_vk;
+    const void* device = nullptr;
+    FakeVkResource depthView, motionView;
+    const FakeVkResource* depth = &depthView;
+    const FakeVkResource* motion = &motionView;
+    out = {};
+    // clang-format off
+@VULKAN_PRE@
+        // clang-format on
+        out = { true, guides, depthRegion, motionRegion, handed };
+    return true;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // The scene and its representations.
 // ---------------------------------------------------------------------------------------------------------------------
@@ -573,7 +600,7 @@ static ModelView ViaD3d12(const Shape& s, const Field& f, const Repr& r)
     return v;
 }
 
-static ModelView ViaVulkan(const Shape& s, const Field& f, const Repr& r)
+template <bool Before = false> static ModelView ViaVulkan(const Shape& s, const Field& f, const Repr& r)
 {
     Guides g = Make(s, f, r);
     ModelView v;
@@ -588,12 +615,20 @@ static ModelView ViaVulkan(const Shape& s, const Field& f, const Repr& r)
     }
     {
         DlssNr::RenderGeometry::Scope scope(r.keys == Keys::Creation, key, &g.params);
-        VulkanPlan(plan, &g.params, s.displayW, s.displayH, g.depth.w, g.depth.h, g.motion.w, g.motion.h, s.workW,
-                   s.workH);
+        if constexpr (Before)
+            VulkanPrePlan(plan, &g.params, s.renderW, s.renderH, g.depth.w, g.depth.h, g.motion.w, g.motion.h, s.workW,
+                          s.workH, s.displayW, s.displayH);
+        else
+            VulkanPlan(plan, &g.params, s.displayW, s.displayH, g.depth.w, g.depth.h, g.motion.w, g.motion.h, s.workW,
+                       s.workH);
     }
     if (!plan.ran)
         return v;
     v.ran = true;
+    if constexpr (Before)
+        CHECK(plan.handed.matched && plan.handed.depth.width == s.workW && plan.handed.motion.width == s.workW &&
+                  plan.handed.depth.height == s.workH && plan.handed.motion.height == s.workH,
+              "pre-stage always hands owned working-size guides to the model, even with MatchGuides off");
     v.matched = plan.handed.matched;
     v.gameDepth = plan.depthRegion;
     v.gameMotion = plan.motionRegion;
@@ -754,7 +789,7 @@ int main()
     {
         const char* name;
         Route route;
-    } routes[] = { { "D3D12", ViaD3d12 }, { "Vulkan", ViaVulkan } };
+    } routes[] = { { "D3D12", ViaD3d12 }, { "Vulkan post", ViaVulkan<> }, { "Vulkan pre", ViaVulkan<true> } };
 
     unsigned exact = 0, near = 0, lossy = 0;
     for (const bool renderMotionScale : { true, false })

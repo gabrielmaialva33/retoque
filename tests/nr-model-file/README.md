@@ -33,7 +33,7 @@ Source guards read the production tree and check:
 - the four config points, frozen by the constructor and kept out of the log's parameter list;
 - the design record.
 
-Thirteen source mutants must each fail a guard.
+Twelve general source mutants and three function-scoped Vulkan refusal mutants must each fail a guard. The post, pre and present builders independently ask the resolver and report its missing-file reason.
 
 Not proved here: that a renamed model loads and runs through the forwarder, the direct runtime or Vulkan, that
 the model's caller checks accept it, MSVC compilation (the Release build covers that), or native Windows.

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
+#include "DlssNr_VkPreScope.h"
+#include "DlssNr_VkPreUpscale.h"
 
 #include <shaders/dlssnr/DlssNr_Common.h>
 
@@ -44,6 +46,27 @@ namespace DlssNr
 // rather than retrying into a crash.
 void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
                             VkPhysicalDevice physicalDevice, VkDevice device);
+
+// Encloses one real provider call. Bindings belong to the client's NGX evaluate window; only Color is restored.
+class ScopedPreUpscaleVk
+{
+    VkPre::ColourLoan<NVSDK_NGX_Parameter> _colour;
+    VkPre::Outcome _outcome = VkPre::Outcome::Unselected;
+    bool _borrowed = false;
+
+  public:
+    ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parameter* params, VkInstance instance,
+                       VkPhysicalDevice physical, VkDevice device, const NVSDK_NGX_Handle* feature,
+                       VkPre::Backend backend = VkPre::Backend::Native);
+    ~ScopedPreUpscaleVk();
+    ScopedPreUpscaleVk(const ScopedPreUpscaleVk&) = delete;
+    ScopedPreUpscaleVk& operator=(const ScopedPreUpscaleVk&) = delete;
+    void Complete() noexcept { _colour.Restore(); }
+    bool AllowPost() const { return VkPre::AllowPost(_outcome); }
+};
+
+void EvaluateAfterPreSafeVk(VkCommandBuffer command, NVSDK_NGX_Parameter* params, VkInstance instance,
+                            VkPhysicalDevice physical, VkDevice device);
 
 // Whether the native Vulkan path is up, and why not if it is not.
 bool IsRunningVk();

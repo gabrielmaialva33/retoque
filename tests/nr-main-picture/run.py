@@ -159,6 +159,17 @@ def check(texts):
                            'g_vk.meterPending.Invalidate();', 'g_vk.exposureLatch.Reset();'), stale=r'\n\s+return;')
     assert 'g_vkPictureEpoch.Consume(DlssNr::Pictures::EvaluateEpoch(params))' in vkfn
     assert at < vkfn.index('ClaimModelForAfterUpscale(device)'), 'the model is reached before the epoch'
+    vkpre = body(vk, 'ScopedPreUpscaleVk::ScopedPreUpscaleVk(')
+    ask = vkpre.index('Pictures::Ask(')
+    assert vkpre.index('DlssNrStage.value_or_default() != 1') < ask
+    assert vkpre.index('NVSDK_NGX_Parameter_Color') > ask, 'pre-stage colour must be read by the lazy picture reader first'
+    role = vkpre.index('picture.role != Pictures::Role::Main')
+    for effect in ('Runtime::Facts()', 'PreRecordingBusy()', 'RecordPreUpscaleVk(', '_colour.Bind('):
+        assert role < vkpre.index(effect), f'pre-stage {effect} precedes main-picture refusal'
+    vkrecord = body(vk, 'static bool RecordPreUpscaleVk(')
+    assert vkrecord.index('std::unique_lock<std::mutex> lock(g_vkMutex, std::try_to_lock);') < vkrecord.index(
+        'g_vkPictureEpoch.Consume(DlssNr::Pictures::EvaluateEpoch(params))') < vkrecord.index('g_fwd.evaluate(')
+    assert 'case DlssNr::Pictures::Consumed::Stale:\n        return false;' in vkrecord
     dispatch = body(dx12, 'bool DlssNr_Dx12::Dispatch(')
     at = consumer(dispatch, 'std::lock_guard<std::mutex> nrLock(g_nrMutex);',
                   restart=('g_nr.reset = true;', 'InvalidateExposureMeter();'), stale=r'reportSkip\([^;]*\);\s*return false;')
@@ -198,7 +209,7 @@ TEXTS = {
     'inputs': read('retoque/shaders/dlssnr/DlssNr_Dx12_Inputs.cpp'),
 }
 check(TEXTS)
-print('PASS: the four NR seams ask the rule before any NR state and leave another picture as it is; release tells it')
+print('PASS: the five NR seams ask the rule before any NR state and leave another picture as it is; release tells it')
 
 SOURCE_MUTANTS = {
     'after: asks after RR': ('dx12', "    // Another of the game's DLSS pictures (DlssNr_PictureGate.h): left as it is before any other way out",
@@ -239,8 +250,14 @@ SOURCE_MUTANTS = {
 }
 for name, (which, old, new) in SOURCE_MUTANTS.items():
     texts = dict(TEXTS)
-    assert texts[which].count(old) == 1, f'source mutant {name!r} no longer applies'
-    texts[which] = texts[which].replace(old, new)
+    if which == 'vk':
+        # Existing post-stage mutants stay scoped to that preserved function; the new pre recorder shares rules.
+        target = body(texts[which], 'void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params,')
+        assert target.count(old) == 1, f'source mutant {name!r} no longer applies to the post body'
+        texts[which] = texts[which].replace(target, target.replace(old, new), 1)
+    else:
+        assert texts[which].count(old) == 1, f'source mutant {name!r} no longer applies'
+        texts[which] = texts[which].replace(old, new)
     try:
         check(texts)
     except (AssertionError, ValueError):

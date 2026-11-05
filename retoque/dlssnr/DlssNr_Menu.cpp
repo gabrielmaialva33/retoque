@@ -1449,10 +1449,19 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushItemWidth(220.0f * menuResScale);
 
-        // Native Vulkan has no pre-upscale implementation; show its effective stage as status.
+        // Native Vulkan uses strict Stage-1 admission; keep requested placement distinct from successful work.
         if (vulkan)
         {
-            ImGui::TextDisabled(Localization::Tr("Stage: after the upscaler (native Vulkan)"));
+            if (config->DlssNrStage.value_or_default() == 1)
+            {
+                ImGui::TextDisabled(Localization::Tr("Stage: before the upscaler requested (native Vulkan)"));
+                HelpMarker("Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;"
+                           "\nthere is no after-upscale NR fallback. One outstanding recording is admitted."
+                           "\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation."
+                           "\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.");
+            }
+            else
+                ImGui::TextDisabled(Localization::Tr("Stage: after the upscaler (native Vulkan)"));
         }
         else if (config->DlssNrHookMethod.value_or_default() == 2)
         {

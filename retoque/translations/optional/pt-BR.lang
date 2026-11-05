@@ -623,3 +623,6 @@ yes	sim
 no	não
 
 The capture recording was discarded or invalidated; nothing was written.	A gravação da captura foi descartada ou invalidada; nenhum arquivo foi escrito.
+# Native Vulkan pre-upscale experiment
+Stage: before the upscaler requested (native Vulkan)	Estágio: solicitado antes do upscaler (Vulkan nativo)
+Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;\nthere is no after-upscale NR fallback. One outstanding recording is admitted.\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation.\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.	Rota experimental de entrada NGX em Vulkan nativo. Entradas não suportadas mantêm o Color original;\nnão há fallback para NR após o upscaler. Só uma gravação pendente é admitida.\nRequer ativação ao iniciar, layouts e ownership comprovados e uma geração pronta sem alterações.\nReconstruções e falta de evidências pulam o NR. A validação no DOOM Eternal ainda está pendente.

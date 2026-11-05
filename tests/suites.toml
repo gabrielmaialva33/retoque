@@ -637,7 +637,7 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 900
-summary = "Zero-motion detection on the Vulkan after-upscale route: the production route state with the real ring, registry and detector, the production pass against recording Vulkan fakes and the route's probe functions extracted verbatim, under ASan/UBSan (the command stream, None/None/Dead then Alive, the sentinel over an old valid grid, recording order, saturation and staleness, Dead on device A then a stable failure on B with no policy reset, refused recordings, exclusive slots); source guards on the VK_MODE block, the push block, the V-06 order behind ZeroGuideReset, no CPU wait, the route's ends and the project; seventeen planted mutants (incl. probes pending across a lost verdict, failed layout creates). No GPU."
+summary = "Zero-motion detection on both Vulkan input placements: the production route state with the real ring, registry and detector, the production pass against recording Vulkan fakes and the route's probe functions extracted verbatim, under ASan/UBSan (the command stream, None/None/Dead then Alive, the sentinel over an old valid grid, recording order, saturation and staleness, Dead on device A then a stable failure on B with no policy reset, refused recordings, exclusive slots); source guards on the VK_MODE block, the push block, the V-06 order behind ZeroGuideReset, no CPU wait, the route's ends and the project; twenty-one planted mutants (incl. separate pre/post guards, probes pending across a lost verdict, failed layout creates). No GPU."
 
 [nr-scene-cut]
 path = "nr-scene-cut"
@@ -1047,7 +1047,7 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
-summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan plan and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan, and 15 mutants that must fail."
+summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan post/pre plans and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan post, mandatory owned pre guides, and 22 mutants that must fail."
 
 [nr-replay-transform]
 path = "nr-replay-transform"
@@ -1160,3 +1160,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
 summary = "Native Vulkan pair capture: production backend against fake Vulkan calls; split snapshots, retirement and executed marker, serial replay, discard, cancellation, writer/device loss, actual-allocation budget; six independently killed safety mutants. No GPU or Wine."
+
+[nr-vk-pre-upscale]
+path = "nr-vk-pre-upscale"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 600
+summary = "Vulkan pre-upscale rules, composite identities, canonical tickets and production scope with fake prepare/SR; compiling mutants, no GPU qualification."

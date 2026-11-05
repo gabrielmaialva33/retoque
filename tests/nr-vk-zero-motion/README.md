@@ -55,3 +55,5 @@ Run: `python3 tests/nr-vk-zero-motion/run.py` (needs `g++` with C++20, ASan and 
 
 What it does not cover: the shader on a device, a real readback, the game's layouts, Proton or native Windows, a game.
 Those are the GPU harness and the in-game checks named in the design note.
+
+Both native input placements run the same source guard for ZeroGuideReset consumption, planning, policy, reservation and recording order. The consume, prepare, reserve-order and policy-counter mutations run independently in each function. Shared probe implementation behavior remains compiled once against fakes; no GPU qualification.

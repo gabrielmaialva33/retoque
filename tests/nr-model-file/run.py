@@ -11,6 +11,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from cpp_source import function, mutate_function
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RULE = ROOT / 'retoque/dlssnr/DlssNr_ModelFile.h'
@@ -138,7 +141,13 @@ def check(s, tree):
     assert s['model'].count('DlssNr::ModelFile::Find(g_dllDir)') == 2, 'scaling ratios or the D3D11 probe do not ask'
     snippet = body(s['vk'], 'std::optional<std::filesystem::path> FindSnippet()')
     assert 'DlssNr::ModelFile::Find(Util::DllPath().remove_filename())' in snippet
-    assert s['vk'].count('DlssNr::ModelFile::NotFoundReason()') == 2, 'a Vulkan refusal keeps the default text'
+    for route, refusal in (('EvaluateAfterUpscaleVk', 'Fail'), ('RecordPreUpscaleVk', 'Fail'), ('RunBuild', 'return stop')):
+        code = function(s['vk'], route)
+        assert code.count('FindSnippet()') == 1, route + ': loader asks shared resolver'
+        reason = refusal + '(DlssNr::ModelFile::NotFoundReason());'
+        assert code.count(reason) == 1 and code.index('if (!snippet.has_value())') < code.index(reason), \
+            route + ': missing model reports shared refusal'
+    assert s['vk'].count('DlssNr::ModelFile::NotFoundReason()') == 3, 'unreviewed Vulkan refusal site'
     assert 'ModelFile::Find(Util::DllPath().remove_filename())' in s['pair'], 'the capture describes another model'
     # The diagnostics report describes the named model; under auto, the default file as before.
     assert re.search(r'const auto model = DlssNr::ModelFile::Explicit\(\) \? DlssNr::ModelFile::Find\(Util::DllPath\(\)'
@@ -214,8 +223,6 @@ SOURCE_MUTANTS = {
     'diagnostics on the default file': ('menu', 'DlssNr::ModelFile::Explicit() ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())',
                                         'false ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())'),
     'identity follows the last Find': ('glue', '            if (g_named.empty())\n', '            if (true)\n'),
-    'Vulkan default text': ('vk', '            Fail(DlssNr::ModelFile::NotFoundReason());',
-                            '            Fail("nvngx_dlssnr.dll was not found beside OptiScaler or the game");'),
 }
 
 for name, (which, old, new) in SOURCE_MUTANTS.items():
@@ -232,3 +239,13 @@ for name, (which, old, new) in SOURCE_MUTANTS.items():
         continue
     raise SystemExit(f'FAIL: the source guards accepted the mutant: {name}')
 print(f'PASS: {len(SOURCE_MUTANTS)} source mutants rejected')
+
+for route in ('EvaluateAfterUpscaleVk', 'RecordPreUpscaleVk', 'RunBuild'):
+    changed = dict(sources)
+    changed['vk'] = mutate_function(sources['vk'], route, 'DlssNr::ModelFile::NotFoundReason()', '"default model missing"')
+    try:
+        check(changed, tree)
+    except AssertionError:
+        continue
+    raise AssertionError('Vulkan refusal mutant survived: ' + route)
+print('PASS: post, pre and present ModelFile refusal mutants rejected independently')

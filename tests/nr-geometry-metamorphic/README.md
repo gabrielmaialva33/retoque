@@ -91,3 +91,5 @@ allocation), so no shipped title is known to hit it.
 The model, NGX, a device, the real shader compiler, D3D11 native evaluates, the pre-upscale route's scratch swap
 (`nr-before-upscale`), periphery packing, Enlarge. The replay counterpart, which runs the real seam on transformed
 captures, is `tools/replay/transform.py` (see `tools/replay/README.md`).
+
+The pre-upscale geometry and Handed plan are also extracted verbatim from RecordPreUpscaleVk into a separate bool-returning fixture. It receives render-size color and independent display dimensions. The representation/bounds relations run across D3D12, Vulkan post and Vulkan pre. Pre must always hand owned working-size guides to NR, including MatchGuides=false. All Vulkan geometry mutants run separately on each placement, plus pre-specific display-reference and mandatory-guide-copy mutations. The original D3D12/post cross-API comparison remains unchanged.
