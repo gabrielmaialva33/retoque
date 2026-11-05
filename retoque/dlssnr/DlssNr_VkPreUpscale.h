@@ -76,6 +76,39 @@ constexpr Refusal Admit(const Admission& a)
         return Refusal::Busy;
     return Refusal::None;
 }
+// The log's words for a refusal (ScopedPreUpscaleVk::Report). Never empty: every value has its own text.
+constexpr const char* RefusalText(Refusal r)
+{
+    switch (r)
+    {
+    case Refusal::None:
+        return "admitted";
+    case Refusal::Off:
+        return "NR is off";
+    case Refusal::Stage:
+        return "Stage is not 1";
+    case Refusal::UnknownFeature:
+        return "the feature is not super sampling";
+    case Refusal::RayReconstruction:
+        return "ray reconstruction is not taken before the upscaler";
+    case Refusal::FrameGeneration:
+        return "the feature is frame generation";
+    case Refusal::Bridge:
+        return "the upscaler runs on D3D12 through the bridge, whose own Stage 1 applies";
+    case Refusal::Identity:
+        return "the feature's identity is unknown or stale";
+    case Refusal::OtherPicture:
+        return "not the main picture";
+    case Refusal::Observation:
+        return "the command buffer's recording was not observed (no ticket, unknown rendering state, or inside a "
+               "render pass)";
+    case Refusal::Recording:
+        return "the command buffer is not a primary, one-time, non-simultaneous recording";
+    case Refusal::Busy:
+        return "an earlier NR recording is still outstanding";
+    }
+    return "an unknown refusal";
+}
 enum class Outcome : uint8_t
 {
     Unselected,

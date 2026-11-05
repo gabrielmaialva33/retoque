@@ -229,7 +229,8 @@ bit-preserved NaNs or byte-exact original image memory. Both snapshots use the s
 | RGBA16F or RGBA32F, existing domain explicitly display-referred | PNG8 through existing float row conversion; record quantization |
 | RGBA8/BGRA8 UNORM, display-referred | PNG8; sampled channels are already RGBA, so do not swizzle a second time; test all byte values |
 | sRGB views | Refuse initially: sampled loads decode RGB, unlike raw byte capture; support needs an explicit shared re-encode contract |
-| Packed 10/11-bit, PQ/HLG, unknown color domain, compressed/integer/other views | Refuse with format/domain reason; never guess HDR transfer from bit depth |
+| B10G11R11_UFLOAT_PACK32 (unsigned float, added 2026-11-05) | Same rule as RGBA16F/RGBA32F: PFM when the route's `linearHdr` is true, PNG8 otherwise. It is linear float storage, not an encoding, and D3D12 already writes its R11G11B10_FLOAT twin. Found refused in DOOM Eternal's DLSS output |
+| Packed 10-bit UNORM, PQ/HLG, unknown color domain, compressed/integer/other views | Refuse with format/domain reason; never guess HDR transfer from bit depth |
 | Vulkan present HDR10/scRGB | Out of scope here; current present-host capture refusal stays |
 
 Use the existing `gameSaysHdr && FormatCanHoldLinearHdr(...)` decision
@@ -333,8 +334,8 @@ The lead approved sampled snapshots, the shared split Session interface, and a b
   recipe with native Linux DXC, independently of the shared Wine/MSVC prefix. No donor code/bytecode or DLL.
   Both source boundaries retain GENERAL; all queue-family indices are ignored. Producer writes precede reads;
   snapshot reads precede later image writes; private writes and the final update marker become host-visible.
-- Explicit format set: RGBA8/BGRA8 UNORM display data, RGBA16F/RGBA32F display or the route's established
-  linear-HDR domain. The writer receives RGBA32F numerical rows, emits PNG8 or PFM, and records actual VkFormat
+- Explicit format set: RGBA8/BGRA8 UNORM display data, RGBA16F/RGBA32F/B10G11R11_UFLOAT display or the route's
+  established linear-HDR domain. The writer receives RGBA32F numerical rows, emits PNG8 or PFM, and records actual VkFormat
   plus `sampled-RGBA32F-numeric`. sRGB, packed/PQ and unknown formats are refused. The capture inherits the
   route's domain classification; it does not discover a game's unreported transfer function. FP32 avoids the
   old FP16 keep image; NaN payload preservation and raw-byte equivalence are not promised.

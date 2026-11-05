@@ -1,12 +1,34 @@
 #include <dlssnr/DlssNr_VkPreUpscale.h>
 #include <dlssnr/DlssNr_VkPreObserve.h>
 #include <cassert>
+#include <string_view>
 #include <iostream>
 using namespace DlssNr::VkPre;
 int main()
 {
     Admission a;
     assert(Admit(a) == Refusal::Off);
+    // Every refusal has its own words for the log (ScopedPreUpscaleVk::Report compares them by address).
+    {
+        const Refusal all[] = { Refusal::None,
+                                Refusal::Off,
+                                Refusal::Stage,
+                                Refusal::UnknownFeature,
+                                Refusal::RayReconstruction,
+                                Refusal::FrameGeneration,
+                                Refusal::Bridge,
+                                Refusal::Identity,
+                                Refusal::OtherPicture,
+                                Refusal::Observation,
+                                Refusal::Recording,
+                                Refusal::Busy };
+        for (auto x : all)
+        {
+            assert(RefusalText(x) != nullptr && RefusalText(x)[0] != '\0');
+            for (auto y : all)
+                assert(x == y || std::string_view(RefusalText(x)) != RefusalText(y));
+        }
+    }
     a.enabled = true;
     assert(Admit(a) == Refusal::Stage);
     a.stage = 1;

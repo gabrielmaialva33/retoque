@@ -3800,7 +3800,10 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
     {
         _outcome = VkPre::Outcome::Rejected; // selected Stage 1 never falls back to post NR
         if (!params || !feature || !command || !device || !physical)
+        {
+            _why = "the evaluate came without its parameters, feature, command buffer or device";
             return;
+        }
         NVSDK_NGX_Resource_VK* colour = nullptr;
         const auto picture =
             Pictures::Ask(params,
@@ -3820,7 +3823,15 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
         const auto coverage = VkPre::Runtime::Status(device);
         if (!facts || !VkPre::Runtime::Uninterrupted() || !coverage.complete || !coverage.formatless ||
             !coverage.formatFlags2)
+        {
+            _why = !facts ? "the command observer is not installed"
+                   : !VkPre::Runtime::Uninterrupted()
+                       ? "the command observer lost track (NR was switched off, or an observation failed) and stays "
+                         "blind for this session"
+                   : !coverage.complete ? "not every command the observer needs could be hooked on this device"
+                                        : "the device lacks formatless storage writes or VK_KHR_format_feature_flags2";
             return;
+        }
         const auto identity = facts->FindFeature((uint64_t) device, feature->Id);
         const auto ticket = VkPre::Runtime::CurrentTicket(device, command);
         const auto recording = facts->Command((uint64_t) device, (uint64_t) command);
@@ -3836,8 +3847,11 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
         admission.oneTime = recording && recording->oneTime;
         admission.simultaneous = !recording || recording->simultaneous;
         admission.outstanding = PreRecordingBusy();
-        if (VkPre::Admit(admission) != VkPre::Refusal::None)
+        if (const auto refusal = VkPre::Admit(admission); refusal != VkPre::Refusal::None)
+        {
+            _why = VkPre::RefusalText(refusal);
             return;
+        }
         const auto geometry = ResolveRenderSize(params);
         auto display = ReadDisplaySize(params);
         if ((!display.width || !display.height) && RenderGeometry::active)
@@ -3845,12 +3859,18 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
         if (!colour || !geometry.size.width || !geometry.size.height || !display.width || !display.height ||
             colour->Resource.ImageViewInfo.Width != geometry.size.width ||
             colour->Resource.ImageViewInfo.Height != geometry.size.height)
+        {
+            _why = "the Color input is not the render size, or the render or display size is unknown";
             return;
+        }
         unsigned int baseX = 0, baseY = 0;
         params->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, &baseX);
         params->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, &baseY);
         if (baseX || baseY)
+        {
+            _why = "the Color input is a subrectangle";
             return;
+        }
         NVSDK_NGX_Resource_VK *depth = nullptr, *motion = nullptr, *output = nullptr, *exposure = nullptr;
         params->Get(NVSDK_NGX_Parameter_Depth, (void**) &depth);
         params->Get(NVSDK_NGX_Parameter_MotionVectors, (void**) &motion);
@@ -3859,18 +3879,30 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
         for (auto* input : { colour, depth, motion })
             if (!PreResource(*facts, device, command, input, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                              VK_IMAGE_USAGE_SAMPLED_BIT))
+            {
+                _why = "Color, depth or motion is not a plain sampled 2D view in SHADER_READ_ONLY_OPTIMAL";
                 return;
+            }
         if (exposure && !PreResource(*facts, device, command, exposure, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                                      VK_IMAGE_USAGE_SAMPLED_BIT))
+        {
+            _why = "the exposure texture is not a plain sampled 2D view in SHADER_READ_ONLY_OPTIMAL";
             return;
+        }
         if (!PreResource(*facts, device, command, output, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_USAGE_STORAGE_BIT))
+        {
+            _why = "the output is not a plain storage 2D view in GENERAL";
             return;
+        }
         uint32_t familyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physical, &familyCount, nullptr);
         std::vector<VkQueueFamilyProperties> families(familyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physical, &familyCount, families.data());
         if (recording->family >= familyCount || !(families[recording->family].queueFlags & VK_QUEUE_COMPUTE_BIT))
+        {
+            _why = "the command buffer's queue family cannot run compute";
             return;
+        }
         // Exclusive ownership is not established by a layout barrier with IGNORED queue indices.
         // Until ownership receipts exist, only explicitly concurrent resources naming this family qualify.
         for (auto* resource : { colour, depth, motion, output, exposure })
@@ -3881,15 +3913,27 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
                 facts->ImageForView((uint64_t) device, (uint64_t) resource->Resource.ImageViewInfo.ImageView);
             if (!image || !image->concurrent ||
                 std::find(image->families.begin(), image->families.end(), recording->family) == image->families.end())
+            {
+                _why = !image ? "an input image is unknown to the observer"
+                       : !image->concurrent
+                           ? "an input image is EXCLUSIVE to one queue family (ownership transfer is not implemented)"
+                           : "a CONCURRENT input image does not name this queue family";
                 return;
+            }
         }
         // Per-format capabilities, not just STORAGE_IMAGE: this shader's storage format is Unknown.
         if (vkGetPhysicalDeviceFormatProperties2 == nullptr)
+        {
+            _why = "vkGetPhysicalDeviceFormatProperties2 is unavailable";
             return;
+        }
         VkPhysicalDeviceProperties capabilities {};
         vkGetPhysicalDeviceProperties(physical, &capabilities);
         if (capabilities.apiVersion < VK_API_VERSION_1_3)
+        {
+            _why = "the physical device is below Vulkan 1.3";
             return; // an instance request alone does not prove core support on the physical device
+        }
 
         for (VkFormat format :
              { colour->Resource.ImageViewInfo.Format, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R32_SFLOAT })
@@ -3904,7 +3948,10 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
                                                        VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT |
                                                        VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT;
             if ((flags.optimalTilingFeatures & required) != required)
+            {
+                _why = "Color's format, RGBA16F or R32F lacks sampled, storage or formatless-write support";
                 return;
+            }
         }
         std::vector<std::pair<uint64_t, VkPre::ViewFact>> views;
         for (auto* resource : { colour, depth, motion, output, exposure })
@@ -3914,11 +3961,17 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
             const auto view = (uint64_t) resource->Resource.ImageViewInfo.ImageView;
             const auto identity = facts->ViewInfo((uint64_t) device, view);
             if (!identity)
+            {
+                _why = "an input view is unknown to the observer";
                 return;
+            }
             views.emplace_back(view, *identity);
         }
         if (g_preBorrow.test_and_set(std::memory_order_acquire))
+        {
+            _why = "another NR evaluate holds the loan";
             return;
+        }
         _borrowed = true;
         bool emitted = false;
         try
@@ -3927,15 +3980,22 @@ ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parame
                                     display.height, recording->family, emitted))
             {
                 _outcome = emitted ? VkPre::Outcome::Partial : VkPre::Outcome::Rejected;
+                _why = "the NR pass could not be recorded";
                 return;
             }
             _outcome = VkPre::Outcome::Partial;
             const auto current = VkPre::Runtime::CurrentTicket(device, command);
             if (!facts->Current(*identity) || !current || !VkPre::SameTicket(*ticket, *current))
+            {
+                _why = "the feature or the recording changed while NR was recorded";
                 return;
+            }
             for (const auto& [view, identity] : views)
                 if (!facts->CurrentView(view, identity))
+                {
+                    _why = "an input view changed while NR was recorded";
                     return;
+                }
             _colour.Bind(params, colour, &g_vk.preScratch.ngx);
             _outcome = VkPre::Outcome::Bound;
         }
@@ -3957,6 +4017,38 @@ ScopedPreUpscaleVk::~ScopedPreUpscaleVk()
     _colour.Restore();
     if (_borrowed)
         g_preBorrow.clear(std::memory_order_release);
+}
+
+void ScopedPreUpscaleVk::Report() const
+{
+    // Bound, or the refusal by name. A frame of another picture (StandDown) or with Stage 1 not selected says nothing.
+    // Each outcome is logged the first time it happens in the session only, so a refusal that alternates with bound
+    // frames (an outstanding recording) cannot fill the log.
+    static constexpr const char* kBound = "bound";
+    const char* now = _outcome == VkPre::Outcome::Bound ? kBound
+                      : _outcome == VkPre::Outcome::Rejected || _outcome == VkPre::Outcome::Partial
+                          ? (_why != nullptr ? _why : "refused before admission")
+                          : nullptr;
+    if (now == nullptr)
+        return;
+    static std::mutex mutex;
+    static std::array<const char*, 32> seen {};
+    {
+        std::lock_guard lock(mutex);
+        auto slot = std::find(seen.begin(), seen.end(), now);
+        if (slot != seen.end())
+            return;
+        slot = std::find(seen.begin(), seen.end(), nullptr);
+        if (slot == seen.end())
+            return;
+        *slot = now;
+    }
+    if (now == kBound)
+        LOG_INFO("DLSS-NR Vulkan Stage 1: NR ran before the upscaler and is bound as its Color (first such frame)");
+    else
+        LOG_INFO("DLSS-NR Vulkan Stage 1: not before the upscaler: {}. No NR after it either (Stage 1 does not fall "
+                 "back); each reason is logged once per session",
+                 now);
 }
 
 void EvaluateAfterPreSafeVk(VkCommandBuffer command, NVSDK_NGX_Parameter* params, VkInstance instance,

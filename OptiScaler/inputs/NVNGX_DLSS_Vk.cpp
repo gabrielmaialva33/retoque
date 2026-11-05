@@ -1072,7 +1072,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                 pre.emplace(InCmdList, InParameters, vkInstance, vkPD, vkDevice, InFeatureHandle);
             auto result = NVNGXProxy::VULKAN_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
             if (pre)
+            {
                 pre->Complete();
+                pre->Report();
+            }
             LOG_INFO("VULKAN_EvaluateFeature result for ({0}): {1:X}", handleId, (UINT) result);
 
             // Neural Rendering over what the upscaler just wrote, on the same command buffer -- the
@@ -1167,7 +1170,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     }
     auto upscaleResult = deviceContext->Evaluate(InCmdList, InParameters);
     if (pre)
+    {
         pre->Complete();
+        pre->Report();
+    }
 
     if (upscaleResult)
         UpscalerInputsVk::UpscaleEnd(InCmdList, output);
