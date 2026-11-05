@@ -242,6 +242,11 @@ struct DlssNrFrameInfo
     // Which of the game's DLSS pictures the frame is (retoque/dlssnr/DlssNr_Pictures.h), read when its guides are
     // gathered, so a frame captured for the present keeps its picture. 0: no picture rule judged the evaluate.
     uint64_t PictureEpoch = 0;
+
+    // Reset above came from the synthesized-motion estimator's scene cut, not from the game. A cut all the same, so
+    // the stabilizer treats it as one; only the log tells the two apart. False when the frame already carried a reset
+    // of its own before the estimator saw the cut.
+    bool ResetIsSceneCut = false;
 };
 
 struct alignas(256) DlssNrConstants

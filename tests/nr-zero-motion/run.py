@@ -110,6 +110,21 @@ assert not re.search(r'\bframe\.(Reset|ResetIsPolicy)\b', dispatch[dispatch.inde
     'a reader of the frame reset after the combined flags bypasses the dead-motion policy'
 assert 'model history dropped on the game\'s all-zero motion vectors, as ZeroGuideReset' in squash(dispatch).replace('" "', '')
 
+# The synthesized-motion estimator's scene cut is a cut (the stabilizer still reads it as one, through
+# frameResetIsPolicy being false) but not the game's: its own counter and line. Decided before the reset is consumed;
+# a policy reset outranks it, and the estimator claims it only when the frame carried no reset of its own.
+assert 'const bool frameResetIsSceneCut = !frameResetIsPolicy && frame.ResetIsSceneCut;' in dispatch
+assert dispatch.index('const bool frameResetIsSceneCut') < dispatch.index('if (frameReset)')
+assert 'auto& count = frameResetIsPolicy ? policyResets : frameResetIsSceneCut ? sceneCutResets : resets;' in dispatch
+labels = squash(dispatch[dispatch.index('if (frameReset)'):]).replace('" "', '')
+assert labels.index('else if (frameResetIsPolicy)') < labels.index('else if (frameResetIsSceneCut)') < \
+    labels.index('the game asked for a history reset'), 'policy, then scene cut, then the game'
+assert 'model history dropped on a scene cut the synthesized motion detected' in labels
+cut_block = renderer[renderer.index('// A cut is a cut, whoever notices it.'):]
+cut_block = squash(cut_block[:cut_block.index('_lastSynthesized = true;')])
+assert 'if (sceneCut) { frame.ResetIsSceneCut = !frame.Reset; frame.Reset = true; frame.ResetIsPolicy = false; }' \
+    in cut_block, 'the cut is the estimator\'s only when nothing had asked before it'
+
 # Never waits: completion through the submission tracker, a busy slot skips the probe.
 update = renderer[renderer.index('void UpdateMotionProbe('):]
 update = update[:update.index('\n}\n')]
