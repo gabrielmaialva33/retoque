@@ -55,6 +55,7 @@
 #include <cstring>
 #include <vector>
 #include <chrono>
+#include <wrl/client.h>
 #include "precompile/DlssNr_Shader.h"
 #include <shaders/output_scaling/OS_Dx12.h>
 #include "DlssNr_Stabilizer_Dx12.h"
@@ -180,6 +181,23 @@ static void StampPresentGuide(size_t slot, DlssNr::PresentGuideIdentity::Stamp s
 
 namespace Dx12Internal
 {
+static void NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason reason,
+                             const DlssNr::PresentGuides::AcquireReport& acquire, uint64_t residentBytes,
+                             uint64_t parkedBytes)
+{
+    if (reason == DlssNr::PresentGuideIdentity::ProducerReason::Recorded)
+    {
+        g_guideIdentity.producer.NoteRecorded(acquire.kind, residentBytes, parkedBytes);
+        return;
+    }
+
+    g_guideIdentity.producer.NoteSkipped(reason, acquire, residentBytes, parkedBytes);
+    g_guideIdentity.status.NoteProducer(reason);
+}
+} // namespace Dx12Internal
+
+namespace Dx12Internal
+{
 static void NoteBridgePresentedExtent(unsigned int width, unsigned int height)
 {
     if (width != 0 && height != 0)
@@ -243,9 +261,9 @@ static void CountGuideIdentity(DlssNr::PresentGuideIdentity::Consumer& consumer,
     const DlssNr::PresentGuideIdentity::Clock::time_point now { std::chrono::milliseconds(NowMs()) };
 
     std::string line;
-    if (ask.asked && logged &&
+    if ((ask.asked || g_guideIdentity.producer.Open().attempts != 0) && logged &&
         consumer.Note(ask.decision, picked, g_presentGuideRing, g_guideIdentity.tracker.Stamped(), ask.present, outcome,
-                      now, &line))
+                      now, &line, &g_guideIdentity.producer))
     {
         LOG_INFO("{}", line);
     }
@@ -434,6 +452,73 @@ struct GuideCapture
 };
 } // namespace Dx12Internal
 
+namespace Dx12Internal
+{
+static uint64_t PresentGuideCloneBytes(ID3D12Device* device, ID3D12Resource* res)
+{
+    if (device == nullptr || res == nullptr)
+        return 0;
+
+    const D3D12_RESOURCE_DESC desc = res->GetDesc();
+    const D3D12_RESOURCE_ALLOCATION_INFO info = device->GetResourceAllocationInfo(0, 1, &desc);
+    if (info.SizeInBytes == 0 || info.SizeInBytes == UINT64_MAX)
+        return 0;
+
+    return info.SizeInBytes;
+}
+} // namespace Dx12Internal
+
+namespace Dx12Internal
+{
+static bool PresentGuideRetirementCapacity()
+{
+    size_t stuck = 0;
+    for (const auto& retired : g_nrRetired)
+        stuck += retired.stuck;
+    const size_t counted = g_nrRetired.size() - std::min<size_t>(stuck, 64);
+    return DlssNr::Chain::RetirementAllowed(counted);
+}
+} // namespace Dx12Internal
+
+namespace Dx12Internal
+{
+static uint64_t ResidentGuideBytes()
+{
+    uint64_t total = 0;
+    for (const auto& clone : g_presentGuideClones)
+    {
+        if (clone.depth != nullptr)
+            total += clone.depthBytes;
+        if (clone.motion != nullptr)
+            total += clone.motionBytes;
+    }
+    return total;
+}
+} // namespace Dx12Internal
+
+namespace Dx12Internal
+{
+static uint64_t ParkedGuideBytes()
+{
+    uint64_t total = 0;
+    for (const auto& entry : g_nrRetired)
+    {
+        if (entry.resource != nullptr)
+            total += entry.cloneBytes;
+    }
+    return total;
+}
+} // namespace Dx12Internal
+
+namespace Dx12Internal
+{
+static void NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason reason)
+{
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    NoteGuideCapture(reason, {}, ResidentGuideBytes(), ParkedGuideBytes());
+}
+} // namespace Dx12Internal
+
 // The capture: a ring slot, its clones (rebuilt for another device, format, size or flags, the old ones parked, never
 // freed under the GPU), the copies recorded on cmdList and tracked before anything is recorded, the stamp, the commit.
 // True when committed. Takes g_nrMutex.
@@ -441,19 +526,29 @@ namespace Dx12Internal
 {
 static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture& source, const DlssNrFrameInfo& frame)
 {
-    if (g_nr.failed || cmdList == nullptr || source.depth == nullptr || source.motion == nullptr)
+    if (g_nr.failed)
         return false;
+
+    if (cmdList == nullptr || source.depth == nullptr || source.motion == nullptr)
+    {
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::MissingInput);
+        return false;
+    }
 
     ID3D12Resource* depth = source.depth;
     ID3D12Resource* motion = source.motion;
 
     ID3D12Device* device = nullptr;
     if (FAILED(depth->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+    {
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::Device);
         return false;
+    }
 
     if (!DeviceChildBelongsTo(device, cmdList) || !DeviceChildBelongsTo(device, motion))
     {
         device->Release();
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::Device);
         return false;
     }
 
@@ -465,6 +560,7 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         motionDesc.DepthOrArraySize != 1 || motionDesc.SampleDesc.Count != 1)
     {
         device->Release();
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::Incompatible);
         return false;
     }
 
@@ -475,6 +571,7 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         !PresentGuideCopyCompatible(device, motionDesc, motionCopyDesc))
     {
         device->Release();
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::Incompatible);
         return false;
     }
 
@@ -492,11 +589,14 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
 
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     TickNrRetired();
+    g_guideIdentity.producer.SetBytes(ResidentGuideBytes(), ParkedGuideBytes());
 
     if (s_failedAllocs.contains({ devId, depthDesc.Format, depthDesc.Width, depthDesc.Height }) ||
         s_failedAllocs.contains({ devId, motionDesc.Format, motionDesc.Width, motionDesc.Height }))
     {
         device->Release();
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::AllocFailed, {}, ResidentGuideBytes(),
+                         ParkedGuideBytes());
         return false;
     }
 
@@ -515,70 +615,142 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         return true;
     };
 
-    const size_t slot = g_presentGuideRing.AcquireForRecord(isReadInFlight);
+    const auto isWriteInFlight = [](void* token) -> bool
+    {
+        if (token == nullptr)
+            return false;
+        auto& writeUsage = *static_cast<DlssNr::Submission::Usage*>(token);
+        return !DlssNr::Submission::CaptureReusable(writeUsage);
+    };
+
+    const auto isShapeMatch = [&](size_t i) -> bool
+    {
+        const auto& c = g_presentGuideClones[i];
+        return c.depth != nullptr && c.motion != nullptr && c.deviceIdentity == devId &&
+               c.sourceDepthFormat == depthDesc.Format && c.sourceDepthWidth == depthDesc.Width &&
+               c.sourceDepthHeight == depthDesc.Height && c.sourceDepthFlags == depthDesc.Flags &&
+               c.sourceMotionFormat == motionDesc.Format && c.sourceMotionWidth == motionDesc.Width &&
+               c.sourceMotionHeight == motionDesc.Height && c.sourceMotionFlags == motionDesc.Flags;
+    };
+
+    DlssNr::PresentGuides::AcquireReport acquire {};
+    const size_t slot = g_presentGuideRing.AcquireForRecord(isReadInFlight, isWriteInFlight, isShapeMatch, &acquire);
     if (slot >= DlssNr::PresentGuides::kRingSize)
     {
         device->Release();
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::SlotsBusy, acquire, ResidentGuideBytes(),
+                         ParkedGuideBytes());
         return false;
     }
 
     auto& clone = g_presentGuideClones[slot];
 
-    if (clone.depth != nullptr)
-    {
-        if (clone.deviceIdentity != devId || clone.sourceDepthFormat != depthDesc.Format ||
-            clone.sourceDepthWidth != depthDesc.Width || clone.sourceDepthHeight != depthDesc.Height ||
-            clone.sourceDepthFlags != depthDesc.Flags)
-        {
-            ParkNrClone(clone.depth, clone.writeUsage, clone.tracked);
-        }
-    }
-    if (clone.motion != nullptr)
-    {
-        if (clone.deviceIdentity != devId || clone.sourceMotionFormat != motionDesc.Format ||
-            clone.sourceMotionWidth != motionDesc.Width || clone.sourceMotionHeight != motionDesc.Height ||
-            clone.sourceMotionFlags != motionDesc.Flags)
-        {
-            ParkNrClone(clone.motion, clone.writeUsage, clone.tracked);
-        }
-    }
+    const bool replaceDepth =
+        clone.depth != nullptr &&
+        (clone.deviceIdentity != devId || clone.sourceDepthFormat != depthDesc.Format ||
+         clone.sourceDepthWidth != depthDesc.Width || clone.sourceDepthHeight != depthDesc.Height ||
+         clone.sourceDepthFlags != depthDesc.Flags);
+    const bool replaceMotion =
+        clone.motion != nullptr &&
+        (clone.deviceIdentity != devId || clone.sourceMotionFormat != motionDesc.Format ||
+         clone.sourceMotionWidth != motionDesc.Width || clone.sourceMotionHeight != motionDesc.Height ||
+         clone.sourceMotionFlags != motionDesc.Flags);
+    const bool needDepth = clone.depth == nullptr || replaceDepth;
+    const bool needMotion = clone.motion == nullptr || replaceMotion;
 
-    if (clone.depth == nullptr)
-        clone.depth = CreatePresentGuideClone(device, depth);
-    if (clone.motion == nullptr)
-        clone.motion = CreatePresentGuideClone(device, motion);
-
-    clone.deviceIdentity = devId;
-    const bool copyCompatible = clone.depth != nullptr && clone.motion != nullptr &&
-                                DeviceChildBelongsTo(device, clone.depth) &&
-                                DeviceChildBelongsTo(device, clone.motion) &&
-                                PresentGuideCopyCompatible(device, depthDesc, clone.depth->GetDesc()) &&
-                                PresentGuideCopyCompatible(device, motionDesc, clone.motion->GetDesc());
-    device->Release();
-    if (clone.depth != nullptr && clone.motion != nullptr && !copyCompatible)
+    if ((replaceDepth || replaceMotion) && !PresentGuideRetirementCapacity())
     {
-        g_presentGuideRing.InvalidateSlot(slot);
+        device->Release();
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::RetiredCap, acquire, ResidentGuideBytes(),
+                         ParkedGuideBytes());
         return false;
     }
 
-    if (clone.depth == nullptr || clone.motion == nullptr)
-    {
-        if (clone.depth == nullptr)
-            s_failedAllocs.insert({ devId, depthDesc.Format, depthDesc.Width, depthDesc.Height });
-        else
-            ParkNrClone(clone.depth, clone.writeUsage, clone.tracked);
+    Microsoft::WRL::ComPtr<ID3D12Resource> newDepth;
+    Microsoft::WRL::ComPtr<ID3D12Resource> newMotion;
+    if (needDepth)
+        newDepth.Attach(CreatePresentGuideClone(device, depth));
+    if (needMotion)
+        newMotion.Attach(CreatePresentGuideClone(device, motion));
 
-        if (clone.motion == nullptr)
+    ID3D12Resource* const candDepth = needDepth ? newDepth.Get() : clone.depth;
+    ID3D12Resource* const candMotion = needMotion ? newMotion.Get() : clone.motion;
+
+    const bool copyCompatible = candDepth != nullptr && candMotion != nullptr &&
+                                DeviceChildBelongsTo(device, candDepth) && DeviceChildBelongsTo(device, candMotion) &&
+                                PresentGuideCopyCompatible(device, depthDesc, candDepth->GetDesc()) &&
+                                PresentGuideCopyCompatible(device, motionDesc, candMotion->GetDesc());
+    if (candDepth != nullptr && candMotion != nullptr && !copyCompatible)
+    {
+        device->Release();
+        if (!replaceDepth && !replaceMotion)
+            g_presentGuideRing.InvalidateSlot(slot);
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Incompatible, acquire, ResidentGuideBytes(),
+                         ParkedGuideBytes());
+        return false;
+    }
+
+    if (candDepth == nullptr || candMotion == nullptr)
+    {
+        device->Release();
+        if (candDepth == nullptr)
+            s_failedAllocs.insert({ devId, depthDesc.Format, depthDesc.Width, depthDesc.Height });
+        if (candMotion == nullptr)
             s_failedAllocs.insert({ devId, motionDesc.Format, motionDesc.Width, motionDesc.Height });
-        else
-            ParkNrClone(clone.motion, clone.writeUsage, clone.tracked);
 
         LOG_ERROR("DLSS-NR present guides: clone allocation failed on device {:p}; present route will use neutral "
                   "guides",
                   devId);
-        g_presentGuideRing.InvalidateSlot(slot);
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::AllocFailed, acquire, ResidentGuideBytes(),
+                         ParkedGuideBytes());
         return false;
     }
+
+    // Submission tracking before ANY barrier, recording, or old-clone retirement on this list (Correction 4)
+    const auto savedWriteUsage = clone.writeUsage;
+    const auto savedCaptureWriteUsage = clone.captureWriteUsage;
+    clone.captureWriteUsage = {}; // reset single capture write usage for eligibility (Correction 2)
+    const bool trackedNow = DlssNr::Submission::Track(cmdList, clone.writeUsage) &&
+                            DlssNr::Submission::Track(cmdList, clone.captureWriteUsage);
+    if (!trackedNow)
+    {
+        clone.writeUsage = savedWriteUsage;
+        clone.captureWriteUsage = savedCaptureWriteUsage;
+        device->Release();
+        static bool s_loggedTrackFail = false;
+        if (!s_loggedTrackFail)
+        {
+            LOG_WARN("DLSS-NR present guides: evaluate command list refused submission tracking (type != DIRECT or "
+                     "sealed); skipping guide snapshot");
+            s_loggedTrackFail = true;
+        }
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::TrackRefused, acquire, ResidentGuideBytes(),
+                         ParkedGuideBytes());
+        return false;
+    }
+
+    const uint64_t nextDepthBytes = needDepth ? PresentGuideCloneBytes(device, newDepth.Get()) : clone.depthBytes;
+    const uint64_t nextMotionBytes = needMotion ? PresentGuideCloneBytes(device, newMotion.Get()) : clone.motionBytes;
+    device->Release();
+
+    if (replaceDepth)
+        ParkNrClone(clone.depth, savedWriteUsage, clone.tracked);
+    if (replaceMotion)
+        ParkNrClone(clone.motion, savedWriteUsage, clone.tracked);
+    if (needDepth)
+    {
+        clone.depth = newDepth.Detach();
+        clone.depthBytes = nextDepthBytes;
+    }
+    if (needMotion)
+    {
+        clone.motion = newMotion.Detach();
+        clone.motionBytes = nextMotionBytes;
+    }
+
+    clone.deviceIdentity = devId;
+    // Never set back to false: earlier captures' writes may still be pending on the GPU.
+    clone.tracked = true;
 
     clone.sourceDepthFormat = depthDesc.Format;
     clone.sourceDepthWidth = depthDesc.Width;
@@ -589,25 +761,6 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
     clone.sourceMotionWidth = motionDesc.Width;
     clone.sourceMotionHeight = motionDesc.Height;
     clone.sourceMotionFlags = motionDesc.Flags;
-
-    // Submission tracking before ANY barrier or recording on this list (Correction 4)
-    clone.captureWriteUsage = {}; // reset single capture write usage for eligibility (Correction 2)
-    const bool trackedNow = DlssNr::Submission::Track(cmdList, clone.writeUsage) &&
-                            DlssNr::Submission::Track(cmdList, clone.captureWriteUsage);
-    // Never set back to false: earlier captures' writes may still be pending on the GPU.
-    clone.tracked = clone.tracked || trackedNow;
-    if (!trackedNow)
-    {
-        static bool s_loggedTrackFail = false;
-        if (!s_loggedTrackFail)
-        {
-            LOG_WARN("DLSS-NR present guides: evaluate command list refused submission tracking (type != DIRECT or "
-                     "sealed); skipping guide snapshot");
-            s_loggedTrackFail = true;
-        }
-        g_presentGuideRing.InvalidateSlot(slot);
-        return false;
-    }
 
     // With GpuTiming off nothing below reads the timing settings (a mutex) or fills metadata.
     std::optional<DlssNr::GpuTiming::Region> captureTiming;
@@ -669,6 +822,8 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
     StampPresentGuide(slot, stamp, frame, clone.width, clone.height);
     g_presentGuideRing.CommitRecord(slot, clone.width, clone.height, frame.DepthInverted, NowMs(),
                                     &clone.captureWriteUsage, &clone);
+    NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Recorded, acquire, ResidentGuideBytes(),
+                     ParkedGuideBytes());
     if (captureTiming)
     {
         captureMetadata.guideSequence = g_presentGuideRing.GetSlot(slot).sequence;
@@ -694,7 +849,10 @@ void CaptureTemporal(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* pa
     source.motion = GetResource(params, NVSDK_NGX_Parameter_MotionVectors, "DLSSD.MotionVectors");
 
     if (source.depth == nullptr || source.motion == nullptr || cmdList == nullptr)
+    {
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::MissingInput);
         return;
+    }
 
     const auto& cfg = *Config::Instance();
     source.depthState = static_cast<D3D12_RESOURCE_STATES>(
@@ -716,7 +874,10 @@ bool CaptureBridgedGuides(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* de
                           uint32_t outputHeight)
 {
     if (params == nullptr)
+    {
+        NoteCaptureSkipUnlocked(DlssNr::PresentGuideIdentity::ProducerReason::MissingInput);
         return false;
+    }
 
     GuideCapture source;
     source.depth = depth;

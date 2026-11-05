@@ -626,11 +626,29 @@ void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, b
     if (res == nullptr)
         return;
 
+    uint64_t bytes = 0;
+    for (auto& clone : g_presentGuideClones)
+    {
+        if (clone.depth == res)
+        {
+            bytes = clone.depthBytes;
+            clone.depthBytes = 0;
+            break;
+        }
+        if (clone.motion == res)
+        {
+            bytes = clone.motionBytes;
+            clone.motionBytes = 0;
+            break;
+        }
+    }
+
     NrRetired r;
     r.tracked = tracked;
     if (tracked)
         r.usage = usage;
     r.resource = res;
+    r.cloneBytes = bytes;
     res = nullptr;
     g_nrRetired.push_back(r);
 }

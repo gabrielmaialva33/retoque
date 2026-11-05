@@ -361,6 +361,13 @@ void Prune(Usage& usage)
             e.reset();
 }
 
+bool CaptureReusable(const Usage& usage)
+{
+    std::lock_guard lock(stateMutex);
+    RefreshOrphans(usage);
+    return Detail::IsCaptureReusable(usage, FenceValue);
+}
+
 bool Completed(const Usage& usage)
 {
     std::lock_guard lock(stateMutex);

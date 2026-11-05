@@ -193,11 +193,21 @@ struct Ring
 } // namespace PresentGuides
 namespace PresentGuideIdentity
 {
-struct Decision {};
-struct Present {};
-struct Status {};
-enum class Outcome {};
-enum class Source {};
+struct Decision
+{
+};
+struct Present
+{
+};
+struct Status
+{
+};
+enum class Outcome
+{
+};
+enum class Source
+{
+};
 struct Tracker
 {
 };
@@ -209,6 +219,9 @@ struct SourceHistory
 {
 };
 struct StatusWindow
+{
+};
+struct Producer
 {
 };
 enum class Fallback

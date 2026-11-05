@@ -451,6 +451,7 @@ struct NrRetired
     DlssNr_DetailStats_Dx12* detailStats = nullptr;
     DlssNr_Pulse_Dx12* pulse = nullptr;
     DlssNr_MotionProbe_Dx12* motionProbe = nullptr;
+    uint64_t cloneBytes = 0;
 };
 
 struct DetailMeasureSession
@@ -571,6 +572,9 @@ struct PresentGuideClone
     uint64_t sourceMotionWidth = 0;
     uint32_t sourceMotionHeight = 0;
     D3D12_RESOURCE_FLAGS sourceMotionFlags = D3D12_RESOURCE_FLAG_NONE;
+
+    uint64_t depthBytes = 0;
+    uint64_t motionBytes = 0;
 };
 
 struct BridgeGuideRead
@@ -586,6 +590,7 @@ struct BridgeGuideRead
 struct PresentGuideIdentityState
 {
     DlssNr::PresentGuideIdentity::Tracker tracker;
+    DlssNr::PresentGuideIdentity::Producer producer;
     DlssNr::PresentGuideIdentity::Consumer present { "D3D12 present" };
     DlssNr::PresentGuideIdentity::Consumer bridge { "D3D11 bridge" };
     DlssNr::PresentGuideIdentity::SourceHistory presentSource;

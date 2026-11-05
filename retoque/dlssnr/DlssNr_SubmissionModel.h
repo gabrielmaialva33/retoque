@@ -115,6 +115,22 @@ template <typename Completed> bool IsSafe(const Epoch& e, Completed completed)
            (IsComplete(e, completed) || (!e.submitted && e.executions == 0));
 }
 
+// Slot overwrite admission for the one epoch of a capture, not resource destruction. A successful Reset
+// before Execute or a definitively orphaned list is reusable too; an unanswered recording remains busy.
+template <typename Completed> bool IsCaptureReusable(const Usage& usage, Completed completed)
+{
+    const Epoch* capture = nullptr;
+    for (const auto& e : usage.epochs)
+    {
+        if (!e)
+            continue;
+        if (capture != nullptr)
+            return false;
+        capture = e.get();
+    }
+    return capture != nullptr && (IsSafe(*capture, completed) || IsComplete(*capture, completed));
+}
+
 // Done on the GPU, as far as starting new work goes. Outside strict mode a completed epoch counts although its
 // list could replay -- the trust Streamline, ReShade and NGX place in the host.
 template <typename Completed> bool IsAdmissionDone(const Epoch& e, Completed completed, bool strict)

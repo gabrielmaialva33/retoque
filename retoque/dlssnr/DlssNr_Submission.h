@@ -42,6 +42,8 @@ void PruneFinished(Usage& usage);
 
 // Completion observed so far, NOT permission to destroy: a list may execute again.
 bool Completed(const Usage& usage);
+// Overwrite admission for a single capture epoch; never a destruction predicate.
+bool CaptureReusable(const Usage& usage);
 bool SubmittedOnlyOn(const Usage& usage, ID3D12CommandQueue* queue);
 void Abandon(ID3D12GraphicsCommandList* list);
 bool Active();

@@ -1,3 +1,4 @@
+#include "pch.h"
 #include <dlssnr/DlssNr_PresentGuideRing.h>
 #include <dlssnr/DlssNr_SubmissionModel.h>
 
@@ -10,6 +11,74 @@
 
 using namespace DlssNr::Submission::Detail;
 using namespace DlssNr::PresentGuides;
+
+// This is the same model predicate called by Submission::CaptureReusable in production.
+template <typename Done> static bool CaptureBusy(void* token, const Done& done)
+{
+    return token && !IsCaptureReusable(*static_cast<Usage*>(token), [&](size_t q) { return done[q]; });
+}
+
+void TestCaptureReuseAndCancelledRing()
+{
+    Model model;
+    std::array<uint64_t, MaxQueues> done {};
+    auto completed = [&](size_t q) { return done[q]; };
+    Usage u;
+    auto epoch = model.Track(101, u, completed);
+    assert(epoch && CaptureBusy(&u, done)); // unsubmitted, still executable
+    auto pending = model.BeforeExecute(101);
+    assert(CaptureBusy(&u, done));
+    Model::AfterExecute(pending, 0, 1, true);
+    assert(CaptureBusy(&u, done)); // outstanding write
+    done[0] = 1;
+    assert(!CaptureBusy(&u, done)); // completed, no Reset required for overwrite admission
+    done[0] = UINT64_MAX;
+    assert(CaptureBusy(&u, done)); // device loss is not completion
+    done[0] = 1;
+    Usage failed;
+    auto failure = model.Track(102, failed, completed);
+    assert(failure);
+    auto signal = model.BeforeExecute(102);
+    Model::AfterExecute(signal, 0, 2, false);
+    Model::AfterReset(model.Current(102), true);
+    assert(CaptureBusy(&failed, done)); // failed signal, even after Reset
+    failure->orphaned = true;
+    assert(CaptureBusy(&failed, done));
+    Usage orphan;
+    auto o = model.Track(103, orphan, completed);
+    o->orphaned = true;
+    assert(!CaptureBusy(&orphan, done)); // definitively released without any Execute
+    o->unknown = true;
+    assert(CaptureBusy(&orphan, done));
+    Usage empty;
+    assert(CaptureBusy(&empty, done));
+    Usage multiple = u;
+    multiple.epochs[1] = epoch;
+    assert(CaptureBusy(&multiple, done)); // enforce the single-epoch capture contract
+
+    Ring ring;
+    std::array<Usage, kRingSize> captures {};
+    auto noRead = [](void*) { return false; };
+    auto writeBusy = [&](void* token) { return CaptureBusy(token, done); };
+    auto shape = [](size_t) { return true; };
+    for (size_t i = 0; i < kRingSize; ++i)
+    {
+        assert(ring.AcquireForRecord(noRead, writeBusy, shape) == i);
+        assert(model.Track(200 + i, captures[i], completed));
+        ring.CommitRecord(i, 1920, 1080, false, 1000 + i, &captures[i], nullptr);
+    }
+    assert(ring.AcquireForRecord(noRead, writeBusy, shape) == kRingSize);
+    for (size_t i = 0; i < kRingSize; ++i)
+        Model::AfterReset(model.Current(200 + i), true); // discard all captures without Execute
+    for (size_t i = 0; i < kRingSize; ++i)
+    {
+        const size_t slot = ring.AcquireForRecord(noRead, writeBusy, shape);
+        assert(slot == i); // no permanent four-slot starvation after successful Reset
+        captures[slot] = {};
+        assert(model.Track(300 + i, captures[slot], completed));
+        ring.CommitRecord(slot, 1920, 1080, false, 2000 + i, &captures[slot], nullptr);
+    }
+}
 
 void TestRingBasicAcquireCommitPick()
 {
@@ -200,8 +269,113 @@ void TestProductionSignature()
     void* queue = (void*) 0x1234;
     const auto isEligible = [queue](void* token) -> bool { return token != nullptr && token == queue; };
     const auto isReadInFlight = [queue](void* token) -> bool { return token != nullptr && token != queue; };
-    assert(ring.AcquireForRecord(isReadInFlight) == 0);
+    const auto isWriteInFlight = [queue](void* token) -> bool { return token != nullptr && token != queue; };
+    const auto isShapeMatch = [](size_t) -> bool { return false; };
+    AcquireReport report {};
+    assert(ring.AcquireForRecord(isReadInFlight, isWriteInFlight, isShapeMatch, &report) == 0);
+    assert(report.slot == 0 && report.kind == AcquireKind::ReusedEmpty);
     assert(ring.PickForPresent(isEligible, 0) == kRingSize);
+}
+
+void TestRingInFlightWriteProtectionAndBusyReport()
+{
+    std::unordered_set<void*> completedWrites;
+    std::unordered_set<void*> inFlightReads;
+    std::unordered_set<void*> inFlightWrites;
+
+    auto isWriteCompleted = [&](void* token) { return completedWrites.find(token) != completedWrites.end(); };
+    auto isReadInFlight = [&](void* token) { return inFlightReads.find(token) != inFlightReads.end(); };
+    auto isWriteInFlight = [&](void* token) { return inFlightWrites.find(token) != inFlightWrites.end(); };
+    auto noShapeMatch = [](size_t) { return false; };
+
+    Ring ring;
+    void* w[4] = { (void*) 0x1, (void*) 0x2, (void*) 0x3, (void*) 0x4 };
+    void* r[4] = { (void*) 0x11, (void*) 0x12, (void*) 0x13, (void*) 0x14 };
+
+    for (int i = 0; i < 4; ++i)
+    {
+        AcquireReport rep {};
+        size_t s = ring.AcquireForRecord(isReadInFlight, isWriteInFlight, noShapeMatch, &rep);
+        assert(s == static_cast<size_t>(i));
+        assert(rep.kind == AcquireKind::ReusedEmpty);
+        ring.CommitRecord(s, 1920, 1080, false, 1000 + i * 10, w[i], r[i]);
+    }
+
+    // Complete slot 3's write and pick it at Present so slot 3 is lastReadIndex.
+    completedWrites.insert(w[3]);
+    assert(ring.PickForPresent(isWriteCompleted, 1040) == 3);
+    assert(ring.LastReadIndex() == 3);
+
+    // Slot 0: read in flight. Slots 1 and 2: capture writes still in flight.
+    inFlightReads.insert(r[0]);
+    inFlightWrites.insert(w[1]);
+    inFlightWrites.insert(w[2]);
+
+    AcquireReport busy {};
+    assert(ring.AcquireForRecord(isReadInFlight, isWriteInFlight, noShapeMatch, &busy) == kRingSize);
+    assert(busy.slot == kRingSize);
+    assert(busy.kind == AcquireKind::None);
+    assert(busy.busyLastRead == 1);
+    assert(busy.busyReadInFlight == 1);
+    assert(busy.busyWriteInFlight == 2);
+
+    // Once slot 2's capture write completes on the GPU, only slot 2 is eligible.
+    inFlightWrites.erase(w[2]);
+    AcquireReport freed {};
+    assert(ring.AcquireForRecord(isReadInFlight, isWriteInFlight, noShapeMatch, &freed) == 2);
+    assert(freed.slot == 2);
+    assert(freed.kind == AcquireKind::EvictedOldest);
+}
+
+void TestRingShapePreferenceOrder()
+{
+    auto noReadInFlight = [](void*) { return false; };
+    auto noWriteInFlight = [](void*) { return false; };
+    auto allWritesDone = [](void*) { return true; };
+
+    Ring ring;
+    void* w[4] = { (void*) 0x1, (void*) 0x2, (void*) 0x3, (void*) 0x4 };
+    void* r[4] = { (void*) 0x11, (void*) 0x12, (void*) 0x13, (void*) 0x14 };
+
+    // Populate slots 0, 2, 3; leave slot 1 empty by invalidating it after initial setup.
+    ring.CommitRecord(0, 1920, 1080, false, 1000, w[0], r[0]); // seq 1 (mismatched)
+    ring.CommitRecord(1, 1920, 1080, false, 1010, w[1], r[1]); // seq 2 -> will invalidate
+    ring.CommitRecord(2, 2560, 1440, false, 1020, w[2], r[2]); // seq 3 (matching)
+    ring.CommitRecord(3, 2560, 1440, false, 1030, w[3], r[3]); // seq 4 -> will become lastReadIndex
+    ring.InvalidateSlot(1);
+    assert(ring.PickForPresent(allWritesDone, 1040) == 3);
+    assert(ring.LastReadIndex() == 3);
+
+    // 1. Prefer free matching slot (slot 2, seq 3) over empty slot (slot 1) and older mismatched slot (slot 0, seq 1).
+    AcquireReport repMatch {};
+    size_t pickedMatch =
+        ring.AcquireForRecord(noReadInFlight, noWriteInFlight, [](size_t i) { return i == 2; }, &repMatch);
+    assert(pickedMatch == 2);
+    assert(repMatch.kind == AcquireKind::ReusedMatching);
+
+    // 2. When no free slot matches, prefer empty slot (slot 1) over older mismatched slot (slot 0, seq 1).
+    AcquireReport repEmpty {};
+    size_t pickedEmpty =
+        ring.AcquireForRecord(noReadInFlight, noWriteInFlight, [](size_t) { return false; }, &repEmpty);
+    assert(pickedEmpty == 1);
+    assert(repEmpty.kind == AcquireKind::ReusedEmpty);
+
+    // Commit slot 1 with seq 5 so all free slots (0, 1, 2) are now valid.
+    ring.CommitRecord(1, 3840, 2160, false, 1050, w[1], r[1]);
+
+    // 3. When multiple free slots match (slot 1 seq 5 and slot 2 seq 3), pick the oldest matching slot (slot 2).
+    AcquireReport repOlderMatch {};
+    size_t pickedOlderMatch = ring.AcquireForRecord(
+        noReadInFlight, noWriteInFlight, [](size_t i) { return i == 1 || i == 2; }, &repOlderMatch);
+    assert(pickedOlderMatch == 2);
+    assert(repOlderMatch.kind == AcquireKind::ReusedMatching);
+
+    // 4. When all free slots are populated and none match, evict the oldest mismatched slot (slot 0, seq 1).
+    AcquireReport repEvict {};
+    size_t pickedEvict =
+        ring.AcquireForRecord(noReadInFlight, noWriteInFlight, [](size_t) { return false; }, &repEvict);
+    assert(pickedEvict == 0);
+    assert(repEvict.kind == AcquireKind::EvictedOldest);
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -300,7 +474,8 @@ static SimResult RunSimulation(int frames, int B, size_t presentQ, unsigned lag,
             return true;
         };
 
-        size_t s = ring.AcquireForRecord(inFlight);
+        size_t s = ring.AcquireForRecord(
+            inFlight, [&](void* token) { return CaptureBusy(token, gpuDone); }, [](size_t) { return false; });
         if (s >= kRingSize)
             ++r.capSkip;
         else
@@ -436,11 +611,14 @@ void TestFullSubmissionModelSimulation()
 
 int main()
 {
+    TestCaptureReuseAndCancelledRing();
     TestRingBasicAcquireCommitPick();
     TestRingInFlightReadProtectionNotLastRead();
     TestRingAllSlotsInFlightSkipsCapture();
     TestRingMaxAgeStaleRejection();
     TestProductionSignature();
+    TestRingInFlightWriteProtectionAndBusyReport();
+    TestRingShapePreferenceOrder();
     TestFullSubmissionModelSimulation();
     std::printf(
         "PASS: nr-present-guides ring acquisition, in-flight read protection, skip fallback, max-age and 20k-frame "
