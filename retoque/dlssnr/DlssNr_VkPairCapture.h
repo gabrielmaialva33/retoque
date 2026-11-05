@@ -16,9 +16,11 @@ struct Plan
 };
 inline Plan PlanFor(uint32_t width, uint32_t height, uint32_t format, bool linearHdr, uint64_t maxStorageRange)
 {
-    // Vulkan format numbers, not DXGI. Storage is always sampled RGBA32F, never a raw image copy.
-    if (width == 0 || height == 0 || (format != 37 && format != 44 && format != 97 && format != 109) ||
-        (linearHdr && format != 97 && format != 109))
+    // Vulkan format numbers, not DXGI. Storage is always sampled RGBA32F, never a raw image copy. 122 is
+    // B10G11R11_UFLOAT_PACK32: unsigned floats, linear like 97/109 (DOOM Eternal's DLSS output), so it takes the same
+    // file rule; the packed 10-bit UNORM formats stay refused (their transfer cannot be told from the bits).
+    const bool floating = format == 97 || format == 109 || format == 122;
+    if (width == 0 || height == 0 || (format != 37 && format != 44 && !floating) || (linearHdr && !floating))
         return {};
     const uint64_t pixels = uint64_t(width) * height;
     // Two readbacks plus two writer snapshots, and the two markers. Check before multiplication.

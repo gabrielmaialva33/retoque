@@ -13,7 +13,24 @@ namespace
 {
 using namespace VkPairCapture;
 static_assert(VK_FORMAT_R8G8B8A8_UNORM == 37 && VK_FORMAT_B8G8R8A8_UNORM == 44 && VK_FORMAT_R16G16B16A16_SFLOAT == 97 &&
-              VK_FORMAT_R32G32B32A32_SFLOAT == 109);
+              VK_FORMAT_R32G32B32A32_SFLOAT == 109 && VK_FORMAT_B10G11R11_UFLOAT_PACK32 == 122);
+// Only the formats PlanFor admits reach the writer.
+const char* FormatName(VkFormat format)
+{
+    switch (format)
+    {
+    case VK_FORMAT_R16G16B16A16_SFLOAT:
+        return "VK_FORMAT_R16G16B16A16_SFLOAT";
+    case VK_FORMAT_R32G32B32A32_SFLOAT:
+        return "VK_FORMAT_R32G32B32A32_SFLOAT";
+    case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
+        return "VK_FORMAT_B10G11R11_UFLOAT_PACK32";
+    case VK_FORMAT_B8G8R8A8_UNORM:
+        return "VK_FORMAT_B8G8R8A8_UNORM";
+    default:
+        return "VK_FORMAT_R8G8B8A8_UNORM";
+    }
+}
 std::atomic<bool> used { false };
 std::atomic<bool> active { false };
 int64_t Now()
@@ -366,11 +383,7 @@ bool Backend::Hand(Readback (&a)[2], Payload&&, Completion)
     job->stamp = attempt->frame.stamp;
     job->frame.api = "Vulkan";
     job->frame.originalDescription = "the foreign output view before encode";
-    const char* format = attempt->frame.format == VK_FORMAT_R16G16B16A16_SFLOAT   ? "VK_FORMAT_R16G16B16A16_SFLOAT"
-                         : attempt->frame.format == VK_FORMAT_R32G32B32A32_SFLOAT ? "VK_FORMAT_R32G32B32A32_SFLOAT"
-                         : attempt->frame.format == VK_FORMAT_B8G8R8A8_UNORM      ? "VK_FORMAT_B8G8R8A8_UNORM"
-                                                                                  : "VK_FORMAT_R8G8B8A8_UNORM";
-    job->frame.sourceFormat = format;
+    job->frame.sourceFormat = FormatName(attempt->frame.format);
     job->frame.representation = "sampled-RGBA32F-numeric";
     job->frame.recordingEpoch = attempt->frame.recording.epoch;
     VkPhysicalDeviceProperties props {};

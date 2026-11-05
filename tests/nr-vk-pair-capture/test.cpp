@@ -38,8 +38,14 @@ int main()
     assert(PlanFor(1920, 1080, 37, false, 1ull << 28));
     assert(PlanFor(1920, 1080, 44, false, 1ull << 28));
     assert(PlanFor(2, 2, 109, true, 1024));
-    for (auto format : { 43u, 50u, 64u, 122u, 0u })
+    // B10G11R11_UFLOAT_PACK32 (DOOM Eternal's linear DLSS output): PFM when linear HDR, PNG8 when display-referred.
+    auto packed = PlanFor(3440, 1440, 122, true, 1ull << 28);
+    assert(packed && packed.dataBytes == 3440ull * 1440 * 16 && packed.image.kind == DlssNr::ImageFile::FileKind::Pfm);
+    assert(PlanFor(16, 16, 122, false, 1ull << 28).image.kind == DlssNr::ImageFile::FileKind::Png8);
+    for (auto format : { 43u, 50u, 64u, 0u })
         assert(!PlanFor(16, 16, format, false, 1ull << 28));
+    for (auto format : { 37u, 44u, 64u })
+        assert(!PlanFor(16, 16, format, true, 1ull << 28));
     assert(!PlanFor(2, 2, 37, true, 1024));
     assert(!PlanFor(0, 2, 97, true, 1024));
     assert(!PlanFor(~0u, ~0u, 97, true, ~0ull));
