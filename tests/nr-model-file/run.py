@@ -175,7 +175,8 @@ def check(s, tree):
     assert 'DlssNrModelFile.set_from_config(NamedModelFile(ini.GetValue("DlssNr", "ModelFile", "auto")));' in reload \
         and 'readString("DlssNr", "ModelFile"' not in reload
     ctor = body(s['config_cpp'], 'Config::Config()')
-    assert re.search(r'Reload\(absoluteFileName\);\s*(//[^\n]*\n\s*)*_dlssNrModelFileAtStart = '
+    # Other start-up freezes (_dlssNr...AtStart, e.g. Dx11SceneStage) may sit between the load and this one.
+    assert re.search(r'Reload\(absoluteFileName\);\s*(//[^\n]*\n\s*|_dlssNr\w+AtStart = \w+\.value_or_default\(\);\s*)*_dlssNrModelFileAtStart = '
                      r'DlssNrModelFile\.value_or_default\(\);\s*\}$', ctor), 'the start-up value is not frozen by the constructor'
     assert s['config_cpp'].count('_dlssNrModelFileAtStart =') == 1, 'the start-up value is written after start-up'
     save = s['config_cpp'][s['config_cpp'].index('bool Config::SaveIni()'):]

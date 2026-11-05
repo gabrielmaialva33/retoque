@@ -251,7 +251,10 @@ def guards(t):
           'switched on again, pending probes are discarded and the verdict starts over')
 
     shutdown = re.sub(r'\s+', ' ', code_mask(body_of(feature, r'^void\s+ShutdownVk\s*\(')))
-    check('if (!deviceAlive) { ForgetMeterReadback(); ForgetMotionProbe();' in shutdown,
+    # The pair capture is told the device is gone first (it invalidates before anything is forgotten), then the meter
+    # and the probe are forgotten without a call.
+    check('if (!deviceAlive) { PairCapture::DeviceGoneVkLocked(g_vk.device, false); ForgetMeterReadback(); '
+          'ForgetMotionProbe();' in shutdown,
           'ShutdownVk(false) forgets the probe without a call')
     gone = re.sub(r'\s+', ' ', code_mask(body_of(feature, r'^void\s+AfterUpscaleDeviceGone\s*\(')))
     check('if (forgetOnly) { ForgetMeterReadback(); ForgetMotionProbe(); }' in gone,

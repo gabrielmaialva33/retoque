@@ -57,9 +57,10 @@ Config::Config()
     absoluteFileName = Util::DllPath().parent_path() / fileName;
     Reload(absoluteFileName);
 
+    // [DlssNr] Dx11SceneStage is a startup choice: the native D3D11 scene route is admitted or not for the process.
+    _dlssNrDx11SceneStageAtStart = DlssNrDx11SceneStage.value_or_default();
     // [DlssNr] ModelFile as the first load left it, the default when that load failed; never changed after, so no
     // later reload or menu save makes a loader use another file in this process (retoque/dlssnr/DlssNr_ModelFile.h).
-    _dlssNrDx11SceneStageAtStart = DlssNrDx11SceneStage.value_or_default();
     _dlssNrModelFileAtStart = DlssNrModelFile.value_or_default();
 }
 

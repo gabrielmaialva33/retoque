@@ -57,4 +57,3 @@ assert check in track_body and 'refusal = "compute-queue-not-hooked";' in track_
 assert track_body.index('!Install(list)') < track_body.index(check) < track_body.index('model.Track('), \
     'the probe runs on the admitted device, before any epoch is created'
 print('PASS: COMPUTE lists only after a COMPUTE queue is proven to use the hooked ExecuteCommandLists')
-
