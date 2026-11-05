@@ -600,19 +600,40 @@ on that path.
 The untracked fallback (section 10, third item) is gone. Where `Submission::Track` refuses the list that carried the
 pass, the capture is refused before any copy is recorded: the two readbacks, never used by the GPU, are released at
 once, the menu shows "This route's commands cannot be followed to the GPU's completion; nothing was captured", and
-the log names the tracker's reason. `completion` in a record is now always `submission-fence`; the A/B and replay
+the log names the tracker's reason. `completion` in a D3D12 record is now always `submission-fence` (native Vulkan's is its own, see below); the A/B and replay
 tools already rejected `assumed-8-frames`.
 
 Why: the fallback read the copies after 8 of the pass's dispatches and let our reference go after 32, an assumption
 about how far behind the GPU runs, not a proof. NeuRotic 0.9.9 refuses a capture without a tracking ticket
-(the 2026-11-04 comparison with its 0.9.9 release, item 1; a local review, not in the repository); this matches that guarantee. The cost is coverage:
-a pass recorded on a list the tracker does not follow (a COMPUTE list, today; `Submission::Track` takes DIRECT lists
-only) cannot be captured. Extending the tracker to COMPUTE queues would restore it with a proof and is a separate
-change to a lifetime component every NR resource shares.
+(the 2026-11-04 comparison with its 0.9.9 release, item 1; a local review, not in the repository); this matches that guarantee. NeuRotic stops there and loses
+those routes; here the tracker follows them instead. `Submission::Track` took DIRECT lists only, and the default
+single-pass NR runs untracked on whatever list the game hands the upscaler, a COMPUTE list included. It now also
+follows a COMPUTE list for a caller that asks (`Lists::DirectOrCompute`, `Detail::ListTypeAdmitted`), and only the
+capture asks. Each queue gets its own fence, and `Install` still refuses a list whose `Reset` is not the hooked one.
+The queue hook is found on a DIRECT probe queue: vkd3d-proton gives every queue type one vtable (source-checked,
+upstream `87983f34`), native D3D12 is not assumed to. So the first COMPUTE list probes once: a COMPUTE queue is
+created on the admitted device, its `ExecuteCommandLists` entry compared with the hooked one, and COMPUTE lists are
+refused for the session (`compute-queue-not-hooked`) unless they match, rather than accepted and left waiting for a
+fence that never comes. NR chain
+recordings never take COMPUTE lists, so chain admission and queue affinity see exactly what they did; every other
+`Track` caller keeps the DIRECT-only rule it was validated under until it is opted in with its own evidence. What is
+left unfollowed (a BUNDLE or COPY list, a second device, a runtime whose hooks differ) is refused with the tracker's
+reason.
 
 Tested in `tests/nr-capture`: the refusal, the released readbacks, no hand-off however long it is polled, the next
 press trying again; four injected defects (capture anyway, leak instead of release, release without `Ready`, hand-off
-by age) each fail the suite.
+by age) each fail the suite. `tests/nr-submission`: the list-type rule (DIRECT always, COMPUTE only on request and
+never for the chain, BUNDLE and COPY never), and source guards that the capture is the only caller opting in; four
+injected defects (COMPUTE for the chain, every type admitted, the request ignored, the chain opted in) each fail it.
+Not proved: a capture on a real COMPUTE list on a GPU.
+
+Independent review (2026-11-04, a local review outside the repository): fence accounting and the copy's barrier states hold for COMPUTE; the probe above answers its native
+coverage caveat. Two shared effects are kept and stated, not hidden. A replayed capture-bearing COMPUTE list latches
+the process-wide strict retirement (`Submission::Strict`) as any tracked replay already does, so other consumers
+retain their resources longer, never shorter. COMPUTE queues share the 32 tracked-queue slots
+(`Detail::MaxQueues`); past them a queue gets no fence and its work stays retained, fail-closed. The review's read
+race (a list re-executed between completion and the writer's read) is closed by handing readbacks over only when
+the recording is retired (`Ready`), not merely completed.
 
 ### 11.1 Writer hand-off waits for retirement (2026-11-04)
 

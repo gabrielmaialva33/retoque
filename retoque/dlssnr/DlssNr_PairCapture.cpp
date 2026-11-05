@@ -156,10 +156,11 @@ struct Dx12Backend
     }
 
     // Before any copy is recorded, as Submission::Track requires. Where it refuses, nothing is captured, and the log
-    // says why the list could not be followed.
+    // says why the list could not be followed. COMPUTE lists too: the upscaler routes record the pass on the game's
+    // list, which may be one, and the copies (to and from COPY_SOURCE) are legal there.
     bool Track(Recording& recording, Ticket& ticket)
     {
-        if (DlssNr::Submission::Track(recording.cmd, ticket))
+        if (DlssNr::Submission::Track(recording.cmd, ticket, false, DlssNr::Submission::Lists::DirectOrCompute))
             return true;
         const char* why = DlssNr::Submission::LastRefusal();
         LOG_INFO("DLSS-NR capture: the pass's list cannot be followed to its completion ({}); nothing was captured",

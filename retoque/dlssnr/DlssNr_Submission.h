@@ -8,11 +8,13 @@
 namespace DlssNr::Submission
 {
 using Usage = Detail::Usage;
+using Lists = Detail::Lists;
 
 // Opt-in only. Call before recording ANY use of the retained object/model. False
 // refuses the work. Keep one Usage per resource generation and copy it at retirement.
 // chain: an NR chain recording (docs/dlssnr/design/chain-in-flight.md), the only kind that sets queue affinity.
-bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool chain = false);
+// lists: DIRECT only unless the caller opts into COMPUTE lists too (Detail::ListTypeAdmitted); never for chain.
+bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool chain = false, Lists lists = Lists::Direct);
 bool Ready(const Usage& usage);
 
 // docs/dlssnr/design/chain-in-flight.md. The renderer's evaluation count, advanced on every Dispatch entry.
