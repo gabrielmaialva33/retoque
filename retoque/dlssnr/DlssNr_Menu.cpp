@@ -310,6 +310,7 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
     PairCapture::ButtonInputs in;
     in.enabled = true;
     in.nativeVulkan = nativeVulkan;
+    in.vulkanCaptureReady = nativeVulkan && DlssNr::IsRunningVk();
     in.d3d12Ran = DlssNr::IsRunning();
     in.proxy = config->DlssNrUseProxy.value_or_default();
     in.compare = config->DlssNrCompare.value_or_default();
@@ -323,7 +324,7 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
 
     ImGui::BeginDisabled(!button.enabled);
     if (ImGui::Button(Localization::Label("Capture original and processed")))
-        DlssNr::RequestPairCapture();
+        DlssNr::RequestPairCapture(nullptr, nativeVulkan);
     ImGui::EndDisabled();
 
     HelpMarker("Saves the next frame twice, as the pass read it and as the pass wrote it, into the"
@@ -333,7 +334,7 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
                "\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the"
                "\nupscaler's output, before the game's own tonemapper, post-processing and interface."
                "\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler"
-               "\nasks for the same capture from outside the game.");
+               "\nasks for the same capture from outside the game on D3D12 routes.");
 
     if (button.reason != nullptr)
         ImGui::TextDisabled("%s", Localization::Tr(button.reason));

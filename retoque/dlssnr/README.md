@@ -66,6 +66,7 @@ experiment.
 | `DlssNr_Capture.h` | the raw burst: eight consecutive before/after frames as raw bytes, for temporal work |
 | `DlssNr_Readback.h` | the texture-to-readback copies both captures use: typed footprint, readback heap, states |
 | `DlssNr_PairCapture.h/.cpp`, `DlssNr_PairCaptureDx12.h` | the comparison capture: one frame as read and as written, copied on the pass's list, read back once the GPU is proven past the copies, written by a thread of its own into `retoque-captures/` with a provenance record; the pure half (state machine, names, cap, record, the menu button) is the header; `../../docs/dlssnr/design/comparison-capture.md`, tested by `tests/nr-capture` |
+| `DlssNr_PairCaptureVk.h/.cpp`, `DlssNr_VkPairCapture.h`, `DlssNr_PairCaptureWriter.h` | native Vulkan after-upscale pair capture: sampled float32 snapshots, serial recording retirement plus executed marker, bounded ownership under the route mutex, and the shared PNG/PFM writer; [design](../../docs/dlssnr/design/nr-vk-pair-capture.md), [host tests](../../tests/nr-vk-pair-capture/README.md); GPU qualification pending |
 | `DlssNr_ImageFile.h` | the capture's PNG (stored deflate, tEXt) and PFM writers and the row conversions; no WIC, no zlib |
 | `DlssNr_SessionGuard.h`, `DlssNr_Session.h/.cpp`, `DlssNr_ProcessEnd.h/.cpp` | the session guard (`[DlssNr] SessionGuard`, off by default): a marker beside the DLL while NR runs, the process's own end seen by a hook on `ntdll!NtTerminateProcess` (a normal quit clears it; an exception, an exit code or a device NR saw lost is recorded), and on the next launch NR kept off with a notice and "Enable anyway". The decisions and texts are the header; `../../docs/dlssnr/design/session-guard.md`, tested by `tests/nr-session-guard` and, for the hook under Wine, `tests/nr-session-exit` |
 | `DlssNr_DriverInitGate.h` | the driver-init gate: a vkCreateDevice (NR on) and the model's NGX initialisation or feature creation never at once, on every route; innermost in the lock order, bounded, re-entrant; `../../docs/dlssnr/design/nr-vulkan-present-host.md`, "The driver-init gate (2026-10-30)", tested by `tests/nr-driver-init-gate` |
@@ -141,6 +142,20 @@ On Linux run `dxc.exe` under the msvc-wine prefix (`WINEPREFIX=~/.local/opt/msvc
 revision of this section said fxc `cs_5_0`, which no longer reproduces it. `tests/nr-invariants`
 checks that each header is exactly the bytecode beside it; that the bytecode is the compile of the
 current `.hlsl` is yours to check.
+
+### Vulkan pair-capture snapshot shader
+
+This Vulkan-only pass has its own HLSL source and does not change the shared NR cbuffer or shader.
+From the repository root, using native Linux DXC (or the recipe above's Windows DXC under the build-prefix lock):
+
+```bash
+dxc -spirv -T cs_6_0 -E CSMain -O3 -Qstrip_debug -D VK_MODE -Cc -Vi retoque/shaders/dlssnr/precompile/dlssnr_pair_capture.hlsl -Fo retoque/shaders/dlssnr/precompile/DlssNr_PairCapture_Shader_Vk.spv
+python3 OptiScaler/shaders/shader_tools/create_header.py retoque/shaders/dlssnr/precompile/DlssNr_PairCapture_Shader_Vk.spv retoque/shaders/dlssnr/precompile/DlssNr_PairCapture_Shader_Vk.h dlssnr_pair_capture_spv
+spirv-val --target-env vulkan1.0 retoque/shaders/dlssnr/precompile/DlssNr_PairCapture_Shader_Vk.spv
+```
+
+The 2026-11-04 artifact used native DXC `1.10.2605.37` (`c4d8f4f9`). Keep source, SPIR-V and header together;
+never format the generated header. A host compilation or SPIR-V validation is not GPU qualification.
 
 ## Attribution
 

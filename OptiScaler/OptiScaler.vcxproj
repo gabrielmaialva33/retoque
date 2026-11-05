@@ -1033,6 +1033,10 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\dlssnr\DlssNr_GpuTiming.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Submission.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCapture.cpp" />
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.cpp" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PairCaptureWriter.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_VkPairCapture.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkRecording.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMeterReadback.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_VkMotionProbe.h" />

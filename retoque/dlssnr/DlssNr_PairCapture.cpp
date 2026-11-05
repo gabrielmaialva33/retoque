@@ -9,6 +9,8 @@
 // freed under the GPU. Nothing on the render thread waits for the GPU, maps, or touches a file.
 
 #include "DlssNr_PairCaptureDx12.h"
+#include "DlssNr_PairCaptureWriter.h"
+#include "DlssNr_PairCaptureVk.h"
 #include "DlssNr_PairCapture.h"
 #include "DlssNr_ImageFile.h"
 #include "DlssNr_Readback.h"
@@ -76,9 +78,10 @@ struct CapturePayload
 
 struct Job
 {
+    std::shared_ptr<CpuJob> cpu;
     capture::Shot shots[2];
     CapturePayload payload;
-    Completion completion = Completion::AssumedFrames;
+    Completion completion = Completion::Submission;
 };
 
 class Writer
@@ -152,17 +155,15 @@ struct Dx12Backend
         return capture::AllocReadback(recording.device, desc, out);
     }
 
-    // Before any copy is recorded, as Submission::Track requires. Where it refuses, the record says the completion
-    // was assumed, and the log says why the list could not be followed.
+    // Before any copy is recorded, as Submission::Track requires. Where it refuses, nothing is captured, and the log
+    // says why the list could not be followed.
     bool Track(Recording& recording, Ticket& ticket)
     {
         if (DlssNr::Submission::Track(recording.cmd, ticket))
             return true;
         const char* why = DlssNr::Submission::LastRefusal();
-        LOG_INFO(
-            "DLSS-NR capture: the pass's list cannot be followed to its completion ({}); the copies are read after "
-            "{} of the pass's dispatches, an assumption the record names (completion=assumed-8-frames)",
-            why != nullptr ? why : "unknown", kAssumedPolls);
+        LOG_INFO("DLSS-NR capture: the pass's list cannot be followed to its completion ({}); nothing was captured",
+                 why != nullptr ? why : "unknown");
         return false;
     }
 
@@ -192,8 +193,14 @@ struct Dx12Backend
         }
         job.payload = std::move(payload);
         job.completion = completion;
-        if (TheWriter().Push(std::move(job)))
-            return true;
+        try
+        {
+            if (TheWriter().Push(std::move(job)))
+                return true;
+        }
+        catch (...)
+        {
+        }
 
         // Not taken: drop the references just added. The session still holds its own, so nothing is freed here.
         for (int i = 0; i < 2; ++i)
@@ -368,10 +375,9 @@ ImageFile::Rows RowsOf(const capture::Shot& shot, const void* mapped)
 std::FILE* OpenForWriting(const std::filesystem::path& path) { return _wfopen(path.c_str(), L"wb"); }
 
 // Returns null on success, or the reason.
-const char* WritePair(Job& job, void* const (&mapped)[2], std::string& stemOut)
+const char* WritePair(Job& job, const ImageFile::Rows (&rows)[2], std::string& stemOut)
 {
     CapturePayload& p = job.payload;
-    const ImageFile::Rows rows[2] = { RowsOf(job.shots[0], mapped[0]), RowsOf(job.shots[1], mapped[1]) };
     for (const auto& r : rows)
     {
         if (!r.Fits(p.plan.source))
@@ -412,7 +418,7 @@ const char* WritePair(Job& job, void* const (&mapped)[2], std::string& stemOut)
                                    FileName(stem, Part::Sidecar, p.plan.kind) };
 
     // The record is complete before the first byte, so both images carry the same one.
-    const Adapter& adapter = AdapterFor(p.luid);
+    const Adapter adapter = job.cpu ? Adapter { job.cpu->gpu, job.cpu->driver } : AdapterFor(p.luid);
     const ModelFacts& model = ModelFactsOnce();
     WriteRecordInputs writeRecord;
     writeRecord.completion = job.completion;
@@ -495,6 +501,34 @@ void Writer::Run()
             jobs_.pop_front();
         }
 
+        if (job.cpu)
+        {
+            const char* failure = kReasonWrite;
+            std::string stem;
+            try
+            {
+                std::vector<uint8_t> pixels[2];
+                if (job.cpu->prepare(pixels))
+                {
+                    const auto& f = job.cpu->frame;
+                    const ImageFile::Rows rows[2] = {
+                        { pixels[0].data(), 0, f.width * 16, f.width, f.height, pixels[0].size() },
+                        { pixels[1].data(), 0, f.width * 16, f.width, f.height, pixels[1].size() }
+                    };
+                    failure = WritePair(job, rows, stem);
+                }
+                else
+                    failure = kReasonDiscarded;
+            }
+            catch (...)
+            {
+                failure = kReasonWrite;
+            }
+            // No mapped pointer escapes prepare; encoding/filesystem work happened without the route mutex.
+            job.cpu->finish(failure == nullptr, failure, std::move(stem));
+            continue;
+        }
+
         // The ticket proved the copies complete before this job existed, so mapping reads finished data.
         void* mapped[2] = {};
         bool isMapped[2] = {};
@@ -512,7 +546,8 @@ void Writer::Run()
             // Nothing may leave this thread: an exception out of a detached thread ends the game (std::terminate).
             try
             {
-                failure = WritePair(job, mapped, stem);
+                const ImageFile::Rows rows[2] = { RowsOf(job.shots[0], mapped[0]), RowsOf(job.shots[1], mapped[1]) };
+                failure = WritePair(job, rows, stem);
             }
             catch (const std::exception& e)
             {
@@ -545,9 +580,29 @@ void Writer::Run()
         }
 
         TheSession().Finished(failure == nullptr, failure, std::move(stem));
+        ReleaseIfIdle(Api::Dx12, TheSession());
     }
 }
 } // namespace
+
+bool DirectoryFailed() { return g_directoryFailed.load(std::memory_order_relaxed); }
+
+bool EnqueueCpuPair(std::shared_ptr<CpuJob> cpu)
+{
+    Job job;
+    job.cpu = std::move(cpu);
+    auto& p = job.payload;
+    p.stamp = job.cpu->stamp;
+    p.plan = job.cpu->frame.plan;
+    p.directory = Util::DllPath().remove_filename() / kDirectoryName;
+    p.exe = SanitizeExeStem(Util::ExePath().stem().wstring());
+    job.cpu->frame.build = BuildInfo::ProductVersion();
+    job.cpu->frame.exe = p.exe;
+    job.cpu->frame.timeUtc = p.stamp.iso;
+    FillFrameRecord(p.record, job.cpu->frame);
+    job.completion = Completion::VulkanRetired;
+    return TheWriter().Push(std::move(job));
+}
 
 void Poll()
 {
@@ -559,6 +614,7 @@ void Poll()
         return;
     Dx12Backend backend;
     session.Poll(backend, NowMs());
+    ReleaseIfIdle(Api::Dx12, session);
 }
 
 bool Wanted() { return g_used.load(std::memory_order_relaxed) && TheSession().Current() == Phase::Requested; }
@@ -572,6 +628,7 @@ void AbandonAfterError(const char* what)
               "withdrawn and the frame is unchanged",
               what != nullptr ? what : "not a standard exception");
     TheSession().Abandon(kReasonInternal);
+    ReleaseIfIdle(Api::Dx12, TheSession());
 }
 
 void AtRecordSite(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D12Resource* original,
@@ -654,6 +711,7 @@ void AtRecordSite(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, ID3D
     {
         LOG_INFO("DLSS-NR capture: not taken: {}", why);
     }
+    ReleaseIfIdle(Api::Dx12, session);
 }
 
 void Shutdown()
@@ -667,10 +725,19 @@ void Shutdown()
 
 namespace DlssNr
 {
-bool RequestPairCapture(const char** why)
+bool RequestPairCapture(const char** why, bool nativeVulkan)
 {
+    std::lock_guard<std::mutex> broker(PairCapture::brokerMutex);
     if (why != nullptr)
         *why = nullptr;
+    if (!PairCapture::Claim(nativeVulkan ? PairCapture::Api::Vulkan : PairCapture::Api::Dx12))
+    {
+        if (why)
+            *why = PairCapture::kReasonBusy;
+        return false;
+    }
+    if (nativeVulkan)
+        return PairCapture::RequestVk(why);
     // The driver proxy returns from the pass before the frame is written, so no frame could ever take the request.
     const char* refusal = PairCapture::kReasonProxy;
     if (!Config::Instance()->DlssNrUseProxy.value_or_default())
@@ -684,6 +751,7 @@ bool RequestPairCapture(const char** why)
         }
         refusal = session.GaveUp() ? PairCapture::kReasonNoCompletion : PairCapture::kReasonBusy;
     }
+    PairCapture::Relinquish(PairCapture::Api::Dx12);
     if (why != nullptr)
         *why = refusal;
     return false;
@@ -691,6 +759,8 @@ bool RequestPairCapture(const char** why)
 
 PairCaptureStatus GetPairCaptureStatus()
 {
+    if (PairCapture::lastApi.load() == PairCapture::Api::Vulkan)
+        return PairCapture::StatusVk();
     PairCaptureStatus status;
     status.directoryFailed = PairCapture::g_directoryFailed.load();
     if (!PairCapture::g_used.load(std::memory_order_acquire))
@@ -698,6 +768,7 @@ PairCaptureStatus GetPairCaptureStatus()
 
     auto& session = PairCapture::TheSession();
     session.ExpireIfStale(PairCapture::NowMs());
+    PairCapture::ReleaseIfIdle(PairCapture::Api::Dx12, session);
 
     status.phase = session.Current();
     status.gaveUp = session.GaveUp();

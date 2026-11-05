@@ -548,7 +548,7 @@ struct PairCaptureStatus
 
 // False when the request is not taken -- a capture already under way (a second press is ignored), the driver proxy
 // on, or the capture off for the session after a recording that never completed -- with why, a literal, when given.
-bool RequestPairCapture(const char** why = nullptr);
+bool RequestPairCapture(const char** why = nullptr, bool nativeVulkan = false);
 PairCaptureStatus GetPairCaptureStatus();
 
 // The present hook. Runs the pass on the swapchain backbuffer at present time: the frame the game

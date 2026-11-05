@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "DlssNrFeature_Vk.h"
+#include "DlssNr_PairCaptureVk.h"
 
 #include <Config.h>
 #include <State.h>
@@ -1549,6 +1550,8 @@ bool LinearHdrVk() { return g_vkLinearHdr.load(); }
 
 std::optional<double> LastGpuTimeVk() { return g_vk.lastGpuTime; }
 
+std::mutex& PairCaptureVkMutex() { return g_vkMutex; }
+
 void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
                             VkPhysicalDevice physicalDevice, VkDevice device)
 {
@@ -1577,6 +1580,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         return;
 
     std::lock_guard<std::mutex> lock(g_vkMutex);
+    PairCapture::PollVkLocked();
 
     const auto recording = VkRecording::Recordings().Current((uint64_t) device, (uint64_t) cmdBuffer);
     if (!recording)
@@ -2438,6 +2442,66 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     const VkImageSubresourceRange colourRange = colour->Resource.ImageViewInfo.SubresourceRange;
 
+    // Opt-in only. The first snapshot samples the actual foreign view before encode (no FP16 keep intermediate).
+    // Every later return cancels the attempt; no executed end marker exists until resolve has succeeded.
+    struct CaptureScope
+    {
+        bool active = false;
+        ~CaptureScope()
+        {
+            if (active)
+                PairCapture::CancelVkLocked();
+        }
+    } capture;
+    if (PairCapture::WantedVk())
+    {
+        try
+        {
+            PairCapture::VkFrame f;
+            f.device = device;
+            f.physical = physicalDevice;
+            f.cmd = cmdBuffer;
+            f.image = colour->Resource.ImageViewInfo.Image;
+            f.view = colour->Resource.ImageViewInfo.ImageView;
+            f.range = colourRange;
+            f.format = colour->Resource.ImageViewInfo.Format;
+            f.recording = *recording;
+            f.facts.route = "vulkan-after-upscale";
+            f.facts.surface = "upscaler-output";
+            f.facts.hookMethod = cfg.DlssNrHookMethod.value_or_default();
+            f.facts.width = width;
+            f.facts.height = height;
+            f.facts.linearHdr = linearHdr;
+            f.facts.whitePoint = encode.WhitePoint;
+            f.facts.frame = g_vk.frames + 1;
+            f.facts.present = State::Instance().frameCount;
+            f.facts.settings =
+                std::format("stage=vulkan-after-upscale render={}x{} compose={}x{} model={}x{} scale={} passes=1 "
+                            "preset={} style={} intensity={} structure={} tone={} skin={} mask={} "
+                            "apply={} white_source={} white_point={} detail={} colour={} max_ratio={} min_ratio={} "
+                            "transfer={} reversible={} highlight_recovery={} residual_limit={} debug={} compare={}",
+                            guideWidth, guideHeight, width, height, workWidth, workHeight, workScale,
+                            cfg.DlssNrPreset.value_or_default(), cfg.DlssNrStyle.value_or_default(),
+                            cfg.DlssNrIntensity.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+                            cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+                            cfg.DlssNrAutoMask.value_or_default(), encode.ApplyModel, wpSource, encode.WhitePoint,
+                            encode.TransferStrength, encode.ColourStrength, encode.MaxRatio, encode.MinRatio,
+                            encode.Transfer, encode.ReversibleMode, encode.HighlightRecovery, encode.ResidualLimit,
+                            cfg.DlssNrDebugView.value_or_default(), cfg.DlssNrCompare.value_or_default());
+            if (cfg.DlssNrUseProxy.value_or_default())
+                f.refusal = PairCapture::kReasonProxy;
+            else if (cfg.DlssNrCompare.value_or_default())
+                f.refusal = PairCapture::kReasonCompare;
+            else if (cfg.DlssNrDebugView.value_or_default())
+                f.refusal = PairCapture::kReasonDebugView;
+            capture.active = PairCapture::BeginVkLocked(std::move(f));
+        }
+        catch (...)
+        {
+            PairCapture::CancelVkLocked();
+        }
+    }
+
     // Open the measurement. Reset immediately before writing: a query pool slot must be reset before
     // it is written again, and doing it here rather than at the end keeps the two in one place.
     const uint32_t timingSlot = (uint32_t) (g_vk.timedFrames % kTimingSlots);
@@ -2725,6 +2789,12 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         return;
     }
 
+    if (capture.active)
+    {
+        PairCapture::CommitVkLocked(cmdBuffer);
+        capture.active = false;
+    }
+
     // Close it, and read the pair from three frames ago -- retired by now, so the read does not wait.
     if (g_vk.queryPool != VK_NULL_HANDLE)
     {
@@ -2770,6 +2840,8 @@ void FreeRouteObjects()
 {
     if (RouteRecordingBusy())
         return;
+
+    PairCapture::PollVkLocked(); // readbacks retain their own device identity after g_vk.device is cleared
 
     if (g_vk.feature != nullptr && g_fwd.release != nullptr)
         g_fwd.release(g_vk.feature);
@@ -2840,6 +2912,7 @@ void ShutdownVk(bool deviceAlive)
 {
     if (!deviceAlive)
     {
+        PairCapture::DeviceGoneVkLocked(g_vk.device, false);
         ForgetMeterReadback();
         ForgetMotionProbe();
         // Only CPU metadata is held by these leases. Abandon GPU objects below without invoking their destructors.
@@ -2996,6 +3069,7 @@ void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::s
                 AbandonMotionProbeReadbacks();
             }
         }
+        PairCapture::DeviceGoneVkLocked(device, !forgetOnly);
         VkRecording::Recordings().ForgetDevice((uint64_t) device);
 
         if (device != VK_NULL_HANDLE && g_vk.device == device)

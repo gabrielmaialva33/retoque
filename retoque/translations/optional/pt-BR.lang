@@ -522,12 +522,12 @@ the HDR conversion was built for another D3D12 device; the frame is shown as the
 the backbuffer's format is not the swapchain's, so the HDR conversion does not trust its colour space; the frame is shown as the game rendered it	o formato do backbuffer não é o do swapchain, então a conversão HDR não confia no seu espaço de cor; o quadro é mostrado como o jogo o renderizou
 # 2026-10-13: the comparison capture (docs/dlssnr/design/comparison-capture.md): the button, its help and its states.
 Capture original and processed	Capturar original e processado
-Saves the next frame twice, as the pass read it and as the pass wrote it, into the\nretoque-captures folder beside OptiScaler. Each file carries a record of the build, the route,\nthe model and every setting that shapes the picture, and a .json beside them says the same.\n\nA display-referred frame is saved as PNG, a linear HDR frame as PFM (32-bit float). On the\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the\nupscaler's output, before the game's own tonemapper, post-processing and interface.\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler\nasks for the same capture from outside the game.	Salva o próximo quadro duas vezes, como o passe o leu e como o passe o escreveu, na\npasta retoque-captures ao lado do OptiScaler. Cada arquivo leva um registro da build, da rota,\ndo modelo e de cada configuração que molda a imagem, e um .json ao lado diz o mesmo.\n\nUm quadro já pronto para a tela é salvo como PNG; um quadro HDR linear, como PFM (float de 32 bits). Nas\nrotas de present é o quadro final, antes de o menu ser desenhado; depois do upscaler é a saída\ndo upscaler, antes do tone mapping, do pós-processamento e da interface do próprio jogo.\n\nOs 64 pares mais recentes são mantidos. Um arquivo chamado dlssnr-capture.trigger ao lado do OptiScaler\npede a mesma captura de fora do jogo.
+Saves the next frame twice, as the pass read it and as the pass wrote it, into the\nretoque-captures folder beside OptiScaler. Each file carries a record of the build, the route,\nthe model and every setting that shapes the picture, and a .json beside them says the same.\n\nA display-referred frame is saved as PNG, a linear HDR frame as PFM (32-bit float). On the\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the\nupscaler's output, before the game's own tonemapper, post-processing and interface.\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler\nasks for the same capture from outside the game on D3D12 routes.	Salva o próximo quadro duas vezes, como o passe o leu e como o passe o escreveu, na\npasta retoque-captures ao lado do OptiScaler. Cada arquivo leva um registro da build, da rota,\ndo modelo e de cada configuração que molda a imagem, e um .json ao lado diz o mesmo.\n\nUm quadro já pronto para a tela é salvo como PNG; um quadro HDR linear, como PFM (float de 32 bits). Nas\nrotas de present é o quadro final, antes de o menu ser desenhado; depois do upscaler é a saída\ndo upscaler, antes do tone mapping, do pós-processamento e da interface do próprio jogo.\n\nOs 64 pares mais recentes são mantidos. Um arquivo chamado dlssnr-capture.trigger ao lado do OptiScaler\npede a mesma captura de fora do jogo.
 Saved %s (the pair and its .json)	Salvo %s (o par e seu .json)
 Turn off Compare to capture the result.	Desligue Comparar para capturar o resultado.
 Turn off the debug view to capture the result.	Desligue a visualização de depuração para capturar o resultado.
 Not with the driver proxy: it returns before the pass writes the frame.	Não com o proxy do driver: ele retorna antes de o passe escrever o quadro.
-Not on this route yet: the capture is D3D12 only.	Ainda não nesta rota: a captura é só para D3D12.
+Capture is unavailable on this route; native Vulkan requires the after-upscale pass.	Captura indisponível nesta rota; o Vulkan nativo requer o passe após o upscaler.
 The capture folder could not be created (see the log).	Não foi possível criar a pasta de capturas (veja o log).
 No frame reached the pass in time; nothing was captured.	Nenhum quadro chegou ao passe a tempo; nada foi capturado.
 Earlier captures are still held for the GPU; try again shortly.	Capturas anteriores ainda estão retidas para a GPU; tente de novo em instantes.
@@ -545,6 +545,7 @@ Writing the files...	Gravando os arquivos...
 This frame is not a single-sample 2D texture; nothing was captured.	Este quadro não é uma textura 2D de amostra única; nada foi capturado.
 The capture failed while the frame was being described or recorded; nothing was captured (see the log).	A captura falhou enquanto o quadro era descrito ou registrado; nada foi capturado (veja o log).
 A capture is already under way.	Já há uma captura em andamento.
+This route's commands cannot be followed to the GPU's completion; nothing was captured (see the log).	Os comandos desta rota não podem ser acompanhados até a GPU concluí-los; nada foi capturado (veja o log).
 # 2026-10-13: the LSFG panel under FSR FG Settings (study branch; tools/lsfg-study/MFG_PRESENTER.md): its controls, the
 # multiplier and what it says about the swapchain the game started with, and the status line.
 LSFG 3.1 Interpolator (Lossless Scaling)	Interpolador LSFG 3.1 (Lossless Scaling)
@@ -620,3 +621,5 @@ unknown	desconhecido
 no-sample	sem amostra
 yes	sim
 no	não
+
+The capture recording was discarded or invalidated; nothing was written.	A gravação da captura foi descartada ou invalidada; nenhum arquivo foi escrito.

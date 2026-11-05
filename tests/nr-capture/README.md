@@ -10,13 +10,17 @@ What it holds: the pure half of the same-frame comparison capture
 `test.cpp` asserts what C++ can check against itself:
 
 - **The state machine** over a fake backend that counts every call: request, record, nothing handed to the writer
-  before the ticket completes, exactly one hand-off when it does, a second request ignored while one is under way,
-  the session's references released only when the list can never run again (`Ready`, not merely `Completed`), a
-  ticket that never completes kept and never released and the capture then off for the session, an ignored press that
-  does not move a waiting request's expiry, the untracked path read after 8 dispatches and labelled
-  `assumed-8-frames`, released after 32, refusals and expiry, an allocation failure, the retained-pair bound, a
-  hand-off the writer refuses, shutdown freeing only what is proven done, and an exception part way through a
-  recording withdrawn by `Abandon` with nothing released.
+  before the recording retires (`Ready`, not merely `Completed`), exactly one hand-off then, a second request
+  ignored while one is under way, completion followed by replay before Reset without any early hand-off, the
+  session's references released in that same poll while the writer owns its references, a ticket that never
+  completes or completes but never retires leaked once with capture then off for the session, an ignored press that
+  does not move a waiting request's expiry, an untracked recording refused before any copy with its
+  readbacks released and nothing handed to the writer (until 2026-11-04 it was read after 8 dispatches as
+  `assumed-8-frames`), refusals and expiry, an allocation failure, a hand-off the writer refuses, shutdown freeing
+  only what is proven safe, and an exception part way through a recording withdrawn by `Abandon` with nothing
+  released before retirement. Retained-pair bound/release/shutdown cases deliberately inject a faulty backend
+  that revokes `Ready` during hand-off: normal monotonic retirement leaves no retained entry. They preserve
+  defensive coverage, not evidence that the real backend can revoke retirement.
 - **The menu button**, every row of DEVELOPMENT.md section 2.3 and their order (every condition at once, cleared one
   row at a time), and the last outcome's line: a refusal for a setting is not shown once the setting is off.
 - **The record site's refusal** (`RefusalFor`): each reason alone, all at once cleared in order (settings before
@@ -79,7 +83,8 @@ wrong, BGRA not swizzled, a subnormal half off by one exponent, PFM rows top to 
 the blue channel of R11G11B10 read one bit off, rows read without their pitch, every stored block marked final, a
 16-bit row written at 8-bit width. In the state machine: handing off before completion, releasing on `Completed`
 instead of `Ready`, releasing instead of leaking a recording that never completed, a second request accepted while
-one is under way, no retained-pair bound, the untracked path read after one dispatch, tracking after the first copy,
+one is under way, no retained-pair bound, an untracked recording captured anyway, its readbacks leaked instead of
+released, retained pairs released without `Ready`, a pending pair handed off by age, tracking after the first copy,
 shutdown releasing what is not ready, no request expiry, a poll that does not count. In the rest: the Compare row
 missing from the button, the cap off by one, a two-digit sequence accepted as ours, ';' left in a record value.
 
@@ -96,6 +101,10 @@ A second review of those fixes added these, each shown to fail on its injected d
 `g_used` set outside the request, the menu's status read without the gate, a second rotation on the failure path, the
 proxy refusal removed from the request, the menu dropping `ReasonStillApplies`, and a builder value from a helper
 call.
+
+The Ready hand-off follow-up (2026-11-04) adds two mutants to every `run.py` execution: hand off on `Completed`
+again, and release retained references on `Completed` instead of `Ready`. Each must compile and fail its specific
+runtime `CHECK`; a compiler failure, sanitizer failure or successful exit does not count as a kill.
 
 ## What this does not cover
 

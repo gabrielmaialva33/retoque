@@ -1135,3 +1135,11 @@ requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "Archive identity and sanitized same-commit complete-host evidence; rejects partial claims and unsafe ZIPs."
+
+[nr-vk-pair-capture]
+path = "nr-vk-pair-capture"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Native Vulkan pair capture: production backend against fake Vulkan calls; split snapshots, retirement and executed marker, serial replay, discard, cancellation, writer/device loss, actual-allocation budget; six independently killed safety mutants. No GPU or Wine."
