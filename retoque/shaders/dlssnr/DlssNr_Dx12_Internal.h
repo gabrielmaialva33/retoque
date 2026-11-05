@@ -824,9 +824,9 @@ bool PausedWithoutFrameGen(const Config& cfg);
 void AdvanceNrClock();
 const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission);
 bool AdaptiveCadenceRequested();
-bool WantsTrackedRecording(const DlssNrPassSnapshot& requested);
+bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory = false);
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
-                      DlssNr::Chain::RecordingLease* lease);
+                      DlssNr::Chain::RecordingLease* lease, bool mandatory = false);
 bool VideoMemory(ID3D12Device* device, DXGI_QUERY_VIDEO_MEMORY_INFO& memory);
 void ParkNrFeature(void*& feature);
 void ParkNrScaler(OS_Dx12*& scaler);

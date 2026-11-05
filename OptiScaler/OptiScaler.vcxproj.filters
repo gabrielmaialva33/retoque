@@ -2274,6 +2274,9 @@
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Dx11Guides.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_Dx11Scene.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PresentHost.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

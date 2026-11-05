@@ -1,6 +1,7 @@
 #include <pch.h>
 #include "DLSSFeature_Dx11.h"
 #include <Config.h>
+#include <dlssnr/DlssNr_Dx11Scene.h>
 
 #include <dxgi.h>
 
@@ -92,6 +93,7 @@ bool DLSSFeatureDx11::EvaluateInternal(ID3D11DeviceContext* InDeviceContext, NVS
             return false;
         }
 
+        DlssNr::EvaluateNativeDx11Scene(InDeviceContext, InParameters);
         LOG_TRACE("_EvaluateFeature ok!");
     }
     else

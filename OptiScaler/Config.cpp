@@ -59,6 +59,7 @@ Config::Config()
 
     // [DlssNr] ModelFile as the first load left it, the default when that load failed; never changed after, so no
     // later reload or menu save makes a loader use another file in this process (retoque/dlssnr/DlssNr_ModelFile.h).
+    _dlssNrDx11SceneStageAtStart = DlssNrDx11SceneStage.value_or_default();
     _dlssNrModelFileAtStart = DlssNrModelFile.value_or_default();
 }
 
@@ -464,6 +465,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DLSSEnabled.set_from_config(readBool("DLSS", "Enabled"));
 
             // --- DLSS 5 Neural Rendering (retoque/dlssnr) ---
+            DlssNrDx11SceneStage.set_from_config(readBool("DlssNr", "Dx11SceneStage"));
             DlssNrEnabled.set_from_config(readBool("DlssNr", "Enabled"));
             DlssNrSessionGuard.set_from_config(readBool("DlssNr", "SessionGuard"));
             DlssNrGameProfiles.set_from_config(readBool("DlssNr", "GameProfiles"));
@@ -1902,6 +1904,8 @@ bool Config::SaveIni()
         ini.SetValue("DLSS", "Enabled", GetBoolValue(Instance()->DLSSEnabled.value_for_config()).c_str());
 
         // --- DLSS 5 Neural Rendering (retoque/dlssnr) ---
+        ini.SetValue("DlssNr", "Dx11SceneStage",
+                     GetBoolValue(Instance()->DlssNrDx11SceneStage.value_for_config()).c_str());
         ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SessionGuard", GetBoolValue(Instance()->DlssNrSessionGuard.value_for_config()).c_str());
         ini.SetValue("DlssNr", "GameProfiles", GetBoolValue(Instance()->DlssNrGameProfiles.value_for_config()).c_str());

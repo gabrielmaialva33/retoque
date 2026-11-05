@@ -7,6 +7,7 @@
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
+#include "DlssNr_Dx11Scene.h"
 #include "DlssNr_Funnel.h"
 #include "DlssNr_Enlarge.h"
 #include "DlssNr_GameProfiles.h"
@@ -395,6 +396,8 @@ static std::string CollectDiagnosticReport(Config* config)
         in.upscaler = state.currentFeature->Name();
     if (const char* route = DlssNr::Dx11Route::ReportText(DlssNr::Dx11RouteReport()))
         in.dx11Route = route;
+    if (const char* scene = DlssNr::NativeDx11SceneStatus())
+        in.dx11Route = scene;
     // The model Retoque's loaders use: the file [DlssNr] ModelFile names, else the default as before
     // (docs/dlssnr/design/model-file.md). A named file resolves with two file checks, never a search.
     if (const auto model = DlssNr::ModelFile::Explicit() ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())
@@ -1214,6 +1217,8 @@ void RenderMenu(Config* config, float menuResScale)
         // for something that is not coming, so this line says why instead, and names the route that carries NR.
         const auto routeReport = enabled ? DlssNr::Dx11RouteReport() : DlssNr::Dx11Route::Report::None;
         const char* routeNotice = DlssNr::Dx11Route::ReportText(routeReport);
+        if (const char* scene = DlssNr::NativeDx11SceneStatus())
+            routeNotice = scene;
 
         // Turning the pass off does not release the model, so the feature handle stays alive and
         // IsRunning keeps answering yes. Reporting a cost from that was wrong in the way that matters

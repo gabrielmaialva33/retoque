@@ -59,6 +59,10 @@ namespace DlssNr
 // preUpscaleDeclined is ScopedPreUpscale::Declined() from the scope wrapped around this same
 // evaluate, when there was one. On stage 1 this pass stands down unless that scope declined the
 // evaluate for a reason this side can serve.
+bool EvaluateDx11SceneFrame(ID3D12GraphicsCommandList* list, ID3D12Resource* colour, ID3D12Resource* depth,
+                            ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* queue,
+                            const char** reason);
+
 void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                           ID3D12CommandQueue* timingQueue = nullptr, bool preUpscaleDeclined = false,
                           bool isRayReconstruction = false);

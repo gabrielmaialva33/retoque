@@ -1,3 +1,5 @@
+#include "pch.h"
+
 // tests/nr-dx11-route: the D3D11 DLSS route decisions (retoque/dlssnr/DlssNr_Dx11Route.h) and the production layer
 // that the call sites use (retoque/dlssnr/DlssNr_Dx11Upscaler.h), the latter against stubs/Config.h.
 //
@@ -34,6 +36,8 @@ void CarryNativeDx11Guides(ID3D11DeviceContext* context, NVSDK_NGX_Parameter* pa
     g_carryCalls.push_back({ nativeDlss, evaluated, context, params });
 }
 bool NativeDx11GuidesCarriedRecently() { return g_carriedRecently; }
+// The scene path is disabled in these existing-route regression cases.
+const char* NativeDx11SceneStatus() { return nullptr; }
 } // namespace DlssNr
 
 namespace

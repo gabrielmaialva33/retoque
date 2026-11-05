@@ -1,0 +1,17 @@
+#pragma once
+#define _CRT_SECURE_NO_WARNINGS
+#include <windows.h>
+#include <d3d11_4.h>
+#include <d3d12.h>
+#include <d3dcompiler.h>
+#include <dxgi1_6.h>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>

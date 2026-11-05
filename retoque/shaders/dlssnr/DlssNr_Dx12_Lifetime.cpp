@@ -151,16 +151,21 @@ bool AdaptiveCadenceRequested()
            DlssNr::Cadence::Requested(config.DlssNrCadence.value_or_default()) > 1;
 }
 
-bool WantsTrackedRecording(const DlssNrPassSnapshot& requested)
+bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory)
 {
-    return g_tracked ||
+    return mandatory || g_tracked ||
            (!g_legacyRecorded && (requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested()));
 }
 
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
-                      DlssNr::Chain::RecordingLease* lease)
+                      DlssNr::Chain::RecordingLease* lease, bool mandatory)
 {
-    const bool optIn = requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested();
+    if (mandatory && g_legacyRecorded)
+    {
+        ChainStatus("Dx11SceneStage: PriorUntrackedRecording; restart required");
+        return false;
+    }
+    const bool optIn = mandatory || requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested();
     if (!g_tracked && optIn && !g_legacyRecorded)
         g_tracked = true;
     if (!g_tracked)

@@ -454,6 +454,23 @@ tier = "wine"
 timeout = 1500
 summary = "The native D3D11 guide transport's API sequence on real devices under a local Proton (DXVK and vkd3d-proton): depth and motion formats a game uses cross through shared textures and a shared fence into clones made as the present guide ring makes them, six frames each, read back byte for byte; the depth-stencil hazard the transport avoids is reported. SKIP without a local Proton."
 
+[nr-dx11-scene-stage]
+path = "nr-dx11-scene-stage"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Native D3D11 POST-SR opt-in policy, integration/lifetime/order contracts and 19 individually killed mutants; no GPU or NGX."
+
+[dx11-scene-transport]
+path = "dx11-scene-transport"
+domain = "transport"
+requires = ["python", "wine-toolchain"]
+tier = "wine"
+timeout = 900
+result = "artifacts/result.json"
+summary = "Isolated DXVK/vkd3d-proton scene-color roundtrip: shared-fence ordering, D3D12 compute, D3D11 same-frame consumption, normal/early Present, a forced-cycle control and the production transport header (24 exact frames plus queue refusal and pixel mutants). No game or NGX; final-only readback; explicit prerequisite SKIP."
+
 [synth-motion-d3d12]
 path = "synth-motion-d3d12"
 domain = "fg"
