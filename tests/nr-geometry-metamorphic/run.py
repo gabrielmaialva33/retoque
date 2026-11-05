@@ -16,6 +16,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from cpp_source import function
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 
@@ -37,6 +40,9 @@ def pieces():
     shader = hlsl[hlsl.rindex('#endif') + len('#endif'):]
     shader = re.sub(r'\[numthreads\([^)]*\)\]', '', shader)
     shader = shader.replace(': SV_DispatchThreadID', '')
+    post = function(vulkan, 'EvaluateAfterUpscaleVk')
+    pre = function(vulkan, 'RecordPreUpscaleVk')
+    assert vulkan.count('const unsigned int createFlags = GameCreateFlags(params);') == 2
     return {
         '@GATHER@': between(inputs, 'DlssNrFrameInfo GatherGuideFrame(', 'DlssNrFrameInfo GatherFrame('),
         # The same cut tests/nr-render-geometry makes.
@@ -45,8 +51,10 @@ def pieces():
         '@REFERENCES@': between(dispatch, '    const unsigned int motionReferenceWidth =', '    if (peripheryActive)'),
         '@SCALE@': between(dispatch, '    const bool renderMotionScale = cfg.DlssNrRenderMotionScale.value_or_default();',
                            '    const int guideDepthInverted'),
-        '@VULKAN@': between(vulkan, '    const unsigned int createFlags = GameCreateFlags(params);',
+        '@VULKAN@': between(post, '    const unsigned int createFlags = GameCreateFlags(params);',
                             '    // Both have to agree.'),
+        '@VULKAN_PRE@': between(pre, '    const unsigned int createFlags = GameCreateFlags(params);',
+                                '    const bool linearHdr ='),
         '@SHADER@': shader,
     }
 
@@ -82,6 +90,21 @@ MUTANTS = [
     ('vulkan motion region from depth\'s clipped width', '@VULKAN@',
      'lowResolutionMotion ? renderReferenceWidth : width', 'lowResolutionMotion ? guideWidth : width'),
     ('vulkan drops the game MV scale', '@VULKAN@', 'params->Get(NVSDK_NGX_Parameter_MV_Scale_X, &mvScaleX);', ''),
+]
+
+# Every Vulkan geometry mutant is also applied independently to the pre-stage's different display reference.
+MUTANTS += [(name.replace('vulkan', 'vulkan pre'), '@VULKAN_PRE@',
+             old.replace('renderReferenceWidth, width', 'renderReferenceWidth, displayWidth')
+                .replace('renderReferenceWidth : width', 'renderReferenceWidth : displayWidth'),
+             new.replace('renderReferenceWidth, width', 'renderReferenceWidth, displayWidth')
+                .replace('guideWidth : width', 'guideWidth : displayWidth'))
+            for name, key, old, new in list(MUTANTS) if key == '@VULKAN@']
+MUTANTS += [
+    ('vulkan pre uses render as display reference', '@VULKAN_PRE@',
+     'MotionReference(lowResolutionMotion, renderReferenceWidth, displayWidth)',
+     'MotionReference(lowResolutionMotion, renderReferenceWidth, width)'),
+    ('vulkan pre stops isolating owned guides', '@VULKAN_PRE@', 'const bool wanted = true;',
+     'const bool wanted = cfg.DlssNrMatchGuides.value_or_default();'),
 ]
 
 

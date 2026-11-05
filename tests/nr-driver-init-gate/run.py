@@ -215,13 +215,25 @@ for call, label in (('g_fwd.init(', 'Vulkan NGX init'), ('g_fwd.create(', 'Vulka
     pairs = blocks(code)
     builder = code.index('void RunBuild(PresentBuildJob& job)')
     sites = [m.start() for m in re.finditer(re.escape(call), code)]
-    say(len(sites) == 2, f'{label}: {call} twice in DlssNrFeature_Vk.cpp, the route and the builder (found {len(sites)})')
+    say(len(sites) == 3, f'{label}: {call} in the post route, pre route and builder (found {len(sites)})')
     for pos in sites:
         open_, close = innermost(pairs, pos)
         body = code[open_ + 1:close]
         line = feature.count('\n', 0, pos) + 1
-        say(' '.join(body.split()).startswith(GATE_NGX), f'{label}: DlssNrFeature_Vk.cpp:{line} takes the gate first')
-        say(not LOCK.search(body) and body.count(';') <= 2, f'{label}: :{line} runs only the call under it')
+        pre_start = code.index('static bool RecordPreUpscaleVk(')
+        pre_end = code.index('ScopedPreUpscaleVk::ScopedPreUpscaleVk(', pre_start)
+        if pre_start < pos < pre_end:
+            normalized = ' '.join(body.split())
+            say(normalized.startswith('DlssNr::DriverInitGate::TryScope gate(DlssNr::DriverInitGate::Hold::Ngx);'),
+                f'{label}: :{line} attempts the nonblocking gate first')
+            before_call = code[open_ + 1:pos]
+            say('if (!gate.Held())' in before_call and 'return false;' in before_call,
+                f'{label}: :{line} refuses a missing hold before the call')
+            say(not LOCK.search(body) and body.count(';') <= 4,
+                f'{label}: :{line} only refusal/metadata cleanup and the call under TryScope')
+        else:
+            say(' '.join(body.split()).startswith(GATE_NGX), f'{label}: DlssNrFeature_Vk.cpp:{line} takes the gate first')
+            say(not LOCK.search(body) and body.count(';') <= 2, f'{label}: :{line} runs only the call under it')
         held = held_at(code, pairs, pos) & LISTED
         expected = set() if pos > builder else {'g_vkMutex'}
         say(held == expected, f'{label}: :{line} holds {sorted(held) or "nothing"} (allowed {sorted(expected) or "nothing"})')

@@ -83,9 +83,11 @@ struct FakeBackend
     std::set<int> readyLists;
     int hands = 0;
     bool handFails = false;
+    // Fault injection only: production retirement is monotonic. Keep the old retained-pair defence testable.
+    bool revokeReadyOnHand = false;
     bool copyThrows = false; // an exception part way through a recording, as the record site can meet one
     std::string lastPayload;
-    Completion lastCompletion = Completion::AssumedFrames;
+    Completion lastCompletion = Completion::Submission;
     // Anything a real backend could block in. The template must never call one; nothing here can be called to wait.
     int blockingWaits = 0;
 
@@ -130,6 +132,8 @@ struct FakeBackend
     }
     bool Hand(Readback (&rb)[2], Payload&& p, Completion c)
     {
+        if (revokeReadyOnHand)
+            readyLists.clear();
         if (handFails)
             return false;
         ++hands;
@@ -167,8 +171,8 @@ static void StateMachine()
         ++g_cases;
     }
 
-    // Tracked: request, record, nothing handed before the ticket completes, one hand when it does, a second request
-    // ignored while under way, the session's references released only when the list can never run again.
+    // Tracked: neither writer reads nor session releases until retirement, even after completion. With normal
+    // monotonic Ready, the defensive retained entry is drained in the hand-off poll; the writer owns its references.
     {
         Session<FakeBackend> s;
         FakeBackend b;
@@ -185,14 +189,15 @@ static void StateMachine()
         CHECK(b.hands == 0 && s.Current() == Phase::Pending); // nothing mapped before completion
         b.completedLists.insert(1);
         s.Poll(b, 10);
-        CHECK(b.hands == 1 && b.lastPayload == "first" && b.lastCompletion == Completion::Submission);
-        CHECK(s.Current() == Phase::Writing);
-        s.Poll(b, 10);
-        CHECK(b.hands == 1);                                 // exactly one write
-        CHECK(b.released.empty() && s.RetainedCount() == 1); // completed is not ready
+        CHECK(b.hands == 0 && b.writer.empty() && b.released.empty() && s.Current() == Phase::Pending);
         b.readyLists.insert(1);
         s.Poll(b, 10);
+        CHECK(b.hands == 1 && b.lastPayload == "first" && b.lastCompletion == Completion::Submission);
+        CHECK(s.Current() == Phase::Writing);
         CHECK(b.released.size() == 2 && b.live.empty() && s.RetainedCount() == 0);
+        CHECK(b.writer.size() == 2); // writer references survive the session's release
+        s.Poll(b, 10);
+        CHECK(b.hands == 1);  // exactly one write
         CHECK(!s.Request(0)); // the writer has not finished
         s.Finished(true, nullptr, "stem-1");
         CHECK(s.Current() == Phase::Idle && s.LastOutcome().ok && s.LastOutcome().stem == "stem-1");
@@ -201,12 +206,16 @@ static void StateMachine()
         ++g_cases;
     }
 
-    // A tracked recording that never completes: kept, never released, given up on after kGiveUpPolls.
+    // Completion alone is not retirement. Both an unfinished list and a completed list the game never resets
+    // give up at the same bound, leaking once and disabling capture for this session.
+    for (bool completed : { false, true })
     {
         Session<FakeBackend> s;
         FakeBackend b;
         FakeBackend::Recording rec;
         CHECK(s.Request(0) && s.Record(b, rec, FakePayload { "never" }, nullptr));
+        if (completed)
+            b.completedLists.insert(1);
         for (uint64_t i = 0; i + 1 < kGiveUpPolls; ++i)
             s.Poll(b, 0);
         CHECK(s.Current() == Phase::Pending && b.leaked.empty());
@@ -214,33 +223,36 @@ static void StateMachine()
         CHECK(s.Current() == Phase::Idle && b.hands == 0);
         CHECK(b.leaked.size() == 2 && b.released.empty() && b.live.empty());
         CHECK(s.LastOutcome().reason == kReasonNoCompletion);
+        b.completedLists.insert(1);
+        b.readyLists.insert(1); // late retirement cannot reclaim leaked resources or re-enable capture
         for (int i = 0; i < 100; ++i)
             s.Poll(b, 0);
-        CHECK(b.released.empty()); // never released later either
+        CHECK(b.released.empty() && b.hands == 0); // never released or handed later either
         // And the capture is off for the session: a route that never completes cannot leak a pair per press.
         CHECK(s.GaveUp() && !s.Request(0) && s.Current() == Phase::Idle);
         ++g_cases;
     }
 
-    // Untracked: read after kAssumedPolls dispatches and labelled so; our reference let go after the retirement count.
+    // Untracked: refused before any copy is recorded. The readbacks, never used by the GPU, are released at once;
+    // nothing is handed to the writer, however long it is polled; the reason is settled and returned; the next press
+    // may try again (a later list may be trackable).
     {
         Session<FakeBackend> s;
         FakeBackend b;
         b.trackable = false;
         FakeBackend::Recording rec;
-        CHECK(s.Request(0) && s.Record(b, rec, FakePayload { "assumed" }, nullptr));
-        for (uint64_t i = 0; i + 1 < kAssumedPolls; ++i)
+        const char* why = nullptr;
+        CHECK(s.Request(0) && !s.Record(b, rec, FakePayload { "untracked" }, nullptr, &why));
+        CHECK(why == kReasonUntracked && s.LastOutcome().reason == kReasonUntracked && !s.LastOutcome().ok);
+        CHECK(b.copies == 0 && b.released.size() == 2 && b.live.empty() && b.leaked.empty());
+        CHECK(s.Current() == Phase::Idle && !s.Busy() && s.RetainedCount() == 0);
+        for (int i = 0; i < 2000; ++i)
             s.Poll(b, 0);
-        CHECK(b.hands == 0);
-        s.Poll(b, 0);
-        CHECK(b.hands == 1 && b.lastCompletion == Completion::AssumedFrames);
-        s.Finished(true, nullptr, "s");
-        for (uint64_t i = kAssumedPolls; i + 1 < kUntrackedReleasePolls; ++i)
-            s.Poll(b, 0);
-        CHECK(b.released.empty());
-        s.Poll(b, 0);
-        CHECK(b.released.size() == 2 && !s.Busy());
-        CHECK(std::string(CompletionName(Completion::AssumedFrames)) == "assumed-8-frames");
+        CHECK(b.hands == 0 && b.writer.empty());
+        b.trackable = true;
+        CHECK(s.Request(0) && s.Record(b, rec, FakePayload { "tracked" }, nullptr));
+        CHECK(b.copies == 2);
+        CHECK(std::string(CompletionName(Completion::Submission)) == "submission-fence");
         ++g_cases;
     }
 
@@ -277,19 +289,23 @@ static void StateMachine()
         ++g_cases;
     }
 
-    // Retained readbacks are bounded: past kMaxRetained a capture is refused rather than holding more.
+    // Defensive only: a faulty backend revokes Ready during Hand. Real retirement cannot reverse, so normal
+    // hand-offs leave no retained entry. The legacy bound still refuses growth if that backend contract breaks.
     {
         Session<FakeBackend> s;
         FakeBackend b;
+        b.revokeReadyOnHand = true;
         for (size_t i = 0; i < kMaxRetained; ++i)
         {
             FakeBackend::Recording rec;
             rec.list = static_cast<int>(10 + i);
             CHECK(s.Request(0) && s.Record(b, rec, FakePayload {}, nullptr));
             b.completedLists.insert(rec.list);
+            b.readyLists.insert(rec.list);
             s.Poll(b, 0);
             s.Finished(true, nullptr, "s");
         }
+        CHECK(b.released.empty()); // do not release when the defensive Ready recheck fails
         CHECK(s.RetainedCount() == kMaxRetained);
         FakeBackend::Recording rec;
         rec.list = 99;
@@ -302,7 +318,7 @@ static void StateMachine()
         ++g_cases;
     }
 
-    // A hand-off the writer cannot take: back to idle with a reason, readbacks kept until proven done.
+    // A rejected hand-off is attempted only after retirement; its session references can then be released.
     {
         Session<FakeBackend> s;
         FakeBackend b;
@@ -311,29 +327,36 @@ static void StateMachine()
         CHECK(s.Request(0) && s.Record(b, rec, FakePayload {}, nullptr));
         b.completedLists.insert(1);
         s.Poll(b, 0);
-        CHECK(s.Current() == Phase::Idle && s.LastOutcome().reason == kReasonHandOff && s.RetainedCount() == 1);
-        CHECK(b.released.empty());
+        CHECK(s.Current() == Phase::Pending && b.released.empty());
+        b.readyLists.insert(1);
+        s.Poll(b, 0);
+        CHECK(s.Current() == Phase::Idle && s.LastOutcome().reason == kReasonHandOff && s.RetainedCount() == 0);
+        CHECK(b.released.size() == 2 && b.live.empty() && b.writer.empty());
         ++g_cases;
     }
 
-    // Shutdown frees only what is proven done: a retained pair whose list is ready is released, one whose list is
-    // complete but not sealed is kept, and so is a capture still pending.
+    // Shutdown's retained bookkeeping is also a defence against the injected non-monotonic backend, not a normal
+    // sequence. It releases only the re-proven Ready pair and leaks the revoked pair plus a completed/unsealed one.
     {
         Session<FakeBackend> s;
         FakeBackend b;
+        b.revokeReadyOnHand = true;
         for (const int list : { 1, 3 })
         {
             FakeBackend::Recording handed;
             handed.list = list;
             CHECK(s.Request(0) && s.Record(b, handed, FakePayload {}, nullptr));
             b.completedLists.insert(list);
+            b.readyLists.insert(list);
             s.Poll(b, 0);
             s.Finished(true, nullptr, "s");
         }
         FakeBackend::Recording pending;
         pending.list = 2;
         CHECK(s.Request(0) && s.Record(b, pending, FakePayload {}, nullptr));
+        b.completedLists.insert(2);
         b.readyLists.insert(1);
+        CHECK(b.hands == 2 && b.writer.size() == 4); // pending list 2 was never handed
         // Not polled since list 1 became ready: Shutdown is what lets it go.
         s.Shutdown(b);
         CHECK(b.released.size() == 2 && b.leaked.size() == 4 && b.live.empty());
@@ -364,8 +387,11 @@ static void StateMachine()
         }
         CHECK(threw && s.Current() == Phase::Recording && b.live.size() == 2);
         s.Abandon(kReasonInternal);
-        CHECK(s.Current() == Phase::Idle && !s.LastOutcome().ok && s.LastOutcome().reason == kReasonInternal);
-        CHECK(b.released.empty() && b.live.size() == 2 && s.RetainedCount() == 0);
+        CHECK(s.Current() == Phase::Pending && !s.LastOutcome().ok && s.LastOutcome().reason == kReasonInternal);
+        b.readyLists.insert(rec.list);
+        s.Poll(b, 1);
+        CHECK(s.Current() == Phase::Idle && b.live.empty());
+        CHECK(b.released.size() == 2 && s.RetainedCount() == 0);
 
         CHECK(s.Request(0));
         s.Abandon(kReasonInternal);
@@ -377,6 +403,84 @@ static void StateMachine()
         CHECK(s.Current() == Phase::Pending);
         ++g_cases;
     }
+}
+
+// A completed list is still executable: replay can overwrite the same readbacks. Model the fence becoming
+// incomplete on replay, completing again, then Reset sealing the recording. No writer ever observes either gap.
+static void CompleteReplayReset()
+{
+    Session<FakeBackend> s;
+    FakeBackend b;
+    FakeBackend::Recording rec;
+    CHECK(s.Request(0) && s.Record(b, rec, FakePayload { "replayed" }, nullptr));
+    b.completedLists.insert(1);
+    s.Poll(b, 1);
+    CHECK(b.hands == 0 && b.writer.empty() && b.released.empty());
+    b.completedLists.erase(1); // game executes the same closed list again, before Reset
+    s.Poll(b, 2);
+    CHECK(b.hands == 0 && b.writer.empty() && b.released.empty());
+    b.completedLists.insert(1); // second execution finishes; still executable
+    s.Poll(b, 3);
+    CHECK(b.hands == 0 && b.writer.empty() && s.Current() == Phase::Pending);
+    b.readyLists.insert(1); // Reset seals the old recording, whose latest execution has completed
+    s.Poll(b, 4);
+    CHECK(b.hands == 1 && b.writer.size() == 2 && s.Current() == Phase::Writing);
+    CHECK(b.released.size() == 2 && s.RetainedCount() == 0);
+    s.Poll(b, 5);
+    CHECK(b.hands == 1);
+    s.Shutdown(b); // writer still owns the pair; no double release or leak
+    CHECK(b.writer.size() == 2 && b.released.size() == 2 && b.leaked.empty());
+    ++g_cases;
+}
+
+// Split Vulkan recording uses the same Session as the D3D12 convenience wrapper.
+static void SplitRecording()
+{
+    struct RetiringBackend : FakeBackend
+    {
+        bool discarded = false;
+        bool Discarded(const Ticket&) { return discarded; }
+        Completion CompletionKind() const { return Completion::VulkanRetired; }
+    };
+    Session<RetiringBackend> s;
+    RetiringBackend b;
+    RetiringBackend::Recording r;
+    CHECK(s.Request(0));
+    CHECK(s.BeginRecord(b, r, FakePayload { "split" }, nullptr));
+    CHECK(s.Current() == Phase::Recording && b.copies == 0 && b.tracks == 1);
+    s.RecordOriginal(b, r);
+    CHECK(b.copies == 1 && b.hands == 0);
+    CHECK(s.CommitRecord(b, r));
+    CHECK(b.copies == 2 && s.Current() == Phase::Pending);
+    b.completedLists.insert(1);
+    s.Poll(b, 1);
+    CHECK(b.hands == 0 && s.Current() == Phase::Pending);
+    b.readyLists.insert(1);
+    s.Poll(b, 2);
+    CHECK(b.hands == 1 && b.lastCompletion == Completion::VulkanRetired);
+    s.Finished(true, nullptr, "split");
+    b.readyLists.insert(1);
+    s.Poll(b, 2);
+    CHECK(b.live.empty());
+
+    b.completedLists.clear();
+    b.readyLists.clear();
+    CHECK(s.Request(3) && s.BeginRecord(b, r, {}, nullptr));
+    s.RecordOriginal(b, r);
+    s.Abandon(kReasonInternal);
+    CHECK(s.Current() == Phase::Pending && !b.live.empty());
+    s.Poll(b, 4);
+    CHECK(b.hands == 1 && !b.live.empty());
+    b.readyLists.insert(1);
+    s.Poll(b, 5);
+    CHECK(s.Current() == Phase::Idle && b.live.empty() && !s.LastOutcome().ok);
+
+    CHECK(s.Request(6) && s.Record(b, r, {}, nullptr));
+    b.discarded = true;
+    s.Poll(b, 7);
+    CHECK(s.Current() == Phase::Idle && b.live.empty() && b.hands == 1);
+    CHECK(s.LastOutcome().reason == kReasonDiscarded);
+    ++g_cases;
 }
 
 // --- The menu button ---------------------------------------------------------------------------------------------
@@ -453,7 +557,12 @@ static void Button()
         ButtonInputs v = in;
         v.proxy = true;
         v.nativeVulkan = true;
-        CHECK(ButtonFor(v).reason == kReasonVulkan); // native Vulkan before every D3D12 row
+        CHECK(ButtonFor(v).reason == kReasonVulkan); // native present/unavailable route still refuses
+        v.vulkanCaptureReady = true;
+        CHECK(ButtonFor(v).reason == kReasonProxy);
+        v.proxy = false;
+        v.d3d12Ran = false;
+        CHECK(ButtonFor(v).enabled); // native after-upscale does not require a D3D12 frame
         v.enabled = false;
         CHECK(!ButtonFor(v).shown); // NR off before everything
     }
@@ -928,14 +1037,13 @@ static void RecordExact(const fs::path& out)
     hdr.linearHdr = true;
     hdr.plan = IF::PlanFor(IF::Dxgi::R16G16B16A16_FLOAT, true);
     WriteRecordInputs hdrWrite = write;
-    hdrWrite.completion = Completion::AssumedFrames;
     hdrWrite.pfm = true;
     hdrWrite.means[1].Add(std::numeric_limits<float>::infinity());
     Record h;
     FillFrameRecord(h, hdr);
     FillWriteRecord(h, hdrWrite);
     CHECK(h.Find("quantised_from") == nullptr && *h.Find("file_kind") == "pfm" && *h.Find("linear_hdr") == "1");
-    CHECK(*h.Find("completion") == "assumed-8-frames" && *h.Find("nonfinite_original") == "0" &&
+    CHECK(*h.Find("completion") == "submission-fence" && *h.Find("nonfinite_original") == "0" &&
           *h.Find("nonfinite_processed") == "1" && *h.Find("mean_processed") == "0.75");
     std::vector<std::string> keys;
     for (const auto& item : h.Items())
@@ -1292,6 +1400,8 @@ static void Images(const fs::path& out)
 
 int main(int argc, char** argv)
 {
+    CompleteReplayReset();
+    SplitRecording();
     CHECK(argc == 2);
     const fs::path out = argv[1];
     fs::create_directories(out);

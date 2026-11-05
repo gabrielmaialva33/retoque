@@ -1,3 +1,4 @@
+#include "pch.h"
 // The present-guide identity decision (retoque/dlssnr/DlssNr_PresentGuideIdentity.h) on the production header:
 // every rule alone, the first-failing order, narrowing only, the swapchain stamp's null semantics, the registry and
 // the frame counter, scenarios on the production ring, a long run that reads only what the rules accept, step 1's
@@ -986,6 +987,38 @@ void WindowAndLine()
         if (second != expectedSecond)
             std::fprintf(stderr, "got:      %s\nexpected: %s\n", second.c_str(), expectedSecond.c_str());
         CHECK(second == expectedSecond);
+
+        // Producer counters, skip reasons, busy breakdown, and resident/parked clone bytes on the same window line.
+        Producer prod;
+        DlssNr::PresentGuides::AcquireReport busy {};
+        busy.busyLastRead = 1;
+        busy.busyReadInFlight = 2;
+        busy.busyWriteInFlight = 1;
+        prod.NoteRecorded(DlssNr::PresentGuides::AcquireKind::ReusedEmpty, 32ull << 20, 0);
+        prod.NoteRecorded(DlssNr::PresentGuides::AcquireKind::ReusedMatching, 32ull << 20, 0);
+        prod.NoteRecorded(DlssNr::PresentGuides::AcquireKind::EvictedOldest, 48ull << 20, 16ull << 20);
+        prod.NoteSkipped(ProducerReason::SlotsBusy, busy, 48ull << 20, 16ull << 20);
+        prod.NoteSkipped(ProducerReason::RetiredCap, {}, 48ull << 20, 32ull << 20);
+        prod.NoteSkipped(ProducerReason::AllocFailed, {}, 48ull << 20, 16ull << 20);
+        prod.NoteSkipped(ProducerReason::TrackRefused, {}, 48ull << 20, 8ull << 20);
+        prod.NoteSkipped(ProducerReason::MissingInput, {}, 48ull << 20, 8ull << 20);
+        prod.NoteSkipped(ProducerReason::Device, {}, 48ull << 20, 8ull << 20);
+        prod.NoteSkipped(ProducerReason::Incompatible, {}, 48ull << 20, 8ull << 20);
+
+        const ProducerCounts pc = prod.Take();
+        CHECK(pc.attempts == 10 && pc.recorded == 3);
+        CHECK(pc.reusedMatching == 1 && pc.allocatedEmpty == 1 && pc.rebuilt == 1);
+        CHECK(ProducerSkips(pc) == 7);
+        CHECK(pc.busyLastRead == 1 && pc.busyReadInFlight == 2 && pc.busyWriteInFlight == 1);
+        CHECK(pc.residentBytes == (48ull << 20) && pc.parkedBytes == (8ull << 20));
+        CHECK(prod.Open().attempts == 0 && prod.Open().residentBytes == (48ull << 20));
+
+        const std::string withProducer = FormatLine("D3D12 present", c, std::chrono::milliseconds(2000), pc);
+        CHECK(withProducer.find("| captures 3/10 recorded (reuse 1, empty 1, rebuild 1), 7 skipped (missing-input 1, "
+                                "device 1, incompatible 1, slots-busy 1 [last-read 1, read-busy 2, "
+                                "write-busy 1], retired-cap 1, alloc-failed 1, track-refused 1), bytes resident " +
+                                std::to_string(48ull << 20) + " parked " + std::to_string(8ull << 20)) !=
+              std::string::npos);
     }
 
     // What Note counts: the four outcomes, refusals by reason, skips the rules would accept, the mark, and a capture's
@@ -1208,6 +1241,14 @@ void StatusAndText()
             one.top = static_cast<Reason>(r);
             CHECK(Unpack(Pack(one)).top == one.top);
         }
+        for (size_t pr = 0; pr < kProducerReasons; ++pr)
+        {
+            Status one;
+            one.producerSkipped = 17;
+            one.producerTop = static_cast<ProducerReason>(pr);
+            const Status unpacked = Unpack(Pack(one));
+            CHECK(unpacked.producerSkipped == 17 && unpacked.producerTop == one.producerTop);
+        }
     }
 
     // One second at a time: skips apart, refusals by reason, the most frequent named.
@@ -1215,6 +1256,9 @@ void StatusAndText()
         StatusWindow w;
         Clock::time_point t {};
         Status out;
+        w.NoteProducer(ProducerReason::SlotsBusy);
+        w.NoteProducer(ProducerReason::SlotsBusy);
+        w.NoteProducer(ProducerReason::RetiredCap);
         CHECK(!w.Add(Outcome::Used, Reason::Accepted, t, &out));
         CHECK(!w.Add(Outcome::Refused, Reason::Lag, t + std::chrono::milliseconds(100), &out));
         CHECK(!w.Add(Outcome::Refused, Reason::Extent, t + std::chrono::milliseconds(200), &out));
@@ -1224,11 +1268,13 @@ void StatusAndText()
         CHECK(w.Add(Outcome::Used, Reason::Accepted, t + std::chrono::milliseconds(1000), &out));
         CHECK(out.presents == 6 && out.used == 2 && out.refused == 3 && out.skipped == 1);
         CHECK(out.top == Reason::Extent);
+        CHECK(out.producerSkipped == 3 && out.producerTop == ProducerReason::SlotsBusy);
 
         // The next second starts empty.
         CHECK(!w.Add(Outcome::Used, Reason::Accepted, t + std::chrono::milliseconds(1500), &out));
         CHECK(w.Add(Outcome::Used, Reason::Accepted, t + std::chrono::milliseconds(2000), &out));
         CHECK(out.presents == 2 && out.used == 2 && out.refused == 0 && out.top == Reason::Accepted);
+        CHECK(out.producerSkipped == 0 && out.producerTop == ProducerReason::Recorded);
     }
 
     // Which source a second names, and the status line's literal for it.
@@ -1293,6 +1339,42 @@ void StatusAndText()
         skipping.skipped = 60;
         CHECK(GuidesLine(skipping, Fallback::Waiting) ==
               "Guides: no new frame from the upscaler; frames are shown as the game drew them");
+        skipping.producerSkipped = 4;
+        skipping.producerTop = ProducerReason::SlotsBusy;
+        CHECK(GuidesLine(skipping, Fallback::Waiting) ==
+              "Guides: capture skipped on 4 frames (slots-busy); frames are shown as the game drew them");
+        s.producerSkipped = 2;
+        s.producerTop = ProducerReason::RetiredCap;
+        CHECK(GuidesLine(s, Fallback::Zero) == "Guides: zero (no motion); 2 capture skipped (retired-cap)");
+    }
+}
+void SaturatedStatus()
+{
+    const std::string overflowLine = "Guides: counters saturated; exact frame totals unavailable";
+    for (auto fallback : { Fallback::Waiting, Fallback::Zero, Fallback::Synthesized })
+    {
+        Status s;
+        s.presents = kStatusCountMax;
+        s.used = kStatusCountMax;
+        CHECK(!Unpack(Pack(s)).countsOverflow);
+        CHECK(GuidesLine(Unpack(Pack(s)), fallback).find("every frame") != std::string::npos);
+        for (auto field :
+             { &Status::presents, &Status::used, &Status::refused, &Status::skipped, &Status::producerSkipped })
+        {
+            auto over = s;
+            over.*field = kStatusCountMax + 1;
+            auto packed = Unpack(Pack(over));
+            CHECK(packed.countsOverflow);
+            CHECK(Unpack(Pack(packed)).countsOverflow); // lower bounds stay marked on re-publication
+            CHECK(GuidesLine(packed, fallback) == overflowLine);
+        }
+        for (auto used : { 2000u, 2500u })
+        {
+            s.presents = 3000;
+            s.used = used;
+            s.refused = 3000 - used;
+            CHECK(GuidesLine(Unpack(Pack(s)), fallback) == overflowLine);
+        }
     }
 }
 } // namespace
@@ -1309,6 +1391,7 @@ int main()
     WindowAndLine();
     SourceChange();
     StatusAndText();
+    SaturatedStatus();
     std::printf("PASS: present-guide identity: %d checks -- every rule alone and in order, rule 6 enforced and not, "
                 "narrowing only over 50000 random cases, null swapchain stamps, registry and frame counter, ring "
                 "scenarios (FG 2x/4x, late copy, the wrapped entry's lag, portrait, resize, second swapchain), a "

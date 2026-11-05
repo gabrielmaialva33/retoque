@@ -213,7 +213,10 @@ for candidate in (units[present_owner].replace(body, '', 1), units[present_owner
                                                'DlssNr::Submission::Track(cmdList, clone.writeUsage) ||', 1),
                   units[present_owner].replace(
                       'DlssNr::Submission::Track(cmdList, clone.writeUsage) &&\n                            DlssNr::Submission::Track(cmdList, clone.captureWriteUsage)',
-                      'DlssNr::Submission::Track(cmdList, clone.captureWriteUsage) &&\n                            DlssNr::Submission::Track(cmdList, clone.writeUsage)', 1)):
+                      'DlssNr::Submission::Track(cmdList, clone.captureWriteUsage) &&\n                            DlssNr::Submission::Track(cmdList, clone.writeUsage)', 1),
+                  units[present_owner].replace('!PresentGuideRetirementCapacity()', 'true', 1),
+                  units[present_owner].replace('isReadInFlight, isWriteInFlight, isShapeMatch',
+                                               'isReadInFlight, isReadInFlight, isShapeMatch', 1)):
     assert candidate != units[present_owner]
     try:
         check_present('CaptureGuides', expected, {**units, present_owner: candidate})

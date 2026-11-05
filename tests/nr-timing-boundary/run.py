@@ -84,8 +84,11 @@ def present_region_guards(source):
     assert all(any(abs(g - d) < 40 for g in guarded) for d in drops)
     assert capture.count('GetDlssNrGpuTimingSettings()') == 1
     gate = capture.index('if (Config::Instance()->DlssNrGpuTimingRequested())')
+    assert capture.index('ParkNrClone(clone.motion, savedWriteUsage, clone.tracked);') < gate
     assert gate < capture.index('GetDlssNrGpuTimingSettings()') < capture.index('captureTiming.emplace(')
-    assert capture.index('g_presentGuideRing.CommitRecord(') < capture.index('captureTiming->Finish(true);')
+    assert capture.index('g_presentGuideRing.CommitRecord(') < \
+        capture.index('NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Recorded,') < \
+        capture.index('captureTiming->Finish(true);')
     # CPU stream (DlssNr_PresentCpuTiming.h): gated like the regions, no new clock reads, submitted presents only.
     assert 'const bool cpuTimed = cfg.DlssNrGpuTimingRequested() && !cfg.DlssNrUseProxy.value_or_default();' in present
     assert present.count('steady_clock::now()') == 2  # PresentSync's own wait log, which predates the CPU stream
@@ -117,6 +120,11 @@ mutants = {
     'ungated route settings': lambda s: s.replace('if (routeTimingArmed)\n        routeTimingSettings =',
                                                   'routeTimingSettings =', 1),
     'ungated capture settings': lambda s: s.replace('if (Config::Instance()->DlssNrGpuTimingRequested())', 'if (true)', 1),
+    'capture note after finish': lambda s: s.replace(
+        'NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Recorded, acquire, ResidentGuideBytes(),\n                     ParkedGuideBytes());\n',
+        '', 1).replace(
+        '    g_temporalValid = true;',
+        '    NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Recorded, acquire, ResidentGuideBytes(),\n                     ParkedGuideBytes());\n    g_temporalValid = true;', 1),
     'dispatch end unmarked': lambda s: s.replace('route->AfterDispatch();', ';', 1),
     'dispatch begin after the call': lambda s: s.replace(
         '    if (route != nullptr)\n        route->BeforeDispatch();\n', '', 1).replace(

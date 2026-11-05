@@ -77,7 +77,7 @@ dxvk/vkd3d-proton path, FG.
 
 ### The mutation controls
 
-By default the runner also builds three mutants of the same unit and requires these cases to fail with them:
+By default the runner also builds the three original request-ownership mutants of the same unit and requires these cases to fail with them:
 
 - the two device-create lists put back to function-static (as before d391a944) **and** the hook's per-call copy of
   the extension array removed: `interleaved-native`, `-d3d`, `-mixed` (A-01). They do: the held create reads B's
@@ -126,3 +126,5 @@ No Vulkan runs. The fake driver checks the rules listed above, not the full vali
 believes its own feature tables. The FG output's `PrepareDevice` (queues, DLSS-G's own extensions and features),
 `hkvkCreateInstance`, the post-create hooks and the menu are fakes. Whether a real driver or the validation layer
 accepts these requests is for a run under the validation layer.
+
+The pre-upscale observer is a fake post-create collaborator here: each eligible native creation must deliver the exact effective request seen by the driver and its requested API version while pointers remain alive. Skip/on12 creations must not call it. Three additional compiled controls omit the observation, pass the original game request, or observe after the effective chain is destroyed; each must fail (the last under ASan). The observer internal opt-in and detours are covered by nr-vk-pre-upscale, not this fake.

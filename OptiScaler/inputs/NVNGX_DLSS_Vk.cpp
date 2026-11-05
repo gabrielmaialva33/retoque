@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <dlssnr/DlssNr_RenderGeometry.h>
+#include <dlssnr/DlssNr_VkPreNgx.h>
 #include <dlssnr/DlssNrFeature_Vk.h>
 #include "Util.h"
 #include "Config.h"
@@ -821,6 +822,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
         LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        DlssNr::VkPre::RememberNgxFeature(InDevice, InFeatureID, OutHandle, result);
         return result;
     }
     else if (InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction)
@@ -832,6 +834,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
             auto result =
                 NVNGXProxy::VULKAN_CreateFeature1()(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature1 result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            DlssNr::VkPre::RememberNgxFeature(InDevice, InFeatureID, OutHandle, result);
             return result;
         }
         else
@@ -903,6 +906,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
 
             DlssNr::RenderGeometry::Remember(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::Vulkan, handleId),
                                              creation);
+            DlssNr::VkPre::RememberNgxFeature(InDevice, InFeatureID, OutHandle, NVSDK_NGX_Result_Success);
             return NVSDK_NGX_Result_Success;
         }
     }
@@ -922,6 +926,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle);
         LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        DlssNr::VkPre::RememberNgxFeature(vkDevice, InFeatureID, OutHandle, result);
         return result;
     }
     else if (InFeatureID != NVSDK_NGX_Feature_SuperSampling && InFeatureID != NVSDK_NGX_Feature_RayReconstruction)
@@ -932,6 +937,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
         {
             auto result = NVNGXProxy::VULKAN_CreateFeature()(InCmdBuffer, InFeatureID, InParameters, OutHandle);
             LOG_INFO("VULKAN_CreateFeature result for ({0}): {1:X}", (int) InFeatureID, (UINT) result);
+            DlssNr::VkPre::RememberNgxFeature(vkDevice, InFeatureID, OutHandle, result);
             return result;
         }
     }
@@ -945,6 +951,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_ReleaseFeature(NVSDK_NGX_Handle*
         return NVSDK_NGX_Result_Success;
 
     auto handleId = InHandle->Id;
+    DlssNr::VkPre::Runtime::ForgetFeature(reinterpret_cast<uintptr_t>(InHandle), handleId);
     DlssNr::RenderGeometry::Forget(DlssNr::RenderGeometry::Key(DlssNr::RenderGeometry::Api::Vulkan, handleId));
     if (handleId < DLSS_MOD_ID_OFFSET)
     {
@@ -1059,14 +1066,20 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
         if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::VULKAN_EvaluateFeature() != nullptr)
         {
             LOG_DEBUG("VULKAN_EvaluateFeature for ({0})", handleId);
+            std::optional<DlssNr::ScopedPreUpscaleVk> pre;
+            if (Config::Instance()->DlssNrEnabled.value_or_default() &&
+                Config::Instance()->DlssNrStage.value_or_default() == 1)
+                pre.emplace(InCmdList, InParameters, vkInstance, vkPD, vkDevice, InFeatureHandle);
             auto result = NVNGXProxy::VULKAN_EvaluateFeature()(InCmdList, InFeatureHandle, InParameters, InCallback);
+            if (pre)
+                pre->Complete();
             LOG_INFO("VULKAN_EvaluateFeature result for ({0}): {1:X}", handleId, (UINT) result);
 
             // Neural Rendering over what the upscaler just wrote, on the same command buffer -- the
             // same placement as the D3D12 path, so frame generation interpolates from enhanced frames
             // and the model still costs one run per rendered frame.
-            if (result == NVSDK_NGX_Result_Success)
-                DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+            if (result == NVSDK_NGX_Result_Success && (!pre || pre->AllowPost()))
+                DlssNr::EvaluateAfterPreSafeVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
 
             return result;
         }
@@ -1116,7 +1129,45 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
     NVSDK_NGX_Resource_VK* output = nullptr;
     InParameters->Get(NVSDK_NGX_Parameter_Output, (void**) &output);
 
+    std::optional<DlssNr::ScopedPreUpscaleVk> pre;
+    if (Config::Instance()->DlssNrEnabled.value_or_default() && Config::Instance()->DlssNrStage.value_or_default() == 1)
+    {
+        auto route = DlssNr::VkPre::Backend::Unknown;
+        switch (deviceContext->GetUpscalerType())
+        {
+        case Upscaler::DLSS:
+        case Upscaler::XeSS:
+        case Upscaler::FSR21:
+        case Upscaler::FSR22:
+        case Upscaler::FFX:
+            route = DlssNr::VkPre::Backend::Native;
+            break;
+        case Upscaler::DLSSD:
+            route = DlssNr::VkPre::Backend::RayReconstruction;
+            break;
+        case Upscaler::DLSS_on12:
+            route = DlssNr::VkPre::Backend::DLSS_on12;
+            break;
+        case Upscaler::XeSS_on12:
+            route = DlssNr::VkPre::Backend::XeSS_on12;
+            break;
+        case Upscaler::FSR21_on12:
+            route = DlssNr::VkPre::Backend::FSR21_on12;
+            break;
+        case Upscaler::FSR22_on12:
+            route = DlssNr::VkPre::Backend::FSR22_on12;
+            break;
+        case Upscaler::FFX_on12:
+            route = DlssNr::VkPre::Backend::FFX_on12;
+            break;
+        default:
+            break;
+        }
+        pre.emplace(InCmdList, InParameters, vkInstance, vkPD, vkDevice, InFeatureHandle, route);
+    }
     auto upscaleResult = deviceContext->Evaluate(InCmdList, InParameters);
+    if (pre)
+        pre->Complete();
 
     if (upscaleResult)
         UpscalerInputsVk::UpscaleEnd(InCmdList, output);
@@ -1149,8 +1200,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
                          backend == Upscaler::FSR22_on12 || backend == Upscaler::FFX_on12 ||
                          backend == Upscaler::DLSS_on12;
 
-    if (upscaleResult && !bridged)
-        DlssNr::EvaluateAfterUpscaleVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
+    if (upscaleResult && !bridged && (!pre || pre->AllowPost()))
+        DlssNr::EvaluateAfterPreSafeVk(InCmdList, InParameters, vkInstance, vkPD, vkDevice);
 
     return upscaleResult ? NVSDK_NGX_Result_Success : NVSDK_NGX_Result_Fail;
 }

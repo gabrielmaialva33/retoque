@@ -2,8 +2,8 @@
 //
 // One press saves two image files of one frame -- the frame the pass read and the frame it produced -- with a
 // provenance record. Both copies are recorded on the command list that ran the pass, so "same frame" is a property
-// of the recording, not of timing; the readbacks are only read once the GPU is proven past them, and never on the
-// render thread.
+// of the recording, not of timing; the readbacks are only read once the GPU is proven past them and the
+// recording can never execute again, and never on the render thread.
 //
 // This header holds what can be tested without a GPU (tests/nr-capture): the request/record/ticket/hand-off state
 // machine over an abstract backend, the names and the 64-pair cap, the provenance record, the UTC stamp, and what
@@ -37,21 +37,20 @@ namespace DlssNr::PairCapture
 // feature cannot fill a drive: about 1.9 GB of uncompressed PNG at 3440x1440, 3.2 GB at 3840x2160.
 constexpr size_t kMaxPairs = 64;
 
-// Where no recording can be tracked to its completion, the copies are read after this many dispatches -- the burst's
-// assumption, and the provenance says it was one -- and our reference is let go after the retirement list's count.
-constexpr uint64_t kAssumedPolls = 8;
-constexpr uint64_t kUntrackedReleasePolls = 32;
+// A recording whose list cannot be tracked to its completion is not captured at all. Until 2026-11-04 its copies were
+// read after 8 dispatches and released after 32 (completion=assumed-8-frames): an assumption about how far the GPU
+// runs behind, not a proof, and a frame the GPU had not finished could be read or freed under it.
 
-// A tracked recording that has not completed after this many dispatches never will (device removed, a list that
-// was dropped, a queue the tracker cannot fence): its readbacks are kept for the rest of the session, never
-// released, and the capture is off for the session, so a route that never completes cannot leak a pair per press.
+// Stop waiting for retirement after this many polls (device removed, a dropped list, an unfenced queue, or a
+// completed list the game never resets). This bound proves nothing about GPU progress: keep its readbacks for the
+// rest of the session, never release them, and disable capture so repeated presses cannot leak more pairs.
 constexpr uint64_t kGiveUpPolls = 1200;
 
 // A request no frame took within this long is withdrawn, so the button does not stay "waiting" forever.
 constexpr int64_t kRequestExpiryMs = 5000;
 
-// Pairs whose readbacks this side still holds until the GPU is proven done with them. Past it, a new capture is
-// refused rather than holding more memory for recordings that may never be released.
+// Defensive retained-pair bound. With monotonic Ready, hand-off and release of our references happen in the same
+// poll. Keep the recheck and cap so a backend that violates that contract cannot cause unbounded retention.
 constexpr size_t kMaxRetained = 4;
 
 // --- Reasons (literals; the menu translates them) --------------------------------------------------------------
@@ -59,7 +58,8 @@ constexpr size_t kMaxRetained = 4;
 inline constexpr const char* kReasonCompare = "Turn off Compare to capture the result.";
 inline constexpr const char* kReasonDebugView = "Turn off the debug view to capture the result.";
 inline constexpr const char* kReasonProxy = "Not with the driver proxy: it returns before the pass writes the frame.";
-inline constexpr const char* kReasonVulkan = "Not on this route yet: the capture is D3D12 only.";
+inline constexpr const char* kReasonVulkan =
+    "Capture is unavailable on this route; native Vulkan requires the after-upscale pass.";
 inline constexpr const char* kReasonDirectory = "The capture folder could not be created (see the log).";
 inline constexpr const char* kReasonExpired = "No frame reached the pass in time; nothing was captured.";
 inline constexpr const char* kReasonRetained = "Earlier captures are still held for the GPU; try again shortly.";
@@ -73,6 +73,11 @@ inline constexpr const char* kReasonSurface = "This frame is not a single-sample
 inline constexpr const char* kReasonInternal =
     "The capture failed while the frame was being described or recorded; nothing was captured (see the log).";
 inline constexpr const char* kReasonBusy = "A capture is already under way.";
+inline constexpr const char* kReasonUntracked =
+    "This route's commands cannot be followed to the GPU's completion; nothing was captured (see the log).";
+
+inline constexpr const char* kReasonDiscarded =
+    "The capture recording was discarded or invalidated; nothing was written.";
 
 // --- State machine ---------------------------------------------------------------------------------------------
 
@@ -81,19 +86,26 @@ enum class Phase : uint32_t
     Idle,
     Requested, // asked for; the next frame the pass writes takes it
     Recording, // claimed by the render thread while it records the copies
-    Pending,   // copies recorded; waiting for the GPU to be proven past them
+    Pending,   // copies recorded; waiting for completion AND retirement (no future execution)
     Writing    // handed to the writer thread
 };
 
 enum class Completion : uint8_t
 {
-    Submission,   // the queue fence after the list that carried the copies (DlssNr::Submission)
-    AssumedFrames // no tracking: read after kAssumedPolls dispatches, an assumption and labelled one
+    Submission,    // queue fence completed AND recording sealed by Reset (DlssNr::Submission::Ready)
+    VulkanRetired, // exact recording retired and its executed end marker observed
 };
 
 inline const char* CompletionName(Completion completion)
 {
-    return completion == Completion::Submission ? "submission-fence" : "assumed-8-frames";
+    switch (completion)
+    {
+    case Completion::Submission:
+        return "submission-fence";
+    case Completion::VulkanRetired:
+        return "vulkan-recording-retired+executed-marker";
+    }
+    return "unknown";
 }
 
 struct Outcome
@@ -108,10 +120,10 @@ struct Outcome
 //
 //   using Readback;  using Ticket;  using Payload;  using Recording;
 //   bool Alloc(Recording&, int which, Readback&)       which: 0 original, 1 processed
-//   bool Track(Recording&, Ticket&)                     before any copy is recorded
+//   bool Track(Recording&, Ticket&)                     before any copy is recorded; false refuses the capture
 //   void Copy(Recording&, int which, Readback&)
-//   bool Completed(const Ticket&)                       the GPU is past the recording (may read)
-//   bool Ready(const Ticket&)                           ... and the list can never run again (may free)
+//   bool Ready(const Ticket&)                           GPU done AND recording cannot run again (may read/free)
+//                                                       retirement must be monotonic; Completed alone is unsafe
 //   void Release(Readback&)                             our reference, only when proven safe
 //   bool Hand(Readback (&)[2], Payload&&, Completion)   to the writer, which takes references of its own
 //   void Leak(Readback (&)[2])                          completion will never be proven: keep them forever
@@ -178,21 +190,45 @@ template <class Backend> class Session
         if (phase == Phase::Pending && pending_.active)
         {
             const uint64_t age = polls_ - pending_.recordedAt;
-            const bool complete = pending_.tracked ? backend.Completed(pending_.ticket) : age >= kAssumedPolls;
-            if (complete)
+            bool discarded = false;
+            if constexpr (requires { backend.Discarded(pending_.ticket); })
+                discarded = backend.Discarded(pending_.ticket);
+            if ((pending_.cancelled || discarded) && backend.Ready(pending_.ticket))
             {
-                const Completion completion = pending_.tracked ? Completion::Submission : Completion::AssumedFrames;
+                backend.Release(pending_.readbacks[0]);
+                backend.Release(pending_.readbacks[1]);
+                if (!pending_.cancelled)
+                    Settle(false, kReasonDiscarded, {});
+                pending_ = {};
+                phase_.store(Phase::Idle, std::memory_order_release);
+            }
+            else if (!pending_.cancelled && !discarded && backend.Ready(pending_.ticket))
+            {
+                Completion completion = Completion::Submission;
+                if constexpr (requires { backend.CompletionKind(); })
+                    completion = backend.CompletionKind();
+                // Completion alone permits replay into the same readbacks while the writer reads. Ready proves
+                // retirement too; AddRef by the writer protects lifetime, not immutability.
                 // Writing before the hand-off, so the writer's return to idle can never be overwritten by this.
                 phase_.store(Phase::Writing, std::memory_order_release);
-                if (!backend.Hand(pending_.readbacks, std::move(pending_.payload), completion))
+                bool handed = false;
+                try
+                {
+                    handed = backend.Hand(pending_.readbacks, std::move(pending_.payload), completion);
+                }
+                catch (...)
+                { /* no commands are emitted by hand-off; retain the GPU references below */
+                }
+                if (!handed)
                 {
                     Settle(false, kReasonHandOff, {});
                     phase_.store(Phase::Idle, std::memory_order_release);
                 }
+                // Normally drained below in this poll. Keep the defensive release recheck and retained bound.
                 Retain(pending_);
                 pending_ = {};
             }
-            else if (pending_.tracked && age >= kGiveUpPolls)
+            else if (age >= kGiveUpPolls)
             {
                 backend.Leak(pending_.readbacks);
                 pending_ = {};
@@ -205,8 +241,7 @@ template <class Backend> class Session
         for (size_t i = 0; i < retained_.size();)
         {
             Retained& r = retained_[i];
-            const bool safe = r.tracked ? backend.Ready(r.ticket) : polls_ - r.recordedAt >= kUntrackedReleasePolls;
-            if (!safe)
+            if (!backend.Ready(r.ticket))
             {
                 ++i;
                 continue;
@@ -221,8 +256,8 @@ template <class Backend> class Session
     // At the record site, after the pass wrote the frame. refusal is the caller's reason not to capture this frame
     // (compare on, a format the files cannot hold), or null. Returns whether the copies were recorded; when this call
     // took the request and did not record, why is set to the reason it settled (null otherwise).
-    bool Record(Backend& backend, Recording& recording, Payload&& payload, const char* refusal,
-                const char** why = nullptr)
+    bool BeginRecord(Backend& backend, Recording& recording, Payload&& payload, const char* refusal,
+                     const char** why = nullptr)
     {
         if (why != nullptr)
             *why = nullptr;
@@ -244,28 +279,88 @@ template <class Backend> class Session
             return false;
         }
 
-        Pending next;
-        if (!backend.Alloc(recording, 0, next.readbacks[0]) || !backend.Alloc(recording, 1, next.readbacks[1]))
+        // No allocation is permitted in Retain after commands/hand-off. The bounded vector never grows past this.
+        try
         {
-            // Never recorded into: nothing on the GPU can be using them.
-            backend.Release(next.readbacks[0]);
-            backend.Release(next.readbacks[1]);
-            if (why != nullptr)
-                *why = kReasonAllocation;
+            retained_.reserve(kMaxRetained);
+        }
+        catch (...)
+        {
             Settle(false, kReasonAllocation, {});
             phase_.store(Phase::Idle, std::memory_order_release);
             return false;
         }
+        Pending next;
+        try
+        {
+            if (!backend.Alloc(recording, 0, next.readbacks[0]) || !backend.Alloc(recording, 1, next.readbacks[1]))
+            {
+                // Never recorded into: nothing on the GPU can be using them.
+                backend.Release(next.readbacks[0]);
+                backend.Release(next.readbacks[1]);
+                if (why != nullptr)
+                    *why = kReasonAllocation;
+                Settle(false, kReasonAllocation, {});
+                phase_.store(Phase::Idle, std::memory_order_release);
+                return false;
+            }
 
-        next.tracked = backend.Track(recording, next.ticket);
-        backend.Copy(recording, 0, next.readbacks[0]);
-        backend.Copy(recording, 1, next.readbacks[1]);
-        next.recordedAt = polls_;
-        next.payload = std::move(payload);
-        next.active = true;
-        pending_ = std::move(next);
+            // Tracked before any copy is recorded, or not recorded at all: nothing on the GPU has used the readbacks
+            // yet.
+            if (!backend.Track(recording, next.ticket))
+            {
+                backend.Release(next.readbacks[0]);
+                backend.Release(next.readbacks[1]);
+                if (why != nullptr)
+                    *why = kReasonUntracked;
+                Settle(false, kReasonUntracked, {});
+                phase_.store(Phase::Idle, std::memory_order_release);
+                return false;
+            }
+            next.recordedAt = polls_;
+            next.payload = std::move(payload);
+            next.active = true;
+            pending_ = std::move(next); // own every readback before the first command, including a throwing Copy
+            return true;
+        }
+        catch (...)
+        {
+            // No commands have been recorded: partial allocation/track failure can release both readbacks.
+            backend.Release(next.readbacks[0]);
+            backend.Release(next.readbacks[1]);
+            Settle(false, kReasonAllocation, {});
+            phase_.store(Phase::Idle, std::memory_order_release);
+            if (why)
+                *why = kReasonAllocation;
+            return false;
+        }
+    }
+
+    void RecordOriginal(Backend& backend, Recording& recording)
+    {
+        if (Current() != Phase::Recording || !pending_.active || pending_.original)
+            return;
+        backend.Copy(recording, 0, pending_.readbacks[0]);
+        pending_.original = true;
+    }
+
+    bool CommitRecord(Backend& backend, Recording& recording)
+    {
+        if (Current() != Phase::Recording || !pending_.active || !pending_.original)
+            return false;
+        backend.Copy(recording, 1, pending_.readbacks[1]);
         phase_.store(Phase::Pending, std::memory_order_release);
         return true;
+    }
+
+    // D3D12 still records adjacent copies using the very same split state machine.
+    bool Record(Backend& backend, Recording& recording, Payload&& payload, const char* refusal,
+                const char** why = nullptr)
+    {
+        if (!BeginRecord(backend, recording, std::move(payload), refusal, why))
+            return false;
+        RecordOriginal(backend, recording);
+        return CommitRecord(backend, recording);
     }
 
     // The writer thread, when it is done with a hand-off.
@@ -275,12 +370,16 @@ template <class Backend> class Session
         phase_.store(Phase::Idle, std::memory_order_release);
     }
 
-    // Render thread: the record site failed part way (an exception while the frame was described or recorded). A
-    // request it took, or one still waiting, goes back to idle with the reason, so the button does not stay
-    // "waiting". Whatever Record allocated before the failure never reached pending_, so it is never released: kept,
-    // not freed, because copies may already be recorded into it. A recording that completed (Pending) is untouched.
+    // A partial recording remains owned and is never published. Only retirement may release it.
     void Abandon(const char* reason)
     {
+        if (Current() == Phase::Recording && pending_.active)
+        {
+            pending_.cancelled = true;
+            Settle(false, reason, {});
+            phase_.store(Phase::Pending, std::memory_order_release);
+            return;
+        }
         for (const Phase from : { Phase::Recording, Phase::Requested })
         {
             Phase expected = from;
@@ -299,12 +398,12 @@ template <class Backend> class Session
         {
             backend.Leak(pending_.readbacks);
             pending_ = {};
-            Phase pending = Phase::Pending;
-            phase_.compare_exchange_strong(pending, Phase::Idle, std::memory_order_acq_rel);
+            for (Phase from : { Phase::Pending, Phase::Recording })
+                phase_.compare_exchange_strong(from, Phase::Idle, std::memory_order_acq_rel);
         }
         for (Retained& r : retained_)
         {
-            if (r.tracked && backend.Ready(r.ticket))
+            if (backend.Ready(r.ticket))
             {
                 backend.Release(r.readbacks[0]);
                 backend.Release(r.readbacks[1]);
@@ -329,16 +428,15 @@ template <class Backend> class Session
         Ticket ticket {};
         Payload payload {};
         uint64_t recordedAt = 0;
-        bool tracked = false;
         bool active = false;
+        bool original = false;
+        bool cancelled = false;
     };
 
     struct Retained
     {
         Readback readbacks[2] {};
         Ticket ticket {};
-        uint64_t recordedAt = 0;
-        bool tracked = false;
     };
 
     void Retain(Pending& from)
@@ -347,8 +445,6 @@ template <class Backend> class Session
         r.readbacks[0] = from.readbacks[0];
         r.readbacks[1] = from.readbacks[1];
         r.ticket = from.ticket;
-        r.recordedAt = from.recordedAt;
-        r.tracked = from.tracked;
         retained_.push_back(std::move(r));
     }
 
@@ -379,12 +475,13 @@ template <class Backend> class Session
 
 struct ButtonInputs
 {
-    bool enabled = false;      // [DlssNr] Enabled
-    bool nativeVulkan = false; // the pass runs natively on Vulkan
-    bool d3d12Ran = false;     // a D3D12 route has run the model this session
-    bool proxy = false;        // [DlssNr] UseProxy
-    uint32_t compare = 0;      // [DlssNr] Compare
-    uint32_t debugView = 0;    // [DlssNr] DebugView
+    bool enabled = false; // [DlssNr] Enabled
+    bool nativeVulkan = false;
+    bool vulkanCaptureReady = false; // the pass runs natively on Vulkan
+    bool d3d12Ran = false;           // a D3D12 route has run the model this session
+    bool proxy = false;              // [DlssNr] UseProxy
+    uint32_t compare = 0;            // [DlssNr] Compare
+    uint32_t debugView = 0;          // [DlssNr] DebugView
     Phase phase = Phase::Idle;
     bool directoryFailed = false;
     bool gaveUp = false; // a recording never completed this session
@@ -408,13 +505,13 @@ inline ButtonState ButtonFor(const ButtonInputs& in)
     ButtonState state;
     if (!in.enabled)
         return state;
-    if (in.nativeVulkan)
+    if (in.nativeVulkan && !in.vulkanCaptureReady)
     {
         state.shown = true;
         state.reason = kReasonVulkan;
         return state;
     }
-    if (!in.d3d12Ran)
+    if (!in.d3d12Ran && !in.vulkanCaptureReady)
         return state;
 
     state.shown = true;
@@ -921,6 +1018,12 @@ struct FrameRecordInputs
     uint64_t present = 0;
     // TimingContract: every setting that shapes the picture, the preset and the working scale among them.
     std::string settings;
+    // Native Vulkan numeric snapshots, explicit literals rather than treating VkFormat as DXGI.
+    const char* api = nullptr;
+    const char* originalDescription = nullptr;
+    const char* sourceFormat = nullptr;
+    const char* representation = nullptr;
+    uint64_t recordingEpoch = 0;
 };
 
 // The first half of the record, set at the record site on the render thread (comparison-capture.md, section 4.4).
@@ -950,13 +1053,24 @@ inline void FillFrameRecord(Record& r, const FrameRecordInputs& in)
     r.Set("frame", std::to_string(in.frame));
     r.Set("present", std::to_string(in.present));
     r.Set("settings", in.settings);
+    if (in.api != nullptr)
+    {
+        r.Set("api", in.api);
+        r.Set("original", in.originalDescription);
+        r.Set("original_format", in.sourceFormat);
+        r.Set("processed_format", in.sourceFormat);
+        r.Set("capture_representation", in.representation);
+        r.Set("recording_epoch", std::to_string(in.recordingEpoch));
+        r.Set("recording_reuse", "serial");
+        r.Set("pair_execution", "last-complete-execution-before-retirement");
+    }
 }
 
 // What the writer thread learns before the files are written: how completion was proven, the model and the adapter
 // (versions and names, never their paths), each image's mean, and the names the pair is written under.
 struct WriteRecordInputs
 {
-    Completion completion = Completion::AssumedFrames;
+    Completion completion = Completion::Submission;
     std::string modelVersion = "unknown";
     std::string modelBytes = "unknown";
     std::string ngxLoader = "unknown";

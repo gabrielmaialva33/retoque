@@ -412,7 +412,7 @@ for builder in ('inline void FillFrameRecord(', 'inline void FillWriteRecord('):
 for struct in ('struct FrameRecordInputs', 'struct WriteRecordInputs'):
     if re.search(r'path|wstring', strip_comments(body_of(code_h, struct))):
         fail(f'{struct} has a field that may hold a path')
-if code_cpp.count('ExePath()') != 1 or 'SanitizeExeStem(Util::ExePath().stem().wstring())' not in code_cpp:
+if code_cpp.count('ExePath()') != 2 or code_cpp.count('SanitizeExeStem(Util::ExePath().stem().wstring())') != 2:
     fail('the executable name must reach the capture only through SanitizeExeStem of its stem')
 if 'DllPath()' in code_cpp and 'payload.directory = Util::DllPath()' not in code_cpp:
     fail('the DLL directory may only travel beside the record, as the payload directory')
@@ -504,7 +504,7 @@ writes = write_pair[write_pair.find('bool ok = false;'):write_pair.find('if (!ok
 if 'try' not in writes or 'catch (...)' not in writes:
     fail('a throw while the files are written must count as a failed write, so the pair is removed')
 writer_run = body_of(code_cpp, 'void Writer::Run()')
-if not re.search(r'try\s*\{\s*failure = WritePair\(', writer_run) or 'catch (...)' not in writer_run:
+if not re.search(r'try\s*\{[^{}]*?(?:Rows\s+rows\[2\].*?;\s*)?failure = WritePair\(', writer_run, re.S) or 'catch (...)' not in writer_run:
     fail('nothing may leave the writer thread: WritePair must run inside try with a catch (...)')
 if 'snprintf' in body_of(code_h, 'inline std::string FormatNumber(') or \
         'std::to_chars' not in body_of(code_h, 'inline std::string FormatNumber('):
@@ -542,6 +542,40 @@ for project in ('OptiScaler.vcxproj', 'OptiScaler.vcxproj.filters'):
 if len(failures) == before:
     print('PASS: source guards -- no wait or map on the render thread, one copy of the readback helpers, no path in '
           'the record, poll and record sites in place, project registration')
+
+# Mutate the production Session, compile successfully, then require the specific runtime CHECK to fail.
+# Compilation/sanitizer failures do not count as a killed mutant. Scratch stays beneath the caller's TMPDIR.
+import resource
+with tempfile.TemporaryDirectory(prefix='nr-capture-ready-mutants-') as temp:
+    temp = Path(temp)
+    header = root / 'retoque/dlssnr/DlssNr_PairCapture.h'
+    source = header.read_text()
+    mutants = (
+        ('hand-on-completed',
+         'else if (!pending_.cancelled && !discarded && backend.Ready(pending_.ticket))',
+         'else if (!pending_.cancelled && !discarded && backend.Completed(pending_.ticket))',
+         'b.hands == 0 && b.writer.empty() && b.released.empty()'),
+        ('release-before-ready', 'if (!backend.Ready(r.ticket))', 'if (!backend.Completed(r.ticket))',
+         'b.released.empty()'),
+    )
+    for name, old, new, expected in mutants:
+        if source.count(old) != 1:
+            raise RuntimeError(f'mutation anchor missing or ambiguous: {name}')
+        include = temp / name
+        (include / 'dlssnr').mkdir(parents=True)
+        (include / 'dlssnr/DlssNr_PairCapture.h').write_text(source.replace(old, new))
+        binary = include / 'capture'
+        subprocess.run(['g++', '-std=c++20', '-g', '-O1', '-fno-omit-frame-pointer',
+                        '-fsanitize=address,undefined', '-fno-sanitize-recover=all',
+                        '-Wall', '-Wextra', '-Werror', '-I', str(include),
+                        '-I', str(root / 'retoque/dlssnr'), '-I', str(root / 'retoque'),
+                        str(here / 'test.cpp'), '-o', str(binary)], check=True)
+        result = subprocess.run([str(binary), str(include / 'out')], capture_output=True, text=True,
+                                preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_CORE, (0, 0)))
+        if result.returncode == 0 or not re.search(r'FAIL [^\n]+: ' + re.escape(expected) + r'\n', result.stderr):
+            fail(f'mutant {name} did not fail its expected CHECK: {result.stderr}')
+        else:
+            print(f'KILLED: {name}: {expected}')
 
 if failures:
     for message in failures:

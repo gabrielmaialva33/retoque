@@ -19,6 +19,19 @@ int main()
     };
     unsigned cases = 0;
     {
+        // Which command-list types Track follows: DIRECT always; COMPUTE only on request and never for the chain;
+        // BUNDLE and COPY never.
+        assert(ListTypeAdmitted(ListTypeDirect, Lists::Direct, false));
+        assert(ListTypeAdmitted(ListTypeDirect, Lists::Direct, true));
+        assert(ListTypeAdmitted(ListTypeDirect, Lists::DirectOrCompute, false));
+        assert(!ListTypeAdmitted(ListTypeCompute, Lists::Direct, false));
+        assert(ListTypeAdmitted(ListTypeCompute, Lists::DirectOrCompute, false));
+        assert(!ListTypeAdmitted(ListTypeCompute, Lists::DirectOrCompute, true));
+        assert(!ListTypeAdmitted(1, Lists::DirectOrCompute, false)); // BUNDLE
+        assert(!ListTypeAdmitted(3, Lists::DirectOrCompute, false)); // COPY
+        ++cases;
+    }
+    {
         Model m;
         Usage use;
         auto e = m.Track(1, use, completed);

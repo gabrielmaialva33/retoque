@@ -57,7 +57,8 @@ bool Done(void* token) { return *static_cast<bool*>(token); }
 size_t Capture(NVSDK_NGX_Parameter* params, const DlssNrFrameInfo& frame, ID3D12Device* device, uint32_t depthWidth,
                uint32_t depthHeight)
 {
-    const size_t slot = DlssNr::g_presentGuideRing.AcquireForRecord(Never);
+    DlssNr::PresentGuides::AcquireReport acquire {};
+    const size_t slot = DlssNr::g_presentGuideRing.AcquireForRecord(Never, Never, &acquire);
     GLUE_CHECK(slot < kRingSize);
     static ID3D12Resource copy;
     DlssNr::g_presentGuideClones[slot] = { &copy, &copy };
@@ -68,6 +69,7 @@ size_t Capture(NVSDK_NGX_Parameter* params, const DlssNrFrameInfo& frame, ID3D12
     g_done[slot] = true;
     DlssNr::g_presentGuideRing.CommitRecord(slot, depthWidth, depthHeight, false, DlssNr::NowMs(), &g_done[slot],
                                             &DlssNr::g_presentGuideClones[slot]);
+    DlssNr::NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Recorded, acquire, 32ull << 20, 8ull << 20);
     return slot;
 }
 
@@ -343,14 +345,25 @@ int main()
         GLUE_CHECK(!RecentGuideStatus(&status) && PresentGuidesLine().empty());
     }
 
-    // The log line, once its window is due: what step 1 did, under the new prefix.
+    // The log line, once its window is due: what step 1 did, under the new prefix, plus producer counts and bytes.
     {
         g_logged.clear();
         g_fakeNowMs += 3000;
+        DlssNr::PresentGuides::AcquireReport busy {};
+        busy.busyLastRead = 1;
+        busy.busyReadInFlight = 2;
+        busy.busyWriteInFlight = 1;
+        DlssNr::NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::SlotsBusy, busy, 32ull << 20,
+                                 8ull << 20);
         Capture(&params, frame, &device, 1280, 720);
         PresentPass(&device, &proxy, 1920, 1080, true);
         GLUE_CHECK(g_logged.size() == 1);
         GLUE_CHECK(g_logged[0].find("DLSS-NR present guides, identity applied, D3D12 present: ") == 0);
+        GLUE_CHECK(g_logged[0].find("| captures ") != std::string::npos);
+        GLUE_CHECK(g_logged[0].find("slots-busy 1 [last-read 1, read-busy 2, write-busy 1]") != std::string::npos);
+        GLUE_CHECK(g_logged[0].find("bytes resident " + std::to_string(32ull << 20) + " parked " +
+                                    std::to_string(8ull << 20)) != std::string::npos);
+        GLUE_CHECK(PresentGuidesLine().find("; 1 capture skipped (slots-busy)") != std::string::npos);
     }
 
     // The bridge: a refusal is not read and is counted; with the pass off, or at a HookMethod it is not built for, or

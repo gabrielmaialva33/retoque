@@ -1,6 +1,8 @@
 #include "pch.h"
 
 #include "DlssNrFeature_Vk.h"
+#include "DlssNr_PairCaptureVk.h"
+#include "DlssNr_VkPreRuntime.h"
 
 #include <Config.h>
 #include <State.h>
@@ -122,6 +124,7 @@ struct Forwarder
 };
 
 Forwarder g_fwd;
+VkPre::Placement g_nativePlacement;
 
 struct VkState
 {
@@ -149,6 +152,12 @@ struct VkState
     OwnedImage output;
     OwnedImage proxy;
     OwnedImage keep;
+    OwnedImage preScratch;
+    std::optional<VkPre::FeatureIdentity> preSource;
+    VkPre::Ticket preLastRecording {};
+    VkFormat preFormat = VK_FORMAT_UNDEFINED;
+    int prePreset = -1;
+    uint32_t preFamily = ~0u;
 
     // The proxy at the model's working size, when that is below the frame. The model -- 98% of the
     // cost -- then runs on this instead of the full proxy, which is the whole point of the working
@@ -1549,6 +1558,8 @@ bool LinearHdrVk() { return g_vkLinearHdr.load(); }
 
 std::optional<double> LastGpuTimeVk() { return g_vk.lastGpuTime; }
 
+std::mutex& PairCaptureVkMutex() { return g_vkMutex; }
+
 void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
                             VkPhysicalDevice physicalDevice, VkDevice device)
 {
@@ -1577,6 +1588,7 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         return;
 
     std::lock_guard<std::mutex> lock(g_vkMutex);
+    PairCapture::PollVkLocked();
 
     const auto recording = VkRecording::Recordings().Current((uint64_t) device, (uint64_t) cmdBuffer);
     if (!recording)
@@ -2438,6 +2450,66 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     const VkImageSubresourceRange colourRange = colour->Resource.ImageViewInfo.SubresourceRange;
 
+    // Opt-in only. The first snapshot samples the actual foreign view before encode (no FP16 keep intermediate).
+    // Every later return cancels the attempt; no executed end marker exists until resolve has succeeded.
+    struct CaptureScope
+    {
+        bool active = false;
+        ~CaptureScope()
+        {
+            if (active)
+                PairCapture::CancelVkLocked();
+        }
+    } capture;
+    if (PairCapture::WantedVk())
+    {
+        try
+        {
+            PairCapture::VkFrame f;
+            f.device = device;
+            f.physical = physicalDevice;
+            f.cmd = cmdBuffer;
+            f.image = colour->Resource.ImageViewInfo.Image;
+            f.view = colour->Resource.ImageViewInfo.ImageView;
+            f.range = colourRange;
+            f.format = colour->Resource.ImageViewInfo.Format;
+            f.recording = *recording;
+            f.facts.route = "vulkan-after-upscale";
+            f.facts.surface = "upscaler-output";
+            f.facts.hookMethod = cfg.DlssNrHookMethod.value_or_default();
+            f.facts.width = width;
+            f.facts.height = height;
+            f.facts.linearHdr = linearHdr;
+            f.facts.whitePoint = encode.WhitePoint;
+            f.facts.frame = g_vk.frames + 1;
+            f.facts.present = State::Instance().frameCount;
+            f.facts.settings =
+                std::format("stage=vulkan-after-upscale render={}x{} compose={}x{} model={}x{} scale={} passes=1 "
+                            "preset={} style={} intensity={} structure={} tone={} skin={} mask={} "
+                            "apply={} white_source={} white_point={} detail={} colour={} max_ratio={} min_ratio={} "
+                            "transfer={} reversible={} highlight_recovery={} residual_limit={} debug={} compare={}",
+                            guideWidth, guideHeight, width, height, workWidth, workHeight, workScale,
+                            cfg.DlssNrPreset.value_or_default(), cfg.DlssNrStyle.value_or_default(),
+                            cfg.DlssNrIntensity.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+                            cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+                            cfg.DlssNrAutoMask.value_or_default(), encode.ApplyModel, wpSource, encode.WhitePoint,
+                            encode.TransferStrength, encode.ColourStrength, encode.MaxRatio, encode.MinRatio,
+                            encode.Transfer, encode.ReversibleMode, encode.HighlightRecovery, encode.ResidualLimit,
+                            cfg.DlssNrDebugView.value_or_default(), cfg.DlssNrCompare.value_or_default());
+            if (cfg.DlssNrUseProxy.value_or_default())
+                f.refusal = PairCapture::kReasonProxy;
+            else if (cfg.DlssNrCompare.value_or_default())
+                f.refusal = PairCapture::kReasonCompare;
+            else if (cfg.DlssNrDebugView.value_or_default())
+                f.refusal = PairCapture::kReasonDebugView;
+            capture.active = PairCapture::BeginVkLocked(std::move(f));
+        }
+        catch (...)
+        {
+            PairCapture::CancelVkLocked();
+        }
+    }
+
     // Open the measurement. Reset immediately before writing: a query pool slot must be reset before
     // it is written again, and doing it here rather than at the end keeps the two in one place.
     const uint32_t timingSlot = (uint32_t) (g_vk.timedFrames % kTimingSlots);
@@ -2725,6 +2797,12 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         return;
     }
 
+    if (capture.active)
+    {
+        PairCapture::CommitVkLocked(cmdBuffer);
+        capture.active = false;
+    }
+
     // Close it, and read the pair from three frames ago -- retired by now, so the read does not wait.
     if (g_vk.queryPool != VK_NULL_HANDLE)
     {
@@ -2761,6 +2839,1146 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
     }
 }
 
+// The pre-stage keeps its recording sequence separate while the Stage-0 body stays hash-guarded.
+// Resource admission and the nonblocking CPU loan are established by ScopedPreUpscaleVk before this call.
+static bool RecordPreUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params, VkInstance instance,
+                               VkPhysicalDevice physicalDevice, VkDevice device, const VkPre::FeatureIdentity& source,
+                               uint32_t displayWidth, uint32_t displayHeight, uint32_t family, bool& emitted)
+{
+    auto& cfg = *Config::Instance();
+
+    if (!cfg.DlssNrEnabled.value_or_default())
+    {
+        g_vkResetOnReturn = true;
+        SessionGuardOff();
+        return false;
+    }
+
+    if (cmdBuffer == VK_NULL_HANDLE || params == nullptr || device == VK_NULL_HANDLE ||
+        physicalDevice == VK_NULL_HANDLE)
+        return false;
+    const auto pictureColour = [params]
+    {
+        NVSDK_NGX_Resource_VK* input = nullptr;
+        params->Get(NVSDK_NGX_Parameter_Color, (void**) &input);
+        return input != nullptr ? (uintptr_t) input->Resource.ImageViewInfo.Image : uintptr_t(0);
+    };
+    if (DlssNr::Pictures::Ask(params, pictureColour).role == DlssNr::Pictures::Role::Aside)
+        return false;
+
+    std::unique_lock<std::mutex> lock(g_vkMutex, std::try_to_lock);
+    if (!lock.owns_lock())
+        return false;
+    if (!g_nativePlacement.TryPre())
+        return false; // Startup opt-in only after any Post caller has claimed this process; restart to switch.
+
+    const auto recording = VkRecording::Recordings().Current((uint64_t) device, (uint64_t) cmdBuffer);
+    if (!recording)
+    {
+        static bool saidUnknownRecording = false;
+        if (!saidUnknownRecording)
+        {
+            saidUnknownRecording = true;
+            LOG_WARN("DLSS-NR Vulkan: NR waits for an observed command-buffer allocation and recording");
+        }
+        return false;
+    }
+
+    if (g_vk.failed)
+        return false;
+    if (RouteRecordingBusy() || VkPre::SameTicket(g_vk.preLastRecording, *recording))
+        return false;
+    if (g_vk.device != VK_NULL_HANDLE &&
+        (g_vk.device != device || !g_vk.preSource || *g_vk.preSource != source || g_vk.preFamily != family))
+        return false;
+    {
+        std::vector<std::string> lines;
+        const char* why =
+            DlssNr::SlNativeNr::AskInto(DlssNr::SlNativeNr::Instance(), lines, DlssNr::SlNativeNr::NowMs());
+        for (const auto& line : lines)
+            LOG_INFO("{}", line);
+        if (std::string tags; DlssNr::SlTagInventory::Instance().TakeLine(tags, DlssNr::SlTagInventory::NowMs()))
+            LOG_INFO("{}", tags);
+        if (why != nullptr)
+        {
+            g_vkResetOnReturn = true;
+            return false;
+        }
+    }
+
+    if (g_vkResetOnReturn.exchange(false))
+        g_vk.reset = true;
+    switch (g_vkPictureEpoch.Consume(DlssNr::Pictures::EvaluateEpoch(params)))
+    {
+    case DlssNr::Pictures::Consumed::Stale:
+        return false;
+    case DlssNr::Pictures::Consumed::Restart:
+        g_vk.reset = true;
+        g_vk.gameExposure = 0.0f;
+        g_vk.meterFrames = 0;
+        g_vk.meterPending.Invalidate();
+        g_vk.exposureLatch.Reset();
+        break;
+    default:
+        break;
+    }
+
+    const uint32_t wpSource = cfg.DlssNrWhitePointSource.value_or_default();
+    if (DlssNr::Exposure::InvalidateOnSourceChange(g_vk.exposureSettingWasOn, wpSource))
+    {
+        g_vk.gameExposure = 0.0f;
+        g_vk.meterFrames = 0;
+        g_vk.meterPending.Invalidate();
+        g_vk.exposureLatch.Reset();
+    }
+    else if (g_vk.exposureSettingWasOn && wpSource != 1)
+    {
+        g_vk.gameExposure = 0.0f;
+        g_vk.meterFrames = 0;
+        g_vk.meterPending.Invalidate();
+        g_vk.exposureLatch.Reset();
+    }
+    g_vk.exposureSettingWasOn = (wpSource == 1);
+    if (NoteModelFault())
+        return false;
+    NVSDK_NGX_Resource_VK* colour = nullptr;
+    NVSDK_NGX_Resource_VK* depth = nullptr;
+    NVSDK_NGX_Resource_VK* motion = nullptr;
+
+    params->Get(NVSDK_NGX_Parameter_Color, (void**) &colour);
+    params->Get(NVSDK_NGX_Parameter_Depth, (void**) &depth);
+    params->Get(NVSDK_NGX_Parameter_MotionVectors, (void**) &motion);
+    NVSDK_NGX_Resource_VK* exposure = nullptr;
+    float preExposure = 1.0f;
+    const bool havePre = params->Get(NVSDK_NGX_Parameter_DLSS_Pre_Exposure, &preExposure) == NVSDK_NGX_Result_Success;
+
+    params->Get(NVSDK_NGX_Parameter_ExposureTexture, (void**) &exposure);
+
+    static bool saidExposure = false;
+
+    if (!saidExposure)
+    {
+        saidExposure = true;
+        LOG_INFO("DLSS-NR Vulkan: exposure from the game: DLSS.Pre.Exposure {}, ExposureTexture {}",
+                 havePre ? std::to_string(preExposure) : std::string("not supplied"),
+                 exposure != nullptr ? "supplied" : "not supplied");
+    }
+
+    g_vk.exposureOffered = exposure != nullptr;
+
+    if (havePre && std::isfinite(preExposure) && preExposure > 0.0f)
+        g_vk.gamePreExposure = preExposure;
+    if (g_vk.device == device)
+        ConsumeMeterReadback();
+    const bool zeroGuideReset = cfg.DlssNrZeroGuideReset.value_or_default();
+    if (zeroGuideReset != g_vk.motionProbe.on)
+    {
+        g_vk.motionProbe.on = zeroGuideReset;
+        if (zeroGuideReset)
+        {
+            g_vk.motionProbe.readbacks.Invalidate();
+            LoseMotionVerdict("ZeroGuideReset was off in between");
+        }
+    }
+    if (zeroGuideReset && g_vk.device == device)
+        ConsumeMotionProbe(zeroGuideReset);
+    static float loggedExposure = -1.0f;
+
+    if (g_vk.gameExposure > 1e-6f &&
+        std::abs(loggedExposure - g_vk.gameExposure) > std::max(0.02f * g_vk.gameExposure, 1e-5f))
+    {
+        loggedExposure = g_vk.gameExposure;
+        LOG_INFO("DLSS-NR Vulkan: the game's exposure is {}, pre-exposure {}, so white point {}", g_vk.gameExposure,
+                 g_vk.gamePreExposure, g_vk.gamePreExposure / g_vk.gameExposure);
+    }
+
+    if (colour == nullptr || depth == nullptr || motion == nullptr)
+    {
+        static bool said = false;
+
+        if (!said)
+        {
+            said = true;
+            LOG_INFO("DLSS-NR Vulkan: the parameter block carried no {}",
+                     colour == nullptr ? "color" : (depth == nullptr ? "depth" : "motion vectors"));
+        }
+
+        return false;
+    }
+
+    const uint32_t width = colour->Resource.ImageViewInfo.Width;
+    const uint32_t height = colour->Resource.ImageViewInfo.Height;
+    uint32_t guideWidth = depth->Resource.ImageViewInfo.Width;
+    uint32_t guideHeight = depth->Resource.ImageViewInfo.Height;
+    const uint32_t motionAllocationWidth = motion->Resource.ImageViewInfo.Width;
+    const uint32_t motionAllocationHeight = motion->Resource.ImageViewInfo.Height;
+
+    if (width == 0 || height == 0)
+        return false;
+    {
+        static VkPhysicalDevice noted = VK_NULL_HANDLE;
+
+        if (physicalDevice != noted)
+        {
+            VkPhysicalDeviceProperties props {};
+            vkGetPhysicalDeviceProperties(physicalDevice, &props);
+            DlssNr::NoteAdapter(props.vendorID, props.deviceID);
+            noted = physicalDevice;
+        }
+    }
+    const float workScale = std::clamp(DlssNr::WorkingScale(), 0.25f, 2.0f);
+    const uint32_t workWidth = (uint32_t) (width * workScale + 0.5f);
+    const uint32_t workHeight = (uint32_t) (height * workScale + 0.5f);
+    const bool reduced = workWidth != width || workHeight != height;
+    if (!g_vk.preSource)
+    {
+        static uint32_t candidateWidth = 0, candidateHeight = 0;
+        static uint64_t candidateSince = 0, candidateSource = 0;
+        static VkDevice candidateDevice = VK_NULL_HANDLE;
+        const auto now = OwnerNowMs();
+        if (candidateWidth != width || candidateHeight != height || candidateSource != source.incarnation ||
+            candidateDevice != device)
+        {
+            candidateWidth = width;
+            candidateHeight = height;
+            candidateSource = source.incarnation;
+            candidateDevice = device;
+            candidateSince = now;
+        }
+        if (now - candidateSince < 500)
+            return false;
+    }
+
+    const bool generationChange = g_vk.width != width || g_vk.height != height || g_vk.workWidth != workWidth ||
+                                  g_vk.workHeight != workHeight ||
+                                  (workScale > 1.0f && g_vk.nrScaler != cfg.DlssNrScalingDownscaler.value_or_default());
+    if (g_vk.preSource && (generationChange || g_vk.preFormat != colour->Resource.ImageViewInfo.Format ||
+                           g_vk.prePreset != (int) cfg.DlssNrPreset.value_or_default()))
+        return false; // A rebuild requires a separately safe lifecycle boundary, never an evaluate-window wait.
+    if (g_vk.device == device && generationChange && RouteRecordingBusy())
+    {
+        static uint64_t lastRefusal = 0;
+        const uint64_t now = OwnerNowMs();
+        if (now - lastRefusal >= 5000)
+        {
+            lastRefusal = now;
+            LOG_INFO("DLSS-NR Vulkan: resize/filter change waits for old command-buffer recordings to reset or free");
+        }
+        g_vk.reset = true;
+        return false; // Do not acquire another generation pin while waiting for quiescence.
+    }
+    if (DlssNr::BelowMinExtent(width, height, workWidth, workHeight))
+    {
+        ++g_vkTooSmall;
+        const uint64_t now = OwnerNowMs();
+
+        if (g_vkTooSmall == 1 || now - g_vkTooSmallSaidMs >= 10000)
+        {
+            g_vkTooSmallSaidMs = now;
+            LOG_INFO("DLSS-NR Vulkan did not run: {}x{} (working {}x{}) is below {} pixels; the model is not "
+                     "built that small ({} frames refused for it so far)",
+                     width, height, workWidth, workHeight, kDlssNrMinExtent, g_vkTooSmall);
+        }
+
+        return false;
+    }
+    if (GuideRefusalStandsDown(device, width, height, workWidth, workHeight, *depth, *motion))
+    {
+        static bool said = false;
+        if (!said)
+        {
+            said = true;
+            LOG_INFO("DLSS-NR Vulkan: this route stands down while its guides are refused; it stops asking for the "
+                     "model until the frames change or a transient failure is tried again");
+        }
+
+        g_vk.reset = true;
+        return false;
+    }
+
+    if (!ClaimModelForAfterUpscale(device))
+        return false;
+    struct RecordingDone
+    {
+        ~RecordingDone()
+        {
+            std::lock_guard<std::mutex> lock(g_ownerMutex);
+            g_owner.AfterUpscaleDone(OwnerNowMs());
+        }
+    } recordingDone;
+
+    g_vk.instance = instance;
+    g_vk.physicalDevice = physicalDevice;
+    if (g_vk.device == VK_NULL_HANDLE)
+    {
+        g_vk.device = device;
+        g_vk.instance = instance;
+        g_vk.physicalDevice = physicalDevice;
+    }
+
+    if (!LoadForwarder())
+        return false;
+    if (!g_vk.ngxInitialised)
+    {
+        auto snippet = FindSnippet();
+
+        if (!snippet.has_value())
+        {
+            Fail(DlssNr::ModelFile::NotFoundReason());
+            return false;
+        }
+        DlssNr::ModelLog::Install(*snippet);
+
+        const int probe = g_fwd.probe != nullptr ? g_fwd.probe(snippet->wstring().c_str()) : 0;
+        if (probe != 15)
+        {
+            LOG_ERROR("DLSS-NR Vulkan: the model's Vulkan surface is incomplete (probe {})", probe);
+            Fail("the model does not expose a complete Vulkan surface");
+            return false;
+        }
+
+        int result = 0;
+        {
+            DlssNr::DriverInitGate::TryScope gate(DlssNr::DriverInitGate::Hold::Ngx);
+            if (!gate.Held())
+            {
+                g_vk.device = VK_NULL_HANDLE; // no generation objects/commands exist before first init
+                return false;
+            }
+            result = g_fwd.init(snippet->wstring().c_str(), State::Instance().NVNGX_ApplicationDataPath.c_str(),
+                                (void*) instance, (void*) physicalDevice, (void*) device, 0x0000015);
+        }
+
+        if (result != 1)
+        {
+            LOG_ERROR("DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned {}", result);
+            NoteModelFault();
+            Fail("the model would not initialise on this Vulkan device");
+            return false;
+        }
+
+        g_vk.ngxInitialised = true;
+        LOG_INFO("DLSS-NR Vulkan: the model initialised on this device");
+    }
+
+    if (g_vk.capabilityParams == nullptr)
+    {
+        if (NVSDK_NGX_VULKAN_AllocateParameters(&g_vk.capabilityParams) != NVSDK_NGX_Result_Success ||
+            g_vk.capabilityParams == nullptr)
+        {
+            Fail("a parameter block could not be allocated");
+            return false;
+        }
+    }
+    DiscoverFloatSlot(g_vk.capabilityParams);
+
+    if (g_vk.pass == nullptr)
+    {
+        DiscoverFloatSlot(g_vk.capabilityParams);
+
+        g_vk.pass = std::make_unique<DlssNr_Vk>("Neural Rendering", device, physicalDevice);
+
+        if (!g_vk.pass->IsInit())
+        {
+            g_vk.pass.reset();
+            Fail("the composition pass could not be created");
+            return false;
+        }
+    }
+    if (g_vk.width != width || g_vk.height != height || g_vk.workWidth != workWidth || g_vk.workHeight != workHeight)
+    {
+
+        if (g_vk.feature != nullptr && g_fwd.release != nullptr)
+        {
+            g_fwd.release(g_vk.feature);
+            g_vk.feature = nullptr;
+        }
+        g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;
+
+        const VkFormat working = VK_FORMAT_R16G16B16A16_SFLOAT;
+        const bool meterReady =
+            (g_vk.meter.Valid() || CreateImage(g_vk.meter, kMeterSide, kMeterSide, VK_FORMAT_R32_SFLOAT, true)) &&
+            CreateMeterReadback();
+
+        if (!meterReady)
+            LOG_WARN("DLSS-NR Vulkan: no exposure meter; the white point stays on the slider");
+
+        DestroyImage(g_vk.proxySmall);
+        DestroyImage(g_vk.outputNative);
+        RetireImage(g_vk.depthRetired);
+        RetireImage(g_vk.motionRetired);
+        g_vk.depthRetired = g_vk.depthMatched;
+        g_vk.motionRetired = g_vk.motionMatched;
+        g_vk.depthMatched = OwnedImage {};
+        g_vk.motionMatched = OwnedImage {};
+        g_vk.guideMatchSizeFailure.clear();
+        g_vk.guideMatchTransient.clear();
+        g_vk.guideMatchFailures = 0;
+        const bool ok = CreateImage(g_vk.output, workWidth, workHeight, working, true) &&
+                        CreateImage(g_vk.proxy, width, height, working, true) &&
+                        CreateImage(g_vk.keep, width, height, working, true) &&
+                        (!reduced || CreateImage(g_vk.proxySmall, workWidth, workHeight, working, true)) &&
+                        (workScale <= 1.0f || CreateImage(g_vk.outputNative, width, height, working, true));
+
+        const bool scratchReady =
+            ok && CreateImage(g_vk.preScratch, width, height, colour->Resource.ImageViewInfo.Format, false);
+        if (!scratchReady)
+        {
+            Fail("the pass could not allocate its own surfaces");
+            return false;
+        }
+
+        g_vk.width = width;
+        g_vk.height = height;
+        g_vk.workWidth = workWidth;
+        g_vk.workHeight = workHeight;
+        g_vk.reset = true;
+    }
+    if (workScale > 1.0f)
+    {
+        const Scaler wantScaler = cfg.DlssNrScalingDownscaler.value_or_default();
+        if (g_vk.nrScaler != wantScaler)
+        {
+            g_vk.superUp.reset();
+            g_vk.superDown.reset();
+            g_vk.nrScaler = wantScaler;
+        }
+        if (!g_vk.superUp)
+            g_vk.superUp = std::make_unique<DlssNr_Scaler_Vk>("DLSS-NR VK supersample up", device, physicalDevice, true,
+                                                              wantScaler);
+        if (!g_vk.superDown)
+            g_vk.superDown = std::make_unique<DlssNr_Scaler_Vk>("DLSS-NR VK supersample down", device, physicalDevice,
+                                                                false, wantScaler);
+    }
+
+    const unsigned int createFlags = GameCreateFlags(params);
+    const bool gameSaysHdr = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_IsHDR) != 0;
+    const bool depthInverted = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
+    const bool lowResolutionMotion = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
+    uint32_t guideAllocWidth = guideWidth;
+    uint32_t guideAllocHeight = guideHeight;
+
+    if (guideAllocWidth == 0 || guideAllocHeight == 0)
+    {
+        guideAllocWidth = width;
+        guideAllocHeight = height;
+    }
+
+    guideWidth = guideAllocWidth;
+    guideHeight = guideAllocHeight;
+
+    const DlssNr::RenderSizeResult geometry = DlssNr::ResolveRenderSize(params);
+    const auto [renderWidth, renderHeight] = geometry.size;
+
+    uint32_t depthBaseX = 0, depthBaseY = 0, motionBaseX = 0, motionBaseY = 0;
+    params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, &depthBaseX);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_Y, &depthBaseY);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_X, &motionBaseX);
+    params->Get(NVSDK_NGX_Parameter_DLSS_Input_MV_SubrectBase_Y, &motionBaseY);
+    if (renderWidth != 0 && renderHeight != 0)
+    {
+        guideWidth = std::min(renderWidth, guideWidth);
+        guideHeight = std::min(renderHeight, guideHeight);
+    }
+
+    depthBaseX = std::min(depthBaseX, guideAllocWidth);
+    depthBaseY = std::min(depthBaseY, guideAllocHeight);
+    guideWidth = std::min(guideWidth, guideAllocWidth - depthBaseX);
+    guideHeight = std::min(guideHeight, guideAllocHeight - depthBaseY);
+    const bool renderKnown = renderWidth != 0 && renderHeight != 0;
+    const uint32_t renderReferenceWidth = renderKnown ? renderWidth : guideWidth;
+    const uint32_t renderReferenceHeight = renderKnown ? renderHeight : guideHeight;
+    const uint32_t wantedMotionWidth = lowResolutionMotion ? renderReferenceWidth : displayWidth;
+    const uint32_t wantedMotionHeight = lowResolutionMotion ? renderReferenceHeight : displayHeight;
+
+    uint32_t motionAllocWidth = motionAllocationWidth;
+    uint32_t motionAllocHeight = motionAllocationHeight;
+
+    if (motionAllocWidth == 0 || motionAllocHeight == 0)
+    {
+        motionAllocWidth = wantedMotionWidth;
+        motionAllocHeight = wantedMotionHeight;
+    }
+
+    motionBaseX = std::min(motionBaseX, motionAllocWidth);
+    motionBaseY = std::min(motionBaseY, motionAllocHeight);
+    const uint32_t motionWidth = std::min(wantedMotionWidth, motionAllocWidth - motionBaseX);
+    const uint32_t motionHeight = std::min(wantedMotionHeight, motionAllocHeight - motionBaseY);
+    {
+        static uint32_t said[6] = { ~0u, ~0u, ~0u, ~0u, ~0u, ~0u };
+        const uint32_t now[6] = { guideWidth, guideHeight, depthBaseX, depthBaseY, motionWidth, motionHeight };
+
+        if (!std::equal(std::begin(now), std::end(now), std::begin(said)))
+        {
+            std::copy(std::begin(now), std::end(now), std::begin(said));
+            LOG_INFO("DLSS-NR Vulkan guides: depth {}x{} at ({},{}), motion vectors {}x{} at ({},{}) in a "
+                     "{}x{} image, {}",
+                     guideWidth, guideHeight, depthBaseX, depthBaseY, motionWidth, motionHeight, motionBaseX,
+                     motionBaseY, motionAllocWidth, motionAllocHeight,
+                     lowResolutionMotion ? "render resolution" : "display resolution");
+        }
+    }
+
+    float mvScaleX = 1.0f, mvScaleY = 1.0f;
+    params->Get(NVSDK_NGX_Parameter_MV_Scale_X, &mvScaleX);
+    params->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &mvScaleY);
+    if (!std::isfinite(mvScaleX) || mvScaleX == 0.0f)
+        mvScaleX = 1.0f;
+
+    if (!std::isfinite(mvScaleY) || mvScaleY == 0.0f)
+        mvScaleY = 1.0f;
+    unsigned int gameReset = 0;
+    const bool gameAskedReset =
+        params->Get(NVSDK_NGX_Parameter_Reset, &gameReset) == NVSDK_NGX_Result_Success && gameReset != 0;
+
+    if (gameAskedReset)
+    {
+        g_vk.reset = true;
+
+        static unsigned long long resets = 0;
+        ++resets;
+
+        if (resets <= 3 || resets % 100 == 0)
+            LOG_INFO("DLSS-NR Vulkan: the game asked for a history reset ({} so far)", resets);
+    }
+    const DlssNr::GuideMatch::Region depthRegion { depthBaseX, depthBaseY, guideWidth, guideHeight };
+    const DlssNr::GuideMatch::Region motionRegion { motionBaseX, motionBaseY, motionWidth, motionHeight };
+    const bool wanted = true;
+    const char* cannotResample =
+        wanted ? PrepareGuideMatch(*depth, *motion, geometry.source, depthRegion, motionRegion, workWidth, workHeight)
+               : nullptr;
+    const DlssNr::GuideMatch::Guides guides = DlssNr::GuideMatch::Choose(wanted, cannotResample == nullptr);
+
+    if (guides == DlssNr::GuideMatch::Guides::Refused)
+    {
+        SayGuideRefusal(cannotResample, workWidth, workHeight);
+        NoteGuideRefusal(device, width, height, workWidth, workHeight, *depth, *motion,
+                         GuideRefusalRetries(cannotResample), GuideRefusalRetryMs(cannotResample));
+        g_vk.reset = true;
+        return false;
+    }
+
+    g_vk.guideRefusal.active = false;
+    g_vk.frameRefusals = 0;
+
+    const uint32_t motionReferenceWidth =
+        DlssNr::GuideMatch::MotionReference(lowResolutionMotion, renderReferenceWidth, displayWidth);
+    const uint32_t motionReferenceHeight =
+        DlssNr::GuideMatch::MotionReference(lowResolutionMotion, renderReferenceHeight, displayHeight);
+    const bool renderMotionScale = cfg.DlssNrRenderMotionScale.value_or_default();
+    const DlssNr::GuideMatch::Handed handed = DlssNr::GuideMatch::ForModel(
+        guides == DlssNr::GuideMatch::Guides::Matched, renderMotionScale, depthRegion, motionRegion, workWidth,
+        workHeight, displayWidth, displayHeight, motionReferenceWidth, motionReferenceHeight, mvScaleX, mvScaleY);
+    const bool linearHdr = gameSaysHdr && FormatCanHoldLinearHdr(colour->Resource.ImageViewInfo.Format);
+    g_vkLinearHdr.store(linearHdr);
+    float whitePoint = cfg.DlssNrWhitePointScale.value_or_default();
+
+    if (cfg.DlssNrWhitePointSource.value_or_default() == 1 && !g_vk.exposureLatch.Latched() &&
+        g_vk.gameExposure > 1e-6f)
+    {
+        const float trim = std::clamp(cfg.DlssNrWhitePointTrim.value_or_default(), 0.01f, 4.0f);
+        whitePoint = std::clamp(g_vk.gamePreExposure / g_vk.gameExposure * trim, 0.01f, 4096.0f);
+    }
+
+    static bool saidEncoding = false;
+
+    if (!saidEncoding)
+    {
+        saidEncoding = true;
+        LOG_INFO("DLSS-NR Vulkan: the game's buffer is {} (flag {}, format {}), depth {}",
+                 linearHdr ? "linear HDR" : "already tone-mapped", gameSaysHdr ? "set" : "clear",
+                 (int) colour->Resource.ImageViewInfo.Format, depthInverted ? "inverted" : "normal");
+    }
+
+    DlssNrConstants encode {};
+    encode.Mode = DlssNrMode_Encode;
+    encode.Width = width;
+    encode.Height = height;
+    encode.WhitePoint = whitePoint;
+    encode.Passthrough = linearHdr ? 0u : 1u;
+    encode.ReversibleMode = cfg.DlssNrReversibleMode.value_or_default();
+    encode.ApplyModel = cfg.DlssNrApplyModel.value_or_default() ? 1u : 0u;
+    encode.TransferStrength = cfg.DlssNrTransferStrength.value_or_default();
+    encode.ColourStrength = cfg.DlssNrColourStrength.value_or_default();
+    encode.MaxRatio = cfg.DlssNrMaxRatio.value_or_default();
+    SetVulkanTransfer(encode, cfg);
+    encode.DebugScale = cfg.DlssNrWhitePointScale.value_or_default();
+    encode.GuideWidth = guideWidth;
+    encode.GuideHeight = guideHeight;
+    encode.HighlightRecovery = linearHdr && cfg.DlssNrHighlightRecovery.value_or_default() ? 1u : 0u;
+    encode.ResidualLimit = DlssNr::ResidualLimitStops(cfg.DlssNrResidualLimit.value_or_default());
+    encode.MinRatio = DlssNr::MinimumRatio(cfg.DlssNrMinRatio.value_or_default());
+    static uint32_t saidRecovery = 0u;
+    static float saidResidualLimit = 0.0f;
+
+    if (encode.HighlightRecovery != saidRecovery)
+    {
+        saidRecovery = encode.HighlightRecovery;
+        LOG_INFO("DLSS-NR Vulkan: highlight recovery {}", saidRecovery != 0 ? "on" : "off");
+    }
+
+    if (encode.ResidualLimit != saidResidualLimit)
+    {
+        saidResidualLimit = encode.ResidualLimit;
+        if (saidResidualLimit > 0.0f)
+            LOG_INFO("DLSS-NR Vulkan: residual limit {:.2f} stops", saidResidualLimit);
+        else
+            LOG_INFO("DLSS-NR Vulkan: residual limit off");
+    }
+    MotionProbePlan probePlan;
+    if (zeroGuideReset)
+    {
+        probePlan = PrepareMotionProbe(*recording, *depth, *motion, depthRegion, motionRegion, lowResolutionMotion);
+
+        const bool deadMotionReset = MotionProbePolicyReset(device, probePlan, zeroGuideReset, gameAskedReset);
+        if (deadMotionReset)
+        {
+            g_vk.reset = true;
+
+            const uint64_t count = ++g_vk.motionProbe.policyResets;
+            if (count <= 3 || count % 100 == 0)
+                LOG_INFO(
+                    "DLSS-NR Vulkan: model history dropped on the game's all-zero motion vectors, as ZeroGuideReset "
+                    "asks ({} so far)",
+                    count);
+        }
+    }
+    auto composition = g_vk.pass->Reserve(cmdBuffer, 4);
+    if (!composition)
+    {
+        static uint64_t lastRefusal = 0;
+        const uint64_t now = OwnerNowMs();
+        if (now - lastRefusal >= 5000)
+        {
+            lastRefusal = now;
+            LOG_INFO("DLSS-NR Vulkan: composition waits for free recording slots");
+        }
+        g_vk.reset = true;
+        return false;
+    }
+    std::optional<DlssNr_Scaler_Vk::Batch> superUpBatch;
+    std::optional<DlssNr_Scaler_Vk::Batch> superDownBatch;
+    if (workScale > 1.0f)
+    {
+        if (reduced && g_vk.proxySmall.Valid() && g_vk.superUp && g_vk.superUp->IsInit())
+        {
+            superUpBatch = g_vk.superUp->Reserve(cmdBuffer, 1);
+            if (!superUpBatch)
+            {
+                g_vk.reset = true;
+                return false;
+            }
+        }
+        if (g_vk.outputNative.Valid() && g_vk.superDown && g_vk.superDown->IsInit())
+        {
+            superDownBatch = g_vk.superDown->Reserve(cmdBuffer, 1);
+            if (!superDownBatch)
+            {
+                g_vk.reset = true;
+                return false;
+            }
+        }
+    }
+
+    try
+    {
+        if (!VkRecording::Recordings().Pin(*recording, { g_vk.recording }))
+            return false;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+    std::optional<VkMeterReadback::Reservation> meterRecording;
+    if (wpSource == 1 && exposure != nullptr && exposure->Type == NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW &&
+        exposure->Resource.ImageViewInfo.ImageView != VK_NULL_HANDLE && g_vk.meter.Valid())
+        meterRecording = ReserveMeterReadback(*recording);
+    std::optional<VkMeterReadback::Reservation> probeRecording;
+    if (zeroGuideReset && probePlan.due)
+        probeRecording = ReserveMotionProbe(*recording, probePlan);
+
+    g_vk.preSource = source;
+    g_vk.preFamily = family;
+    g_vk.preFormat = colour->Resource.ImageViewInfo.Format;
+    g_vk.prePreset = (int) cfg.DlssNrPreset.value_or_default();
+    g_vk.preLastRecording = *recording;
+    // Pins and the complete dispatch budget precede even the model feature-create commands.
+    emitted = true; // conservative after reservation: any later failure retains the recording
+    BeginRouteRecording();
+    g_vk.preScratch.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    g_vk.reset = true; // no submission receipt: every admitted NR evaluate starts a fresh history
+    if (!g_vk.pass->Prepare(cmdBuffer))
+        return false;
+
+    if (g_vk.feature == nullptr)
+    {
+        {
+            DlssNr::DriverInitGate::TryScope gate(DlssNr::DriverInitGate::Hold::Ngx);
+            if (!gate.Held())
+                return false;
+            g_vk.feature =
+                g_fwd.create((void*) cmdBuffer, g_vk.capabilityParams, workWidth, workHeight,
+                             (int) cfg.DlssNrPreset.value_or_default(), cfg.DlssNrIntensity.value_or_default(),
+                             (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+                             cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+                             cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, 1);
+        }
+
+        if (g_vk.feature == nullptr)
+        {
+            NoteModelFault();
+            Fail("the model would not build a feature on this device");
+            return false;
+        }
+
+        LOG_INFO("DLSS-NR Vulkan: feature up at {}x{} (frame {}x{})", workWidth, workHeight, width, height);
+        g_vk.reset = true;
+
+        g_vk.modelVramBytes = AskModelVramVk(g_vk.capabilityParams, "before upscale");
+        if (NoteModelFault())
+            return false;
+    }
+
+    Transition(cmdBuffer, g_vk.proxy, VK_IMAGE_LAYOUT_GENERAL);
+    Transition(cmdBuffer, g_vk.keep, VK_IMAGE_LAYOUT_GENERAL);
+    if (!g_vk.pass->Dispatch(cmdBuffer, *composition, encode, width, height, colour->Resource.ImageViewInfo.ImageView,
+                             VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, g_vk.proxy.view, g_vk.keep.view,
+                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+    {
+        Fail("the encode dispatch failed");
+        return false;
+    }
+    OwnedImage* modelInput = &g_vk.proxy;
+
+    if (reduced && g_vk.proxySmall.Valid())
+    {
+        bool built = false;
+
+        if (workScale > 1.0f)
+        {
+
+            Transition(cmdBuffer, g_vk.proxy, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            Transition(cmdBuffer, g_vk.proxySmall, VK_IMAGE_LAYOUT_GENERAL);
+
+            VkImageInfo upin = ImageInfoOf(g_vk.proxy);
+            VkImageInfo upout = ImageInfoOf(g_vk.proxySmall);
+
+            if (superUpBatch && g_vk.superUp->Dispatch(cmdBuffer, *superUpBatch, upin, upout))
+                built = true;
+            else
+            {
+                static bool warnedVkSuper = false;
+                if (!warnedVkSuper)
+                {
+                    warnedVkSuper = true;
+                    LOG_WARN("DLSS-NR Vulkan supersample: upscaler unavailable, falling back to box enlarge.");
+                }
+            }
+        }
+
+        if (!built)
+        {
+            DlssNrConstants down = encode;
+            down.Mode = DlssNrMode_Downsample;
+            down.Width = workWidth;
+            down.Height = workHeight;
+
+            Transition(cmdBuffer, g_vk.proxy, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+            Transition(cmdBuffer, g_vk.proxySmall, VK_IMAGE_LAYOUT_GENERAL);
+
+            if (!g_vk.pass->Dispatch(cmdBuffer, *composition, down, workWidth, workHeight, g_vk.proxy.view,
+                                     VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, g_vk.proxySmall.view,
+                                     VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+            {
+                Fail("the downsample dispatch failed");
+                return false;
+            }
+        }
+
+        modelInput = &g_vk.proxySmall;
+    }
+    if (meterRecording)
+    {
+        const uint32_t slot = meterRecording->slot;
+        DlssNrConstants meter = encode;
+        meter.Mode = DlssNrMode_Meter;
+        meter.Width = kMeterSide;
+        meter.Height = kMeterSide;
+
+        Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_GENERAL);
+
+        if (g_vk.pass->Dispatch(cmdBuffer, *composition, meter, kMeterSide, kMeterSide, VK_NULL_HANDLE, VK_NULL_HANDLE,
+                                VK_NULL_HANDLE, exposure->Resource.ImageViewInfo.ImageView, g_vk.meter.view,
+                                VK_NULL_HANDLE, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+        {
+            Transition(cmdBuffer, g_vk.meter, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            VkBufferImageCopy region {};
+            region.bufferOffset = 0;
+            region.bufferRowLength = 0;
+            region.bufferImageHeight = 0;
+            region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+            region.imageOffset = { 0, 0, 0 };
+            region.imageExtent = { kMeterSide, kMeterSide, 1 };
+
+            vkCmdCopyImageToBuffer(cmdBuffer, g_vk.meter.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   g_vk.meterReadback[slot], 1, &region);
+            VkBufferMemoryBarrier toHost {};
+            toHost.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            toHost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+            toHost.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toHost.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            toHost.buffer = g_vk.meterReadback[slot];
+            toHost.offset = 0;
+            toHost.size = kMeterBytes;
+
+            vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr,
+                                 1, &toHost, 0, nullptr);
+
+            g_vk.meterFrames++;
+        }
+    }
+    if (probeRecording)
+    {
+        auto& probe = g_vk.motionProbe;
+        const uint32_t slot = probeRecording->slot;
+        probe.pass.Record(cmdBuffer, depth->Resource.ImageViewInfo.ImageView, motion->Resource.ImageViewInfo.ImageView,
+                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, depthRegion, motionRegion, probe.grid[slot].image,
+                          probe.grid[slot].view, probe.readback[slot]);
+    }
+
+    Transition(cmdBuffer, g_vk.output, VK_IMAGE_LAYOUT_GENERAL);
+    NVSDK_NGX_Resource_VK* depthForModel = depth;
+    NVSDK_NGX_Resource_VK* motionForModel = motion;
+
+    if (handed.matched)
+    {
+        g_vk.guideMatch.Record(cmdBuffer, depth->Resource.ImageViewInfo.ImageView,
+                               motion->Resource.ImageViewInfo.ImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                               depthRegion, motionRegion, g_vk.depthMatched.image, g_vk.depthMatched.view,
+                               g_vk.motionMatched.image, g_vk.motionMatched.view, workWidth, workHeight);
+        g_vk.depthMatched.layout = VK_IMAGE_LAYOUT_GENERAL;
+        g_vk.motionMatched.layout = VK_IMAGE_LAYOUT_GENERAL;
+        depthForModel = &g_vk.depthMatched.ngx;
+        motionForModel = &g_vk.motionMatched.ngx;
+    }
+    {
+        static float saidScale[2] = { -1.0f, -1.0f };
+        static int saidMatched = -1;
+        static uint32_t saidShape[2] = { ~0u, ~0u };
+        const uint32_t shapeNow[2] = { workWidth, workHeight };
+
+        if (saidMatched != (handed.matched ? 1 : 0) || saidShape[0] != shapeNow[0] || saidShape[1] != shapeNow[1])
+        {
+            saidMatched = handed.matched ? 1 : 0;
+            saidShape[0] = shapeNow[0];
+            saidShape[1] = shapeNow[1];
+
+            if (handed.matched)
+                LOG_INFO("DLSS-NR Vulkan guides matched to the working size: depth and motion {}x{} for a {}x{} model "
+                         "(the frame's guides are {}x{} and {}x{})",
+                         workWidth, workHeight, workWidth, workHeight, guideWidth, guideHeight, motionWidth,
+                         motionHeight);
+        }
+
+        if (saidScale[0] != handed.scaleX || saidScale[1] != handed.scaleY)
+        {
+            saidScale[0] = handed.scaleX;
+            saidScale[1] = handed.scaleY;
+            LOG_INFO("DLSS-NR Vulkan model motion scale {:.1f} x {:.1f}: game scale {:.1f} x {:.1f} measured against "
+                     "{}x{} ({}), motion texture {}x{} ({}), model {}x{}{}",
+                     handed.scaleX, handed.scaleY, mvScaleX, mvScaleY, motionReferenceWidth, motionReferenceHeight,
+                     lowResolutionMotion ? "render size, low-resolution vectors" : "output size", handed.motion.width,
+                     handed.motion.height, handed.matched ? "matched to the working size" : "the game's region",
+                     workWidth, workHeight, renderMotionScale ? "" : " -- legacy working/frame conversion");
+        }
+    }
+    const int evaluated = g_fwd.evaluate(
+        (void*) cmdBuffer, g_vk.feature, g_vk.capabilityParams, &modelInput->ngx, depthForModel, motionForModel,
+        &g_vk.output.ngx, workWidth, workHeight, handed.depth.width, handed.depth.height, handed.motion.width,
+        handed.motion.height, handed.depth.baseX, handed.depth.baseY, handed.motion.baseX, handed.motion.baseY,
+        depthInverted ? 1 : 0, g_vk.reset ? 1 : 0, cfg.DlssNrIntensity.value_or_default(),
+        (int) cfg.DlssNrStyle.value_or_default(), cfg.DlssNrLocalStructure.value_or_default(),
+        cfg.DlssNrLocalTone.value_or_default(), cfg.DlssNrSkinStructure.value_or_default(),
+        cfg.DlssNrAutoMask.value_or_default() ? 1 : 0, handed.scaleX, handed.scaleY);
+
+    g_vk.reset = false;
+    g_vk.frames++;
+    // Under g_vkMutex: a post admission must not inherit this pre-stage history at equal dimensions.
+    // The post wrapper first proves recording quiescence; the existing post gates then consume this latch.
+    // A skipped admission leaves either the latch or g_vk.reset pending until an actual model evaluate.
+    g_vkResetOnReturn = true;
+
+    if (evaluated != 1)
+    {
+        LOG_ERROR("DLSS-NR Vulkan: evaluate returned {}", evaluated);
+        NoteModelFault();
+        Fail("the model refused to evaluate");
+        return false;
+    }
+
+    SessionGuardEvaluated();
+
+    DlssNrConstants resolve = encode;
+    resolve.Mode = DlssNrMode_Resolve;
+    OwnedImage* resolveProxy = modelInput;
+    OwnedImage* resolveAnswer = &g_vk.output;
+
+    if (superDownBatch)
+    {
+        Transition(cmdBuffer, g_vk.output, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        Transition(cmdBuffer, g_vk.outputNative, VK_IMAGE_LAYOUT_GENERAL);
+
+        VkImageInfo dsin = ImageInfoOf(g_vk.output);
+        VkImageInfo dsout = ImageInfoOf(g_vk.outputNative);
+
+        if (g_vk.superDown->Dispatch(cmdBuffer, *superDownBatch, dsin, dsout))
+        {
+            resolveProxy = &g_vk.proxy;
+            resolveAnswer = &g_vk.outputNative;
+        }
+    }
+
+    Transition(cmdBuffer, *resolveProxy, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    Transition(cmdBuffer, *resolveAnswer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    Transition(cmdBuffer, g_vk.keep, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    Transition(cmdBuffer, g_vk.preScratch, VK_IMAGE_LAYOUT_GENERAL);
+    if (!g_vk.pass->Dispatch(cmdBuffer, *composition, resolve, width, height, resolveProxy->view, resolveAnswer->view,
+                             g_vk.keep.view, VK_NULL_HANDLE, g_vk.preScratch.view, VK_NULL_HANDLE,
+                             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL))
+    {
+        Fail("the resolve dispatch failed");
+        return false;
+    }
+
+    Transition(cmdBuffer, g_vk.preScratch, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    return true;
+}
+
+namespace
+{
+std::atomic_flag g_preBorrow = ATOMIC_FLAG_INIT;
+
+bool PreRecordingBusy()
+{
+    std::unique_lock<std::mutex> lock(g_vkMutex, std::try_to_lock);
+    return !lock.owns_lock() || RouteRecordingBusy();
+}
+
+bool PreResource(VkPre::Observations& facts, VkDevice device, VkCommandBuffer command,
+                 const NVSDK_NGX_Resource_VK* resource, VkImageLayout layout, VkImageUsageFlags usage)
+{
+    if (!resource || resource->Type != NVSDK_NGX_RESOURCE_VK_TYPE_VK_IMAGEVIEW)
+        return false;
+    const auto& r = resource->Resource.ImageViewInfo;
+    const auto view = facts.ViewInfo((uint64_t) device, (uint64_t) r.ImageView);
+    const auto image = facts.ImageForView((uint64_t) device, (uint64_t) r.ImageView);
+    const VkPre::Range range { r.SubresourceRange.aspectMask, r.SubresourceRange.baseMipLevel,
+                               r.SubresourceRange.levelCount, r.SubresourceRange.baseArrayLayer,
+                               r.SubresourceRange.layerCount };
+    return view && image && view->simple && image->simple && view->image == (uint64_t) r.Image &&
+           view->format == (uint32_t) r.Format && image->format == (uint32_t) r.Format && view->range == range &&
+           view->type == VK_IMAGE_VIEW_TYPE_2D && image->type == VK_IMAGE_TYPE_2D &&
+           image->samples == VK_SAMPLE_COUNT_1_BIT && image->depth == 1 && image->levels == 1 && image->layers == 1 &&
+           range.mip == 0 && range.levels == 1 && range.layer == 0 && range.layers == 1 && image->width == r.Width &&
+           image->height == r.Height && (image->usage & usage) == usage &&
+           facts.Layout((uint64_t) command, (uint64_t) r.ImageView) == (uint32_t) layout;
+}
+} // namespace
+
+ScopedPreUpscaleVk::ScopedPreUpscaleVk(VkCommandBuffer command, NVSDK_NGX_Parameter* params, VkInstance instance,
+                                       VkPhysicalDevice physical, VkDevice device, const NVSDK_NGX_Handle* feature,
+                                       VkPre::Backend backend)
+{
+    const auto& cfg = *Config::Instance();
+    if (!cfg.DlssNrEnabled.value_or_default() || cfg.DlssNrStage.value_or_default() != 1)
+        return;
+    try
+    {
+        _outcome = VkPre::Outcome::Rejected; // selected Stage 1 never falls back to post NR
+        if (!params || !feature || !command || !device || !physical)
+            return;
+        NVSDK_NGX_Resource_VK* colour = nullptr;
+        const auto picture =
+            Pictures::Ask(params,
+                          [&]
+                          {
+                              params->Get(NVSDK_NGX_Parameter_Color, (void**) &colour);
+                              return colour ? (uintptr_t) colour->Resource.ImageViewInfo.Image : uintptr_t(0);
+                          });
+        if (picture.role != Pictures::Role::Main)
+        {
+            _outcome = VkPre::Outcome::StandDown;
+            return;
+        }
+        if (!colour)
+            params->Get(NVSDK_NGX_Parameter_Color, (void**) &colour);
+        auto* facts = VkPre::Runtime::Facts();
+        const auto coverage = VkPre::Runtime::Status(device);
+        if (!facts || !VkPre::Runtime::Uninterrupted() || !coverage.complete || !coverage.formatless ||
+            !coverage.formatFlags2)
+            return;
+        const auto identity = facts->FindFeature((uint64_t) device, feature->Id);
+        const auto ticket = VkPre::Runtime::CurrentTicket(device, command);
+        const auto recording = facts->Command((uint64_t) device, (uint64_t) command);
+        VkPre::Admission admission;
+        admission.enabled = true;
+        admission.stage = 1;
+        admission.feature = identity ? identity->kind : VkPre::Feature::Unknown;
+        admission.backend = backend;
+        admission.identity = identity && identity->source == (uintptr_t) feature && facts->Current(*identity);
+        admission.mainPicture = true;
+        admission.observed = ticket && recording && recording->renderingKnown && !recording->inside;
+        admission.primary = recording && recording->primary;
+        admission.oneTime = recording && recording->oneTime;
+        admission.simultaneous = !recording || recording->simultaneous;
+        admission.outstanding = PreRecordingBusy();
+        if (VkPre::Admit(admission) != VkPre::Refusal::None)
+            return;
+        const auto geometry = ResolveRenderSize(params);
+        auto display = ReadDisplaySize(params);
+        if ((!display.width || !display.height) && RenderGeometry::active)
+            display = RenderGeometry::active->display;
+        if (!colour || !geometry.size.width || !geometry.size.height || !display.width || !display.height ||
+            colour->Resource.ImageViewInfo.Width != geometry.size.width ||
+            colour->Resource.ImageViewInfo.Height != geometry.size.height)
+            return;
+        unsigned int baseX = 0, baseY = 0;
+        params->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, &baseX);
+        params->Get(NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, &baseY);
+        if (baseX || baseY)
+            return;
+        NVSDK_NGX_Resource_VK *depth = nullptr, *motion = nullptr, *output = nullptr, *exposure = nullptr;
+        params->Get(NVSDK_NGX_Parameter_Depth, (void**) &depth);
+        params->Get(NVSDK_NGX_Parameter_MotionVectors, (void**) &motion);
+        params->Get(NVSDK_NGX_Parameter_Output, (void**) &output);
+        params->Get(NVSDK_NGX_Parameter_ExposureTexture, (void**) &exposure);
+        for (auto* input : { colour, depth, motion })
+            if (!PreResource(*facts, device, command, input, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                             VK_IMAGE_USAGE_SAMPLED_BIT))
+                return;
+        if (exposure && !PreResource(*facts, device, command, exposure, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                     VK_IMAGE_USAGE_SAMPLED_BIT))
+            return;
+        if (!PreResource(*facts, device, command, output, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_USAGE_STORAGE_BIT))
+            return;
+        uint32_t familyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical, &familyCount, nullptr);
+        std::vector<VkQueueFamilyProperties> families(familyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical, &familyCount, families.data());
+        if (recording->family >= familyCount || !(families[recording->family].queueFlags & VK_QUEUE_COMPUTE_BIT))
+            return;
+        // Exclusive ownership is not established by a layout barrier with IGNORED queue indices.
+        // Until ownership receipts exist, only explicitly concurrent resources naming this family qualify.
+        for (auto* resource : { colour, depth, motion, output, exposure })
+        {
+            if (!resource)
+                continue;
+            const auto image =
+                facts->ImageForView((uint64_t) device, (uint64_t) resource->Resource.ImageViewInfo.ImageView);
+            if (!image || !image->concurrent ||
+                std::find(image->families.begin(), image->families.end(), recording->family) == image->families.end())
+                return;
+        }
+        // Per-format capabilities, not just STORAGE_IMAGE: this shader's storage format is Unknown.
+        if (vkGetPhysicalDeviceFormatProperties2 == nullptr)
+            return;
+        VkPhysicalDeviceProperties capabilities {};
+        vkGetPhysicalDeviceProperties(physical, &capabilities);
+        if (capabilities.apiVersion < VK_API_VERSION_1_3)
+            return; // an instance request alone does not prove core support on the physical device
+
+        for (VkFormat format :
+             { colour->Resource.ImageViewInfo.Format, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R32_SFLOAT })
+        {
+            VkFormatProperties3 flags {};
+            flags.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3;
+            VkFormatProperties2 info {};
+            info.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2;
+            info.pNext = &flags;
+            vkGetPhysicalDeviceFormatProperties2(physical, format, &info);
+            constexpr VkFormatFeatureFlags2 required = VK_FORMAT_FEATURE_2_SAMPLED_IMAGE_BIT |
+                                                       VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT |
+                                                       VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT;
+            if ((flags.optimalTilingFeatures & required) != required)
+                return;
+        }
+        std::vector<std::pair<uint64_t, VkPre::ViewFact>> views;
+        for (auto* resource : { colour, depth, motion, output, exposure })
+        {
+            if (!resource)
+                continue;
+            const auto view = (uint64_t) resource->Resource.ImageViewInfo.ImageView;
+            const auto identity = facts->ViewInfo((uint64_t) device, view);
+            if (!identity)
+                return;
+            views.emplace_back(view, *identity);
+        }
+        if (g_preBorrow.test_and_set(std::memory_order_acquire))
+            return;
+        _borrowed = true;
+        bool emitted = false;
+        try
+        {
+            if (!RecordPreUpscaleVk(command, params, instance, physical, device, *identity, display.width,
+                                    display.height, recording->family, emitted))
+            {
+                _outcome = emitted ? VkPre::Outcome::Partial : VkPre::Outcome::Rejected;
+                return;
+            }
+            _outcome = VkPre::Outcome::Partial;
+            const auto current = VkPre::Runtime::CurrentTicket(device, command);
+            if (!facts->Current(*identity) || !current || !VkPre::SameTicket(*ticket, *current))
+                return;
+            for (const auto& [view, identity] : views)
+                if (!facts->CurrentView(view, identity))
+                    return;
+            _colour.Bind(params, colour, &g_vk.preScratch.ngx);
+            _outcome = VkPre::Outcome::Bound;
+        }
+        catch (...)
+        {
+            _outcome = emitted ? VkPre::Outcome::Partial : VkPre::Outcome::Rejected;
+            _colour.Restore();
+            g_vkResetOnReturn = true;
+        }
+    }
+    catch (...)
+    {
+        _colour.Restore();
+    }
+}
+
+ScopedPreUpscaleVk::~ScopedPreUpscaleVk()
+{
+    _colour.Restore();
+    if (_borrowed)
+        g_preBorrow.clear(std::memory_order_release);
+}
+
+void EvaluateAfterPreSafeVk(VkCommandBuffer command, NVSDK_NGX_Parameter* params, VkInstance instance,
+                            VkPhysicalDevice physical, VkDevice device)
+{
+    if (!Config::Instance()->DlssNrEnabled.value_or_default() || !g_nativePlacement.PostNeedsLoan())
+    {
+        EvaluateAfterUpscaleVk(command, params, instance, physical, device);
+        return;
+    }
+    if (g_preBorrow.test_and_set(std::memory_order_acquire))
+        return;
+    struct ReleaseLoan
+    {
+        ~ReleaseLoan() { g_preBorrow.clear(std::memory_order_release); }
+    } release;
+    if (PreRecordingBusy())
+        return;
+    // Hold the CPU loan through the call, closing the check-to-record race at an equal-sized Stage change.
+    EvaluateAfterUpscaleVk(command, params, instance, physical, device);
+}
+
 namespace
 {
 // Everything of the after-upscale route's, on a live device, once nothing the GPU runs can still use it: the caller
@@ -2770,6 +3988,8 @@ void FreeRouteObjects()
 {
     if (RouteRecordingBusy())
         return;
+
+    PairCapture::PollVkLocked(); // readbacks retain their own device identity after g_vk.device is cleared
 
     if (g_vk.feature != nullptr && g_fwd.release != nullptr)
         g_fwd.release(g_vk.feature);
@@ -2782,6 +4002,9 @@ void FreeRouteObjects()
     DestroyImage(g_vk.proxySmall);
     DestroyImage(g_vk.outputNative);
     DestroyImage(g_vk.keep);
+    DestroyImage(g_vk.preScratch);
+    g_vk.preSource.reset();
+    g_vk.preLastRecording = {};
     g_vk.meterPending.Abandon();
     g_vk.meterAcceptedSerial = 0;
     DestroyImage(g_vk.meter);
@@ -2840,6 +4063,7 @@ void ShutdownVk(bool deviceAlive)
 {
     if (!deviceAlive)
     {
+        PairCapture::DeviceGoneVkLocked(g_vk.device, false);
         ForgetMeterReadback();
         ForgetMotionProbe();
         // Only CPU metadata is held by these leases. Abandon GPU objects below without invoking their destructors.
@@ -2866,6 +4090,9 @@ void ShutdownVk(bool deviceAlive)
         g_vk.proxySmall = OwnedImage {};
         g_vk.outputNative = OwnedImage {};
         g_vk.keep = OwnedImage {};
+        g_vk.preScratch = OwnedImage {};
+        g_vk.preSource.reset();
+        g_vk.preLastRecording = {};
         g_vk.meter = OwnedImage {};
         g_vk.depthMatched = OwnedImage {};
         g_vk.motionMatched = OwnedImage {};
@@ -2996,6 +4223,7 @@ void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::s
                 AbandonMotionProbeReadbacks();
             }
         }
+        PairCapture::DeviceGoneVkLocked(device, !forgetOnly);
         VkRecording::Recordings().ForgetDevice((uint64_t) device);
 
         if (device != VK_NULL_HANDLE && g_vk.device == device)

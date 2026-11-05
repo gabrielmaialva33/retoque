@@ -92,6 +92,26 @@ class Gate
         return entry;
     }
 
+    // Evaluate-window callers cannot wait for device creation. Refuse without a condition-variable wait.
+    Entry TryEnter(Hold hold)
+    {
+        Entry entry;
+        entry.wanted = true;
+        std::unique_lock lock(_mutex, std::try_to_lock);
+        if (!lock.owns_lock())
+            return entry;
+        ++_stats.entries;
+        if (_depth != 0 && _owner != std::this_thread::get_id())
+        {
+            ++_stats.contended;
+            entry.blockedBy = _ngx != 0 ? Hold::Ngx : Hold::DeviceCreate;
+            return entry;
+        }
+        Take(hold, 1);
+        entry.held = true;
+        return entry;
+    }
+
     // After an Enter that returned held; the holds are let go in the reverse order of their entries.
     void Leave(Hold hold)
     {
@@ -289,6 +309,25 @@ class Scope
     const Hold _hold;
     const char* const _site;
     Entry _entry;
+};
+
+// Nonblocking counterpart for work inserted in the game's evaluate window.
+class TryScope
+{
+    Gate& _gate;
+    Hold _hold;
+    Entry _entry;
+
+  public:
+    explicit TryScope(Hold hold, Gate& gate = Process()) : _gate(gate), _hold(hold), _entry(gate.TryEnter(hold)) {}
+    ~TryScope()
+    {
+        if (_entry.held)
+            _gate.Leave(_hold);
+    }
+    bool Held() const { return _entry.held; }
+    TryScope(const TryScope&) = delete;
+    TryScope& operator=(const TryScope&) = delete;
 };
 
 // First in a vkCreateDevice hook that may run below another of ours: this hook's own code runs outside the gate, the

@@ -421,6 +421,14 @@ Outcome Create(const Setup& setup, FakeGpu& gpu, Request& request, const std::st
     const std::string where = label + " [" + gpu.name + " " + setup.Label() + "]";
     Check(result == VK_SUCCESS && device != VK_NULL_HANDLE, where + ": the create did not reach the driver");
     outcome.got = ReceivedBy(device);
+    const auto observation = DlssNr::VkPre::Runtime::Take(device);
+    Check(observation.has_value() == (!setup.skip && !setup.d3d), where + ": observer install routing");
+    if (observation)
+    {
+        Check(SameRequest(observation->request, outcome.got),
+              where + ": observer did not see effective driver request");
+        Check(observation->apiVersion == GetPhysicalDeviceApiVersion(gpu.Handle()), where + ": observer API version");
+    }
 
     // The game's request: same struct, same pointers, same contents
     Check(std::memcmp(&topLevel, info, sizeof(topLevel)) == 0, where + ": the game's VkDeviceCreateInfo changed");

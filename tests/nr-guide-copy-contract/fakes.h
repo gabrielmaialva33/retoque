@@ -80,7 +80,8 @@ int ExpectedFamily(int f)
     }
 }
 constexpr int D3D12_RESOURCE_DIMENSION_TEXTURE2D = 3;
-constexpr int D3D12_RESOURCE_FLAG_NONE = 0;
+constexpr unsigned D3D12_RESOURCE_FLAG_NONE = 0, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE = 8,
+                   D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS = 32;
 constexpr int D3D12_HEAP_TYPE_DEFAULT = 0, D3D12_HEAP_FLAG_NONE = 0;
 constexpr int D3D12_TEXTURE_LAYOUT_UNKNOWN = 0, D3D12_FEATURE_FORMAT_INFO = 1;
 constexpr int D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE = 1, D3D12_RESOURCE_STATE_COPY_SOURCE = 2,
@@ -119,6 +120,13 @@ struct ID3D12Resource : ID3D12DeviceChild
 {
     D3D12_RESOURCE_DESC desc;
     auto GetDesc() { return desc; }
+    unsigned releases = 0;
+    bool gpuOutstanding = false;
+    void Release()
+    {
+        assert(!gpuOutstanding && "resource released while GPU use is outstanding");
+        ++releases;
+    }
 };
 static unsigned allocations = 0;
 struct LUID

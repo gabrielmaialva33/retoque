@@ -609,6 +609,10 @@ class Config
     // start-up only (DlssNrModelFileAtStart); a change applies at the next start. Not written to the log's
     // parameter list, since it may be a path of the user's own.
     CustomOptional<std::string> DlssNrModelFile { std::string("auto") };
+    // Native D3D11 POST-SR transport is startup opt-in; reload/save applies next launch.
+    CustomOptional<bool> DlssNrDx11SceneStage { false };
+    bool DlssNrDx11SceneStageAtStart() const { return _dlssNrDx11SceneStageAtStart; }
+
     const std::string& DlssNrModelFileAtStart() const { return _dlssNrModelFileAtStart; }
 
     // Look for the exposure the game computed but never handed to the upscaler.
@@ -1343,6 +1347,8 @@ class Config
 
     std::map<std::string, CustomOptional<int>, NoCaseLess> _ffxCustomUpscalerIndex;
     std::mutex _customIndexMutex;
+
+    bool _dlssNrDx11SceneStageAtStart = false;
 
     bool Reload(std::filesystem::path iniPath);
 

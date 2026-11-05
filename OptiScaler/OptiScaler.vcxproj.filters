@@ -2220,6 +2220,9 @@
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCapture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_VkPresentHost.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -2269,6 +2272,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Dx11Guides.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_Dx11Scene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PresentHost.cpp">

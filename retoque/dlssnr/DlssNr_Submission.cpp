@@ -188,14 +188,53 @@ size_t FindQueue(ID3D12CommandQueue* queue)
     }
     return Detail::MaxQueues;
 }
+
+// COMPUTE lists are followed only where a COMPUTE queue's ExecuteCommandLists is the implementation the queue hook
+// detoured, which ResTrack_Dx12::HookToQueue finds on a DIRECT probe queue. vkd3d-proton gives every queue type one
+// vtable; native D3D12 is not assumed to. Probed once, on the admitted device: a COMPUTE queue is created, its entry
+// compared with the hooked one, and released. Unhooked or unknown refuses COMPUTE lists for the session, so a list
+// whose submissions the hook would never see is not accepted and then left waiting for a fence that never comes.
+enum class ComputeProbe : uint8_t
+{
+    Unknown,
+    Hooked,
+    Unhooked,
+};
+ComputeProbe computeProbe = ComputeProbe::Unknown;
+
+bool ComputeQueuesHooked()
+{
+    std::lock_guard lock(installMutex);
+    if (computeProbe != ComputeProbe::Unknown)
+        return computeProbe == ComputeProbe::Hooked;
+    computeProbe = ComputeProbe::Unhooked;
+    void* const hooked = ResTrack_Dx12::NrQueueImplementation();
+    if (!deviceOwner || !hooked)
+        return false;
+    D3D12_COMMAND_QUEUE_DESC desc {};
+    desc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+    ID3D12CommandQueue* queue = nullptr;
+    if (FAILED(deviceOwner->CreateCommandQueue(&desc, IID_PPV_ARGS(&queue))) || !queue)
+        return false;
+    ID3D12CommandQueue* const real = Canonical(queue);
+    const bool same = real && (*reinterpret_cast<void***>(real))[10] == hooked;
+    queue->Release();
+    computeProbe = same ? ComputeProbe::Hooked : ComputeProbe::Unhooked;
+    LOG_INFO("DLSS-NR submission tracking: COMPUTE queues {} the hooked ExecuteCommandLists; COMPUTE lists are {}",
+             same ? "use" : "do not use", same ? "followed where a caller asks" : "never followed");
+    return same;
+}
 } // namespace
 
 bool Active() { return active.load(std::memory_order_acquire); }
 const char* LastRefusal() { return refusal.load(); }
 
-bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool chain)
+static_assert(Detail::ListTypeDirect == D3D12_COMMAND_LIST_TYPE_DIRECT);
+static_assert(Detail::ListTypeCompute == D3D12_COMMAND_LIST_TYPE_COMPUTE);
+
+bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool chain, Lists lists)
 {
-    if (!list || list->GetType() != D3D12_COMMAND_LIST_TYPE_DIRECT)
+    if (!list || !Detail::ListTypeAdmitted(static_cast<uint32_t>(list->GetType()), lists, chain))
     {
         refusal = "unsupported-command-list-type";
         return false;
@@ -203,6 +242,11 @@ bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool chain)
     list = Canonical(list);
     if (!list || !Install(list))
         return false;
+    if (list->GetType() == D3D12_COMMAND_LIST_TYPE_COMPUTE && !ComputeQueuesHooked())
+    {
+        refusal = "compute-queue-not-hooked";
+        return false;
+    }
     std::lock_guard lock(stateMutex);
     try
     {
@@ -315,6 +359,13 @@ void Prune(Usage& usage)
     for (auto& e : usage.epochs)
         if (e && Detail::IsReady(*e, FenceValue))
             e.reset();
+}
+
+bool CaptureReusable(const Usage& usage)
+{
+    std::lock_guard lock(stateMutex);
+    RefreshOrphans(usage);
+    return Detail::IsCaptureReusable(usage, FenceValue);
 }
 
 bool Completed(const Usage& usage)

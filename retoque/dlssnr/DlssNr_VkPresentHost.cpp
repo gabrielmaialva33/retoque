@@ -11,6 +11,7 @@
 #include "DlssNr_SlNativeNr.h"
 #include "DlssNr_DriverInitGate.h"
 #include "DlssNr_VkRecording.h"
+#include "DlssNr_VkPreRuntime.h"
 
 #include <Config.h>
 #include <State.h>
@@ -3886,6 +3887,8 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
 
     DeferredRelease::RegisterOwner(H(*device));
     HookDevice(*device);
+    if (!internal)
+        DlssNr::VkPre::Runtime::Install(*device, edited ? &withExtensions : info, instanceApiVersion);
 
     // The round trip's own submits go through the host's trampoline of the device's vkQueueSubmit. The next layer
     // can still be Vulkan_wDx12 (as in DOOM), so even fence-only submits need a non-null submit array. The borrowed

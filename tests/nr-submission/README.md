@@ -27,3 +27,7 @@ These tests do NOT execute COM, Detours, D3D12, NGX or GPU work. Hook coverage,
 unknown wrapper implementations and real queue/device-loss behavior require
 separate integration validation. No game installations or markers are accessed.
 This directory is outside the release package's explicit artifact allow-list.
+
+It also checks which command-list types `Track` follows (`Detail::ListTypeAdmitted`: DIRECT always, COMPUTE only for a
+caller that opts in and never for an NR chain recording, BUNDLE and COPY never) and, by source guard, that the
+comparison capture is the only caller opting in.

@@ -324,7 +324,7 @@ int ConversionCases()
 } // namespace
 namespace DlssNr::Submission
 {
-bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool)
+bool Track(ID3D12GraphicsCommandList* list, Usage& usage, bool, Lists)
 {
     ++tracks;
     if (failTrack)

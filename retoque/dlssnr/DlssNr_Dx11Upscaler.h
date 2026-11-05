@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DlssNr_Dx11Route.h"
+#include "DlssNr_Dx11Scene.h"
 
 #include <Config.h>
 
@@ -80,6 +81,9 @@ inline void NoteDx11Evaluate(::Upscaler upscaler, ID3D11DeviceContext* context, 
 
     // Before the report, so that an evaluate the transport carries is not reported as one whose guides are missing.
     CarryNativeDx11Guides(context, params, route == Dx11Route::Kind::NativeDlss, evaluated);
+
+    if (NativeDx11SceneStatus() != nullptr)
+        return; // The opt-in seam reports its own admitted/refused status.
 
     const auto report =
         Dx11Route::Decide({ true, route, cfg.DlssNrHookMethod.value_or_default(), NativeDx11GuidesCarriedRecently() });

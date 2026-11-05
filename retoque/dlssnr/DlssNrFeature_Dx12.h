@@ -59,6 +59,10 @@ namespace DlssNr
 // preUpscaleDeclined is ScopedPreUpscale::Declined() from the scope wrapped around this same
 // evaluate, when there was one. On stage 1 this pass stands down unless that scope declined the
 // evaluate for a reason this side can serve.
+bool EvaluateDx11SceneFrame(ID3D12GraphicsCommandList* list, ID3D12Resource* colour, ID3D12Resource* depth,
+                            ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* queue,
+                            const char** reason);
+
 void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                           ID3D12CommandQueue* timingQueue = nullptr, bool preUpscaleDeclined = false,
                           bool isRayReconstruction = false);
@@ -548,7 +552,7 @@ struct PairCaptureStatus
 
 // False when the request is not taken -- a capture already under way (a second press is ignored), the driver proxy
 // on, or the capture off for the session after a recording that never completed -- with why, a literal, when given.
-bool RequestPairCapture(const char** why = nullptr);
+bool RequestPairCapture(const char** why = nullptr, bool nativeVulkan = false);
 PairCaptureStatus GetPairCaptureStatus();
 
 // The present hook. Runs the pass on the swapchain backbuffer at present time: the frame the game

@@ -210,48 +210,53 @@ def guards(t):
         for wait in waits:
             check(wait not in text, f'{name} call {wait}')
 
-    evaluate = body_of(feature, r'^void\s+EvaluateAfterUpscaleVk\s*\(')
-    flat = re.sub(r'\s+', ' ', code_mask(evaluate))
-    check('const bool zeroGuideReset = cfg.DlssNrZeroGuideReset.value_or_default();' in flat, 'the key, read once')
-    for call in ('ConsumeMotionProbe(', 'PrepareMotionProbe(', 'MotionProbePolicyReset(', 'ReserveMotionProbe(',
-                 'probe.pass.Record('):
-        check(flat.count(call) == 1, f'{call} once in EvaluateAfterUpscaleVk')
-    check('if (zeroGuideReset && g_vk.device == device) ConsumeMotionProbe(zeroGuideReset);' in flat,
-          'readbacks consumed only with the key on, on the same device')
-    check(re.search(r'if \(zeroGuideReset\) \{ probePlan = PrepareMotionProbe\(', flat) is not None,
-          'the plan only with the key on')
-    check('if (zeroGuideReset && probePlan.due) probeRecording = ReserveMotionProbe(*recording, probePlan);' in flat,
-          'the reservation only with the key on and a due probe')
-    check('if (probeRecording) {' in flat, 'the probe recorded only with a reservation')
-    check('const bool deadMotionReset = MotionProbePolicyReset(device, probePlan, zeroGuideReset, gameAskedReset);'
-          in flat, 'the rule takes the game\'s own reset')
-    policy_block = block_after(flat, 'if (deadMotionReset)')
-    check('g_vk.reset = true;' in policy_block and '++g_vk.motionProbe.policyResets' in policy_block and
-          'resets' not in policy_block.replace('policyResets', ''), 'a policy reset has its own counter')
-    game_block = block_after(flat, 'if (gameAskedReset)')
-    check('++resets;' in game_block and 'dead' not in game_block.lower() and 'probe' not in game_block.lower(),
-          'the game\'s counter never counts the probe')
+    for route, signature in (('post', r'^void\s+EvaluateAfterUpscaleVk\s*\('),
+                             ('pre', r'^static bool\s+RecordPreUpscaleVk\s*\(')):
+        evaluate = body_of(feature, signature)
+        flat = re.sub(r'\s+', ' ', code_mask(evaluate))
+        check('const bool zeroGuideReset = cfg.DlssNrZeroGuideReset.value_or_default();' in flat, 'the key, read once')
+        for call in ('ConsumeMotionProbe(', 'PrepareMotionProbe(', 'MotionProbePolicyReset(', 'ReserveMotionProbe(',
+                     'probe.pass.Record('):
+            check(flat.count(call) == 1, f'{call} once in {route}')
+        check('if (zeroGuideReset && g_vk.device == device) ConsumeMotionProbe(zeroGuideReset);' in flat,
+              'readbacks consumed only with the key on, on the same device')
+        check(re.search(r'if \(zeroGuideReset\) \{ probePlan = PrepareMotionProbe\(', flat) is not None,
+              'the plan only with the key on')
+        check('if (zeroGuideReset && probePlan.due) probeRecording = ReserveMotionProbe(*recording, probePlan);' in flat,
+              'the reservation only with the key on and a due probe')
+        check('if (probeRecording) {' in flat, 'the probe recorded only with a reservation')
+        check('const bool deadMotionReset = MotionProbePolicyReset(device, probePlan, zeroGuideReset, gameAskedReset);'
+              in flat, 'the rule takes the game\'s own reset')
+        policy_block = block_after(flat, 'if (deadMotionReset)')
+        check('g_vk.reset = true;' in policy_block and '++g_vk.motionProbe.policyResets' in policy_block and
+              'resets' not in policy_block.replace('policyResets', ''), 'a policy reset has its own counter')
+        game_block = block_after(flat, 'if (gameAskedReset)')
+        check('++resets;' in game_block and 'dead' not in game_block.lower() and 'probe' not in game_block.lower(),
+              'the game\'s counter never counts the probe')
 
-    def at(needle):
-        return flat.find(needle)
+        def at(needle):
+            return flat.find(needle)
 
-    order = [('ConsumeMeterReadback();', 'ConsumeMotionProbe('),
-             ('g_vk.guideRefusal.active = false;', 'PrepareMotionProbe('),
-             ('PrepareMotionProbe(', 'g_vk.pass->Reserve(cmdBuffer, 4)'),
-             ('Pin(*recording, { g_vk.recording })', 'ReserveMotionProbe('),
-             ('ReserveMeterReadback(*recording)', 'ReserveMotionProbe('),
-             ('ReserveMotionProbe(', 'BeginRouteRecording();'),
-             ('g_vk.meterFrames++;', 'probe.pass.Record('),
-             ('probe.pass.Record(', 'g_fwd.evaluate('),
-             ('deadMotionReset', 'g_fwd.evaluate(')]
-    for first, then in order:
-        check(at(first) >= 0 and at(then) >= 0 and at(first) < at(then), f'{first} before {then}')
-    check('if (zeroGuideReset != g_vk.motionProbe.on) {' in flat and
-          'g_vk.motionProbe.readbacks.Invalidate(); LoseMotionVerdict(' in flat,
-          'switched on again, pending probes are discarded and the verdict starts over')
+        order = [('ConsumeMeterReadback();', 'ConsumeMotionProbe('),
+                 ('g_vk.guideRefusal.active = false;', 'PrepareMotionProbe('),
+                 ('PrepareMotionProbe(', 'g_vk.pass->Reserve(cmdBuffer, 4)'),
+                 ('Pin(*recording, { g_vk.recording })', 'ReserveMotionProbe('),
+                 ('ReserveMeterReadback(*recording)', 'ReserveMotionProbe('),
+                 ('ReserveMotionProbe(', 'BeginRouteRecording();'),
+                 ('g_vk.meterFrames++;', 'probe.pass.Record('),
+                 ('probe.pass.Record(', 'g_fwd.evaluate('),
+                 ('deadMotionReset', 'g_fwd.evaluate(')]
+        for first, then in order:
+            check(at(first) >= 0 and at(then) >= 0 and at(first) < at(then), f'{first} before {then}')
+        check('if (zeroGuideReset != g_vk.motionProbe.on) {' in flat and
+              'g_vk.motionProbe.readbacks.Invalidate(); LoseMotionVerdict(' in flat,
+              'switched on again, pending probes are discarded and the verdict starts over')
 
     shutdown = re.sub(r'\s+', ' ', code_mask(body_of(feature, r'^void\s+ShutdownVk\s*\(')))
-    check('if (!deviceAlive) { ForgetMeterReadback(); ForgetMotionProbe();' in shutdown,
+    # The pair capture is told the device is gone first (it invalidates before anything is forgotten), then the meter
+    # and the probe are forgotten without a call.
+    check('if (!deviceAlive) { PairCapture::DeviceGoneVkLocked(g_vk.device, false); ForgetMeterReadback(); '
+          'ForgetMotionProbe();' in shutdown,
           'ShutdownVk(false) forgets the probe without a call')
     gone = re.sub(r'\s+', ' ', code_mask(body_of(feature, r'^void\s+AfterUpscaleDeviceGone\s*\(')))
     check('if (forgetOnly) { ForgetMeterReadback(); ForgetMotionProbe(); }' in gone,
@@ -369,14 +374,33 @@ def main():
               'bindings, optional SPIR-V, every probe step behind ZeroGuideReset in the V-06 order, no CPU wait, '
               'the three ends, Begin flags passed on, project)')
 
+    route_mutants = {'consume without the key', 'reserve after the first command', "policy in the game's counter",
+                     'prepare without the key'}
     for name, path, old, new in GUARD_MUTANTS:
-        mutated = dict(baseline)
-        mutated[path] = mutate(baseline[path], old, new)
-        if guards(mutated):
-            print(f'PASS: guard mutant caught: {name}')
-        else:
-            print(f'FAIL: guard mutant survived: {name}')
-            failed.append(name)
+        targets = ('post', 'pre') if name in route_mutants else (None,)
+        for target in targets:
+            mutated = dict(baseline)
+            if target:
+                signature = r'^void\s+EvaluateAfterUpscaleVk\s*\(' if target == 'post' else r'^static bool\s+RecordPreUpscaleVk\s*\('
+                original = body_of(baseline[path], signature)
+                if name == 'reserve after the first command':
+                    # Move exactly the reservation call past the first command in either route; pre has extra
+                    # identity publication between these anchors, which must not become part of the mutation.
+                    call = '        probeRecording = ReserveMotionProbe(*recording, probePlan);'
+                    changed = mutate(original, call, '        (void) 0;')
+                    changed = mutate(changed, '    BeginRouteRecording();',
+                                     '    BeginRouteRecording();\n    if (zeroGuideReset && probePlan.due)\n' + call)
+                else:
+                    changed = mutate(original, old, new)
+                mutated[path] = baseline[path].replace(original, changed, 1)
+            else:
+                mutated[path] = mutate(baseline[path], old, new)
+            label = name + (f' [{target}]' if target else '')
+            if guards(mutated):
+                print(f'PASS: guard mutant caught: {label}')
+            else:
+                print(f'FAIL: guard mutant survived: {label}')
+                failed.append(label)
 
     with tempfile.TemporaryDirectory(prefix='nr-vk-zero-motion-') as directory:
         passed, output = build_and_run(baseline[FEATURE], directory)

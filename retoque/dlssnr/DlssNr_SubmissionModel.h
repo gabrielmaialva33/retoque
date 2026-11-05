@@ -29,6 +29,25 @@ constexpr uint64_t AffinityBatches = 8;
 // four NR recordings are on the GPU: 24 of the main pass's 64 ring slots at six dispatches each.
 constexpr unsigned MaxEarlierInFlight = 3;
 
+// Which command-list types a caller lets Track follow. DIRECT always; COMPUTE only for a caller that asks for it and
+// is not an NR chain recording, so chain admission and queue affinity (chain-in-flight.md) see exactly what they did
+// before. The queue hook and the list Reset hook are the same implementation for both types, and Install still refuses
+// any list whose Reset is not the hooked one. D3D12_COMMAND_LIST_TYPE values; Submission.cpp asserts they match.
+enum class Lists : uint8_t
+{
+    Direct,
+    DirectOrCompute,
+};
+constexpr uint32_t ListTypeDirect = 0;
+constexpr uint32_t ListTypeCompute = 2;
+
+constexpr bool ListTypeAdmitted(uint32_t type, Lists lists, bool chain)
+{
+    if (type == ListTypeDirect)
+        return true;
+    return type == ListTypeCompute && lists == Lists::DirectOrCompute && !chain;
+}
+
 struct Epoch
 {
     uintptr_t list = 0;
@@ -94,6 +113,22 @@ template <typename Completed> bool IsSafe(const Epoch& e, Completed completed)
         return true;
     return e.orphaned && e.pending == 0 && !e.unknown &&
            (IsComplete(e, completed) || (!e.submitted && e.executions == 0));
+}
+
+// Slot overwrite admission for the one epoch of a capture, not resource destruction. A successful Reset
+// before Execute or a definitively orphaned list is reusable too; an unanswered recording remains busy.
+template <typename Completed> bool IsCaptureReusable(const Usage& usage, Completed completed)
+{
+    const Epoch* capture = nullptr;
+    for (const auto& e : usage.epochs)
+    {
+        if (!e)
+            continue;
+        if (capture != nullptr)
+            return false;
+        capture = e.get();
+    }
+    return capture != nullptr && (IsSafe(*capture, completed) || IsComplete(*capture, completed));
 }
 
 // Done on the GPU, as far as starting new work goes. Outside strict mode a completed epoch counts although its

@@ -220,6 +220,43 @@ assert renderer.count('StampPresentGuide(') == 2  # its definition and its one c
 assert renderer.count('CaptureGuides(cmdList, source, frame);') == 1
 assert renderer.count('return CaptureGuides(cmdList, source, GatherGuideFrame(params));') == 1
 assert renderer.count('CaptureGuides(') == 3  # its definition and its two producers
+
+def assert_capture_guides_contract(core_src):
+    assert 'g_presentGuideRing.AcquireForRecord(isReadInFlight, isWriteInFlight, isShapeMatch, &acquire)' in core_src
+    retire_cap = core_src.index('if ((replaceDepth || replaceMotion) && !PresentGuideRetirementCapacity())')
+    alloc_depth = core_src.index('newDepth.Attach(CreatePresentGuideClone(device, depth));')
+    alloc_motion = core_src.index('newMotion.Attach(CreatePresentGuideClone(device, motion));')
+    track_call = core_src.index('const bool trackedNow = DlssNr::Submission::Track(cmdList, clone.writeUsage) &&')
+    park_depth = core_src.index('ParkNrClone(clone.depth, savedWriteUsage, clone.tracked);')
+    park_motion = core_src.index('ParkNrClone(clone.motion, savedWriteUsage, clone.tracked);')
+    detach_depth = core_src.index('clone.depth = newDepth.Detach();')
+    detach_motion = core_src.index('clone.motion = newMotion.Detach();')
+    assert retire_cap < alloc_depth < alloc_motion < track_call < park_depth < park_motion < detach_depth < detach_motion
+    for reason in ('MissingInput', 'Device', 'Incompatible', 'SlotsBusy', 'RetiredCap', 'AllocFailed', 'TrackRefused',
+                   'Recorded'):
+        assert f'ProducerReason::{reason}' in core_src, f'missing {reason}'
+
+assert_capture_guides_contract(core)
+
+for mut_name, mut_core in (
+    ('missing-write-in-flight', core.replace(
+        'g_presentGuideRing.AcquireForRecord(isReadInFlight, isWriteInFlight, isShapeMatch, &acquire)',
+        'g_presentGuideRing.AcquireForRecord(isReadInFlight)', 1)),
+    ('missing-retire-cap', core.replace('!PresentGuideRetirementCapacity()', 'true', 1)),
+    ('park-before-track', (
+        core[:core.index('const auto savedWriteUsage = clone.writeUsage;')] +
+        'ParkNrClone(clone.depth, savedWriteUsage, clone.tracked);\n' +
+        core[core.index('const auto savedWriteUsage = clone.writeUsage;'):].replace(
+            'ParkNrClone(clone.depth, savedWriteUsage, clone.tracked);', '', 1)
+    )),
+    ('missing-track-refused-reason', core.replace('ProducerReason::TrackRefused', 'ProducerReason::Recorded', 1)),
+):
+    try:
+        assert_capture_guides_contract(mut_core)
+    except (AssertionError, ValueError):
+        pass
+    else:
+        raise AssertionError(f'capture_guides contract accepted mutant {mut_name}')
 temporal = function(renderer, 'void CaptureTemporal(')
 assert 'D3D12OutputExtent(params, &outputWidth, &outputHeight);' in temporal
 assert 'cfg.DepthResourceBarrier.value_or(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)' in temporal
@@ -273,3 +310,21 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-nr-present-guide-identity-')
     binary = directory / 'glue'
     subprocess.run(flags + ['-Wno-unused-function', str(unit), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
+
+    identity_header = (retoque / 'dlssnr/DlssNr_PresentGuideIdentity.h').read_text()
+    for name, old, new in (
+        ('lose-overflow-bit', 'static_cast<uint64_t>(overflow) << 63',
+         'static_cast<uint64_t>(overflow && false) << 63'),
+        ('format-saturated-as-exact', 'if (status.countsOverflow)', 'if (status.countsOverflow && false)'),
+    ):
+        assert old in identity_header
+        overlay = directory / name
+        (overlay / 'dlssnr').mkdir(parents=True)
+        (overlay / 'dlssnr/DlssNr_PresentGuideIdentity.h').write_text(identity_header.replace(old, new, 1))
+        binary = overlay / 'decide'
+        subprocess.run(['g++', '-std=c++20', '-O1', '-Wall', '-Wextra', '-Werror',
+                        '-I', str(overlay), '-I', str(retoque / 'dlssnr'), '-I', str(retoque),
+                        '-I', str(root / 'OptiScaler'), str(here / 'decide.cpp'), '-o', str(binary)], check=True)
+        result = subprocess.run([str(binary)], capture_output=True, text=True)
+        assert result.returncode != 0, f'mutant survived: {name}'
+        print(f'PASS: {name}: compiled; status test killed mutant')

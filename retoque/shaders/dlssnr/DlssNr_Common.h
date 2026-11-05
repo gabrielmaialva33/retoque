@@ -247,6 +247,9 @@ struct DlssNrFrameInfo
     // the stabilizer treats it as one; only the log tells the two apart. False when the frame already carried a reset
     // of its own before the estimator saw the cut.
     bool ResetIsSceneCut = false;
+
+    // Owned native D3D11 POST-SR transport: mandatory exact recording lifetime and owned exposure state.
+    bool NativeDx11Scene = false;
 };
 
 struct alignas(256) DlssNrConstants

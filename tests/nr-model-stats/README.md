@@ -38,3 +38,5 @@ Mutation-checked on 2026-10-30: dropping the sentinel write, not checking it, as
   whether its figure is right are for a GPU run ([model-vram-stats](../../docs/dlssnr/design/model-vram-stats.md),
   "What a GPU run must show").
 - The menu line is checked as source text, not drawn.
+
+The Vulkan guards name post, pre and present build queries individually. Both input routes must query only after successful creation and stop on a stats fault. Each release/abandonment site must immediately forget the figure. Seven independent query/forget mutants cover these sites; a global count cannot compensate for a missing pre-stage check.

@@ -454,6 +454,23 @@ tier = "wine"
 timeout = 1500
 summary = "The native D3D11 guide transport's API sequence on real devices under a local Proton (DXVK and vkd3d-proton): depth and motion formats a game uses cross through shared textures and a shared fence into clones made as the present guide ring makes them, six frames each, read back byte for byte; the depth-stencil hazard the transport avoids is reported. SKIP without a local Proton."
 
+[nr-dx11-scene-stage]
+path = "nr-dx11-scene-stage"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Native D3D11 POST-SR opt-in policy, integration/lifetime/order contracts and 19 individually killed mutants; no GPU or NGX."
+
+[dx11-scene-transport]
+path = "dx11-scene-transport"
+domain = "transport"
+requires = ["python", "wine-toolchain"]
+tier = "wine"
+timeout = 900
+result = "artifacts/result.json"
+summary = "Isolated DXVK/vkd3d-proton scene-color roundtrip: shared-fence ordering, D3D12 compute, D3D11 same-frame consumption, normal/early Present, a forced-cycle control and the production transport header (24 exact frames plus queue refusal and pixel mutants). No game or NGX; final-only readback; explicit prerequisite SKIP."
+
 [synth-motion-d3d12]
 path = "synth-motion-d3d12"
 domain = "fg"
@@ -620,7 +637,7 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 900
-summary = "Zero-motion detection on the Vulkan after-upscale route: the production route state with the real ring, registry and detector, the production pass against recording Vulkan fakes and the route's probe functions extracted verbatim, under ASan/UBSan (the command stream, None/None/Dead then Alive, the sentinel over an old valid grid, recording order, saturation and staleness, Dead on device A then a stable failure on B with no policy reset, refused recordings, exclusive slots); source guards on the VK_MODE block, the push block, the V-06 order behind ZeroGuideReset, no CPU wait, the route's ends and the project; seventeen planted mutants (incl. probes pending across a lost verdict, failed layout creates). No GPU."
+summary = "Zero-motion detection on both Vulkan input placements: the production route state with the real ring, registry and detector, the production pass against recording Vulkan fakes and the route's probe functions extracted verbatim, under ASan/UBSan (the command stream, None/None/Dead then Alive, the sentinel over an old valid grid, recording order, saturation and staleness, Dead on device A then a stable failure on B with no policy reset, refused recordings, exclusive slots); source guards on the VK_MODE block, the push block, the V-06 order behind ZeroGuideReset, no CPU wait, the route's ends and the project; twenty-one planted mutants (incl. separate pre/post guards, probes pending across a lost verdict, failed layout creates). No GPU."
 
 [nr-scene-cut]
 path = "nr-scene-cut"
@@ -1030,7 +1047,7 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 300
-summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan plan and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan, and 15 mutants that must fail."
+summary = "Metamorphic NR input geometry (N-03): one analytic scene in equivalent representations (keys, padded allocations at a base with sentinel margins, MV units with compensating scale, MVLowRes against display vectors, BGRA colour) through GatherGuideFrame, Dispatch's geometry/scale, the Vulkan post/pre plans and the guide resample HLSL on a CPU shim; exact vs bounded relations, analytic check, D3D12 = Vulkan post, mandatory owned pre guides, and 22 mutants that must fail."
 
 [nr-replay-transform]
 path = "nr-replay-transform"
@@ -1135,3 +1152,19 @@ requires = ["python"]
 tier = "host"
 timeout = 60
 summary = "Archive identity and sanitized same-commit complete-host evidence; rejects partial claims and unsafe ZIPs."
+
+[nr-vk-pair-capture]
+path = "nr-vk-pair-capture"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Native Vulkan pair capture: production backend against fake Vulkan calls; split snapshots, retirement and executed marker, serial replay, discard, cancellation, writer/device loss, actual-allocation budget; six independently killed safety mutants. No GPU or Wine."
+
+[nr-vk-pre-upscale]
+path = "nr-vk-pre-upscale"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 600
+summary = "Vulkan pre-upscale rules, composite identities, canonical tickets and production scope with fake prepare/SR; compiling mutants, no GPU qualification."

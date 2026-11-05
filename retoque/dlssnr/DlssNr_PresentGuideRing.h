@@ -30,6 +30,23 @@ struct Slot
     void* readToken = nullptr;  // pointer to present submission tracking usage
 };
 
+enum class AcquireKind : uint8_t
+{
+    None = 0,
+    ReusedMatching,
+    ReusedEmpty,
+    EvictedOldest,
+};
+
+struct AcquireReport
+{
+    size_t slot = kRingSize;
+    AcquireKind kind = AcquireKind::None;
+    uint32_t busyLastRead = 0;
+    uint32_t busyReadInFlight = 0;
+    uint32_t busyWriteInFlight = 0;
+};
+
 class Ring
 {
     Slot _slots[kRingSize] {};
@@ -38,34 +55,101 @@ class Ring
 
   public:
     // Selects a slot to record a new capture into on the evaluate command list.
-    // Skips slots currently being read by in-flight present commands and the slot read last.
-    // If all other slots are currently in flight, returns kRingSize (skips capture, matching RenoDX).
-    template <typename P> size_t AcquireForRecord(P isReadInFlight)
+    // Skips the slot read last, slots currently being read by in-flight present commands, and slots whose
+    // previous capture write is still in flight on the GPU.
+    // Among free slots, prefers one whose existing clones already match (device, depth desc, motion desc),
+    // then an empty slot, then evicting the oldest mismatched slot.
+    // If all slots are currently busy, returns kRingSize (skips capture, matching RenoDX).
+    template <typename ReadPred, typename WritePred, typename MatchPred>
+    size_t AcquireForRecord(ReadPred isReadInFlight, WritePred isWriteInFlight, MatchPred isShapeMatch,
+                            AcquireReport* report = nullptr)
     {
-        size_t best = kRingSize;
-        uint64_t oldestSeq = UINT64_MAX;
+        AcquireReport out {};
+        size_t bestMatching = kRingSize;
+        uint64_t oldestMatchingSeq = UINT64_MAX;
+        size_t firstEmpty = kRingSize;
+        size_t bestEvict = kRingSize;
+        uint64_t oldestEvictSeq = UINT64_MAX;
 
         for (size_t i = 0; i < kRingSize; ++i)
         {
             if (i == _lastReadIndex)
+            {
+                ++out.busyLastRead;
                 continue;
+            }
 
             // Never overwrite a slot whose present-time read is still in flight on the GPU
             if (isReadInFlight(_slots[i].readToken))
+            {
+                ++out.busyReadInFlight;
                 continue;
+            }
+
+            // Never overwrite a slot whose previous capture write is still in flight on the GPU
+            if (isWriteInFlight(_slots[i].writeToken))
+            {
+                ++out.busyWriteInFlight;
+                continue;
+            }
+
+            if (isShapeMatch(i))
+            {
+                const uint64_t seq = _slots[i].recorded ? _slots[i].sequence : 0;
+                if (bestMatching == kRingSize || seq < oldestMatchingSeq)
+                {
+                    oldestMatchingSeq = seq;
+                    bestMatching = i;
+                }
+                continue;
+            }
 
             if (!_slots[i].recorded)
-                return i;
-
-            if (_slots[i].sequence < oldestSeq)
             {
-                oldestSeq = _slots[i].sequence;
-                best = i;
+                if (firstEmpty == kRingSize)
+                    firstEmpty = i;
+                continue;
+            }
+
+            if (_slots[i].sequence < oldestEvictSeq)
+            {
+                oldestEvictSeq = _slots[i].sequence;
+                bestEvict = i;
             }
         }
 
-        // When all non-last-read slots have in-flight reads, return kRingSize to skip capture
-        return best;
+        if (bestMatching != kRingSize)
+        {
+            out.slot = bestMatching;
+            out.kind = AcquireKind::ReusedMatching;
+        }
+        else if (firstEmpty != kRingSize)
+        {
+            out.slot = firstEmpty;
+            out.kind = AcquireKind::ReusedEmpty;
+        }
+        else if (bestEvict != kRingSize)
+        {
+            out.slot = bestEvict;
+            out.kind = AcquireKind::EvictedOldest;
+        }
+
+        if (report != nullptr)
+            *report = out;
+
+        // When all non-last-read slots have in-flight reads or writes, return kRingSize to skip capture
+        return out.slot;
+    }
+
+    template <typename ReadPred, typename WritePred>
+    size_t AcquireForRecord(ReadPred isReadInFlight, WritePred isWriteInFlight, AcquireReport* report = nullptr)
+    {
+        return AcquireForRecord(isReadInFlight, isWriteInFlight, [](size_t) { return false; }, report);
+    }
+
+    template <typename ReadPred> size_t AcquireForRecord(ReadPred isReadInFlight)
+    {
+        return AcquireForRecord(isReadInFlight, [](void*) { return false; }, [](size_t) { return false; }, nullptr);
     }
 
     void CommitRecord(size_t index, uint32_t w, uint32_t h, bool depthInverted, int64_t nowMs, void* writeToken,

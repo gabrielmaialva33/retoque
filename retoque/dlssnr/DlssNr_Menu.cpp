@@ -7,6 +7,7 @@
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
+#include "DlssNr_Dx11Scene.h"
 #include "DlssNr_Funnel.h"
 #include "DlssNr_Enlarge.h"
 #include "DlssNr_GameProfiles.h"
@@ -310,6 +311,7 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
     PairCapture::ButtonInputs in;
     in.enabled = true;
     in.nativeVulkan = nativeVulkan;
+    in.vulkanCaptureReady = nativeVulkan && DlssNr::IsRunningVk();
     in.d3d12Ran = DlssNr::IsRunning();
     in.proxy = config->DlssNrUseProxy.value_or_default();
     in.compare = config->DlssNrCompare.value_or_default();
@@ -323,7 +325,7 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
 
     ImGui::BeginDisabled(!button.enabled);
     if (ImGui::Button(Localization::Label("Capture original and processed")))
-        DlssNr::RequestPairCapture();
+        DlssNr::RequestPairCapture(nullptr, nativeVulkan);
     ImGui::EndDisabled();
 
     HelpMarker("Saves the next frame twice, as the pass read it and as the pass wrote it, into the"
@@ -333,7 +335,7 @@ static void RenderPairCapture(Config* config, bool nativeVulkan)
                "\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the"
                "\nupscaler's output, before the game's own tonemapper, post-processing and interface."
                "\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler"
-               "\nasks for the same capture from outside the game.");
+               "\nasks for the same capture from outside the game on D3D12 routes.");
 
     if (button.reason != nullptr)
         ImGui::TextDisabled("%s", Localization::Tr(button.reason));
@@ -394,6 +396,8 @@ static std::string CollectDiagnosticReport(Config* config)
         in.upscaler = state.currentFeature->Name();
     if (const char* route = DlssNr::Dx11Route::ReportText(DlssNr::Dx11RouteReport()))
         in.dx11Route = route;
+    if (const char* scene = DlssNr::NativeDx11SceneStatus())
+        in.dx11Route = scene;
     // The model Retoque's loaders use: the file [DlssNr] ModelFile names, else the default as before
     // (docs/dlssnr/design/model-file.md). A named file resolves with two file checks, never a search.
     if (const auto model = DlssNr::ModelFile::Explicit() ? DlssNr::ModelFile::Find(Util::DllPath().remove_filename())
@@ -1213,6 +1217,8 @@ void RenderMenu(Config* config, float menuResScale)
         // for something that is not coming, so this line says why instead, and names the route that carries NR.
         const auto routeReport = enabled ? DlssNr::Dx11RouteReport() : DlssNr::Dx11Route::Report::None;
         const char* routeNotice = DlssNr::Dx11Route::ReportText(routeReport);
+        if (const char* scene = DlssNr::NativeDx11SceneStatus())
+            routeNotice = scene;
 
         // Turning the pass off does not release the model, so the feature handle stays alive and
         // IsRunning keeps answering yes. Reporting a cost from that was wrong in the way that matters
@@ -1443,10 +1449,19 @@ void RenderMenu(Config* config, float menuResScale)
         ImGui::Spacing();
         ImGui::PushItemWidth(220.0f * menuResScale);
 
-        // Native Vulkan has no pre-upscale implementation; show its effective stage as status.
+        // Native Vulkan uses strict Stage-1 admission; keep requested placement distinct from successful work.
         if (vulkan)
         {
-            ImGui::TextDisabled(Localization::Tr("Stage: after the upscaler (native Vulkan)"));
+            if (config->DlssNrStage.value_or_default() == 1)
+            {
+                ImGui::TextDisabled(Localization::Tr("Stage: before the upscaler requested (native Vulkan)"));
+                HelpMarker("Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;"
+                           "\nthere is no after-upscale NR fallback. One outstanding recording is admitted."
+                           "\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation."
+                           "\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.");
+            }
+            else
+                ImGui::TextDisabled(Localization::Tr("Stage: after the upscaler (native Vulkan)"));
         }
         else if (config->DlssNrHookMethod.value_or_default() == 2)
         {

@@ -594,3 +594,78 @@ thread, the exception's text, tighter source guards). It raised two more items, 
 catch. That costs one "capture failed" line and a second press. The second: if `Track` throws after both readbacks
 were allocated, they are kept although nothing was recorded into them. That is conservative, and costs memory only
 on that path.
+
+## 11. Untracked recordings are refused (2026-11-04)
+
+The untracked fallback (section 10, third item) is gone. Where `Submission::Track` refuses the list that carried the
+pass, the capture is refused before any copy is recorded: the two readbacks, never used by the GPU, are released at
+once, the menu shows "This route's commands cannot be followed to the GPU's completion; nothing was captured", and
+the log names the tracker's reason. `completion` in a D3D12 record is now always `submission-fence` (native Vulkan's is its own, see below); the A/B and replay
+tools already rejected `assumed-8-frames`.
+
+Why: the fallback read the copies after 8 of the pass's dispatches and let our reference go after 32, an assumption
+about how far behind the GPU runs, not a proof. NeuRotic 0.9.9 refuses a capture without a tracking ticket
+(the 2026-11-04 comparison with its 0.9.9 release, item 1; a local review, not in the repository); this matches that guarantee. NeuRotic stops there and loses
+those routes; here the tracker follows them instead. `Submission::Track` took DIRECT lists only, and the default
+single-pass NR runs untracked on whatever list the game hands the upscaler, a COMPUTE list included. It now also
+follows a COMPUTE list for a caller that asks (`Lists::DirectOrCompute`, `Detail::ListTypeAdmitted`), and only the
+capture asks. Each queue gets its own fence, and `Install` still refuses a list whose `Reset` is not the hooked one.
+The queue hook is found on a DIRECT probe queue: vkd3d-proton gives every queue type one vtable (source-checked,
+upstream `87983f34`), native D3D12 is not assumed to. So the first COMPUTE list probes once: a COMPUTE queue is
+created on the admitted device, its `ExecuteCommandLists` entry compared with the hooked one, and COMPUTE lists are
+refused for the session (`compute-queue-not-hooked`) unless they match, rather than accepted and left waiting for a
+fence that never comes. NR chain
+recordings never take COMPUTE lists, so chain admission and queue affinity see exactly what they did; every other
+`Track` caller keeps the DIRECT-only rule it was validated under until it is opted in with its own evidence. What is
+left unfollowed (a BUNDLE or COPY list, a second device, a runtime whose hooks differ) is refused with the tracker's
+reason.
+
+Tested in `tests/nr-capture`: the refusal, the released readbacks, no hand-off however long it is polled, the next
+press trying again; four injected defects (capture anyway, leak instead of release, release without `Ready`, hand-off
+by age) each fail the suite. `tests/nr-submission`: the list-type rule (DIRECT always, COMPUTE only on request and
+never for the chain, BUNDLE and COPY never), and source guards that the capture is the only caller opting in; four
+injected defects (COMPUTE for the chain, every type admitted, the request ignored, the chain opted in) each fail it.
+Not proved: a capture on a real COMPUTE list on a GPU.
+
+Independent review (2026-11-04, a local review outside the repository): fence accounting and the copy's barrier states hold for COMPUTE; the probe above answers its native
+coverage caveat. Two shared effects are kept and stated, not hidden. A replayed capture-bearing COMPUTE list latches
+the process-wide strict retirement (`Submission::Strict`) as any tracked replay already does, so other consumers
+retain their resources longer, never shorter. COMPUTE queues share the 32 tracked-queue slots
+(`Detail::MaxQueues`); past them a queue gets no fence and its work stays retained, fail-closed. The review's read
+race (a list re-executed between completion and the writer's read) is closed by handing readbacks over only when
+the recording is retired (`Ready`), not merely completed.
+
+### 11.1 Writer hand-off waits for retirement (2026-11-04)
+
+The independent compute-capture review of 2026-11-04 (second P2; a local review outside the repository) identified a read race in the existing D3D12
+capture. `Completed` proved that the observed queue submissions had finished, but the game could execute the
+same closed list again before Reset. Those copies could overwrite the private readbacks while the writer
+mapped/read them. The writer's references kept the resources alive; they did not keep their contents immutable.
+This affected DIRECT recordings too, independently of the proposed COMPUTE opt-in.
+
+The shared `PairCapture::Session` now hands a pair to the writer only on `backend.Ready(ticket)`: the backend
+must prove both completion and retirement, so that recording cannot execute again. D3D12 uses the existing
+`Submission::Ready`, which requires successful Reset to seal the recording and all tracked executions complete;
+it does not use the age/orphan-based `Settled` policy. Native Vulkan already requires retirement and a valid
+executed marker, or discards the attempt without publication. Its rules are unchanged.
+
+The cost is latency: a D3D12 capture now waits for the game's Reset of that list, typically a frame or a few
+(expected, not measured here). A game that never resets gives up after `kGiveUpPolls` (1,200 capture polls), even
+if the last submission completed. Give-up proves nothing about future use: leak the pair, write nothing, and
+keep capture disabled for that session. Later completion/retirement does not undo that rule. No GPU wait is added.
+A legally replayed recording yields its last complete execution, never a guarantee of its first execution.
+
+With monotonic retirement, the session releases its own references in the hand-off poll; the writer owns its
+references. The retained-pair recheck and cap remain as defence. Their host tests deliberately inject a faulty,
+non-monotonic backend that revokes `Ready` during hand-off; this is not a normal production lifecycle.
+`tests/nr-capture` covers completion → replay before Reset → completion → retirement, no earlier hand-off,
+writer refusal, shutdown, both give-up cases and session lockout. Its runner compiles and individually rejects
+mutants that hand off on `Completed` again or release retained references before `Ready`.
+
+## Native Vulkan extension (2026-11-04)
+
+The v1 D3D12-only statements above describe the original delivery. Native Vulkan **after-upscale** now uses
+its own tracked-only backend of the same split Session and shared PNG/PFM writer; see
+[native Vulkan pair capture](nr-vk-pair-capture.md) for formats, serial-retirement proof, executed markers,
+budget, device-loss handling and the unqualified GPU matrix. Native Vulkan present remains unavailable.
+No frame-count fallback was restored. The trigger-file entry remains D3D12-only; Vulkan uses the menu button.

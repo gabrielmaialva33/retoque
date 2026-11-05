@@ -189,6 +189,23 @@ with tempfile.TemporaryDirectory(prefix='vk-create-contract-') as folder:
                 if not red:
                     failed.append('control ' + case)
 
+        install = 'DlssNr::VkPre::Runtime::Install(*pDevice, &localCreateInfo, requestedApiVersion);'
+        assert unit.count(install) == 1
+        control('control-no-observer', unit.replace(install, '(void) 0;'), ['capabilities-nr'],
+                'without the successful native create observation')
+        control('control-observer-game-request', unit.replace(install,
+                'DlssNr::VkPre::Runtime::Install(*pDevice, pCreateInfo, requestedApiVersion);'), ['capabilities-nr'],
+                'with the original rather than effective device request')
+        # Slice from the hooks file: the assembled unit also contains a same-named class declaration.
+        native_create = block(hooks, 'static VkResult hkvkCreateDevice(')
+        assert native_create.count(install) == 1 and unit.count(native_create) == 1
+        assert native_create.count('    LOG_FUNC_RESULT(result);') == 1
+        late_create = native_create.replace(install, '(void) 0;').replace(
+            '    LOG_FUNC_RESULT(result);',
+            '    if (result == VK_SUCCESS && !ScopedSkipVulkanHooks::Active() && !State::Instance().creatingD3DDevice)\n'
+            '        ' + install + '\n    LOG_FUNC_RESULT(result);')
+        control('control-observer-after-request-dies', unit.replace(native_create, late_create, 1),
+                ['capabilities-nr'], 'with observation after the effective feature chain was destroyed')
         # The device create holds two per-thread lists: filteredExtensions (dxvk/vkd3d-proton) and newExtensionList.
         assert unit.count('static thread_local std::vector<const char*>') == 2, 'the per-thread lists moved'
         own_extensions = 'ownedRequest.OwnExtensions(localCreateInfo);'

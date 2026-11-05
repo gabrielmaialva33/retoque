@@ -388,6 +388,10 @@ there.
 
 ```ini
 [DlssNr]
+; Startup opt-in native D3D11 POST-SR. Requires explicit Dx11Upscaler=dlss,
+; effective HookMethod=1 and Stage=0; shared fences and distinct Vulkan queues.
+; Unsupported runtimes refuse with a named status/log reason for this session.
+Dx11SceneStage=false
 ; Game profiles: the keys some games need before NR runs in them at all (HookMethod=2 for a D3D11 game with no
 ; upscaler, VulkanPresentHost for DOOM Eternal, ...), applied at start-up only where this file leaves them on
 ; auto, never written back. Under Proton it also points NvapiPath at Proton's own nvapi64.dll when the prefix

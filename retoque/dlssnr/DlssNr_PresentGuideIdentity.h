@@ -492,6 +492,190 @@ constexpr Clock::duration kSteadyWindow = std::chrono::seconds(30);
 constexpr size_t kLagBuckets = 5;   // 0, 1, 2, 3, 4 or more
 constexpr size_t kFrameBuckets = 3; // 1, 2, 3 or more
 
+// Why a producer capture attempt was skipped before CommitRecord, in the order CaptureGuides checks.
+enum class ProducerReason : uint8_t
+{
+    Recorded = 0,
+    MissingInput,
+    Device,
+    Incompatible,
+    SlotsBusy,
+    RetiredCap,
+    AllocFailed,
+    TrackRefused,
+};
+constexpr size_t kProducerReasons = 8;
+
+inline const char* ProducerReasonName(ProducerReason reason)
+{
+    switch (reason)
+    {
+    case ProducerReason::Recorded:
+        return "recorded";
+    case ProducerReason::MissingInput:
+        return "missing-input";
+    case ProducerReason::Device:
+        return "device";
+    case ProducerReason::Incompatible:
+        return "incompatible";
+    case ProducerReason::SlotsBusy:
+        return "slots-busy";
+    case ProducerReason::RetiredCap:
+        return "retired-cap";
+    case ProducerReason::AllocFailed:
+        return "alloc-failed";
+    case ProducerReason::TrackRefused:
+        return "track-refused";
+    }
+    return "?";
+}
+
+struct ProducerCounts
+{
+    uint32_t attempts = 0;
+    uint32_t recorded = 0;
+    uint32_t reusedMatching = 0;
+    uint32_t allocatedEmpty = 0;
+    uint32_t rebuilt = 0;
+    std::array<uint32_t, kProducerReasons> skipped {}; // by ProducerReason (1..kProducerReasons-1)
+    uint32_t busyLastRead = 0;
+    uint32_t busyReadInFlight = 0;
+    uint32_t busyWriteInFlight = 0;
+    uint64_t residentBytes = 0;
+    uint64_t parkedBytes = 0;
+};
+
+inline uint32_t ProducerSkips(const ProducerCounts& counts)
+{
+    uint32_t total = 0;
+    for (size_t r = static_cast<size_t>(ProducerReason::MissingInput); r < kProducerReasons; ++r)
+        total += counts.skipped[r];
+    return total;
+}
+
+inline uint32_t ProducerShape(const ProducerCounts& counts)
+{
+    uint32_t shape = 0;
+    uint32_t bit = 0;
+    const auto add = [&shape, &bit](uint64_t value) { shape |= (value != 0 ? 1u : 0u) << bit++; };
+
+    add(counts.recorded);
+    add(counts.reusedMatching);
+    add(counts.allocatedEmpty);
+    add(counts.rebuilt);
+    for (size_t r = static_cast<size_t>(ProducerReason::MissingInput); r < kProducerReasons; ++r)
+        add(counts.skipped[r]);
+    add(counts.busyLastRead);
+    add(counts.busyReadInFlight);
+    add(counts.busyWriteInFlight);
+    add(counts.parkedBytes);
+
+    return shape;
+}
+
+inline std::string FormatProducerSummary(const ProducerCounts& producer)
+{
+    const auto n = [](uint32_t value) { return std::to_string(value); };
+    const uint32_t skipped = ProducerSkips(producer);
+
+    std::string out = "captures " + n(producer.recorded) + "/" + n(producer.attempts) + " recorded";
+    if (producer.recorded != 0)
+    {
+        out += " (reuse " + n(producer.reusedMatching) + ", empty " + n(producer.allocatedEmpty) + ", rebuild " +
+               n(producer.rebuilt) + ")";
+    }
+    out += ", " + n(skipped) + " skipped";
+    if (skipped != 0)
+    {
+        std::string reasons;
+        for (size_t r = static_cast<size_t>(ProducerReason::MissingInput); r < kProducerReasons; ++r)
+        {
+            if (producer.skipped[r] == 0)
+                continue;
+            reasons += reasons.empty() ? " (" : ", ";
+            reasons += std::string(ProducerReasonName(static_cast<ProducerReason>(r))) + " " + n(producer.skipped[r]);
+            if (static_cast<ProducerReason>(r) == ProducerReason::SlotsBusy &&
+                (producer.busyLastRead != 0 || producer.busyReadInFlight != 0 || producer.busyWriteInFlight != 0))
+            {
+                reasons += " [last-read " + n(producer.busyLastRead) + ", read-busy " + n(producer.busyReadInFlight) +
+                           ", write-busy " + n(producer.busyWriteInFlight) + "]";
+            }
+        }
+        out += reasons + ")";
+    }
+    out += ", bytes resident " + std::to_string(producer.residentBytes) + " parked " +
+           std::to_string(producer.parkedBytes);
+    return out;
+}
+
+class Producer
+{
+    ProducerCounts _counts {};
+
+  public:
+    const ProducerCounts& Open() const { return _counts; }
+
+    void NoteRecorded(PresentGuides::AcquireKind kind, uint64_t residentBytes, uint64_t parkedBytes)
+    {
+        ++_counts.attempts;
+        ++_counts.recorded;
+        switch (kind)
+        {
+        case PresentGuides::AcquireKind::ReusedMatching:
+            ++_counts.reusedMatching;
+            break;
+        case PresentGuides::AcquireKind::ReusedEmpty:
+            ++_counts.allocatedEmpty;
+            break;
+        case PresentGuides::AcquireKind::EvictedOldest:
+            ++_counts.rebuilt;
+            break;
+        case PresentGuides::AcquireKind::None:
+            break;
+        }
+        _counts.residentBytes = residentBytes;
+        _counts.parkedBytes = parkedBytes;
+    }
+
+    void NoteSkipped(ProducerReason reason, const PresentGuides::AcquireReport& acquire, uint64_t residentBytes,
+                     uint64_t parkedBytes)
+    {
+        if (reason == ProducerReason::Recorded)
+            return;
+
+        ++_counts.attempts;
+        const size_t idx = static_cast<size_t>(reason);
+        if (idx < kProducerReasons)
+            ++_counts.skipped[idx];
+
+        if (reason == ProducerReason::SlotsBusy)
+        {
+            _counts.busyLastRead += acquire.busyLastRead;
+            _counts.busyReadInFlight += acquire.busyReadInFlight;
+            _counts.busyWriteInFlight += acquire.busyWriteInFlight;
+        }
+        _counts.residentBytes = residentBytes;
+        _counts.parkedBytes = parkedBytes;
+    }
+
+    void SetBytes(uint64_t residentBytes, uint64_t parkedBytes)
+    {
+        _counts.residentBytes = residentBytes;
+        _counts.parkedBytes = parkedBytes;
+    }
+
+    ProducerCounts Take()
+    {
+        ProducerCounts out = _counts;
+        _counts = {};
+        _counts.residentBytes = out.residentBytes;
+        _counts.parkedBytes = out.parkedBytes;
+        return out;
+    }
+
+    void Reset() { *this = Producer {}; }
+};
+
 struct Counts
 {
     uint32_t presents = 0;
@@ -543,7 +727,8 @@ inline uint32_t Shape(const Counts& counts)
     return shape;
 }
 
-inline std::string FormatLine(const char* consumer, const Counts& counts, Clock::duration elapsed)
+inline std::string FormatLine(const char* consumer, const Counts& counts, Clock::duration elapsed,
+                              const ProducerCounts& producer = {})
 {
     const auto n = [](uint32_t value) { return std::to_string(value); };
     const long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
@@ -587,6 +772,9 @@ inline std::string FormatLine(const char* consumer, const Counts& counts, Clock:
                 n(counts.mismatchHeight);
     }
 
+    if (producer.attempts != 0 || producer.residentBytes != 0 || producer.parkedBytes != 0)
+        line += " | " + FormatProducerSummary(producer);
+
     return line;
 }
 
@@ -620,7 +808,8 @@ class Consumer
 
     // Counts one present; `present` is what Tracker::AtPresent filled. True when a line is due, written to *line.
     bool Note(const Decision& decision, size_t picked, const PresentGuides::Ring& ring, const Stamps& stamps,
-              const Present& present, Outcome outcome, Clock::time_point now, std::string* line)
+              const Present& present, Outcome outcome, Clock::time_point now, std::string* line,
+              Producer* producer = nullptr)
     {
         if (!_started)
         {
@@ -685,13 +874,15 @@ class Consumer
         if (elapsed < kWindow)
             return false;
 
-        const uint32_t shape = Shape(_counts);
+        const uint32_t producerShape = producer != nullptr ? ProducerShape(producer->Open()) : 0u;
+        const uint32_t shape = Shape(_counts) ^ (producerShape * 0x9E3779B1u);
 
         if (_haveWritten && shape == _writtenShape && elapsed < kSteadyWindow)
             return false;
 
+        const ProducerCounts prod = producer != nullptr ? producer->Take() : ProducerCounts {};
         if (line != nullptr)
-            *line = FormatLine(_name, _counts, elapsed);
+            *line = FormatLine(_name, _counts, elapsed, prod);
 
         _writtenShape = shape;
         _haveWritten = true;
@@ -768,29 +959,43 @@ struct Status
     uint32_t used = 0;
     uint32_t refused = 0;
     uint32_t skipped = 0;
-    Reason top = Reason::Accepted; // the most frequent refusal; Accepted when there was none
+    Reason top = Reason::Accepted;                         // the most frequent refusal; Accepted when there was none
+    uint32_t producerSkipped = 0;                          // captures the producer skipped in this second
+    ProducerReason producerTop = ProducerReason::Recorded; // the most frequent producer skip reason
+    bool countsOverflow = false;                           // packed counts are lower bounds, not exact totals
 };
 
 // Packed into one word, so it is published with a store and read with a load, without the ring's lock. Each count
-// saturates at 15 bits, far above any present rate.
-constexpr uint32_t kStatusCountMax = 0x7FFF;
+// saturates at 11 bits; bit 63 preserves whether any count exceeded the range.
+constexpr uint32_t kStatusCountMax = 0x7FF;
 
 inline uint64_t Pack(const Status& status)
 {
     const auto field = [](uint32_t v) -> uint64_t { return v > kStatusCountMax ? kStatusCountMax : v; };
-    return field(status.presents) | field(status.used) << 15 | field(status.refused) << 30 |
-           field(status.skipped) << 45 | static_cast<uint64_t>(static_cast<uint8_t>(status.top) & 0xFu) << 60;
+    const bool overflow = status.countsOverflow || status.presents > kStatusCountMax || status.used > kStatusCountMax ||
+                          status.refused > kStatusCountMax || status.skipped > kStatusCountMax ||
+                          status.producerSkipped > kStatusCountMax;
+    return field(status.presents) | field(status.used) << 11 | field(status.refused) << 22 |
+           field(status.skipped) << 33 | field(status.producerSkipped) << 44 |
+           static_cast<uint64_t>(static_cast<uint8_t>(status.top) & 0xFu) << 55 |
+           static_cast<uint64_t>(static_cast<uint8_t>(status.producerTop) & 0xFu) << 59 |
+           static_cast<uint64_t>(overflow) << 63;
 }
 
 inline Status Unpack(uint64_t word)
 {
     Status status;
+    status.countsOverflow = (word >> 63) != 0;
     status.presents = static_cast<uint32_t>(word & kStatusCountMax);
-    status.used = static_cast<uint32_t>(word >> 15 & kStatusCountMax);
-    status.refused = static_cast<uint32_t>(word >> 30 & kStatusCountMax);
-    status.skipped = static_cast<uint32_t>(word >> 45 & kStatusCountMax);
-    const auto top = static_cast<uint8_t>(word >> 60 & 0xFu);
+    status.used = static_cast<uint32_t>(word >> 11 & kStatusCountMax);
+    status.refused = static_cast<uint32_t>(word >> 22 & kStatusCountMax);
+    status.skipped = static_cast<uint32_t>(word >> 33 & kStatusCountMax);
+    status.producerSkipped = static_cast<uint32_t>(word >> 44 & kStatusCountMax);
+    const auto top = static_cast<uint8_t>(word >> 55 & 0xFu);
     status.top = top < kReasons ? static_cast<Reason>(top) : Reason::Accepted;
+    const auto producerTop = static_cast<uint8_t>(word >> 59 & 0xFu);
+    status.producerTop =
+        producerTop < kProducerReasons ? static_cast<ProducerReason>(producerTop) : ProducerReason::Recorded;
     return status;
 }
 
@@ -800,10 +1005,22 @@ class StatusWindow
 {
     Status _open {};
     std::array<uint32_t, kReasons> _reasons {};
+    std::array<uint32_t, kProducerReasons> _producerReasons {};
     Clock::time_point _start {};
     bool _started = false;
 
   public:
+    void NoteProducer(ProducerReason reason)
+    {
+        if (reason == ProducerReason::Recorded)
+            return;
+
+        ++_open.producerSkipped;
+        const size_t idx = static_cast<size_t>(reason);
+        if (idx < kProducerReasons)
+            ++_producerReasons[idx];
+    }
+
     // One present. True when a second has passed, with that second written to *out.
     bool Add(Outcome outcome, Reason reason, Clock::time_point now, Status* out)
     {
@@ -842,11 +1059,22 @@ class StatusWindow
             }
         }
 
+        uint32_t bestProducer = 0;
+        for (size_t r = static_cast<size_t>(ProducerReason::MissingInput); r < kProducerReasons; ++r)
+        {
+            if (_producerReasons[r] > bestProducer)
+            {
+                bestProducer = _producerReasons[r];
+                _open.producerTop = static_cast<ProducerReason>(r);
+            }
+        }
+
         if (out != nullptr)
             *out = _open;
 
         _open = {};
         _reasons = {};
+        _producerReasons = {};
         _start = now;
         return true;
     }
@@ -920,8 +1148,14 @@ inline const char* RouteText(bool autoRoute, Source source)
 // The menu's line under the present controls: what the guides were, and what the rules refused, over the last second.
 inline std::string GuidesLine(const Status& status, Fallback fallback)
 {
+    if (status.countsOverflow)
+        return "Guides: counters saturated; exact frame totals unavailable";
+
     const auto n = [](uint32_t value) { return std::to_string(value); };
     const std::string reason = status.refused != 0 ? std::string(" (") + ReasonName(status.top) + ")" : "";
+    const std::string producerReason = status.producerTop != ProducerReason::Recorded
+                                           ? std::string(" (") + ProducerReasonName(status.producerTop) + ")"
+                                           : "";
     const Source source = SourceOf(status, fallback);
     std::string line;
 
@@ -947,13 +1181,19 @@ inline std::string GuidesLine(const Status& status, Fallback fallback)
         line = "Guides: none the rules accept yet; frames are shown as the game drew them";
         break;
     case Source::Skipping:
+        if (status.producerSkipped != 0)
+            return "Guides: capture skipped on " + n(status.producerSkipped) + " frames" + producerReason +
+                   "; frames are shown as the game drew them";
         return "Guides: no new frame from the upscaler; frames are shown as the game drew them";
     }
 
     if (source != Source::Game && status.refused != 0)
         line += "; the game's refused on " + n(status.refused) + " of " + n(status.presents) + " frames" + reason;
 
-    if (status.skipped != 0)
+    if (status.producerSkipped != 0)
+        line += "; " + n(status.producerSkipped) + " capture skipped" + producerReason;
+
+    if (status.skipped != 0 && status.producerSkipped == 0)
         line += "; " + n(status.skipped) + " with no new frame from the upscaler";
 
     return line;

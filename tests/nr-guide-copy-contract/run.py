@@ -48,3 +48,5 @@ with tempfile.TemporaryDirectory(prefix="retoque-guide-copy-contract-") as folde
 
 
 subprocess.run([sys.executable, str(HERE / "owner-run.py")], check=True)
+
+subprocess.run([sys.executable, str(HERE / "retirement-run.py")], check=True)

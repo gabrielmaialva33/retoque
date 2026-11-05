@@ -12,6 +12,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
+from cpp_source import function, mutate_function
+
 here = Path(__file__).resolve().parent
 repo = here.parents[1]
 failures = []
@@ -216,22 +219,57 @@ ask = body(vk, 'uint64_t AskModelVramVk(', vk_path)
 require('g_fwd.queryStats(params, &bytes)' in ask and ask.count('LOG_INFO(') == 1 and ask.count('LOG_DEBUG(') == 1
         and 'LOG_ERROR' not in ask and 'LOG_WARN' not in ask and 'Fail(' not in ask,
         'AskModelVramVk: one INFO line on a figure, one DEBUG line otherwise, and it never fails the route itself')
-require(vk.count('AskModelVramVk(') == 3, 'the Vulkan query is asked from exactly two build sites')
-up_at = vk.find('LOG_INFO("DLSS-NR Vulkan: feature up at')
-after_at = vk.find('g_vk.modelVramBytes = AskModelVramVk(g_vk.capabilityParams, "after upscale");')
-require(0 <= vk.find('if (g_vk.feature == nullptr)', vk.find('g_fwd.create((void*) cmdBuffer')) < up_at < after_at,
-        'the after-upscale route asks only after its feature was built')
-require(re.match(r'\s*if \(NoteModelFault\(\)\)\s*return;', vk[after_at + len('g_vk.modelVramBytes = AskModelVramVk('
-                                                                         'g_vk.capabilityParams, "after upscale");'):]),
-        'a fault inside the stats callback stops the after-upscale route right after the query')
+# Bind each query/forget to its owning function: a missing pre invariant cannot be hidden by an extra post one.
+def check_vk_lifecycle(text):
+    for route, label, returned in (('EvaluateAfterUpscaleVk', 'after upscale', ''),
+                                    ('RecordPreUpscaleVk', 'before upscale', ' false')):
+        code = function(text, route)
+        query = f'g_vk.modelVramBytes = AskModelVramVk(g_vk.capabilityParams, "{label}");'
+        assert code.count(query) == 1, route + ': query once per successful build'
+        created = code.index('g_fwd.create((void*) cmdBuffer')
+        failed = code.index('if (g_vk.feature == nullptr)', created)
+        running = code.index('LOG_INFO("DLSS-NR Vulkan: feature up at', failed)
+        asked = code.index(query)
+        assert created < failed < running < asked, route + ': query only after successful create'
+        assert f'return{returned};' in code[failed:running], route + ': failed create stops before query'
+        assert re.match(r'\s*if \(NoteModelFault\(\)\)\s*return' + returned + ';', code[asked+len(query):]), \
+            route + ': stats fault stops immediately'
+    assert text.count('AskModelVramVk(') == 4, 'only definition plus post/pre/present build queries'
+    present = function(text, 'RunBuild')
+    assert present.count('AskModelVramVk(params, "present host");') == 1
+    assert present.index('if (submitted == VK_SUCCESS)') < present.index('AskModelVramVk(params, "present host");') \
+        < present.index('if (submitted == VK_NOT_READY)'), 'present query follows completed build'
+    forget = 'g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;'
+    for route in ('EvaluateAfterUpscaleVk', 'RecordPreUpscaleVk', 'FreeRouteObjects', 'ShutdownVk'):
+        code = function(text, route)
+        assert code.count('g_vk.feature = nullptr;') == code.count(forget) == 1, route + ': release/forget pair'
+        # The resize paths close the release's conditional before forgetting even an already absent feature.
+        assert re.search(r'g_vk\.feature = nullptr;\s*(?:}\s*)?' + re.escape(forget), code), \
+            route + ': stale figure survives release/abandonment'
+    assert text.count(forget) == 4, 'unreviewed route figure reset'
+
+
+try:
+    check_vk_lifecycle(vk)
+except (AssertionError, ValueError) as error:
+    require(False, str(error))
+for route, old, new in [
+    *[(route, f'g_vk.modelVramBytes = AskModelVramVk(g_vk.capabilityParams, "{label}");',
+       'g_vk.modelVramBytes = 0;') for route, label in
+      (('EvaluateAfterUpscaleVk', 'after upscale'), ('RecordPreUpscaleVk', 'before upscale'))],
+    ('RunBuild', 'AskModelVramVk(params, "present host");', 'DlssNr::ModelStats::kUnknown;'),
+    *[(route, 'g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;', '') for route in
+      ('EvaluateAfterUpscaleVk', 'RecordPreUpscaleVk', 'FreeRouteObjects', 'ShutdownVk')],
+]:
+    mutated = mutate_function(vk, route, old, new)
+    try:
+        check_vk_lifecycle(mutated)
+    except (AssertionError, ValueError):
+        continue
+    require(False, 'stats lifecycle mutant survived: ' + route + ': ' + old)
+print('PASS: 7 independent Vulkan query/release/abandonment guard mutants rejected')
 require('std::atomic<uint64_t> modelVramBytes' in vk and 'g_vk.modelVramBytes.load()' in vk,
         'the Vulkan figure is atomic: the menu reads it on the presenting thread')
-submit_at = vk.find('if (submitted == VK_SUCCESS)')
-present_at = vk.find('AskModelVramVk(params, "present host");')
-require(0 <= submit_at < present_at < vk.find('if (submitted == VK_NOT_READY)'),
-        'the present host asks only once the build\'s GPU work has completed')
-require(vk.count('g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;') == 3,
-        'the after-upscale figure is forgotten wherever its feature is released or abandoned')
 vk_api = body(vk, 'std::optional<unsigned long long> ModelVramBytesVk()', vk_path)
 require('IsRunningVk()' in vk_api, 'the Vulkan figure is shown only while that path runs')
 require(menu.count('DlssNr::ModelVramBytesVk()') == 2, 'the Vulkan figure is read by the status line and the export')

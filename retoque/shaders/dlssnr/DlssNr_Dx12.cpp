@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_Dx11Scene.h>
 
 #include "DlssNr_Dx12_Internal.h"
 
@@ -845,12 +846,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (frame.AfterRayReconstruction)
         passSnapshot.Count = DlssNr::PassConfig::BoundCount(cfg.DlssNrRRPasses.value_or_default());
     std::optional<DlssNr::Chain::RecordingLease> ownedRecording;
-    if (!recording && WantsTrackedRecording(passSnapshot))
+    if (!recording && WantsTrackedRecording(passSnapshot, frame.NativeDx11Scene))
     {
         ownedRecording.emplace(g_recordings, reinterpret_cast<uintptr_t>(cmdList));
         recording = &*ownedRecording;
     }
-    if (!TrackNrRecording(cmdList, passSnapshot, recording))
+    if (!TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene))
     {
         reportSkip(g_chainStatus.load());
         return false;
@@ -967,8 +968,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         cfg.DepthResourceBarrier.value_or(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
     const auto motionResourceBarrier = static_cast<D3D12_RESOURCE_STATES>(
         cfg.MVResourceBarrier.value_or(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
-    const auto exposureBarrierState =
-        sourceIsTarget ? exposureResourceBarrier : D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    const auto exposureBarrierState = sourceIsTarget && !frame.NativeDx11Scene
+                                          ? exposureResourceBarrier
+                                          : D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     const auto depthBarrierState = frame.DepthState >= 0 ? static_cast<D3D12_RESOURCE_STATES>(frame.DepthState)
                                    : sourceIsTarget      ? depthResourceBarrier
                                                          : D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -5744,6 +5746,26 @@ DlssNrFrameInfo PresentFrameDefaults(bool reset, PresentColour colour)
     return frame;
 }
 
+bool EvaluateDx11SceneFrame(ID3D12GraphicsCommandList* list, ID3D12Resource* colour, ID3D12Resource* depth,
+                            ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* queue,
+                            const char** reason)
+{
+    if (!frame.NativeDx11Scene || !Config::Instance()->DlssNrEnabled.value_or_default())
+        return false;
+    ++g_upscaleRenders;
+    if (g_sourceIsPresent.exchange(false))
+        g_resetOnReturn = true;
+    const char* why = "scene frame declined";
+    const bool recorded = EvaluateAtPresent(list, colour, depth, motion, frame, queue, &why);
+    if (reason)
+        *reason = why;
+    g_upscaleApplied = recorded;
+    g_upscaleReason = recorded ? "composition recorded into native D3D11 upscaler output" : why;
+    if (recorded)
+        ++g_passesRecorded;
+    return recorded;
+}
+
 bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colour, ID3D12Resource* depth,
                        ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue,
                        const char** outReason, DlssNr::GpuTiming::Region* route)
@@ -6418,6 +6440,7 @@ void Shutdown()
 {
     // Before the locks: the transport takes its own lock and then g_nrMutex when it captures, so it is never asked
     // to while g_nrMutex is held.
+    ShutdownNativeDx11Scene();
     ShutdownNativeDx11Guides();
 
     std::lock_guard<std::mutex> preLock(g_preMutex);
