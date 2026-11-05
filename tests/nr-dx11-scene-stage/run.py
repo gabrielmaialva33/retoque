@@ -4,6 +4,7 @@ from pathlib import Path
 import os
 import re
 import subprocess
+from scene_cases import run_cases, run_mutants
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -38,9 +39,9 @@ def contracts(files):
     assert 'QueueRefusal(' in code, 'VkQueue equality enforced'
     assert 'SharedFencesUnavailable' in code and 'Fence(true, c11, c12)' in code
     body = scene[scene.index('void EvaluateNativeDx11Scene('):scene.index('const char* NativeDx11SceneStatus()')]
-    assert body.index('if (!Eligible()') < body.index('Pictures::Ask(') < body.index('std::unique_lock') < body.index('PrepareD3D12ForD3D11(')
+    assert body.index('if (!Config::Instance()->DlssNrDx11SceneStageAtStart())') < body.index('Pictures::Ask(') < body.index('std::unique_lock') < body.index('PrepareD3D12ForD3D11(')
     assert '.role == Pictures::Role::Aside' in body
-    assert 'std::try_to_lock' in body and 'if (!lock.owns_lock() || refused)' in body
+    assert 'std::try_to_lock' in body and 'if (!lock.owns_lock())' in body
     assert 'frame.NativeDx11Scene = true' in body and 'GatherGuideFrame(params)' in body
     assert 'Dx11Upscaler.has_value()' in scene and 'Upscaler::DLSS' in scene
     assert 'EffectiveMethod(boundary)' in scene
@@ -73,6 +74,8 @@ def compiled(header, name, expected):
 
 contracts(base)
 compiled(base[FILES[0]], 'baseline', True)
+run_cases(base[FILES[2]])
+run_mutants(base[FILES[2]])
 mutants = [
     (0, 'startup && enabled &&', 'enabled && (startup || !startup) &&', 'opt-in'),
     (0, 'explicitNative &&', '(explicitNative || !explicitNative) &&', 'native-only'),

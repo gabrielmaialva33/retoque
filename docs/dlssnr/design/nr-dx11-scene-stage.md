@@ -11,7 +11,8 @@ no donor code, shader, bytecode, binary or model is imported.
 The approved product path keeps native D3D11 DLSS and runs NR on its successful evaluation's
 **actual Output, before the wrapper's later effects and before the game's later effects**. It is
 startup opt-in only. Pre-SR remains out of scope. The native backend calls the fork-owned scene
-entry; the generic wrapper and original-handle forwarding paths are unchanged.
+entry; the generic wrapper and original-handle forwarding paths are unchanged. Frame generation
+is refused as `FrameGenerationUnsupported`: its extra queues are outside the alias proof below.
 
 The installed runtime supports the measured transport with distinct queues. **A generic Proton
 route without queue-identity evidence is not safely achievable under this contract.** An aliased
@@ -443,12 +444,15 @@ scanout and visual quality. No general non-deadlock proof or product-path approv
 `Config.md`. The constructor snapshots it after the initial config load; reload/save changes the
 next launch only. No menu toggle is added. Eligibility additionally requires master NR enabled,
 an **explicit** `Dx11Upscaler=dlss`, `PresentBoundary::EffectiveMethod(...) == 1`, and `Stage=0`.
-Unresolved Auto (effective 0) and Stage 1 do not enter. The main-picture gate runs before the scene
-mutex, status/history updates, allocation, queue inspection or NR. Secondary pictures are untouched.
+Unresolved Auto (effective 0) and Stage 1 do not enter. A matching nonzero `RenderGeometry` binding
+is required before picture selection or transport.
+The main-picture gate uses input **Color**, before the scene mutex, history updates, allocation,
+queue inspection or NR. Output remains the actual transport/copy-back target, including a wrapper's
+redirected output. Secondary pictures are untouched.
 
 With the startup key off, no scene objects/queues are created. The original automatic `dlss_12`
-choice and native-guide Present transport are unchanged. Refusal latches for the session without
-changing any routing/config key: native HookMethod 1 remains native without NR, and the existing
+choice and native-guide Present transport are unchanged. Transport/ownership failure latches for
+the session without changing any routing/config key: native HookMethod 1 remains native without NR, and the existing
 native-guide Present path remains available if its existing conditions later apply. The diagnostic
 report and route status show named scene reasons instead of the old unconditional native-NoPass
 warning once the opt-in seam has an answer. Build registration is explicit in the Visual Studio project.
@@ -545,3 +549,45 @@ DXVK's read-only consumer ABI is documented in the primary
 (`IDXGIVkInteropDevice`, UUID ending `9323`); the vkd3d queue ABI prefix matches the declaration
 already used in `OptiScaler/misc/IdentifyGpu.h`. Runtime queries, rather than the presence of these
 declarations at compile time, decide admission.
+
+
+## Review follow-up (2026-11-05)
+
+The scene seam judges the original input Color, not the write destination. Different Colors sharing
+an Output are different pictures; the same Color written to different Outputs remains a view of the
+main picture. The actual Output is still copied into the transport and receives the result.
+
+`FeatureIdentityUnavailableRecreate` refuses before `Pictures::Ask`, resource reads or transport
+when the active RenderGeometry binding is absent, belongs to another parameter block or has key
+zero. In particular, features created with NR off have no remembered creation identity: enabling
+NR cannot admit them until recreation. This refusal is per evaluate, not a permanent session latch;
+a recreated, bound feature can enter. The older seams' unbound Main/epoch-zero behavior is unchanged.
+
+Once a transport owner is activated, an eligibility gap (including the master switch turning off),
+an invalid/unbound evaluate, scene-lock contention, or an unsuccessful transport attempt leaves reset
+debt. The next admitted main frame ORs that debt into the game's Reset even with stable dimensions,
+device and picture epoch. Debt is atomically consumed **before** recording; success does not clear
+a newer concurrent decline. Transport Busy/Passthrough restores it. A bound Aside returns before
+any gap bookkeeping and cannot create or consume main-picture debt, including on a temporarily
+ineligible stage. With NR disabled, RenderGeometry intentionally supplies no binding; an activated
+owner conservatively remembers the gap without reading resources or judging pictures. Startup key
+off and never-activated NR-off calls remain cold, without scene allocation or GPU work.
+
+`FrameGenerationUnsupported` refuses before scene lock/device preparation/transport whenever the
+known FG signals indicate an active or selected FG path: D3D12/Vulkan providers (including paused
+but active providers), Streamline's mode/request/interpolation count, FSR input activity, DLSSG game
+input enable, or a selected FG input/output. ForceXeLL alone is not an FG path. The selected-route
+checks intentionally over-refuse paused/idle FG configurations: an extra queue can still exist.
+The refusal recovers after those signals clear, with reset debt for an already activated owner.
+This is a fail-closed restriction, not an expanded queue proof: the three checked queue identities
+do **not** cover an FG queue. Unknown external injectors and game/model internals remain outside
+qualification; there is no claim that a process-wide flag discovers arbitrary third-party queues.
+No transport/fence/resource-lifetime changes are part of this follow-up.
+
+Host regression coverage compiles the complete production scene entry with inert graphics and
+renderer interfaces, alongside the real picture/geometry/policy headers. It checks both Color/Output
+identity cases, off-at-creation then enable and recreate, absent/foreign/zero-key binding, stable-epoch
+reset after disabled/stage/FG/busy gaps, Aside and cold paths, concurrent decline preservation, and
+each FG signal. Nine additional mutants must **compile successfully and fail runtime assertions**;
+compile failure is not a killed mutant. This complements the original 19 policy/source mutants.
+These host tests do not exercise GPU queues, NGX, image quality or native Windows correctness.
