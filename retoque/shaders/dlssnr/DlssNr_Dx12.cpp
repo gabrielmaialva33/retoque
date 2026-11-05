@@ -1202,16 +1202,20 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         MotionProbeDead(), frame.GameGuides, cfg.DlssNrZeroGuideReset.value_or_default(), frame.Reset);
     const bool frameReset = frame.Reset || deadMotionReset;
     const bool frameResetIsPolicy = deadMotionReset || frame.ResetIsPolicy;
+    const bool frameResetIsSceneCut = !frameResetIsPolicy && frame.ResetIsSceneCut;
 
     if (frameReset)
     {
         g_nr.reset = true;
 
-        // Two counters, because only one of them is the game. ZeroGuideReset asks on every zero-guide
+        // Three counters, because only one of them is the game. ZeroGuideReset asks on every zero-guide
         // frame, and a log saying "the game asked" 69300 times described a game that asked for nothing.
+        // The synthesized-motion estimator's scene cuts are the same mislabel on a game without an upscaler:
+        // Dying Light (2026-11-04) "asked" about 2 200 times in two hours.
         static unsigned long long resets = 0;
         static unsigned long long policyResets = 0;
-        auto& count = frameResetIsPolicy ? policyResets : resets;
+        static unsigned long long sceneCutResets = 0;
+        auto& count = frameResetIsPolicy ? policyResets : frameResetIsSceneCut ? sceneCutResets : resets;
         ++count;
 
         if (count <= 3 || count % 100 == 0)
@@ -1222,6 +1226,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                          count);
             else if (frameResetIsPolicy)
                 LOG_INFO("DLSS-NR: model history dropped on zero guides, as ZeroGuideReset asks ({} so far)", count);
+            else if (frameResetIsSceneCut)
+                LOG_INFO("DLSS-NR: model history dropped on a scene cut the synthesized motion detected ({} so far)",
+                         count);
             else
                 LOG_INFO("DLSS-NR: the game asked for a history reset ({} so far)", count);
         }
@@ -5589,9 +5596,10 @@ ID3D12Resource* SynthMotionGuide::Record(ID3D12Device* device, ID3D12GraphicsCom
         frame.ResetIsPolicy = false;
     }
 
-    // A cut is a cut, whoever notices it.
+    // A cut is a cut, whoever notices it. Said to be the estimator's only when nothing else had already asked.
     if (sceneCut)
     {
+        frame.ResetIsSceneCut = !frame.Reset;
         frame.Reset = true;
         frame.ResetIsPolicy = false;
     }

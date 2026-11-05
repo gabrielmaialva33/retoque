@@ -32,7 +32,10 @@ menu checkbox "Synthesized motion" next to "No history without motion", under Ho
   `DlssNr_Dx12.cpp`) records the estimator, hands the field over in `GuideRestState(true)`, describes
   it (`kSynthMotionScaleX/Y` = 1, output resolution, no subrect), drops the zero-guide policy reset
   (`ZeroGuideReset`) for a frame that has real motion, turns an estimator scene cut into a real Reset,
-  and hands the field back after the pass (`AfterPass`). A gap over 250 ms between recordings resets
+  and hands the field back after the pass (`AfterPass`). That Reset is marked `ResetIsSceneCut` unless the frame
+  already carried one, and `Dispatch` logs it under its own counter ("a scene cut the synthesized motion detected"),
+  not as the game's: until 2026-11-04 these cuts read as "the game asked for a history reset", about 2 200 times in
+  two hours of Dying Light, a game with no upscaler. A gap over 250 ms between recordings resets
   the estimator, so a pass switched off and on never differences two unrelated frames.
 - **D3D12 present** (`RunPresentPass`, the no-capture branch): recorded from `g_bbCopy` after the
   backbuffer copy, before `EvaluateAtPresent`; confirmed or abandoned with the present list
