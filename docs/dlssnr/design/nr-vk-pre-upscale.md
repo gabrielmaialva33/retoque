@@ -435,3 +435,18 @@ multiple outstanding model recordings require separate evidence, not a relaxed g
 Phase 1 changed documentation only. Stage 2a and 2b add observation, the live opt-in pre-SR scope and host
 contracts. Release builds validate compilation/linking only; no shader regeneration, game run, GPU benchmark or
 deployment has been performed.
+
+## Refusals in the log and the observer's cost (2026-11-05)
+
+The first game run ([DOOM Eternal](../../superpowers/reviews/2026-11-05-doom-eternal-vulkan-runs.md)) refused every
+frame without a word: the scope's refusal paths returned silently, and because a selected Stage 1 never falls back,
+that game got neither placement in-game, only the present host's cold NR. Each refusal path now sets a literal
+reason (`_why`, or `VkPre::RefusalText` for the admission rule), and `ScopedPreUpscaleVk::Report`, called after
+`Complete` on both evaluate paths, logs each reason and the first bound frame once per session. Nothing else in the
+admission changed.
+
+The same run measured the observer: about 39 presents/s with it active against about 120 once it went blind (NR
+switched off and on), with the same NR pass cost. Every observed command takes the one mutex of `Observations`;
+an engine that records on many threads waits on it. Stage 1 is not usable in such a game until the observer keeps
+per-command-buffer state; whether a structural refusal should stand the observer down and return the frame to
+Stage 0 is an open decision, not implemented.

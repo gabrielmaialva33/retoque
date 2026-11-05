@@ -52,6 +52,7 @@ class ScopedPreUpscaleVk
 {
     VkPre::ColourLoan<NVSDK_NGX_Parameter> _colour;
     VkPre::Outcome _outcome = VkPre::Outcome::Unselected;
+    const char* _why = nullptr; // a string literal naming the refusal; Report compares it by address
     bool _borrowed = false;
 
   public:
@@ -63,6 +64,9 @@ class ScopedPreUpscaleVk
     ScopedPreUpscaleVk& operator=(const ScopedPreUpscaleVk&) = delete;
     void Complete() noexcept { _colour.Restore(); }
     bool AllowPost() const { return VkPre::AllowPost(_outcome); }
+    // One log line whenever this frame's outcome differs from the last one logged: the refusal by name, or the
+    // first frame bound. Called after Complete; never on the provider's call path.
+    void Report() const;
 };
 
 void EvaluateAfterPreSafeVk(VkCommandBuffer command, NVSDK_NGX_Parameter* params, VkInstance instance,
