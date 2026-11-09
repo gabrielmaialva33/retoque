@@ -24,6 +24,10 @@ pub enum Repair {
     RemoveComponent {
         id: String,
     },
+    /// Fetch a compatible community NR model into the app catalog, then review selecting it for the game.
+    FetchCompatibleModel {
+        sha256: String,
+    },
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct Finding {
@@ -58,6 +62,7 @@ pub struct Inputs<'a> {
     pub override_present: Option<bool>,
     pub proxy_loaded_last_session: Option<bool>,
     pub driver_nvngx_present: Option<bool>,
+    pub allow_model_fetch: bool,
 }
 impl<'a> Inputs<'a> {
     pub fn new(status: &'a Status) -> Self {
@@ -76,6 +81,7 @@ impl<'a> Inputs<'a> {
             override_present: None,
             proxy_loaded_last_session: None,
             driver_nvngx_present: None,
+            allow_model_fetch: false,
         }
     }
 }
@@ -155,16 +161,38 @@ pub fn diagnose(input: &Inputs<'_>) -> Vec<Finding> {
             .map_or(Some(state.model_present), |_| None)
     });
     if enabled(input.ini, "DlssNr").or(state.nr_enabled) == Some(true) && present == Some(false) {
+        let mut evidence = vec![
+            FactEvidence::new("evidence.nr_enabled", "true"),
+            FactEvidence::new("evidence.model_present", "false"),
+        ];
+        let catalog_alt = input
+            .catalog
+            .iter()
+            .find(|m| m.compatibility.for_gpu(input.gpu) == Compatibility::Compatible);
+        let repair = if input.allow_model_fetch && input.runtime != Runtime::Unknown {
+            if let Some(m) = catalog_alt {
+                evidence.push(FactEvidence::new("evidence.catalog_model", &m.sha256));
+                Some(setting(
+                    "DlssNr",
+                    "ModelFile",
+                    &crate::models::Catalog::model_file_value(m, input.runtime.is_wine()),
+                ))
+            } else if let Some(remote) = crate::model_fetch::pick_pinned_for_gpu(input.gpu) {
+                evidence.push(FactEvidence::new("evidence.community_model", &remote.sha256));
+                Some(Repair::FetchCompatibleModel { sha256: remote.sha256 })
+            } else {
+                Some(setting("DlssNr", "Enabled", "false"))
+            }
+        } else {
+            Some(setting("DlssNr", "Enabled", "false"))
+        };
         add(
             "model_missing",
             Severity::Error,
             "doctor.model_missing.title",
             "doctor.model_missing.why",
-            vec![
-                FactEvidence::new("evidence.nr_enabled", "true"),
-                FactEvidence::new("evidence.model_present", "false"),
-            ],
-            Some(setting("DlssNr", "Enabled", "false")),
+            evidence,
+            repair,
         );
     }
     if let Some(model) = input.model.filter(|m| m.present == Some(true)) {
@@ -180,13 +208,21 @@ pub fn diagnose(input: &Inputs<'_>) -> Vec<Finding> {
             if let Some(m) = alternative {
                 evidence.push(FactEvidence::new("evidence.catalog_model", &m.sha256));
             }
-            let repair = alternative.filter(|_| input.runtime != Runtime::Unknown).map(|m| {
-                setting(
+            let repair = if let Some(m) = alternative.filter(|_| input.runtime != Runtime::Unknown) {
+                Some(setting(
                     "DlssNr",
                     "ModelFile",
                     &crate::models::Catalog::model_file_value(m, input.runtime.is_wine()),
-                )
-            });
+                ))
+            } else if input.allow_model_fetch
+                && input.runtime != Runtime::Unknown
+                && let Some(remote) = crate::model_fetch::pick_pinned_for_gpu(input.gpu)
+            {
+                evidence.push(FactEvidence::new("evidence.community_model", &remote.sha256));
+                Some(Repair::FetchCompatibleModel { sha256: remote.sha256 })
+            } else {
+                None
+            };
             add(
                 "model_incompatible",
                 Severity::Error,
@@ -466,5 +502,48 @@ mod tests {
         input.runtime = Runtime::Proton;
         input.override_present = Some(false);
         assert!(!has(&input, "launch_override"));
+    }
+    #[test]
+    fn missing_or_incompatible_model_offers_community_fetch_when_enabled() {
+        let status = Status {
+            nr_enabled: Some(true),
+            model_present: false,
+            ..Default::default()
+        };
+        let gpu = crate::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288").remove(0);
+        let mut input = Inputs::new(&status);
+        input.gpu = Some(&gpu);
+        input.runtime = Runtime::Proton;
+        input.allow_model_fetch = true;
+        let findings = diagnose(&input);
+        assert_eq!(findings[0].id, "model_missing");
+        assert_eq!(
+            findings[0].repair,
+            Some(Repair::FetchCompatibleModel {
+                sha256: "cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed".into()
+            })
+        );
+
+        let incompat = ModelInspection {
+            present: Some(true),
+            compatibility: ModelCompatibility {
+                known: true,
+                archs: vec![120],
+            },
+        };
+        let default_status = Status::default();
+        let mut input = Inputs::new(&default_status);
+        input.model = Some(&incompat);
+        input.gpu = Some(&gpu);
+        input.runtime = Runtime::Windows;
+        input.allow_model_fetch = true;
+        let findings = diagnose(&input);
+        assert_eq!(findings[0].id, "model_incompatible");
+        assert_eq!(
+            findings[0].repair,
+            Some(Repair::FetchCompatibleModel {
+                sha256: "cdfa6c1ec784867182164c7836f324f087b5c9f374d0c9fe46f54999feabf3ed".into()
+            })
+        );
     }
 }

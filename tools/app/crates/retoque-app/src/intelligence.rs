@@ -80,6 +80,14 @@ impl Snapshot {
                 .filter(|log| log.nr_initialized || log.dlss_version.is_some())
                 .map(|_| true);
             inputs.driver_nvngx_present = driver;
+            inputs.allow_model_fetch = true;
+            if inputs.runtime == recommend::Runtime::Unknown {
+                inputs.runtime = if cfg!(windows) {
+                    recommend::Runtime::Windows
+                } else {
+                    recommend::Runtime::Proton
+                };
+            }
             doctor::diagnose(&inputs)
         } else {
             Vec::new()
@@ -225,6 +233,9 @@ impl RetoqueApp {
                     edits: vec![],
                 },
             ),
+            Repair::FetchCompatibleModel { sha256 } => {
+                self.nr_fetch_repair(target, &sha256);
+            }
         }
     }
     pub(crate) fn receive_watch(&mut self, target: PathBuf, result: Result<crate::watcher::Changes, String>) {

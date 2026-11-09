@@ -227,6 +227,11 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Override de execução presente",
     ),
     ("evidence.log", "Redacted log line", "Linha de log anonimizada"),
+    (
+        "evidence.community_model",
+        "Community model SHA256",
+        "SHA256 do modelo da comunidade",
+    ),
 ];
 #[cfg(test)]
 mod tests {

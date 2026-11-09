@@ -21,6 +21,10 @@ pub(crate) enum AppCommand {
     RefreshModel,
     ImportModel(std::path::PathBuf),
     RemoveModel(String),
+    PromptFetchCompatibleModel(Option<std::path::PathBuf>),
+    PromptFetchModel(retoque_data::model_fetch::RemoteModel, Option<std::path::PathBuf>),
+    PromptRefreshModelCatalog,
+    DismissNrModelOffer,
 }
 
 #[derive(Clone)]

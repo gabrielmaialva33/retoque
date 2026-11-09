@@ -45,6 +45,8 @@ pub(crate) struct Saved {
     pub(crate) lossless_dir: Option<PathBuf>,
     #[serde(default)]
     pub(crate) sm86_offer_seen: bool,
+    #[serde(default)]
+    pub(crate) nr_model_offer_seen: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -134,6 +136,7 @@ pub struct RetoqueApp {
     pub(crate) process_notice: Option<Vec<(u32, String)>>,
     pub(crate) tuning: crate::autotune::UiState,
     pub(crate) lsfg: crate::lsfg_ui::State,
+    pub(crate) nr_fetch: crate::tabs::model::NrFetchState,
     pub(crate) folder_dialog: Option<FolderDialog>,
     pub(crate) folder_focus: Option<egui::Id>,
     pub(crate) folder_restore: u8,
@@ -175,6 +178,7 @@ impl RetoqueApp {
             process_notice: None,
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
+            nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,
             folder_focus: None,
             folder_restore: 0,
@@ -281,6 +285,7 @@ impl eframe::App for RetoqueApp {
         self.show_process_notice(ui.ctx());
         self.palette_sheet(ui.ctx());
         self.drop_sheet(ui.ctx());
+        self.nr_fetch_dialog(ui.ctx());
         self.handle_commands();
     }
 

@@ -60,6 +60,7 @@ pub(crate) mod shell_tests {
             doctor_badges: HashMap::new(),
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
+            nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,
             folder_focus: None,
             folder_restore: 0,

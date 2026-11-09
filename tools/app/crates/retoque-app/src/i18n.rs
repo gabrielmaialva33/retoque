@@ -1454,6 +1454,156 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("watch.refresh", "Refresh selected game", "Atualizar jogo selecionado"),
     ("log.diagnoses", "Log diagnosis", "Diagnóstico do log"),
+    // Community NR model fetch (app-nr-fetch): append-only translation keys.
+    (
+        "nr_fetch.title",
+        "Community NR model (RankFTW/rhi-repo)",
+        "Modelo NR da comunidade (RankFTW/rhi-repo)",
+    ),
+    (
+        "nr_fetch.source_note",
+        "Community redistribution from RankFTW/rhi-repo (listed by ApolloF/DLSS5-Updater-catalog), not an official NVIDIA download. Verified by size and SHA-256 before import.",
+        "Redistribuição da comunidade em RankFTW/rhi-repo (listada por ApolloF/DLSS5-Updater-catalog), não é um download oficial da NVIDIA. Verificado por tamanho e SHA-256 antes da importação.",
+    ),
+    (
+        "nr_fetch.get_compatible",
+        "Get a compatible model…",
+        "Obter um modelo compatível…",
+    ),
+    (
+        "nr_fetch.consent_title",
+        "Get a compatible NR model",
+        "Obter um modelo NR compatível",
+    ),
+    (
+        "nr_fetch.consent_body",
+        "Download this archive over HTTPS into the app catalog, verify its size and SHA-256, and extract only nvngx_dlssnr.dll? Game settings are reviewed separately before any write.",
+        "Baixar este pacote por HTTPS para o catálogo do aplicativo, verificar o tamanho e o SHA-256 e extrair apenas nvngx_dlssnr.dll? Os ajustes do jogo são revisados separadamente antes de qualquer gravação.",
+    ),
+    ("nr_fetch.confirm", "Confirm download", "Confirmar download"),
+    ("nr_fetch.later", "Later", "Agora não"),
+    (
+        "nr_fetch.refresh_catalog",
+        "Refresh community catalog…",
+        "Atualizar catálogo da comunidade…",
+    ),
+    (
+        "nr_fetch.refresh_title",
+        "Refresh community NR model catalog",
+        "Atualizar catálogo de modelos NR da comunidade",
+    ),
+    (
+        "nr_fetch.refresh_body",
+        "Fetch catalog.json from ApolloF/DLSS5-Updater-catalog on GitHub (up to 8 MiB)? Only entries on RankFTW/rhi-repo releases with a SHA-256 are accepted; unprobed entries are never assumed compatible.",
+        "Baixar catalog.json de ApolloF/DLSS5-Updater-catalog no GitHub (até 8 MiB)? Apenas entradas em releases de RankFTW/rhi-repo com SHA-256 são aceitas; entradas não sondadas nunca são assumidas como compatíveis.",
+    ),
+    ("nr_fetch.confirm_refresh", "Refresh catalog", "Atualizar catálogo"),
+    (
+        "nr_fetch.downloading",
+        "Downloading community NR model",
+        "Baixando modelo NR da comunidade",
+    ),
+    (
+        "nr_fetch.no_compatible_gpu",
+        "No compatible model can be picked automatically because the GPU or its CUDA architecture is unknown.",
+        "Nenhum modelo compatível pode ser escolhido automaticamente porque a GPU ou sua arquitetura CUDA é desconhecida.",
+    ),
+    (
+        "nr_fetch.unavailable",
+        "No compatible NR model entry is available for this GPU. No changes were applied.",
+        "Nenhum modelo NR compatível está disponível para esta GPU. Nenhuma alteração foi aplicada.",
+    ),
+    (
+        "nr_fetch.available_variants",
+        "Available community variants",
+        "Variantes disponíveis na comunidade",
+    ),
+    ("nr_fetch.download_variant", "Download…", "Baixar…"),
+    (
+        "nr_fetch.error.0",
+        "invalid or missing model sha256",
+        "O SHA-256 do modelo no catálogo está ausente ou é inválido.",
+    ),
+    (
+        "nr_fetch.error.1",
+        "model catalog exceeds size limit",
+        "O catálogo de modelos excede o limite de tamanho.",
+    ),
+    (
+        "nr_fetch.error.2",
+        "too many model catalog entries",
+        "O catálogo de modelos contém entradas demais.",
+    ),
+    (
+        "nr_fetch.error.3",
+        "invalid model catalog metadata",
+        "Os metadados do catálogo de modelos são inválidos.",
+    ),
+    (
+        "nr_fetch.error.4",
+        "non-rhi-repo model URL",
+        "O endereço não pertence às releases de RankFTW/rhi-repo.",
+    ),
+    (
+        "nr_fetch.error.5",
+        "refused model redirect",
+        "O destino do redirecionamento do modelo não é permitido.",
+    ),
+    (
+        "nr_fetch.error.6",
+        "model catalog redirect refused",
+        "O catálogo de modelos tentou um redirecionamento não permitido.",
+    ),
+    (
+        "nr_fetch.error.7",
+        "missing model redirect",
+        "O redirecionamento do modelo não informa o destino.",
+    ),
+    (
+        "nr_fetch.error.8",
+        "model HTTPS request failed",
+        "Não foi possível consultar ou baixar o modelo por HTTPS.",
+    ),
+    (
+        "nr_fetch.error.9",
+        "unexpected model HTTP status",
+        "O servidor do modelo retornou um status HTTP inesperado.",
+    ),
+    (
+        "nr_fetch.error.10",
+        "model response exceeds size limit",
+        "A resposta do download do modelo excede o limite de tamanho.",
+    ),
+    (
+        "nr_fetch.error.11",
+        "too many model redirects",
+        "O download do modelo excedeu o limite de redirecionamentos.",
+    ),
+    (
+        "nr_fetch.error.12",
+        "nvngx_dlssnr.dll missing from archive",
+        "O arquivo nvngx_dlssnr.dll não foi encontrado no pacote.",
+    ),
+    (
+        "nr_fetch.error.13",
+        "multiple nvngx_dlssnr.dll entries in archive",
+        "O pacote contém mais de um nvngx_dlssnr.dll.",
+    ),
+    (
+        "nr_fetch.error.14",
+        "model size mismatch",
+        "O tamanho do modelo não corresponde ao declarado.",
+    ),
+    (
+        "nr_fetch.error.15",
+        "model SHA-256 mismatch",
+        "O SHA-256 do modelo não corresponde ao esperado.",
+    ),
+    (
+        "nr_fetch.error.16",
+        "pinned model metadata mismatch",
+        "Os metadados do catálogo conflitam com uma versão fixada conhecida.",
+    ),
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {
@@ -1502,7 +1652,7 @@ mod tests {
 pub fn diagnostic(lang: Lang, message: &str) -> String {
     if let Some((key, _, _)) = TEXT
         .iter()
-        .find(|(key, en, _)| key.starts_with("sm86.error.") && *en == message)
+        .find(|(key, en, _)| (key.starts_with("sm86.error.") || key.starts_with("nr_fetch.error.")) && *en == message)
     {
         return t(lang, key).into();
     }
