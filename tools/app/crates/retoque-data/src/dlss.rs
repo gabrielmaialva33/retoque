@@ -213,6 +213,11 @@ pub fn inspect(install_dir: &Path) -> io::Result<Vec<GameDll>> {
         })
         .collect()
 }
+/// True only for a readable version that is the catalog's or newer; unknown versions are never "current".
+pub fn current(version: &str) -> bool {
+    let parts = version.split('.').collect::<Vec<_>>();
+    (3..=4).contains(&parts.len()) && parts.iter().all(|p| p.parse::<u32>().is_ok()) && !older(version)
+}
 pub fn older(version: &str) -> bool {
     let mut numbers = [0u32; 4];
     let parts = version.split('.').collect::<Vec<_>>();
@@ -368,6 +373,14 @@ mod tests {
         assert!(!temp.path().join("dlss").exists());
         assert!(download(temp.path(), true, &Fake, &mut |_| {}).is_err());
         assert!(!catalog_path(temp.path()).exists());
+    }
+    #[test]
+    fn current_needs_a_readable_version_at_least_the_catalogs() {
+        assert!(super::current("310.9.16.0"));
+        assert!(super::current("310.10.0"));
+        assert!(!super::current("310.6.0.0"));
+        assert!(!super::current("garbage"));
+        assert!(!super::current("310.x.16"));
     }
     #[test]
     fn numeric_versions_and_unknown_are_not_guessed() {

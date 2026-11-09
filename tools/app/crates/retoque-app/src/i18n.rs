@@ -1457,11 +1457,17 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("dlss.title", "NVIDIA DLSS", "NVIDIA DLSS"),
     ("dlss.installed", "DLSS in this game", "DLSS neste jogo"),
     ("dlss.available", "available", "disponível"),
+    ("dlss.current", "up to date", "atualizado"),
     ("dlss.update", "Update DLSS…", "Atualizar DLSS…"),
     (
         "dlss.restore",
         "Remove Retoque and restore original DLSS…",
         "Remover Retoque e restaurar DLSS original…",
+    ),
+    (
+        "dlss.restore_only",
+        "Restore original DLSS…",
+        "Restaurar DLSS original…",
     ),
     (
         "dlss.optimize",

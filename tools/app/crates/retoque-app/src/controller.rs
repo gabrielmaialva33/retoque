@@ -165,7 +165,11 @@ impl RetoqueApp {
                     | Outcome::ModelInspection(_)
                     | Outcome::Catalog { .. }
                     | Outcome::Auto(_)
-                    | Outcome::NrFetch(_)
+                    // Download progress ticks are not new facts; recompute only when a fetch finishes.
+                    | Outcome::NrFetch(
+                        crate::tabs::model::NrFetchEvent::Downloaded(_)
+                            | crate::tabs::model::NrFetchEvent::CatalogRefreshed(_)
+                    )
             );
             self.library_state.invalidate();
             let current = self.view.target.clone();

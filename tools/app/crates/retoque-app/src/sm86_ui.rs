@@ -226,12 +226,7 @@ impl RetoqueApp {
             .and_then(|c| c.as_ref().ok())
             .map(Vec::as_slice)
             .unwrap_or(&[]);
-        let gpu = self
-            .tuning
-            .gpus
-            .as_ref()
-            .filter(|g| g.len() == 1)
-            .and_then(|g| g.first());
+        let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
         let nr_enabled = self
             .view
             .ini

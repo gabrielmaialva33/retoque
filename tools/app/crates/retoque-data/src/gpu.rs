@@ -32,6 +32,24 @@ pub struct Gpu {
     pub vram_mib: Option<u64>,
 }
 
+/// The GPU a game will run on, when that is unambiguous: the only NVIDIA GPU, or else the only real adapter.
+/// Virtual display adapters (Parsec, remote desktop, basic display: vendor `Other`) never count, so a single RTX
+/// next to one of them is still "the" GPU. Two NVIDIA GPUs, or several real non-NVIDIA ones, stay unknown.
+pub fn primary(gpus: &[Gpu]) -> Option<&Gpu> {
+    let mut nvidia = gpus.iter().filter(|g| g.vendor == Vendor::Nvidia);
+    match (nvidia.next(), nvidia.next()) {
+        (Some(only), None) => Some(only),
+        (Some(_), Some(_)) => None,
+        (None, _) => {
+            let mut real = gpus.iter().filter(|g| g.vendor != Vendor::Other);
+            match (real.next(), real.next()) {
+                (Some(only), None) => Some(only),
+                _ => None,
+            }
+        }
+    }
+}
+
 fn architecture(cap: Option<(u32, u32)>) -> Arch {
     match cap {
         Some((7, 5)) => Arch::Turing,
@@ -242,6 +260,32 @@ fn platform_adapters() -> Vec<Gpu> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn primary_ignores_virtual_adapters_and_refuses_two_nvidia_gpus() {
+        let rtx = super::parse_nvidia_smi_csv("NVIDIA GeForce RTX 3060, 8.6, 617.14, 12288").remove(0);
+        let parsec = super::Gpu {
+            name: "Parsec Virtual Display Adapter".into(),
+            vendor: super::Vendor::Other,
+            arch: super::Arch::NotNvidia,
+            compute_cap: None,
+            driver: None,
+            vram_mib: None,
+        };
+        let intel = super::Gpu {
+            name: "Intel UHD".into(),
+            vendor: super::Vendor::Intel,
+            ..parsec.clone()
+        };
+        assert_eq!(super::primary(&[rtx.clone(), parsec.clone()]), Some(&rtx));
+        assert_eq!(super::primary(&[parsec.clone(), rtx.clone()]), Some(&rtx));
+        assert_eq!(super::primary(&[intel.clone(), rtx.clone()]), Some(&rtx));
+        assert_eq!(super::primary(&[rtx.clone(), rtx.clone()]), None);
+        assert_eq!(super::primary(&[intel.clone(), parsec.clone()]), Some(&intel));
+        assert_eq!(super::primary(&[intel.clone(), intel.clone()]), None);
+        assert_eq!(super::primary(&[parsec]), None);
+        assert_eq!(super::primary(&[]), None);
+    }
+
     use super::*;
     #[test]
     fn csv_adapters_unavailable_fields_and_architectures() {
