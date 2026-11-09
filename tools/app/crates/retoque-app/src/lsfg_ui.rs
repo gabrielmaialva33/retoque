@@ -251,7 +251,11 @@ impl RetoqueApp {
                         };
                         self.autotune_request(
                             format!("{} · {}", self.tr("auto.lsfg"), self.tr(key)),
-                            Request { component: None, edits },
+                            Request {
+                                component: None,
+                                edits,
+                                ..Default::default()
+                            },
                         );
                     }
                 }

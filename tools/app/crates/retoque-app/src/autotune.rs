@@ -19,6 +19,7 @@ pub enum ComponentChange {
 pub struct Request {
     pub component: Option<ComponentChange>,
     pub edits: Vec<Edit>,
+    pub dlss: Option<crate::dlss_ui::Change>,
 }
 #[derive(Clone)]
 pub struct Prepared {
@@ -44,6 +45,27 @@ pub fn prepare(target: &Path, request: Request) -> Result<Prepared, AppError> {
         }
         .map_err(AppError::from)?;
         plans.push(p);
+    }
+    if let Some(change) = &request.dlss {
+        match change {
+            crate::dlss_ui::Change::Update(update) => {
+                let dlss = retoque_data::dlss::plan(target, update).map_err(AppError::from)?;
+                if matches!(request.component, Some(ComponentChange::Install(_)))
+                    && plans.first().is_some_and(|p| p.game_dir() == dlss.game_dir())
+                {
+                    let component = plans.remove(0);
+                    plans.push(retoque_core::combine_install_plans(component, dlss).map_err(AppError::from)?);
+                } else {
+                    plans.insert(0, dlss);
+                }
+            }
+            crate::dlss_ui::Change::Restore { install_dir } => {
+                if !plans.is_empty() || !request.edits.is_empty() {
+                    return Err("restore cannot be combined with optimization".into());
+                }
+                plans = retoque_core::plan_game_restore(install_dir, target, false).map_err(AppError::from)?;
+            }
+        }
     }
     if !request.edits.is_empty() {
         plans.push(retoque_core::plan_settings(target, &request.edits).map_err(AppError::from)?);
@@ -79,12 +101,33 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
             detail: "plan refused or empty".into(),
         });
     }
+    for plan in &prepared.plans {
+        retoque_core::validate_plan(plan).map_err(|e| ApplyFailure {
+            completed: 0,
+            detail: e.into(),
+        })?;
+    }
     let total: usize = prepared.plans.iter().map(|p| p.steps().len()).sum();
     let mut offset = 0;
     for (index, original) in prepared.plans.iter().enumerate() {
         // A component updates the receipt. Rebase only the subsequent INI edit, never a component source.
         let fresh;
-        let plan = if index > 0 {
+        let plan = if index == 1
+            && prepared.request.dlss.is_some()
+            && let Some(ComponentChange::Remove(id)) = &prepared.request.component
+        {
+            fresh = plan_component_uninstall(&prepared.target, id).map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?;
+            if fresh.steps() != original.steps() || !fresh.refusals().is_empty() {
+                return Err(ApplyFailure {
+                    completed: index,
+                    detail: "component changed since review".into(),
+                });
+            }
+            &fresh
+        } else if index > 0 && !prepared.request.edits.is_empty() && index + 1 == prepared.plans.len() {
             fresh =
                 retoque_core::plan_settings(&prepared.target, &prepared.request.edits).map_err(|e| ApplyFailure {
                     completed: index,
@@ -120,6 +163,7 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
 
 #[derive(Default)]
 pub struct UiState {
+    pub dlss: crate::dlss_ui::State,
     pub sm86: optimize::UiState,
     pub gpus: Option<Vec<gpu::Gpu>>,
     pub detected_lossless: Option<PathBuf>,
@@ -132,6 +176,7 @@ pub struct UiState {
     pub request: u64,
     pub review_title: String,
     pub writes: std::collections::HashSet<PathBuf>,
+    pub write_roots: std::collections::HashMap<PathBuf, Vec<PathBuf>>,
 }
 pub enum Event {
     Sm86Progress(u64),
@@ -244,6 +289,7 @@ mod tests {
         let p = prepare(
             temp.path(),
             Request {
+                dlss: None,
                 component: None,
                 edits: vec![edit("true")],
             },
@@ -262,6 +308,7 @@ mod tests {
         let p = prepare(
             temp.path(),
             Request {
+                dlss: None,
                 component: None,
                 edits: vec![edit("true")],
             },
@@ -282,6 +329,7 @@ mod tests {
         let p = Prepared {
             target: temp.path().into(),
             request: Request {
+                dlss: None,
                 component: None,
                 edits: later,
             },
@@ -304,6 +352,7 @@ mod tests {
         let mut p = prepare(
             temp.path(),
             Request {
+                dlss: None,
                 component: None,
                 edits: vec![edit("true")],
             },
@@ -327,6 +376,7 @@ mod tests {
         let p = Prepared {
             target: temp.path().into(),
             request: Request {
+                dlss: None,
                 component: None,
                 edits: later,
             },
@@ -347,6 +397,7 @@ mod tests {
         let p = prepare(
             temp.path(),
             Request {
+                dlss: None,
                 component: None,
                 edits: vec![edit("true")],
             },

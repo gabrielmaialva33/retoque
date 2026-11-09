@@ -18,8 +18,8 @@ def main():
     cmd = ['cargo', 'build', '--manifest-path', str(manifest), '-p', 'retoque-cli', '-j', '4', '--message-format=json-render-diagnostics']
     # On the workstation the scope bounds Rust and its children, including linker memory.
     if sys.platform == 'linux' and shutil.which('systemd-run') and os.environ.get('XDG_RUNTIME_DIR'):
-        cmd = ['systemd-run', '--user', '--scope', '-p', 'MemoryHigh=8G', '-p', 'MemoryMax=10G',
-               '-p', 'MemorySwapMax=2G', '-p', 'OOMPolicy=kill', '--', *cmd]
+        cmd = ['systemd-run', '--user', '--scope', '-p', 'MemoryHigh=7G', '-p', 'MemoryMax=8G',
+               '-p', 'MemorySwapMax=1G', '-p', 'OOMPolicy=kill', '--', *cmd]
     build = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
     executable = None
     for line in build.stdout.splitlines():
@@ -42,7 +42,8 @@ def main():
     from cross_receipts import run as cross_receipts
     from cli_contract import run as cli_contract
     from pending_journal import run as pending_journal
-    return cross_receipts(executable) or cli_contract(executable) or pending_journal(executable)
+    from dlss_receipts import run as dlss_receipts
+    return cross_receipts(executable) or cli_contract(executable) or pending_journal(executable) or dlss_receipts(executable)
 
 
 if __name__ == '__main__':

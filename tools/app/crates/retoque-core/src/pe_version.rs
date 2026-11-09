@@ -239,6 +239,20 @@ mod tests {
         }
     }
     #[test]
+    fn dlss_version_fixture_reads_pinned_version_without_loading_dll() {
+        let temp = tempfile::tempdir().unwrap();
+        for name in ["nvngx_dlss.dll", "nvngx_dlssd.dll", "nvngx_dlssg.dll"] {
+            let mut bytes = fixture(true);
+            put32(&mut bytes, 512 + 176, 310 << 16 | 9);
+            put32(&mut bytes, 512 + 180, 16 << 16);
+            let path = temp.path().join(name);
+            std::fs::write(&path, bytes).unwrap();
+            assert_eq!(file_version(&path).as_deref(), Some("310.9.16.0"));
+            std::fs::write(&path, b"MZ invalid version data").unwrap();
+            assert_eq!(file_version(&path), None);
+        }
+    }
+    #[test]
     fn game_status_reads_versions_and_only_warns_on_known_mismatch() {
         let temp = tempfile::tempdir().unwrap();
         let mut proxy = fixture(true);

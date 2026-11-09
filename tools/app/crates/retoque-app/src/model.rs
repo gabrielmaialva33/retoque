@@ -24,6 +24,7 @@ pub enum PlanKind {
 }
 
 pub enum Outcome {
+    Dlss(crate::dlss_ui::Event),
     Lsfg(crate::lsfg_ui::Event),
     HistoryWritten(Result<(), AppError>),
     DropClassified {

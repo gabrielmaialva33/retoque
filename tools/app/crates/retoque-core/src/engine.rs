@@ -1,5 +1,7 @@
 #[path = "components.rs"]
 pub(crate) mod components;
+#[path = "dlss.rs"]
+pub(crate) mod dlss;
 
 use crate::{
     ini::Ini,
@@ -23,6 +25,7 @@ const PENDING: &str = ".retoque/pending-receipt.txt";
 pub(crate) struct Execution {
     operation: Operation,
     component_only: bool,
+    process_roots: Vec<PathBuf>,
     component_completion: Option<ReceiptStatus>,
     proxy: Option<String>,
     forget: BTreeMap<usize, Record>,
@@ -1102,11 +1105,20 @@ fn cleanup_empty(game: &Path, dir: &Path) -> Result<(), Error> {
 }
 fn plan_processes(plan: &Plan) -> Vec<(u32, String)> {
     let paths = plan.execution.snapshots.keys().cloned().collect::<Vec<_>>();
-    crate::process::running_for(&plan.game_dir, &paths)
+    let mut processes = crate::process::running_for(&plan.game_dir, &paths);
+    for root in &plan.execution.process_roots {
+        processes.extend(crate::process::running_for(root, &paths));
+    }
+    processes.sort();
+    processes.dedup();
+    processes
 }
 
 fn validate_snapshots(plan: &Plan, expected: &BTreeMap<PathBuf, Fingerprint>) -> Result<(), Error> {
     check_game_directory(&plan.game_dir)?;
+    for root in &plan.execution.process_roots {
+        check_game_directory(root)?;
+    }
     let processes = plan_processes(plan);
     if !processes.is_empty() {
         return Err(Error::Refused(vec![Refusal::GameRunning { processes }]));
@@ -1497,4 +1509,37 @@ fn apply_settings(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(),
         });
     }
     Ok(())
+}
+
+// Merge disjoint install mutations before review, keeping the original sources and receipt preconditions.
+pub(crate) fn combine_installs(mut first: Plan, second: Plan) -> Result<Plan, Error> {
+    if first.game_dir != second.game_dir
+        || first.execution.operation != Operation::Install
+        || second.execution.operation != Operation::Install
+    {
+        return Err(usage_error("only same-root installs can be combined"));
+    }
+    let used: std::collections::BTreeSet<_> = first.steps.iter().flat_map(step_paths).collect();
+    if second.steps.iter().flat_map(step_paths).any(|p| used.contains(p)) {
+        return Err(usage_error("overlapping install plans"));
+    }
+    for (path, expected) in second.execution.snapshots {
+        if first.execution.snapshots.get(&path).is_some_and(|old| old != &expected) {
+            return Err(usage_error("install plans observe different files"));
+        }
+        first.execution.snapshots.insert(path, expected);
+    }
+    first.execution.observed_files.extend(second.execution.observed_files);
+    first.execution.process_roots.extend(second.execution.process_roots);
+    first.steps.extend(second.steps);
+    first.refusals.extend(second.refusals);
+    // Preserve every original fingerprint. Resealing would bless source changes between the plans.
+    first.execution.steps = first.steps.clone();
+    first.execution.refusals = first.refusals.clone();
+    Ok(first)
+}
+
+pub(crate) fn validate_plan(plan: &Plan) -> Result<(), Error> {
+    verify(plan)?;
+    validate_snapshots(plan, &plan.execution.snapshots)
 }

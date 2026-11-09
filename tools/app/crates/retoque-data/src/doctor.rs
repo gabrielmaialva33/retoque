@@ -12,11 +12,14 @@ use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum Severity {
+    Info,
     Warning,
     Error,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Repair {
+    UpdateDlss,
+    RestoreDlss,
     Settings(Vec<Action>),
     Reinstall,
     /// Reconcile through core's uninstall/recovery planner, preserving its refusals.
@@ -276,6 +279,44 @@ pub fn diagnose(input: &Inputs<'_>) -> Vec<Finding> {
                 repair: diagnosis.repair,
             });
         }
+    }
+    findings
+}
+
+/// Pure DLSS diagnostics. An unknown version never proves that a DLL is outdated.
+pub fn diagnose_dlss(files: &[crate::dlss::GameDll], root_incomplete: bool) -> Vec<Finding> {
+    let mut findings = Vec::new();
+    if root_incomplete {
+        findings.push(Finding {
+            id: "dlss_root_incomplete",
+            severity: Severity::Error,
+            title_key: "doctor.dlss_root.title",
+            why_key: "doctor.dlss_root.why",
+            evidence: vec![],
+            repair: Some(Repair::RestoreDlss),
+        });
+    }
+    let old = files
+        .iter()
+        .filter(|d| d.version.as_deref().is_some_and(crate::dlss::older))
+        .collect::<Vec<_>>();
+    if !old.is_empty() {
+        findings.push(Finding {
+            id: "dlss_outdated",
+            severity: Severity::Info,
+            title_key: "doctor.dlss.title",
+            why_key: "doctor.dlss.why",
+            evidence: old
+                .iter()
+                .map(|d| {
+                    FactEvidence::new(
+                        "evidence.dlss_file_version",
+                        format!("{}: {}", d.path, d.version.as_deref().unwrap_or_default()),
+                    )
+                })
+                .collect(),
+            repair: Some(Repair::UpdateDlss),
+        });
     }
     findings
 }

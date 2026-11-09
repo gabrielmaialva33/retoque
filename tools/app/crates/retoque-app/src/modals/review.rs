@@ -13,7 +13,7 @@ use retoque_core::Plan;
 #[derive(Clone)]
 pub(crate) enum ReviewKind {
     Standard(PlanKind),
-    Autotune(autotune::Request),
+    Autotune(Box<autotune::Request>),
 }
 #[derive(Clone)]
 pub(crate) struct ReviewSession {
@@ -28,6 +28,7 @@ impl ReviewSession {
         !self.plans.is_empty()
             && self.plans.iter().all(|p| p.refusals().is_empty())
             && (matches!(self.kind, ReviewKind::Standard(PlanKind::Uninstall))
+                || matches!(&self.kind, ReviewKind::Autotune(r) if matches!(r.dlss,Some(crate::dlss_ui::Change::Restore { .. })))
                 || self.plans.iter().any(|p| !p.steps().is_empty()))
     }
 }
@@ -48,6 +49,7 @@ pub(crate) fn show(
         .max_height((ui.ctx().content_rect().height() - 290.0).max(160.0))
         .show(ui, |ui| {
             for (index, plan) in session.plans.iter().enumerate() {
+                ui.label(plan.game_dir().display().to_string());
                 for refusal in plan.refusals() {
                     let (key, detail) = refusal_text(lang, refusal);
                     ui.colored_label(theme::BAD, format!("{} {detail}", t(lang, key)));

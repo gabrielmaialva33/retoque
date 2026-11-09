@@ -275,3 +275,6 @@ fn default_home_dir() -> Option<PathBuf> {
         .map(PathBuf::from)
         .filter(|p| !p.as_os_str().is_empty())
 }
+
+mod dlss_paths;
+pub use dlss_paths::find_dlss_paths;

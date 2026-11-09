@@ -233,6 +233,7 @@ fn watcher_error_is_visible_in_both_languages_and_has_manual_refresh() {
 fn measure_diagnose_per_selection() {
     let temp = tempfile::tempdir().unwrap();
     let snapshot = || Snapshot {
+        install_dir: temp.path().into(),
         target: temp.path().into(),
         status: Some(Status {
             nr_enabled: Some(true),

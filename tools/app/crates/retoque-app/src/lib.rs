@@ -40,3 +40,5 @@ mod intuitive_tests;
 pub(crate) mod watcher;
 
 pub(crate) mod lsfg_ui;
+
+mod dlss_ui;

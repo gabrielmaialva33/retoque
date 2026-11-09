@@ -167,6 +167,7 @@ impl RetoqueApp {
         }
     }
     pub(crate) fn optimize_controls(&mut self, ui: &mut egui::Ui) {
+        self.dlss_optimize_checkbox(ui);
         let recs = self.view.intelligence.recommendations.clone();
         let target = self.view.target.as_ref();
         let mut experimental = target.is_some() && self.tuning.sm86.experimental_for.as_ref() == target;
@@ -229,7 +230,7 @@ impl RetoqueApp {
         });
         let wine = self.view.intelligence.facts.runtime.is_wine();
         let model_edit = model.map(|m| ("DlssNr".into(), "ModelFile".into(), Catalog::model_file_value(m, wine)));
-        let composed = optimize::compose(optimize::Selection {
+        let mut composed = optimize::compose(optimize::Selection {
             recommendations: &self.view.intelligence.recommendations,
             component: component.as_ref(),
             installed_ids: self
@@ -245,6 +246,15 @@ impl RetoqueApp {
             lsfg_ready: self.autotune_ready(),
             lsfg_edits: self.autotune_lsfg_edits(2, &self.view.intelligence.facts),
         });
+        if self.tuning.dlss.selected_for.as_ref() == Some(&target)
+            && let Ok(c) = &mut composed
+        {
+            c.request.dlss = self.dlss_update_request();
+            if c.request.dlss.is_none() {
+                self.tuning.sm86.error = Some(self.tr("dlss.download_first").into());
+                return;
+            }
+        }
         self.tuning.sm86.error = None;
         match composed {
             Err(e) => self.tuning.sm86.error = Some(self.tr(e).into()),
@@ -266,7 +276,7 @@ impl RetoqueApp {
                 });
                 self.tuning.sm86.consent = Some(Consent::Download);
             }
-            Ok(c) if c.request.component.is_some() || !c.request.edits.is_empty() => {
+            Ok(c) if c.request.component.is_some() || c.request.dlss.is_some() || !c.request.edits.is_empty() => {
                 self.autotune_request(self.tr("optimize.title").into(), c.request)
             }
             Ok(c) => {

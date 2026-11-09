@@ -227,6 +227,28 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Override de execução presente",
     ),
     ("evidence.log", "Redacted log line", "Linha de log anonimizada"),
+    ("severity.info", "Information", "Informação"),
+    (
+        "doctor.dlss.title",
+        "A newer DLSS is available",
+        "Uma versão mais nova do DLSS está disponível",
+    ),
+    (
+        "doctor.dlss.why",
+        "NVIDIA DLSS 310.9.16 can replace older SR/RR/FG files after review. Game compatibility is not guaranteed.",
+        "O NVIDIA DLSS 310.9.16 pode substituir arquivos SR/RR/FG antigos após revisão. A compatibilidade com o jogo não é garantida.",
+    ),
+    (
+        "doctor.dlss_root.title",
+        "DLSS root receipt needs recovery",
+        "O recibo DLSS na raiz precisa de recuperação",
+    ),
+    (
+        "doctor.dlss_root.why",
+        "A pending or incomplete DLSS operation remains at the game installation root. Review restoration of both receipts.",
+        "Há uma operação DLSS pendente ou incompleta na raiz do jogo. Revise a restauração dos dois recibos.",
+    ),
+    ("evidence.dlss_file_version", "Game DLSS version", "Versão DLSS do jogo"),
 ];
 #[cfg(test)]
 mod tests {

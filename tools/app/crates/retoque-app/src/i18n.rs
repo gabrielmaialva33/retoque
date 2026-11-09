@@ -1454,6 +1454,175 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("watch.refresh", "Refresh selected game", "Atualizar jogo selecionado"),
     ("log.diagnoses", "Log diagnosis", "Diagnóstico do log"),
+    ("dlss.title", "NVIDIA DLSS", "NVIDIA DLSS"),
+    ("dlss.installed", "DLSS in this game", "DLSS neste jogo"),
+    ("dlss.available", "available", "disponível"),
+    ("dlss.update", "Update DLSS…", "Atualizar DLSS…"),
+    (
+        "dlss.restore",
+        "Remove Retoque and restore original DLSS…",
+        "Remover Retoque e restaurar DLSS original…",
+    ),
+    (
+        "dlss.optimize",
+        "Also update DLSS (optional)",
+        "Atualizar DLSS também (opcional)",
+    ),
+    ("dlss.download", "Get DLSS 310.9.16…", "Obter DLSS 310.9.16…"),
+    (
+        "dlss.downloading",
+        "Downloading verified NVIDIA DLSS…",
+        "Baixando NVIDIA DLSS com verificação…",
+    ),
+    (
+        "dlss.download_first",
+        "Get DLSS from the DLSS card first, then review the update.",
+        "Obtenha o DLSS no cartão DLSS primeiro; depois revise a atualização.",
+    ),
+    (
+        "dlss.consent",
+        "Download SR, RR and FG directly from NVIDIA (115 MB)? Only the kinds already in the game will be replaced after a separate review. NVIDIA license applies.",
+        "Baixar SR, RR e FG diretamente da NVIDIA (115 MB)? Apenas os tipos já presentes no jogo serão substituídos após outra revisão. Aplica-se a licença NVIDIA.",
+    ),
+    (
+        "dlss.caution",
+        "DLL changes may be incompatible with a game or its anti-cheat. Check the game policy before updating. Originals are backed up for restoration.",
+        "Trocas de DLL podem ser incompatíveis com o jogo ou seu anticheat. Confira a política do jogo antes de atualizar. Os originais terão backup para restauração.",
+    ),
+    ("dlss.confirm_download", "Confirm download", "Confirmar download"),
+    ("dlss.license", "Read NVIDIA license", "Ler licença NVIDIA"),
+    (
+        "dlss.error.0",
+        "DLSS root receipt belongs to another installation",
+        "O recibo na raiz pertence a outra instalação",
+    ),
+    (
+        "dlss.error.1",
+        "invalid DLSS game root or empty file list",
+        "Raiz do jogo inválida ou lista DLSS vazia",
+    ),
+    (
+        "dlss.error.2",
+        "invalid or duplicate DLSS path",
+        "Caminho DLSS inválido ou duplicado",
+    ),
+    (
+        "dlss.error.3",
+        "DLSS destination missing, linked or ambiguous",
+        "Destino DLSS ausente, vinculado ou ambíguo",
+    ),
+    (
+        "dlss.error.4",
+        "restore previous DLSS receipt before changing its root",
+        "Restaure o recibo DLSS anterior antes de mudar sua raiz",
+    ),
+    (
+        "dlss.error.5",
+        "DLSS root marker is not receipt-owned",
+        "O marcador DLSS da raiz não pertence ao recibo",
+    ),
+    (
+        "dlss.error.6",
+        "invalid DLSS catalog marker",
+        "Marcador do catálogo DLSS inválido",
+    ),
+    (
+        "dlss.error.7",
+        "non-Unicode DLSS path",
+        "Caminho DLSS com codificação inválida",
+    ),
+    (
+        "dlss.error.8",
+        "DLSS catalog file missing or linked",
+        "Arquivo do catálogo DLSS ausente ou vinculado",
+    ),
+    (
+        "dlss.error.9",
+        "DLSS file changed since previous update; restore or reconcile first",
+        "A DLL mudou desde a atualização anterior; restaure ou reconcilie primeiro",
+    ),
+    (
+        "dlss.error.10",
+        "target outside DLSS game root",
+        "Pasta-alvo fora da raiz do jogo",
+    ),
+    (
+        "dlss.error.11",
+        "DLSS size or SHA-256 mismatch",
+        "Tamanho ou SHA-256 do DLSS não confere",
+    ),
+    ("dlss.error.12", "linked DLSS catalog", "Catálogo DLSS é um vínculo"),
+    (
+        "dlss.error.13",
+        "invalid DLSS catalog directory",
+        "Diretório do catálogo DLSS inválido",
+    ),
+    (
+        "dlss.error.14",
+        "invalid DLSS catalog file",
+        "Arquivo do catálogo DLSS inválido",
+    ),
+    (
+        "dlss.error.15",
+        "DLSS download requires confirmation",
+        "O download DLSS exige confirmação",
+    ),
+    (
+        "dlss.error.16",
+        "DLSS catalog appeared during download",
+        "O catálogo DLSS apareceu durante o download",
+    ),
+    (
+        "dlss.error.17",
+        "DLSS catalog is not downloaded",
+        "O catálogo DLSS ainda não foi baixado",
+    ),
+    (
+        "dlss.error.18",
+        "DLSS catalog disappeared",
+        "O catálogo DLSS desapareceu",
+    ),
+    (
+        "dlss.error.19",
+        "DLSS scan depth exceeded",
+        "Limite de profundidade da busca DLSS excedido",
+    ),
+    (
+        "dlss.error.20",
+        "DLSS scan entry limit exceeded",
+        "Limite de arquivos da busca DLSS excedido",
+    ),
+    (
+        "dlss.error.21",
+        "non-Unicode DLSS scan path",
+        "Caminho com codificação inválida na busca DLSS",
+    ),
+    ("dlss.error.22", "invalid DLSS path", "Caminho DLSS inválido"),
+    (
+        "dlss.error.23",
+        "restore cannot be combined with optimization",
+        "A restauração não pode ser combinada com otimização",
+    ),
+    (
+        "dlss.error.24",
+        "only same-root installs can be combined",
+        "Somente instalações na mesma raiz podem ser combinadas",
+    ),
+    (
+        "dlss.error.25",
+        "overlapping install plans",
+        "Planos de instalação alteram os mesmos caminhos",
+    ),
+    (
+        "dlss.error.26",
+        "install plans observe different files",
+        "Os arquivos mudaram entre os planos de instalação",
+    ),
+    (
+        "dlss.error.component_changed",
+        "component changed since review",
+        "O componente mudou desde a revisão",
+    ),
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {
@@ -1500,6 +1669,12 @@ mod tests {
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
+    if let Some((key, en, _)) = TEXT
+        .iter()
+        .find(|(key, en, _)| key.starts_with("dlss.error.") && message.contains(en))
+    {
+        return message.replace(en, t(lang, key));
+    }
     if let Some((key, _, _)) = TEXT
         .iter()
         .find(|(key, en, _)| key.starts_with("sm86.error.") && *en == message)
