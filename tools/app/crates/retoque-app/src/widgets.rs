@@ -105,6 +105,13 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
                 );
             }
             response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, selected, *label));
+            // egui turns `selected` into a checkbox-style `toggled` state. For a tab, screen readers and Windows UI
+            // Automation expect `selected` instead (SelectionItem), and `toggled` also hides the click (Invoke) action.
+            ui.ctx().accesskit_node_builder(response.id, |node| {
+                node.clear_toggled();
+                node.set_selected(selected);
+                node.add_action(egui::accesskit::Action::Click);
+            });
             if let Some((_, _, shortcut)) = crate::modals::palette::TABS.get(i) {
                 response.clone().on_hover_text(*shortcut);
             }
@@ -410,5 +417,31 @@ mod uri_tests {
     #[test]
     fn unix_paths_keep_their_slashes() {
         assert_eq!(file_uri(Path::new("/home/u/a b.jpg")), "file:///home/u/a b.jpg"); // privacy: allow (synthetic test path)
+    }
+}
+
+#[cfg(test)]
+mod tab_a11y_tests {
+    use egui_kittest::Harness;
+    use egui_kittest::kittest::{NodeT, Queryable};
+
+    #[test]
+    fn tabs_expose_selected_state_and_click_for_screen_readers() {
+        let harness = Harness::new_ui(|ui| {
+            super::tabs(ui, &["First", "Second"], 1);
+        });
+        let first = harness.get_by_label("First");
+        let second = harness.get_by_label("Second");
+        assert_eq!(first.accesskit_node().role(), egui::accesskit::Role::Tab);
+        assert_eq!(first.accesskit_node().is_selected(), Some(false));
+        assert_eq!(second.accesskit_node().is_selected(), Some(true));
+        // `toggled` would turn the tab into a checkbox for assistive tech and hide its click action.
+        assert_eq!(first.accesskit_node().toggled(), None);
+        assert!(
+            first
+                .accesskit_node()
+                .data()
+                .supports_action(egui::accesskit::Action::Click)
+        );
     }
 }
