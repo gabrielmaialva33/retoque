@@ -58,6 +58,9 @@ def run(executable):
                                 capture_output=True, text=True, env=os.environ.copy())
         assert result.returncode == 0, result.stdout + result.stderr
         assert (game / 'ReShade64.dll').read_bytes() == limited
-        assert (game / 'ReShade.ini').read_bytes() == preset
+        # Bash/PowerShell do not replay INI provenance (README): the user's preset survives, and the one ReShade
+        # setting the install made, [INPUT] InputProcessing=1 (both menus keep the mouse), is left in place.
+        config = (game / 'ReShade.ini').read_bytes()
+        assert config.startswith(preset) and b'[INPUT]' in config and b'InputProcessing=1' in config, config
     print('PASS: ReShade/add-on dry-run, byte-exact undo, source preservation and Bash receipt-v1 removal')
     return 0

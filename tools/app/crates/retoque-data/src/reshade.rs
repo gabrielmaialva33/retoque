@@ -236,6 +236,8 @@ pub struct Snapshot {
     pub nr_enabled: bool,
     pub yield_to_addons: Option<String>,
     pub load_enabled: bool,
+    /// ReShade is here and its overlay takes the mouse from the Retoque menu while open (InputProcessing 2/absent).
+    pub menu_input_blocked: bool,
 }
 impl Snapshot {
     pub fn owner(&self) -> retoque_core::reshade::NrOwner {
@@ -254,13 +256,15 @@ pub fn inspect(game: &Path) -> Result<Snapshot, retoque_core::Error> {
         ini.get(s, k)
             .is_some_and(|v| v.eq_ignore_ascii_case("true") || v == "1")
     };
+    let build = retoque_core::reshade::installed_build(game)?;
     Ok(Snapshot {
         addons: retoque_core::reshade::addons(game)?,
-        build: retoque_core::reshade::installed_build(game)?,
+        build,
         managed: retoque_core::reshade::managed(game)?,
         nr_enabled: on("DlssNr", "Enabled"),
         yield_to_addons: ini.get("DlssNr", "YieldToAddons").map(str::to_owned),
         load_enabled: on("Plugins", "LoadReshade"),
+        menu_input_blocked: build.is_some() && retoque_core::reshade::menu_input_blocked_in(game)?,
     })
 }
 pub fn recommendation(snapshot: &Snapshot) -> Option<crate::recommend::Recommendation> {

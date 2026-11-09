@@ -349,3 +349,77 @@ fn user_config_created_after_import_survives_undo() {
     run(plan_remove(&g, "a.addon64").unwrap());
     assert_eq!(fs::read(g.join("ReShade.ini")).unwrap(), b"");
 }
+
+fn input_mode(g: &std::path::Path) -> Option<String> {
+    let bytes = fs::read(g.join("ReShade.ini")).ok()?;
+    retoque_core::ini::Ini::parse_sensitive(&bytes)
+        .get("INPUT", "InputProcessing")
+        .map(str::to_owned)
+}
+
+#[test]
+fn install_lets_both_menus_use_the_mouse_and_uninstall_removes_the_config_it_created() {
+    let (_t, g, s) = fixture();
+    assert!(menu_input_blocked(b""));
+    let plan = plan_install(&g, &g, &s).unwrap();
+    assert!(plan.steps().iter().any(
+        |s| matches!(s, retoque_core::Step::SetIni { file, section, key, value, .. }
+        if file == "ReShade.ini" && section == "INPUT" && key == "InputProcessing" && value == "1")
+    ));
+    run(plan);
+    assert_eq!(input_mode(&g).as_deref(), Some("1"));
+    assert!(!menu_input_blocked_in(&g).unwrap());
+    run(plan_uninstall(&g).unwrap());
+    assert!(!g.join("ReShade.ini").exists(), "only the key Retoque wrote was there");
+    assert!(!g.join(".retoque/reshade-input.ini").exists());
+}
+
+#[test]
+fn reshade_rewriting_its_config_still_restores_the_input_mode_and_keeps_its_settings() {
+    let (_t, g, s) = fixture();
+    fs::write(
+        g.join("ReShade.ini"),
+        b"[INPUT]\r\nInputProcessing=2\r\nKeyOverlay=36,0,0,0\r\n",
+    )
+    .unwrap();
+    run(plan_install(&g, &g, &s).unwrap());
+    assert_eq!(input_mode(&g).as_deref(), Some("1"));
+    // ReShade saves its whole configuration on exit.
+    let mut saved = fs::read(g.join("ReShade.ini")).unwrap();
+    saved.extend_from_slice(b"[OVERLAY]\r\nTutorialProgress=4\r\n");
+    fs::write(g.join("ReShade.ini"), &saved).unwrap();
+    run(plan_uninstall(&g).unwrap());
+    assert_eq!(input_mode(&g).as_deref(), Some("2"));
+    let text = fs::read_to_string(g.join("ReShade.ini")).unwrap();
+    assert!(text.contains("TutorialProgress=4") && text.contains("KeyOverlay=36,0,0,0"));
+}
+
+#[test]
+fn a_mode_the_user_chose_later_survives_uninstall() {
+    let (_t, g, s) = fixture();
+    run(plan_install(&g, &g, &s).unwrap());
+    let changed = fs::read_to_string(g.join("ReShade.ini"))
+        .unwrap()
+        .replace("InputProcessing=1", "InputProcessing=0");
+    fs::write(g.join("ReShade.ini"), changed).unwrap();
+    run(plan_uninstall(&g).unwrap());
+    assert_eq!(input_mode(&g).as_deref(), Some("0"));
+}
+
+#[test]
+fn menu_input_repair_alone_on_an_existing_reshade() {
+    let (_t, g, _s) = fixture();
+    fs::write(g.join("ReShade.ini"), b"[INPUT]\r\nInputProcessing=2\r\n").unwrap();
+    assert!(menu_input_blocked_in(&g).unwrap());
+    run(plan_menu_input(&g).unwrap());
+    assert_eq!(input_mode(&g).as_deref(), Some("1"));
+    assert!(plan_menu_input(&g).unwrap().steps().is_empty());
+    for mode in ["0", "1", " 1"] {
+        assert!(!menu_input_blocked(
+            format!("[INPUT]\nInputProcessing={mode}\n").as_bytes()
+        ));
+    }
+    assert!(menu_input_blocked(b"[INPUT]\nInputProcessing=2\n"));
+    // ReShade compares names case-sensitively: a differently cased key is not its setting.
+    assert!(menu_input_blocked(b"[input]\ninputprocessing=1\n"));
+}

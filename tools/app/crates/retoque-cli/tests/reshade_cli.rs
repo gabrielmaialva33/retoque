@@ -57,7 +57,8 @@ fn pe(markers: &[u8]) -> Vec<u8> {
 #[test]
 fn interrupted_component_install_recovers_at_each_step() {
     for limited in [false, true] {
-        for step in 0..if limited { 4 } else { 3 } {
+        // Every mutation: both undo states, the DLL (and its backup), LoadReshade and InputProcessing.
+        for step in 0..if limited { 6 } else { 5 } {
             let temp = tempfile::tempdir().unwrap();
             let game = temp.path().join("game");
             fs::create_dir(&game).unwrap();

@@ -352,6 +352,22 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Neural Rendering: pelo Retoque",
     ),
     (
+        "rs.input_title",
+        "ReShade's menu takes the mouse from the Retoque menu",
+        "O menu do ReShade tira o mouse do menu do Retoque",
+    ),
+    (
+        "rs.input_why",
+        "With ReShade's input processing on \"block all\" (its default), while its overlay is open the Retoque menu gets no mouse or keyboard. Setting it to block only while the cursor is over ReShade's own windows lets both menus be used together.",
+        "Com o processamento de entrada do ReShade em \"bloquear tudo\" (o padrão dele), enquanto o menu dele está aberto o menu do Retoque não recebe mouse nem teclado. Bloquear só quando o cursor está sobre as janelas do ReShade deixa os dois menus funcionarem juntos.",
+    ),
+    ("rs.input_mode", "ReShade.ini [INPUT]", "ReShade.ini [INPUT]"),
+    (
+        "rs.input_fix",
+        "Let both menus use the mouse",
+        "Deixar os dois menus usarem o mouse",
+    ),
+    (
         "rs.yield",
         "Let the NR add-on take over (default)",
         "Deixar o add-on NR assumir (padrão)",

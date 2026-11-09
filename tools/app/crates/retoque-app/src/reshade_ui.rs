@@ -9,6 +9,7 @@ pub enum Change {
     Add(PathBuf),
     Remove(String),
     Enable { file: String, enabled: bool },
+    MenuInput,
 }
 impl Change {
     pub fn plan(&self, target: &Path) -> Result<Plan, retoque_core::Error> {
@@ -18,6 +19,7 @@ impl Change {
             Self::Add(path) => core::plan_add(target, path),
             Self::Remove(file) => core::plan_remove(target, file),
             Self::Enable { file, enabled } => core::plan_enabled(target, file, *enabled),
+            Self::MenuInput => core::plan_menu_input(target),
         }
     }
 }
@@ -64,6 +66,10 @@ impl RetoqueApp {
                 ..Default::default()
             },
         );
+    }
+    pub(crate) fn reshade_menu_input(&mut self) {
+        self.tab = Tab::Install;
+        self.reshade_request(Change::MenuInput);
     }
     pub(crate) fn reshade_offer(&mut self) {
         self.tab = Tab::Install;
@@ -318,6 +324,16 @@ impl RetoqueApp {
                             policy = Some("false");
                         }
                     });
+                }
+                if snapshot.menu_input_blocked {
+                    ui.label(t(lang, "rs.input_title"));
+                    if ui
+                        .add_enabled(enabled, egui::Button::new(t(lang, "rs.input_fix")))
+                        .on_hover_text(t(lang, "rs.input_why"))
+                        .clicked()
+                    {
+                        change = Some(Change::MenuInput);
+                    }
                 }
                 if snapshot.managed
                     && ui

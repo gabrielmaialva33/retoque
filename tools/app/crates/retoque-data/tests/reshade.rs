@@ -99,6 +99,30 @@ fn doctor_and_recommendation_are_static_and_do_not_enable_anything() {
     assert!(!t.path().join(".retoque").exists());
 }
 
+#[test]
+fn doctor_offers_both_menus_the_mouse_only_while_reshade_blocks_it() {
+    let t = tempfile::tempdir().unwrap();
+    std::fs::write(t.path().join("ReShade64.dll"), pe(b"ReShade LoadFromDllMain")).unwrap();
+    let blocked = inspect(t.path()).unwrap();
+    assert!(blocked.menu_input_blocked);
+    let finding = retoque_data::doctor::diagnose_reshade(&blocked)
+        .into_iter()
+        .find(|f| f.id == "reshade_menu_input")
+        .unwrap();
+    assert_eq!(finding.repair, Some(retoque_data::doctor::Repair::ReShadeMenuInput));
+    std::fs::write(t.path().join("ReShade.ini"), b"[INPUT]\r\nInputProcessing=1\r\n").unwrap();
+    let open = inspect(t.path()).unwrap();
+    assert!(!open.menu_input_blocked);
+    assert!(
+        retoque_data::doctor::diagnose_reshade(&open)
+            .iter()
+            .all(|f| f.id != "reshade_menu_input")
+    );
+    // Without ReShade there is nothing to block.
+    let none = tempfile::tempdir().unwrap();
+    assert!(!inspect(none.path()).unwrap().menu_input_blocked);
+}
+
 fn pe(markers: &[u8]) -> Vec<u8> {
     let mut b = vec![0; 328];
     b[..2].copy_from_slice(b"MZ");

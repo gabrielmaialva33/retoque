@@ -270,3 +270,10 @@ these host tests nor PE inspection qualify GPU behavior, game compatibility, or 
 
 The legacy Bash/PowerShell uninstallers consume the normal v1 file/backup records, but do not replay the new
 INI provenance. Use the app or CLI component/full uninstall for exact restoration of ReShade loader/add-on settings.
+
+ReShade's default input mode (`[INPUT] InputProcessing=2`) gives its open overlay all mouse and keyboard input, and
+its message hooks see input before OptiScaler's, so the Retoque menu cannot be used while both are open. Installing
+the component sets `InputProcessing=1` in ReShade.ini (block only while the cursor is over ReShade's own windows),
+with its own undo state; uninstall restores the previous mode unless the user changed it since. For a ReShade that
+was already there, Doctor and the ReShade card offer the same reviewed edit. The legacy uninstallers leave that one
+setting in place.

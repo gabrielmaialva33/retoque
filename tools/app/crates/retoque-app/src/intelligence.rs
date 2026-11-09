@@ -226,6 +226,7 @@ impl RetoqueApp {
         }
         match repair {
             Repair::InstallReShade => self.reshade_offer(),
+            Repair::ReShadeMenuInput => self.reshade_menu_input(),
             Repair::UpdateDlss => self.dlss_request_update(),
             Repair::RestoreDlss => self.dlss_restore(),
             Repair::Settings(actions) => {

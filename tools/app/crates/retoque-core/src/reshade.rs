@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 pub const DLL: &str = "ReShade64.dll";
 pub const CONFIG: &str = "ReShade.ini";
 const STATE: &str = ".retoque/reshade.ini";
+// Undo of the one ReShade.ini setting the install makes, [INPUT] InputProcessing (see menu_input_blocked).
+const INPUT_STATE: &str = ".retoque/reshade-input.ini";
 const MAX_DLL: u64 = 128 * 1024 * 1024;
 const MAX_INI: u64 = 2 * 1024 * 1024;
 
@@ -75,6 +77,22 @@ pub fn nr_owner(nr_on: bool, yield_to_addons: Option<&str>, addons: &[Addon]) ->
     } else {
         NrOwner::Retoque
     }
+}
+/// Whether ReShade's overlay takes the mouse and keyboard from everything else in the game while it is open.
+/// ReShade 6.8 defaults `[INPUT] InputProcessing` to 2 (block all input while the overlay is visible); its message
+/// hooks sit below OptiScaler's (ReShade is loaded first), so in that mode the Retoque menu never sees the mouse while
+/// both are open. 1 blocks only while the cursor is over ReShade's own windows; 0 never blocks.
+pub fn menu_input_blocked(config: &[u8]) -> bool {
+    !matches!(
+        Ini::parse_sensitive(config)
+            .get("INPUT", "InputProcessing")
+            .map(str::trim),
+        Some("0" | "1")
+    )
+}
+/// menu_input_blocked for the game's own ReShade.ini (absent reads as ReShade's default, which blocks).
+pub fn menu_input_blocked_in(game: &Path) -> Result<bool, Error> {
+    Ok(menu_input_blocked(&read_config(&canonical(game)?, CONFIG)?.1))
 }
 pub fn addon_filename(name: &str) -> bool {
     safe_rel(name)
@@ -294,7 +312,10 @@ fn load_state(game: &Path, path: &str, receipt: &Receipt) -> Result<Option<State
             .ok_or_else(|| usage_error("invalid ReShade state"))?,
     )
     .map_err(|_| usage_error("invalid ReShade state"))?;
-    if state.schema != 1 || (state.file != DLL && !addon_filename(&state.file)) || state.edits.len() > 1024 {
+    if state.schema != 1
+        || (state.file != DLL && state.file != CONFIG && !addon_filename(&state.file))
+        || state.edits.len() > 1024
+    {
         return Err(usage_error("invalid ReShade state"));
     }
     Ok(Some(state))
@@ -484,6 +505,39 @@ fn loader_guards(plan: &mut Plan) -> Result<(), Error> {
     }
     Ok(())
 }
+// The [INPUT] InputProcessing=1 edit and its undo state, or None when ReShade already lets the menu have the mouse.
+fn menu_input_edit(game: &Path, receipt: &Receipt) -> Result<Option<(State, EditRecord)>, Error> {
+    let (file, bytes) = read_config(game, CONFIG)?;
+    if !menu_input_blocked(&bytes) {
+        return Ok(None);
+    }
+    let Some(edit) = record_edit(&bytes, &file, "INPUT", "InputProcessing", Some("1".into())) else {
+        return Ok(None);
+    };
+    let mut state = load_state(game, INPUT_STATE, receipt)?.unwrap_or(State {
+        schema: 1,
+        file: CONFIG.into(),
+        created: false,
+        before_sha: None,
+        addon_name: None,
+        ini_existed: exists(&game.join(&file)),
+        original_disabled: Vec::new(),
+        edits: Vec::new(),
+    });
+    state.edits.push(edit.clone());
+    Ok(Some((state, edit)))
+}
+/// Lets the Retoque menu use the mouse while ReShade's overlay is open: `[INPUT] InputProcessing=1` in ReShade.ini,
+/// reviewed and undone with the ReShade component (or alone, when nothing else changes).
+pub fn plan_menu_input(game: &Path) -> Result<Plan, Error> {
+    let (mut plan, receipt) = begin(game, false)?;
+    let game = plan.game_dir.clone();
+    if let Some((state, edit)) = menu_input_edit(&game, &receipt)? {
+        save_state(&mut plan, INPUT_STATE, &state)?;
+        note_edit(&mut plan, &edit, false, false);
+    }
+    seal(plan, &receipt)
+}
 pub fn plan_install(game: &Path, exe_dir: &Path, source: &Path) -> Result<Plan, Error> {
     let (mut plan, receipt) = begin(game, false)?;
     if canonical(exe_dir)? != plan.game_dir {
@@ -519,9 +573,17 @@ pub fn plan_install(game: &Path, exe_dir: &Path, source: &Path) -> Result<Plan, 
     if let Some(edit) = &edit {
         state.edits.push(edit.clone());
     }
-    // Write undo evidence before changing the user's INI, including interrupted installs.
+    let input = menu_input_edit(&game, &receipt)?;
+    // Write undo evidence before changing the user's INIs, including interrupted installs. Each insert goes first, so
+    // the component's own state (which uninstall looks for) is written before the input state.
+    if let Some((input_state, _)) = &input {
+        save_state_first(&mut plan, INPUT_STATE, input_state)?;
+    }
     save_state_first(&mut plan, STATE, &state)?;
     if let Some(edit) = edit {
+        note_edit(&mut plan, &edit, false, false);
+    }
+    if let Some((_, edit)) = input {
         note_edit(&mut plan, &edit, false, false);
     }
     if build(&bounded(source, MAX_DLL)?) != Build::Full {
@@ -555,7 +617,7 @@ fn restore_edits(plan: &mut Plan, state: &State, virtual_inis: &mut BTreeMap<Str
         if record.file != *file
             || !matches!(
                 (record.section.as_str(), record.key.as_str()),
-                ("Plugins", "LoadReshade") | ("ADDON", "DisabledAddons")
+                ("Plugins", "LoadReshade") | ("ADDON", "DisabledAddons") | ("INPUT", "InputProcessing")
             )
         {
             return Err(usage_error("invalid lifecycle edit identity"));
@@ -565,7 +627,7 @@ fn restore_edits(plan: &mut Plan, state: &State, virtual_inis: &mut BTreeMap<Str
         }
         if ini.undo(&record.undo) {
             note_edit(plan, record, true, true);
-        } else if file.eq_ignore_ascii_case(CONFIG) {
+        } else if file.eq_ignore_ascii_case(CONFIG) && record.key == "DisabledAddons" {
             // Another add-on or the user changed the list: restore only this file's original entries.
             let mut values = config_values(&ini.to_bytes(), "DisabledAddons");
             let fallback = Path::new(&state.file).file_stem().unwrap().to_string_lossy();
@@ -591,6 +653,13 @@ fn restore_edits(plan: &mut Plan, state: &State, virtual_inis: &mut BTreeMap<Str
                 continue;
             } // mutation did not run before interruption
             if current != record.new.as_deref() {
+                if record.key == "InputProcessing" {
+                    // The user chose another input mode in ReShade's own settings since: theirs stands.
+                    plan.notes.push(
+                        "ReShade's input processing was changed since install; the current choice is kept".into(),
+                    );
+                    continue;
+                }
                 return Err(usage_error(
                     "LoadReshade changed since the reviewed install; preserve the undo state",
                 ));
@@ -677,6 +746,14 @@ fn remove(game: &Path, state_path: &str, expected: &str) -> Result<Plan, Error> 
     plan.steps.push(Step::Remove {
         path: state_path.into(),
     });
+    if state_path == STATE
+        && let Some(input) = load_state(&plan.game_dir, INPUT_STATE, &receipt)?
+    {
+        restore_edits(&mut plan, &input, &mut BTreeMap::new())?;
+        plan.steps.push(Step::Remove {
+            path: INPUT_STATE.into(),
+        });
+    }
     seal(plan, &receipt)
 }
 pub fn plan_uninstall(game: &Path) -> Result<Plan, Error> {
@@ -787,7 +864,7 @@ pub(super) fn before_uninstall(plan: &mut Plan, receipt: &Receipt) -> Result<(),
     let mut virtual_inis = BTreeMap::new();
     for record in receipt.records.iter().rev() {
         if let Record::File { path, .. } = record
-            && (path == STATE || (path.starts_with(".retoque/addon-") && path.ends_with(".ini")))
+            && (path == STATE || path == INPUT_STATE || (path.starts_with(".retoque/addon-") && path.ends_with(".ini")))
             && let Some(state) = load_state(&plan.game_dir, path, receipt)?
         {
             restore_edits(plan, &state, &mut virtual_inis)?;
