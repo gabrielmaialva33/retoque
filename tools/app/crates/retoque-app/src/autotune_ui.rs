@@ -402,7 +402,12 @@ impl RetoqueApp {
     }
     pub(crate) fn autotune_apply(&mut self, p: autotune::Prepared) {
         let target = p.target.clone();
-        let mut roots = p.plans.iter().map(|p| p.game_dir().to_owned()).collect::<Vec<_>>();
+        let mut roots = vec![target.clone()];
+        for plan in &p.plans {
+            if plan.game_dir().starts_with(&target) || target.starts_with(plan.game_dir()) {
+                roots.push(plan.game_dir().to_owned());
+            }
+        }
         if let Some(change) = &p.request.dlss {
             roots.push(match change {
                 crate::dlss_ui::Change::Update(u) => u.install_dir.clone(),
@@ -420,6 +425,8 @@ impl RetoqueApp {
         }
         let kind = if matches!(p.request.dlss, Some(crate::dlss_ui::Change::Restore { .. })) {
             PlanKind::Uninstall
+        } else if p.request.retoque_install().is_some() {
+            PlanKind::Install
         } else {
             PlanKind::Settings
         };

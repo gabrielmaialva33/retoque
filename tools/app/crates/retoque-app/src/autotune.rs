@@ -14,12 +14,52 @@ pub mod optimize;
 pub enum ComponentChange {
     Install(components::Component),
     Remove(String),
+    Retoque {
+        options: Box<retoque_core::InstallOptions>,
+        component: Option<Box<ComponentChange>>,
+    },
 }
 #[derive(Clone, Debug, Default)]
 pub struct Request {
     pub component: Option<ComponentChange>,
     pub edits: Vec<Edit>,
     pub dlss: Option<crate::dlss_ui::Change>,
+}
+impl Request {
+    pub fn with_install(mut self, options: retoque_core::InstallOptions) -> Self {
+        self.set_install(options);
+        self
+    }
+    pub fn set_install(&mut self, options: retoque_core::InstallOptions) {
+        let existing = match self.component.take() {
+            Some(ComponentChange::Retoque { component, .. }) => component,
+            other => other.map(Box::new),
+        };
+        self.component = Some(ComponentChange::Retoque {
+            options: Box::new(options),
+            component: existing,
+        });
+    }
+    pub fn set_component(&mut self, change: ComponentChange) {
+        match &mut self.component {
+            Some(ComponentChange::Retoque { component, .. }) => {
+                *component = Some(Box::new(change));
+            }
+            slot => *slot = Some(change),
+        }
+    }
+    pub fn retoque_install(&self) -> Option<&retoque_core::InstallOptions> {
+        match &self.component {
+            Some(ComponentChange::Retoque { options, .. }) => Some(options),
+            _ => None,
+        }
+    }
+    pub fn component_change(&self) -> Option<&ComponentChange> {
+        match &self.component {
+            Some(ComponentChange::Retoque { component, .. }) => component.as_deref(),
+            other => other.as_ref(),
+        }
+    }
 }
 #[derive(Clone)]
 pub struct Prepared {
@@ -29,34 +69,170 @@ pub struct Prepared {
     pub groups: Vec<Vec<usize>>,
 }
 
+static STAGED_DIRS: std::sync::Mutex<Vec<tempfile::TempDir>> = std::sync::Mutex::new(Vec::new());
+
+fn remember_staged(temp: tempfile::TempDir) {
+    if let Ok(mut guard) = STAGED_DIRS.lock() {
+        if guard.len() >= 16 {
+            guard.remove(0);
+        }
+        guard.push(temp);
+    }
+}
+
+fn plan_post_install_component(
+    target: &Path,
+    change: &ComponentChange,
+    install_options: Option<&retoque_core::InstallOptions>,
+) -> Result<Plan, AppError> {
+    match change {
+        ComponentChange::Install(c) => {
+            let files = ComponentFiles {
+                id: c.id.clone(),
+                source_root: c.root.clone(),
+                files: c.files.clone(),
+            };
+            if let Some(options) = install_options
+                && options.proxy.eq_ignore_ascii_case("version.dll")
+                && !target.join("version.dll").exists()
+                && options.source_dir.join("OptiScaler.dll").is_file()
+            {
+                let temp = tempfile::tempdir().map_err(AppError::from)?;
+                let staged_proxy = temp.path().join("version.dll");
+                std::fs::copy(options.source_dir.join("OptiScaler.dll"), &staged_proxy)
+                    .map_err(|e| AppError::io(staged_proxy, e))?;
+                let plan = plan_component_install(temp.path(), &files).map_err(AppError::from)?;
+                remember_staged(temp);
+                return Ok(plan);
+            }
+            plan_component_install(target, &files).map_err(AppError::from)
+        }
+        ComponentChange::Remove(id) => plan_component_uninstall(target, id).map_err(AppError::from),
+        ComponentChange::Retoque { component, options } => match component.as_deref() {
+            Some(inner) => plan_post_install_component(target, inner, Some(options)),
+            None => Err("missing inner component change".into()),
+        },
+    }
+}
+
+fn plan_post_install_settings(target: &Path, install_plan: Option<&Plan>, edits: &[Edit]) -> Result<Plan, AppError> {
+    let Some(install) = install_plan else {
+        return retoque_core::plan_settings(target, edits).map_err(AppError::from);
+    };
+    let current = match retoque_core::read_ini(target) {
+        Ok(value) => value,
+        Err(retoque_core::Error::Refused(_)) => {
+            return retoque_core::plan_settings(target, edits).map_err(AppError::from);
+        }
+        Err(error) => return Err(error.into()),
+    };
+    let install_touches_edits = install.steps().iter().any(|step| {
+        matches!(
+            step,
+            Step::SetIni { section, key, .. }
+                if edits.iter().any(|(s, k, _)| s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key))
+        )
+    });
+    if current.is_some() && !install_touches_edits {
+        return retoque_core::plan_settings(target, edits).map_err(AppError::from);
+    }
+    let copied_ini = install.steps().iter().find_map(|step| match step {
+        Step::Copy { from, to } if to.eq_ignore_ascii_case(retoque_core::INI_NAME) => Some(from.as_path()),
+        _ => None,
+    });
+    let has_install_ini_step = copied_ini.is_some()
+        || install
+            .steps()
+            .iter()
+            .any(|step| matches!(step, Step::SetIni { file, .. } if file.eq_ignore_ascii_case(retoque_core::INI_NAME)));
+    if current.is_none() && !has_install_ini_step {
+        return retoque_core::plan_settings(target, edits).map_err(AppError::from);
+    }
+    if current.is_none()
+        && !install_touches_edits
+        && let Some(from) = copied_ini
+        && let Some(parent) = from.parent()
+        && from
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.eq_ignore_ascii_case(retoque_core::INI_NAME))
+        && retoque_core::read_ini(parent).ok().flatten().is_some()
+    {
+        return retoque_core::plan_settings(parent, edits).map_err(AppError::from);
+    }
+    let mut ini = if let Some((_, bytes)) = current {
+        retoque_core::ini::Ini::parse(&bytes)
+    } else if let Some(from) = copied_ini {
+        let bytes = std::fs::read(from).map_err(|e| AppError::io(from.to_path_buf(), e))?;
+        retoque_core::ini::Ini::parse(&bytes)
+    } else {
+        retoque_core::ini::Ini::default()
+    };
+    for step in install.steps() {
+        if let Step::SetIni {
+            file,
+            section,
+            key,
+            value,
+            ..
+        } = step
+            && file.eq_ignore_ascii_case(retoque_core::INI_NAME)
+        {
+            ini.set(section, key, value);
+        }
+    }
+    let temp = tempfile::tempdir().map_err(AppError::from)?;
+    let staged_ini = temp.path().join(retoque_core::INI_NAME);
+    std::fs::write(&staged_ini, ini.to_bytes()).map_err(|e| AppError::io(staged_ini, e))?;
+    let plan = retoque_core::plan_settings(temp.path(), edits).map_err(AppError::from)?;
+    remember_staged(temp);
+    Ok(plan)
+}
+
+fn is_backup_copy(copy: &str, path: &str) -> bool {
+    copy.starts_with(".retoque/backup/") && copy.ends_with(&format!("/{path}"))
+}
+
+fn steps_match(a: &[Step], b: &[Step]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(left, right)| match (left, right) {
+            (Step::Backup { path: pa, copy: ca }, Step::Backup { path: pb, copy: cb }) => {
+                pa == pb && (ca == cb || (is_backup_copy(ca, pa) && is_backup_copy(cb, pb)))
+            }
+            _ => left == right,
+        })
+}
+
 pub fn prepare(target: &Path, request: Request) -> Result<Prepared, AppError> {
     let mut plans = Vec::new();
-    if let Some(change) = &request.component {
-        let p = match change {
-            ComponentChange::Install(c) => plan_component_install(
-                target,
-                &ComponentFiles {
-                    id: c.id.clone(),
-                    source_root: c.root.clone(),
-                    files: c.files.clone(),
-                },
-            ),
-            ComponentChange::Remove(id) => plan_component_uninstall(target, id),
+    if let Some(options) = request.retoque_install() {
+        let mut options = options.clone();
+        if options.game_dir.as_os_str().is_empty() {
+            options.game_dir = target.to_path_buf();
         }
-        .map_err(AppError::from)?;
+        plans.push(retoque_core::plan_install(&options).map_err(AppError::from)?);
+    }
+    let install_offset = usize::from(request.retoque_install().is_some());
+    if let Some(change) = request.component_change() {
+        let p = plan_post_install_component(target, change, request.retoque_install())?;
         plans.push(p);
     }
     if let Some(change) = &request.dlss {
         match change {
             crate::dlss_ui::Change::Update(update) => {
                 let dlss = retoque_data::dlss::plan(target, update).map_err(AppError::from)?;
-                if matches!(request.component, Some(ComponentChange::Install(_)))
-                    && plans.first().is_some_and(|p| p.game_dir() == dlss.game_dir())
+                if matches!(request.component_change(), Some(ComponentChange::Install(_)))
+                    && plans
+                        .get(install_offset)
+                        .is_some_and(|p| p.game_dir() == dlss.game_dir())
                 {
-                    let component = plans.remove(0);
-                    plans.push(retoque_core::combine_install_plans(component, dlss).map_err(AppError::from)?);
+                    let component = plans.remove(install_offset);
+                    plans.insert(
+                        install_offset,
+                        retoque_core::combine_install_plans(component, dlss).map_err(AppError::from)?,
+                    );
                 } else {
-                    plans.insert(0, dlss);
+                    plans.insert(install_offset, dlss);
                 }
             }
             crate::dlss_ui::Change::Restore { install_dir } => {
@@ -68,7 +244,8 @@ pub fn prepare(target: &Path, request: Request) -> Result<Prepared, AppError> {
         }
     }
     if !request.edits.is_empty() {
-        plans.push(retoque_core::plan_settings(target, &request.edits).map_err(AppError::from)?);
+        let install_plan = request.retoque_install().and_then(|_| plans.first());
+        plans.push(plan_post_install_settings(target, install_plan, &request.edits)?);
     }
     let groups = plans
         .iter()
@@ -94,6 +271,86 @@ pub struct ApplyFailure {
     pub completed: usize,
     pub detail: AppError,
 }
+fn replan_intermediate(prepared: &Prepared, index: usize) -> Result<Option<Plan>, ApplyFailure> {
+    let has_settings = !prepared.request.edits.is_empty();
+    if index > 0 && has_settings && index + 1 == prepared.plans.len() {
+        let fresh =
+            retoque_core::plan_settings(&prepared.target, &prepared.request.edits).map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?;
+        if fresh.steps() != prepared.plans[index].steps() || !fresh.refusals().is_empty() {
+            return Err(ApplyFailure {
+                completed: index,
+                detail: "settings changed since review".into(),
+            });
+        }
+        return Ok(Some(fresh));
+    }
+    if index == 0 || matches!(prepared.request.dlss, Some(crate::dlss_ui::Change::Restore { .. })) {
+        return Ok(None);
+    }
+    let install_offset = usize::from(prepared.request.retoque_install().is_some());
+    let non_settings_count = prepared.plans.len() - usize::from(has_settings);
+    let fresh = match (prepared.request.component_change(), &prepared.request.dlss) {
+        (Some(ComponentChange::Install(c)), Some(crate::dlss_ui::Change::Update(update)))
+            if non_settings_count == install_offset + 1 =>
+        {
+            let comp = plan_component_install(
+                &prepared.target,
+                &ComponentFiles {
+                    id: c.id.clone(),
+                    source_root: c.root.clone(),
+                    files: c.files.clone(),
+                },
+            )
+            .map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?;
+            let dlss = retoque_data::dlss::plan(&prepared.target, update).map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?;
+            retoque_core::combine_install_plans(comp, dlss).map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?
+        }
+        (_, Some(crate::dlss_ui::Change::Update(update))) if index == install_offset => {
+            retoque_data::dlss::plan(&prepared.target, update).map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?
+        }
+        (Some(ComponentChange::Install(c)), _) => plan_component_install(
+            &prepared.target,
+            &ComponentFiles {
+                id: c.id.clone(),
+                source_root: c.root.clone(),
+                files: c.files.clone(),
+            },
+        )
+        .map_err(|e| ApplyFailure {
+            completed: index,
+            detail: e.into(),
+        })?,
+        (Some(ComponentChange::Remove(id)), _) => {
+            plan_component_uninstall(&prepared.target, id).map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?
+        }
+        _ => return Ok(None),
+    };
+    if !steps_match(fresh.steps(), prepared.plans[index].steps()) || !fresh.refusals().is_empty() {
+        return Err(ApplyFailure {
+            completed: index,
+            detail: "component changed since review".into(),
+        });
+    }
+    Ok(Some(fresh))
+}
 pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<(), ApplyFailure> {
     if prepared.plans.iter().any(|p| !p.refusals().is_empty()) || prepared.plans.is_empty() {
         return Err(ApplyFailure {
@@ -110,39 +367,9 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
     let total: usize = prepared.plans.iter().map(|p| p.steps().len()).sum();
     let mut offset = 0;
     for (index, original) in prepared.plans.iter().enumerate() {
-        // A component updates the receipt. Rebase only the subsequent INI edit, never a component source.
-        let fresh;
-        let plan = if index == 1
-            && prepared.request.dlss.is_some()
-            && let Some(ComponentChange::Remove(id)) = &prepared.request.component
-        {
-            fresh = plan_component_uninstall(&prepared.target, id).map_err(|e| ApplyFailure {
-                completed: index,
-                detail: e.into(),
-            })?;
-            if fresh.steps() != original.steps() || !fresh.refusals().is_empty() {
-                return Err(ApplyFailure {
-                    completed: index,
-                    detail: "component changed since review".into(),
-                });
-            }
-            &fresh
-        } else if index > 0 && !prepared.request.edits.is_empty() && index + 1 == prepared.plans.len() {
-            fresh =
-                retoque_core::plan_settings(&prepared.target, &prepared.request.edits).map_err(|e| ApplyFailure {
-                    completed: index,
-                    detail: e.into(),
-                })?;
-            if fresh.steps() != original.steps() || !fresh.refusals().is_empty() {
-                return Err(ApplyFailure {
-                    completed: index,
-                    detail: "settings changed since review".into(),
-                });
-            }
-            &fresh
-        } else {
-            original
-        };
+        // A prior plan updates the receipt or INI. Rebase subsequent plans against the post-step game folder.
+        let fresh = replan_intermediate(prepared, index)?;
+        let plan = fresh.as_ref().unwrap_or(original);
         plan.clone()
             .into_verified()
             .and_then(|verified| {
