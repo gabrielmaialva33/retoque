@@ -29,6 +29,39 @@ impl Lang {
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    ("lsfg.found", "Lossless Scaling found", "Lossless Scaling encontrado"),
+    (
+        "lsfg.preparing",
+        "Preparing shaders automatically…",
+        "Preparando shaders automaticamente…",
+    ),
+    (
+        "lsfg.downloading",
+        "Downloading the official shader compiler…",
+        "Baixando o compilador oficial de shaders…",
+    ),
+    ("lsfg.cancel", "Cancel preparation", "Cancelar preparação"),
+    (
+        "lsfg.cancelled",
+        "Preparation cancelled. Your game was not changed.",
+        "Preparação cancelada. Seu jogo não foi alterado.",
+    ),
+    (
+        "lsfg.failed",
+        "Shader preparation failed:",
+        "Falha ao preparar shaders:",
+    ),
+    ("lsfg.retry", "Retry preparation", "Tentar preparar novamente"),
+    (
+        "lsfg.download_prompt",
+        "Preparing shaders requires Microsoft DXC v1.8.2505.1 (up to 64 MiB). Download it from Microsoft’s official GitHub release into the app data folder? The download is checked with SHA-256.",
+        "Preparar shaders exige Microsoft DXC v1.8.2505.1 (até 64 MiB). Baixar da versão oficial da Microsoft no GitHub para a pasta de dados do app? O download é verificado com SHA-256.",
+    ),
+    (
+        "lsfg.download_confirm",
+        "Download compiler and prepare shaders",
+        "Baixar compilador e preparar shaders",
+    ),
     ("doctor.review", "Review repair…", "Revisar reparo…"),
     (
         "remedy.processes",
@@ -1003,8 +1036,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.shader_hint",
-        "From the Retoque source checkout, run: python3 tools/lsfg-study/convert.py \"<Lossless Scaling>/lsfg-vk.dll\" --out \"<shader folder>\". Requires spirv-cross and dxc. Then set [LSFG] ShaderDir to that folder (0.cso through 98.cso), or use --cache-dir \"<game proxy folder>/lsfg-cache\" to create the runtime's hash-keyed cache. The app does not copy or convert Lossless Scaling files.",
-        "No código-fonte do Retoque, execute: python3 tools/lsfg-study/convert.py \"<Lossless Scaling>/lsfg-vk.dll\" --out \"<pasta de shaders>\". É preciso ter spirv-cross e dxc. Depois, aponte [LSFG] ShaderDir para essa pasta (0.cso a 98.cso), ou use --cache-dir \"<pasta do proxy do jogo>/lsfg-cache\" para criar o cache identificado pelo hash do DLL. O aplicativo não copia nem converte arquivos do Lossless Scaling.",
+        "The app prepares shaders automatically in its data folder. If the compiler is missing, confirm its official download.",
+        "O app prepara os shaders automaticamente na pasta de dados. Se o compilador estiver ausente, confirme o download oficial.",
     ),
     // Discovery folders / worker t117
     ("store.xbox", "Xbox", "Xbox"),

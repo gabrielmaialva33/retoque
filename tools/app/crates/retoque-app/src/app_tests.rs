@@ -59,6 +59,7 @@ pub(crate) mod shell_tests {
             intuitive: Default::default(),
             doctor_badges: HashMap::new(),
             tuning: crate::autotune::UiState::default(),
+            lsfg: crate::lsfg_ui::State::default(),
             folder_dialog: None,
             folder_focus: None,
             folder_restore: 0,

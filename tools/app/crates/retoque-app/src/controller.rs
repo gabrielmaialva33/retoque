@@ -208,7 +208,14 @@ impl RetoqueApp {
                 }
                 Outcome::ModelInspection(inspection) => self.view.inspection = Some(inspection),
                 Outcome::ModelUsage(usage) => self.model_usage = usage,
-                Outcome::Auto(event) => self.autotune_event(*event),
+                Outcome::Auto(event) => {
+                    let refresh = matches!(*event, crate::autotune::Event::Facts { .. });
+                    self.autotune_event(*event);
+                    if refresh {
+                        self.lsfg_recheck();
+                    }
+                }
+                Outcome::Lsfg(event) => self.lsfg_event(event),
                 Outcome::Discovered { games, skipped, art } => {
                     if self.rescan_pending {
                         self.scanning = false;

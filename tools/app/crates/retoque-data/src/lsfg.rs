@@ -1,4 +1,6 @@
-//! Locates the user's Lossless Scaling files and checks existing converted shaders. Never copies or converts.
+//! Locates the user's Lossless Scaling files and checks existing converted shaders. Preparation is provided by the local Rust pipeline.
+
+pub use crate::lsfg_prepare::{PreparedCache, ensure_lsfg_shaders, prepared_cache};
 
 use retoque_discovery::{
     io::read_bounded_string,
@@ -42,7 +44,7 @@ pub fn find_in_steam_roots(roots: &[PathBuf]) -> Option<PathBuf> {
                 .map(|m| m.install_dir)
                 .unwrap_or_else(|| "Lossless Scaling".into()),
         );
-        if dir.join("Lossless.dll").is_file() {
+        if dir.join("Lossless.dll").is_file() || dir.join("lsfg-vk.dll").is_file() {
             return Some(dir);
         }
     }
@@ -128,14 +130,22 @@ pub fn lsfg_readiness_for_game(
     cache_needed()
 }
 
+/// App preparation readiness, distinct from whether the current game actually references this cache.
+/// Reads and verifies the hash-keyed app cache; call on a worker, never once per UI frame.
+pub fn lsfg_preparation_readiness(lossless_dir: &Path, app_data: &Path) -> LsfgReadiness {
+    if !lossless_dir.join("lsfg-vk.dll").is_file() {
+        return LsfgReadiness::NoLosslessScaling;
+    }
+    match prepared_cache(lossless_dir, app_data) {
+        Ok(Some(_)) => LsfgReadiness::Ready,
+        _ => cache_needed(),
+    }
+}
+
 fn cache_needed() -> LsfgReadiness {
-    // This is a command template, never executed here. It contains no user paths or licensed content.
-    LsfgReadiness::NeedsShaderCache { hint: concat!(
-        "From the Retoque source checkout, run: python3 tools/lsfg-study/convert.py \"<Lossless Scaling>/lsfg-vk.dll\" --out \"<shader folder>\". ",
-        "Requires spirv-cross and dxc. Then set [LSFG] ShaderDir to that folder (0.cso through 98.cso), ",
-        "or use --cache-dir \"<game proxy folder>/lsfg-cache\" to create the runtime's hash-keyed cache. ",
-        "The app does not copy or convert Lossless Scaling files."
-    ).into() }
+    LsfgReadiness::NeedsShaderCache {
+        hint: "lsfg.prepare.required".into(),
+    }
 }
 
 fn shader_host_path(value: &str) -> Option<PathBuf> {
