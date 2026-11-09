@@ -1,4 +1,4 @@
-//! Local, content-addressed copies of the user's sm86 release. No downloader and no bundled runtime.
+//! Content-addressed copies of local and officially downloaded sm86 releases.
 //! Capability-relative I/O rejects links and keeps a swapped path from redirecting catalogue writes/removals.
 
 use cap_fs_ext::{DirExt, FollowSymlinks, MetadataExt, OpenOptionsFollowExt, OpenOptionsSyncExt};
@@ -13,8 +13,8 @@ use std::{
 };
 
 const META: &str = "component.json";
-const TREES: [&str; 4] = ["backend", "kernels", "runtime", "xefg"];
-const REQUIRED: [&str; 6] = [
+const TREES: [&str; 5] = ["backend", "kernels", "runtime", "xefg", "sr"];
+pub(crate) const REQUIRED: [&str; 6] = [
     "version.dll",
     "dlssg_sm86.ini",
     "dlssg_sm86/backend/sm86_backend.dll",
@@ -94,7 +94,7 @@ fn safe_name(name: &str) -> bool {
                 | "LPT9"
         )
 }
-fn allowed_path(path: &str) -> bool {
+pub fn allowed_path(path: &str) -> bool {
     if matches!(path, "version.dll" | "dlssg_sm86.ini") {
         return true;
     }
@@ -107,14 +107,14 @@ fn allowed_path(path: &str) -> bool {
         && !parts.last().unwrap().to_ascii_lowercase().starts_with("nvngx_dlssnr")
 }
 
-struct HeldDir {
-    root: PathBuf,
-    dir: Dir,
+pub(crate) struct HeldDir {
+    pub(crate) root: PathBuf,
+    pub(crate) dir: Dir,
     #[cfg(windows)]
     _ancestors: Vec<Dir>,
 }
 impl HeldDir {
-    fn open(path: &Path) -> io::Result<Self> {
+    pub(crate) fn open(path: &Path) -> io::Result<Self> {
         if fs::symlink_metadata(path)?.file_type().is_symlink() {
             return Err(invalid("component root is a link"));
         }
@@ -153,7 +153,7 @@ impl HeldDir {
             _ancestors: ancestors,
         })
     }
-    fn current(&self) -> io::Result<()> {
+    pub(crate) fn current(&self) -> io::Result<()> {
         let current = Dir::open_ambient_dir(&self.root, cap_std::ambient_authority())?.dir_metadata()?;
         let held = self.dir.dir_metadata()?;
         if current.dev() != held.dev() || current.ino() != held.ino() {
@@ -162,7 +162,7 @@ impl HeldDir {
         Ok(())
     }
 }
-fn open_regular(dir: &Dir, path: &str) -> io::Result<cap_std::fs::File> {
+pub(crate) fn open_regular(dir: &Dir, path: &str) -> io::Result<cap_std::fs::File> {
     let mut parts = path.split('/').peekable();
     let mut parent = dir.try_clone()?;
     while let Some(part) = parts.next() {
@@ -220,6 +220,10 @@ fn members(dir: &Dir) -> io::Result<Vec<String>> {
     let mut names = HashSet::new();
     let tree = dir.open_dir_nofollow("dlssg_sm86")?;
     for name in TREES {
+        // SR is an optional runtime feature; old local FG-only imports remain supported.
+        if name == "sr" && !tree.try_exists(name)? {
+            continue;
+        }
         walk(
             &tree.open_dir_nofollow(name)?,
             &format!("dlssg_sm86/{name}"),
@@ -544,6 +548,11 @@ mod tests {
         assert!(inspect_dir(temp.path(), "Synthetic").is_err());
         assert!(!allowed_path("dlssg_sm86/backend/../../outside.dll"));
         assert!(!allowed_path("dlssg_sm86/backend/file:stream"));
+        assert!(allowed_path("dlssg_sm86/sr/sr_kernels.dll"));
+        assert!(allowed_path("dlssg_sm86/sr/nvngx_dlss.dll"));
+        assert!(!allowed_path("dlssg_sm86/sr/nvngx_dlssnr.dll"));
+        assert!(!allowed_path("alternatives/dxgi.dll"));
+        assert!(!allowed_path("archive/0.3.5/version.dll"));
     }
     #[cfg(unix)]
     #[test]

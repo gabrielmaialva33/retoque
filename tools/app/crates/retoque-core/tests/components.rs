@@ -260,3 +260,39 @@ fn apply(
 ) -> Result<(), retoque_core::Error> {
     retoque_core::apply(&plan.clone().into_verified()?, progress)
 }
+
+#[test]
+fn monolithic_upgrade_removes_proxy_and_ini_before_first_payload_copy() {
+    let f = Fixture::new();
+    let mut legacy = vec![0; 20 * 1024 * 1024];
+    legacy[..14].copy_from_slice(b"MZ dlssg_sm86 ");
+    fs::write(f.game.join("version.dll"), &legacy).unwrap();
+    fs::write(f.game.join("dlssg_sm86.ini"), b"old ini").unwrap();
+    let p = plan_component_install(&f.game, &f.component).unwrap();
+    assert!(p.refusals().is_empty());
+    assert_eq!(fs::read(f.game.join("version.dll")).unwrap(), legacy);
+    let first_copy = p.steps().iter().position(|s| matches!(s, Step::Copy { .. })).unwrap();
+    for name in ["version.dll", "dlssg_sm86.ini"] {
+        assert!(
+            p.steps()[..first_copy]
+                .iter()
+                .any(|s| matches!(s,Step::Remove {path} if path == name))
+        );
+    }
+    apply(&p, &mut |_| {}).unwrap();
+    apply(&plan_component_uninstall(&f.game, "synthetic-1").unwrap(), &mut |_| {}).unwrap();
+    assert_eq!(fs::read(f.game.join("version.dll")).unwrap(), legacy);
+    assert_eq!(fs::read(f.game.join("dlssg_sm86.ini")).unwrap(), b"old ini");
+}
+#[test]
+fn legacy_proxy_does_not_authorize_replacing_foreign_runtime_files() {
+    let f = Fixture::new();
+    fs::write(f.game.join("version.dll"), b"dlssg_sm86 old").unwrap();
+    fs::write(f.game.join("dlssg_sm86.ini"), b"old ini").unwrap();
+    fs::create_dir_all(f.game.join("dlssg_sm86/runtime")).unwrap();
+    fs::write(f.game.join("dlssg_sm86/runtime/nvngx_dlssg.dll"), b"foreign").unwrap();
+    let p = plan_component_install(&f.game, &f.component).unwrap();
+    assert!(!p.refusals().is_empty());
+    assert!(apply(&p, &mut |_| {}).is_err());
+    assert_eq!(fs::read(f.game.join("version.dll")).unwrap(), b"dlssg_sm86 old");
+}

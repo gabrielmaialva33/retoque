@@ -6,6 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
 cap-std = "4"
 cap-fs-ext = "4"
 retoque-core.workspace = true

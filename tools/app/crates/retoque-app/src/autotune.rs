@@ -1,11 +1,14 @@
 //! GUI orchestration: one reviewed component operation followed by settings, one writer lock.
 use crate::error::AppError;
 use crate::model::Edit;
-use retoque_core::{Plan, Step, StepDone};
-use std::path::{Path, PathBuf};
-// Integration: replace these two imports with retoque_data / retoque_core exports, then delete stubs.
 use retoque_core::{ComponentFiles, installed_components, plan_component_install, plan_component_uninstall};
+use retoque_core::{Plan, Step, StepDone};
+pub use retoque_data::sm86;
 pub use retoque_data::{components, gpu, lsfg, recommend};
+use std::path::{Path, PathBuf};
+
+#[path = "optimize.rs"]
+pub mod optimize;
 
 #[derive(Clone, Debug)]
 pub enum ComponentChange {
@@ -117,6 +120,7 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
 
 #[derive(Default)]
 pub struct UiState {
+    pub sm86: optimize::UiState,
     pub gpus: Option<Vec<gpu::Gpu>>,
     pub detected_lossless: Option<PathBuf>,
     pub selected_component: Option<String>,
@@ -130,9 +134,13 @@ pub struct UiState {
     pub writes: std::collections::HashSet<PathBuf>,
 }
 pub enum Event {
+    Sm86Progress(u64),
+    Sm86Release(Result<(sm86::Release, bool), AppError>),
+    Sm86Downloaded(Result<(Vec<components::Component>, sm86::Record), AppError>),
     Environment {
         gpus: Vec<gpu::Gpu>,
         lossless: Option<PathBuf>,
+        kit_cache: Option<PathBuf>,
     },
     Catalog(Result<Vec<components::Component>, AppError>),
     Facts {
@@ -152,6 +160,10 @@ pub fn environment() -> Event {
     Event::Environment {
         gpus: gpu::detect(),
         lossless: lsfg::find_lossless_scaling(None),
+        kit_cache: std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|p| p.join("first-run-cache/sm86")))
+            .filter(|p| p.join("release.json").is_file() && p.join("release.zip").is_file()),
     }
 }
 pub fn catalog(import: Option<PathBuf>, remove: Option<String>) -> Event {
@@ -164,7 +176,10 @@ pub fn catalog(import: Option<PathBuf>, remove: Option<String>) -> Event {
             if let Some(id) = remove {
                 c.remove(&id)?;
             }
-            c.list()
+            let mut items = c.list()?;
+            let cache = sm86::Cache::open(&sm86::default_cache()?)?;
+            cache.prefer_latest(&mut items)?;
+            Ok::<_, std::io::Error>(items)
         })()
         .map_err(AppError::from),
     )

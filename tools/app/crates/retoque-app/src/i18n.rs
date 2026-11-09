@@ -29,6 +29,266 @@ impl Lang {
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    (
+        "sm86.error.0",
+        "ambiguous sm86 release asset",
+        "Mais de um arquivo corresponde à release sm86.",
+    ),
+    (
+        "sm86.error.1",
+        "app data unavailable",
+        "O diretório de dados do app está indisponível.",
+    ),
+    (
+        "sm86.error.2",
+        "archive exceeds unpacked size limit",
+        "O pacote excede o limite de tamanho descompactado.",
+    ),
+    (
+        "sm86.error.3",
+        "archive link, encryption or special file refused",
+        "O pacote contém um link, criptografia ou arquivo especial não permitido.",
+    ),
+    (
+        "sm86.error.4",
+        "archive size overflow",
+        "O tamanho declarado do pacote é inválido.",
+    ),
+    (
+        "sm86.error.5",
+        "documented sm86 release asset missing",
+        "O arquivo documentado da release sm86 não foi encontrado.",
+    ),
+    (
+        "sm86.error.6",
+        "incomplete sm86 release",
+        "Faltam arquivos obrigatórios da release sm86.",
+    ),
+    (
+        "sm86.error.7",
+        "invalid official sm86 release metadata",
+        "Os metadados da release oficial sm86 são inválidos.",
+    ),
+    (
+        "sm86.error.8",
+        "invalid release record",
+        "O registro local da release é inválido.",
+    ),
+    (
+        "sm86.error.9",
+        "kit cache requires a GitHub digest",
+        "O cache do kit exige um hash publicado pelo GitHub.",
+    ),
+    (
+        "sm86.error.10",
+        "kit cache requires a matching GitHub SHA-256 digest",
+        "O cache do kit exige correspondência com o SHA-256 publicado pelo GitHub.",
+    ),
+    (
+        "sm86.error.11",
+        "kit metadata too large",
+        "Os metadados do kit excedem o limite de tamanho.",
+    ),
+    (
+        "sm86.error.12",
+        "missing release redirect",
+        "O redirecionamento da release não informa o destino.",
+    ),
+    (
+        "sm86.error.13",
+        "non-official sm86 URL",
+        "O endereço não pertence à release oficial sm86.",
+    ),
+    (
+        "sm86.error.14",
+        "protected binary in kit archive",
+        "O pacote do kit contém um binário protegido que não pode ser incluído.",
+    ),
+    (
+        "sm86.error.15",
+        "refused sm86 release redirect",
+        "O destino do redirecionamento da release sm86 não é permitido.",
+    ),
+    (
+        "sm86.error.16",
+        "release API redirect refused",
+        "A API de releases tentou um redirecionamento não permitido.",
+    ),
+    (
+        "sm86.error.17",
+        "release SHA-256 mismatch",
+        "O SHA-256 do download não corresponde ao publicado.",
+    ),
+    (
+        "sm86.error.18",
+        "release changed since first download",
+        "O conteúdo desta versão mudou desde o primeiro download.",
+    ),
+    (
+        "sm86.error.19",
+        "release metadata exceeds size limit",
+        "Os metadados da release excedem o limite de tamanho.",
+    ),
+    (
+        "sm86.error.20",
+        "release record exceeds limit",
+        "O registro local da release excede o limite de tamanho.",
+    ),
+    (
+        "sm86.error.21",
+        "release response exceeds size limit",
+        "A resposta do download excede o limite de tamanho.",
+    ),
+    (
+        "sm86.error.22",
+        "release size mismatch",
+        "O tamanho do download não corresponde ao declarado.",
+    ),
+    (
+        "sm86.error.23",
+        "sm86 HTTPS request failed",
+        "Não foi possível consultar ou baixar a release sm86 por HTTPS.",
+    ),
+    (
+        "sm86.error.24",
+        "too many archive entries",
+        "O pacote contém arquivos demais.",
+    ),
+    (
+        "sm86.error.25",
+        "too many release redirects",
+        "O download excedeu o limite de redirecionamentos.",
+    ),
+    (
+        "sm86.error.26",
+        "truncated archive entry",
+        "O pacote contém um arquivo truncado.",
+    ),
+    (
+        "sm86.error.27",
+        "unexpected release HTTP status",
+        "O servidor da release retornou um status HTTP inesperado.",
+    ),
+    (
+        "sm86.error.28",
+        "unsafe or colliding archive path",
+        "O pacote contém um caminho inseguro ou nomes conflitantes.",
+    ),
+    (
+        "sm86.error.29",
+        "unsupported release digest",
+        "O algoritmo de hash publicado não é suportado.",
+    ),
+    (
+        "sm86.error.30",
+        "unsupported sm86 release",
+        "Esta release sm86 não é suportada.",
+    ),
+    (
+        "note.sm86_upgrade",
+        "Upgrade sm86 0.3.x: back up and remove the old proxy and INI before copying the complete 0.4.x runtime.",
+        "Atualizar sm86 0.3.x: guardar backup e remover o proxy e o INI antigos antes de copiar o runtime 0.4.x completo.",
+    ),
+    (
+        "note.sm86_install",
+        "Install catalogued dlssg-sm86; record its identity and files in .retoque/components.txt. The game installer makes no network requests.",
+        "Instalar dlssg-sm86 do catálogo e registrar sua identidade e arquivos em .retoque/components.txt. O instalador do jogo não faz requisições de rede.",
+    ),
+    (
+        "sm86.consent_title",
+        "Get official frame generation components",
+        "Obter componentes oficiais de geração de quadros",
+    ),
+    (
+        "sm86.check_consent",
+        "Contact the official GitHub release API to compare the latest version with your local catalog?",
+        "Consultar a API oficial de releases do GitHub para comparar a versão mais recente com seu catálogo local?",
+    ),
+    (
+        "sm86.download_consent",
+        "Download dlssg_for_sm86 from its official GitHub release and verify its hash? Files stay in app data until you confirm a game review. Up to 256 MiB download and 1 GiB unpacked. No telemetry.",
+        "Baixar dlssg_for_sm86 da release oficial no GitHub e verificar seu hash? Os arquivos ficam nos dados do app até você confirmar a revisão do jogo. Até 256 MiB de download e 1 GiB descompactado. Sem telemetria.",
+    ),
+    (
+        "sm86.kit_available",
+        "This installation includes a first-run cache. It will be verified and imported locally, without downloading.",
+        "Esta instalação inclui um cache inicial. Ele será verificado e importado localmente, sem download.",
+    ),
+    (
+        "sm86.license",
+        "Third-party runtimes and kernels retain their own terms; the complete package is not MIT. License texts and notices are preserved in the app cache.",
+        "Runtimes e kernels de terceiros mantêm seus próprios termos; o pacote completo não é MIT. Licenças e avisos são preservados no cache do app.",
+    ),
+    ("sm86.confirm", "Confirm", "Confirmar"),
+    ("sm86.later", "Later", "Agora não"),
+    (
+        "sm86.download_help",
+        "Get the official release once and reuse it across games. Game installation always has a separate review.",
+        "Obtenha a release oficial uma vez e reutilize-a nos jogos. A instalação no jogo sempre tem uma revisão separada.",
+    ),
+    ("sm86.download", "Get official release…", "Obter release oficial…"),
+    ("sm86.check", "Check for update…", "Verificar atualização…"),
+    (
+        "sm86.progress",
+        "Preparing official components",
+        "Preparando componentes oficiais",
+    ),
+    (
+        "sm86.current",
+        "This release is available in your catalog.",
+        "Esta release está disponível no seu catálogo.",
+    ),
+    (
+        "sm86.new",
+        "This release is not yet available in your catalog.",
+        "Esta release ainda não está disponível no seu catálogo.",
+    ),
+    (
+        "sm86.ignored",
+        "Archive entries ignored (not extracted)",
+        "Entradas do arquivo ignoradas (não extraídas)",
+    ),
+    ("optimize.title", "Optimize automatically", "Otimizar automaticamente"),
+    (
+        "optimize.experimental",
+        "Include experimental sm86 under Proton/Wine in this review",
+        "Incluir sm86 experimental em Proton/Wine nesta revisão",
+    ),
+    (
+        "optimize.choose_lsfg",
+        "Include LSFG in this review",
+        "Incluir LSFG nesta revisão",
+    ),
+    (
+        "optimize.lsfg_unavailable",
+        "LSFG shader preparation is not available in this build. No changes were applied.",
+        "A preparação dos shaders LSFG não está disponível nesta versão. Nenhuma alteração foi aplicada.",
+    ),
+    (
+        "optimize.experimental_omitted",
+        "Experimental sm86 was left out. Select it explicitly above to include it in a review.",
+        "O sm86 experimental ficou de fora. Selecione-o explicitamente acima para incluí-lo em uma revisão.",
+    ),
+    (
+        "optimize.nothing",
+        "No applicable changes with the current choices.",
+        "Nenhuma alteração aplicável com as escolhas atuais.",
+    ),
+    (
+        "optimize.install_first",
+        "Install or adopt Retoque before optimizing.",
+        "Instale ou adote o Retoque antes de otimizar.",
+    ),
+    (
+        "optimize.identity_missing",
+        "The installed component identity is unavailable. Refresh the game before reviewing.",
+        "A identidade do componente instalado está indisponível. Atualize o jogo antes de revisar.",
+    ),
+    (
+        "optimize.conflict",
+        "The proposed settings conflict. No changes were applied.",
+        "As configurações propostas entram em conflito. Nenhuma alteração foi aplicada.",
+    ),
     ("doctor.review", "Review repair…", "Revisar reparo…"),
     (
         "remedy.processes",
@@ -1197,7 +1457,15 @@ mod tests {
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
+    if let Some((key, _, _)) = TEXT
+        .iter()
+        .find(|(key, en, _)| key.starts_with("sm86.error.") && *en == message)
+    {
+        return t(lang, key).into();
+    }
     for key in [
+        "note.sm86_upgrade",
+        "note.sm86_install",
         "note.resume",
         "note.driver",
         "note.model",

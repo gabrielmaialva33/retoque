@@ -43,6 +43,8 @@ pub(crate) struct Saved {
     pub(crate) targets: BTreeMap<String, PathBuf>,
     #[serde(default)]
     pub(crate) lossless_dir: Option<PathBuf>,
+    #[serde(default)]
+    pub(crate) sm86_offer_seen: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

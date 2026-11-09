@@ -141,6 +141,24 @@ pub(crate) fn plan_install(game: &Path, component: &ComponentFiles) -> Result<Pl
         }
     }
     let backup = backup_dir(&game);
+    let monolithic = legacy && fs::metadata(&loader).is_ok_and(|m| m.len() >= 20 * 1024 * 1024);
+    let mut removed_legacy = BTreeSet::new();
+    if monolithic {
+        // 0.4.x requires a clean proxy/INI transition, not overlaying 0.3.x. Backups stay in
+        // receipt v1 so both the app and existing uninstall scripts can restore the prior version.
+        for file in ["version.dll", "dlssg_sm86.ini"] {
+            check_parents(&game, file)?;
+            exact_case(&game, file)?;
+            if regular(&game.join(file)) {
+                plan.steps.push(Step::Backup {
+                    path: file.into(),
+                    copy: format!("{backup}/{file}"),
+                });
+                plan.steps.push(Step::Remove { path: file.into() });
+                removed_legacy.insert(file.to_owned());
+            }
+        }
+    }
     for file in &files {
         check_parents(&game, file)?;
         exact_case(&game, file)?;
@@ -150,14 +168,14 @@ pub(crate) fn plan_install(game: &Path, component: &ComponentFiles) -> Result<Pl
         if !regular(&from) {
             return Err(usage_error(format!("component source is not a regular file: {file}")));
         }
-        if exists(&to) {
+        if exists(&to) && !removed_legacy.contains(file) {
             if !regular(&to) {
                 plan.refusals.push(foreign(file));
                 continue;
             }
             let sha = hash(&to)?;
             let owned = owned(&receipt, file, &sha);
-            if !owned && !legacy {
+            if !owned && !(legacy && matches!(file.as_str(), "version.dll" | "dlssg_sm86.ini")) {
                 plan.refusals.push(foreign(file));
                 continue;
             }
@@ -202,7 +220,13 @@ pub(crate) fn plan_install(game: &Path, component: &ComponentFiles) -> Result<Pl
     plan.execution
         .snapshots
         .insert(game.join(INDEX), fingerprint(&game.join(INDEX))?);
-    plan.notes.push("Install user-imported dlssg-sm86; record its identity and files in .retoque/components.txt. Existing legacy files are backed up. No runtimes are downloaded.".into());
+    if monolithic {
+        plan.notes.push(
+            "Upgrade sm86 0.3.x: back up and remove the old proxy and INI before copying the complete 0.4.x runtime."
+                .into(),
+        );
+    }
+    plan.notes.push("Install catalogued dlssg-sm86; record its identity and files in .retoque/components.txt. The game installer makes no network requests.".into());
     seal(plan, &receipt)
 }
 

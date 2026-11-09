@@ -84,3 +84,33 @@ coverage. Therefore Proton/Wine suggestions are experimental, and a last-session
 sm86 proposal. The verified confidence tier is reserved for feature-specific runtime proof: API detection or NR
 initialization never upgrades a frame-generation proposal. UI consumers can translate the new keys through
 `retoque_data::messages::text`; existing recommendation title/why keys remain unchanged.
+
+## Official frame-generation cache and automatic review
+
+The frame-generation card gets `sdli1995/dlssg_for_sm86` from its official GitHub release after confirmation.
+A single detected RTX 20/30 gets this offer on first run. The download runs on the worker lane (synchronous
+ureq/rustls), follows only approved HTTPS GitHub asset redirects, and is capped at 256 MiB compressed,
+1 GiB expanded and 8192 entries. GitHub's SHA-256 digest is checked when present; the first accepted hash
+for each version is recorded and a changed archive for that version is refused. Checking updates is also
+an explicit network confirmation. No telemetry or game-folder writes occur in this step.
+
+Only catalogued payload paths are extracted: `version.dll`, `dlssg_sm86.ini` and
+`dlssg_sm86/{backend,kernels,runtime,xefg,sr}`. SR is optional for local FG-only imports but is included from
+complete official releases because the M/L INT8 SR presets load it at runtime. Legal texts stay separately
+in the app's `sm86-releases/<version>/notices` cache. Other safe members, including alternative proxies,
+old archives and unknown future extras, are ignored and listed in `ignored-files.log`; unsafe names, links,
+collisions, corrupt/truncated archives, excess sizes and missing required payloads are refused.
+
+“Optimize automatically” combines recommendations and a known compatible NR model repair into one review.
+Experimental Proton/Wine sm86 requires explicit selection; LSFG is included only when selected and ready.
+`autotune::optimize::Prerequisite::LsfgShaders` is the integration hook for shader preparation; this build
+reports it unavailable and does not apply partial settings. App-data prerequisites finish before the game
+review. Changing the selected game or opening another review invalidates the pending continuation.
+The core's reviewed legacy transition backs up/removes a monolithic proxy and INI before new payload copies;
+a second sm86 proxy is refused for manual reconciliation. Receipt v1 and running-game refusals still apply.
+
+The kit builder can opt into `INCLUDE_OFFICIAL_SM86=1`. The `cache_sm86` example stores the exact archive plus
+GitHub metadata in `first-run-cache/sm86`, requiring a published SHA-256 digest. The GUI verifies that cache
+again and imports it after confirmation without downloading. `verify_sm86_cache` can exercise that import
+against an explicit scratch catalog. These archives/runtimes are never committed. See the additional
+[third-party notices](THIRD_PARTY_NOTICES.md); the full upstream package is not covered by its wrapper's MIT license.
