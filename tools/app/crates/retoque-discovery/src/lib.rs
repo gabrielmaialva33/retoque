@@ -23,12 +23,14 @@ pub use lutris::{
     LutrisDbGame, LutrisYamlConfig, parse_lutris_db, parse_lutris_yaml, read_lutris_db_file, try_parse_lutris_yaml,
 };
 pub use steam::{
-    SteamAppManifest, VdfValue, is_proton_or_wine_tool, is_steam_tool_or_runtime, normalize_path_buf,
-    normalize_windows_path, parse_appmanifest_acf, parse_compat_tool_mapping_vdf, parse_library_folders_vdf, parse_vdf,
+    SteamAppManifest, VdfValue, is_proton_or_wine_tool, is_steam_non_game_app, is_steam_tool_or_runtime,
+    normalize_path_buf, normalize_windows_path, parse_appmanifest_acf, parse_compat_tool_mapping_vdf,
+    parse_library_folders_vdf, parse_vdf,
 };
 pub use targets::{
     DLSS_DLLS, PROXY_DLLS, detect_emulator_name, emulator_name_for_exe, find_dlss_anywhere,
-    find_dlss_anywhere_with_targets, has_elf_executable, is_ignored_exe, resolve_hint_path,
+    find_dlss_anywhere_with_targets, has_elf_executable, is_ignored_exe, is_standalone_dlss_receipt, resolve_hint_path,
+    target_has_retoque,
 };
 pub use windows::{
     EpicManifestItem, discover_emulators_from_drives, discover_epic_from_dir, discover_epic_with_roots,
@@ -95,6 +97,205 @@ pub struct Game {
     pub registered: bool,
 }
 
+impl Game {
+    /// Returns `true` when this discovered entry is a known Steam non-game tool, server, SDK, or
+    /// editor (hidden from the default library grid unless searched).
+    pub fn is_non_game(&self) -> bool {
+        if self.store != Store::Steam && !self.id.starts_with("steam:") && !self.id.starts_with("steam-folder:") {
+            return false;
+        }
+        let app_id = match self.runtime {
+            Runtime::Proton { app_id, .. } => app_id,
+            _ => self
+                .id
+                .strip_prefix("steam:")
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0),
+        };
+        let dir_name = last_path_segment(&self.install_dir).unwrap_or_default();
+        is_steam_non_game_app(app_id, &self.name, &dir_name)
+    }
+
+    /// Returns `true` when any candidate target directory of this game has a Retoque receipt or
+    /// an observed OptiScaler proxy / companion DLL.
+    pub fn has_retoque_in_any_target(&self) -> bool {
+        self.targets.iter().any(target_has_retoque)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ManualFolderKind {
+    /// A single game or emulator installation directory.
+    SingleGame,
+    /// A Steam library (`steamapps/`) or a parent directory containing several game folders.
+    Library,
+    /// A filesystem or drive root (`C:\`, `F:\`, `/`), which must never be treated as a single game.
+    DriveRoot,
+}
+
+/// Returns `true` if `path` is a Windows drive root (`C:\`, `F:\`, `F:`) or Unix root (`/`).
+pub fn is_drive_root(path: &Path) -> bool {
+    let raw = path.to_string_lossy();
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed == "/" || trimmed == "\\" {
+        return true;
+    }
+    let norm = normalize_windows_path(trimmed);
+    let b = norm.as_bytes();
+    if b.len() == 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
+        return true;
+    }
+    if b.len() == 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/') {
+        return true;
+    }
+    path.parent().is_none()
+}
+
+fn last_path_segment(path: &Path) -> Option<String> {
+    let s = path.to_string_lossy();
+    s.trim_end_matches(['/', '\\'])
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|seg| !seg.is_empty() && !seg.ends_with(':'))
+        .map(str::to_string)
+}
+
+/// Returns `true` if `path` is a Steam library folder (contains `steamapps/`, `libraryfolders.vdf`,
+/// or is named `SteamLibrary` / `steamapps`).
+pub fn is_steam_library_dir(path: &Path) -> bool {
+    if is_drive_root(path) {
+        return false;
+    }
+    if let Some(seg) = last_path_segment(path)
+        && (seg.eq_ignore_ascii_case("steamlibrary") || seg.eq_ignore_ascii_case("steamapps"))
+    {
+        return true;
+    }
+    if path.join("steamapps").is_dir() || path.join("libraryfolders.vdf").is_file() {
+        return true;
+    }
+    if let Ok(rd) = fs::read_dir(path) {
+        for entry in rd.flatten() {
+            if entry.file_type().is_ok_and(|ft| ft.is_dir())
+                && entry.file_name().to_string_lossy().eq_ignore_ascii_case("steamapps")
+            {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn is_single_game_internal_subdir(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with("_data") || lower.ends_with(".pak") {
+        return true;
+    }
+    matches!(
+        lower.as_str(),
+        "bin"
+            | "bin32"
+            | "bin64"
+            | "x64"
+            | "x86"
+            | "x64_dx12"
+            | "win64"
+            | "win32"
+            | "wingdk"
+            | "binaries"
+            | "engine"
+            | "game"
+            | "defed"
+            | "work"
+            | "ph_ft"
+            | "retail"
+            | "release"
+            | "shipping"
+            | "data"
+            | "content"
+            | "mods"
+            | "plugins"
+            | "dlc"
+            | "soundtrack"
+            | "ost"
+            | "bonus"
+            | "artbook"
+            | "extras"
+            | "tools"
+            | "launcher"
+            | "support"
+            | "redist"
+            | "_commonredist"
+            | "shadercache"
+            | "shaders"
+            | "saves"
+            | "logs"
+            | "licenses"
+            | "dlssg_sm86"
+            | "optiscaler"
+    )
+}
+
+/// Returns `true` if `path` is a Steam library or holds multiple child game directories.
+pub fn holds_multiple_games(path: &Path) -> bool {
+    if is_drive_root(path) {
+        return false;
+    }
+    if is_steam_library_dir(path) {
+        return true;
+    }
+    if !path.is_dir() {
+        return false;
+    }
+    let Ok(rd) = fs::read_dir(path) else {
+        return false;
+    };
+    let mut has_root_exe = false;
+    let mut child_dirs = Vec::new();
+    for entry in rd.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        let fname = entry.file_name();
+        let name = fname.to_string_lossy();
+        if ft.is_file() {
+            if name.len() > 4
+                && name[name.len() - 4..].eq_ignore_ascii_case(".exe")
+                && !targets::is_ignored_exe(&name, Path::new(""))
+            {
+                has_root_exe = true;
+            }
+        } else if ft.is_dir() && !name.starts_with('.') && !is_single_game_internal_subdir(&name) {
+            child_dirs.push(entry.path());
+        }
+    }
+    if has_root_exe || child_dirs.len() < 2 {
+        return false;
+    }
+    child_dirs.sort();
+    let mut game_children = 0usize;
+    for child in child_dirs {
+        if !targets(&child).is_empty() {
+            game_children += 1;
+            if game_children >= 2 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Classify a user-supplied manual folder as a single game, a multi-game/Steam library, or a drive root.
+pub fn classify_manual_folder(path: &Path) -> ManualFolderKind {
+    if is_drive_root(path) {
+        ManualFolderKind::DriveRoot
+    } else if is_steam_library_dir(path) || holds_multiple_games(path) {
+        ManualFolderKind::Library
+    } else {
+        ManualFolderKind::SingleGame
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     /// Folders the user added by hand; each is a game.
@@ -111,14 +312,60 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
     let mut games = Vec::new();
     let mut skipped = Vec::new();
 
+    let mut effective_libraries: Vec<PathBuf> = Vec::new();
+    let mut effective_manual: Vec<PathBuf> = Vec::new();
+
+    for lib_dir in &config.libraries {
+        let norm_lib = normalize_path_buf(lib_dir);
+        if is_drive_root(&norm_lib) {
+            continue;
+        }
+        if !effective_libraries.contains(&norm_lib) {
+            effective_libraries.push(norm_lib);
+        }
+    }
+
+    for manual_dir in &config.manual {
+        let norm_dir = normalize_path_buf(manual_dir);
+        match classify_manual_folder(&norm_dir) {
+            ManualFolderKind::DriveRoot => continue,
+            ManualFolderKind::Library => {
+                if !effective_libraries.contains(&norm_dir) {
+                    effective_libraries.push(norm_dir);
+                }
+            }
+            ManualFolderKind::SingleGame => {
+                if !effective_manual.contains(&norm_dir) {
+                    effective_manual.push(norm_dir);
+                }
+            }
+        }
+    }
+
     #[cfg(windows)]
-    let extra_steam_roots = if config.home.is_none() {
+    let mut extra_steam_roots = if config.home.is_none() {
         windows::windows_steam_roots()
     } else {
         Vec::new()
     };
     #[cfg(not(windows))]
-    let extra_steam_roots: Vec<PathBuf> = Vec::new();
+    let mut extra_steam_roots: Vec<PathBuf> = Vec::new();
+
+    for lib_dir in &effective_libraries {
+        if lib_dir.join("steamapps").is_dir() {
+            if !extra_steam_roots.contains(lib_dir) {
+                extra_steam_roots.push(lib_dir.clone());
+            }
+        } else if last_path_segment(lib_dir).is_some_and(|s| s.eq_ignore_ascii_case("steamapps"))
+            && let Some(parent) = lib_dir.parent()
+            && !is_drive_root(parent)
+        {
+            let norm_parent = normalize_path_buf(parent);
+            if !extra_steam_roots.contains(&norm_parent) {
+                extra_steam_roots.push(norm_parent);
+            }
+        }
+    }
 
     let windows_steam_runtime = cfg!(windows) && config.home.is_none();
     let (steam_games, steam_skipped) =
@@ -151,13 +398,12 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
 
     let mut seen_install_dirs: HashSet<PathBuf> = games.iter().map(|g| g.install_dir.clone()).collect();
 
-    for lib_dir in &config.libraries {
-        let norm_lib = normalize_path_buf(lib_dir);
+    for norm_lib in &effective_libraries {
         if !norm_lib.is_dir() {
             skipped.push(format!("library ({}): directory not found", norm_lib.display()));
             continue;
         }
-        let read_dir = match fs::read_dir(&norm_lib) {
+        let read_dir = match fs::read_dir(norm_lib) {
             Ok(rd) => rd,
             Err(e) => {
                 skipped.push(format!("library ({}): {e}", norm_lib.display()));
@@ -181,6 +427,20 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
             else {
                 continue;
             };
+            if matches!(
+                folder_name.to_ascii_lowercase().as_str(),
+                "steamapps"
+                    | "steamlibrary"
+                    | "compatdata"
+                    | "shadercache"
+                    | "workshop"
+                    | "downloading"
+                    | "temp"
+                    | "depotcache"
+                    | "userdata"
+            ) {
+                continue;
+            }
             if !seen_install_dirs.insert(child_norm.clone()) {
                 continue;
             }
@@ -212,8 +472,7 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
         }
     }
 
-    for manual_dir in &config.manual {
-        let norm_dir = normalize_path_buf(manual_dir);
+    for norm_dir in &effective_manual {
         if !norm_dir.is_dir() {
             skipped.push(format!("manual ({}): directory not found", norm_dir.display()));
             continue;
@@ -221,30 +480,27 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
         if !seen_install_dirs.insert(norm_dir.clone()) {
             continue;
         }
-        let game_targets = targets(&norm_dir);
-        let dlss_anywhere = targets::find_dlss_anywhere_with_targets(&norm_dir, &game_targets);
+        let game_targets = targets(norm_dir);
+        let dlss_anywhere = targets::find_dlss_anywhere_with_targets(norm_dir, &game_targets);
         let runtime = if cfg!(windows) && config.home.is_none() {
             Runtime::Windows
-        } else if game_targets.is_empty() && targets::has_elf_executable(&norm_dir) {
+        } else if game_targets.is_empty() && targets::has_elf_executable(norm_dir) {
             Runtime::NativeLinux
         } else {
             Runtime::Unknown
         };
+        let Some(folder_name) = last_path_segment(norm_dir) else {
+            continue;
+        };
         let name = detect_emulator_name(&game_targets)
             .map(str::to_string)
-            .unwrap_or_else(|| {
-                norm_dir
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| "Manual".to_string())
-            });
+            .unwrap_or(folder_name);
 
         games.push(Game {
             id: format!("manual:{}", norm_dir.display()),
             name,
             store: Store::Manual,
-            install_dir: norm_dir,
+            install_dir: norm_dir.clone(),
             runtime,
             targets: game_targets,
             dlss_anywhere,

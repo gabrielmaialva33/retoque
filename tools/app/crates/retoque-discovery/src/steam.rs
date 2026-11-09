@@ -1,12 +1,18 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use crate::io::{MAX_TEXT_BYTES, read_bounded_string};
 use crate::targets::{find_dlss_anywhere_with_targets, find_targets, has_elf_executable};
 use crate::{Game, Runtime, Store};
 
 const MAX_VDF_DEPTH: usize = 64;
+
+fn non_game_manifest_ids() -> &'static Mutex<HashSet<u32>> {
+    static IDS: OnceLock<Mutex<HashSet<u32>>> = OnceLock::new();
+    IDS.get_or_init(|| Mutex::new(HashSet::new()))
+}
 
 /// Normalize a path string when it starts with a Windows drive prefix (`c:/...` or `C:\...`),
 /// uppercasing the drive letter and converting mixed `/` and `\` separators to `\`.
@@ -343,12 +349,64 @@ pub fn parse_appmanifest_acf(text: &str) -> Result<SteamAppManifest, String> {
         })
     });
 
+    let manifest_non_game = manifest_indicates_non_game(app_state);
+    if app_id != 0
+        && let Ok(mut set) = non_game_manifest_ids().lock()
+    {
+        if manifest_non_game {
+            set.insert(app_id);
+        } else {
+            set.remove(&app_id);
+        }
+    }
+
     Ok(SteamAppManifest {
         app_id,
         name,
         install_dir,
         uses_proton_override,
     })
+}
+
+fn manifest_indicates_non_game(app_state: &VdfValue) -> bool {
+    let is_non_game_type = |val: &str| {
+        matches!(
+            val.trim().to_ascii_lowercase().as_str(),
+            "tool"
+                | "application"
+                | "server"
+                | "dedicated server"
+                | "sdk"
+                | "editor"
+                | "engine"
+                | "driver"
+                | "config"
+                | "benchmark"
+        )
+    };
+    for key in ["type", "apptype", "category", "section_type"] {
+        if app_state.get_str(key).is_some_and(is_non_game_type) {
+            return true;
+        }
+    }
+    for key in ["istool", "is_tool"] {
+        if app_state
+            .get_str(key)
+            .is_some_and(|v| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true"))
+        {
+            return true;
+        }
+    }
+    for sec in ["UserConfig", "MountedConfig"] {
+        if let Some(cfg) = app_state.get(sec) {
+            for key in ["type", "apptype", "category", "section_type"] {
+                if cfg.get_str(key).is_some_and(is_non_game_type) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Pure parser for `CompatToolMapping` inside Steam's `config/config.vdf` (or standalone VDF).
@@ -436,6 +494,104 @@ pub fn is_steam_tool_or_runtime(app_id: u32, name: &str, install_dir: &str) -> b
         return true;
     }
 
+    false
+}
+
+const KNOWN_NON_GAME_APP_IDS: &[u32] = &[
+    993090,  // Lossless Scaling
+    556450,  // The Forest Dedicated Server
+    715850,  // The Divinity Engine 2
+    305320,  // The Divinity Engine
+    431960,  // Wallpaper Engine
+    388080,  // Borderless Gaming
+    629520,  // Soundpad
+    367670,  // Controller Companion
+    1366800, // Crosshair X
+    250820,  // SteamVR
+    908520,  // fpsVR
+    1009850, // OVR Advanced Settings
+    1494460, // Desktop+
+    223850,  // 3DMark
+];
+
+/// Returns `true` if a Steam app is a non-game tool, server, SDK, or editor (such as
+/// "Lossless Scaling", "The Forest Dedicated Server", or "The Divinity Engine 2") that should be
+/// hidden from the default library grid unless searched. Playable mod loaders such as `tModLoader`
+/// return `false`.
+pub fn is_steam_non_game_app(app_id: u32, name: &str, install_dir: &str) -> bool {
+    let name_lower = name.trim().to_ascii_lowercase();
+    let dir_lower = install_dir.trim().to_ascii_lowercase();
+
+    // Playable mod-loader games that must never be hidden.
+    if app_id == 1281930 || name_lower == "tmodloader" || dir_lower == "tmodloader" {
+        return false;
+    }
+
+    if is_steam_tool_or_runtime(app_id, name, install_dir) {
+        return true;
+    }
+
+    if app_id != 0 && KNOWN_NON_GAME_APP_IDS.contains(&app_id) {
+        return true;
+    }
+
+    if app_id != 0 && non_game_manifest_ids().lock().is_ok_and(|set| set.contains(&app_id)) {
+        return true;
+    }
+
+    if matches!(
+        name_lower.as_str(),
+        "lossless scaling" | "wallpaper engine" | "borderless gaming" | "steamvr" | "soundpad" | "fpsvr"
+    ) || matches!(
+        dir_lower.as_str(),
+        "lossless scaling" | "wallpaper_engine" | "borderless gaming" | "steamvr" | "soundpad" | "fpsvr"
+    ) {
+        return true;
+    }
+
+    if name_lower.contains("dedicated server")
+        || dir_lower.contains("dedicated server")
+        || name_lower.ends_with(" server")
+        || dir_lower.ends_with(" server")
+    {
+        return true;
+    }
+
+    if name_lower == "sdk"
+        || name_lower.ends_with(" sdk")
+        || dir_lower == "sdk"
+        || dir_lower.ends_with(" sdk")
+        || name_lower.ends_with(" authoring tools")
+        || dir_lower.ends_with(" authoring tools")
+        || name_lower.ends_with(" mod tools")
+        || dir_lower.ends_with(" mod tools")
+        || name_lower.ends_with(" creation kit")
+        || dir_lower.ends_with(" creation kit")
+    {
+        return true;
+    }
+
+    if ends_with_editor_or_engine(&name_lower) || ends_with_editor_or_engine(&dir_lower) {
+        return true;
+    }
+
+    false
+}
+
+fn ends_with_editor_or_engine(lower: &str) -> bool {
+    let trimmed = lower.trim();
+    if trimmed == "editor" || trimmed == "engine" || trimmed.ends_with(" editor") || trimmed.ends_with(" engine") {
+        return true;
+    }
+    // Conservative check for numbered editors/engines such as "The Divinity Engine 2" or "Mod Editor 2".
+    if let Some((prefix, tail)) = trimmed.rsplit_once(' ')
+        && (!tail.is_empty() && tail.chars().all(|c| c.is_ascii_digit()) || matches!(tail, "ii" | "iii" | "iv" | "v"))
+    {
+        let p = prefix.trim_end();
+        if p.ends_with(" editor") || p.ends_with(" engine") {
+            return true;
+        }
+    }
     false
 }
 

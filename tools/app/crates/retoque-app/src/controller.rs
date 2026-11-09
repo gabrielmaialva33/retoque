@@ -6,6 +6,7 @@ impl RetoqueApp {
     }
 
     pub(crate) fn rescan(&mut self) {
+        self.migrate_saved_folders();
         if self.scanning {
             self.rescan_pending = true;
             return;
@@ -28,7 +29,16 @@ impl RetoqueApp {
         picked
             .filter(|p| game.targets.iter().any(|t| &t.path == *p))
             .cloned()
-            .or_else(|| game.targets.first().map(|t| t.path.clone()))
+            .or_else(|| {
+                game.targets
+                    .iter()
+                    .find(|t| {
+                        crate::state::library::single_target_install_state(t, &self.library_state.status, None)
+                            != InstallState::Missing
+                    })
+                    .or_else(|| game.targets.first())
+                    .map(|t| t.path.clone())
+            })
     }
 
     pub(crate) fn open_target(&mut self, target: Option<PathBuf>) {
@@ -157,20 +167,19 @@ impl RetoqueApp {
         }
         let mut intelligence_changed = false;
         for outcome in self.jobs.drain() {
-            intelligence_changed |= matches!(
-                &outcome,
+            intelligence_changed |= match &outcome {
                 Outcome::Status { .. }
-                    | Outcome::Ini { .. }
-                    | Outcome::Logs { .. }
-                    | Outcome::ModelInspection(_)
-                    | Outcome::Catalog { .. }
-                    | Outcome::Auto(_)
-                    // Download progress ticks are not new facts; recompute only when a fetch finishes.
-                    | Outcome::NrFetch(
-                        crate::tabs::model::NrFetchEvent::Downloaded(_)
-                            | crate::tabs::model::NrFetchEvent::CatalogRefreshed(_)
-                    )
-            );
+                | Outcome::Ini { .. }
+                | Outcome::Logs { .. }
+                | Outcome::ModelInspection(_)
+                | Outcome::Catalog { .. } => true,
+                Outcome::Auto(event) => !matches!(**event, crate::autotune::Event::Sm86Progress(_)),
+                Outcome::NrFetch(event) => {
+                    !matches!(event, crate::tabs::model::NrFetchEvent::Progress(_))
+                        && self.nr_fetch.then_optimize.is_none()
+                }
+                _ => false,
+            };
             self.library_state.invalidate();
             let current = self.view.target.clone();
             let ours = |t: &Path| current.as_deref() == Some(t);
@@ -212,8 +221,8 @@ impl RetoqueApp {
                                 }
                             },
                         );
-                        self.library_state.status.insert(path, *status);
                     }
+                    self.library_state.status.insert(path, *status);
                 }
                 Outcome::LibraryDone(generation) if generation == self.library_generation => {
                     self.library_pending = false
@@ -512,14 +521,19 @@ impl RetoqueApp {
         self.library_generation += 1;
         self.library_pending = true;
         self.library_state.status.clear();
+        if let (Some(target), Some(Ok(status))) = (&self.view.target, &self.view.status) {
+            self.library_state.status.insert(target.clone(), status.clone());
+        }
         self.usage_refreshed = None;
         let generation = self.library_generation;
-        let paths: Vec<_> = self
-            .library_state
-            .games
-            .iter()
-            .filter_map(|g| self.target_for(g))
-            .collect();
+        let mut paths = Vec::new();
+        for g in &self.library_state.games {
+            for t in &g.targets {
+                if !paths.contains(&t.path) {
+                    paths.push(t.path.clone());
+                }
+            }
+        }
         let ctx = self.context.clone();
         self.jobs.spawn("library-status", None, move |tx| {
             for path in paths {
