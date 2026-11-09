@@ -394,7 +394,9 @@ class State
     WorkingMode workingMode = WorkingMode::Other;
 
     // Vulkan stuff
-    bool vulkanCreatingSC = false;
+    // Only DXGI calls reentered from this thread's Vulkan hooks bypass wrapping. DXVK's present thread must not
+    // suppress wrapping when the game recreates its own swapchain on another thread (F11 / Alt-Tab).
+    inline static thread_local bool vulkanCreatingSC = false;
     bool vulkanHooksSkipped = false; // [Vulkan] SkipHooks or the Linux marker file: no vulkan-1.dll hooks,
                                      // the menu uses the D3D overlay path (dllmain ResolveVulkanHookPolicy)
 

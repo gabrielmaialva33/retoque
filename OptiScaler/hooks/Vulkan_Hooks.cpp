@@ -917,7 +917,9 @@ static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPres
         return VK_ERROR_OUT_OF_DATE_KHR;
     }
 
-    ReflexHooks::update(false, true);
+    // DXVK/vkd3d-proton already updated Reflex on the DXGI side with the actual FG state.
+    if (!dxgiBacked)
+        ReflexHooks::update(false, true);
 
     // dxvk/vkd3d-proton's go through the DXGI swapchain
     if (!dxgiBacked)

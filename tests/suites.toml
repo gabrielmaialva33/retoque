@@ -1168,3 +1168,19 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 600
 summary = "Vulkan pre-upscale rules, composite identities, canonical tickets and production scope with fake prepare/SR; compiling mutants, no GPU qualification."
+
+[proton-reflex-contract]
+path = "proton-reflex-contract"
+domain = "transport"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Production Vulkan swapchain scope and Reflex decision slices: nested/two-thread isolation, DXGI/native present ownership, async marker history and RTSS expiry, with four regression controls. No GPU."
+
+[nr-forwarder-version]
+path = "nr-forwarder-version"
+domain = "tooling"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Forwarder resource shares OptiScaler's numeric file/product version, follows a synthetic version bump, and is wired into MSBuild and MSVC CMake; four source controls. No PE execution."
