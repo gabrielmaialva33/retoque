@@ -9,7 +9,7 @@ DEFAULT_REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
 OUT_DIR="${OUT_DIR:-}"
-RAW_VERSION="${VERSION:-0.3.0}"
+RAW_VERSION="${VERSION:-0.1.0}"
 DEST_DIR=""
 
 usage() {

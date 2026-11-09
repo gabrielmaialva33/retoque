@@ -4,7 +4,7 @@ Beside the full script-installer bundle (`Retoque-vX.Y.Z.zip` documented in [VAL
 `gabrielmaialva33/retoque` releases may attach a payload-only archive for `retoque-app`:
 
 - `retoque-payload-<version>-x64.zip` (where `<version>` is the numeric/prerelease version stripped of the
-  `retoque-v` or `v` tag prefix, e.g. `retoque-payload-0.3.0-x64.zip` for tag `retoque-v0.3.0`)
+  `retoque-v` or `v` tag prefix, e.g. `retoque-payload-0.1.0-x64.zip` for tag `retoque-v0.1.0`)
 - `SHA256SUMS` (`sha256sum` line for `retoque-payload-<version>-x64.zip`)
 
 Publication is always manual. The packaging script prints the `gh release create` command it would run and never
@@ -36,7 +36,7 @@ Neither the packager nor the app unpacker ever accepts:
 ## Packaging command
 
 ```bash
-bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/payload --version retoque-v0.3.0
+bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/payload --version retoque-v0.1.0
 ```
 
 The script verifies required files, the OptiScaler marker, the four forwarder exports, matching PE `VERSIONINFO`

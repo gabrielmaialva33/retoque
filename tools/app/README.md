@@ -202,7 +202,7 @@ Release assets follow [docs/releases/PAYLOAD.md](../../docs/releases/PAYLOAD.md)
 from `x64/out` and the repository with:
 
 ```bash
-bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/payload --version retoque-v0.3.0
+bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/payload --version retoque-v0.1.0
 ```
 
 The script checks the forwarder exports, verifies that `OptiScaler.dll` and `nvngx.dll_dlssnr.dll` have matching

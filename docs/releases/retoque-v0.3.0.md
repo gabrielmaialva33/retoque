@@ -1,5 +1,8 @@
 # Retoque v0.3.0 — draft for Gabriel's review
 
+> **Superseded, never published.** Retoque's own numbering starts at `retoque-v0.1.0`
+> ([notes](retoque-v0.1.0.md)); this draft is kept as history.
+
 Proposed tag: `retoque-v0.3.0`. This text is a draft, not a published release or a claim that the release
 build has passed testing. Publication requires Gabriel's approval.
 
