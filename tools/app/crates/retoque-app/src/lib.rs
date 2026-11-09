@@ -12,3 +12,20 @@ pub mod widgets;
 pub use app::RetoqueApp;
 
 pub mod autotune;
+
+pub mod commands;
+
+pub(crate) mod modals;
+
+#[cfg(test)]
+mod app_tests;
+pub(crate) mod autotune_ui;
+pub(crate) mod controller;
+pub(crate) mod folders_ui;
+pub(crate) mod format;
+pub(crate) mod shell;
+pub(crate) mod tabs;
+
+pub(crate) mod state;
+
+pub mod error;

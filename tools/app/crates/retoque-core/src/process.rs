@@ -365,7 +365,12 @@ mod tests {
             .unwrap();
         let plan = crate::plan_settings(temp.path(), &edits).unwrap();
         assert!(plan.refusals.iter().any(|r| matches!(r, crate::Refusal::GameRunning {processes} if processes.iter().any(|(pid,name)|*pid==0 && name.contains("OptiScaler.ini")))));
-        assert!(crate::apply(&reviewed, &mut |_| panic!("locked INI changed")).is_err());
+        assert!(
+            crate::apply(&reviewed.into_verified().unwrap(), &mut |_| panic!(
+                "locked INI changed"
+            ))
+            .is_err()
+        );
         assert_eq!(fs::read(&ini).unwrap(), b"[LSFG]\nEnabled=false\n");
     }
 }

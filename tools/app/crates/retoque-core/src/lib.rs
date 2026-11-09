@@ -136,14 +136,59 @@ impl Refusal {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan {
-    pub game_dir: PathBuf,
-    pub steps: Vec<Step>,
+    game_dir: PathBuf,
+    steps: Vec<Step>,
     /// Empty when the plan may be applied.
-    pub refusals: Vec<Refusal>,
+    refusals: Vec<Refusal>,
     /// Things the user should know that do not stop the run (model missing, launch option needed, …).
-    pub notes: Vec<String>,
+    notes: Vec<String>,
     // The engine retains operation and preconditions; callers cannot construct unchecked plans.
     execution: engine::Execution,
+}
+
+/// A sealed, refusal-free preview. No mutable access to its steps is exposed.
+///
+/// Unchecked plans cannot be applied:
+/// ```compile_fail
+/// use retoque_core::{Plan, apply};
+/// fn bypass(plan: &Plan) { apply(plan, &mut |_| {}).unwrap(); }
+/// ```
+/// Review callers cannot alter the original steps:
+/// ```compile_fail
+/// use retoque_core::{Plan, Step};
+/// fn bypass(plan: &mut Plan) { plan.steps.push(Step::Remove { path: "nvngx_dlssnr.dll".into() }); }
+/// ```
+/// Nor remove refusals:
+/// ```compile_fail
+/// use retoque_core::Plan;
+/// fn bypass(plan: &mut Plan) { plan.refusals.clear(); }
+/// ```
+#[derive(Clone, Debug)]
+pub struct VerifiedPlan(Plan);
+
+impl Plan {
+    pub fn game_dir(&self) -> &Path {
+        &self.game_dir
+    }
+    pub fn steps(&self) -> &[Step] {
+        &self.steps
+    }
+    pub fn refusals(&self) -> &[Refusal] {
+        &self.refusals
+    }
+    pub fn notes(&self) -> &[String] {
+        &self.notes
+    }
+    /// Verification seals the reviewed value; apply still checks filesystem/process preconditions.
+    pub fn into_verified(self) -> Result<VerifiedPlan, Error> {
+        engine::verify(&self)?;
+        Ok(VerifiedPlan(self))
+    }
+}
+impl VerifiedPlan {
+    pub fn plan(&self) -> &Plan {
+        &self.0
+    }
 }
 
 /// Reported by `apply` after each step, for progress display.
@@ -154,24 +199,21 @@ pub struct StepDone {
     pub step: Step,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Io { path: PathBuf, source: std::io::Error },
+    #[error("{}: {source}", path.display())]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("refused: {0:?}")]
     Refused(Vec<Refusal>),
+    #[error("{0}")]
     Other(String),
+    #[error("{0}")]
+    StalePlan(String),
 }
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Io { path, source } => write!(f, "{}: {source}", path.display()),
-            Error::Refused(r) => write!(f, "refused: {r:?}"),
-            Error::Other(s) => f.write_str(s),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 /// What is installed in a folder, read without writing anything.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -244,8 +286,8 @@ pub fn plan_settings(game_dir: &Path, edits: &[(String, String, String)]) -> Res
 /// receipt untouched, and reports progress after each edit. Already completed edits remain if a later edit fails.
 /// Refusal-free zero-step plans are accepted: uninstall can still remove an empty/partial receipt, while an
 /// empty settings plan writes nothing. Callers must not hide apply solely because the step list is empty.
-pub fn apply(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(), Error> {
-    engine::apply(plan, progress)
+pub fn apply(plan: &VerifiedPlan, progress: &mut dyn FnMut(StepDone)) -> Result<(), Error> {
+    engine::apply(&plan.0, progress)
 }
 
 pub fn status(game_dir: &Path) -> Result<Status, Error> {

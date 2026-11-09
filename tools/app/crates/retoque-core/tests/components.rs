@@ -90,7 +90,7 @@ fn foreign_own_proxy_and_second_loader_are_refused() {
         let f = Fixture::new();
         fs::write(f.game.join(path), bytes).unwrap();
         let p = plan_component_install(&f.game, &f.component).unwrap();
-        assert!(!p.refusals.is_empty(), "{path}: {bytes}");
+        assert!(!p.refusals().is_empty(), "{path}: {bytes}");
         assert!(apply(&p, &mut |_| {}).is_err());
         assert!(!f.game.join(".retoque").exists());
     }
@@ -196,7 +196,7 @@ fn mapped_game_refuses_plan_and_already_reviewed_apply() {
     child.wait().unwrap();
     assert!(
         refused
-            .refusals
+            .refusals()
             .iter()
             .any(|r| matches!(r, Refusal::GameRunning { .. }))
     );
@@ -251,4 +251,12 @@ fn component_operations_do_not_mark_an_unrelated_partial_receipt_complete() {
         status(&f.game).unwrap().receipt.unwrap().status,
         receipt::ReceiptStatus::Partial
     );
+}
+
+// Test adapter keeps existing refusal/staleness probes at the same boundary after typestate migration.
+fn apply(
+    plan: &retoque_core::Plan,
+    progress: &mut dyn FnMut(retoque_core::StepDone),
+) -> Result<(), retoque_core::Error> {
+    retoque_core::apply(&plan.clone().into_verified()?, progress)
 }

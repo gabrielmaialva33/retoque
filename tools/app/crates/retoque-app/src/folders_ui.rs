@@ -1,12 +1,12 @@
 //! User-owned discovery roots. Removing a registration never removes files.
-use super::*;
+use crate::app::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum FolderKind {
+pub(crate) enum FolderKind {
     Game,
     Library,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum FolderDialog {
+pub(crate) enum FolderDialog {
     Add,
     Manage,
 }
@@ -17,7 +17,7 @@ impl Saved {
             FolderKind::Library => &mut self.libraries,
         }
     }
-    pub(super) fn register_folder(&mut self, kind: FolderKind, path: PathBuf) -> bool {
+    pub(crate) fn register_folder(&mut self, kind: FolderKind, path: PathBuf) -> bool {
         let paths = self.folder_list(kind);
         if paths.contains(&path) {
             return false;
@@ -25,7 +25,7 @@ impl Saved {
         paths.push(path);
         true
     }
-    pub(super) fn forget_folder(&mut self, kind: FolderKind, path: &Path) -> bool {
+    pub(crate) fn forget_folder(&mut self, kind: FolderKind, path: &Path) -> bool {
         let paths = self.folder_list(kind);
         let before = paths.len();
         paths.retain(|p| p != path);
@@ -33,11 +33,11 @@ impl Saved {
     }
 }
 impl RetoqueApp {
-    pub(super) fn folders_open(&mut self, dialog: FolderDialog) {
+    pub(crate) fn folders_open(&mut self, dialog: FolderDialog) {
         self.folder_dialog = Some(dialog);
         self.folder_focus = self.context.memory(|m| m.focused());
     }
-    pub(super) fn folders_button(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn folders_button(&mut self, ui: &mut egui::Ui) {
         if ui.small_button(self.tr("folders.title")).clicked() {
             self.folders_open(FolderDialog::Manage);
         }
@@ -54,7 +54,7 @@ impl RetoqueApp {
             self.folder_dialog = Some(FolderDialog::Manage);
         }
     }
-    pub(super) fn folders_dialog(&mut self, ctx: &egui::Context) {
+    pub(crate) fn folders_dialog(&mut self, ctx: &egui::Context) {
         if self.folder_restore > 0 {
             if let Some(id) = self.folder_focus {
                 ctx.memory_mut(|m| m.request_focus(id));

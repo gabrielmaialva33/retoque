@@ -29,6 +29,23 @@ impl Lang {
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    ("doctor.review", "Review repair…", "Revisar reparo…"),
+    (
+        "remedy.processes",
+        "Show running processes",
+        "Ver processos em execução",
+    ),
+    (
+        "remedy.close_processes",
+        "Close these processes, then review again",
+        "Feche estes processos e revise novamente",
+    ),
+    ("remedy.replan", "Prepare a fresh review", "Preparar uma nova revisão"),
+    (
+        "remedy.foreign",
+        "Choose keep or replace…",
+        "Escolher manter ou substituir…",
+    ),
     (
         "mdl.incompatible",
         "This NR model has no compatible kernels for the detected GPU. Choose another model.",
@@ -100,7 +117,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("inst.advanced", "Advanced", "Avançado"),
     ("st.build", "build", "versão"),
-    ("inst.notes", "Notes", "Observações"),
+    ("inst.notes()", "Notes", "Observações"),
     ("dismiss", "×", "×"),
     ("dismiss.help", "Dismiss message", "Fechar mensagem"),
     ("brand", "Retoque", "Retoque"),
@@ -1132,20 +1149,16 @@ pub fn diagnostic(lang: Lang, message: &str) -> String {
 mod source_coverage {
     use super::*;
 
-    const SOURCES: &[(&str, &str)] = &[
-        ("app.rs", include_str!("app.rs")),
-        ("folders_ui.rs", include_str!("folders_ui.rs")),
-        ("autotune.rs", include_str!("autotune.rs")),
-        ("autotune_ui.rs", include_str!("autotune_ui.rs")),
-        ("compare.rs", include_str!("compare.rs")),
-        ("i18n.rs", include_str!("i18n.rs")),
-        ("jobs.rs", include_str!("jobs.rs")),
-        ("lib.rs", include_str!("lib.rs")),
-        ("main.rs", include_str!("main.rs")),
-        ("model.rs", include_str!("model.rs")),
-        ("theme.rs", include_str!("theme.rs")),
-        ("widgets.rs", include_str!("widgets.rs")),
-    ];
+    fn sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                sources(&path, out);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                out.push((path.display().to_string(), std::fs::read_to_string(&path).unwrap()));
+            }
+        }
+    }
 
     // Tokenize only enough Rust to find literal translation arguments, ignoring comments and strings containing
     // sample code. This avoids a regex dependency and handles multiline calls and qualified Lang expressions.
@@ -1232,18 +1245,14 @@ mod source_coverage {
 
     #[test]
     fn every_literal_translation_call_has_both_languages() {
-        let actual: std::collections::BTreeSet<_> = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src"))
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-            .filter(|name| name.ends_with(".rs"))
-            .collect();
-        let included: std::collections::BTreeSet<_> = SOURCES.iter().map(|(name, _)| name.to_string()).collect();
-        assert_eq!(
-            actual, included,
-            "include new Rust source files in translation coverage"
+        let mut all_sources = Vec::new();
+        sources(
+            std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
+            &mut all_sources,
         );
+        assert!(all_sources.len() >= 13);
         let mut checked = 0;
-        for (file, source) in SOURCES {
+        for (file, source) in &all_sources {
             for key in literal_keys(source) {
                 let entry = TEXT.iter().find(|(k, _, _)| *k == key);
                 let (_, en, pt) = entry.unwrap_or_else(|| panic!("{file}: missing translation key {key}"));
