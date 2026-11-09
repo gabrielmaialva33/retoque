@@ -16,6 +16,8 @@ path = "src/main.rs"
 
 [dependencies]
 tempfile = "3.27.0"
+notify = "8.2.2"
+notify-debouncer-full = "0.7.0"
 thiserror = "2.0.21"
 sha2 = "0.10"
 retoque-core.workspace = true

@@ -1140,6 +1140,17 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Item não suportado. Escolha nvngx_dlssnr*.dll ou uma pasta de jogo/componente.",
     ),
     ("drop.confirm", "Confirm", "Confirmar"),
+    ("doctor.title", "Retoque Doctor", "Retoque Doctor"),
+    ("doctor.prepare", "Prepare repair…", "Preparar reparo…"),
+    ("doctor.evidence", "Evidence", "Evidências"),
+    ("doctor.badge", "Health findings", "Problemas detectados"),
+    (
+        "watch.manual",
+        "Live updates unavailable. Refresh manually.",
+        "Atualizações automáticas indisponíveis. Atualize manualmente.",
+    ),
+    ("watch.refresh", "Refresh selected game", "Atualizar jogo selecionado"),
+    ("log.diagnoses", "Log diagnosis", "Diagnóstico do log"),
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {

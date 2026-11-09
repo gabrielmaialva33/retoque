@@ -29,6 +29,17 @@ pub enum Outcome {
         request: u64,
         paths: Vec<(PathBuf, crate::drop_import::Route)>,
     },
+    Doctor(Box<crate::intelligence::Assessment>),
+    DoctorBadge {
+        generation: u64,
+        target: PathBuf,
+        count: usize,
+    },
+    Watch {
+        generation: u64,
+        target: PathBuf,
+        result: Result<crate::watcher::Changes, String>,
+    },
     Scoped {
         epoch: Option<u64>,
         request: u64,
@@ -75,6 +86,7 @@ pub enum Outcome {
         result: Result<(), AppError>,
     },
     Logs {
+        latest: bool,
         target: PathBuf,
         files: Vec<PathBuf>,
         result: Result<Option<Summary>, AppError>,
@@ -198,7 +210,12 @@ pub fn logs(target: PathBuf) -> Outcome {
             .map_err(|e| AppError::io(newest.clone(), e).for_target(target.clone())),
         None => Ok(None),
     };
-    Outcome::Logs { target, files, result }
+    Outcome::Logs {
+        latest: true,
+        target,
+        files,
+        result,
+    }
 }
 
 pub fn bundle(target: PathBuf, status_text: String, out_dir: PathBuf) -> Outcome {

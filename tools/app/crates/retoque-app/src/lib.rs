@@ -33,6 +33,8 @@ pub mod error;
 pub(crate) mod drop_import;
 pub(crate) mod fuzzy;
 pub(crate) mod history;
+pub(crate) mod intelligence;
 pub(crate) mod intuitive;
 #[cfg(test)]
 mod intuitive_tests;
+pub(crate) mod watcher;

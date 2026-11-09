@@ -57,6 +57,7 @@ pub(crate) mod shell_tests {
         let (cmd_tx, cmd_rx) = CommandSender::channel();
         RetoqueApp {
             intuitive: Default::default(),
+            doctor_badges: HashMap::new(),
             tuning: crate::autotune::UiState::default(),
             folder_dialog: None,
             folder_focus: None,
@@ -273,6 +274,7 @@ pub(crate) mod shell_tests {
         }));
         app.tuning.installed = Some(Ok(vec![]));
         app.tuning.readiness = Some(LsfgReadiness::NoLosslessScaling);
+        app.refresh_intelligence();
         let mut harness = Harness::builder().with_size([930., 1200.]).build_ui_state(
             |ui, app: &mut RetoqueApp| {
                 app.context = ui.ctx().clone();
@@ -308,6 +310,7 @@ pub(crate) mod shell_tests {
         harness.run_steps(3);
         assert!(!harness.state().review_open);
         harness.state_mut().tuning.installed = Some(Ok(vec!["component".into()]));
+        harness.state_mut().refresh_intelligence();
         harness.run_steps(3);
         assert!(
             harness

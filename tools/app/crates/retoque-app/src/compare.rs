@@ -334,6 +334,11 @@ impl CompareView {
             });
         }
     }
+    pub(crate) fn invalidate_captures(&mut self, target: &Path) {
+        if self.target.as_deref() == Some(target) {
+            self.scan(target);
+        }
+    }
     fn scan(&mut self, target: &Path) {
         self.epoch += 1;
         self.request += 1;

@@ -82,12 +82,14 @@ pub(crate) struct GameView {
     pub(crate) copied: bool,
     pub(crate) inspection: Option<ModelInspection>,
     pub(crate) doctor: Option<crate::tabs::doctor::DoctorCard>,
+    pub(crate) intelligence: crate::intelligence::ViewState,
     pub(crate) ini_values: crate::state::settings::IniValues,
 }
 
 pub struct RetoqueApp {
     pub(crate) intuitive: crate::intuitive::State,
     // The before/after viewer keeps its decoded images and view transform across frames.
+    pub(crate) doctor_badges: HashMap<PathBuf, usize>,
     pub(crate) compare: crate::compare::CompareView,
     pub(crate) saved: Saved,
     pub(crate) lang: Lang,
@@ -149,6 +151,7 @@ impl RetoqueApp {
                 history_root: crate::history::default_root(),
                 ..Default::default()
             },
+            doctor_badges: HashMap::new(),
             drafts: HashMap::new(),
             context: cc.egui_ctx.clone(),
             cmd_tx,
@@ -264,6 +267,7 @@ impl eframe::App for RetoqueApp {
                         .max_rect(rect)
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
+                self.watcher_notice(&mut child);
                 self.game(&mut child);
                 ui.advance_cursor_after_rect(rect);
             });

@@ -145,6 +145,15 @@ impl RetoqueApp {
                     let capsule = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
                     let hint = (!game.registered).then(|| self.tr("folders.unregistered"));
                     let response = widgets::game_row(ui, &game.name, detail, state, capsule, selected, hint);
+                    // Cached Doctor findings for any of the game's folders; looked up by reference, no per-frame work.
+                    let findings = game
+                        .targets
+                        .iter()
+                        .filter_map(|t| self.doctor_badges.get(&t.path))
+                        .copied()
+                        .max()
+                        .unwrap_or(0);
+                    let response = crate::tabs::doctor::row_badge(ui, response, findings, self.lang);
                     list_focus |= response.has_focus();
                     if response.clicked() {
                         response.request_focus();

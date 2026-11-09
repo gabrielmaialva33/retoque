@@ -33,6 +33,7 @@ impl RetoqueApp {
 
     pub(crate) fn open_target(&mut self, target: Option<PathBuf>) {
         self.library_state.invalidate();
+        self.jobs.watch(target.clone());
         self.jobs.advance_epoch();
         self.review = None;
         if let Some(old) = self.view.target.clone() {
@@ -68,6 +69,10 @@ impl RetoqueApp {
         self.jobs.advance_epoch();
         self.autotune_refresh(t.clone());
         self.view.inspection = None;
+        self.view.doctor = None;
+        self.view.intelligence.latest_log = None;
+        self.view.intelligence.log_diagnoses.clear();
+        self.view.intelligence.recommendations = Default::default();
         let (a, b, c) = (t.clone(), t.clone(), t);
         self.jobs.spawn("status", None, move |_| model::status(a));
         self.jobs.spawn("ini", None, move |_| model::read_ini(b));
@@ -129,6 +134,7 @@ impl RetoqueApp {
         };
         self.review_open = false;
         self.restore_focus();
+        self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, plan.steps().len()));
         self.write_kinds.insert(target.clone(), kind);
         let t = target.clone();
@@ -142,7 +148,17 @@ impl RetoqueApp {
         if self.usage_refreshed.is_none_or(|at| at.elapsed().as_secs() >= 30) {
             self.refresh_model_usage();
         }
+        let mut intelligence_changed = false;
         for outcome in self.jobs.drain() {
+            intelligence_changed |= matches!(
+                &outcome,
+                Outcome::Status { .. }
+                    | Outcome::Ini { .. }
+                    | Outcome::Logs { .. }
+                    | Outcome::ModelInspection(_)
+                    | Outcome::Catalog { .. }
+                    | Outcome::Auto(_)
+            );
             self.library_state.invalidate();
             let current = self.view.target.clone();
             let ours = |t: &Path| current.as_deref() == Some(t);
@@ -151,11 +167,39 @@ impl RetoqueApp {
                 Outcome::HistoryWritten(Err(error)) => {
                     self.toast(self.tr("undo.save_failed").into(), Some(error), true)
                 }
+                Outcome::Doctor(assessment) => self.receive_assessment(*assessment),
+                Outcome::DoctorBadge {
+                    generation,
+                    target,
+                    count,
+                } if generation == self.library_generation && !ours(&target) => {
+                    self.doctor_badges.insert(target, count);
+                }
+                Outcome::Watch { target, result, .. } => self.receive_watch(target, result),
                 Outcome::Payload(path, result) if self.payload.as_ref() == Some(&path) => {
                     self.payload_build = Some(result)
                 }
                 Outcome::Library(generation, path, status) if generation == self.library_generation => {
                     if self.view.target.as_ref() != Some(&path) || self.view.status.is_none() {
+                        let target = path.clone();
+                        let inspected = status.clone();
+                        self.jobs.submit(
+                            crate::jobs::Lane::Fast,
+                            false,
+                            "library-doctor",
+                            Some(target.clone()),
+                            move |_| {
+                                // Status only checks the adjacent model; it cannot prove an explicit ModelFile missing.
+                                let unknown_model = retoque_data::doctor::ModelInspection::default();
+                                let mut inputs = retoque_data::doctor::Inputs::new(&inspected);
+                                inputs.model = Some(&unknown_model);
+                                Outcome::DoctorBadge {
+                                    generation,
+                                    target,
+                                    count: retoque_data::doctor::diagnose(&inputs).len(),
+                                }
+                            },
+                        );
                         self.library_state.status.insert(path, *status);
                     }
                 }
@@ -262,6 +306,7 @@ impl RetoqueApp {
                 } => {
                     self.finish_compound_history(&target, result.is_ok());
                     // The folder is free again whether or not the user is still looking at it.
+                    self.jobs.end_write(&target);
                     self.writing.remove(&target);
                     self.write_kinds.remove(&target);
                     let game_name = self
@@ -305,7 +350,15 @@ impl RetoqueApp {
                         self.rescan();
                     }
                 }
-                Outcome::Logs { target, files, result } if ours(&target) => {
+                Outcome::Logs {
+                    latest,
+                    target,
+                    files,
+                    result,
+                } if ours(&target) => {
+                    if latest {
+                        self.view.intelligence.latest_log = result.as_ref().ok().and_then(|s| s.as_ref()).cloned();
+                    }
                     self.view.logs = Some((files, result));
                 }
                 Outcome::Bundle { target, result } if ours(&target) => {
@@ -351,9 +404,12 @@ impl RetoqueApp {
                         }
                     }
                     // A write that died part-way may have changed the folder: release it and read it again.
-                    if let Some(t) = target {
+                    if matches!(job, "apply" | "autotune-apply")
+                        && let Some(t) = target
+                    {
                         self.finish_compound_history(&t, false);
                         self.tuning.writes.remove(&t);
+                        self.jobs.end_write(&t);
                         self.writing.remove(&t);
                         self.write_kinds.remove(&t);
                         if ours(&t) {
@@ -364,6 +420,9 @@ impl RetoqueApp {
                 // A result for a folder the user has left.
                 _ => {}
             }
+        }
+        if intelligence_changed {
+            self.refresh_intelligence();
         }
     }
 
@@ -490,6 +549,16 @@ impl RetoqueApp {
             match command {
                 AppCommand::SelectGame(id) => self.select_game(id),
                 AppCommand::UndoSettings(target) => self.start_undo(target),
+                AppCommand::PrepareRepair(target, repair) => self.prepare_repair(target, repair),
+                AppCommand::RefreshSelected => {
+                    if let Some(target) = self.view.target.clone()
+                        && !self.busy()
+                    {
+                        self.jobs.watch(Some(target.clone()));
+                        self.load_target(target.clone());
+                        self.compare.invalidate_captures(&target);
+                    }
+                }
                 AppCommand::RequestPlan(target, kind, inputs) => {
                     if self.view.target.as_ref() == Some(&target) {
                         self.start_plan(kind, inputs);
@@ -533,6 +602,7 @@ impl RetoqueApp {
                         self.jobs.spawn("logs", None, move |_| match selected {
                             None => model::logs(target),
                             Some(path) => Outcome::Logs {
+                                latest: false,
                                 target,
                                 files,
                                 result: retoque_data::logs::summarize(&path).map(Some).map_err(AppError::from),

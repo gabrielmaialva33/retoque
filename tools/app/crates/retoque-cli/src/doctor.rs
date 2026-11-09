@@ -168,7 +168,10 @@ fn show(findings: &[doctor::Finding], json: bool) -> Result<(), Error> {
             }
         }
     }
-    if !findings.is_empty() {
+    if crate::output::failed() {
+        std::process::exit(1);
+    }
+    if !findings.is_empty() && !crate::output::broken_pipe() {
         std::process::exit(6);
     }
     Ok(())
