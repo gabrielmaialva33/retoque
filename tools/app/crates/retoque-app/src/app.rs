@@ -86,6 +86,7 @@ pub(crate) struct GameView {
 }
 
 pub struct RetoqueApp {
+    pub(crate) intuitive: crate::intuitive::State,
     // The before/after viewer keeps its decoded images and view transform across frames.
     pub(crate) compare: crate::compare::CompareView,
     pub(crate) saved: Saved,
@@ -144,6 +145,10 @@ impl RetoqueApp {
         let payload = model::find_payload().or_else(|| saved.payload.clone().filter(|p| model::is_payload(p)));
         let (cmd_tx, cmd_rx) = CommandSender::channel();
         let mut app = RetoqueApp {
+            intuitive: crate::intuitive::State {
+                history_root: crate::history::default_root(),
+                ..Default::default()
+            },
             drafts: HashMap::new(),
             context: cc.egui_ctx.clone(),
             cmd_tx,
@@ -212,6 +217,7 @@ impl RetoqueApp {
 impl eframe::App for RetoqueApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.receive();
+        self.global_drop_input(ui.ctx());
         self.shell_shortcuts(ui.ctx());
         if ui.ctx().input(|i| i.viewport().close_requested()) && !self.writing.is_empty() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -265,6 +271,8 @@ impl eframe::App for RetoqueApp {
         self.folders_dialog(ui.ctx());
         self.show_toasts(ui.ctx());
         self.show_process_notice(ui.ctx());
+        self.palette_sheet(ui.ctx());
+        self.drop_sheet(ui.ctx());
         self.handle_commands();
     }
 

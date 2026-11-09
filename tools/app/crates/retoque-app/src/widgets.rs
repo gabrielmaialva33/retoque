@@ -105,6 +105,9 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
                 );
             }
             response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Tab, true, selected, *label));
+            if let Some((_, _, shortcut)) = crate::modals::palette::TABS.get(i) {
+                response.clone().on_hover_text(*shortcut);
+            }
             if response.clicked() {
                 clicked = Some(i);
             }

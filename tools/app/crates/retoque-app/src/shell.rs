@@ -34,6 +34,10 @@ impl RetoqueApp {
                         if self.lang != before {
                             self.saved.lang = Some(self.lang);
                         }
+                    })
+                    .response
+                    .widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "palette.language"))
                     });
                 if ui
                     .add_enabled(!self.scanning, egui::Button::new(self.tr("app.refresh")))
@@ -44,6 +48,13 @@ impl RetoqueApp {
                     if let Some(t) = t {
                         self.load_target(t);
                     }
+                }
+                if ui
+                    .button(self.tr("palette.title"))
+                    .on_hover_text("Ctrl+K · Ctrl+P")
+                    .clicked()
+                {
+                    self.intuitive.palette.open(ui.ctx());
                 }
                 if self.jobs.busy() || self.library_pending {
                     ui.spinner();
@@ -216,7 +227,8 @@ impl RetoqueApp {
                 Tab::Install => self.install_tab(ui),
                 Tab::Settings => {
                     let mut edits = std::mem::take(&mut self.view.edits);
-                    self.settings_tab(ui, &mut edits, &self.cmd_tx);
+                    let commands = self.cmd_tx.clone();
+                    self.settings_tab(ui, &mut edits, &commands);
                     self.view.edits = edits;
                 }
                 Tab::Model => {
@@ -281,6 +293,7 @@ impl RetoqueApp {
                 .desired_width(f32::INFINITY),
         );
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::TextInput, true, t(self.lang, "lib.search")));
+        response.clone().on_hover_text("/ · Ctrl+F");
         if self.focus_search {
             response.request_focus();
             self.focus_search = false;
@@ -288,7 +301,8 @@ impl RetoqueApp {
     }
 
     pub(crate) fn library_keyboard(&mut self, ui: &egui::Ui) {
-        if self.review_open || self.folder_dialog.is_some() {
+        if self.review_open || self.folder_dialog.is_some() || self.intuitive.palette.open || self.intuitive.drop.open()
+        {
             return;
         }
         let search_focus = ui.memory(|m| m.has_focus(egui::Id::unique("library_search")));

@@ -6,6 +6,7 @@ use crate::model::PlanKind;
 
 pub(crate) enum AppCommand {
     SelectGame(String),
+    UndoSettings(std::path::PathBuf),
     RequestPlan(std::path::PathBuf, PlanKind, PlanInputs),
     RescanLibrary,
     ConfirmReview(u64),
@@ -34,21 +35,23 @@ impl CommandSender {
     }
 }
 
-/// Stable actions for a future palette; labels share the ordinary UI's translations.
+/// Stable actions for the command palette; labels share the ordinary UI's translations.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaletteAction {
     RescanLibrary,
     ReviewInstall,
     ReviewUninstall,
     ReviewSettings,
+    UndoSettings,
 }
 
 impl PaletteAction {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::RescanLibrary,
         Self::ReviewInstall,
         Self::ReviewUninstall,
         Self::ReviewSettings,
+        Self::UndoSettings,
     ];
 
     pub fn label(self, lang: crate::i18n::Lang) -> &'static str {
@@ -59,6 +62,7 @@ impl PaletteAction {
                 Self::ReviewInstall => "kind.install",
                 Self::ReviewUninstall => "kind.uninstall",
                 Self::ReviewSettings => "kind.settings",
+                Self::UndoSettings => "undo.title",
             },
         )
     }

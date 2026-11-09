@@ -29,3 +29,10 @@ pub(crate) mod tabs;
 pub(crate) mod state;
 
 pub mod error;
+
+pub(crate) mod drop_import;
+pub(crate) mod fuzzy;
+pub(crate) mod history;
+pub(crate) mod intuitive;
+#[cfg(test)]
+mod intuitive_tests;

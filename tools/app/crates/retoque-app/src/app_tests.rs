@@ -35,7 +35,7 @@ mod tests {
     }
 }
 #[cfg(test)]
-mod shell_tests {
+pub(crate) mod shell_tests {
     use super::*;
     use egui_kittest::{
         Harness,
@@ -56,6 +56,7 @@ mod shell_tests {
         let context = egui::Context::default();
         let (cmd_tx, cmd_rx) = CommandSender::channel();
         RetoqueApp {
+            intuitive: Default::default(),
             tuning: crate::autotune::UiState::default(),
             folder_dialog: None,
             folder_focus: None,
@@ -491,7 +492,7 @@ mod tab_content_tests {
     }
 }
 
-mod measurements {
+pub(crate) mod measurements {
     use super::*;
     use std::{
         alloc::{GlobalAlloc, Layout, System},
@@ -528,7 +529,7 @@ mod measurements {
     }
     #[global_allocator]
     static ALLOCATOR: Counter = Counter;
-    fn measure(name: &str, repeats: usize, mut f: impl FnMut()) -> usize {
+    pub(crate) fn measure(name: &str, repeats: usize, mut f: impl FnMut()) -> usize {
         f();
         ALLOCATIONS.with(|n| n.set(0));
         COUNTING.with(|enabled| enabled.set(true));
@@ -619,11 +620,11 @@ mod measurements {
         app.view.ini = Some(Ok(Some(ini)));
         let mut h = egui_kittest::Harness::builder()
             .with_size([1200., 900.])
-            .with_accessibility_check(false)
+            .with_accessibility_check(true)
             .build_ui_state(
                 |ui, app: &mut RetoqueApp| {
                     let mut edits = std::mem::take(&mut app.view.edits);
-                    app.settings_tab(ui, &mut edits, &app.cmd_tx);
+                    app.settings_tab(ui, &mut edits, &app.cmd_tx.clone());
                     app.view.edits = edits;
                 },
                 app,
