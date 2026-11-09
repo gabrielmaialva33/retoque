@@ -24,6 +24,9 @@ Cases:
 - a case variant of the proxy name (`DXGI.DLL`) refused;
 - a Python child that mmaps the installed `dxgi.dll` stands in for a running game: deploy, uninstall
   and dry run all refuse (exit 3), name its pid, and change nothing;
+- a pending app journal (`.retoque/pending-receipt.txt`) refuses install, uninstall and both dry runs
+  with exit 1 and recovery instructions, leaving all state intact; also covers an empty journal, a missing
+  base receipt, a directory and a dangling link at the journal name;
 - `--dry-run` writes nothing, for a fresh install, for Keep-ReShade and for `--uninstall`;
 - a failure injected after the second step (`RETOQUE_DEPLOY_TEST_FAIL_AFTER_STEP`) leaves a receipt
   marked `partial` listing exactly the two files written; `--uninstall` from it empties the directory,
@@ -51,3 +54,12 @@ Linux process mapping a file, which is the mechanism the check reads. Pure Pytho
 ```bash
 python3 tests/deploy-safety/run.py
 ```
+
+The same cases can test the Rust CLI with `--impl /path/to/retoque`, or
+`RETOQUE_DEPLOY_IMPL=/path/to/retoque`. Flags are mapped to its install/uninstall subcommands. The release-wrapper
+case then exercises executable-relative payload discovery; shellcheck continues checking the Bash source.
+Default invocation still tests the original Bash script.
+
+The pending-app-journal refusal case always invokes Bash, including with `--impl`: the core is the recovery
+consumer, whereas the legacy scripts must refuse. Real Rust-crash cross-script coverage is in
+[app-install-parity](../app-install-parity/README.md).

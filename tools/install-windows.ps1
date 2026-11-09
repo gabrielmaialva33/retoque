@@ -1113,6 +1113,12 @@ function Invoke-Main {
     $script:StateDir = [IO.Path]::Combine($full, '.retoque')
     $script:ReceiptPath = [IO.Path]::Combine($script:StateDir, 'receipt.txt')
 
+    # The app's write-ahead intent is not part of this script's v1 receipt. Test the entry itself,
+    # including a directory or dangling link; never parse or remove it, even during a dry run.
+    if (Test-Entry '.retoque/pending-receipt.txt') {
+        Stop-Run 1 "An interrupted Retoque app operation must be recovered with the app or 'retoque' first; nothing was written."
+    }
+
     if ($Uninstall) { Invoke-Uninstall } else { Invoke-Deploy }
 }
 

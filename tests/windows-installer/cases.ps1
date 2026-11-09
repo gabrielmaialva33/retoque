@@ -132,7 +132,9 @@ function Get-Snapshot([string]$Dir) {
     if (Test-Path -LiteralPath $Dir) {
         foreach ($item in @(Get-ChildItem -LiteralPath $Dir -Recurse -Force)) {
             $rel = $item.FullName.Substring($Dir.Length + 1)
-            $snap[$rel] = if ($item.PSIsContainer) { 'dir' } else { 'file ' + (Get-Sha $item.FullName) }
+            $snap[$rel] = if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                'link ' + $item.Target
+            } elseif ($item.PSIsContainer) { 'dir' } else { 'file ' + (Get-Sha $item.FullName) }
         }
     }
     return , $snap
@@ -609,6 +611,38 @@ Add-Case 'file_in_use_refused_by_the_exclusive_open' {
     # Compared once the handle is gone: under the emulation this process cannot read what it holds either.
     Expect-Unchanged $before $game 'four refused runs while dxgi.dll was held'
     Uninstall-Ok $game | Out-Null
+}
+
+Add-Case 'pending_app_journal_refuses_every_operation' {
+    param($tmp)
+    $src = New-Src $tmp 'pending' -NoSupport
+    foreach ($kind in @('file', 'empty', 'without-base', 'directory', 'dangling-link')) {
+        $game = New-Game $tmp @{ 'ReShade64.dll' = $ReShade } "game [$kind]"
+        $state = Join-Path $game '.retoque'
+        [void][IO.Directory]::CreateDirectory($state)
+        if ($kind -ne 'without-base') {
+            [IO.File]::WriteAllText((Join-Path $state 'receipt.txt'), "version`t1`nstatus`tpartial`nproxy`tdxgi.dll`n")
+        }
+        $pending = Join-Path $state 'pending-receipt.txt'
+        if ($kind -eq 'directory') {
+            [void][IO.Directory]::CreateDirectory($pending)
+        } elseif ($kind -eq 'dangling-link') {
+            [void][IO.File]::CreateSymbolicLink($pending, (Join-Path $tmp 'missing'))
+        } else {
+            [IO.File]::WriteAllText($pending, $(if ($kind -eq 'empty') { '' } else { 'opaque app intent; do not parse or delete' }))
+        }
+        $before = Get-Snapshot $game
+        foreach ($mode in @('install', 'uninstall', 'install-dry', 'uninstall-dry')) {
+            $flags = @()
+            if ($mode.StartsWith('uninstall')) { $flags += '-Uninstall' }
+            if ($mode.EndsWith('-dry')) { $flags += '-DryRun' }
+            $r = Invoke-Installer $game $flags -Src $src
+            Expect ($r.Code -eq 1) "pending $kind / $mode must refuse with exit 1"
+            $message = $r.Out + $r.Err
+            Expect ($message.Contains('interrupted Retoque app operation') -and $message.Contains("app or 'retoque' first")) 'explain app recovery before scripts'
+            Expect-Unchanged $before $game "pending $kind / $mode writes nothing"
+        }
+    }
 }
 
 Add-Case 'dry_run_writes_nothing' {

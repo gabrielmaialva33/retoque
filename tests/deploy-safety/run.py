@@ -8,6 +8,7 @@ No Wine, no game, no build: the script is always pointed at fake sources with --
 never reach build-local.sh.
 """
 from pathlib import Path
+import argparse
 import hashlib
 import os
 import shutil
@@ -18,6 +19,15 @@ import tempfile
 REPO = Path(__file__).resolve().parents[2]
 SCRIPT = REPO / 'tools' / 'deploy-to-game.sh'
 SHIPPED_INI = REPO / 'OptiScaler.ini'
+IMPL = os.environ.get('RETOQUE_DEPLOY_IMPL')
+
+
+def command(args):
+    if not IMPL:
+        return ['bash', str(SCRIPT), *args]
+    uninstall = '--uninstall' in args
+    flags = [a for a in args if a != '--uninstall' and (not uninstall or a != '--no-nvngx')]
+    return [IMPL, 'uninstall' if uninstall else 'install', *flags]
 
 # The markers mirror a real build: OptiScaler carries CheckWorkingMode's line and also names
 # ReShade64.dll and the forwarder's exports, which is exactly what must not make it look like ReShade.
@@ -55,16 +65,17 @@ def sha(path):
 last_run = []
 
 
-def run(game, *args, src=None, env_extra=None, proxy=None):
+def run(game, *args, src=None, env_extra=None, proxy=None, legacy=False):
     """The script as it is invoked by hand: options, the game directory, then the optional proxy name.
     --source-dir is added when given; the result is kept for the failure report."""
     env = {k: v for k, v in os.environ.items() if not k.startswith('RETOQUE_DEPLOY_')}
     env.update(env_extra or {})
-    cmd = ['bash', str(SCRIPT), '--no-nvngx']
+    cmd = ['--no-nvngx']
     if src is not None:
         cmd += ['--source-dir', str(src)]
     cmd += [*args, str(game)] + ([proxy] if proxy else [])
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=60)
+    invocation = ['bash', str(SCRIPT), *cmd] if legacy else command(cmd)
+    result = subprocess.run(invocation, capture_output=True, text=True, env=env, timeout=60)
     last_run.append(result)
     return result
 
@@ -570,7 +581,7 @@ def driver_copy_refusal_and_uninstall(tmp):
     env = {'RETOQUE_DEPLOY_TEST_NVNGX': str(driver)}
     game = make_game(tmp)
     def install(*flags):
-        r = subprocess.run(['bash', str(SCRIPT), '--source-dir', str(src), *flags, str(game)],
+        r = subprocess.run(command(['--source-dir', str(src), *flags, str(game)]),
                            env={**os.environ, **env}, capture_output=True, text=True)
         last_run.append(r)
         return r
@@ -599,7 +610,14 @@ def release_wrapper_passthrough(tmp):
         shutil.copyfile(REPO / 'tools' / name, src / name)
     (src / 'OptiScaler.ini').write_text('[DlssNr]\nEnabled=auto\n')
     game = make_game(tmp)
-    r = subprocess.run(['bash', str(src / 'install-linux.sh'), '--no-nvngx', '--enable-nr', str(game)],
+    if IMPL:
+        # A release CLI finds payload beside itself when launched outside the checkout.
+        release_cli = src / 'retoque'
+        shutil.copy2(IMPL, release_cli)
+        cmd = [str(release_cli), 'install', '--no-nvngx', '--enable-nr', str(game)]
+    else:
+        cmd = ['bash', str(src / 'install-linux.sh'), '--no-nvngx', '--enable-nr', str(game)]
+    r = subprocess.run(cmd,
                        cwd=tmp, capture_output=True, text=True)
     last_run.append(r)
     expect(r.returncode == 0, 'wrapper works outside repo with flags')
@@ -702,7 +720,42 @@ def shellcheck_clean(tmp):
     expect(result.returncode == 0, 'shellcheck reports warnings')
 
 
+@case
+def pending_app_journal_refuses_every_legacy_operation(tmp):
+    # The Rust consumer reconciles intents; this case always checks the legacy Bash consumer,
+    # including when this suite otherwise uses --impl to exercise Rust.
+    src = make_src(tmp, 'pending')
+    for kind in ('file', 'empty', 'without-base', 'directory', 'dangling-link'):
+        root = tmp / kind
+        root.mkdir()
+        game = make_game(root, {'ReShade64.dll': RESHADE})
+        state = game / '.retoque'
+        state.mkdir()
+        if kind != 'without-base':
+            (state / 'receipt.txt').write_text('version\t1\nstatus\tpartial\nproxy\tdxgi.dll\n')
+        pending = state / 'pending-receipt.txt'
+        if kind == 'directory':
+            pending.mkdir()
+        elif kind == 'dangling-link':
+            pending.symlink_to(root / 'missing')
+        else:
+            pending.write_bytes(b'' if kind == 'empty' else b'opaque app intent; do not parse or delete')
+        before = snapshot(game)
+        for flags in ((), ('--uninstall',), ('--dry-run',), ('--uninstall', '--dry-run')):
+            result = run(game, *flags, src=src, legacy=True)
+            expect(result.returncode == 1, f'pending {kind}: {flags} must refuse with exit 1')
+            message = (result.stdout + result.stderr).lower()
+            expect('interrupted retoque app operation' in message and "app or 'retoque' first" in message,
+                   'tell the user how to recover the pending app operation')
+            expect(snapshot(game) == before, f'pending {kind}: {flags} must write nothing')
+
+
 def main():
+    global IMPL
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--impl', help='retoque CLI to test in place of the bash implementation')
+    args = parser.parse_args()
+    IMPL = str(Path(args.impl or IMPL).resolve()) if args.impl or IMPL else None
     failed = []
     for fn in CASES:
         last_run.clear()
