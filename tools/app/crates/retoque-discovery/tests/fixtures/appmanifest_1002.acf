@@ -1,0 +1,13 @@
+"AppState"
+{
+	"appid"		"1002"
+	"Universe"		"1"
+	"name"		"Tux Racer Extreme"
+	"StateFlags"		"4"
+	"installdir"		"TuxRacer"
+	"LastUpdated"		"1700000100"
+	"SizeOnDisk"		"25000000"
+	"UserConfig"
+	{
+	}
+}

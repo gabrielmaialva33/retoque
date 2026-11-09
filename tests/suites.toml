@@ -1168,3 +1168,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 600
 summary = "Vulkan pre-upscale rules, composite identities, canonical tickets and production scope with fake prepare/SR; compiling mutants, no GPU qualification."
+
+[app-install-parity]
+path = "app-install-parity"
+domain = "platform"
+requires = ["python", "cargo"]
+tier = "host"
+timeout = 600
+summary = "Rust installer CLI against the deploy-safety synthetic fixtures and receipt reversibility cases."

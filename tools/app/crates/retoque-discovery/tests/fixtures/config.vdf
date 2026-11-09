@@ -1,0 +1,27 @@
+"InstallConfigStore"
+{
+	"Software"
+	{
+		"Valve"
+		{
+			"Steam"
+			{
+				"CompatToolMapping"
+				{
+					"1001"
+					{
+						"name"		"GE-Proton10-1"
+						"config"		""
+						"priority"		"250"
+					}
+					"1002"
+					{
+						"name"		"SteamLinuxRuntime_sniper"
+						"config"		""
+						"priority"		"250"
+					}
+				}
+			}
+		}
+	}
+}

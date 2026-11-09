@@ -1,0 +1,9 @@
+{
+  "FormatVersion": 0,
+  "bIsIncompleteInstall": false,
+  "AppName": "NebulaNine",
+  "DisplayName": "Nebula Nine",
+  "InstallLocation": "C:\\Games\\Epic\\NebulaNine",
+  "LaunchExecutable": "Nebula/Binaries/Win64/NebulaNine-Win64-Shipping.exe",
+  "MainGameAppName": "NebulaNine"
+}

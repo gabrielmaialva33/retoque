@@ -1,0 +1,27 @@
+"libraryfolders"
+{
+	"0"
+	{
+		"path"		"/opt/steam-main"
+		"label"		""
+		"contentid"		"1111111111111111111"
+		"totalsize"		"0"
+		"apps"
+		{
+			"1001"		"50000000"
+			"1493710"		"1000000"
+			"228980"		"500000"
+		}
+	}
+	"1"
+	{
+		"path"		"/mnt/fast/SteamLibrary"
+		"label"		"FastNVMe"
+		"contentid"		"2222222222222222222"
+		"totalsize"		"1000000000"
+		"apps"
+		{
+			"1002"		"25000000"
+		}
+	}
+}

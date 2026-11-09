@@ -1,0 +1,11 @@
+{
+  "CypressApp": {
+    "winePrefix": "/opt/prefixes/heroic/CypressOdyssey",
+    "wineVersion": {
+      "bin": "/opt/wine/bin/wine",
+      "name": "Wine-GE-Latest",
+      "type": "wine"
+    }
+  },
+  "version": "v0"
+}

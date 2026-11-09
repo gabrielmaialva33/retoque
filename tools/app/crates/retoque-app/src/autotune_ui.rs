@@ -1,0 +1,594 @@
+//! GPU recommendations and reviewed frame-generation operations in the existing shell.
+use super::*;
+use crate::autotune::{
+    self, ComponentChange, Event, Request,
+    components::ComponentKind,
+    gpu::Arch,
+    lsfg::LsfgReadiness,
+    recommend::{self, Action, GameFacts, Need},
+};
+
+impl RetoqueApp {
+    pub(super) fn autotune_start(&mut self) {
+        self.jobs.spawn("autotune-environment", None, |_| {
+            Outcome::Auto(Box::new(autotune::environment()))
+        });
+        self.autotune_catalog(None, None);
+    }
+    pub(super) fn autotune_catalog(&mut self, import: Option<PathBuf>, remove: Option<String>) {
+        self.tuning.catalog = None;
+        self.jobs.spawn("autotune-catalog", None, move |_| {
+            Outcome::Auto(Box::new(autotune::catalog(import, remove)))
+        });
+    }
+    pub(super) fn autotune_refresh(&mut self, target: PathBuf) {
+        self.tuning.facts_generation += 1;
+        let generation = self.tuning.facts_generation;
+        self.tuning.installed = None;
+        self.tuning.readiness = None;
+        let dir = self.saved.lossless_dir.clone();
+        self.jobs.spawn("autotune-facts", None, move |_| {
+            Outcome::Auto(Box::new(autotune::facts(target, generation, dir)))
+        });
+    }
+    pub(super) fn autotune_event(&mut self, event: Event) {
+        match event {
+            Event::Environment { gpus, lossless } => {
+                self.tuning.gpus = Some(gpus);
+                self.tuning.detected_lossless = lossless;
+            }
+            Event::Catalog(result) => self.tuning.catalog = Some(result),
+            Event::Facts {
+                target,
+                generation,
+                installed,
+                lossless,
+                readiness,
+            } if self.view.target.as_ref() == Some(&target) && generation == self.tuning.facts_generation => {
+                self.tuning.installed = Some(installed);
+                self.tuning.lossless = lossless;
+                self.tuning.readiness = Some(readiness);
+            }
+            Event::Plan {
+                target,
+                request,
+                result,
+            } if self.view.target.as_ref() == Some(&target) && request == self.tuning.request => {
+                self.tuning.review = Some((self.tuning.review_title.clone(), result));
+            }
+            _ => {}
+        }
+    }
+    pub(super) fn autotune_gpu(&self, ui: &mut egui::Ui) {
+        let Some(gpus) = &self.tuning.gpus else {
+            ui.add(egui::Label::new(self.tr("auto.gpu_reading")).wrap());
+            return;
+        };
+        let Some(gpu) = gpus.first() else {
+            ui.label(RichText::new(self.tr("auto.gpu_unknown")).small().color(theme::MUTED));
+            return;
+        };
+        let arch = self.tr(match gpu.arch {
+            Arch::Turing => "auto.turing",
+            Arch::Ampere => "auto.ampere",
+            Arch::Ada => "auto.ada",
+            Arch::Blackwell => "auto.blackwell",
+            Arch::OlderNvidia => "auto.older",
+            Arch::NotNvidia => "auto.other",
+            Arch::Unknown => "auto.unknown",
+        });
+        let memory = gpu
+            .vram_mib
+            .map(|m| format!(" · {:.0} {}", m as f64 / 1024., self.tr("auto.gb")))
+            .unwrap_or_default();
+        let response = ui.label(
+            RichText::new(format!("{} · {arch}{memory}", gpu.name))
+                .small()
+                .color(theme::MUTED),
+        );
+        if let Some(driver) = &gpu.driver {
+            response.on_hover_text(format!("{} {driver}", self.tr("auto.driver")));
+        }
+    }
+    fn autotune_game_facts(&self) -> GameFacts {
+        // One fact builder for the CLI and the window (retoque-data::recommend::facts_for_with_ini), fed with what the
+        // view already holds: no disk reads on the UI thread.
+        let status = self.view.status.as_ref().and_then(|r| r.as_ref().ok());
+        let ini = self
+            .view
+            .ini
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .and_then(|i| i.as_ref());
+        let components: Vec<String> = self
+            .tuning
+            .installed
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .cloned()
+            .unwrap_or_default();
+        if let Some(game) = self.selected_game()
+            && let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref())
+        {
+            return recommend::facts_for_with_ini(game, target, status, &components, ini);
+        }
+        // A folder the library does not list (added by path, or a stale selection): what the status and the ini say.
+        let tracked = status.is_some_and(|s| s.receipt.is_some());
+        let proxies = status.is_some_and(|s| !s.optiscaler_proxies.is_empty());
+        let lsfg_enabled =
+            ini.and_then(|i| i.get("LSFG", "Enabled"))
+                .and_then(|v| match v.to_ascii_lowercase().as_str() {
+                    "true" => Some(true),
+                    "false" => Some(false),
+                    _ => None,
+                });
+        GameFacts {
+            installed: tracked || proxies,
+            untracked: !tracked && proxies,
+            sm86_installed: !components.is_empty(),
+            lsfg_enabled,
+            ..GameFacts::default()
+        }
+    }
+    fn autotune_ready(&self) -> bool {
+        matches!(self.tuning.readiness, Some(LsfgReadiness::Ready))
+    }
+    fn autotune_known_components(&self) -> bool {
+        matches!(self.tuning.installed, Some(Ok(_)))
+    }
+    fn autotune_choose_lossless(&mut self) {
+        if let Some(path) = rfd::FileDialog::new().pick_folder() {
+            self.saved.lossless_dir = Some(path);
+            if let Some(target) = self.view.target.clone() {
+                self.autotune_refresh(target);
+            }
+        }
+    }
+    fn autotune_readiness(&mut self, ui: &mut egui::Ui) {
+        match &self.tuning.readiness {
+            Some(LsfgReadiness::Ready) => {
+                ui.colored_label(theme::GOOD, self.tr("auto.ls_ready"));
+            }
+            Some(LsfgReadiness::NeedsShaderCache { hint }) => {
+                ui.colored_label(theme::WARN, self.tr("auto.ls_shaders"));
+                if hint.starts_with("From the Retoque source checkout, run:") {
+                    ui.add(egui::Label::new(self.tr("auto.shader_hint")).wrap());
+                } else {
+                    ui.add(egui::Label::new(diagnostic(self.lang, hint)).wrap());
+                }
+            }
+            Some(LsfgReadiness::NoLosslessScaling) => {
+                ui.colored_label(theme::WARN, self.tr("auto.ls_missing"));
+            }
+            None => {
+                ui.spinner();
+                ui.add(egui::Label::new(self.tr("auto.ls_checking")).wrap());
+            }
+        }
+        if let Some(dir) = &self.tuning.lossless {
+            ui.label(RichText::new(short_path(dir)).small())
+                .on_hover_text(dir.display().to_string());
+        }
+        if ui.button(self.tr("auto.choose_lossless")).clicked() {
+            self.autotune_choose_lossless();
+        }
+    }
+    pub(super) fn autotune_card(&mut self, ui: &mut egui::Ui) {
+        // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
+        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("auto.title"));
+            self.nr_compatibility_notice(ui);
+            let facts = self.autotune_game_facts();
+            if self.tuning.gpus.is_none() || self.view.status.is_none() || !self.autotune_known_components() {
+                ui.add(egui::Label::new(self.tr("auto.checking")).wrap());
+                if let Some(Err(e)) = &self.tuning.installed {
+                    ui.colored_label(theme::BAD, e);
+                }
+                return;
+            }
+            let recs = recommend::recommend(self.tuning.gpus.as_ref().and_then(|g| g.first()), &facts);
+            if recs.is_empty() {
+                ui.add(egui::Label::new(self.tr("auto.none")).wrap());
+            }
+            for rec in recs {
+                ui.push_id(rec.id, |ui| {
+                    ui.label(RichText::new(t(self.lang, rec.title_key)).strong());
+                    ui.add(egui::Label::new(t(self.lang, rec.why_key)).wrap());
+                    let mut ready = !self.busy();
+                    match &rec.needs {
+                        Some(Need::RetoqueInstalled) => {
+                            ui.add(egui::Label::new(self.tr("auto.need_install")).wrap());
+                            if ui
+                                .add_enabled(
+                                    self.install_inputs().is_some() && !self.busy(),
+                                    theme::primary(self.tr("auto.prepare_install")),
+                                )
+                                .clicked()
+                                && let Some(options) = self.install_inputs()
+                            {
+                                self.request_plan(PlanKind::Install, PlanInputs::Install(options));
+                            }
+                            return;
+                        }
+                        Some(Need::Component(_)) => {
+                            ready &= self.autotune_component_picker(ui);
+                        }
+                        Some(Need::LosslessScaling) => {
+                            self.autotune_readiness(ui);
+                            ready &= self.autotune_ready();
+                        }
+                        None => {}
+                    }
+                    if ui.add_enabled(ready, theme::primary(self.tr("auto.apply"))).clicked() {
+                        let mut request = Request::default();
+                        for action in rec.actions {
+                            match action {
+                                Action::SetIni { section, key, value } => request.edits.push((section, key, value)),
+                                Action::InstallComponent(ComponentKind::DlssgSm86) => {
+                                    if let Some(c) = self.autotune_selected_component() {
+                                        request.component = Some(ComponentChange::Install(c));
+                                    }
+                                }
+                                Action::RemoveComponent(ComponentKind::DlssgSm86) => {
+                                    if let Some(id) = self
+                                        .tuning
+                                        .installed
+                                        .as_ref()
+                                        .and_then(|r| r.as_ref().ok())
+                                        .and_then(|ids| ids.first())
+                                    {
+                                        request.component = Some(ComponentChange::Remove(id.clone()));
+                                    }
+                                }
+                            }
+                        }
+                        if rec.id == "lsfg_x2" {
+                            request.edits = self.autotune_lsfg_edits(2, &facts);
+                        }
+                        self.autotune_request(t(self.lang, rec.title_key).into(), request);
+                    }
+                    ui.add_space(8.0);
+                });
+            }
+        });
+    }
+    fn autotune_lsfg_edits(&self, multiplier: u8, facts: &GameFacts) -> Vec<Edit> {
+        let wine = matches!(
+            self.selected_game().map(|g| &g.runtime),
+            Some(Runtime::Wine { .. } | Runtime::Proton { .. })
+        );
+        let mut edits = recommend::lsfg_edits(multiplier, self.tuning.lossless.as_deref(), wine);
+        edits.extend(recommend::lsfg_input_edits(facts));
+        edits
+    }
+    pub(super) fn autotune_lsfg(&mut self, ui: &mut egui::Ui) {
+        // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
+        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
+        ui.add_space(12.0);
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("auto.lsfg"));
+            ui.add(egui::Label::new(self.tr("auto.ls_help")).wrap());
+            let facts = self.autotune_game_facts();
+            let ini = self
+                .view
+                .ini
+                .as_ref()
+                .and_then(|r| r.as_ref().ok())
+                .and_then(|i| i.as_ref());
+            let current = if facts.lsfg_enabled == Some(true) {
+                ini.and_then(|i| i.get("LSFG", "Multiplier"))
+                    .and_then(|s| s.parse::<u8>().ok())
+                    .unwrap_or(2)
+            } else {
+                0
+            };
+            let can_on = self.autotune_ready() && self.autotune_known_components() && !facts.sm86_installed;
+            ui.horizontal_wrapped(|ui| {
+                for (value, key) in [(0, "auto.off"), (2, "auto.x2"), (3, "auto.x3"), (4, "auto.x4")] {
+                    if ui
+                        .add_enabled(
+                            facts.installed && !self.busy() && (value == 0 || can_on),
+                            egui::Button::new(self.tr(key)).selected(current == value),
+                        )
+                        .clicked()
+                    {
+                        let edits = if value == 0 {
+                            recommend::lsfg_off_edits()
+                        } else {
+                            self.autotune_lsfg_edits(value, &facts)
+                        };
+                        self.autotune_request(
+                            format!("{} · {}", self.tr("auto.lsfg"), self.tr(key)),
+                            Request { component: None, edits },
+                        );
+                    }
+                }
+            });
+            if !facts.installed {
+                ui.add(egui::Label::new(self.tr("auto.need_install")).wrap());
+            }
+            if facts.sm86_installed {
+                ui.colored_label(theme::WARN, self.tr("auto.ls_conflict"));
+            }
+            self.autotune_readiness(ui);
+        });
+    }
+    fn autotune_selected_component(&self) -> Option<autotune::components::Component> {
+        let items = self.tuning.catalog.as_ref()?.as_ref().ok()?;
+        items
+            .iter()
+            .find(|c| Some(&c.id) == self.tuning.selected_component.as_ref())
+            .or_else(|| items.first())
+            .cloned()
+    }
+    fn autotune_component_picker(&mut self, ui: &mut egui::Ui) -> bool {
+        let selected = self.autotune_selected_component();
+        if let Some(items) = self.tuning.catalog.as_ref().and_then(|r| r.as_ref().ok()) {
+            egui::ComboBox::from_id_salt("component_pick")
+                .selected_text(
+                    selected
+                        .as_ref()
+                        .map(|c| c.label.as_str())
+                        .unwrap_or(self.tr("auto.no_component")),
+                )
+                .show_ui(ui, |ui| {
+                    for c in items {
+                        ui.selectable_value(&mut self.tuning.selected_component, Some(c.id.clone()), &c.label);
+                    }
+                });
+        }
+        if selected.is_none() {
+            ui.add(egui::Label::new(self.tr("auto.import_help")).wrap());
+            if ui.button(self.tr("auto.import")).clicked()
+                && let Some(dir) = rfd::FileDialog::new().pick_folder()
+            {
+                self.autotune_catalog(Some(dir), None);
+            }
+        }
+        selected.is_some()
+    }
+    pub(super) fn autotune_components(&mut self, ui: &mut egui::Ui) {
+        // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
+        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("auto.components"));
+            ui.add(egui::Label::new(self.tr("auto.import_help")).wrap());
+            if ui.button(self.tr("auto.import")).clicked()
+                && let Some(dir) = rfd::FileDialog::new().pick_folder()
+            {
+                self.autotune_catalog(Some(dir), None);
+            }
+            match self.tuning.catalog.clone() {
+                None => {
+                    ui.spinner();
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(theme::BAD, e);
+                }
+                Some(Ok(items)) => {
+                    if items.is_empty() {
+                        ui.add(egui::Label::new(self.tr("auto.no_component")).wrap());
+                    }
+                    for c in items {
+                        ui.push_id(&c.id, |ui| {
+                            ui.label(
+                                RichText::new(format!(
+                                    "{} · {}",
+                                    c.label,
+                                    c.version.as_deref().unwrap_or(self.tr("mdl.version_unknown"))
+                                ))
+                                .strong(),
+                            );
+                            ui.label(RichText::new(short_path(&c.root)).small());
+                            let installed = self
+                                .tuning
+                                .installed
+                                .as_ref()
+                                .and_then(|r| r.as_ref().ok())
+                                .is_some_and(|ids| ids.contains(&c.id));
+                            let allowed = self.autotune_game_facts().installed
+                                && !self.busy()
+                                && self.autotune_known_components();
+                            ui.horizontal_wrapped(|ui| {
+                                if installed {
+                                    ui.colored_label(theme::GOOD, self.tr("auto.component_installed"));
+                                } else if ui
+                                    .add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")))
+                                    .clicked()
+                                {
+                                    self.autotune_request(
+                                        self.tr("auto.component_install").into(),
+                                        Request {
+                                            component: Some(ComponentChange::Install(c.clone())),
+                                            edits: recommend::lsfg_off_edits(),
+                                        },
+                                    );
+                                }
+                                if ui
+                                    .add_enabled(!self.jobs.busy(), egui::Button::new(self.tr("auto.catalog_remove")))
+                                    .clicked()
+                                {
+                                    self.autotune_catalog(None, Some(c.id.clone()));
+                                }
+                            });
+                        });
+                    }
+                }
+            }
+            match self.tuning.installed.clone() {
+                Some(Ok(ids)) => {
+                    if ids.is_empty() {
+                        ui.add(egui::Label::new(self.tr("auto.none_installed")).wrap());
+                    }
+                    for id in ids {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(format!(
+                                "{} · {}",
+                                self.tr("auto.component_installed"),
+                                &id[..id.len().min(12)]
+                            ));
+                            if ui
+                                .add_enabled(!self.busy(), egui::Button::new(self.tr("auto.component_remove")))
+                                .clicked()
+                            {
+                                self.autotune_request(
+                                    self.tr("auto.component_remove").into(),
+                                    Request {
+                                        component: Some(ComponentChange::Remove(id)),
+                                        edits: vec![],
+                                    },
+                                );
+                            }
+                        });
+                    }
+                }
+                Some(Err(e)) => {
+                    ui.colored_label(theme::BAD, e);
+                }
+                None => {
+                    ui.add(egui::Label::new(self.tr("auto.checking")).wrap());
+                }
+            }
+        });
+        ui.add_space(12.0);
+    }
+    fn autotune_request(&mut self, title: String, request: Request) {
+        let Some(target) = self.view.target.clone() else { return };
+        if self.busy() {
+            return;
+        }
+        self.next_request += 1;
+        let serial = self.next_request;
+        self.tuning.request = serial;
+        self.tuning.review = None;
+        self.tuning.review_title = title;
+        self.tuning.active = true;
+        self.review_open = true;
+        self.origin_focus = self.context.memory(|m| m.focused());
+        self.jobs.spawn("autotune-plan", None, move |_| {
+            Outcome::Auto(Box::new(Event::Plan {
+                result: autotune::prepare(&target, request),
+                target,
+                request: serial,
+            }))
+        });
+    }
+    pub(super) fn autotune_review(&mut self, ui: &mut egui::Ui) {
+        ui.heading(&self.tuning.review_title);
+        ui.add(egui::Label::new(self.tr("inst.plan")).wrap());
+        ui.add(egui::Label::new(self.tr("shell.review_note")).wrap());
+        let prepared = self.tuning.review.as_ref().map(|(_, r)| r.clone());
+        let mut can_apply = false;
+        match &prepared {
+            Some(Ok(p)) => {
+                egui::ScrollArea::vertical()
+                    .max_height((ui.ctx().content_rect().height() - 290.).max(160.))
+                    .show(ui, |ui| {
+                        for (index, plan) in p.plans.iter().enumerate() {
+                            for refusal in &plan.refusals {
+                                let (key, detail) = refusal_text(self.lang, refusal);
+                                ui.colored_label(theme::BAD, format!("{} {detail}", self.tr(key)));
+                            }
+                            for (group, key) in [
+                                "shell.add",
+                                "shell.replace",
+                                "shell.keep",
+                                "shell.remove",
+                                "shell.settings",
+                            ]
+                            .into_iter()
+                            .enumerate()
+                            {
+                                let steps: Vec<_> = plan
+                                    .steps
+                                    .iter()
+                                    .enumerate()
+                                    .filter(|(i, _)| p.groups[index][*i] == group)
+                                    .map(|(_, s)| s)
+                                    .collect();
+                                if steps.is_empty() {
+                                    continue;
+                                }
+                                ui.add_space(8.);
+                                ui.label(RichText::new(self.tr(key)).strong());
+                                for step in steps {
+                                    let (_, text, color) = step_text(self.lang, step);
+                                    ui.add(egui::Label::new(RichText::new(text).color(color)).wrap());
+                                }
+                            }
+                            for note in &plan.notes {
+                                ui.add(egui::Label::new(diagnostic(self.lang, note)).wrap());
+                            }
+                        }
+                    });
+                can_apply = !self.busy()
+                    && !p.plans.is_empty()
+                    && p.plans.iter().all(|p| p.refusals.is_empty())
+                    && p.plans.iter().any(|p| !p.steps.is_empty());
+                if p.plans.iter().all(|p| p.steps.is_empty()) {
+                    ui.add(egui::Label::new(self.tr("inst.nothing")).wrap());
+                }
+            }
+            Some(Err(e)) => {
+                ui.colored_label(theme::BAD, e);
+            }
+            None => {
+                ui.spinner();
+                ui.add(egui::Label::new(self.tr("shell.preparing")).wrap());
+            }
+        }
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            if ui.button(self.tr("cancel")).clicked() {
+                self.review_open = false;
+                self.restore_focus();
+            }
+            if ui
+                .add_enabled(can_apply, theme::primary(self.tr("auto.confirm")))
+                .clicked()
+                && let Some(Ok(p)) = prepared
+            {
+                self.autotune_apply(p);
+            }
+        });
+    }
+    fn autotune_apply(&mut self, p: autotune::Prepared) {
+        let target = p.target.clone();
+        if self.writing.contains_key(&target) || self.view.target.as_ref() != Some(&target) {
+            return;
+        }
+        let total = p.plans.iter().map(|p| p.steps.len()).sum();
+        self.writing.insert(target.clone(), (0, total));
+        self.write_kinds.insert(target.clone(), PlanKind::Settings);
+        self.tuning.writes.insert(target.clone());
+        self.review_open = false;
+        self.restore_focus();
+        let ctx = self.context.clone();
+        let lang = self.lang;
+        self.jobs.spawn("autotune-apply", Some(target.clone()), move |tx| {
+            let result = autotune::apply(&p, &mut |done| {
+                let _ = tx.send(Outcome::Progress {
+                    target: target.clone(),
+                    done,
+                });
+                ctx.request_repaint();
+            })
+            .map_err(|failure| {
+                format!(
+                    "{} {}/{}: {}",
+                    t(lang, "auto.partial"),
+                    failure.completed,
+                    p.plans.len(),
+                    failure.detail
+                )
+            });
+            Outcome::Applied {
+                target,
+                kind: PlanKind::Settings,
+                edits: p.request.edits,
+                result,
+            }
+        });
+    }
+}

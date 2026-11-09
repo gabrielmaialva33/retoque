@@ -1,0 +1,42 @@
+[package]
+name = "retoque-app"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "retoque_app"
+path = "src/lib.rs"
+
+[[bin]]
+name = "retoque-app"
+path = "src/main.rs"
+
+[dependencies]
+sha2 = "0.10"
+retoque-core.workspace = true
+retoque-discovery.workspace = true
+retoque-data.workspace = true
+eframe = { version = "0.37", default-features = false, features = ["accesskit", "clipboard", "default_fonts", "persistence"] }
+egui = "0.37"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sys-locale = "0.3.2"
+rfd = "0.17.2"
+dirs = "7.0.0"
+egui_extras = { version = "0.37", features = ["image", "file"] }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["eframe"] }
+tempfile = "3.27.0"
+
+# OpenGL on Linux (works on every desktop we target and keeps the binary small); wgpu on Windows, where it renders
+# through Direct3D 12 and does not depend on the quality of a vendor's OpenGL driver.
+[target.'cfg(not(windows))'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["glow", "wayland", "x11"] }
+
+[target.'cfg(windows)'.dependencies]
+eframe = { version = "0.37", default-features = false, features = ["wgpu"] }

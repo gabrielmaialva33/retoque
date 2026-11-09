@@ -139,6 +139,7 @@ This is a coverage index, not evidence that any suite or hardware passed.
 
 | Suite | Tier | Requirements | Evidence contract | Summary |
 |---|---|---|---|---|
+| [app-install-parity](app-install-parity/README.md) | host | python, cargo | process exit (see suite limits) | Rust installer CLI against the deploy-safety synthetic fixtures and receipt reversibility cases. |
 | [deploy-safety](deploy-safety/README.md) | host | python | process exit (see suite limits) | tools/deploy-to-game.sh on fake game directories: refuses while a process maps the directory, on a foreign or case-variant DLL, and on a second OptiScaler proxy; Keep-ReShade with the ini key replaced, never duplicated; receipt, partial receipt, dry run, and uninstall back to the prior state. |
 | [display-only-adapter](display-only-adapter/README.md) | host | python, cxx | process exit (see suite limits) | IdentifyGpu skips an indirect display adapter that cannot render (Parsec's virtual display, enumerated with the real GPU's name and ids), so it can no longer become the primary GPU; anything the kernel cannot answer keeps the adapter. |
 | [dlss-library-path](dlss-library-path/README.md) | host | python, cxx | process exit (see suite limits) | [Libraries] NvngxDlssPath naming a folder (with or without a trailing separator) or the file keeps the file's path, so both NGX path users get the folder; a folder without the file or a missing path leaves the search to run. |

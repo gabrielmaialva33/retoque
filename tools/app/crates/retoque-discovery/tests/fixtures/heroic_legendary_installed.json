@@ -1,0 +1,25 @@
+{
+  "CypressApp": {
+    "app_name": "CypressApp",
+    "title": "Cypress Odyssey",
+    "install_path": "/opt/games/heroic/CypressOdyssey",
+    "executable": "Cypress/Binaries/Win64/Cypress-Win64-Shipping.exe",
+    "platform": "Windows",
+    "is_dlc": false
+  },
+  "WinBackslashApp": {
+    "app_name": "WinBackslashApp",
+    "title": "Backslash Runner",
+    "install_path": "/opt/games/heroic/BackslashRunner",
+    "executable": "bin\\x64\\Runner.exe",
+    "platform": "Windows",
+    "is_dlc": false
+  },
+  "CypressSoundtrack": {
+    "app_name": "CypressSoundtrack",
+    "title": "Cypress Odyssey OST",
+    "install_path": "/opt/games/heroic/CypressOST",
+    "platform": "Windows",
+    "is_dlc": true
+  }
+}
