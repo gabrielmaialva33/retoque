@@ -200,6 +200,14 @@ bool EnsureForwarder()
     if (g_nr.forwarder != nullptr)
         return g_nr.create != nullptr;
 
+    // Before anything of the model is loaded: another producer in the process gets NR for the session
+    // (DlssNr_Consumers.h), and NR is now off as with the toggle key.
+    if (DlssNr::Consumers::HandOverIfCompeting())
+    {
+        g_nr.reason = "Neural Rendering is handed to another add-on in this process ([DlssNr] YieldToAddons)";
+        return false;
+    }
+
     if (Config::Instance()->DlssNrModelLoader.value_or_default() == NrModelLoader::Direct)
         return EnsureDirectRuntime();
 

@@ -826,6 +826,11 @@ const char* LoadForwarderShared()
 
     g_fwd.tried = true;
 
+    // Before the forwarder is loaded: another producer in the process gets NR for the session
+    // (DlssNr_Consumers.h), and NR is now off as with the toggle key.
+    if (DlssNr::Consumers::HandOverIfCompeting())
+        return g_fwd.failure = "Neural Rendering is handed to another add-on in this process ([DlssNr] YieldToAddons)";
+
     auto path = Util::FindFilePath(Util::DllPath().remove_filename(), "nvngx.dll_dlssnr.dll");
 
     if (!path.has_value())

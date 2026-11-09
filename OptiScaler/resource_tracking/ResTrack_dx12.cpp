@@ -2637,10 +2637,36 @@ void* ResTrack_Dx12::NrQueueImplementation() { return nrQueueImplementation.load
 
 IUnknown* ResTrack_Dx12::NrRealObject(IUnknown* object)
 {
-    if (!object)
-        return nullptr;
-    IUnknown* real = nullptr;
-    return CheckForRealObject("NR submission", object, &real) ? real : object;
+    // The object the runtime implements, behind Streamline's and ReShade 6.7+'s proxies in either order: NR
+    // submission tracking keys lists and queues by it and reads its vtable, and those proxies hand exactly these
+    // objects to the ExecuteCommandLists the queue hook detoured. Each proxy holds a reference on its original for as
+    // long as the caller holds the proxy, so none is kept here. A ReShade older than 6.7 cannot be unwrapped and stays
+    // refused by the runtime-module check (DlssNr_Submission.cpp).
+    for (int depth = 0; object != nullptr && depth < 4; ++depth)
+    {
+        IUnknown* real = nullptr;
+
+        if (CheckForRealObject("NR submission", object, &real) && real != nullptr && real != object)
+        {
+            object = real;
+            continue;
+        }
+
+        if (IUnknown* original = Util::GetReShadeOriginal(object))
+        {
+            original->Release();
+
+            if (original != object)
+            {
+                object = original;
+                continue;
+            }
+        }
+
+        break;
+    }
+
+    return object;
 }
 void ResTrack_Dx12::HookDevice(ID3D12Device* device)
 {

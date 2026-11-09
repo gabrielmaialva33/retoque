@@ -503,6 +503,21 @@ static void LoadInjectedDlls()
         State::DisableServeOriginal(201);
 
         LOG_INFO("Loading {}, result: {:X}", rsFile.filename().string(), (size_t) reshadeModule);
+
+        // ReShade's message hooks were installed before ours, so they see input first. In its default input mode (2)
+        // its open overlay swallows the mouse and keyboard for everything else in the game, our menu included; 1
+        // blocks only while the cursor is over ReShade's own windows, so both menus can be used together.
+        if (reshadeModule != nullptr)
+        {
+            const auto rsIni = rsFile.parent_path() / L"ReShade.ini";
+            const UINT mode = GetPrivateProfileIntW(L"INPUT", L"InputProcessing", 2, rsIni.c_str());
+
+            if (mode == 2)
+                LOG_WARN("ReShade blocks all input while its overlay is open ([INPUT] InputProcessing=2 in {}), so "
+                         "this menu gets no mouse or keyboard while both are open; InputProcessing=1 lets both be used "
+                         "(the Retoque app offers it)",
+                         rsIni.filename().string());
+        }
     }
 }
 
