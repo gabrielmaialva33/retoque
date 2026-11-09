@@ -61,6 +61,7 @@ pub(crate) mod shell_tests {
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
             payload_ui: crate::payload_ui::State::default(),
+            nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,
             folder_focus: None,
             folder_restore: 0,

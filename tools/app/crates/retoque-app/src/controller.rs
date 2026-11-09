@@ -165,6 +165,7 @@ impl RetoqueApp {
                     | Outcome::ModelInspection(_)
                     | Outcome::Catalog { .. }
                     | Outcome::Auto(_)
+                    | Outcome::NrFetch(_)
             );
             self.library_state.invalidate();
             let current = self.view.target.clone();
@@ -225,6 +226,7 @@ impl RetoqueApp {
                 Outcome::Dlss(event) => self.dlss_event(event),
                 Outcome::Lsfg(event) => self.lsfg_event(event),
                 Outcome::PayloadFetch(event) => self.payload_event(*event),
+                Outcome::NrFetch(event) => self.nr_fetch_event(event),
                 Outcome::Discovered { games, skipped, art } => {
                     if self.rescan_pending {
                         self.scanning = false;
@@ -600,6 +602,10 @@ impl RetoqueApp {
                 AppCommand::RefreshModel => self.refresh_model_inspection(),
                 AppCommand::ImportModel(path) => self.jobs.spawn("import", None, move |_| model::catalog_import(path)),
                 AppCommand::RemoveModel(sha) => self.jobs.spawn("remove", None, move |_| model::catalog_remove(sha)),
+                AppCommand::PromptFetchCompatibleModel(target) => self.nr_fetch_prompt_compatible(target),
+                AppCommand::PromptFetchModel(entry, target) => self.nr_fetch_open_consent(entry, target),
+                AppCommand::PromptRefreshModelCatalog => self.nr_fetch_prompt_refresh(),
+                AppCommand::DismissNrModelOffer => self.saved.nr_model_offer_seen = true,
                 AppCommand::Bundle => {
                     if !self.busy()
                         && let Some(target) = self.view.target.clone()

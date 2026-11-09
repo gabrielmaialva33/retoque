@@ -190,7 +190,11 @@ impl RetoqueApp {
         }
         if ui
             .add_enabled(
-                target.is_some() && !self.busy() && !self.tuning.sm86.busy && self.tuning.sm86.pending.is_none(),
+                target.is_some()
+                    && !self.busy()
+                    && !self.tuning.sm86.busy
+                    && !self.nr_fetch.busy
+                    && self.tuning.sm86.pending.is_none(),
                 theme::primary(self.tr("optimize.title")),
             )
             .clicked()
@@ -201,6 +205,12 @@ impl RetoqueApp {
             ui.horizontal(|ui| {
                 ui.spinner();
                 ui.label(self.tr("sm86.progress"));
+            });
+        }
+        if self.nr_fetch.busy {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(self.tr("nr_fetch.downloading"));
             });
         }
         if let Some(error) = &self.tuning.sm86.error {
@@ -216,18 +226,60 @@ impl RetoqueApp {
             .and_then(|c| c.as_ref().ok())
             .map(Vec::as_slice)
             .unwrap_or(&[]);
-        let model = self.view.inspection.as_ref().and_then(|m| {
-            autotune::recommend::nr_model(
-                &m.compatibility,
-                self.tuning
-                    .gpus
+        let gpu = self
+            .tuning
+            .gpus
+            .as_ref()
+            .filter(|g| g.len() == 1)
+            .and_then(|g| g.first());
+        let nr_enabled = self
+            .view
+            .ini
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .and_then(|i| i.as_ref())
+            .and_then(|i| i.get("DlssNr", "Enabled"))
+            .map(|s| !matches!(s.trim().to_ascii_lowercase().as_str(), "false" | "0"))
+            .or_else(|| {
+                self.view
+                    .status
                     .as_ref()
-                    .filter(|g| g.len() == 1)
-                    .and_then(|g| g.first()),
-                models,
-            )
-            .1
-        });
+                    .and_then(|r| r.as_ref().ok())
+                    .and_then(|s| s.nr_enabled)
+            })
+            .unwrap_or(true);
+        let model_incompatible =
+            self.view.inspection.as_ref().is_some_and(|m| {
+                m.compatibility.for_gpu(gpu) == retoque_data::model_compat::Compatibility::Incompatible
+            });
+        let model_missing = nr_enabled
+            && self.view.inspection.as_ref().is_some_and(|m| {
+                !m.present
+                    && (m.path.is_some()
+                        || self
+                            .view
+                            .ini
+                            .as_ref()
+                            .and_then(|r| r.as_ref().ok())
+                            .and_then(|i| i.as_ref())
+                            .and_then(|i| i.get("DlssNr", "ModelFile"))
+                            .is_none_or(|v| v.trim().is_empty() || v.trim().eq_ignore_ascii_case("auto")))
+            });
+        let (model, need_nr_model) = if model_incompatible || model_missing {
+            let local = models
+                .iter()
+                .find(|m| m.compatibility.for_gpu(gpu) == retoque_data::model_compat::Compatibility::Compatible);
+            if local.is_some() {
+                (local, false)
+            } else {
+                (
+                    None,
+                    retoque_data::model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu).is_some(),
+                )
+            }
+        } else {
+            (None, false)
+        };
         let wine = self.view.intelligence.facts.runtime.is_wine();
         let model_edit = model.map(|m| ("DlssNr".into(), "ModelFile".into(), Catalog::model_file_value(m, wine)));
         let mut composed = optimize::compose(optimize::Selection {
@@ -241,6 +293,7 @@ impl RetoqueApp {
                 .map(Vec::as_slice)
                 .unwrap_or(&[]),
             model_edit,
+            need_nr_model,
             include_experimental: self.tuning.sm86.experimental_for.as_ref() == Some(&target),
             choose_lsfg: self.tuning.sm86.lsfg_for.as_ref() == Some(&target),
             lsfg_ready: self.autotune_ready(),
@@ -258,6 +311,11 @@ impl RetoqueApp {
         self.tuning.sm86.error = None;
         match composed {
             Err(e) => self.tuning.sm86.error = Some(self.tr(e).into()),
+            Ok(c) if c.prerequisites.contains(&Prerequisite::NrModel) => {
+                if !self.nr_fetch_prepare_for_optimize(target) {
+                    self.tuning.sm86.error = Some(self.tr(Prerequisite::NrModel.unavailable_key()).into());
+                }
+            }
             Ok(c) if c.prerequisites.contains(&Prerequisite::LsfgShaders) => {
                 // Shaders are prepared in app data first; the optimization resumes when they are ready
                 // (lsfg_ui::lsfg_event). Nothing is applied to the game before that single review.

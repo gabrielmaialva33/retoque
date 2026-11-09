@@ -17,12 +17,14 @@ pub fn first_run_eligible(gpus: &[retoque_data::gpu::Gpu]) -> bool {
 pub enum Prerequisite {
     Sm86,
     LsfgShaders,
+    NrModel,
 }
 impl Prerequisite {
     pub fn unavailable_key(self) -> &'static str {
         match self {
             Self::Sm86 => "sm86.download_help",
             Self::LsfgShaders => "optimize.lsfg_unavailable",
+            Self::NrModel => "nr_fetch.unavailable",
         }
     }
 }
@@ -32,6 +34,7 @@ pub struct Selection<'a> {
     pub component: Option<&'a components::Component>,
     pub installed_ids: &'a [String],
     pub model_edit: Option<Edit>,
+    pub need_nr_model: bool,
     pub include_experimental: bool,
     pub choose_lsfg: bool,
     pub lsfg_ready: bool,
@@ -89,6 +92,8 @@ pub fn compose(selection: Selection<'_>) -> Result<Composition, &'static str> {
     }
     if let Some(edit) = selection.model_edit {
         request.edits.push(edit);
+    } else if selection.need_nr_model {
+        prerequisites.push(Prerequisite::NrModel);
     }
     // Duplicate/conflicting recommendations must never silently change the resulting setting.
     let mut values = std::collections::BTreeMap::new();
@@ -250,6 +255,15 @@ mod tests {
         .unwrap();
         assert!(c.prerequisites.is_empty());
         assert_eq!(c.request.edits, edits);
+        assert_eq!(
+            compose(Selection {
+                need_nr_model: true,
+                ..Default::default()
+            })
+            .unwrap()
+            .prerequisites,
+            [Prerequisite::NrModel]
+        );
     }
     #[test]
     fn combined_component_settings_and_model_do_not_write_until_confirmed() {
@@ -371,6 +385,80 @@ mod tests {
             assert!(h.state().saved.sm86_offer_seen);
             assert!(h.state().tuning.sm86.consent.is_none());
             assert!(!h.state().jobs.busy());
+        }
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn optimize_prerequisite_fetches_nr_model_in_app_data_then_opens_single_review_in_both_languages() {
+        use crate::tabs::model::{NrConsent, synthetic_model_fixture_for_optimize};
+        for lang in [Lang::En, Lang::Pt] {
+            let temp = tempfile::tempdir().unwrap();
+            let component = component(temp.path());
+            let game = temp.path().join("game");
+            fs::create_dir(&game).unwrap();
+            let before = b"[LSFG]\nEnabled=true\n[DlssNr]\nEnabled=true\nModelFile=auto\n";
+            fs::write(game.join("OptiScaler.ini"), before).unwrap();
+            let (entry, fetcher) = synthetic_model_fixture_for_optimize();
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.view.target = Some(game.clone());
+            app.view.ini = Some(Ok(Some(retoque_core::ini::Ini::parse(before))));
+            app.view.intelligence.recommendations = Arc::new(recs(recommend::Runtime::Windows, true));
+            app.view.intelligence.facts = Arc::new(recommend::GameFacts {
+                installed: true,
+                has_dlssg: true,
+                runtime: recommend::Runtime::Windows,
+                ..Default::default()
+            });
+            app.tuning.catalog = Some(Ok(vec![component]));
+            app.tuning.installed = Some(Ok(vec![]));
+            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
+            // Model missing beside the game and empty local catalog: Prerequisite::NrModel must run first.
+            app.view.inspection = Some(ModelInspection {
+                path: Some(game.join("nvngx_dlssnr.dll")),
+                present: false,
+                ..Default::default()
+            });
+            app.catalog = Some(Ok(vec![]));
+            app.nr_fetch.entries = vec![entry];
+            app.nr_fetch.catalog_root = Some(temp.path().join("nr-catalog"));
+            app.nr_fetch.fetcher = Some(fetcher);
+            let mut h = Harness::builder().with_size([900., 900.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    app.context = ui.ctx().clone();
+                    app.receive();
+                    app.optimize_controls(ui);
+                    app.nr_fetch_dialog(ui.ctx());
+                },
+                app,
+            );
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+                .click();
+            h.run_steps(3);
+            assert!(matches!(h.state().nr_fetch.consent, Some(NrConsent::Download(_))));
+            assert!(h.state().review.is_none());
+            h.get_by_label(t(lang, "nr_fetch.consent_title"));
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+                .click();
+            h.run_steps(3);
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while h.state().review.is_none() {
+                h.state_mut().receive();
+                assert!(Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+            let r = h.state().review.as_ref().unwrap().as_ref().unwrap();
+            assert_eq!(r.plans.len(), 2);
+            assert!(r.allowed());
+            assert_eq!(r.title, t(lang, "optimize.title"));
+            assert!(
+                r.plans
+                    .iter()
+                    .flat_map(|p| p.steps())
+                    .any(|s| matches!(s, retoque_core::Step::SetIni { key, .. } if key == "ModelFile"))
+            );
+            assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
+            assert!(!game.join("version.dll").exists());
         }
     }
 }

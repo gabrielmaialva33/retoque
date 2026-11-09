@@ -387,6 +387,7 @@ impl RetoqueApp {
             );
         }
         ui.add_space(12.0);
+        self.first_run_nr_card(ui);
         self.search_field(ui);
         self.library_keyboard(ui);
         ui.horizontal(|ui| {

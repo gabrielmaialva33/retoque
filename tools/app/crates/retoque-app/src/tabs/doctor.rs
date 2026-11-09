@@ -35,7 +35,11 @@ pub(crate) fn repair_button(
 ) {
     if let Some(repair) = repair {
         let enabled = !matches!(repair, Repair::Reinstall) || can_reinstall;
-        let button = ui.add_enabled(enabled, egui::Button::new(t(lang, "doctor.prepare")));
+        let label = match repair {
+            Repair::FetchCompatibleModel { .. } => t(lang, "nr_fetch.get_compatible"),
+            _ => t(lang, "doctor.prepare"),
+        };
+        let button = ui.add_enabled(enabled, egui::Button::new(label));
         if !enabled {
             button.clone().on_hover_text(t(lang, "app.payload.none"));
         }

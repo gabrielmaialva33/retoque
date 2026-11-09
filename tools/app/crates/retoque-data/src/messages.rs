@@ -249,6 +249,11 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Há uma operação DLSS pendente ou incompleta na raiz do jogo. Revise a restauração dos dois recibos.",
     ),
     ("evidence.dlss_file_version", "Game DLSS version", "Versão DLSS do jogo"),
+    (
+        "evidence.community_model",
+        "Community model SHA256",
+        "SHA256 do modelo da comunidade",
+    ),
 ];
 #[cfg(test)]
 mod tests {

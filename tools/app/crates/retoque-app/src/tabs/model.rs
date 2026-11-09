@@ -1,4 +1,48 @@
 use crate::app::*;
+use retoque_data::model_fetch::{self, RemoteModel};
+use std::sync::Arc;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NrConsent {
+    Download(RemoteModel),
+    RefreshCatalog,
+}
+
+pub enum NrFetchEvent {
+    Progress(u64),
+    CatalogRefreshed(Result<Vec<RemoteModel>, AppError>),
+    Downloaded(Result<(Vec<Model>, Model), AppError>),
+}
+
+pub type SharedModelFetcher = Arc<dyn model_fetch::Fetcher + Send + Sync>;
+
+pub struct NrFetchState {
+    pub entries: Vec<RemoteModel>,
+    pub consent: Option<NrConsent>,
+    pub busy: bool,
+    pub downloaded: u64,
+    pub error: Option<AppError>,
+    pub select_for_target: Option<PathBuf>,
+    pub then_optimize: Option<(PathBuf, u64, u64)>,
+    pub catalog_root: Option<PathBuf>,
+    pub fetcher: Option<SharedModelFetcher>,
+}
+
+impl Default for NrFetchState {
+    fn default() -> Self {
+        Self {
+            entries: model_fetch::pinned_entries(),
+            consent: None,
+            busy: false,
+            downloaded: 0,
+            error: None,
+            select_for_target: None,
+            then_optimize: None,
+            catalog_root: None,
+            fetcher: None,
+        }
+    }
+}
 
 impl RetoqueApp {
     pub(crate) fn model_tab(&self, ui: &mut egui::Ui, commands: &CommandSender) {
@@ -30,6 +74,8 @@ impl RetoqueApp {
                 }
                 _ => self.tab_install_prompt(ui),
             }
+            ui.add_space(12.0);
+            self.nr_fetch_card(ui);
             return;
         }
         let inspection = self.view.inspection.clone();
@@ -108,6 +154,7 @@ impl RetoqueApp {
         });
         ui.add_space(16.0);
         ui.label(RichText::new(self.tr("mdl.catalog")).size(18.0).strong());
+        self.nr_fetch_card(ui);
         self.model_import_area(ui);
         let models = match &self.catalog {
             None => {
@@ -320,6 +367,625 @@ impl RetoqueApp {
                     PlanInputs::Settings(vec![("DlssNr".into(), "ModelFile".into(), value)]),
                 );
             }
+        } else if self.tab != Tab::Model && !self.doctor_has_model_fetch() {
+            let gpu = self
+                .tuning
+                .gpus
+                .as_ref()
+                .filter(|g| g.len() == 1)
+                .and_then(|g| g.first());
+            let missing_or_incompatible = (!info.present && info.path.is_some())
+                || info.compatibility.for_gpu(gpu) == retoque_data::model_compat::Compatibility::Incompatible;
+            if missing_or_incompatible && let Some(remote) = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu) {
+                ui.label(format!(
+                    "{}: {} ({:.1} {})",
+                    self.tr("nr_fetch.title"),
+                    remote.label,
+                    remote.size as f64 / 1_048_576.0,
+                    self.tr("unit.mib")
+                ));
+                if ui
+                    .add_enabled(
+                        !self.busy() && !self.nr_fetch.busy,
+                        egui::Button::new(self.tr("nr_fetch.get_compatible")),
+                    )
+                    .clicked()
+                {
+                    self.cmd_tx
+                        .send(AppCommand::PromptFetchCompatibleModel(self.view.target.clone()));
+                }
+            }
+        }
+    }
+
+    pub(crate) fn doctor_has_model_fetch(&self) -> bool {
+        self.view.doctor.as_ref().is_some_and(|card| {
+            card.findings.iter().any(|f| {
+                matches!(
+                    f.repair,
+                    Some(retoque_data::doctor::Repair::FetchCompatibleModel { .. })
+                )
+            })
+        })
+    }
+
+    pub(crate) fn nr_fetch_single_gpu(&self) -> Option<&retoque_data::gpu::Gpu> {
+        self.tuning
+            .gpus
+            .as_ref()
+            .filter(|g| g.len() == 1)
+            .and_then(|g| g.first())
+    }
+
+    pub(crate) fn nr_fetch_first_run_eligible(&self) -> Option<RemoteModel> {
+        if self.saved.nr_model_offer_seen {
+            return None;
+        }
+        let gpu = self.nr_fetch_single_gpu()?;
+        let models = self.catalog.as_ref()?.as_ref().ok()?;
+        if models
+            .iter()
+            .any(|m| m.compatibility.for_gpu(Some(gpu)) == retoque_data::model_compat::Compatibility::Compatible)
+        {
+            return None;
+        }
+        model_fetch::pick_for_gpu(&self.nr_fetch.entries, Some(gpu)).cloned()
+    }
+
+    pub(crate) fn first_run_nr_card(&self, ui: &mut egui::Ui) {
+        let Some(entry) = self.nr_fetch_first_run_eligible() else {
+            return;
+        };
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("nr_fetch.consent_title"));
+            ui.add(egui::Label::new(self.tr("nr_fetch.source_note")).wrap());
+            ui.label(
+                RichText::new(format!(
+                    "{} · {:.1} {} · SHA-256 {}",
+                    entry.label,
+                    entry.size as f64 / 1_048_576.0,
+                    self.tr("unit.mib"),
+                    &entry.sha256[..entry.sha256.len().min(12)]
+                ))
+                .color(theme::MUTED),
+            );
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        !self.busy() && !self.nr_fetch.busy,
+                        theme::primary(self.tr("nr_fetch.get_compatible")),
+                    )
+                    .clicked()
+                {
+                    self.cmd_tx
+                        .send(AppCommand::PromptFetchCompatibleModel(self.view.target.clone()));
+                }
+                if ui.button(self.tr("nr_fetch.later")).clicked() {
+                    self.cmd_tx.send(AppCommand::DismissNrModelOffer);
+                }
+            });
+        });
+        ui.add_space(12.0);
+    }
+
+    pub(crate) fn nr_fetch_card(&self, ui: &mut egui::Ui) {
+        let gpu = self.nr_fetch_single_gpu();
+        let compatible = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu);
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("nr_fetch.title"));
+            ui.add(egui::Label::new(RichText::new(self.tr("nr_fetch.source_note")).color(theme::MUTED)).wrap());
+            ui.add_space(6.0);
+            if let Some(entry) = compatible {
+                ui.label(
+                    RichText::new(format!(
+                        "{} · {:.1} {} · SHA-256 {}",
+                        entry.label,
+                        entry.size as f64 / 1_048_576.0,
+                        self.tr("unit.mib"),
+                        &entry.sha256[..entry.sha256.len().min(12)]
+                    ))
+                    .strong(),
+                );
+                self.model_compatibility_label(ui, &entry.compatibility);
+            } else {
+                ui.colored_label(theme::WARN, self.tr("nr_fetch.no_compatible_gpu"));
+            }
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add_enabled(
+                        compatible.is_some() && !self.busy() && !self.nr_fetch.busy,
+                        theme::primary(self.tr("nr_fetch.get_compatible")),
+                    )
+                    .clicked()
+                {
+                    self.cmd_tx
+                        .send(AppCommand::PromptFetchCompatibleModel(self.view.target.clone()));
+                }
+                if ui
+                    .add_enabled(
+                        !self.nr_fetch.busy,
+                        egui::Button::new(self.tr("nr_fetch.refresh_catalog")),
+                    )
+                    .clicked()
+                {
+                    self.cmd_tx.send(AppCommand::PromptRefreshModelCatalog);
+                }
+            });
+            if self.nr_fetch.busy {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(format!(
+                        "{} · {:.1} {}",
+                        self.tr("nr_fetch.downloading"),
+                        self.nr_fetch.downloaded as f64 / 1_048_576.0,
+                        self.tr("unit.mib")
+                    ));
+                });
+            }
+            if let Some(error) = &self.nr_fetch.error {
+                ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+            }
+            ui.collapsing(self.tr("nr_fetch.available_variants"), |ui| {
+                for entry in &self.nr_fetch.entries {
+                    ui.push_id(&entry.sha256, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.strong(&entry.label);
+                            ui.label(format!(
+                                "{:.1} {} · {}",
+                                entry.size as f64 / 1_048_576.0,
+                                self.tr("unit.mib"),
+                                &entry.sha256[..entry.sha256.len().min(12)]
+                            ));
+                            if ui
+                                .add_enabled(
+                                    !self.busy() && !self.nr_fetch.busy,
+                                    egui::Button::new(self.tr("nr_fetch.download_variant")).small(),
+                                )
+                                .clicked()
+                            {
+                                self.cmd_tx
+                                    .send(AppCommand::PromptFetchModel(entry.clone(), self.view.target.clone()));
+                            }
+                        });
+                        self.model_compatibility_label(ui, &entry.compatibility);
+                        ui.add_space(4.0);
+                    });
+                }
+            });
+        });
+        ui.add_space(12.0);
+    }
+
+    pub(crate) fn nr_fetch_prompt_compatible(&mut self, select_for_target: Option<PathBuf>) {
+        let gpu = self.nr_fetch_single_gpu();
+        if let Some(entry) = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu).cloned() {
+            self.nr_fetch_open_consent(entry, select_for_target);
+        } else {
+            self.nr_fetch.error = Some(self.tr("nr_fetch.unavailable").into());
+        }
+    }
+
+    pub(crate) fn nr_fetch_open_consent(&mut self, entry: RemoteModel, select_for_target: Option<PathBuf>) {
+        self.saved.nr_model_offer_seen = true;
+        self.nr_fetch.error = None;
+        self.nr_fetch.select_for_target = select_for_target;
+        self.nr_fetch.consent = Some(NrConsent::Download(entry));
+    }
+
+    pub(crate) fn nr_fetch_prompt_refresh(&mut self) {
+        self.nr_fetch.error = None;
+        self.nr_fetch.consent = Some(NrConsent::RefreshCatalog);
+    }
+
+    pub(crate) fn nr_fetch_prepare_for_optimize(&mut self, target: PathBuf) -> bool {
+        let gpu = self.nr_fetch_single_gpu();
+        let Some(entry) = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu).cloned() else {
+            return false;
+        };
+        self.saved.nr_model_offer_seen = true;
+        self.nr_fetch.error = None;
+        self.nr_fetch.select_for_target = None;
+        self.nr_fetch.then_optimize = Some((target, self.tuning.facts_generation, self.next_request));
+        self.nr_fetch.consent = Some(NrConsent::Download(entry));
+        true
+    }
+
+    pub(crate) fn nr_fetch_repair(&mut self, target: PathBuf, sha256: &str) {
+        if let Some(Ok(models)) = &self.catalog
+            && let Some(existing) = models.iter().find(|m| m.sha256 == sha256)
+        {
+            let value = Catalog::model_file_value(existing, cfg!(not(windows)));
+            self.start_plan(
+                PlanKind::Settings,
+                PlanInputs::Settings(vec![("DlssNr".into(), "ModelFile".into(), value)]),
+            );
+            return;
+        }
+        if let Some(entry) = self
+            .nr_fetch
+            .entries
+            .iter()
+            .find(|e| e.sha256 == sha256)
+            .cloned()
+            .or_else(|| {
+                let gpu = self.nr_fetch_single_gpu();
+                model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu).cloned()
+            })
+        {
+            self.nr_fetch_open_consent(entry, Some(target));
+        }
+    }
+
+    pub(crate) fn nr_fetch_dialog(&mut self, ctx: &egui::Context) {
+        let Some(consent) = self.nr_fetch.consent.clone() else {
+            return;
+        };
+        let mut confirm = false;
+        let mut cancel = false;
+        egui::Modal::new(egui::Id::unique("nr-fetch-consent")).show(ctx, |ui| {
+            ui.set_max_width(540.0);
+            match &consent {
+                NrConsent::Download(entry) => {
+                    ui.heading(self.tr("nr_fetch.consent_title"));
+                    ui.label(self.tr("nr_fetch.source_note"));
+                    ui.label(
+                        RichText::new(format!(
+                            "{}: {} · {:.1} {} ({} B) · SHA-256 {}",
+                            self.tr("model"),
+                            entry.label,
+                            entry.size as f64 / 1_048_576.0,
+                            self.tr("unit.mib"),
+                            entry.size,
+                            &entry.sha256[..entry.sha256.len().min(12)]
+                        ))
+                        .strong(),
+                    );
+                    self.model_compatibility_label(ui, &entry.compatibility);
+                    ui.label(self.tr("nr_fetch.consent_body"));
+                    ui.horizontal(|ui| {
+                        confirm = ui.button(self.tr("nr_fetch.confirm")).clicked();
+                        cancel = ui.button(self.tr("cancel")).clicked();
+                    });
+                }
+                NrConsent::RefreshCatalog => {
+                    ui.heading(self.tr("nr_fetch.refresh_title"));
+                    ui.label(self.tr("nr_fetch.refresh_body"));
+                    ui.horizontal(|ui| {
+                        confirm = ui.button(self.tr("nr_fetch.confirm_refresh")).clicked();
+                        cancel = ui.button(self.tr("cancel")).clicked();
+                    });
+                }
+            }
+        });
+        if cancel {
+            self.nr_fetch.consent = None;
+            self.nr_fetch.select_for_target = None;
+            self.nr_fetch.then_optimize = None;
+        }
+        if confirm {
+            self.nr_fetch.consent = None;
+            self.nr_fetch_start(consent);
+        }
+    }
+
+    pub(crate) fn nr_fetch_start(&mut self, consent: NrConsent) {
+        if self.nr_fetch.busy {
+            return;
+        }
+        self.nr_fetch.busy = true;
+        self.nr_fetch.error = None;
+        self.nr_fetch.downloaded = 0;
+        let custom_fetcher = self.nr_fetch.fetcher.clone();
+        let catalog_root = self.nr_fetch.catalog_root.clone();
+        let ctx = self.context.clone();
+        self.jobs.spawn("nr-model-fetch", None, move |tx| {
+            let active_fetcher: &dyn model_fetch::Fetcher = match custom_fetcher.as_deref() {
+                Some(f) => f,
+                None => &model_fetch::CommunityFetcher,
+            };
+            match consent {
+                NrConsent::RefreshCatalog => {
+                    let result = model_fetch::refresh_catalog(active_fetcher).map_err(AppError::from);
+                    Outcome::NrFetch(NrFetchEvent::CatalogRefreshed(result))
+                }
+                NrConsent::Download(entry) => {
+                    let result = (|| -> Result<(Vec<Model>, Model), AppError> {
+                        let catalog = Catalog::open(catalog_root.as_deref())?;
+                        let mut previous = 0u64;
+                        let mut imported =
+                            model_fetch::download_and_import(active_fetcher, &entry, &catalog, &mut |bytes| {
+                                if bytes.saturating_sub(previous) >= 256 * 1024 || bytes >= entry.size {
+                                    previous = bytes;
+                                    let _ = tx.send(Outcome::NrFetch(NrFetchEvent::Progress(bytes)));
+                                    ctx.request_repaint();
+                                }
+                            })?;
+                        let mut items = catalog.list()?;
+                        if entry.compatibility.known {
+                            imported.compatibility = entry.compatibility.clone();
+                            for item in &mut items {
+                                if item.sha256 == imported.sha256 {
+                                    item.compatibility = entry.compatibility.clone();
+                                }
+                            }
+                        }
+                        Ok((items, imported))
+                    })();
+                    Outcome::NrFetch(NrFetchEvent::Downloaded(result))
+                }
+            }
+        });
+    }
+
+    pub(crate) fn nr_fetch_event(&mut self, event: NrFetchEvent) {
+        match event {
+            NrFetchEvent::Progress(bytes) => self.nr_fetch.downloaded = bytes,
+            NrFetchEvent::CatalogRefreshed(result) => {
+                self.nr_fetch.busy = false;
+                match result {
+                    Ok(entries) => self.nr_fetch.entries = entries,
+                    Err(e) => self.nr_fetch.error = Some(e),
+                }
+            }
+            NrFetchEvent::Downloaded(result) => {
+                self.nr_fetch.busy = false;
+                match result {
+                    Ok((items, imported)) => {
+                        self.catalog = Some(Ok(items));
+                        self.usage_refreshed = None;
+                        if let Some((target, generation, review_request)) = self.nr_fetch.then_optimize.take() {
+                            self.nr_fetch.select_for_target = None;
+                            if self.view.target.as_ref() == Some(&target)
+                                && self.tuning.facts_generation == generation
+                                && self.next_request == review_request
+                            {
+                                self.optimize_automatically();
+                            }
+                        } else if let Some(target) = self.nr_fetch.select_for_target.take()
+                            && self.view.target.as_ref() == Some(&target)
+                            && matches!(&self.view.ini, Some(Ok(Some(_))))
+                        {
+                            let value = Catalog::model_file_value(&imported, cfg!(not(windows)));
+                            self.start_plan(
+                                PlanKind::Settings,
+                                PlanInputs::Settings(vec![("DlssNr".into(), "ModelFile".into(), value)]),
+                            );
+                        }
+                    }
+                    Err(error) => {
+                        self.nr_fetch.error = Some(error.clone());
+                        self.nr_fetch.select_for_target = None;
+                        if let Some((target, generation, _)) = self.nr_fetch.then_optimize.take()
+                            && self.view.target.as_ref() == Some(&target)
+                            && self.tuning.facts_generation == generation
+                        {
+                            self.tuning.sm86.error = Some(error);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(all(test, not(windows)))]
+pub(crate) fn synthetic_model_fixture_for_optimize() -> (RemoteModel, SharedModelFetcher) {
+    let (entry, archive) = tests::synthetic_model_fixture();
+    (
+        entry,
+        Arc::new(tests::SyntheticNrFetcher {
+            archive,
+            catalog_json: Vec::new(),
+        }),
+    )
+}
+
+#[cfg(all(test, not(windows)))]
+mod tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+    use sha2::{Digest, Sha256};
+    use std::{
+        fs,
+        time::{Duration, Instant},
+    };
+
+    pub(crate) struct SyntheticNrFetcher {
+        pub archive: Vec<u8>,
+        pub catalog_json: Vec<u8>,
+    }
+
+    impl model_fetch::Fetcher for SyntheticNrFetcher {
+        fn get(&self, url: &str, limit: u64, progress: &mut dyn FnMut(u64)) -> std::io::Result<Vec<u8>> {
+            let data = if url == model_fetch::CATALOG_URL {
+                &self.catalog_json
+            } else {
+                assert!(model_fetch::allowed_asset_url(url));
+                &self.archive
+            };
+            assert!(data.len() as u64 <= limit);
+            progress(data.len() as u64);
+            Ok(data.clone())
+        }
+    }
+
+    pub(crate) fn synthetic_model_fixture() -> (RemoteModel, Vec<u8>) {
+        let dll_bytes = b"MZ synthetic NR compat-fp16 fixture".to_vec();
+        let sha256 = format!("{:x}", Sha256::digest(&dll_bytes));
+        let archive = model_fetch::build_single_dll_zip(&dll_bytes).unwrap();
+        let entry = RemoteModel {
+            version: "310.9.16".into(),
+            variant: "compat-fp16".into(),
+            label: "DLSS NR 310.9.16 (compat-fp16)".into(),
+            url: "https://github.com/RankFTW/rhi-repo/releases/download/dlssnr-310.9.16/nvngx_dlssnr_310.9.16.zip"
+                .into(),
+            sha256,
+            size: dll_bytes.len() as u64,
+            compatibility: retoque_data::model_compat::ModelCompatibility {
+                archs: vec![75, 86, 89, 120],
+                known: true,
+            },
+        };
+        (entry, archive)
+    }
+
+    fn settle(app: &mut RetoqueApp, ready: impl Fn(&RetoqueApp) -> bool) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !ready(app) {
+            app.receive();
+            assert!(Instant::now() < deadline, "timed out waiting for worker");
+            std::thread::yield_now();
+        }
+    }
+
+    #[test]
+    fn model_tab_get_compatible_shows_community_source_downloads_imports_and_reviews_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            let temp = tempfile::tempdir().unwrap();
+            let game = temp.path().join("game");
+            fs::create_dir(&game).unwrap();
+            let before = b"[DlssNr]\nEnabled=true\nModelFile=auto\n";
+            fs::write(game.join("OptiScaler.ini"), before).unwrap();
+            let (entry, archive) = synthetic_model_fixture();
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.tab = Tab::Model;
+            app.view.target = Some(game.clone());
+            app.view.ini = Some(Ok(Some(Ini::parse(before))));
+            app.catalog = Some(Ok(vec![]));
+            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
+            app.nr_fetch.entries = vec![entry.clone()];
+            app.nr_fetch.catalog_root = Some(temp.path().join("catalog"));
+            app.nr_fetch.fetcher = Some(Arc::new(SyntheticNrFetcher {
+                archive,
+                catalog_json: Vec::new(),
+            }));
+
+            let mut h = Harness::builder().with_size([1000., 900.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    app.context = ui.ctx().clone();
+                    app.receive();
+                    let tx = app.cmd_tx.clone();
+                    app.model_tab(ui, &tx);
+                    app.nr_fetch_dialog(ui.ctx());
+                    app.review_sheet(ui.ctx());
+                    app.handle_commands();
+                },
+                app,
+            );
+            h.get_by_label(t(lang, "nr_fetch.source_note"));
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.get_compatible"))
+                .click();
+            h.run_steps(3);
+            assert!(h.state().nr_fetch.consent.is_some());
+            assert!(!h.state().jobs.busy());
+            h.get_by_label(t(lang, "nr_fetch.consent_title"));
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+                .click();
+            h.run_steps(3);
+            settle(h.state_mut(), |app| app.review.is_some());
+            assert!(h.state().review_open);
+            let models = h.state().catalog.as_ref().unwrap().as_ref().unwrap();
+            assert_eq!(models.len(), 1);
+            assert_eq!(models[0].label, entry.label);
+            let review = h.state().review.as_ref().unwrap().as_ref().unwrap();
+            assert!(
+                review
+                    .plans
+                    .iter()
+                    .flat_map(|p| p.steps())
+                    .any(|s| matches!(s, Step::SetIni { key, .. } if key == "ModelFile"))
+            );
+            assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn first_run_offer_and_later_never_contact_network_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 4090,8.9,1,24576"));
+            app.catalog = Some(Ok(vec![]));
+            let mut h = Harness::builder().with_size([1000., 800.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    app.first_run_nr_card(ui);
+                    app.nr_fetch_dialog(ui.ctx());
+                    app.handle_commands();
+                },
+                app,
+            );
+            h.get_by_label(t(lang, "nr_fetch.consent_title"));
+            h.get_by_label(t(lang, "nr_fetch.source_note"));
+            assert!(!h.state().jobs.busy());
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.later"))
+                .click();
+            h.run_steps(3);
+            assert!(h.state().saved.nr_model_offer_seen);
+            assert!(h.state().nr_fetch.consent.is_none());
+            assert!(!h.state().jobs.busy());
+        }
+    }
+
+    #[test]
+    fn doctor_repair_fetches_compatible_model_and_opens_settings_review_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            let temp = tempfile::tempdir().unwrap();
+            let game = temp.path().join("game");
+            fs::create_dir(&game).unwrap();
+            let before = b"[DlssNr]\nEnabled=true\nModelFile=missing.dll\n";
+            fs::write(game.join("OptiScaler.ini"), before).unwrap();
+            let (entry, archive) = synthetic_model_fixture();
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.view.target = Some(game.clone());
+            app.view.status = Some(Ok(Status {
+                nr_enabled: Some(true),
+                model_present: false,
+                ..Default::default()
+            }));
+            app.view.ini = Some(Ok(Some(Ini::parse(before))));
+            app.view.inspection = Some(ModelInspection {
+                path: Some(game.join("missing.dll")),
+                present: false,
+                ..Default::default()
+            });
+            app.catalog = Some(Ok(vec![]));
+            app.tuning.installed = Some(Ok(vec![]));
+            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
+            app.nr_fetch.entries = vec![entry.clone()];
+            app.nr_fetch.catalog_root = Some(temp.path().join("catalog"));
+            app.nr_fetch.fetcher = Some(Arc::new(SyntheticNrFetcher {
+                archive,
+                catalog_json: Vec::new(),
+            }));
+            app.refresh_intelligence();
+            settle(&mut app, |app| app.view.doctor.is_some());
+
+            let mut h = Harness::builder().with_size([1000., 900.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    app.context = ui.ctx().clone();
+                    app.receive();
+                    if let (Some(card), Some(target)) = (&app.view.doctor, &app.view.target) {
+                        crate::tabs::doctor::show(ui, card, target, app.lang, &app.cmd_tx, false);
+                    }
+                    app.nr_fetch_dialog(ui.ctx());
+                    app.review_sheet(ui.ctx());
+                    app.handle_commands();
+                },
+                app,
+            );
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.get_compatible"))
+                .click();
+            h.run_steps(3);
+            assert!(h.state().nr_fetch.consent.is_some());
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+                .click();
+            h.run_steps(3);
+            settle(h.state_mut(), |app| app.review.is_some());
+            assert!(h.state().review_open);
+            assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
         }
     }
 }
