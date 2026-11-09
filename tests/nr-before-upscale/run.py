@@ -42,7 +42,9 @@ child_owner = between(resource_source, 'bool DeviceChildBelongsTo(ID3D12Device* 
 # The engagement funnel (DlssNr_Funnel.h) is pure and compiled as it is; the crash note's install is Win32 and stubbed.
 funnel = ('#include <retoque/dlssnr/DlssNr_Funnel.h>\n'
           'static unsigned GetCurrentThreadId() { return 1; }\n'
-          'namespace DlssNr::CrashNote { inline void InstallOnce() {} }\n')
+          'namespace DlssNr::CrashNote { inline void InstallOnce() {} }\n'
+          # No other neural producer in a host test (DlssNr_Consumers.h scans Win32 modules; tests/nr-consumers).
+          'namespace DlssNr::Consumers { inline bool HandOverIfCompeting() { return false; } }\n')
 unit = '#include "fakes.h"\n' + funnel + owner + 'NrDeviceOwner g_nrDeviceOwner;\n' + child_owner + coverage + allocation + resources
 spatial = between(source, 'void ReportSpatialContract(', 'DlssNrFrameInfo GatherGuideFrame(')
 unit += '\nnamespace DlssNr {\n' + declaration + spatial + compose + views + after + scope + '\n}\n#include "cases.h"\n'

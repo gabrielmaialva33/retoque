@@ -4290,6 +4290,10 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
 {
     const Config& cfg = *Config::Instance();
 
+    // A neural add-on in the process takes NR for the session (DlssNr_Consumers.h); Enabled is then off.
+    if (cfg.DlssNrEnabled.value_or_default())
+        DlssNr::Consumers::HandOverIfCompeting();
+
     if (!cfg.DlssNrEnabled.value_or_default())
     {
         g_resetOnReturn = true;
@@ -5151,6 +5155,9 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                           ID3D12CommandQueue* timingQueue, bool preUpscaleDeclined, bool isRayReconstruction)
 {
     const Config& cfg = *Config::Instance();
+    // Before any gate of our own can decline first and name a different reason: another neural producer in the
+    // process (a ReShade add-on) gets NR for the session, and Enabled is now off (DlssNr_Consumers.h).
+    const bool handedOver = cfg.DlssNrEnabled.value_or_default() && DlssNr::Consumers::HandOverIfCompeting();
     const bool dlssNrEnabled = cfg.DlssNrEnabled.value_or_default();
     const int dlssNrStage = cfg.DlssNrStage.value_or_default();
 
@@ -5158,7 +5165,8 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     {
         g_resetOnReturn = true;
         GpuTiming::SetEnabled(false);
-        ReportSkipOnce("it is switched off");
+        ReportSkipOnce(handedOver ? "it is handed to another neural add-on in this process ([DlssNr] YieldToAddons)"
+                                  : "it is switched off");
         return;
     }
 
