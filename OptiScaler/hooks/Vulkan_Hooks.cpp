@@ -643,28 +643,27 @@ static void hkvkDestroyInstance(VkInstance instance, const VkAllocationCallbacks
     o_vkDestroyInstance(instance, pAllocator);
 }
 
-VALIDATE_HOOK(hkvkDestroyDevice, PFN_vkDestroyDevice)
-static void hkvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
+void VulkanHooks::DestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator)
 {
-    LOG_FUNC();
+    // A host detour can wrap the bundle hook. Only the outer call prepares/releases this device;
+    // each inner hook still forwards to its own trampoline once, without losing the drain result.
+    static thread_local std::vector<VkDevice> destroying;
+    if (std::find(destroying.begin(), destroying.end(), device) != destroying.end())
+    {
+        next(device, allocator);
+        return;
+    }
+    destroying.push_back(device);
+    struct Scope
+    {
+        std::vector<VkDevice>& stack;
+        ~Scope() { stack.pop_back(); }
+    } scope { destroying };
 
     // Objects created on the device have to go before it
     if (device != VK_NULL_HANDLE)
     {
-        const auto nrDrained = DlssNr::VkPresentHost::PrepareForDeviceDestroy(device);
-        MenuOverlayVk::ReleaseDevice(device);
-        bool drained = nrDrained.value_or(false);
-        if (!nrDrained.has_value())
-        {
-            // No NR producer exists for this device. Vulkan requires the application's producers
-            // to be stopped before destroy; confirm its queues too, rather than assuming idle.
-            auto waitIdle = o_vkGetDeviceProcAddr != nullptr
-                                ? (PFN_vkDeviceWaitIdle) o_vkGetDeviceProcAddr(device, "vkDeviceWaitIdle")
-                                : nullptr;
-            drained = waitIdle != nullptr && waitIdle(device) == VK_SUCCESS;
-        }
-        DeferredRelease::RetireOwner((uint64_t) device, drained);
-
+        const bool drained = DlssNr::VkPresentHost::PrepareForDeviceDestroy(device).value_or(false);
         {
             std::scoped_lock lock(_hookedDevicesMutex);
             _hookedDevices.erase((uint64_t) device);
@@ -683,11 +682,23 @@ static void hkvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAll
         FSR2VkDeviceDestroyed(device);
         XeSSVkDeviceDestroyed(device);
 
+        // HudCopy/NGX and the overlay enqueue children before the owner is finally retired.
+        // The overlay consumes this exact proof; it must not retry idle after an NR drain failed.
+        MenuOverlayVk::ReleaseDevice(device, drained);
+        DeferredRelease::RetireOwner((uint64_t) device, drained);
+        DlssNr::VkPresentHost::FinishDeviceDestroy(device);
+
         std::scoped_lock lock(_passThroughSwapchainsMutex);
         std::erase_if(_passThroughSwapchains, [device](const auto& entry) { return entry.first == device; });
     }
 
-    o_vkDestroyDevice(device, pAllocator);
+    next(device, allocator);
+}
+
+VALIDATE_HOOK(hkvkDestroyDevice, PFN_vkDestroyDevice)
+static void hkvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
+{
+    VulkanHooks::DestroyDevice(o_vkDestroyDevice, device, pAllocator);
 }
 
 VALIDATE_HOOK(hkvkCreateDevice, PFN_vkCreateDevice)

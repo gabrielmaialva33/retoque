@@ -715,6 +715,7 @@ void synthInputCases()
         assert(f.sc->ResizeBuffers1(2, 0, 0, 0, 0, nullptr, nullptr) == S_OK);
         assert(f.presenter.lastResizeWidth == 0 && f.presenter.lastResizeHeight == 0);
         assert(f.real.lastResizeWidth == 841 && f.real.lastResizeHeight == 1356);
+        assert(State::Instance().screenWidth == 841 && State::Instance().screenHeight == 1356);
     }
 
     // Teardown frees it behind the same drain as the rest of the interop.

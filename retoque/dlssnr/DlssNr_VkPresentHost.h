@@ -45,10 +45,12 @@ namespace DlssNr::VkPresentHost
 // its own [Vulkan] SkipHooks / marker check. Installs once; a no-op unless the configuration above holds.
 void Install(HMODULE vulkan1);
 
-// Shared destruction boundary with VulkanHooks. Stops/drains the NR producer before other owners
-// release resources. nullopt means this host never owned the device; false requires abandonment.
-// Repeated calls are inert after the first removes the transport record.
+// Called once by VulkanHooks::DestroyDevice, shared by both detour layers. Stops/drains NR,
+// or drains an untracked device under the host's transport/known-queue locks. False requires
+// abandonment. Child owners enqueue their releases afterward, before final deferred retirement.
 std::optional<bool> PrepareForDeviceDestroy(VkDevice device);
+// Called after all child owners and deferred retirement, before the real device destruction.
+void FinishDeviceDestroy(VkDevice device);
 
 // From OptiScaler's Streamline log callbacks (both SDK generations), every message: `level` 0 info, 1 warning, 2 error.
 // Counted for stage 4's pacer trace (DlssNr_VkPresentFg.h); returns at once unless [DlssNr] VulkanPresentTrace is on

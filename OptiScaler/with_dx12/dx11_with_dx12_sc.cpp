@@ -1502,9 +1502,9 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::GetDesc(DXGI_SWAP_CHAIN_DESC* pDesc)
     {
         pDesc->OutputWindow = _handle;
 
-        // Real one is always windowed on its hidden window
+        // Report the bridge's emulated state, not its always-windowed presenter.
         BOOL fullscreen = FALSE;
-        if (_fgSwapChain != nullptr && SUCCEEDED(_fgSwapChain->GetFullscreenState(&fullscreen, nullptr)))
+        if (SUCCEEDED(GetFullscreenState(&fullscreen, nullptr)))
             pDesc->Windowed = !fullscreen;
     }
 
@@ -1964,8 +1964,8 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::ResizeBuffers1(UINT BufferCount, UINT Wid
 
         if (State::Instance().currentFeature == nullptr)
         {
-            State::Instance().screenWidth = static_cast<float>(Width);
-            State::Instance().screenHeight = static_cast<float>(Height);
+            State::Instance().screenWidth = static_cast<float>(hiddenWidth);
+            State::Instance().screenHeight = static_cast<float>(hiddenHeight);
             State::Instance().lastMipBias = 100.0f;
             State::Instance().lastMipBiasMax = -100.0f;
         }

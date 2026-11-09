@@ -139,7 +139,7 @@ assert statements[0] == 'DlssNr::VkPresentHost::Install(vulkan1)', statements[0]
 assert hook.index('VkPresentHost::Install') < hook.index('vulkanHooksSkipped')
 # Include, install, caller lookup, FG forwarding, and the shared teardown producer-stop boundary.
 assert 'DlssNr::VkPresentHost::PrepareForDeviceDestroy(device)' in hooks
-assert code(hooks).count('VkPresentHost') == 5, code(hooks).count('VkPresentHost')
+assert code(hooks).count('VkPresentHost') == 6, code(hooks).count('VkPresentHost')
 fg_present = code(function(hooks, 'static VkResult FGOutputQueuePresent('))
 assert 'PresentFromFG(o_QueuePresentKHR, queue, pPresentInfo, _ReturnAddress())' in fg_present
 fg_bridge = code(function(host, 'VkResult DlssNr::VkPresentHost::PresentFromFG('))
@@ -166,7 +166,11 @@ assert re.search(r'LOG_INFO\([^;]*State::Instance\(\)\.vulkanHooksSkipped', code
 # tick, upscaler timing, the overlay, spoofing), no NGX of its own (the model is DlssNrFeature_Vk.cpp's, reached through
 # DlssNr_VkPresentModel.h), not the after-upscale route's state, and no device-wide idle wait (DEVELOPMENT.md's drain is
 # done on the host's own fences, which needs no queue).
-body = code(host)
+fallback = function(host, 'bool DrainUntrackedDevice(')
+assert 'TryHandBackQueueLocks' in fallback
+assert fallback.index('TryHandBackQueueLocks') < fallback.index('waitIdle(device)')
+# Only the pre-existing bundle-only fallback may use device idle, now under transport/queue locks.
+body = code(host.replace(fallback, ''))
 for forbidden in ('ReflexHooks', 'FrameLimit', 'TickFrozenCheck', 'ReadUpscalerTime', 'upscaleTimes', 'MenuOverlay',
                   'VulkanSpoofing', 'InputCommon', 'EvaluateAfterUpscaleVk', 'DlssNr_Vk(', 'ShutdownVk', 'swapchainApi',
                   'NGX', 'NVSDK', 'DeviceWaitIdle', 'memcpy', 'localCreateInfo', 'imageUsage |=', 'g_vk'):
@@ -193,7 +197,7 @@ for call, times in (('o_CreateInstance(info, allocator, instance)', 1), ('o_Dest
                     ('o_EnumeratePhysicalDevices(instance, count, devices)', 1),
                     ('o_CreateDevice(physical, edited ? &withExtensions : info, allocator, device)', 1),
                     ('o_CreateWin32Surface(instance, info, allocator, surface)', 1),
-                    ('o_DestroySurface(instance, surface, allocator)', 1), ('next(device, allocator)', 1),
+                    ('o_DestroySurface(instance, surface, allocator)', 1), ('VulkanHooks::DestroyDevice(next, device, allocator)', 1),
                     ('next(device, family, index, queue)', 1), ('next(device, info, queue)', 1),
                     ('next(device, info, allocator, swapchain)', 1), ('next(device, down, allocator, swapchain)', 1),
                     ('next(device, swapchain, allocator)', 2), ('next(device, swapchain, count, images)', 1),
@@ -285,11 +289,11 @@ for name in ('Retired RetireSwapchain(', 'std::string TeardownDevice('):
     assert retire.index('if (dev.lost)') < first_destroy, name
     assert retire.index('WaitSlot(') < first_destroy or name.startswith('std::string'), name
 
-assert 'OnDeviceDestroyed' in function(host, 'std::optional<bool> PrepareDeviceDestroy(')
+assert 'OnDeviceDestroyed' in function(host, 'void DlssNr::VkPresentHost::FinishDeviceDestroy(')
 
 # Destroys retire the record before the downstream call, while the handle cannot be handed out again.
-for name, record, down in (('OnDestroyDevice', 'PrepareDeviceDestroy(device)', 'next(device, allocator)'),
-                           ('OnDestroySwapchain', 'OnSwapchainDestroyed', 'next(device, swapchain, allocator)'),
+assert 'VulkanHooks::DestroyDevice(next, device, allocator);' in function(host, 'void OnDestroyDevice(')
+for name, record, down in (('OnDestroySwapchain', 'OnSwapchainDestroyed', 'next(device, swapchain, allocator)'),
                            ('hkDestroyInstance', 'OnInstanceDestroyed', 'o_DestroyInstance('),
                            ('hkDestroySurfaceKHR', 'OnSurfaceDestroyed', 'o_DestroySurface(')):
     start = host.index(name + '(')

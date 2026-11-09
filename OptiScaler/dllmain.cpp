@@ -1200,8 +1200,8 @@ static void CheckWorkingMode()
     // On native NVIDIA the startup check (isNvidiaViaNvapi) now leaves nvapi64.dll loaded once it has
     // initialised it, so it is already present here and these hooks go in at startup rather than when
     // the game loads nvapi (the same hooks most games got anyway).
-    if (GetDllNameWModule(&nvapiNamesW) != nullptr || (Config::Instance()->DisableFlipMetering.value_or_default() &&
-                                                       IdentifyGpu::getPrimaryGpu().vendorId == VendorId::Nvidia))
+    if (GetDllNameWModule(&nvapiNamesW) != nullptr ||
+        (Config::Instance()->DisableFlipMetering.value_or_default() && IdentifyGpu::hasNvidiaHint()))
     {
         // This hooks nvapi as well when possible
         auto nvapi64 = LibraryLoadHooks::LoadNvApi();

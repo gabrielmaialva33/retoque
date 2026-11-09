@@ -53,7 +53,6 @@ class IFGFeature_Dx12 : public virtual IFGFeature
     bool InitCopyCmdList();
     void DestroyCopyCmdList();
     bool WaitForUIAllocator(UINT index);
-    bool SubmitUICommandList(UINT index);
 
   protected:
     ID3D12Device* _device = nullptr;
@@ -128,6 +127,7 @@ class IFGFeature_Dx12 : public virtual IFGFeature
     bool WaitForFenceValue(ID3D12Fence* fence, HANDLE event, UINT64 value);
     UINT64 SignalSCFence();
     void SubmitSCCommandList(UINT index);
+    bool SubmitUICommandList(UINT index);
     virtual void CreateObjects(ID3D12Device* InDevice) = 0;
 
     // After CreateObjects: releases a partly created set of UI / SC command objects, so the next request creates

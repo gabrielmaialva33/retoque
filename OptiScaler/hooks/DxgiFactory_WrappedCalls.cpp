@@ -230,6 +230,8 @@ HRESULT DxgiFactoryWrappedCalls::CreateSwapChain(IDXGIFactory* realFactory, Wrap
                     if (SUCCEEDED(realScResult) && DxgiFactoryHooks::PrepareDx12InteropDesc(
                                                        fgDesc, DxgiFactoryHooks::IsTearingSupported(realFactory)))
                     {
+                        // The bridge emulates fullscreen; its D3D12 presenter always stays windowed.
+                        fgDesc.Windowed = TRUE;
                         {
                             ScopedSkipFGSCCreation skipFGSCCreation {};
                             fgScResult = FGHooks::CreateSwapChain(wrappedFactory, dx12Queue, &fgDesc, &fgSwapChain);

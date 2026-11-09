@@ -106,6 +106,8 @@ class IdentifyGpu
 
     // Startup nvapi check, getPrimaryGpu uses it while detection is running
     static void setNvidiaHint(bool nvidia) { nvidiaHint = nvidia; }
+    // Safe under the loader lock: never enumerate adapters or create a DXGI factory.
+    static bool hasNvidiaHint() { return nvidiaHint.load(std::memory_order_relaxed); }
 
     // Game is rendering through the translation layer, based on the API it's currently using
     static bool gameUsesDxvk();

@@ -72,6 +72,9 @@ class VulkanHooks
     // vkQueuePresentKHR's also times the presented frames for the menu. nullptr when it isn't hooked.
     static PFN_vkVoidFunction OriginalSwapchainFunction(const char* pName);
 
+    // One destruction protocol shared by the bundle and NR detours; next is this caller's trampoline.
+    static void DestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator);
+
     static void Hook(HMODULE vulkan1);
     static void Unhook();
 };

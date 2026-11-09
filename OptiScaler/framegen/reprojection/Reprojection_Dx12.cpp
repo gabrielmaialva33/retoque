@@ -328,14 +328,7 @@ bool Reprojection_Dx12::Present()
     }
 
     // 2. Execute the populated command lists
-    if (_uiCommandListResetted[fIndex])
-    {
-        if (_uiCommandList[fIndex]->Close() == S_OK)
-            _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_uiCommandList[fIndex]);
-
-        _gameCommandQueue->Signal(_uiFence, _uiAllocatorFenceValues[fIndex]);
-        _uiCommandListResetted[fIndex] = false;
-    }
+    SubmitUICommandList(fIndex);
 
     SubmitSCCommandList(fIndex);
 

@@ -43,11 +43,10 @@ with tempfile.TemporaryDirectory(prefix='retoque-deferred-release-') as tmp:
 
 host = (ROOT / 'retoque/dlssnr/DlssNr_VkPresentHost.cpp').read_text()
 prepare = host[host.index('std::optional<bool> PrepareDeviceDestroy('):host.index('void OnDestroyDevice(')]
-assert prepare.index('TeardownDevice(*dev, destroyDeferred)') < prepare.index('DeferredRelease::RetireOwner(H(device), destroyDeferred);')
-assert 'if (tracked)' in prepare and 'bool destroyDeferred = false;' in prepare
-destroy = host[host.index('void OnDestroyDevice('):host.index('\nvoid OnGetQueue(')]
-assert destroy.index('PrepareDeviceDestroy(device)') < destroy.index('DeferredRelease::RetireOwner(') < destroy.index('next(device, allocator);')
-assert 'drained.value_or(false)' in destroy
+assert 'DeferredRelease::RetireOwner' not in prepare
+assert 'TeardownDevice(*dev, destroyDeferred)' in prepare
+assert 'DrainUntrackedDevice(device)' in prepare
+assert 'VulkanHooks::DestroyDevice(next, device, allocator);' in host
 assert 'destroyDeferred = false;' in host[host.index('std::string TeardownDevice('):]
 assert 'destroyDeferred = !unproven && !dev.leaked;' in host
 created = host[host.index('VkResult VKAPI_CALL hkCreateDevice('):]
@@ -55,9 +54,9 @@ assert created.index('DeferredRelease::RegisterOwner(H(*device));') < created.in
 print('PASS: NR teardown retires the owner before destroying its device; creation reopens reused handles')
 
 menu = (ROOT / 'OptiScaler/menu/menu_overlay_vk.cpp').read_text()
-cleanup = menu[menu.index('static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying)\n{'):menu.index('MenuOverlayVk::DestroyVulkanObjects(')]
+cleanup = menu[menu.index('static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying, std::optional<bool> drainProof)\n{'):menu.index('MenuOverlayVk::DestroyVulkanObjects(')]
 assert cleanup.index('vkDeviceWaitIdle(') < cleanup.index('DeferredRelease::FlushOwner(') < cleanup.index('_ImVulkan_Info = {};')
-assert 'if (!_vulkanDeviceLost && !shutdown)' in cleanup[:cleanup.index('DeferredRelease::FlushOwner(')]
+assert '!_vulkanDeviceLost && !shutdown)' in cleanup[:cleanup.index('DeferredRelease::FlushOwner(')]
 assert 'DeferredRelease::RetireOwner((uint64_t) _ImVulkan_Info.Device, false);' in cleanup
 print('PASS: drained menu cleanup flushes deferred resources; device loss abandons them')
 

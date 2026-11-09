@@ -333,7 +333,8 @@ void MenuOverlayVk::DeviceCreated(VkDevice device, const VkDeviceCreateInfo* pCr
     LOG_DEBUG("recorded {0} queue families for device {1:X}", families.size(), (UINT64) device);
 }
 
-static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying = false);
+static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying = false,
+                                       std::optional<bool> drainProof = std::nullopt);
 
 // These hooks see vkd3d-proton's presents as well as a native Vulkan game's. swapchainApi is DX12
 // only once a wrapped DXGI swapchain has presented from a D3D12 queue, which under Proton means
@@ -935,7 +936,7 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
 }
 
 // Caller holds _vkCleanMutex and _vkPresentMutex.
-static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying)
+static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying, std::optional<bool> drainProof)
 {
     State::Instance().menuOverlayIsVulkan = false;
 
@@ -948,7 +949,8 @@ static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying)
 
     _vulkanObjectsCreated = false;
 
-    auto result = vkDeviceWaitIdle(_ImVulkan_Info.Device);
+    const auto result = drainProof.has_value() ? (*drainProof ? VK_SUCCESS : VK_ERROR_DEVICE_LOST)
+                                               : vkDeviceWaitIdle(_ImVulkan_Info.Device);
     if (result != VK_SUCCESS && !shutdown)
         LOG_WARN("vkDeviceWaitIdle error: {0:X}", (UINT) result);
 
@@ -1035,13 +1037,13 @@ static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying)
             vkDestroyDescriptorPool(_ImVulkan_Info.Device, _ImVulkan_Info.DescriptorPool, VK_NULL_HANDLE);
     }
 
-    if (!_vulkanDeviceLost && !shutdown)
+    if (!drainProof.has_value() && !_vulkanDeviceLost && !shutdown)
     {
         // The successful device-wide idle above covers every queued shader destruction, including
         // the blur just released. Do not leave callbacks referring to this device after menu teardown.
         DeferredRelease::FlushOwner((uint64_t) _ImVulkan_Info.Device);
     }
-    else if (_vulkanDeviceLost)
+    else if (!drainProof.has_value() && _vulkanDeviceLost)
     {
         DeferredRelease::RetireOwner((uint64_t) _ImVulkan_Info.Device, false);
     }
@@ -1086,12 +1088,12 @@ bool MenuOverlayVk::DestroyVulkanObjects(bool shutdown, HWND hwnd)
     return DestroyVulkanObjectsLocked(shutdown);
 }
 
-void MenuOverlayVk::ReleaseDevice(VkDevice device)
+void MenuOverlayVk::ReleaseDevice(VkDevice device, std::optional<bool> drained)
 {
     std::scoped_lock presentLock(_vkPresentMutex);
     std::scoped_lock cleanLock(_vkCleanMutex);
     if (device != VK_NULL_HANDLE && device == _ImVulkan_Info.Device)
-        DestroyVulkanObjectsLocked(false, true);
+        DestroyVulkanObjectsLocked(false, true, drained);
     std::lock_guard queuesLock(_deviceQueueCountsMutex);
     _deviceQueueCounts.erase(device);
 }

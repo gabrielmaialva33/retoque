@@ -366,7 +366,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_GetParameters(NVSDK_NGX_Parameter
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
     if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::NVNGXModule() != nullptr &&
-        NVNGXProxy::IsDx11Inited() && NVNGXProxy::D3D11_GetParameters() != nullptr)
+        NVNGXProxy::D3D11_GetParameters() != nullptr)
     {
         LOG_INFO("calling NVNGXProxy::D3D11_GetParameters");
 
@@ -538,13 +538,16 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(ID3D11DeviceContext
     {
         Upscaler upscalerChoice = Upscaler::FSR22; // Default FSR 2.2.1
 
-        // Only automatic selection starts the native runtime speculatively.
+        // Choose the NR bridge before touching the native D3D11 runtime. Only the native
+        // automatic route needs that init; an explicit user choice is applied below as before.
         if (!Config::Instance()->Dx11Upscaler.has_value() && IdentifyGpu::getPrimaryGpu().dlssCapable &&
-            Config::Instance()->DLSSEnabled.value_or_default() && D3D11Device != nullptr &&
-            NVNGXProxy::InitDx11(D3D11Device))
-            upscalerChoice = Upscaler::DLSS;
+            Config::Instance()->DLSSEnabled.value_or_default() && D3D11Device != nullptr)
+        {
+            upscalerChoice = DlssNr::Dx11DefaultUpscaler(Upscaler::DLSS);
+            if (upscalerChoice == Upscaler::DLSS && !NVNGXProxy::InitDx11(D3D11Device))
+                upscalerChoice = Upscaler::FSR22;
+        }
 
-        upscalerChoice = DlssNr::Dx11DefaultUpscaler(upscalerChoice);
         if (Config::Instance()->Dx11Upscaler.has_value())
             upscalerChoice = Config::Instance()->Dx11Upscaler.value();
 

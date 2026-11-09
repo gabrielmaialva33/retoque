@@ -20,7 +20,7 @@ pre=r'''
 #define LOG_WARN(...) ((void)0)
 struct IUnknown { unsigned refs=3; unsigned Release(){return --refs;} };
 static bool proof=false; static int synthReleases=0;
-static bool WaitForQueueIdle(void*){return proof;}
+static bool WaitForFGQueuesIdle(){return proof;}
 static void ReleaseSynthD3D12(){++synthReleases;}
 struct FG { bool keep=false; int releases=0; void* context=(void*)1;
  void ReleaseSwapchain(void*){++releases;if(!keep)context=nullptr;}

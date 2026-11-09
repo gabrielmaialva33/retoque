@@ -632,7 +632,8 @@ static void DyingDeviceAbandonsUnprovenObjects()
     GameCreateSwapchain(device, window, "dyingChain", 2, VK_NULL_HANDLE, &chain);
     g_idleResult = VK_ERROR_OUT_OF_HOST_MEMORY;
     auto mark = Mark();
-    MenuOverlayVk::ReleaseDevice(device);
+    MenuOverlayVk::ReleaseDevice(device, false);
+    Check(Count(Since(mark), "idle ") == 0, "failed host drain must not be retried by the menu");
     Check(Count(Since(mark), "destroy ") == 0, "failed drain destroys no GPU object");
     Check(_vulkanDeviceLost && !_vulkanObjectsCreated && _ImVulkan_Info.Device == VK_NULL_HANDLE,
           "unproven objects abandoned and dead handle removed");

@@ -1556,6 +1556,13 @@ bool DrainForDestroy(DeviceTransport& dev, uint64_t budgetNs)
     if (dev.lost || queues.empty())
         return false;
 
+    std::vector<std::unique_lock<QueueMutex>> held;
+    for (const auto& [queue, locks] : queues)
+    {
+        if (TryHandBackQueueLocks(*locks, held) != nullptr)
+            return false;
+    }
+
     std::vector<VkFence> fences;
     VkFenceCreateInfo fenceInfo { VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
     const VkSubmitInfo submitInfo { VK_STRUCTURE_TYPE_SUBMIT_INFO };
@@ -2617,10 +2624,16 @@ std::string TeardownDevice(DeviceTransport& dev, bool& destroyDeferred)
     DlssNr::AfterUpscaleDeviceGone(dev.device, unproven, dev.lines);
     DlssNr::ShutdownPresentNgx(dev.device, unproven, dev.lines);
 
-    for (const VkSemaphore semaphore : dev.retained)
-        dev.fn.destroySemaphore(dev.device, semaphore, nullptr);
-    const size_t retained = dev.retained.size();
+    // The final device-wide proof also covers retained present semaphores. A failed queue
+    // drain must not free them (or their pools) just because the host's own slot fences finished.
+    if (!unproven)
+    {
+        for (const VkSemaphore semaphore : dev.retained)
+            dev.fn.destroySemaphore(dev.device, semaphore, nullptr);
+    }
+    const size_t retained = unproven ? 0 : dev.retained.size();
     dev.retained.clear();
+    dev.leaked = dev.leaked || unproven;
 
     if (!dev.leaked)
     {
@@ -2692,22 +2705,39 @@ void AttachTarget(Targets<Pfn>& set, const std::array<void*, kTargets>& hooks, P
 
 // --- Device-level hooks, one instantiation per slot --------------------------------------------------------------
 
+// No transport record exists (including bundle-only mode). Keep every known queue locked during
+// the driver-wide idle. A failed tracked drain never reaches this fallback.
+bool DrainUntrackedDevice(VkDevice device)
+{
+    std::vector<std::unique_lock<QueueMutex>> held;
+    const auto queues = DeviceQueues(device);
+    for (const auto& [queue, locks] : queues)
+    {
+        if (TryHandBackQueueLocks(*locks, held) != nullptr)
+            return false;
+    }
+    PFN_vkDeviceWaitIdle waitIdle = nullptr;
+    return Resolve(device, "vkDeviceWaitIdle", waitIdle) && waitIdle(device) == VK_SUCCESS;
+}
+
 std::optional<bool> PrepareDeviceDestroy(VkDevice device)
 {
     HostActivity activity("vkDestroyDevice", H(device));
     std::string line;
     std::vector<std::string> modelLines;
-    bool tracked = false;
     bool destroyDeferred = false;
     {
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(device))
         {
-            tracked = true;
             line = "DLSS-NR Vulkan present host: device " + Hex(H(device)) + " #" + std::to_string(dev->id) +
                    " destroyed; " + TeardownDevice(*dev, destroyDeferred);
             modelLines.swap(dev->lines);
             g_transport.erase(device);
+        }
+        else
+        {
+            destroyDeferred = DrainUntrackedDevice(device);
         }
     }
 
@@ -2725,29 +2755,15 @@ std::optional<bool> PrepareDeviceDestroy(VkDevice device)
         Log(traceLines);
     }
 
-    {
-        std::lock_guard lock(g_registryMutex);
-        g_registry.OnDeviceDestroyed(H(device));
-    }
-
-    EraseQueueLocks(device);
-
     if (!line.empty())
         LOG_INFO("{}", line);
 
-    // Shader_Vk now queues its destruction. Finish/drop this device's queue before its handle dies,
-    // also waiting for callbacks detached by a concurrent collector. Never destroy after a failed drain.
-    if (tracked)
-        DeferredRelease::RetireOwner(H(device), destroyDeferred);
-    return tracked ? std::optional<bool>(destroyDeferred) : std::nullopt;
+    return destroyDeferred;
 }
 
 void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator)
 {
-    const auto drained = PrepareDeviceDestroy(device);
-    // A second hook may already have retired it; never infer completion from destroy itself.
-    DeferredRelease::RetireOwner(H(device), drained.value_or(false));
-    next(device, allocator);
+    VulkanHooks::DestroyDevice(next, device, allocator);
 }
 
 void OnGetQueue(PFN_vkGetDeviceQueue next, VkDevice device, uint32_t family, uint32_t index, VkQueue* queue)
@@ -3952,6 +3968,15 @@ template <typename Pfn> void Attach(Pfn& original, void* hook)
         DetourAttach(&(PVOID&) original, hook);
 }
 } // namespace
+
+void DlssNr::VkPresentHost::FinishDeviceDestroy(VkDevice device)
+{
+    {
+        std::lock_guard lock(g_registryMutex);
+        g_registry.OnDeviceDestroyed(H(device));
+    }
+    EraseQueueLocks(device);
+}
 
 void DlssNr::VkPresentHost::NoteStreamline(int level, const char* message)
 {

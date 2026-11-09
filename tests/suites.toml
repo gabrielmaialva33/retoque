@@ -1168,3 +1168,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 600
 summary = "Vulkan pre-upscale rules, composite identities, canonical tickets and production scope with fake prepare/SR; compiling mutants, no GPU qualification."
+
+[upstream-review]
+path = "upstream-review"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Production-slice regressions for upstream integration review: teardown, NGX, FG and bridge contracts."

@@ -507,8 +507,6 @@ struct NvngxModule
 struct CustomNgxModule
 {
     NvngxModule module;
-    // Custom runtimes expose the SDK ABI, not the driver core's two-argument entry.
-    PFN_D3D12_Shutdown1 shutdown1 = nullptr;
     bool dx12Inited = false;
 };
 
@@ -565,6 +563,9 @@ class NVNGXProxy
             (PFN_D3D12_Init_Ext) KernelBaseProxy::GetProcAddress_()(module.dll, "NVSDK_NGX_D3D12_Init_Ext");
         module.D3D12_Shutdown =
             (PFN_D3D12_Shutdown) KernelBaseProxy::GetProcAddress_()(module.dll, "NVSDK_NGX_D3D12_Shutdown");
+        // A custom nvngx.dll is also a raw NGX runtime, not the public SDK wrapper.
+        module.D3D12_Shutdown1 =
+            (PFN_D3D12_CoreShutdown1) KernelBaseProxy::GetProcAddress_()(module.dll, "NVSDK_NGX_D3D12_Shutdown1");
         module.D3D12_GetParameters =
             (PFN_D3D12_GetParameters) KernelBaseProxy::GetProcAddress_()(module.dll, "NVSDK_NGX_D3D12_GetParameters");
         module.D3D12_AllocateParameters = (PFN_D3D12_AllocateParameters) KernelBaseProxy::GetProcAddress_()(
@@ -1025,13 +1026,8 @@ class NVNGXProxy
 
     static PFN_D3D11_GetParameters D3D11_GetParameters() { return _module.D3D11_GetParameters; }
 
-    static PFN_D3D11_DestroyParameters D3D11_DestroyParameters()
-    {
-        if (!_dx11Inited)
-            return nullptr;
-
-        return _module.D3D11_DestroyParameters;
-    }
+    // Core-owned tables outlive feature initialization, including failed init and shutdown.
+    static PFN_D3D11_DestroyParameters D3D11_DestroyParameters() { return _module.D3D11_DestroyParameters; }
 
     static PFN_D3D11_CreateFeature D3D11_CreateFeature()
     {
@@ -1107,8 +1103,6 @@ class NVNGXProxy
 
             module.filePath = path.wstring();
             GetDx12Functions(module);
-            custom.shutdown1 =
-                (PFN_D3D12_Shutdown1) KernelBaseProxy::GetProcAddress_()(module.dll, "NVSDK_NGX_D3D12_Shutdown1");
         }
 
         auto usable = (module.D3D12_Init_ProjectID != nullptr || module.D3D12_Init_Ext != nullptr) &&
@@ -1134,8 +1128,11 @@ class NVNGXProxy
 
         if (custom.module.D3D12_Shutdown != nullptr)
             custom.module.D3D12_Shutdown();
-        else if (custom.shutdown1 != nullptr)
-            custom.shutdown1(InDevice);
+        else if (custom.module.D3D12_Shutdown1 != nullptr && InDevice != nullptr)
+        {
+            unsigned int remaining = 0;
+            custom.module.D3D12_Shutdown1(InDevice, &remaining);
+        }
 
         custom.dx12Inited = false;
     }
@@ -1172,13 +1169,8 @@ class NVNGXProxy
 
     static PFN_D3D12_GetParameters D3D12_GetParameters() { return _module.D3D12_GetParameters; }
 
-    static PFN_D3D12_DestroyParameters D3D12_DestroyParameters()
-    {
-        if (!_dx12Inited)
-            return nullptr;
-
-        return _module.D3D12_DestroyParameters;
-    }
+    // Core-owned tables outlive feature initialization, including failed init and shutdown.
+    static PFN_D3D12_DestroyParameters D3D12_DestroyParameters() { return _module.D3D12_DestroyParameters; }
 
     static PFN_D3D12_CreateFeature D3D12_CreateFeature()
     {
@@ -1296,13 +1288,8 @@ class NVNGXProxy
 
     static PFN_VULKAN_GetParameters VULKAN_GetParameters() { return _module.VULKAN_GetParameters; }
 
-    static PFN_VULKAN_DestroyParameters VULKAN_DestroyParameters()
-    {
-        if (!_vulkanInited)
-            return nullptr;
-
-        return _module.VULKAN_DestroyParameters;
-    }
+    // Core-owned tables outlive feature initialization, including failed init and shutdown.
+    static PFN_VULKAN_DestroyParameters VULKAN_DestroyParameters() { return _module.VULKAN_DestroyParameters; }
 
     static PFN_VULKAN_CreateFeature VULKAN_CreateFeature()
     {

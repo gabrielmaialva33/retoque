@@ -197,6 +197,21 @@ static bool WaitForQueueIdle(ID3D12CommandQueue* queue)
     return afterWait != UINT64_MAX && afterWait >= waitValue;
 }
 
+// The retained queue belongs to this FG swapchain. State::currentCommandQueue can instead be
+// another chain's present queue (or null). NR/synth use the provider's game queue; cover it too
+// when an interposer makes it distinct from the retained creation queue.
+static bool WaitForFGQueuesIdle()
+{
+    if (!WaitForQueueIdle(currentCommandQueue))
+        return false;
+
+    auto* fg = State::Instance().currentFG;
+    auto* gameQueue = fg != nullptr ? fg->GetCommandQueue() : nullptr;
+    if (gameQueue != nullptr && gameQueue != currentCommandQueue)
+        return WaitForQueueIdle(gameQueue);
+    return true;
+}
+
 // Nested FG swapchain resizes would deadlock on the FG mutex
 static thread_local int resizeDepth = 0;
 
@@ -506,12 +521,11 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
         {
             LOG_WARN("Looks like game is creating new swapchain, without releasing old one!");
 
-            if (State::Instance().currentCommandQueue != nullptr && resizeFence != nullptr &&
-                resizeFenceEvent != nullptr)
+            if (currentCommandQueue != nullptr && resizeFence != nullptr && resizeFenceEvent != nullptr)
             {
                 LOG_DEBUG("Waiting for GPU to finish");
 
-                const auto waitResult = WaitForQueueIdle(State::Instance().currentCommandQueue);
+                const auto waitResult = WaitForFGQueuesIdle();
 
                 LOG_DEBUG("WaitForSingleObject result: {}", waitResult);
             }
@@ -633,12 +647,11 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
         {
             LOG_WARN("Looks like game is creating new swapchain, without releasing old one!");
 
-            if (State::Instance().currentCommandQueue != nullptr && resizeFence != nullptr &&
-                resizeFenceEvent != nullptr)
+            if (currentCommandQueue != nullptr && resizeFence != nullptr && resizeFenceEvent != nullptr)
             {
                 LOG_DEBUG("Waiting for GPU to finish");
 
-                const auto waitResult = WaitForQueueIdle(State::Instance().currentCommandQueue);
+                const auto waitResult = WaitForFGQueuesIdle();
 
                 LOG_DEBUG("WaitForSingleObject result: {}", waitResult);
             }
@@ -964,18 +977,13 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
         return o_FGSCResizeBuffers(This, BufferCount, Width, Height, NewFormat, SwapChainFlags);
     }
 
-    if (State::Instance().currentCommandQueue != nullptr && resizeFence != nullptr && resizeFenceEvent != nullptr)
+    // Drain the queues owned by this FG chain before any old-buffer resources can be released.
+    if (!WaitForFGQueuesIdle())
     {
-        LOG_DEBUG("Waiting for GPU to finish before resizing buffers");
-
-        const auto waitResult = WaitForQueueIdle(State::Instance().currentCommandQueue);
-
-        LOG_DEBUG("WaitForSingleObject result: {}", waitResult);
-
-        // Synthesized FG's pair is sized to the old buffers, and the queue is idle now
-        if (waitResult)
-            ReleaseSynthD3D12();
+        LOG_ERROR("FG resize refused: the owned queues have no completion proof");
+        return DXGI_ERROR_WAS_STILL_DRAWING;
     }
+    ReleaseSynthD3D12();
 
     if (State::Instance().activeFgOutput == FGOutput::XeFG)
     {
@@ -1172,18 +1180,13 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain3* This, UINT BufferCount, UINT 
                                     ppPresentQueue);
     }
 
-    if (State::Instance().currentCommandQueue != nullptr && resizeFence != nullptr && resizeFenceEvent != nullptr)
+    // Drain the queues owned by this FG chain before any old-buffer resources can be released.
+    if (!WaitForFGQueuesIdle())
     {
-        LOG_DEBUG("Waiting for GPU to finish before resizing buffers");
-
-        const auto waitResult = WaitForQueueIdle(State::Instance().currentCommandQueue);
-
-        LOG_DEBUG("WaitForSingleObject result: {}", waitResult);
-
-        // Synthesized FG's pair is sized to the old buffers, and the queue is idle now
-        if (waitResult)
-            ReleaseSynthD3D12();
+        LOG_ERROR("FG resize refused: the owned queues have no completion proof");
+        return DXGI_ERROR_WAS_STILL_DRAWING;
     }
+    ReleaseSynthD3D12();
 
     if (State::Instance().activeFgOutput == FGOutput::XeFG)
     {
@@ -1825,7 +1828,7 @@ void FGHooks::ReleaseFGSwapchain(IUnknown* swapchain, bool releaseReferences)
     {
         LOG_DEBUG("Waiting for GPU to finish");
 
-        const auto waitResult = WaitForQueueIdle(State::Instance().currentCommandQueue);
+        const auto waitResult = WaitForFGQueuesIdle();
 
         LOG_DEBUG("WaitForSingleObject result: {}", waitResult);
         if (!waitResult)
