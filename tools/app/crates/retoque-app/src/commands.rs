@@ -6,6 +6,8 @@ use crate::model::PlanKind;
 
 pub(crate) enum AppCommand {
     SelectGame(String),
+    PrepareRepair(std::path::PathBuf, retoque_data::doctor::Repair),
+    RefreshSelected,
     RequestPlan(std::path::PathBuf, PlanKind, PlanInputs),
     RescanLibrary,
     ConfirmReview(u64),

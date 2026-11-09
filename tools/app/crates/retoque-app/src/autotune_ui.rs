@@ -96,7 +96,7 @@ impl RetoqueApp {
             response.on_hover_text(format!("{} {driver}", self.tr("auto.driver")));
         }
     }
-    fn autotune_game_facts(&self) -> GameFacts {
+    pub(crate) fn autotune_game_facts(&self) -> GameFacts {
         // One fact builder for the CLI and the window (retoque-data::recommend::facts_for_with_ini), fed with what the
         // view already holds: no disk reads on the UI thread.
         let status = self.view.status.as_ref().and_then(|r| r.as_ref().ok());
@@ -116,7 +116,9 @@ impl RetoqueApp {
         if let Some(game) = self.selected_game()
             && let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref())
         {
-            return recommend::facts_for_with_ini(game, target, status, &components, ini);
+            let mut facts = recommend::facts_for_with_ini(game, target, status, &components, ini);
+            facts.last_session_api = self.view.intelligence.latest_log.as_ref().and_then(|l| l.api.clone());
+            return facts;
         }
         // A folder the library does not list (added by path, or a stale selection): what the status and the ini say.
         let tracked = status.is_some_and(|s| s.receipt.is_some());
@@ -133,6 +135,7 @@ impl RetoqueApp {
             untracked: !tracked && proxies,
             sm86_installed: !components.is_empty(),
             lsfg_enabled,
+            last_session_api: self.view.intelligence.latest_log.as_ref().and_then(|l| l.api.clone()),
             ..GameFacts::default()
         }
     }
@@ -185,7 +188,6 @@ impl RetoqueApp {
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("auto.title"));
             self.nr_compatibility_notice(ui);
-            let facts = self.autotune_game_facts();
             if self.tuning.gpus.is_none() || self.view.status.is_none() || !self.autotune_known_components() {
                 ui.add(egui::Label::new(self.tr("auto.checking")).wrap());
                 if let Some(Err(e)) = &self.tuning.installed {
@@ -193,14 +195,15 @@ impl RetoqueApp {
                 }
                 return;
             }
-            let recs = recommend::recommend(self.tuning.gpus.as_ref().and_then(|g| g.first()), &facts);
+            let recs = self.view.intelligence.recommendations.clone();
             if recs.is_empty() {
                 ui.add(egui::Label::new(self.tr("auto.none")).wrap());
             }
-            for rec in recs {
+            for rec in recs.iter() {
                 ui.push_id(rec.id, |ui| {
                     ui.label(RichText::new(t(self.lang, rec.title_key)).strong());
                     ui.add(egui::Label::new(t(self.lang, rec.why_key)).wrap());
+                    recommendation_evidence(ui, self.lang, rec);
                     let mut ready = !self.busy();
                     match &rec.needs {
                         Some(Need::RetoqueInstalled) => {
@@ -228,9 +231,11 @@ impl RetoqueApp {
                     }
                     if ui.add_enabled(ready, theme::primary(self.tr("auto.apply"))).clicked() {
                         let mut request = Request::default();
-                        for action in rec.actions {
+                        for action in &rec.actions {
                             match action {
-                                Action::SetIni { section, key, value } => request.edits.push((section, key, value)),
+                                Action::SetIni { section, key, value } => {
+                                    request.edits.push((section.clone(), key.clone(), value.clone()))
+                                }
                                 Action::InstallComponent(ComponentKind::DlssgSm86) => {
                                     if let Some(c) = self.autotune_selected_component() {
                                         request.component = Some(ComponentChange::Install(c));
@@ -250,7 +255,7 @@ impl RetoqueApp {
                             }
                         }
                         if rec.id == "lsfg_x2" {
-                            request.edits = self.autotune_lsfg_edits(2, &facts);
+                            request.edits = self.autotune_lsfg_edits(2, &self.view.intelligence.facts);
                         }
                         self.autotune_request(t(self.lang, rec.title_key).into(), request);
                     }
@@ -273,9 +278,9 @@ impl RetoqueApp {
         ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         ui.add_space(12.0);
         widgets::card(ui, |ui| {
+            let facts = self.view.intelligence.facts.clone();
             widgets::card_title(ui, self.tr("auto.lsfg"));
             ui.add(egui::Label::new(self.tr("auto.ls_help")).wrap());
-            let facts = self.autotune_game_facts();
             let ini = self
                 .view
                 .ini
@@ -485,6 +490,7 @@ impl RetoqueApp {
             return;
         }
         let total = p.plans.iter().map(|p| p.steps().len()).sum();
+        self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, total));
         self.write_kinds.insert(target.clone(), PlanKind::Settings);
         self.tuning.writes.insert(target.clone());
@@ -516,4 +522,13 @@ impl RetoqueApp {
             }
         });
     }
+}
+
+pub(crate) fn recommendation_evidence(ui: &mut egui::Ui, lang: Lang, rec: &recommend::Recommendation) {
+    use crate::tabs::doctor::{evidence, text};
+    ui.label(text(lang, rec.confidence.key()));
+    if let Some(key) = rec.caveat_key {
+        ui.label(text(lang, key));
+    }
+    ui.collapsing(t(lang, "doctor.evidence"), |ui| evidence(ui, lang, &rec.evidence));
 }

@@ -1,5 +1,10 @@
+// In scope for every subcommand, including progress output in apply callbacks.
+macro_rules! println {
+    ($($arg:tt)*) => { crate::output::line(format_args!($($arg)*)) };
+}
 mod autotune;
 mod doctor;
+mod output;
 
 use retoque_core::{
     Error, Foreign, InstallOptions, Refusal, Step, apply, plan_install, plan_settings, plan_uninstall, status,
@@ -329,5 +334,8 @@ fn main() {
             1
         };
         std::process::exit(code);
+    }
+    if output::failed() {
+        std::process::exit(1);
     }
 }

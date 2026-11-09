@@ -21,6 +21,29 @@ impl RetoqueApp {
             }
         });
         ui.add_space(12.0);
+        if !self.view.intelligence.log_diagnoses.is_empty() {
+            widgets::card(ui, |ui| {
+                widgets::card_title(ui, self.tr("log.diagnoses"));
+                for diagnosis in &self.view.intelligence.log_diagnoses {
+                    ui.push_id(diagnosis.id, |ui| {
+                        ui.strong(crate::tabs::doctor::text(self.lang, diagnosis.title_key));
+                        ui.label(crate::tabs::doctor::text(self.lang, diagnosis.why_key));
+                        ui.monospace(&diagnosis.evidence_line);
+                        ui.add_enabled_ui(!self.busy(), |ui| {
+                            crate::tabs::doctor::repair_button(
+                                ui,
+                                diagnosis.repair.as_ref(),
+                                &target,
+                                self.lang,
+                                commands,
+                                self.payload.is_some(),
+                            )
+                        });
+                        ui.add_space(8.0);
+                    });
+                }
+            });
+        }
         let (files, result) = match &self.view.logs {
             None => {
                 ui.horizontal(|ui| {
@@ -29,7 +52,7 @@ impl RetoqueApp {
                 });
                 return;
             }
-            Some((files, result)) => (files.clone(), result.clone()),
+            Some((files, result)) => (files, result),
         };
         match result {
             Err(e) => {
@@ -73,7 +96,7 @@ impl RetoqueApp {
                 ui.add_space(12.0);
                 let errors = s.error_count.max(s.errors.len());
                 widgets::card(ui, |ui| {
-                    widgets::card_title(ui, &log_verdict(self.lang, &s));
+                    widgets::card_title(ui, &log_verdict(self.lang, s));
                     ui.label(
                         RichText::new(self.tr("log.evidence_note"))
                             .size(13.0)

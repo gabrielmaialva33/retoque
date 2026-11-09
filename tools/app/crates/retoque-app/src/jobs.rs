@@ -18,6 +18,8 @@ type Work = Box<dyn FnOnce() + Send>;
 
 pub struct TaskHub {
     tx: Sender<Outcome>,
+    watcher: crate::watcher::WatcherLane,
+    watch_generation: u64,
     rx: Receiver<Outcome>,
     fast: Sender<Work>,
     heavy: Sender<Work>,
@@ -32,6 +34,8 @@ impl TaskHub {
     pub fn new(ctx: egui::Context) -> Self {
         let (tx, rx) = channel();
         Self {
+            watcher: crate::watcher::WatcherLane::new(tx.clone(), ctx.clone()),
+            watch_generation: 0,
             tx,
             rx,
             fast: lane("fast"),
@@ -42,6 +46,24 @@ impl TaskHub {
             requests: Default::default(),
             epoch: Arc::new(AtomicU64::new(0)),
         }
+    }
+    pub(crate) fn watch(&mut self, target: Option<PathBuf>) {
+        self.watch_generation += 1;
+        if !self.watcher.select(self.watch_generation, target.clone())
+            && let Some(target) = target
+        {
+            let _ = self.tx.send(Outcome::Watch {
+                generation: self.watch_generation,
+                target,
+                result: Err("watcher worker unavailable".into()),
+            });
+        }
+    }
+    pub(crate) fn begin_write(&self, target: &std::path::Path) {
+        self.watcher.begin_write(target);
+    }
+    pub(crate) fn end_write(&self, target: &std::path::Path) {
+        self.watcher.end_write(target);
     }
     pub fn advance_epoch(&mut self) {
         self.epoch.fetch_add(1, Ordering::Relaxed);
@@ -56,16 +78,16 @@ impl TaskHub {
         work: impl FnOnce(&Sender<Outcome>) -> Outcome + Send + 'static,
     ) {
         let lane = match name {
-            "status" | "ini" | "logs" | "model-usage" => Lane::Fast,
+            "status" | "ini" | "logs" | "model-usage" | "doctor" => Lane::Fast,
             _ => Lane::Heavy,
         };
         let scoped = matches!(
             name,
-            "status" | "ini" | "logs" | "plan" | "autotune-plan" | "autotune-facts" | "model-inspection"
+            "doctor" | "status" | "ini" | "logs" | "plan" | "autotune-plan" | "autotune-facts" | "model-inspection"
         );
         self.submit(lane, scoped, name, target, work);
     }
-    /// Watcher is a reserved fast-I/O lane; no filesystem watcher is installed here.
+    /// Short background work. Native watches live in the dedicated watcher lane.
     pub fn submit(
         &mut self,
         lane: Lane,
@@ -148,6 +170,7 @@ impl TaskHub {
                         out.push(*outcome);
                     }
                 }
+                Outcome::Watch { generation, .. } if generation != self.watch_generation => {}
                 other => out.push(other),
             }
         }

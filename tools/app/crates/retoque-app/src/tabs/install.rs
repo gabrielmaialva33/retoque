@@ -2,12 +2,6 @@ use crate::app::*;
 
 impl RetoqueApp {
     pub(crate) fn install_tab(&mut self, ui: &mut egui::Ui) {
-        self.autotune_card(ui);
-        self.autotune_lsfg(ui);
-        ui.add_space(12.0);
-        if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target) {
-            crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx);
-        }
         let Some(target) = self.view.target.clone() else { return };
         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
         let busy = self.busy();
@@ -32,6 +26,15 @@ impl RetoqueApp {
                 };
             }
         });
+        ui.add_space(12.0);
+        if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target) {
+            ui.add_enabled_ui(!self.busy(), |ui| {
+                crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx, self.payload.is_some())
+            });
+        }
+        self.autotune_card(ui);
+        self.autotune_lsfg(ui);
+        ui.add_space(12.0);
         let _ = &target;
         if let Some(Ok(s)) = &self.view.status
             && let Some(option) = s.launch_option.clone()

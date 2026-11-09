@@ -29,3 +29,5 @@ pub(crate) mod tabs;
 pub(crate) mod state;
 
 pub mod error;
+pub(crate) mod intelligence;
+pub(crate) mod watcher;
