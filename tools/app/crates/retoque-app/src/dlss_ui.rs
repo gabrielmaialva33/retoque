@@ -156,6 +156,9 @@ impl RetoqueApp {
         });
     }
     pub(crate) fn dlss_optimize_checkbox(&mut self, ui: &mut egui::Ui) {
+        // "Optimize automatically" needs the game's DLSS files and the catalog state; inspect them here too, not
+        // only when the DLSS card on the Model tab has been shown (cached per game and facts generation).
+        self.dlss_inspect();
         let target = self.view.target.as_ref();
         let mut selected = target.is_some() && self.tuning.dlss.selected_for.as_ref() == target;
         if ui.checkbox(&mut selected, self.tr("dlss.optimize")).changed() {
@@ -256,6 +259,39 @@ impl State {
 mod tests {
     use super::*;
     use egui_kittest::{Harness, kittest::Queryable};
+    #[test]
+    fn optimize_checkbox_inspects_the_game_dlss_without_opening_the_dlss_card() {
+        let temp = tempfile::tempdir().unwrap();
+        let game = temp.path().join("game");
+        std::fs::create_dir_all(&game).unwrap();
+        let mut app = crate::app_tests::shell_tests::app();
+        app.view.target = Some(game.clone());
+        app.selected = Some("synthetic".into());
+        app.library_state.games.push(Game {
+            id: "synthetic".into(),
+            name: "Synthetic".into(),
+            store: Store::Manual,
+            install_dir: game.clone(),
+            runtime: Runtime::Unknown,
+            targets: vec![],
+            dlss_anywhere: vec!["nvngx_dlss.dll".into()],
+            registered: true,
+        });
+        assert!(app.tuning.dlss.key.is_none());
+        let mut h = Harness::builder().build_ui_state(
+            |ui, app: &mut RetoqueApp| {
+                app.context = ui.ctx().clone();
+                app.dlss_optimize_checkbox(ui);
+            },
+            app,
+        );
+        h.run();
+        assert_eq!(
+            h.state().tuning.dlss.key.as_ref().map(|(root, _)| root.clone()),
+            Some(game),
+            "drawing the one-click DLSS option must start the inspection"
+        );
+    }
     #[test]
     fn standalone_root_restore_opens_review_in_both_languages() {
         use std::{
