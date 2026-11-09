@@ -321,7 +321,7 @@ impl RetoqueApp {
         info: &retoque_data::model_compat::ModelCompatibility,
     ) {
         use retoque_data::model_compat::Compatibility;
-        let gpu = self.tuning.gpus.as_ref().and_then(|g| g.first());
+        let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
         let (key, color) = match info.for_gpu(gpu) {
             Compatibility::Incompatible => ("mdl.incompatible", theme::WARN),
             Compatibility::Compatible => ("mdl.arch_match", theme::MUTED),
@@ -352,7 +352,7 @@ impl RetoqueApp {
             .unwrap_or(&[]);
         let (_, alternative) = retoque_data::recommend::nr_model(
             &info.compatibility,
-            self.tuning.gpus.as_ref().and_then(|g| g.first()),
+            self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary),
             models,
         );
         if let Some(model) = alternative {
@@ -368,12 +368,7 @@ impl RetoqueApp {
                 );
             }
         } else if self.tab != Tab::Model && !self.doctor_has_model_fetch() {
-            let gpu = self
-                .tuning
-                .gpus
-                .as_ref()
-                .filter(|g| g.len() == 1)
-                .and_then(|g| g.first());
+            let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
             let missing_or_incompatible = (!info.present && info.path.is_some())
                 || info.compatibility.for_gpu(gpu) == retoque_data::model_compat::Compatibility::Incompatible;
             if missing_or_incompatible && let Some(remote) = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu) {
@@ -410,11 +405,7 @@ impl RetoqueApp {
     }
 
     pub(crate) fn nr_fetch_single_gpu(&self) -> Option<&retoque_data::gpu::Gpu> {
-        self.tuning
-            .gpus
-            .as_ref()
-            .filter(|g| g.len() == 1)
-            .and_then(|g| g.first())
+        self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary)
     }
 
     pub(crate) fn nr_fetch_first_run_eligible(&self) -> Option<RemoteModel> {

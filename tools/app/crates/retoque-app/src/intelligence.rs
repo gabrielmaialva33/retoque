@@ -176,9 +176,8 @@ impl RetoqueApp {
             gpu: self
                 .tuning
                 .gpus
-                .as_ref()
-                .filter(|g| g.len() == 1)
-                .and_then(|g| g.first())
+                .as_deref()
+                .and_then(retoque_data::gpu::primary)
                 .cloned(),
             latest: self.view.intelligence.latest_log.clone(),
             displayed: self

@@ -55,12 +55,24 @@ impl RetoqueApp {
             self.tuning.dlss.error = Some(self.tr("dlss.download_first").into());
         }
     }
+    /// The game folder holds an app receipt for Retoque (as opposed to only a root DLSS receipt).
+    fn dlss_target_has_receipt(&self) -> bool {
+        matches!(&self.view.status, Some(Ok(status)) if status.receipt.is_some())
+    }
+    /// Name the review and the button after what will really be undone.
+    pub(crate) fn dlss_restore_label(&self) -> &'static str {
+        match (self.dlss_target_has_receipt(), self.tuning.dlss.restorable) {
+            (true, true) => "dlss.restore",
+            (false, true) => "dlss.restore_only",
+            _ => "shell.review_remove",
+        }
+    }
     pub(crate) fn dlss_restore(&mut self) {
         let Some(install_dir) = self.dlss_install_dir() else {
             return;
         };
         self.autotune_request(
-            self.tr("dlss.restore").into(),
+            self.tr(self.dlss_restore_label()).into(),
             crate::autotune::Request {
                 dlss: Some(Change::Restore { install_dir }),
                 ..Default::default()
@@ -159,13 +171,17 @@ impl RetoqueApp {
                 .files
                 .iter()
                 .map(|file| {
+                    // Only an older known version is offered an update; equal or newer reads as current.
+                    let offer = match file.version.as_deref() {
+                        Some(version) if dlss::current(version) => self.tr("dlss.current").to_string(),
+                        _ => format!("{} {}", dlss::VERSION, self.tr("dlss.available")),
+                    };
                     format!(
-                        "{} · {} {} · {} {}",
+                        "{} · {} {} · {}",
                         file.path,
                         self.tr("dlss.installed"),
                         file.version.as_deref().unwrap_or(self.tr("mdl.version_unknown")),
-                        dlss::VERSION,
-                        self.tr("dlss.available")
+                        offer
                     )
                 })
                 .collect();
@@ -195,7 +211,7 @@ impl RetoqueApp {
             }
             if self.tuning.dlss.restorable
                 && ui
-                    .add_enabled(!self.busy(), egui::Button::new(self.tr("dlss.restore")))
+                    .add_enabled(!self.busy(), egui::Button::new(self.tr(self.dlss_restore_label())))
                     .clicked()
             {
                 self.dlss_restore();
@@ -282,7 +298,7 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "dlss.restore"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "dlss.restore_only"))
                 .click();
             h.run_steps(2);
             let deadline = Instant::now() + Duration::from_secs(8);

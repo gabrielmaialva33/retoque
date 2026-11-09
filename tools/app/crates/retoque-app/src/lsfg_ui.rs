@@ -210,6 +210,16 @@ impl RetoqueApp {
         {
             edits.push(prepare::shader_dir_edit(cache, wine));
         }
+        // Option values are case-insensitive for OptiScaler (FGInput=Synthesized == synthesized): do not propose a
+        // change that only rewrites letter case. Paths keep exact comparison (case matters on Linux).
+        edits.retain(|(section, key, value)| {
+            let is_path = key.ends_with("Path") || key.ends_with("Dir");
+            let now = match &self.view.ini {
+                Some(Ok(Some(ini))) => ini.get(section, key),
+                _ => None,
+            };
+            !matches!(now, Some(now) if !is_path && now.eq_ignore_ascii_case(value) && now != value)
+        });
         edits
     }
     pub(crate) fn lsfg_card(&mut self, ui: &mut egui::Ui) {

@@ -90,7 +90,7 @@ impl RetoqueApp {
             ui.add(egui::Label::new(self.tr("auto.gpu_reading")).wrap());
             return;
         };
-        let Some(gpu) = gpus.first() else {
+        let Some(gpu) = retoque_data::gpu::primary(gpus) else {
             ui.label(RichText::new(self.tr("auto.gpu_unknown")).small().color(theme::MUTED));
             return;
         };

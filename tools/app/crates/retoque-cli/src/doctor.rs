@@ -90,7 +90,7 @@ pub fn run(game: &Path, json: bool) -> Result<(), Error> {
     let components = retoque_core::installed_components(game)?;
     let gpus = retoque_data::gpu::detect();
     // Multiple adapters do not identify which one this game uses.
-    let gpu = (gpus.len() == 1).then(|| &gpus[0]);
+    let gpu = retoque_data::gpu::primary(&gpus);
     let lsfg_enabled = ini
         .as_ref()
         .and_then(|i| i.get("LSFG", "Enabled"))

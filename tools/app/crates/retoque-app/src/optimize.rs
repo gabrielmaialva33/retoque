@@ -4,13 +4,14 @@ use crate::{error::AppError, model::Edit};
 use std::path::PathBuf;
 
 pub fn first_run_eligible(gpus: &[retoque_data::gpu::Gpu]) -> bool {
-    gpus.len() == 1
-        && gpus[0].vendor == retoque_data::gpu::Vendor::Nvidia
-        && gpus[0]
-            .name
-            .as_bytes()
-            .windows(6)
-            .any(|name| name.eq_ignore_ascii_case(b"RTX 20") || name.eq_ignore_ascii_case(b"RTX 30"))
+    retoque_data::gpu::primary(gpus).is_some_and(|gpu| {
+        gpu.vendor == retoque_data::gpu::Vendor::Nvidia
+            && gpu
+                .name
+                .as_bytes()
+                .windows(6)
+                .any(|name| name.eq_ignore_ascii_case(b"RTX 20") || name.eq_ignore_ascii_case(b"RTX 30"))
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
