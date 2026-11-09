@@ -166,5 +166,10 @@ class StreamlineProxy
         Boundary::inits.push_back(api);
         return Boundary::initOk;
     }
+    // Device unwrapping is outside this binding fixture; the binding itself remains production.
+    static sl::Result SetD3D12Device(void* device, bool bind)
+    {
+        return bind ? SetD3DDeviceAndBind(device) : _slSetD3DDevice(device);
+    }
     // @production@
 };

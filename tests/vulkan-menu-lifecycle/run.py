@@ -59,11 +59,13 @@ for name, field, fake in (('IsInited', '_isInited', 'g_menuInited'), ('Handle', 
             common.count(f'std::atomic_ref<{"HWND" if field == "_handle" else "bool"}>({field}).store(') != 2):
         sys.exit(f'FAIL: MenuCommon::Init and Shutdown no longer both store {field} through std::atomic_ref')
 fakes = (HERE / 'fakes.cpp').read_text()
-fakes = fakes.replace('@INITED_READ@', getters['IsInited']).replace('@HANDLE_READ@', getters['Handle'])
-assert '@' + 'INITED_READ@' not in fakes and '@' + 'HANDLE_READ@' not in fakes
+fakes = fakes.replace('PRODUCTION_INITED_READ', getters['IsInited']).replace('PRODUCTION_HANDLE_READ', getters['Handle'])
+assert 'PRODUCTION_INITED_READ' not in fakes and 'PRODUCTION_HANDLE_READ' not in fakes
 print('PASS: source shape: MenuCommon publishes its window and inited flag through std::atomic_ref', flush=True)
 
-unit = overlay + '\n' + fakes + '\n'
+vkfeature = (ROOT / 'OptiScaler/framegen/IFGFeature_Vk.cpp').read_text()
+srgb = vkfeature[vkfeature.index('VkFormat IFGFeature_Vk::WithoutSrgb('):vkfeature.index('static VkFormat VelocityFormat(')]
+unit = overlay + '\n' + srgb + fakes + '\n'
 unit += ('// ---- sliced from Vulkan_Hooks.cpp hkvkCreateWin32SurfaceKHR ----\n'
          'static HWND _hwnd = nullptr;\nstruct FakeSurfaceInfo { HWND hwnd; };\n'
          'static void SurfaceHookTail(const FakeSurfaceInfo* pCreateInfo)\n{\n' + surface + '}\n\n')

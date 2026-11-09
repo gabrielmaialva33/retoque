@@ -9,6 +9,12 @@
 using HRESULT = int32_t;
 using BOOL = int;
 using UINT = unsigned int;
+using DWORD = unsigned long;
+using LONG = long;
+struct RECT
+{
+    LONG left = 0, top = 0, right = 1920, bottom = 1080;
+};
 using LONG_PTR = intptr_t;
 using HWND = void*;
 constexpr BOOL TRUE = 1;
@@ -149,11 +155,14 @@ constexpr UINT SWP_NOZORDER = 0x0004;
 constexpr UINT SWP_NOACTIVATE = 0x0010;
 constexpr UINT SWP_FRAMECHANGED = 0x0020;
 constexpr UINT SWP_SHOWWINDOW = 0x0040;
+constexpr UINT SWP_NOMOVE = 2;
 inline const HWND HWND_TOP = nullptr;
 
 struct Window
 {
     LONG_PTR style = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+    LONG_PTR exStyle = WS_EX_OVERLAPPEDWINDOW;
+    RECT rect;
     int restyles = 0;
     int moves = 0;
 };
@@ -164,14 +173,31 @@ inline LONG_PTR SetWindowLongPtr(HWND, int index, LONG_PTR value)
     ++window.restyles;
     if (index == GWL_STYLE)
         window.style = value;
+    else
+        window.exStyle = value;
     return 0;
 }
 
-inline BOOL SetWindowPos(HWND, HWND, int, int, int, int, UINT)
+inline BOOL SetWindowPos(HWND, HWND, int x, int y, int w, int h, UINT flags)
 {
     ++window.moves;
+    if (flags & SWP_NOMOVE)
+    {
+        x = window.rect.left;
+        y = window.rect.top;
+    }
+    window.rect = { x, y, x + w, y + h };
     return 1;
 }
+
+inline BOOL IsIconic(HWND) { return FALSE; }
+inline BOOL GetWindowRect(HWND, RECT* out)
+{
+    *out = window.rect;
+    return TRUE;
+}
+inline LONG_PTR GetWindowLongPtr(HWND, int index) { return index == GWL_STYLE ? window.style : window.exStyle; }
+inline BOOL AdjustWindowRectEx(RECT*, DWORD, BOOL, DWORD) { return TRUE; }
 
 namespace Util
 {
@@ -247,6 +273,13 @@ using PFN_ResizeTarget = HRESULT (*)(IDXGISwapChain*, const DXGI_MODE_DESC*);
 
 struct FGHooks
 {
+    inline static bool _borderlessPending = false, _windowSaved = false;
+    inline static LONG_PTR _savedStyle = 0, _savedExStyle = 0;
+    inline static RECT _savedRect;
+    static bool UseBorderless();
+    static void ApplyBorderless(IDXGIOutput*);
+    static void RestoreWindow(UINT, UINT);
+    static void PresentPending();
     static HRESULT hkSetFullscreenState(IDXGISwapChain* This, BOOL Fullscreen, IDXGIOutput* pTarget);
     static HRESULT hkGetFullscreenState(IDXGISwapChain* This, BOOL* pFullscreen, IDXGIOutput** ppTarget);
     static HRESULT hkGetFullscreenDesc(IDXGISwapChain1* This, DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pDesc);

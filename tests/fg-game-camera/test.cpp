@@ -88,6 +88,8 @@ struct IFGFeature
     std::map<int, bool> resources[4];
     bool _waitingExecute[4] {}, _noUi[4] {}, _noDistortionField[4] {}, _noHudless[4] {};
     virtual ~IFGFeature() = default;
+    uint64_t NextDispatchFrame();
+    bool _allowLowerFrameId = false;
     bool IsActive();
     bool IsPaused();
     bool IsDispatched();
@@ -120,8 +122,14 @@ struct Util
 {
     static int64_t MillisecondsNow() { return 0; }
 };
+enum class FGOutput
+{
+    NoFG,
+    XeFG
+};
 struct State
 {
+    FGOutput activeFgOutput = FGOutput::NoFG;
     uint64_t fgLastFrame = 0;
     static inline IFGFeature* current = nullptr;
     static State& Instance()

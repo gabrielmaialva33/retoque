@@ -7,6 +7,7 @@
 // Shared CPU fence wait for the swapchain and upscaler D3D11/D3D12 bridges.
 // Returns success only on proven completion; preserves the caller's pending value.
 HRESULT WaitForBridgeFence(ID3D12Fence* fence, ID3D12Device* device, HANDLE event, UINT64 value, DWORD timeout);
+HRESULT CreateD3D12DeviceOnAdapter(IDXGIAdapter* adapter, D3D_FEATURE_LEVEL featureLevel, ID3D12Device** device);
 
 class WithDx12
 {

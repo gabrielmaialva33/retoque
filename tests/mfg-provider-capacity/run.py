@@ -30,6 +30,7 @@ save = re.search(r'ini.SetValue\("DLSSG", "OverrideInterpolationCount",.*?;', co
 unit = (HERE / "fakes.h").read_text().replace("// @optional@", optional)
 unit = unit.replace("// @read@", read).replace("// @save@", save)
 unit = unit.replace("// @serializer@", function(config, "template <typename T> std::string GetIntValue("))
+unit += function((ROOT / 'OptiScaler/framegen/nvngx/Nvngx_FG.cpp').read_text(), 'int Nvngx_FG::limitToProvider(')
 unit += function(config, "std::optional<int> Config::readInt(")
 for name in ("g_dlssgMfgGeneration", "g_dlssgMfgGetter"):
     declaration = re.search(r"static std::atomic<[^;]+ " + name + r"[^;]+;", hooks)

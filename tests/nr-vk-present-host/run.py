@@ -137,8 +137,9 @@ hook = code(function(hooks, 'void VulkanHooks::Hook(HMODULE vulkan1)'))
 statements = [s.strip() for s in hook.strip('{} \n').split(';') if s.strip()]
 assert statements[0] == 'DlssNr::VkPresentHost::Install(vulkan1)', statements[0]
 assert hook.index('VkPresentHost::Install') < hook.index('vulkanHooksSkipped')
-# The include, install, original caller lookup, and the FG bypass's explicit forwarding into the host.
-assert code(hooks).count('VkPresentHost') == 4, code(hooks).count('VkPresentHost')
+# Include, install, caller lookup, FG forwarding, and the shared teardown producer-stop boundary.
+assert 'DlssNr::VkPresentHost::PrepareForDeviceDestroy(device)' in hooks
+assert code(hooks).count('VkPresentHost') == 5, code(hooks).count('VkPresentHost')
 fg_present = code(function(hooks, 'static VkResult FGOutputQueuePresent('))
 assert 'PresentFromFG(o_QueuePresentKHR, queue, pPresentInfo, _ReturnAddress())' in fg_present
 fg_bridge = code(function(host, 'VkResult DlssNr::VkPresentHost::PresentFromFG('))
@@ -284,8 +285,10 @@ for name in ('Retired RetireSwapchain(', 'std::string TeardownDevice('):
     assert retire.index('if (dev.lost)') < first_destroy, name
     assert retire.index('WaitSlot(') < first_destroy or name.startswith('std::string'), name
 
+assert 'OnDeviceDestroyed' in function(host, 'std::optional<bool> PrepareDeviceDestroy(')
+
 # Destroys retire the record before the downstream call, while the handle cannot be handed out again.
-for name, record, down in (('OnDestroyDevice', 'OnDeviceDestroyed', 'next(device, allocator)'),
+for name, record, down in (('OnDestroyDevice', 'PrepareDeviceDestroy(device)', 'next(device, allocator)'),
                            ('OnDestroySwapchain', 'OnSwapchainDestroyed', 'next(device, swapchain, allocator)'),
                            ('hkDestroyInstance', 'OnInstanceDestroyed', 'o_DestroyInstance('),
                            ('hkDestroySurfaceKHR', 'OnSurfaceDestroyed', 'o_DestroySurface(')):
@@ -625,7 +628,7 @@ for forbidden in ('lock', 'Lock', 'Mutex', 'mutex'):
     assert forbidden not in watchdog, forbidden
 assert 'Activities().Check(ActivityNowMs())' in watchdog and 'Sleep(500)' in watchdog
 # Every entry point that can hold or wait for a host lock records an activity.
-for name in ('VkResult OnPresent(', 'void OnDestroyDevice(', 'void OnDestroySwapchain(', 'VkResult OnCreateSwapchain(',
+for name in ('VkResult OnPresent(', 'std::optional<bool> PrepareDeviceDestroy(', 'void OnDestroySwapchain(', 'VkResult OnCreateSwapchain(',
              'VkResult LockedQueueCall('):
     assert 'HostActivity activity(' in code(function(host, name)), name
 assert 'g_transportMutex.lock()' in code(function(host, '    TransportLock()'))
@@ -745,7 +748,7 @@ assert 'const auto entered = traced ? std::chrono::steady_clock::now() : std::ch
 assert 'if (traced && info->swapchainCount >= 1' in present_body
 assert present_body.index('result = next(queue, info);') < present_body.index('g_trace.Add(sample, streamline)')
 assert 'sample.fg = prep.fgKnown ? prep.fg : ClassifyFg(FgFactsFor(queue, info->pSwapchains[0]));' in present_body
-for name in ('void OnDestroySwapchain(', 'void OnDestroyDevice(', 'VkResult OnCreateSwapchain('):
+for name in ('void OnDestroySwapchain(', 'std::optional<bool> PrepareDeviceDestroy(', 'VkResult OnCreateSwapchain('):
     body = code(function(host, name))
     assert 'if (g_traceOn.load(std::memory_order_relaxed)' in body, name
 note = code(function(host, 'void DlssNr::VkPresentHost::NoteStreamline(int level, const char* message)'))

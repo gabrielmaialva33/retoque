@@ -146,18 +146,18 @@ def finished(process, facts, run_log, name):
     return False
 
 
-def check_dll(dll):
+def check_dll(dll, source_root=ROOT):
     if not dll.exists():
         raise RuntimeError(f'{dll} does not exist; run ./build-local.sh Release first')
     data = dll.read_bytes()
     if b'(cold NR): window ' not in data:
         raise RuntimeError(f'{dll} has no stage-3 present host in it (stale build); run ./build-local.sh Release')
     # A source newer than the DLL means the DLL is not what the tree says.
-    sources = [ROOT / 'OptiScaler/hooks/Vulkan_Hooks.cpp', ROOT / 'OptiScaler/Config.h', ROOT / 'OptiScaler/Config.cpp',
-               ROOT / 'retoque/shaders/dlssnr/DlssNr_PresentHdr_Vk.h',
-               ROOT / 'retoque/dlssnr/DlssNrFeature_Vk.cpp', ROOT / 'retoque/dlssnr/DlssNr_VkModelOwner.h',
-               *sorted((ROOT / 'retoque/dlssnr').glob('DlssNr_VkPresent*'))]
-    stale = [str(s.relative_to(ROOT)) for s in sources if s.stat().st_mtime > dll.stat().st_mtime]
+    sources = [source_root / 'OptiScaler/hooks/Vulkan_Hooks.cpp', source_root / 'OptiScaler/Config.h', source_root / 'OptiScaler/Config.cpp',
+               source_root / 'retoque/shaders/dlssnr/DlssNr_PresentHdr_Vk.h',
+               source_root / 'retoque/dlssnr/DlssNrFeature_Vk.cpp', source_root / 'retoque/dlssnr/DlssNr_VkModelOwner.h',
+               *sorted((source_root / 'retoque/dlssnr').glob('DlssNr_VkPresent*'))]
+    stale = [str(s.relative_to(source_root)) for s in sources if s.stat().st_mtime > dll.stat().st_mtime]
     if stale:
         raise RuntimeError(f'{dll} is older than {", ".join(stale)}; rebuild before testing')
 
@@ -787,8 +787,12 @@ def check_host_on(name, facts, log, *, marker_off_bundle):
         # the detour's. Should that stop holding, the export check below would prove nothing for this function.
         # With the bundle installed, its own vkGetDeviceProcAddr hands out its vkQueueSubmit hook (Vulkan_wDx12); the
         # host detours the export, which that hook calls down to.
-        if function in DEVICE_LEVEL and not (marker_off_bundle and function.startswith('vkQueue') and
-                                             function != 'vkQueuePresentKHR'):
+        # The upstream bundle now returns its explicit destroy hook; the harness destroys through
+        # this proc-address route so successful retirement is checked, not merely an export prologue.
+        if marker_off_bundle and function == 'vkDestroyDevice':
+            need(not state['same_as_device_proc'], 'bundle destroy hook was not returned by vkGetDeviceProcAddr')
+        elif function in DEVICE_LEVEL and not (marker_off_bundle and function.startswith('vkQueue') and
+                                               function != 'vkQueuePresentKHR'):
             need(state['same_as_device_proc'], f'{function}: vkGetDeviceProcAddr no longer returns the export')
         need(state['patched'], f'{function} was not patched')
     if not marker_off_bundle:
@@ -1937,6 +1941,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dll', default=str(ROOT / 'x64/out/OptiScaler.dll'),
                         help='the production OptiScaler.dll to test (default: x64/out, where build-local.sh copies it)')
+    parser.add_argument('--source-root', type=Path, default=ROOT,
+                        help='source tree corresponding to --dll, used for the stale-build guard (read only)')
     parser.add_argument('--only', help='comma-separated cases')
     parser.add_argument('--skip-build', action='store_true', help='reuse the harness already in artifacts/')
     args = parser.parse_args()
@@ -1944,7 +1950,8 @@ def main():
     OUT.mkdir(exist_ok=True)
     (OUT / 'results.json').write_text('{"status":"RUNNING"}\n')
     dll = Path(args.dll).resolve()
-    check_dll(dll)
+    source_root = args.source_root.resolve()
+    check_dll(dll, source_root)
     if not Path('/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json').exists():
         raise RuntimeError('Khronos validation layer missing; cannot claim a validated run')
     redists = sorted(MSVC.parents[1].glob('VC/Redist/MSVC/*/x64/Microsoft.VC143.CRT'))
@@ -1961,7 +1968,7 @@ def main():
                c not in ROUTE_CASES]
     if unknown:
         raise RuntimeError(f'unknown case(s): {unknown}')
-    results = {'dll': str(dll), 'dll_sha256': sha(dll), 'harness_sha256': sha(OUT / EXE), 'cases': {}}
+    results = {'dll': str(dll), 'source_root': str(source_root), 'dll_sha256': sha(dll), 'harness_sha256': sha(OUT / EXE), 'cases': {}}
     failures = []
     wine = proton_libraries() if any(c in TRANSLATED_CASES for c in cases) else None
     baseline = {}

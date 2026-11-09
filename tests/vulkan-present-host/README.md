@@ -400,3 +400,15 @@ Exact active-phase presentation readbacks prove the present host stood down: the
 upscaled output is a separate resource and is not presented by this fixture. Those readbacks
 do not prove the scaler's pixel algorithm, down-leg correctness or image quality. Exposure
 sample readback and executable command-buffer resubmission remain separate tests.
+
+### Bundle destroy routing after upstream 2026-11-09
+
+The bundle now returns its explicit destroy hook from `vkGetDeviceProcAddr`. The fixture calls that
+address for device destruction and expects this routing distinction when the bundle is enabled; marker
+mode still requires the original export identity. Completion, single-retirement and validation assertions
+remain in place. The historical one-window overlay cases still leave their device to process exit and
+do not qualify that final device teardown.
+
+For an explicitly selected baseline DLL, `--source-root` names its corresponding source tree (read only)
+for the same stale-build guard. Harness, logs and runtime prefixes remain under this fixture, and results
+record the selected source root and DLL hash. This does not relax the isolated overlay fixture's revision requirement.

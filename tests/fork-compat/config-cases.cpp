@@ -55,5 +55,52 @@ int main()
         for (const auto* key : { "XeSSPath", "XeFGPath", "XeLLPath" })
             assert(std::string(second.ini.GetValue("Libraries", key)) != "AUTO");
     }
+    for (const char* value : { "auto", "true", "false", "TRUE", "invalid" })
+    {
+        Config first;
+        first.ini.SetValue("OptiFG", "HudlessFlip", value);
+        first.ini.SetValue("Log", "CreateDumps", value);
+        first.Read();
+        const bool expected = std::string(value) == "true" || std::string(value) == "TRUE";
+        assert(first.FGHudlessFlip.value_or_default() == expected);
+        assert(first.CreateDumps.value_or_default() == expected);
+        first.ini.Reset();
+        first.Save();
+        std::string saved;
+        assert(first.ini.Save(saved) >= 0);
+        Config second;
+        assert(second.ini.LoadData(saved) >= 0);
+        second.Read();
+        assert(second.FGHudlessFlip.value_or_default() == expected);
+        assert(second.CreateDumps.value_or_default() == expected);
+    }
+    for (const char* mode : { "auto", "0", "1", "2", "3", "1000361000", "invalid" })
+    {
+        Config first;
+        first.ini.SetValue("V-Sync", "VulkanPresentMode", mode);
+        first.Read();
+        first.ini.Reset();
+        first.Save();
+        std::string saved;
+        assert(first.ini.Save(saved) >= 0);
+        Config second;
+        assert(second.ini.LoadData(saved) >= 0);
+        second.Read();
+        assert(first.VulkanPresentMode.value_for_config() == second.VulkanPresentMode.value_for_config());
+    }
+    // Runtime resolution or a missing DLL must not replace the persisted relative preference.
+    CustomOptional<std::wstring, NoDefault> path;
+    path.set_from_config(L"relative/model.dll");
+    path.set_volatile_value(L"Z:/resolved/relative/model.dll");
+    assert(path.value_for_config() == L"relative/model.dll");
+    path.reset_volatile();
+    assert(!path.has_value() && path.value_for_config() == L"relative/model.dll");
+    path = std::wstring(L"new.dll");
+    assert(path.value_for_config() == L"new.dll");
+    CustomOptional<std::wstring, NoDefault> automatic;
+    automatic.set_volatile_value(L"Z:/found/model.dll");
+    automatic.reset_volatile();
+    assert(!automatic.has_value() && !automatic.value_for_config().has_value());
+    std::cout << "PASS: new INI keys read/save/read, auto/defaults, volatile paths and reset\n";
     std::cout << "PASS: distinct XeSS/XeFG/XeLL paths, single overrides, auto/missing and read/save/read\n";
 }

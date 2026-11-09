@@ -112,6 +112,13 @@ for tree in ('OptiScaler', 'retoque'):
     for path in (root / tree).rglob('*'):
         if path.suffix in ('.cpp', '.h', '.hpp') and path.is_file():
             text = code_only(path.read_text(encoding='utf-8', errors='replace'))
+            if path == root / 'OptiScaler/misc/CrashDumps.cpp':
+                init = function_body(text, 'void CrashDumps::Init()')
+                require(init.find('!Config::Instance()->CreateDumps.value_or_default()') <
+                        init.find('AddVectoredExceptionHandler'), 'upstream dumps must remain opt-in')
+                require('CustomOptional<bool> CreateDumps { false };' in read('OptiScaler/Config.h'),
+                        'upstream dumps must default off')
+                continue
             require('AddVectoredExceptionHandler' not in text and 'AddVectoredContinueHandler' not in text,
                     f'{path.relative_to(root)} adds a vectored handler: the crash note is last-chance only')
 

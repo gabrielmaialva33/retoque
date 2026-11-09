@@ -509,10 +509,8 @@ def check_module_words(sources, fail):
 
 # 10. Typeless views that change the component type. Every NR pass views with translateTypeless (kViewTranslateTypeless)
 # through float4 declarations; a typeless family mapped to a UINT/SINT view hands a float shader integer texels.
-KNOWN_INTEGER_VIEWS = {
-    'DXGI_FORMAT_R10G10B10A2_TYPELESS': 'upstream maps it to R10G10B10A2_UINT; an NR-owned UNORM mapping changes pixels '
-                                        'where it applies (native-api-rules.md, open)',
-}
+# Closed by upstream integration 2026-11-09: the common view table now returns UNORM.
+KNOWN_INTEGER_VIEWS = {}
 
 # 11. Vulkan storage images declared with a format in modules whose slots take views of several formats. The NR and HDR
 # modules write the proxy, the meter, the game's output and the HDR targets through one declaration each.
@@ -841,17 +839,17 @@ def self_test():
                        found.append)
     if not any('a byte array' in f for f in found):
         problems.append(f'byte-aligned pCode: expected a failure, got {found or "none"}')
-    # 10. A second integer view, and the known one fixed.
+    # 10. Reject new integer views and reintroduction of the resolved R10G10B10A2 defect.
     table = (root / 'OptiScaler/shaders/Shader_Dx12.cpp').read_text()
     found = []
     check_integer_views(table.replace('return DXGI_FORMAT_R16G16_FLOAT;', 'return DXGI_FORMAT_R16G16_UINT;'), found.append)
     if not any('R16G16_TYPELESS to DXGI_FORMAT_R16G16_UINT' in f for f in found):
         problems.append(f'new integer view: expected a failure, got {found or "none"}')
     found = []
-    check_integer_views(table.replace('return DXGI_FORMAT_R10G10B10A2_UINT;', 'return DXGI_FORMAT_R10G10B10A2_UNORM;'),
+    check_integer_views(table.replace('return DXGI_FORMAT_R10G10B10A2_UNORM;', 'return DXGI_FORMAT_R10G10B10A2_UINT;'),
                         found.append)
-    if not any('no longer maps' in f for f in found):
-        problems.append(f'fixed integer view: expected a failure, got {found or "none"}')
+    if not any('R10G10B10A2_TYPELESS to DXGI_FORMAT_R10G10B10A2_UINT' in f for f in found):
+        problems.append(f'reintroduced integer view: expected a failure, got {found or "none"}')
     # 6. SPIR-V: an oversized push-constant block, and a format-less storage write nobody checks.
     pc = root / 'retoque/shaders/synth_motion/precompile/SynthMotion_Expand_Shader_Vk.spv'
     blob = bytearray(pc.read_bytes())

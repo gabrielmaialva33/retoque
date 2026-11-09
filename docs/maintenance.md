@@ -67,6 +67,7 @@ Do not assume the main branch still points where another session left it; inspec
 | [2026-10-27](linux-proton/upstream-20261027.md) | Internal Vulkan creation, dynamic FG and overlay changes |
 | [2026-10-29](linux-proton/upstream-20261029.md) | Custom upscaler libraries, SDK 2.4 and NGX compatibility |
 | [2026-10-30](linux-proton/upstream-20261030.md) | Custom DLSSG libraries, Vulkan FFX nvngx FG and extended DLL search |
+| [2026-11-09](linux-proton/upstream-20261109.md) | Trial integration: lifecycle, NGX lazy init, Vulkan presentation and shader rings; pending qualification |
 | [2026-11-03](linux-proton/upstream-20261103.md) | Plugin API, occluded swapchain creation and Pascal FSR4 pipeline retry |
 | [2026-11-04](linux-proton/upstream-20261104.md) | Vulkan release waits on the feature's device, DP4a features, 1.3 for DLSS-G |
 

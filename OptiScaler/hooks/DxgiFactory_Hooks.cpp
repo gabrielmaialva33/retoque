@@ -17,6 +17,7 @@
 #include <d3d11.h>
 #include <magic_enum.hpp>
 #include <detours/detours.h>
+#include <wrl/client.h>
 
 // #define DETAILED_SC_LOGS
 
@@ -24,7 +25,26 @@
 #include <magic_enum.hpp>
 #endif
 
-static bool IsTearingSupported(IDXGIFactory* factory)
+// When ReShade hooks DXGI before Opti, FG libraries create their swapchain inside ReShade's hook,
+// which then passes its proxy queue on to DXGI. ReShade loaded by Opti hooks after, it needs its proxy.
+static Microsoft::WRL::ComPtr<ID3D12CommandQueue> ReShadeRealQueue(IUnknown* pDevice)
+{
+    Microsoft::WRL::ComPtr<IUnknown> original;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
+
+    // ReShade loaded by Special K sits above Opti too
+    if (reshadeModule != nullptr)
+        return queue;
+
+    original.Attach(Util::GetReShadeOriginal(pDevice));
+
+    if (original != nullptr && SUCCEEDED(original.As(&queue)))
+        LOG_INFO("Using the real queue behind ReShade's proxy");
+
+    return queue;
+}
+
+bool DxgiFactoryHooks::IsTearingSupported(IDXGIFactory* factory)
 {
     if (factory == nullptr)
         return false;
@@ -43,7 +63,12 @@ static bool IsTearingSupported(IDXGIFactory* factory)
     return SUCCEEDED(hr) && supported == TRUE;
 }
 
-static bool PrepareDx12FlipFormat(DXGI_FORMAT& format)
+void DxgiFactoryHooks::ResolveInteropSize(HWND hWnd, UINT& width, UINT& height)
+{
+    Dx11wDx12::ResolveZeroExtent(hWnd, width, height);
+}
+
+bool DxgiFactoryHooks::PrepareDx12FlipFormat(DXGI_FORMAT& format)
 {
     switch (format)
     {
@@ -71,7 +96,7 @@ static bool PrepareDx12FlipFormat(DXGI_FORMAT& format)
     }
 }
 
-static bool PrepareDx12InteropDesc(DXGI_SWAP_CHAIN_DESC& desc, bool tearingSupported)
+bool DxgiFactoryHooks::PrepareDx12InteropDesc(DXGI_SWAP_CHAIN_DESC& desc, bool tearingSupported)
 {
     // D3D12 swapchain backbuffers cannot be multisampled.
     if (desc.SampleDesc.Count > 1)
@@ -152,7 +177,7 @@ static bool PrepareDx12InteropDesc(DXGI_SWAP_CHAIN_DESC& desc, bool tearingSuppo
     return true;
 }
 
-static bool PrepareDx12InteropDesc1(DXGI_SWAP_CHAIN_DESC1& desc, bool tearingSupported)
+bool DxgiFactoryHooks::PrepareDx12InteropDesc1(DXGI_SWAP_CHAIN_DESC1& desc, bool tearingSupported)
 {
     // D3D12 swapchain backbuffers cannot be multisampled.
     if (desc.SampleDesc.Count > 1)
@@ -233,8 +258,12 @@ static bool PrepareDx12InteropDesc1(DXGI_SWAP_CHAIN_DESC1& desc, bool tearingSup
     return true;
 }
 
-void DxgiFactoryHooks::HookToFactory(IDXGIFactory* pFactory)
+void DxgiFactoryHooks::HookToFactory(IDXGIFactory* pFactory, bool fromSpecialK)
 {
+    // Factories can be created from several threads
+    static std::mutex hookMutex;
+    std::lock_guard<std::mutex> lock(hookMutex);
+
     if (pFactory == nullptr || o_EnumAdapters != nullptr)
         return;
 
@@ -244,7 +273,35 @@ void DxgiFactoryHooks::HookToFactory(IDXGIFactory* pFactory)
     if (!Util::CheckForRealObject(__FUNCTION__, pFactory, (IUnknown**) &real))
         real = pFactory;
 
+    // Special K hooks the real factory behind ReShade's proxy
+    if (fromSpecialK)
+    {
+        if (auto original = Util::GetReShadeOriginal(real); original != nullptr)
+        {
+            real = (IDXGIFactory*) original;
+            original->Release();
+        }
+    }
+
     void** pFactoryVTable = *reinterpret_cast<void***>(real);
+
+    // Special K hooks the factory from its init thread and the game's factories wait for it in its export hooks.
+    // Hooking after it puts our swapchain wrapper above Special K's, 15s is Special K's own wait limit.
+    if (fromSpecialK)
+    {
+        static ULONGLONG skWaitStart = GetTickCount64();
+        auto code = (const uint8_t*) pFactoryVTable[10];
+        bool skHooked = code[0] == 0xE9 || code[0] == 0xEB || (code[0] == 0xFF && code[1] == 0x25);
+
+        if (!skHooked && GetTickCount64() - skWaitStart < 15000)
+        {
+            LOG_DEBUG("Waiting for Special K to hook the factory");
+            return;
+        }
+    }
+
+    LOG_DEBUG("CreateSwapChain: {}, CreateSwapChainForHwnd: {}", Util::WhoIsTheCaller(pFactoryVTable[10]),
+              Util::WhoIsTheCaller(pFactoryVTable[15]));
 
     DetourTransactionBegin();
     DetourUpdateThread(GetCurrentThread());
@@ -425,8 +482,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
         return res;
     }
 
-    if ((pDesc->BufferDesc.Height != 0 && pDesc->BufferDesc.Height < 100) ||
-        (pDesc->BufferDesc.Width != 0 && pDesc->BufferDesc.Width < 100))
+    if (Util::IsOverlaySwapchain(pDesc->OutputWindow, pDesc->BufferDesc.Width, pDesc->BufferDesc.Height))
     {
         LOG_WARN("Overlay call!");
 
@@ -445,27 +501,32 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
               localDesc.BufferCount, localDesc.Flags, (SIZE_T) localDesc.OutputWindow, localDesc.Windowed,
               _skipFGSwapChainCreation);
 
+    if (!_skipFGSwapChainCreation)
+        FGHooks::ReleaseUnusableFGSwapchain(localDesc.OutputWindow, pDevice);
+
     if (State::Instance().activeFgOutput == FGOutput::XeFG &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
-        if (!localDesc.Windowed)
-        {
-            State::Instance().SCExclusiveFullscreen = true;
-            localDesc.Windowed = true;
-        }
+        // Nested call from the FG library is windowed, keep the outer request
+        if (!_skipFGSwapChainCreation && !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+            State::Instance().SCExclusiveFullscreenRequested = !localDesc.Windowed;
+        localDesc.Windowed = true;
 
         localDesc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
         localDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_STRETCHED;
     }
 
     // For vsync override
-    if (!localDesc.Windowed)
+    if (!localDesc.Windowed && !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
     {
         LOG_INFO("Game is creating fullscreen swapchain, disabled V-Sync overrides");
         Config::Instance()->OverrideVsync.set_volatile_value(false);
     }
 
-    if (Config::Instance()->OverrideVsync.value_or_default())
+    // Flip model doesn't support MSAA or sRGB buffers
+    if (Config::Instance()->OverrideVsync.value_or_default() && localDesc.SampleDesc.Count <= 1 &&
+        localDesc.BufferDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
+        localDesc.BufferDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
     {
         localDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         localDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
@@ -474,9 +535,12 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
             localDesc.BufferCount = 2;
     }
 
-    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
-    State::Instance().SCLastFlags = localDesc.Flags;
-    State::Instance().realExclusiveFullscreen = !localDesc.Windowed;
+    if (!FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+    {
+        State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+        State::Instance().SCLastFlags = localDesc.Flags;
+        State::Instance().realExclusiveFullscreen = !localDesc.Windowed;
+    }
 
 #ifdef DETAILED_SC_LOGS
     LOG_TRACE("localDesc.BufferCount: {}", localDesc.BufferCount);
@@ -497,36 +561,34 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
     LOG_TRACE("localDesc.Windowed: {}", localDesc.Windowed);
 #endif //
 
+    Util::WarnIfProxy(__FUNCTION__, pDevice);
+
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> reShadeRealQueue;
+
+    if (_skipFGSwapChainCreation)
+        reShadeRealQueue = ReShadeRealQueue(pDevice);
+
+    if (reShadeRealQueue != nullptr)
+        pDevice = reShadeRealQueue.Get();
+
     // Check for SL proxy, get real queue
+    auto prevCommandQueue = State::Instance().currentCommandQueue;
     ID3D12CommandQueue* cq = nullptr;
     IUnknown* real = nullptr;
     HRESULT FGSCResult = E_NOTIMPL;
 
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) == S_OK)
     {
-        if (State::Instance().currentD3D12Device == nullptr)
-        {
-            ID3D12Device* device = nullptr;
-            if (cq->GetDevice(IID_PPV_ARGS(&device)) == S_OK)
-            {
-                if (device != nullptr)
-                {
-                    // Update current D3D12 device
-                    if (State::Instance().currentD3D12Device != device)
-                    {
-                        State::Instance().currentD3D12Device = device;
-                    }
-
-                    LOG_INFO("Captured D3D12 device from command queue: {:X}", (UINT64) device);
-                    D3D12Hooks::HookDevice(State::Instance().currentD3D12Device);
-                }
-            }
-        }
+        cq->Release();
 
         if (!Util::CheckForRealObject(__FUNCTION__, cq, &real))
             real = cq;
 
-        State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+        if (!FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+        {
+            State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+            D3D12Hooks::CaptureDevice((ID3D12CommandQueue*) real);
+        }
 
         if (State::Instance().currentD3D12Device != nullptr)
         {
@@ -540,7 +602,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
             ScopedSkipFGSCCreation skipFGSCCreation {};
             FGSCResult = FGHooks::CreateSwapChain(realFactory, real, &localDesc, ppSwapChain);
 
-            if (FGSCResult == S_OK)
+            if (SUCCEEDED(FGSCResult))
             {
                 State::Instance().currentSwapchainDesc = localDesc;
                 return FGSCResult;
@@ -558,7 +620,8 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
             D3D11Hooks::HookToDevice(device);
             State::Instance().currentD3D11Device = device;
 
-            if (!_skipFGSwapChainCreation && Dx11wDx12::Wanted())
+            if (!_skipFGSwapChainCreation && Dx11wDx12::Wanted() &&
+                !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
             {
                 auto hiddenHwnd = CreateHiddenSwapchainWindow();
 
@@ -579,6 +642,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
                                                  realDesc.BufferDesc.Height);
                     realDesc.OutputWindow = hiddenHwnd;
                     realDesc.Windowed = TRUE;
+                    ResolveInteropSize(localDesc.OutputWindow, realDesc.BufferDesc.Width, realDesc.BufferDesc.Height);
 
                     IDXGISwapChain* realDx11SwapChain = nullptr;
                     HRESULT realScResult = E_FAIL;
@@ -683,7 +747,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
 
     // If FG is disabled or call is coming from FG library
     // Create the DXGI SwapChain and wrap it
-    if (_skipFGSwapChainCreation || FGSCResult != S_OK)
+    if (_skipFGSwapChainCreation || FAILED(FGSCResult))
     {
         // !_skipFGSwapChainCreation for preventing early enablement flags
         if (!_skipFGSwapChainCreation)
@@ -697,6 +761,22 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
         {
             ScopedSkipParentWrapping skipParentWrapping {};
             result = o_CreateSwapChain(realFactory, pDevice, &localDesc, ppSwapChain);
+
+            // DXGI can reject our desc changes, the game's own desc works as without Opti
+            if (FAILED(result) && memcmp(&localDesc, pDesc, sizeof(localDesc)) != 0)
+            {
+                LOG_WARN("Failed with modified desc: {:X}, retrying with game's desc", (UINT) result);
+
+                localDesc = *pDesc;
+                result = o_CreateSwapChain(realFactory, pDevice, &localDesc, ppSwapChain);
+
+                if (SUCCEEDED(result) && !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+                {
+                    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+                    State::Instance().SCLastFlags = localDesc.Flags;
+                    State::Instance().realExclusiveFullscreen = !localDesc.Windowed;
+                }
+            }
         }
 
         if (!_skipFGSwapChainCreation)
@@ -709,15 +789,24 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
 
         if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
         {
-            State::Instance().currentSwapchainDesc = localDesc;
-            State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
+            // Another window's swapchain must not replace the FG swapchain's state
+            const bool otherWindow = FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow);
+
+            if (!otherWindow)
+            {
+                State::Instance().currentSwapchainDesc = localDesc;
+                State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
+            }
+
+            Util::WarnIfProxy(__FUNCTION__, *ppSwapChain);
 
             // Check for SL proxy
             IDXGISwapChain* realSC = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, *ppSwapChain, (IUnknown**) &realSC))
                 realSC = *ppSwapChain;
 
-            State::Instance().currentRealSwapchain = realSC;
+            if (!otherWindow)
+                State::Instance().currentRealSwapchain = realSC;
 
             IUnknown* realDevice = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &realDevice))
@@ -735,14 +824,17 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
             WrappedIDXGISwapChain4* wrapped;
             if ((*ppSwapChain)->QueryInterface(IID_PPV_ARGS(&wrapped)) != S_OK)
             {
-                *ppSwapChain =
-                    new WrappedIDXGISwapChain4(realSC, realDevice, localDesc.OutputWindow, localDesc.Flags, false);
+                *ppSwapChain = new WrappedIDXGISwapChain4(realSC, realDevice, localDesc.OutputWindow, localDesc.Flags,
+                                                          false, *ppSwapChain);
 
-                // Set as currentSwapchain is FG is disabled
-                if (!_skipFGSwapChainCreation)
-                    State::Instance().currentSwapchain = *ppSwapChain;
+                if (!otherWindow)
+                {
+                    // Set as currentSwapchain is FG is disabled
+                    if (!_skipFGSwapChainCreation)
+                        State::Instance().currentSwapchain = *ppSwapChain;
 
-                State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                    State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                }
 
                 LOG_DEBUG("Created new WrappedIDXGISwapChain4: {:X}, pDevice: {:X}", (size_t) *ppSwapChain,
                           (size_t) pDevice);
@@ -757,6 +849,10 @@ HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* p
     {
         LOG_ERROR("CreateSwapChain failed: {:X}", (UINT) result);
     }
+
+    // The game can release a failed swapchain's queue
+    if (FAILED(result))
+        State::Instance().currentCommandQueue = prevCommandQueue;
 
     return result;
 }
@@ -812,7 +908,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
         return result;
     }
 
-    if ((pDesc->Height != 0 && pDesc->Height < 100) || (pDesc->Width != 0 && pDesc->Width < 100))
+    if (Util::IsOverlaySwapchain(hWnd, pDesc->Width, pDesc->Height))
     {
         LOG_WARN("Overlay call!");
         HRESULT result;
@@ -837,36 +933,37 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
               localDesc.Width, localDesc.Height, (UINT) localDesc.Format, localDesc.BufferCount, localDesc.Flags,
               (size_t) hWnd, _skipFGSwapChainCreation);
 
-    if (pFullscreenDesc != nullptr)
-        State::Instance().realExclusiveFullscreen = !pFullscreenDesc->Windowed;
-
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC localFullscreenDesc {};
 
     if (pFullscreenDesc != nullptr)
         memcpy(&localFullscreenDesc, pFullscreenDesc, sizeof(DXGI_SWAP_CHAIN_FULLSCREEN_DESC));
 
+    if (!_skipFGSwapChainCreation)
+        FGHooks::ReleaseUnusableFGSwapchain(hWnd, pDevice);
+
     if (State::Instance().activeFgOutput == FGOutput::XeFG &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
-        if (pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed)
-        {
-
-            State::Instance().SCExclusiveFullscreen = true;
-            localFullscreenDesc.Windowed = true;
-        }
+        // Nested call from the FG library is windowed, keep the outer request
+        if (!_skipFGSwapChainCreation && !FGHooks::IsOtherWindowThanFG(hWnd))
+            State::Instance().SCExclusiveFullscreenRequested =
+                pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+        localFullscreenDesc.Windowed = true;
 
         localDesc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
         localDesc.Scaling = DXGI_SCALING_STRETCH;
     }
 
     // For vsync override
-    if (pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed)
+    if (pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed && !FGHooks::IsOtherWindowThanFG(hWnd))
     {
         LOG_INFO("Game is creating fullscreen swapchain, disabled V-Sync overrides");
         Config::Instance()->OverrideVsync.set_volatile_value(false);
     }
 
-    if (Config::Instance()->OverrideVsync.value_or_default())
+    // Flip model doesn't support MSAA or sRGB buffers
+    if (Config::Instance()->OverrideVsync.value_or_default() && localDesc.SampleDesc.Count <= 1 &&
+        localDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB && localDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
     {
         localDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         localDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
@@ -875,9 +972,12 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
             localDesc.BufferCount = 2;
     }
 
-    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
-    State::Instance().SCLastFlags = localDesc.Flags;
-    State::Instance().realExclusiveFullscreen = pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+    if (!FGHooks::IsOtherWindowThanFG(hWnd))
+    {
+        State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+        State::Instance().SCLastFlags = localDesc.Flags;
+        State::Instance().realExclusiveFullscreen = pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+    }
 
 #ifdef VER_PRE_RELEASE
     LOG_TRACE("localDesc.AlphaMode : {}", magic_enum::enum_name(localDesc.AlphaMode));
@@ -902,36 +1002,34 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
     }
 #endif
 
+    Util::WarnIfProxy(__FUNCTION__, pDevice);
+
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> reShadeRealQueue;
+
+    if (_skipFGSwapChainCreation)
+        reShadeRealQueue = ReShadeRealQueue(pDevice);
+
+    if (reShadeRealQueue != nullptr)
+        pDevice = reShadeRealQueue.Get();
+
     // Check for SL proxy, get real queue
+    auto prevCommandQueue = State::Instance().currentCommandQueue;
     ID3D12CommandQueue* cq = nullptr;
     IUnknown* real = nullptr;
     HRESULT FGSCResult = E_NOTIMPL;
 
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) == S_OK)
     {
-        if (State::Instance().currentD3D12Device == nullptr)
-        {
-            ID3D12Device* device = nullptr;
-            if (cq->GetDevice(IID_PPV_ARGS(&device)) == S_OK)
-            {
-                if (device != nullptr)
-                {
-                    // Update current D3D12 device
-                    if (State::Instance().currentD3D12Device != device)
-                    {
-                        State::Instance().currentD3D12Device = device;
-                    }
-
-                    LOG_INFO("Captured D3D12 device from command queue: {:X}", (UINT64) device);
-                    D3D12Hooks::HookDevice(State::Instance().currentD3D12Device);
-                }
-            }
-        }
+        cq->Release();
 
         if (!Util::CheckForRealObject(__FUNCTION__, cq, &real))
             real = cq;
 
-        State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+        if (!FGHooks::IsOtherWindowThanFG(hWnd))
+        {
+            State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+            D3D12Hooks::CaptureDevice((ID3D12CommandQueue*) real);
+        }
 
         if (State::Instance().currentD3D12Device != nullptr)
         {
@@ -947,7 +1045,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                                                          pFullscreenDesc != nullptr ? &localFullscreenDesc : nullptr,
                                                          pRestrictToOutput, ppSwapChain);
 
-            if (FGSCResult == S_OK)
+            if (SUCCEEDED(FGSCResult))
             {
                 ((IDXGISwapChain*) *ppSwapChain)->GetDesc(&State::Instance().currentSwapchainDesc);
                 return FGSCResult;
@@ -965,7 +1063,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
             D3D11Hooks::HookToDevice(device);
             State::Instance().currentD3D11Device = device;
 
-            if (!_skipFGSwapChainCreation && Dx11wDx12::Wanted())
+            if (!_skipFGSwapChainCreation && Dx11wDx12::Wanted() && !FGHooks::IsOtherWindowThanFG(hWnd))
             {
                 // For dx11 swapchain
                 auto hiddenHwnd = CreateHiddenSwapchainWindow();
@@ -983,7 +1081,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                 {
                     // Only the hidden swapchain gets a resolved extent; see Dx11wDx12::ResolveZeroExtent.
                     DXGI_SWAP_CHAIN_DESC1 realDesc = localDesc;
-                    Dx11wDx12::ResolveZeroExtent(hWnd, realDesc.Width, realDesc.Height);
+                    ResolveInteropSize(hWnd, realDesc.Width, realDesc.Height);
                     IDXGISwapChain1* realDx11SwapChain1 = nullptr;
                     HRESULT realScResult = E_FAIL;
                     {
@@ -999,7 +1097,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                     bool fgSwapChainIsRealFG = false;
                     const bool tearingSupported = IsTearingSupported(realFactory);
 
-                    if (realScResult == S_OK && PrepareDx12InteropDesc1(fgDesc, tearingSupported))
+                    if (SUCCEEDED(realScResult) && PrepareDx12InteropDesc1(fgDesc, tearingSupported))
                     {
                         // Windowed, whatever the game asked, for frame generation's presenter and the plain one
                         // alike: the game's exclusive fullscreen is emulated as a borderless window
@@ -1015,10 +1113,10 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                             fgScResult = FGHooks::CreateSwapChainForHwnd(realFactory, dx12Queue, hWnd, &fgDesc, nullptr,
                                                                          pRestrictToOutput, &fgSwapChain1);
 
-                            fgSwapChainIsRealFG = fgScResult == S_OK && fgSwapChain1 != nullptr;
+                            fgSwapChainIsRealFG = SUCCEEDED(fgScResult) && fgSwapChain1 != nullptr;
                         }
 
-                        if (fgScResult != S_OK || fgSwapChain1 == nullptr)
+                        if (FAILED(fgScResult) || fgSwapChain1 == nullptr)
                         {
                             fgSwapChainIsRealFG = false;
 
@@ -1038,11 +1136,11 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                             fgScResult = Dx11wDx12SC::RetryAfterTakeover(hWnd, fgScResult, createAgain);
                         }
 
-                        if (fgScResult == S_OK && fgSwapChain1 != nullptr)
+                        if (SUCCEEDED(fgScResult) && fgSwapChain1 != nullptr)
                             fgSwapChain1->QueryInterface(IID_PPV_ARGS(&fgSwapChain4));
                     }
 
-                    if (realScResult == S_OK && realDx11SwapChain1 != nullptr && fgSwapChain4 != nullptr)
+                    if (SUCCEEDED(realScResult) && realDx11SwapChain1 != nullptr && fgSwapChain4 != nullptr)
                     {
                         Dx11wDx12::MatchHiddenToPresenter(realDx11SwapChain1, fgSwapChain4);
                         ((IDXGISwapChain*) fgSwapChain4)->GetDesc(&State::Instance().currentSwapchainDesc);
@@ -1100,7 +1198,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
 
     // If FG is disabled or call is coming from FG library
     // Create the DXGI SwapChain and wrap it
-    if (_skipFGSwapChainCreation || FGSCResult != S_OK)
+    if (_skipFGSwapChainCreation || FAILED(FGSCResult))
     {
 
         // !_skipFGSwapChainCreation for preventing early enablement flags
@@ -1117,6 +1215,30 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
             result = o_CreateSwapChainForHwnd(realFactory, pDevice, hWnd, &localDesc,
                                               pFullscreenDesc != nullptr ? &localFullscreenDesc : nullptr,
                                               pRestrictToOutput, ppSwapChain);
+
+            // DXGI can reject our desc changes, the game's own desc works as without Opti
+            if (FAILED(result) && (memcmp(&localDesc, pDesc, sizeof(localDesc)) != 0 ||
+                                   (pFullscreenDesc != nullptr &&
+                                    memcmp(&localFullscreenDesc, pFullscreenDesc, sizeof(localFullscreenDesc)) != 0)))
+            {
+                LOG_WARN("Failed with modified desc: {:X}, retrying with game's desc", (UINT) result);
+
+                localDesc = *pDesc;
+
+                if (pFullscreenDesc != nullptr)
+                    localFullscreenDesc = *pFullscreenDesc;
+
+                result = o_CreateSwapChainForHwnd(realFactory, pDevice, hWnd, pDesc, pFullscreenDesc, pRestrictToOutput,
+                                                  ppSwapChain);
+
+                if (SUCCEEDED(result) && !FGHooks::IsOtherWindowThanFG(hWnd))
+                {
+                    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+                    State::Instance().SCLastFlags = localDesc.Flags;
+                    State::Instance().realExclusiveFullscreen =
+                        pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+                }
+            }
         }
 
         if (!_skipFGSwapChainCreation)
@@ -1129,14 +1251,21 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
 
         if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
         {
-            State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
+            // Another window's swapchain must not replace the FG swapchain's state
+            const bool otherWindow = FGHooks::IsOtherWindowThanFG(hWnd);
+
+            if (!otherWindow)
+                State::Instance().swapchainInteropApi = SwapchainInteropApi::None;
+
+            Util::WarnIfProxy(__FUNCTION__, *ppSwapChain);
 
             // check for SL proxy
             IDXGISwapChain1* realSC = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, *ppSwapChain, (IUnknown**) &realSC))
                 realSC = *ppSwapChain;
 
-            State::Instance().currentRealSwapchain = realSC;
+            if (!otherWindow)
+                State::Instance().currentRealSwapchain = realSC;
 
             IUnknown* readDevice = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &readDevice))
@@ -1148,22 +1277,27 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
                 State::Instance().screenHeight = static_cast<float>(localDesc.Height);
             }
 
-            realSC->GetDesc(&State::Instance().currentSwapchainDesc);
+            if (!otherWindow)
+                realSC->GetDesc(&State::Instance().currentSwapchainDesc);
 
             LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (uintptr_t) *ppSwapChain, (uintptr_t) hWnd);
 
             WrappedIDXGISwapChain4* wrapped;
             if ((*ppSwapChain)->QueryInterface(IID_PPV_ARGS(&wrapped)) != S_OK)
             {
-                *ppSwapChain = new WrappedIDXGISwapChain4(realSC, readDevice, hWnd, localDesc.Flags, false);
+                *ppSwapChain =
+                    new WrappedIDXGISwapChain4(realSC, readDevice, hWnd, localDesc.Flags, false, *ppSwapChain);
 
                 LOG_DEBUG("Created new WrappedIDXGISwapChain4: {0:X}, pDevice: {1:X}", (uintptr_t) *ppSwapChain,
                           (uintptr_t) pDevice);
 
-                if (!_skipFGSwapChainCreation)
-                    State::Instance().currentSwapchain = *ppSwapChain;
+                if (!otherWindow)
+                {
+                    if (!_skipFGSwapChainCreation)
+                        State::Instance().currentSwapchain = *ppSwapChain;
 
-                State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                    State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                }
             }
             else
             {
@@ -1183,6 +1317,10 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUn
         firstCall = false;
     }
 
+    // The game can release a failed swapchain's queue
+    if (FAILED(result))
+        State::Instance().currentCommandQueue = prevCommandQueue;
+
     return result;
 }
 
@@ -1199,22 +1337,22 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
                       pDesc->Height, (UINT) pDesc->Format, pDesc->Flags, pDesc->BufferCount, _skipFGSwapChainCreation);
 
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        return realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
+        return o_CreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
     }
 
     if (pDevice == nullptr || pDesc == nullptr)
     {
         LOG_WARN("pDevice or pDesc is nullptr!");
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        return realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
+        return o_CreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
     }
 
-    if ((pDesc->Height != 0 && pDesc->Height < 100) || (pDesc->Width != 0 && pDesc->Width < 100))
+    if (Util::IsOverlaySwapchain(nullptr, pDesc->Width, pDesc->Height))
     {
         LOG_WARN("Overlay call!");
 
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        return realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
+        return o_CreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
     }
 
     DXGI_SWAP_CHAIN_DESC1 localDesc {};
@@ -1223,8 +1361,9 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
     LOG_DEBUG("Width: {}, Height: {}, Format: {}, Count: {}, SkipWrapping: {}", localDesc.Width, localDesc.Height,
               (UINT) localDesc.Format, localDesc.BufferCount, _skipFGSwapChainCreation);
 
-    // For vsync override
-    if (Config::Instance()->OverrideVsync.value_or_default())
+    // For vsync override, flip model doesn't support MSAA or sRGB buffers
+    if (Config::Instance()->OverrideVsync.value_or_default() && localDesc.SampleDesc.Count <= 1 &&
+        localDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB && localDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
     {
         localDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         localDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
@@ -1233,18 +1372,44 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
             localDesc.BufferCount = 2;
     }
 
-    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
-    State::Instance().SCLastFlags = localDesc.Flags;
-    State::Instance().realExclusiveFullscreen = false;
+    // No FG swapchain for CoreWindow, so this is another window if one exists
+    if (!_skipFGSwapChainCreation)
+        FGHooks::ReleaseUnusableFGSwapchain((HWND) pWindow, pDevice);
 
+    const bool otherWindow = FGHooks::IsOtherWindowThanFG((HWND) pWindow);
+
+    if (!otherWindow)
+    {
+        State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+        State::Instance().SCLastFlags = localDesc.Flags;
+        State::Instance().realExclusiveFullscreen = false;
+    }
+
+    Util::WarnIfProxy(__FUNCTION__, pDevice);
+
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> reShadeRealQueue;
+
+    if (_skipFGSwapChainCreation)
+        reShadeRealQueue = ReShadeRealQueue(pDevice);
+
+    if (reShadeRealQueue != nullptr)
+        pDevice = reShadeRealQueue.Get();
+
+    auto prevCommandQueue = State::Instance().currentCommandQueue;
     ID3D12CommandQueue* cq = nullptr;
     IUnknown* real = nullptr;
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) == S_OK)
     {
+        cq->Release();
+
         if (!Util::CheckForRealObject(__FUNCTION__, cq, &real))
             real = cq;
 
-        State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+        if (!otherWindow)
+        {
+            State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+            D3D12Hooks::CaptureDevice((ID3D12CommandQueue*) real);
+        }
 
         if (State::Instance().currentD3D12Device != nullptr)
             WithDx12::SetD3D12Objects(State::Instance().currentD3D12Device, State::Instance().currentCommandQueue,
@@ -1256,37 +1421,63 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
         result =
             o_CreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, &localDesc, pRestrictToOutput, ppSwapChain);
+
+        // DXGI can reject our desc changes, the game's own desc works as without Opti
+        if (FAILED(result) && memcmp(&localDesc, pDesc, sizeof(localDesc)) != 0)
+        {
+            LOG_WARN("Failed with modified desc: {:X}, retrying with game's desc", (UINT) result);
+
+            localDesc = *pDesc;
+            result = o_CreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, &localDesc, pRestrictToOutput,
+                                                    ppSwapChain);
+
+            if (SUCCEEDED(result) && !otherWindow)
+            {
+                State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+                State::Instance().SCLastFlags = localDesc.Flags;
+            }
+        }
     }
 
     if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
     {
+        Util::WarnIfProxy(__FUNCTION__, *ppSwapChain);
+
         // check for SL proxy
         IDXGISwapChain* realSC = nullptr;
         if (!Util::CheckForRealObject(__FUNCTION__, *ppSwapChain, (IUnknown**) &realSC))
             realSC = *ppSwapChain;
 
-        State::Instance().currentRealSwapchain = realSC;
+        if (!otherWindow)
+            State::Instance().currentRealSwapchain = realSC;
 
         IUnknown* readDevice = nullptr;
         if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &readDevice))
             readDevice = pDevice;
 
-        realSC->GetDesc(&State::Instance().currentSwapchainDesc);
+        if (!otherWindow)
+        {
+            realSC->GetDesc(&State::Instance().currentSwapchainDesc);
 
-        State::Instance().screenWidth = static_cast<float>(localDesc.Width);
-        State::Instance().screenHeight = static_cast<float>(localDesc.Height);
+            State::Instance().screenWidth = static_cast<float>(localDesc.Width);
+            State::Instance().screenHeight = static_cast<float>(localDesc.Height);
+        }
 
         LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (UINT64) *ppSwapChain, (UINT64) pWindow);
 
         WrappedIDXGISwapChain4* wrapped;
         if ((*ppSwapChain)->QueryInterface(IID_PPV_ARGS(&wrapped)) != S_OK)
         {
-            *ppSwapChain = new WrappedIDXGISwapChain4(realSC, readDevice, (HWND) pWindow, localDesc.Flags, true);
+            *ppSwapChain =
+                new WrappedIDXGISwapChain4(realSC, readDevice, (HWND) pWindow, localDesc.Flags, true, *ppSwapChain);
 
-            if (!_skipFGSwapChainCreation)
-                State::Instance().currentSwapchain = *ppSwapChain;
+            if (!otherWindow)
+            {
+                if (!_skipFGSwapChainCreation)
+                    State::Instance().currentSwapchain = *ppSwapChain;
 
-            State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                State::Instance().currentWrappedSwapchain = *ppSwapChain;
+            }
 
             LOG_DEBUG("Created new WrappedIDXGISwapChain4: {0:X}, pDevice: {1:X}", (UINT64) *ppSwapChain,
                       (UINT64) pDevice);
@@ -1296,6 +1487,10 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
             wrapped->Release();
         }
     }
+
+    // The game can release a failed swapchain's queue
+    if (FAILED(result))
+        State::Instance().currentCommandQueue = prevCommandQueue;
 
     return result;
 }
@@ -1332,8 +1527,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
         return res;
     }
 
-    if ((pDesc->BufferDesc.Height != 0 && pDesc->BufferDesc.Height < 100) ||
-        (pDesc->BufferDesc.Width != 0 && pDesc->BufferDesc.Width < 100))
+    if (Util::IsOverlaySwapchain(pDesc->OutputWindow, pDesc->BufferDesc.Width, pDesc->BufferDesc.Height))
     {
         LOG_WARN("Overlay call!");
 
@@ -1352,27 +1546,32 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
               localDesc.BufferCount, localDesc.Flags, (SIZE_T) localDesc.OutputWindow, localDesc.Windowed,
               _skipFGSwapChainCreation);
 
+    if (!_skipFGSwapChainCreation)
+        FGHooks::ReleaseUnusableFGSwapchain(localDesc.OutputWindow, pDevice);
+
     if (State::Instance().activeFgOutput == FGOutput::XeFG &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
-        if (!localDesc.Windowed)
-        {
-            State::Instance().SCExclusiveFullscreen = true;
-            localDesc.Windowed = true;
-        }
+        // Nested call from the FG library is windowed, keep the outer request
+        if (!_skipFGSwapChainCreation && !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+            State::Instance().SCExclusiveFullscreenRequested = !localDesc.Windowed;
+        localDesc.Windowed = true;
 
         localDesc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
         localDesc.BufferDesc.Scaling = DXGI_MODE_SCALING_STRETCHED;
     }
 
     // For vsync override
-    if (!localDesc.Windowed)
+    if (!localDesc.Windowed && !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
     {
         LOG_INFO("Game is creating fullscreen swapchain, disabled V-Sync overrides");
         Config::Instance()->OverrideVsync.set_volatile_value(false);
     }
 
-    if (Config::Instance()->OverrideVsync.value_or_default())
+    // Flip model doesn't support MSAA or sRGB buffers
+    if (Config::Instance()->OverrideVsync.value_or_default() && localDesc.SampleDesc.Count <= 1 &&
+        localDesc.BufferDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB &&
+        localDesc.BufferDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
     {
         localDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         localDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
@@ -1381,9 +1580,12 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
             localDesc.BufferCount = 2;
     }
 
-    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
-    State::Instance().SCLastFlags = localDesc.Flags;
-    State::Instance().realExclusiveFullscreen = !localDesc.Windowed;
+    if (!FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+    {
+        State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+        State::Instance().SCLastFlags = localDesc.Flags;
+        State::Instance().realExclusiveFullscreen = !localDesc.Windowed;
+    }
 
 #ifdef DETAILED_SC_LOGS
     LOG_TRACE("localDesc.BufferCount: {}", localDesc.BufferCount);
@@ -1405,45 +1607,23 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
 #endif //
 
     // Check for SL proxy, get real queue
+    auto prevCommandQueue = State::Instance().currentCommandQueue;
     ID3D12CommandQueue* cq = nullptr;
     IUnknown* real = nullptr;
     HRESULT FGSCResult = E_NOTIMPL;
 
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) == S_OK)
     {
-        if (State::Instance().currentD3D12Device == nullptr)
-        {
-            ID3D12Device* device = nullptr;
-            if (cq->GetDevice(IID_PPV_ARGS(&device)) == S_OK)
-            {
-                if (device != nullptr)
-                {
-                    // Update current D3D12 device and adapter
-                    if (State::Instance().currentD3D12Device != device)
-                    {
-                        State::Instance().currentD3D12Device = device;
-
-                        IDXGIDevice* dxgiDevice = nullptr;
-                        if (device->QueryInterface(IID_PPV_ARGS(&dxgiDevice)) == S_OK)
-                        {
-                            IDXGIAdapter* adapter = nullptr;
-                            if (dxgiDevice->GetAdapter(&adapter) == S_OK)
-                                adapter->Release();
-
-                            dxgiDevice->Release();
-                        }
-                    }
-
-                    LOG_INFO("Captured D3D12 device from command queue: {:X}", (UINT64) device);
-                    D3D12Hooks::HookDevice(State::Instance().currentD3D12Device);
-                }
-            }
-        }
+        cq->Release();
 
         if (!Util::CheckForRealObject(__FUNCTION__, cq, &real))
             real = cq;
 
-        State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+        if (!FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+        {
+            State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+            D3D12Hooks::CaptureDevice((ID3D12CommandQueue*) real);
+        }
 
         if (State::Instance().currentD3D12Device != nullptr)
             WithDx12::SetD3D12Objects(State::Instance().currentD3D12Device, State::Instance().currentCommandQueue,
@@ -1455,7 +1635,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
             ScopedSkipFGSCCreation skipFGSCCreation {};
             FGSCResult = FGHooks::CreateSwapChain(realFactory, real, &localDesc, ppSwapChain);
 
-            if (FGSCResult == S_OK)
+            if (SUCCEEDED(FGSCResult))
             {
                 State::Instance().currentSwapchainDesc = localDesc;
                 return FGSCResult;
@@ -1499,7 +1679,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
 
     // If FG is disabled or call is coming from FG library
     // Create the DXGI SwapChain and wrap it
-    if (_skipFGSwapChainCreation || FGSCResult != S_OK)
+    if (_skipFGSwapChainCreation || FAILED(FGSCResult))
     {
         // !_skipFGSwapChainCreation for preventing early enablement flags
         if (!_skipFGSwapChainCreation)
@@ -1513,6 +1693,22 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
         {
             ScopedSkipParentWrapping skipParentWrapping {};
             result = o_DLSSGCreateSwapChain(realFactory, pDevice, &localDesc, ppSwapChain);
+
+            // DXGI can reject our desc changes, the game's own desc works as without Opti
+            if (FAILED(result) && memcmp(&localDesc, pDesc, sizeof(localDesc)) != 0)
+            {
+                LOG_WARN("Failed with modified desc: {:X}, retrying with game's desc", (UINT) result);
+
+                localDesc = *pDesc;
+                result = o_DLSSGCreateSwapChain(realFactory, pDevice, &localDesc, ppSwapChain);
+
+                if (SUCCEEDED(result) && !FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow))
+                {
+                    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+                    State::Instance().SCLastFlags = localDesc.Flags;
+                    State::Instance().realExclusiveFullscreen = !localDesc.Windowed;
+                }
+            }
         }
 
         if (!_skipFGSwapChainCreation)
@@ -1525,14 +1721,19 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
 
         if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
         {
-            State::Instance().currentSwapchainDesc = localDesc;
+            // Another window's swapchain must not replace the FG swapchain's state
+            const bool otherWindow = FGHooks::IsOtherWindowThanFG(localDesc.OutputWindow);
+
+            if (!otherWindow)
+                State::Instance().currentSwapchainDesc = localDesc;
 
             // Check for SL proxy
             IDXGISwapChain* realSC = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, *ppSwapChain, (IUnknown**) &realSC))
                 realSC = *ppSwapChain;
 
-            State::Instance().currentRealSwapchain = realSC;
+            if (!otherWindow)
+                State::Instance().currentRealSwapchain = realSC;
 
             IUnknown* realDevice = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &realDevice))
@@ -1550,14 +1751,17 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
             WrappedIDXGISwapChain4* wrapped;
             if ((*ppSwapChain)->QueryInterface(IID_PPV_ARGS(&wrapped)) != S_OK)
             {
-                *ppSwapChain =
-                    new WrappedIDXGISwapChain4(realSC, realDevice, localDesc.OutputWindow, localDesc.Flags, false);
+                *ppSwapChain = new WrappedIDXGISwapChain4(realSC, realDevice, localDesc.OutputWindow, localDesc.Flags,
+                                                          false, *ppSwapChain);
 
-                // Set as currentSwapchain is FG is disabled
-                if (!_skipFGSwapChainCreation)
-                    State::Instance().currentSwapchain = *ppSwapChain;
+                if (!otherWindow)
+                {
+                    // Set as currentSwapchain is FG is disabled
+                    if (!_skipFGSwapChainCreation)
+                        State::Instance().currentSwapchain = *ppSwapChain;
 
-                State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                    State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                }
 
                 LOG_DEBUG("Created new WrappedIDXGISwapChain4: {:X}, pDevice: {:X}", (size_t) *ppSwapChain,
                           (size_t) pDevice);
@@ -1572,6 +1776,10 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnkno
     {
         LOG_ERROR("CreateSwapChain failed: {:X}", (UINT) result);
     }
+
+    // The game can release a failed swapchain's queue
+    if (FAILED(result))
+        State::Instance().currentCommandQueue = prevCommandQueue;
 
     return result;
 }
@@ -1627,7 +1835,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
         return result;
     }
 
-    if ((pDesc->Height != 0 && pDesc->Height < 100) || (pDesc->Width != 0 && pDesc->Width < 100))
+    if (Util::IsOverlaySwapchain(hWnd, pDesc->Width, pDesc->Height))
     {
         LOG_WARN("Overlay call!");
         HRESULT result;
@@ -1652,36 +1860,37 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
               localDesc.Width, localDesc.Height, (UINT) localDesc.Format, localDesc.BufferCount, localDesc.Flags,
               (size_t) hWnd, _skipFGSwapChainCreation);
 
-    if (pFullscreenDesc != nullptr)
-        State::Instance().realExclusiveFullscreen = !pFullscreenDesc->Windowed;
-
     DXGI_SWAP_CHAIN_FULLSCREEN_DESC localFullscreenDesc {};
 
     if (pFullscreenDesc != nullptr)
         memcpy(&localFullscreenDesc, pFullscreenDesc, sizeof(DXGI_SWAP_CHAIN_FULLSCREEN_DESC));
 
+    if (!_skipFGSwapChainCreation)
+        FGHooks::ReleaseUnusableFGSwapchain(hWnd, pDevice);
+
     if (State::Instance().activeFgOutput == FGOutput::XeFG &&
         Config::Instance()->FGXeFGForceBorderless.value_or_default())
     {
-        if (pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed)
-        {
-
-            State::Instance().SCExclusiveFullscreen = true;
-            localFullscreenDesc.Windowed = true;
-        }
+        // Nested call from the FG library is windowed, keep the outer request
+        if (!_skipFGSwapChainCreation && !FGHooks::IsOtherWindowThanFG(hWnd))
+            State::Instance().SCExclusiveFullscreenRequested =
+                pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+        localFullscreenDesc.Windowed = true;
 
         localDesc.Flags &= ~DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
         localDesc.Scaling = DXGI_SCALING_STRETCH;
     }
 
     // For vsync override
-    if (pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed)
+    if (pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed && !FGHooks::IsOtherWindowThanFG(hWnd))
     {
         LOG_INFO("Game is creating fullscreen swapchain, disabled V-Sync overrides");
         Config::Instance()->OverrideVsync.set_volatile_value(false);
     }
 
-    if (Config::Instance()->OverrideVsync.value_or_default())
+    // Flip model doesn't support MSAA or sRGB buffers
+    if (Config::Instance()->OverrideVsync.value_or_default() && localDesc.SampleDesc.Count <= 1 &&
+        localDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB && localDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
     {
         localDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         localDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
@@ -1690,9 +1899,12 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
             localDesc.BufferCount = 2;
     }
 
-    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
-    State::Instance().SCLastFlags = localDesc.Flags;
-    State::Instance().realExclusiveFullscreen = pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+    if (!FGHooks::IsOtherWindowThanFG(hWnd))
+    {
+        State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+        State::Instance().SCLastFlags = localDesc.Flags;
+        State::Instance().realExclusiveFullscreen = pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+    }
 
 #ifdef VER_PRE_RELEASE
     LOG_TRACE("localDesc.AlphaMode : {}", magic_enum::enum_name(localDesc.AlphaMode));
@@ -1718,45 +1930,23 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
 #endif
 
     // Check for SL proxy, get real queue
+    auto prevCommandQueue = State::Instance().currentCommandQueue;
     ID3D12CommandQueue* cq = nullptr;
     IUnknown* real = nullptr;
     HRESULT FGSCResult = E_NOTIMPL;
 
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) == S_OK)
     {
-        if (State::Instance().currentD3D12Device == nullptr)
-        {
-            ID3D12Device* device = nullptr;
-            if (cq->GetDevice(IID_PPV_ARGS(&device)) == S_OK)
-            {
-                if (device != nullptr)
-                {
-                    // Update current D3D12 device and adapter
-                    if (State::Instance().currentD3D12Device != device)
-                    {
-                        State::Instance().currentD3D12Device = device;
-
-                        IDXGIDevice* dxgiDevice = nullptr;
-                        if (device->QueryInterface(IID_PPV_ARGS(&dxgiDevice)) == S_OK)
-                        {
-                            IDXGIAdapter* adapter = nullptr;
-                            if (dxgiDevice->GetAdapter(&adapter) == S_OK)
-                                adapter->Release();
-
-                            dxgiDevice->Release();
-                        }
-                    }
-
-                    LOG_INFO("Captured D3D12 device from command queue: {:X}", (UINT64) device);
-                    D3D12Hooks::HookDevice(State::Instance().currentD3D12Device);
-                }
-            }
-        }
+        cq->Release();
 
         if (!Util::CheckForRealObject(__FUNCTION__, cq, &real))
             real = cq;
 
-        State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+        if (!FGHooks::IsOtherWindowThanFG(hWnd))
+        {
+            State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+            D3D12Hooks::CaptureDevice((ID3D12CommandQueue*) real);
+        }
 
         if (State::Instance().currentD3D12Device != nullptr)
             WithDx12::SetD3D12Objects(State::Instance().currentD3D12Device, State::Instance().currentCommandQueue,
@@ -1770,7 +1960,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
                                                          pFullscreenDesc != nullptr ? &localFullscreenDesc : nullptr,
                                                          pRestrictToOutput, ppSwapChain);
 
-            if (FGSCResult == S_OK)
+            if (SUCCEEDED(FGSCResult))
             {
                 ((IDXGISwapChain*) *ppSwapChain)->GetDesc(&State::Instance().currentSwapchainDesc);
                 return FGSCResult;
@@ -1815,7 +2005,7 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
 
     // If FG is disabled or call is coming from FG library
     // Create the DXGI SwapChain and wrap it
-    if (_skipFGSwapChainCreation || FGSCResult != S_OK)
+    if (_skipFGSwapChainCreation || FAILED(FGSCResult))
     {
 
         // !_skipFGSwapChainCreation for preventing early enablement flags
@@ -1832,6 +2022,30 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
             result = o_DLSSGCreateSwapChainForHwnd(realFactory, pDevice, hWnd, &localDesc,
                                                    pFullscreenDesc != nullptr ? &localFullscreenDesc : nullptr,
                                                    pRestrictToOutput, ppSwapChain);
+
+            // DXGI can reject our desc changes, the game's own desc works as without Opti
+            if (FAILED(result) && (memcmp(&localDesc, pDesc, sizeof(localDesc)) != 0 ||
+                                   (pFullscreenDesc != nullptr &&
+                                    memcmp(&localFullscreenDesc, pFullscreenDesc, sizeof(localFullscreenDesc)) != 0)))
+            {
+                LOG_WARN("Failed with modified desc: {:X}, retrying with game's desc", (UINT) result);
+
+                localDesc = *pDesc;
+
+                if (pFullscreenDesc != nullptr)
+                    localFullscreenDesc = *pFullscreenDesc;
+
+                result = o_DLSSGCreateSwapChainForHwnd(realFactory, pDevice, hWnd, pDesc, pFullscreenDesc,
+                                                       pRestrictToOutput, ppSwapChain);
+
+                if (SUCCEEDED(result) && !FGHooks::IsOtherWindowThanFG(hWnd))
+                {
+                    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+                    State::Instance().SCLastFlags = localDesc.Flags;
+                    State::Instance().realExclusiveFullscreen =
+                        pFullscreenDesc != nullptr && !localFullscreenDesc.Windowed;
+                }
+            }
         }
 
         if (!_skipFGSwapChainCreation)
@@ -1844,12 +2058,16 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
 
         if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
         {
+            // Another window's swapchain must not replace the FG swapchain's state
+            const bool otherWindow = FGHooks::IsOtherWindowThanFG(hWnd);
+
             // check for SL proxy
             IDXGISwapChain1* realSC = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, *ppSwapChain, (IUnknown**) &realSC))
                 realSC = *ppSwapChain;
 
-            State::Instance().currentRealSwapchain = realSC;
+            if (!otherWindow)
+                State::Instance().currentRealSwapchain = realSC;
 
             IUnknown* readDevice = nullptr;
             if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &readDevice))
@@ -1861,21 +2079,26 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
                 State::Instance().screenHeight = static_cast<float>(localDesc.Height);
             }
 
-            realSC->GetDesc(&State::Instance().currentSwapchainDesc);
+            if (!otherWindow)
+                realSC->GetDesc(&State::Instance().currentSwapchainDesc);
 
             LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (uintptr_t) *ppSwapChain, (uintptr_t) hWnd);
 
             WrappedIDXGISwapChain4* wrapped;
             if ((*ppSwapChain)->QueryInterface(IID_PPV_ARGS(&wrapped)) != S_OK)
             {
-                *ppSwapChain = new WrappedIDXGISwapChain4(realSC, readDevice, hWnd, localDesc.Flags, false);
+                *ppSwapChain =
+                    new WrappedIDXGISwapChain4(realSC, readDevice, hWnd, localDesc.Flags, false, *ppSwapChain);
                 LOG_DEBUG("Created new WrappedIDXGISwapChain4: {0:X}, pDevice: {1:X}", (uintptr_t) *ppSwapChain,
                           (uintptr_t) pDevice);
 
-                if (!_skipFGSwapChainCreation)
-                    State::Instance().currentSwapchain = *ppSwapChain;
+                if (!otherWindow)
+                {
+                    if (!_skipFGSwapChainCreation)
+                        State::Instance().currentSwapchain = *ppSwapChain;
 
-                State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                    State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                }
             }
             else
             {
@@ -1895,6 +2118,10 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory
         firstCall = false;
     }
 
+    // The game can release a failed swapchain's queue
+    if (FAILED(result))
+        State::Instance().currentCommandQueue = prevCommandQueue;
+
     return result;
 }
 
@@ -1912,22 +2139,25 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
                       pDesc->Height, (UINT) pDesc->Format, pDesc->Flags, pDesc->BufferCount, _skipFGSwapChainCreation);
 
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        return realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
+        return o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput,
+                                                   ppSwapChain);
     }
 
     if (pDevice == nullptr || pDesc == nullptr)
     {
         LOG_WARN("pDevice or pDesc is nullptr!");
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        return realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
+        return o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput,
+                                                   ppSwapChain);
     }
 
-    if ((pDesc->Height != 0 && pDesc->Height < 100) || (pDesc->Width != 0 && pDesc->Width < 100))
+    if (Util::IsOverlaySwapchain(nullptr, pDesc->Width, pDesc->Height))
     {
         LOG_WARN("Overlay call!");
 
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        return realFactory->CreateSwapChainForCoreWindow(pDevice, pWindow, pDesc, pRestrictToOutput, ppSwapChain);
+        return o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, pDesc, pRestrictToOutput,
+                                                   ppSwapChain);
     }
 
     DXGI_SWAP_CHAIN_DESC1 localDesc {};
@@ -1936,8 +2166,9 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
     LOG_DEBUG("Width: {}, Height: {}, Format: {}, Count: {}, SkipWrapping: {}", localDesc.Width, localDesc.Height,
               (UINT) localDesc.Format, localDesc.BufferCount, _skipFGSwapChainCreation);
 
-    // For vsync override
-    if (Config::Instance()->OverrideVsync.value_or_default())
+    // For vsync override, flip model doesn't support MSAA or sRGB buffers
+    if (Config::Instance()->OverrideVsync.value_or_default() && localDesc.SampleDesc.Count <= 1 &&
+        localDesc.Format != DXGI_FORMAT_R8G8B8A8_UNORM_SRGB && localDesc.Format != DXGI_FORMAT_B8G8R8A8_UNORM_SRGB)
     {
         localDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         localDesc.Flags |= DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
@@ -1946,18 +2177,34 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
             localDesc.BufferCount = 2;
     }
 
-    State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
-    State::Instance().SCLastFlags = localDesc.Flags;
-    State::Instance().realExclusiveFullscreen = false;
+    // No FG swapchain for CoreWindow, so this is another window if one exists
+    if (!_skipFGSwapChainCreation)
+        FGHooks::ReleaseUnusableFGSwapchain((HWND) pWindow, pDevice);
 
+    const bool otherWindow = FGHooks::IsOtherWindowThanFG((HWND) pWindow);
+
+    if (!otherWindow)
+    {
+        State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+        State::Instance().SCLastFlags = localDesc.Flags;
+        State::Instance().realExclusiveFullscreen = false;
+    }
+
+    auto prevCommandQueue = State::Instance().currentCommandQueue;
     ID3D12CommandQueue* cq = nullptr;
     IUnknown* real = nullptr;
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) == S_OK)
     {
+        cq->Release();
+
         if (!Util::CheckForRealObject(__FUNCTION__, cq, &real))
             real = cq;
 
-        State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+        if (!otherWindow)
+        {
+            State::Instance().currentCommandQueue = (ID3D12CommandQueue*) real;
+            D3D12Hooks::CaptureDevice((ID3D12CommandQueue*) real);
+        }
 
         if (State::Instance().currentD3D12Device != nullptr)
             WithDx12::SetD3D12Objects(State::Instance().currentD3D12Device, State::Instance().currentCommandQueue,
@@ -1967,8 +2214,24 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
     HRESULT result = E_FAIL;
     {
         ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-        auto result = o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, &localDesc, pRestrictToOutput,
-                                                          ppSwapChain);
+        result = o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, &localDesc, pRestrictToOutput,
+                                                     ppSwapChain);
+
+        // DXGI can reject our desc changes, the game's own desc works as without Opti
+        if (FAILED(result) && memcmp(&localDesc, pDesc, sizeof(localDesc)) != 0)
+        {
+            LOG_WARN("Failed with modified desc: {:X}, retrying with game's desc", (UINT) result);
+
+            localDesc = *pDesc;
+            result = o_DLSSGCreateSwapChainForCoreWindow(realFactory, pDevice, pWindow, &localDesc, pRestrictToOutput,
+                                                         ppSwapChain);
+
+            if (SUCCEEDED(result) && !otherWindow)
+            {
+                State::Instance().SCAllowTearing = (localDesc.Flags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
+                State::Instance().SCLastFlags = localDesc.Flags;
+            }
+        }
     }
 
     if (SUCCEEDED(result) && ppSwapChain != nullptr && *ppSwapChain != nullptr)
@@ -1978,28 +2241,36 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
         if (!Util::CheckForRealObject(__FUNCTION__, *ppSwapChain, (IUnknown**) &realSC))
             realSC = *ppSwapChain;
 
-        State::Instance().currentRealSwapchain = realSC;
+        if (!otherWindow)
+            State::Instance().currentRealSwapchain = realSC;
 
         IUnknown* readDevice = nullptr;
         if (!Util::CheckForRealObject(__FUNCTION__, pDevice, (IUnknown**) &readDevice))
             readDevice = pDevice;
 
-        realSC->GetDesc(&State::Instance().currentSwapchainDesc);
+        if (!otherWindow)
+        {
+            realSC->GetDesc(&State::Instance().currentSwapchainDesc);
 
-        State::Instance().screenWidth = static_cast<float>(localDesc.Width);
-        State::Instance().screenHeight = static_cast<float>(localDesc.Height);
+            State::Instance().screenWidth = static_cast<float>(localDesc.Width);
+            State::Instance().screenHeight = static_cast<float>(localDesc.Height);
+        }
 
         LOG_DEBUG("Created new swapchain: {0:X}, hWnd: {1:X}", (UINT64) *ppSwapChain, (UINT64) pWindow);
 
         WrappedIDXGISwapChain4* wrapped;
         if ((*ppSwapChain)->QueryInterface(IID_PPV_ARGS(&wrapped)) != S_OK)
         {
-            *ppSwapChain = new WrappedIDXGISwapChain4(realSC, readDevice, (HWND) pWindow, localDesc.Flags, true);
+            *ppSwapChain =
+                new WrappedIDXGISwapChain4(realSC, readDevice, (HWND) pWindow, localDesc.Flags, true, *ppSwapChain);
 
-            if (!_skipFGSwapChainCreation)
-                State::Instance().currentSwapchain = *ppSwapChain;
+            if (!otherWindow)
+            {
+                if (!_skipFGSwapChainCreation)
+                    State::Instance().currentSwapchain = *ppSwapChain;
 
-            State::Instance().currentWrappedSwapchain = *ppSwapChain;
+                State::Instance().currentWrappedSwapchain = *ppSwapChain;
+            }
 
             LOG_DEBUG("Created new WrappedIDXGISwapChain4: {0:X}, pDevice: {1:X}", (UINT64) *ppSwapChain,
                       (UINT64) pDevice);
@@ -2009,6 +2280,10 @@ HRESULT DxgiFactoryHooks::DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realF
             wrapped->Release();
         }
     }
+
+    // The game can release a failed swapchain's queue
+    if (FAILED(result))
+        State::Instance().currentCommandQueue = prevCommandQueue;
 
     return result;
 }
@@ -2037,7 +2312,18 @@ HRESULT DxgiFactoryHooks::EnumAdapters(IDXGIFactory* realFactory, UINT Adapter, 
             auto gpuLuid = allGpus[Adapter].luid;
 
             ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-            result = o_EnumAdapterByLuid(factory6, gpuLuid, __uuidof(IDXGIAdapter), (void**) ppAdapter);
+            result = o_EnumAdapterByLuid(factory6, gpuLuid, IID_PPV_ARGS(ppAdapter));
+        }
+        // Empty while GPUs are being detected, other mods can enumerate from inside the detection
+        else if (allGpus.empty())
+        {
+            auto preference = Config::Instance()->PreferDedicatedGpu.value_or_default()
+                                  ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
+                                  : DXGI_GPU_PREFERENCE_UNSPECIFIED;
+
+            ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
+            result =
+                factory6->EnumAdapterByGpuPreference(Adapter, preference, __uuidof(IDXGIAdapter), (void**) ppAdapter);
         }
         else
             result = DXGI_ERROR_NOT_FOUND;
@@ -2085,7 +2371,18 @@ HRESULT DxgiFactoryHooks::EnumAdapters1(IDXGIFactory1* realFactory, UINT Adapter
             auto gpuLuid = allGpus[Adapter].luid;
 
             ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
-            result = o_EnumAdapterByLuid(factory6, gpuLuid, __uuidof(IDXGIAdapter), (void**) ppAdapter);
+            result = o_EnumAdapterByLuid(factory6, gpuLuid, IID_PPV_ARGS(ppAdapter));
+        }
+        // Empty while GPUs are being detected, other mods can enumerate from inside the detection
+        else if (allGpus.empty())
+        {
+            auto preference = Config::Instance()->PreferDedicatedGpu.value_or_default()
+                                  ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
+                                  : DXGI_GPU_PREFERENCE_UNSPECIFIED;
+
+            ScopedSkipDxgiLoadChecks skipDxgiLoadChecks {};
+            result =
+                factory6->EnumAdapterByGpuPreference(Adapter, preference, __uuidof(IDXGIAdapter1), (void**) ppAdapter);
         }
         else
             result = DXGI_ERROR_NOT_FOUND;

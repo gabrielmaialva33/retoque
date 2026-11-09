@@ -29,6 +29,7 @@ struct Register
 void Reset()
 {
     calls = {};
+    FGHooks::_borderlessPending = FGHooks::_windowSaved = false;
     window = {};
     State::Instance() = {};
     Config::Instance()->FGXeFGForceBorderless.value = false;
@@ -315,12 +316,14 @@ CASE(xefg_emulates, "XeFG with the key (control): fullscreen emulated, never for
     assert(FGHooks::hkResizeTarget(&sc, &mode) == S_OK && calls.resizeTarget == 0);
     FGHooks::CoverAfterResizeBuffers(S_OK);
     FGHooks::CoverAfterResizeBuffers1(S_OK);
-    assert(window.moves == 3);
+    assert(window.moves == 1 && FGHooks::_borderlessPending); // resize only schedules the window work
+    FGHooks::PresentPending();
+    assert(window.moves == 1 && !FGHooks::_borderlessPending); // already covers the monitor, no recursive WM_SIZE
     assert(FGHooks::hkSetFullscreenState(&sc, FALSE, nullptr) == S_OK);
     assert(calls.setState == 0 && !State::Instance().SCExclusiveFullscreen);
-    assert(window.style == (WS_OVERLAPPEDWINDOW | WS_VISIBLE) && window.moves == 4);
+    assert(window.style == (WS_OVERLAPPEDWINDOW | WS_VISIBLE) && window.moves == 2);
     FGHooks::CoverAfterResizeBuffers(S_OK);
-    assert(window.moves == 4);
+    assert(window.moves == 2);
 }
 
 CASE(key_off_forwards, "Key off (control): every output forwards SetFullscreenState and ResizeTarget")

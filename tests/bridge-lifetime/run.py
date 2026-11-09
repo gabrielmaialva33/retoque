@@ -76,7 +76,7 @@ predicates = 'namespace Dx11wDx12\n{\n' + ''.join(map(function, [
     'void MatchHiddenToPresenter(IDXGISwapChain* hidden,',
 ])) + '} // namespace Dx11wDx12\n'
 # Upstream's skip-resize test lives in the production file's anonymous namespace; verbatim here too.
-helpers = 'namespace\n{\n' + function('bool IsSame(IDXGISwapChain* swapchain,') + '} // namespace\n'
+helpers = 'namespace\n{\n' + function('bool IsSame(IDXGISwapChain* swapchain,') + function('UINT ValidPresentFlags(') + '} // namespace\n'
 # Production's retry budget for a refused presenter resize, verbatim from the header, into the fake class.
 bridge_header = (root / 'OptiScaler/with_dx12/dx11_with_dx12_sc.h').read_text()
 retries = re.search(r'^\s*static constexpr UINT kRefusedResizeRetries = \d+;$', bridge_header, re.M).group(0)
@@ -99,6 +99,7 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-bridge-lifetime-') as direct
 # whose public reference counts decide a vkd3d-proton-style ResizeBuffers.
 overlay_source = (root / 'OptiScaler/menu/menu_overlay_dx.cpp').read_text()
 overlay_unit = ((here / 'overlay_fakes.h').read_text() +
+                function('static bool IsRendererBackend(', overlay_source) +
                 function('static bool WaitForMenuGpu(', overlay_source) +
                 function('static bool SubmitMenuDraw(', overlay_source) +
                 function('static bool PrepareMenuAllocator(', overlay_source) +

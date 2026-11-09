@@ -88,34 +88,83 @@ bool IFGFeature_Dx12::DropIncompleteCommandObjects()
 
 bool IFGFeature_Dx12::WaitForUIAllocator(UINT index)
 {
-    if (_uiFence == nullptr || _uiFenceEvent == nullptr)
-        return true;
+    return WaitForFenceValue(_uiFence, _uiFenceEvent, _uiAllocatorFenceValues[index]);
+}
 
-    const auto fenceValue = _uiAllocatorFenceValues[index];
-    if (fenceValue == 0)
-        return true;
+bool IFGFeature_Dx12::WaitForFenceValue(ID3D12Fence* fence, HANDLE event, UINT64 value)
+{
+    if (value == 0)
+        return true; // This allocator has never been submitted.
+    if (value == UINT64_MAX || fence == nullptr || event == nullptr)
+        return false; // Failed Signal, missing proof, or a lost device cannot authorize Reset.
 
-    const auto completedValue = _uiFence->GetCompletedValue();
-    if (completedValue >= fenceValue)
-        return true;
+    const auto deadline = GetTickCount64() + 5000;
+    bool registered = false;
+    for (;;)
+    {
+        const auto completed = fence->GetCompletedValue();
+        if (completed == UINT64_MAX)
+            return false;
+        if (completed >= value)
+            return true;
+        const auto now = GetTickCount64();
+        if (now >= deadline)
+            return false;
+        if (!registered)
+        {
+            if (FAILED(fence->SetEventOnCompletion(value, event)))
+                return false;
+            registered = true;
+        }
+        const auto beforeWait = GetTickCount64();
+        if (beforeWait >= deadline)
+            continue;
+        const auto result = WaitForSingleObject(event, static_cast<DWORD>(deadline - beforeWait));
+        if (result != WAIT_OBJECT_0 && result != WAIT_TIMEOUT)
+            return false;
+        // A stale registration can wake this event; only the fence value proves completion.
+    }
+}
 
-    auto result = _uiFence->SetEventOnCompletion(fenceValue, _uiFenceEvent);
+UINT64 IFGFeature_Dx12::SignalSCFence()
+{
+    std::scoped_lock lock(_scFenceMutex);
+
+    if (_scFence == nullptr || _gameCommandQueue == nullptr)
+        return UINT64_MAX;
+
+    // Values must reach the queue in order
+    const auto value = ++_scFenceValue;
+    auto result = _gameCommandQueue->Signal(_scFence, value);
+
     if (FAILED(result))
     {
-        LOG_ERROR("UI allocator fence SetEventOnCompletion failed. slot {}, fence {}, completed {}, result {:X}", index,
-                  fenceValue, completedValue, (UINT) result);
-        return false;
+        LOG_ERROR("SC fence signal failed. fence {}, result {:X}", value, (UINT) result);
+        return UINT64_MAX;
     }
 
-    const auto waitResult = WaitForSingleObject(_uiFenceEvent, 5000);
-    if (waitResult != WAIT_OBJECT_0)
+    return value;
+}
+
+void IFGFeature_Dx12::SubmitSCCommandList(UINT index)
+{
+    if (index >= BUFFER_COUNT || !_scCommandListResetted[index])
+        return;
+
+    LOG_DEBUG("Executing _scCommandList[{}]: {:X}", index, (size_t) _scCommandList[index]);
+    auto closeResult = _scCommandList[index]->Close();
+
+    if (closeResult == S_OK)
     {
-        LOG_ERROR("UI allocator fence wait failed. slot {}, fence {}, completed {}, waitResult {:X}", index, fenceValue,
-                  _uiFence->GetCompletedValue(), waitResult);
-        return false;
+        _gameCommandQueue->ExecuteCommandLists(1, (ID3D12CommandList**) &_scCommandList[index]);
+        _scAllocatorFenceValues[index] = SignalSCFence();
+    }
+    else
+    {
+        LOG_ERROR("_scCommandList[{}]->Close() error: {:X}", index, (UINT) closeResult);
     }
 
-    return true;
+    _scCommandListResetted[index] = false;
 }
 
 bool IFGFeature_Dx12::SubmitUICommandList(UINT index)
@@ -146,6 +195,7 @@ bool IFGFeature_Dx12::SubmitUICommandList(UINT index)
     auto signalResult = _gameCommandQueue->Signal(_uiFence, _uiAllocatorFenceValues[index]);
     if (FAILED(signalResult))
     {
+        _uiAllocatorFenceValues[index] = UINT64_MAX;
         LOG_ERROR("UI allocator fence signal failed. slot {}, fence {}, result {:X}", index,
                   _uiAllocatorFenceValues[index], (UINT) signalResult);
         return false;
@@ -221,6 +271,29 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetUICommandList(int index)
     return _uiCommandList[index];
 }
 
+void IFGFeature_Dx12::ReleaseFences()
+{
+    std::scoped_lock lock(_scFenceMutex);
+
+    // Recreated with the objects, so they are never signaled from another device's queue
+    DeferredRelease::Release(_uiFence);
+    DeferredRelease::Release(_scFence);
+
+    for (auto event : { &_uiFenceEvent, &_scFenceEvent })
+    {
+        if (*event != nullptr)
+        {
+            DeferredRelease::Enqueue([handle = *event]() { CloseHandle(handle); });
+            *event = nullptr;
+        }
+    }
+
+    _uiFenceValue = 0;
+    _scFenceValue = 0;
+    memset(_uiAllocatorFenceValues, 0, sizeof(_uiAllocatorFenceValues));
+    memset(_scAllocatorFenceValues, 0, sizeof(_scAllocatorFenceValues));
+}
+
 ID3D12GraphicsCommandList* IFGFeature_Dx12::GetSCCommandList(int index)
 {
     if (index < 0)
@@ -263,6 +336,9 @@ ID3D12GraphicsCommandList* IFGFeature_Dx12::GetSCCommandList(int index)
 
     if (!_scCommandListResetted[index])
     {
+        if (!WaitForFenceValue(_scFence, _scFenceEvent, _scAllocatorFenceValues[index]))
+            return nullptr;
+
         auto result = _scCommandAllocator[index]->Reset();
 
         if (result == S_OK)
@@ -348,25 +424,78 @@ void IFGFeature_Dx12::ReleaseResourceCopies()
 
     _mvFlip.reset();
     _depthFlip.reset();
+    _hudlessFlip.reset();
 
     Hudfix_Dx12::ReleaseBuffers();
 }
 
-void IFGFeature_Dx12::FlipResource(Dx12Resource* resource)
+bool IFGFeature_Dx12::WillFlip(const Dx12Resource* resource) const
+{
+    if (State::Instance().activeFgInput != FGInput::Upscaler)
+        return false;
+
+    if (resource->type == FG_ResourceType::HudlessColor)
+        return resource->flip || Config::Instance()->FGHudlessFlip.value_or_default();
+
+    return Config::Instance()->FGResourceFlip.value_or_default() &&
+           (resource->type == FG_ResourceType::Velocity || resource->type == FG_ResourceType::Depth);
+}
+
+// UAV format keeping the hudless values, the shader encodes sRGB inputs
+static DXGI_FORMAT HudlessFlipFormat(ID3D12Device* device, DXGI_FORMAT format)
+{
+    switch (format)
+    {
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+        format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        break;
+
+    case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+        format = DXGI_FORMAT_B8G8R8A8_UNORM;
+        break;
+
+    case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+        format = DXGI_FORMAT_R10G10B10A2_UNORM;
+        break;
+
+    case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+        format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        break;
+
+    default:
+        break;
+    }
+
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT support { format };
+    if (SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support))) &&
+        (support.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE) != 0)
+    {
+        return format;
+    }
+
+    // Typed UAV stores always work with it
+    return DXGI_FORMAT_R8G8B8A8_UNORM;
+}
+
+void IFGFeature_Dx12::FlipResource(Dx12Resource* resource, int fIndex)
 {
     auto type = resource->type;
+    const bool color = type == FG_ResourceType::HudlessColor;
 
-    if (type != FG_ResourceType::Depth && type != FG_ResourceType::Velocity)
+    if (type != FG_ResourceType::Depth && type != FG_ResourceType::Velocity && !color)
         return;
 
-    auto fIndex = GetIndex();
     ID3D12Resource* flipOutput = nullptr;
     std::unique_ptr<RF_Dx12>* flip = nullptr;
 
     flipOutput = _resourceCopy[fIndex][type];
 
+    const auto format = color ? HudlessFlipFormat(_device, resource->resource->GetDesc().Format) : DXGI_FORMAT_UNKNOWN;
+
     if (!CreateBufferResource(_device, resource->resource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, &flipOutput, true,
-                              resource->type == FG_ResourceType::Depth))
+                              resource->type == FG_ResourceType::Depth, format))
     {
         LOG_ERROR("{}, CreateBufferResource for flip is failed!", magic_enum::enum_name(type));
         return;
@@ -384,6 +513,16 @@ void IFGFeature_Dx12::FlipResource(Dx12Resource* resource)
 
         flip = &_depthFlip;
     }
+    else if (color)
+    {
+        if (_hudlessFlip.get() == nullptr)
+        {
+            _hudlessFlip = std::make_unique<RF_Dx12>("HudlessFlip", _device);
+            return;
+        }
+
+        flip = &_hudlessFlip;
+    }
     else
     {
         if (_mvFlip.get() == nullptr)
@@ -397,15 +536,26 @@ void IFGFeature_Dx12::FlipResource(Dx12Resource* resource)
 
     if (flip->get()->IsInit())
     {
-        auto cmdList = (resource->cmdList != nullptr) ? resource->cmdList : GetUICommandList(fIndex);
+        // Hudless captures come from the game's list mid recording, the shader's state can't be set there
+        auto cmdList = (resource->cmdList != nullptr && !color) ? resource->cmdList : GetUICommandList(fIndex);
         if (cmdList == nullptr)
         {
             LOG_ERROR("Can't flip {}: GetUICommandList({}) failed", magic_enum::enum_name(type), fIndex);
             return;
         }
 
+        // Hudless can come in any state
+        const auto readState = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        const bool transition = color && (resource->state & readState) == 0;
+
+        if (transition)
+            ResourceBarrier((ID3D12GraphicsCommandList*) cmdList, resource->resource, resource->state, readState);
+
         auto result = flip->get()->Dispatch((ID3D12GraphicsCommandList*) cmdList, resource->resource, flipOutput,
-                                            resource->width, resource->height, true);
+                                            resource->width, resource->height, true, color);
+
+        if (transition)
+            ResourceBarrier((ID3D12GraphicsCommandList*) cmdList, resource->resource, readState, resource->state);
 
         if (result)
         {
@@ -413,6 +563,10 @@ void IFGFeature_Dx12::FlipResource(Dx12Resource* resource)
             resource->validity = FG_ResourceValidity::UntilPresent;
             resource->copy = flipOutput;
             resource->state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+            // Later work on it has to follow the flip on the UI list
+            if (color)
+                resource->cmdList = nullptr;
         }
     }
 }
@@ -529,14 +683,14 @@ void IFGFeature_Dx12::DestroyCopyCmdList()
 {
     for (size_t i = 0; i < BUFFER_COUNT; i++)
     {
-        SAFE_RELEASE(_copyCommandAllocator[i]);
-        SAFE_RELEASE(_copyCommandList[i]);
+        DeferredRelease::Release(_copyCommandAllocator[i]);
+        DeferredRelease::Release(_copyCommandList[i]);
     }
 }
 
 bool IFGFeature_Dx12::CreateBufferResource(ID3D12Device* device, ID3D12Resource* source,
                                            D3D12_RESOURCE_STATES initialState, ID3D12Resource** target, bool UAV,
-                                           bool depth)
+                                           bool depth, DXGI_FORMAT format)
 {
     if (device == nullptr || source == nullptr)
         return false;
@@ -548,6 +702,8 @@ bool IFGFeature_Dx12::CreateBufferResource(ID3D12Device* device, ID3D12Resource*
 
     if (depth)
         inDesc.Format = DXGI_FORMAT_R32_FLOAT;
+    else if (format != DXGI_FORMAT_UNKNOWN)
+        inDesc.Format = format;
 
     if (*target != nullptr)
     {
@@ -627,10 +783,15 @@ bool IFGFeature_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue*
                               desc->BufferCount, desc->BufferDesc.Width, desc->BufferDesc.Height,
                               desc->BufferDesc.Format, desc->Flags) == S_OK;
 
+            if (!result)
+                return false;
+
             _gameCommandQueue = GameQueueFor(cmdQueue);
             _swapChain = State::Instance().currentFGSwapchain;
             *swapChain = State::Instance().currentFGSwapchain;
-            return result;
+            (*swapChain)->AddRef();
+
+            return true;
         }
         // Game is creating new swapchain without releasing old one,
         // we need to release it to avoid errors
@@ -661,10 +822,15 @@ bool IFGFeature_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue
             auto result = State::Instance().currentFGSwapchain->ResizeBuffers(
                               desc->BufferCount, desc->Width, desc->Height, desc->Format, desc->Flags) == S_OK;
 
+            if (!result)
+                return false;
+
             _gameCommandQueue = GameQueueFor(cmdQueue);
             _swapChain = State::Instance().currentFGSwapchain;
             *swapChain = (IDXGISwapChain1*) State::Instance().currentFGSwapchain;
-            return result;
+            (*swapChain)->AddRef();
+
+            return true;
         }
         // Game is creating new swapchain without releasing old one,
         // we need to release it to avoid errors

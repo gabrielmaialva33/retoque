@@ -22,6 +22,21 @@ void IFeature_Dx12::ResourceBarrier(ID3D12GraphicsCommandList* InCommandList, ID
     InCommandList->ResourceBarrier(1, &barrier);
 }
 
+void IFeature_Dx12::ForwardBarrier(ID3D12GraphicsCommandList* InCommandList, ID3D12Resource* InResource,
+                                   D3D12_RESOURCE_STATES InBeforeState, D3D12_RESOURCE_STATES InAfterState)
+{
+    ResourceBarrier(InCommandList, InResource, InBeforeState, InAfterState);
+    _barrierTransitions.emplace_back(InResource, InBeforeState, InAfterState);
+}
+
+void IFeature_Dx12::RestoreBarriers(ID3D12GraphicsCommandList* InCommandList)
+{
+    for (const auto& [resource, before, after] : _barrierTransitions | std::views::reverse)
+        ResourceBarrier(InCommandList, resource, after, before);
+
+    _barrierTransitions.clear();
+}
+
 bool IFeature_Dx12::Init(ID3D12Device* InDevice, ID3D12GraphicsCommandList* InCommandList,
                          NVSDK_NGX_Parameter* InParameters)
 {
@@ -140,19 +155,23 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
               } });
     }
 
-    _actualSharpness = _sharpness;
+    _actualSharpness.reset();
     if (useRcas)
     {
         pipeline.push_back(
             { // Setup
               [&](ID3D12Resource* nextOutput) -> ID3D12Resource*
               {
-                  // Disable any built-in sharpness shaders
-                  InParameters->Set(NVSDK_NGX_Parameter_Sharpness, 0.0f);
-                  _sharpness = 0.0f;
-
-                  if (RCAS->CreateBufferResource(Device, nextOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+                  // Same checks as Dispatch, a skipped pass must not take over the output
+                  if (paramMotion && paramOutput &&
+                      RCAS->CreateBufferResource(Device, nextOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS) &&
+                      RCAS->CanRender())
                   {
+                      // Disable any built-in sharpness shaders
+                      InParameters->Set(NVSDK_NGX_Parameter_Sharpness, 0.0f);
+                      _actualSharpness = _sharpness;
+                      _sharpness = 0.0f;
+
                       RCAS->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                       return RCAS->Buffer();
                   }
@@ -213,7 +232,10 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
             { // Setup
               [&](ID3D12Resource* nextOutput) -> ID3D12Resource*
               {
-                  if (Magnifier->CreateBufferResource(Device, nextOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
+                  // Same checks as Dispatch, a skipped pass must not take over the output
+                  if (paramMotion && paramOutput &&
+                      Magnifier->CreateBufferResource(Device, nextOutput, D3D12_RESOURCE_STATE_UNORDERED_ACCESS) &&
+                      Magnifier->CanRender())
                   {
                       Magnifier->SetBufferState(InCommandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                       return Magnifier->Buffer();
@@ -234,6 +256,11 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
               } });
     }
 
+    // RCAS setup and DLSS zero the game's sharpness, restored after EvaluateInternal
+    float originalSharpness = 0.0f;
+    bool hasSharpness =
+        InParameters->Get(NVSDK_NGX_Parameter_Sharpness, &originalSharpness) == NVSDK_NGX_Result_Success;
+
     // Iterate BACKWARDS to establish where each shader needs to pull its input from
     ID3D12Resource* currentTarget = paramOutput;
     for (auto it = pipeline.rbegin(); it != pipeline.rend(); ++it)
@@ -252,12 +279,30 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
 
     UpscalerTime->Start(InCommandList);
 
+    _barrierTransitions.clear();
+
+    // Game's real output, our pass buffers track their own state
+    std::optional<int32_t> outputBarrier = Config::Instance()->OutputResourceBarrier;
+    if (paramOutput && outputBarrier.has_value() && upscaler != Upscaler::DLSS && upscaler != Upscaler::DLSSD)
+    {
+        ForwardBarrier(InCommandList, paramOutput, (D3D12_RESOURCE_STATES) outputBarrier.value(),
+                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
+
     auto evalResult = EvaluateInternal(InCommandList, InParameters);
 
     UpscalerTime->End(InCommandList);
 
+    InParameters->Set(NVSDK_NGX_Parameter_Output, paramOutput);
+
+    if (hasSharpness)
+        InParameters->Set(NVSDK_NGX_Parameter_Sharpness, originalSharpness);
+
     if (!evalResult)
+    {
+        RestoreBarriers(InCommandList);
         return false;
+    }
 
     // Iterate FORWARDS to execute the shaders in the defined order
     for (auto& pass : pipeline)
@@ -266,6 +311,7 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
         {
             if (!pass.Dispatch(pass.inputBuffer, pass.outputBuffer))
             {
+                RestoreBarriers(InCommandList);
                 return true;
             }
         }
@@ -285,7 +331,8 @@ bool IFeature_Dx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_NGX
         }
     }
 
-    InParameters->Set(NVSDK_NGX_Parameter_Output, paramOutput);
+    // After the legacy menu, which expects the output in UAV
+    RestoreBarriers(InCommandList);
 
     return evalResult;
 }
@@ -329,6 +376,9 @@ void IFeature_Dx12::RenderDeferredMenu(ID3D12GraphicsCommandList* InCommandList)
 
 std::optional<double> IFeature_Dx12::ReadUpscalerTime(void* commandQueueVoid)
 {
+    if (!UpscalerTime || !RCAS || !OutputScaler)
+        return std::nullopt;
+
     ID3D12CommandQueue* commandQueue = (ID3D12CommandQueue*) commandQueueVoid;
 
     lastUpscalerTime = UpscalerTime->ReadGpuTime(commandQueue);

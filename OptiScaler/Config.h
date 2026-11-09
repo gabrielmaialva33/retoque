@@ -51,6 +51,20 @@ template <class T, HasDefaultValue defaultState = WithDefault> class CustomOptio
         std::optional<T>::operator=(value);
     }
 
+    // Prevents the reset from being saved to ini
+    constexpr void reset_volatile()
+    {
+        if (!_volatile)
+        {
+            if (this->has_value())
+                _configIni = this->value();
+            else
+                _configIni = std::nullopt;
+        }
+        _volatile = true;
+        std::optional<T>::reset();
+    }
+
     // Use this when first setting a CustomOptional
     constexpr void set_from_config(const std::optional<T>& opt)
     {
@@ -315,6 +329,7 @@ class Config
     CustomOptional<bool> LogSingleFile { true };
     CustomOptional<bool> LogAsync { false };
     CustomOptional<int> LogAsyncThreads { 4 };
+    CustomOptional<bool> CreateDumps { false };
 
     // XeSS
     CustomOptional<bool> BuildPipelines { true };
@@ -819,7 +834,7 @@ class Config
     // RCAS
     CustomOptional<bool> RcasEnabled { false };
     CustomOptional<bool> ContrastEnabled { false };
-    CustomOptional<float> Contrast { -0.3f };
+    CustomOptional<float> Contrast { 0.0f };
 
     // DA Sharpening
     CustomOptional<float, NoDefault> DADepthScale;
@@ -1129,6 +1144,7 @@ class Config
     CustomOptional<bool> FGMakeDepthCopy { true };
     CustomOptional<bool> FGResourceFlip { false };
     CustomOptional<bool> FGResourceFlipOffset { false };
+    CustomOptional<bool> FGHudlessFlip { false };
     CustomOptional<bool, SoftDefault> FGAlwaysCaptureFSRFGSwapchain { false };
 
     CustomOptional<int, NoDefault> FGRectLeft;
@@ -1292,6 +1308,7 @@ class Config
     CustomOptional<bool, SoftDefault> OverrideVsync { false };
     CustomOptional<bool, NoDefault> ForceVsync;
     CustomOptional<UINT> VsyncInterval { 0 };
+    CustomOptional<int, NoDefault> VulkanPresentMode; // VkPresentModeKHR
 
     // Old configs for compat reasons
     CustomOptional<bool, NoDefault> _DONTUSE_Fsr4ForceEnableInt8;

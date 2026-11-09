@@ -39,7 +39,7 @@ failures = []
 # Behaviour: the members, the getters and both CreateObjects, verbatim
 members = base_header[base_header.index("    ID3D12GraphicsCommandList* _scCommandList[BUFFER_COUNT]") :
                       base_header.index("    std::unordered_map<FG_ResourceType, Dx12Resource> _frameResources")]
-parts = [function(base, "bool IFGFeature_Dx12::" + name + "(") for name in ("WaitForUIAllocator", "SubmitUICommandList")]
+parts = [function(base, "bool IFGFeature_Dx12::" + name + "(") for name in ("WaitForFenceValue", "WaitForUIAllocator", "SubmitUICommandList")]
 parts += [function(base, "ID3D12GraphicsCommandList* IFGFeature_Dx12::" + name + "(")
           for name in ("GetUICommandList", "GetSCCommandList")]
 if "bool IFGFeature_Dx12::DropIncompleteCommandObjects(" in base:
@@ -89,6 +89,8 @@ with tempfile.TemporaryDirectory(prefix="retoque-fg-command-objects-") as folder
                     "-fno-omit-frame-pointer", str(cpp), "-o", str(binary)], check=True)
     if subprocess.run([str(binary)], timeout=120).returncode != 0:
         failures.append("the command-object and format cases failed (see above)")
+
+subprocess.run([sys.executable, str(HERE / "fence_cases.py")], check=True)
 
 for failure in failures:
     print("FAIL:", failure, file=sys.stderr)

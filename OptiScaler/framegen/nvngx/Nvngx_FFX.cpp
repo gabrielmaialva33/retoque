@@ -11,6 +11,7 @@
 #include <misc/IdentifyGpu.h>
 #include <hooks/Vulkan_Hooks.h>
 #include <framegen/ffx/FSRFG_Vk.h>
+#include <fsr4/FSR4DriverProviderVk.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -41,7 +42,10 @@ bool Nvngx_FFX::InitVk()
     if (!FfxApiProxy::IsFGReadyVk())
         FfxApiProxy::InitFfxVk();
 
-    if (!FfxApiProxy::IsFGReadyVk())
+    // Driver provided ML FG works without the FFX SDK
+    const bool driverFg = FSR4DriverProviderVk::InitFg();
+
+    if (!FfxApiProxy::IsFGReadyVk() && !driverFg)
     {
         LOG_ERROR("Couldn't get Vulkan FG ready");
         return false;
@@ -133,10 +137,8 @@ NVSDK_NGX_Result Nvngx_FFX::D3D12_ReleaseFeature(NVSDK_NGX_Handle* InHandle)
     if (!InOurHandle)
         return NVSDK_NGX_Result_FAIL_InvalidParameter;
 
-    if (InOurHandle->device)
-        InOurHandle->device->Release();
-
-    delete InOurHandle; // destroys FFX context automatically
+    // FFX can still have work in flight, the destructor releases the context and then the device
+    Util::DelayedDestroy(std::unique_ptr<Nvngx_FFX_Handle>(InOurHandle));
 
     return NVSDK_NGX_Result_Success;
 }
@@ -315,6 +317,7 @@ static constexpr Nvngx_FFX_Api ApiDx12 {
     FfxApiProxy::D3D12_Configure,
     FfxApiProxy::D3D12_Query,
     FfxApiProxy::D3D12_Dispatch,
+    FfxApiProxy::D3D12_QueryFgVersions,
     GetResourceDx12,
     CopyTextureDx12,
 };
@@ -325,6 +328,7 @@ static constexpr Nvngx_FFX_Api ApiVk {
     FfxApiProxy::VULKAN_Configure,
     FfxApiProxy::VULKAN_Query,
     FfxApiProxy::VULKAN_Dispatch,
+    FfxApiProxy::VULKAN_QueryFgVersions,
     GetResourceVk,
     CopyTextureVk,
 };
@@ -347,7 +351,7 @@ bool QueryHDRLuminanceRange(NVSDK_NGX_Parameter* InParameters, Nvngx_FFX_Handle*
         IdentifyGpu::getHardwareAdapter(factory.Get(), adapter.GetAddressOf(), D3D_FEATURE_LEVEL_12_0);
 
         // Then check the first HDR-capable output
-        for (uint32_t j = 0; adapter->EnumOutputs(j, &output) == S_OK; j++)
+        for (uint32_t j = 0; adapter != nullptr && adapter->EnumOutputs(j, &output) == S_OK; j++)
         {
             if (IDXGIOutput6* output6; output->QueryInterface(IID_PPV_ARGS(&output6)) == S_OK)
             {
@@ -553,21 +557,14 @@ NVSDK_NGX_Result Nvngx_FFX::Evaluate(const Nvngx_FFX_Api& api, ffxApiHeader* bac
 
     if (InOurHandle->fgContext->ctx == nullptr)
     {
-        ffxQueryDescGetVersions versionQuery {};
-        versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
-        versionQuery.createDescType = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
-        versionQuery.device = device;
-        uint64_t versionCount = 0;
-        versionQuery.outputCount = &versionCount;
-        // get number of versions for allocation
-        api.Query(nullptr, &versionQuery.header);
+        api.QueryFgVersions(device, State::Instance().ffxFGVersionIds, State::Instance().ffxFGVersionNames);
 
-        State::Instance().ffxFGVersionIds.resize(versionCount);
-        State::Instance().ffxFGVersionNames.resize(versionCount);
-        versionQuery.versionIds = State::Instance().ffxFGVersionIds.data();
-        versionQuery.versionNames = State::Instance().ffxFGVersionNames.data();
-        // fill version ids and names arrays.
-        api.Query(nullptr, &versionQuery.header);
+        if (State::Instance().ffxFGVersionIds.empty())
+        {
+            LOG_ERROR("No FFX FG version found");
+            InOurHandle->createFailed = true;
+            return NVSDK_NGX_Result_Fail;
+        }
 
         ffxCreateContextDescFrameGeneration createFg {};
         createFg.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;

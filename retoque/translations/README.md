@@ -19,7 +19,8 @@ reasons the NR panel shows. On the LSFG study branch it also covers the LSFG blo
 Settings (`retoque/lsfg/LsfgMenu.cpp`); LSFG's own fallback reasons in its status line stay English. Since upstream's menu redesign (merged 2026-10-04) the shell is translated
 in a few central places rather than at each call site: `SectionTitle` and `ScopedCard` (every section
 and card title), the sidebar's tab and group names, and the Custom tab picker. The sidebar widens to
-fit the longest translated name. The rest of upstream's menu is untouched and stays in English: routing
+fit the longest translated name. The Vulkan present-mode and HUDless-flip controls added on 2026-11-09,
+and the FSR debug-view control, also use the optional pack. The rest of upstream's menu stays in English: routing
 its strings would change most of `menu_common.cpp`, an upstream file, and every merge from
 `optiscaler/master` would conflict on it. Dynamic diagnostic text absent from the dictionary also
 falls back to English. This is not a runtime language switcher.

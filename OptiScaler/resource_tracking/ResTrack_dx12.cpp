@@ -9,6 +9,7 @@
 #include <Config.h>
 #include <State.h>
 #include <Util.h>
+#include <hooks/D3D12_Hooks.h>
 
 #include <menu/menu_overlay_dx.h>
 
@@ -559,21 +560,13 @@ void ResTrack_Dx12::hkCreateRenderTargetView(ID3D12Device* This, ID3D12Resource*
                                              D3D12_RENDER_TARGET_VIEW_DESC* pDesc,
                                              D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
-    // force hdr for swapchain buffer
-    if (pResource != nullptr && pDesc != nullptr && Config::Instance()->ForceHDR.value_or_default())
+    // force hdr for swapchain buffer, the game's desc can be read only
+    D3D12_RENDER_TARGET_VIEW_DESC hdrDesc {};
+    if (pDesc != nullptr && D3D12Hooks::IsForcedHDRBuffer(pResource))
     {
-        for (size_t i = 0; i < State::Instance().scBuffers.size(); i++)
-        {
-            if (State::Instance().scBuffers[i] == pResource)
-            {
-                if (Config::Instance()->UseHDR10.value_or_default())
-                    pDesc->Format = DXGI_FORMAT_R10G10B10A2_UNORM;
-                else
-                    pDesc->Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-
-                break;
-            }
-        }
+        hdrDesc = *pDesc;
+        hdrDesc.Format = D3D12Hooks::ForcedHDRFormat();
+        pDesc = &hdrDesc;
     }
 
     o_CreateRenderTargetView(This, pResource, pDesc, DestDescriptor);
@@ -609,21 +602,13 @@ void ResTrack_Dx12::hkCreateShaderResourceView(ID3D12Device* This, ID3D12Resourc
                                                D3D12_SHADER_RESOURCE_VIEW_DESC* pDesc,
                                                D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
-    // force hdr for swapchain buffer
-    if (pResource != nullptr && pDesc != nullptr && Config::Instance()->ForceHDR.value_or_default())
+    // force hdr for swapchain buffer, the game's desc can be read only
+    D3D12_SHADER_RESOURCE_VIEW_DESC hdrDesc {};
+    if (pDesc != nullptr && D3D12Hooks::IsForcedHDRBuffer(pResource))
     {
-        for (size_t i = 0; i < State::Instance().scBuffers.size(); i++)
-        {
-            if (State::Instance().scBuffers[i] == pResource)
-            {
-                if (Config::Instance()->UseHDR10.value_or_default())
-                    pDesc->Format = DXGI_FORMAT_R10G10B10A2_UNORM;
-                else
-                    pDesc->Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-
-                break;
-            }
-        }
+        hdrDesc = *pDesc;
+        hdrDesc.Format = D3D12Hooks::ForcedHDRFormat();
+        pDesc = &hdrDesc;
     }
 
     o_CreateShaderResourceView(This, pResource, pDesc, DestDescriptor);
@@ -660,20 +645,13 @@ void ResTrack_Dx12::hkCreateUnorderedAccessView(ID3D12Device* This, ID3D12Resour
                                                 D3D12_UNORDERED_ACCESS_VIEW_DESC* pDesc,
                                                 D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor)
 {
-    if (pResource != nullptr && pDesc != nullptr && Config::Instance()->ForceHDR.value_or_default())
+    // force hdr for swapchain buffer, the game's desc can be read only
+    D3D12_UNORDERED_ACCESS_VIEW_DESC hdrDesc {};
+    if (pDesc != nullptr && D3D12Hooks::IsForcedHDRBuffer(pResource))
     {
-        for (size_t i = 0; i < State::Instance().scBuffers.size(); i++)
-        {
-            if (State::Instance().scBuffers[i] == pResource)
-            {
-                if (Config::Instance()->UseHDR10.value_or_default())
-                    pDesc->Format = DXGI_FORMAT_R10G10B10A2_UNORM;
-                else
-                    pDesc->Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-
-                break;
-            }
-        }
+        hdrDesc = *pDesc;
+        hdrDesc.Format = D3D12Hooks::ForcedHDRFormat();
+        pDesc = &hdrDesc;
     }
 
     // Every unordered access view the game makes passes through here, which is the one place a
@@ -778,16 +756,23 @@ HRESULT ResTrack_Dx12::hkCreateDescriptorHeap(ID3D12Device* This, D3D12_DESCRIPT
 
         if (!o_HeapRelease)
         {
-            PVOID* vtbl = *(PVOID**) heap;
-            o_HeapRelease = (PFN_HeapRelease) vtbl[2];
-            DetourTransactionBegin();
-            DetourUpdateThread(GetCurrentThread());
-            DetourAttach(&(PVOID&) o_HeapRelease, hkHeapRelease);
-            auto detourResult = DetourTransactionCommit();
-            if (detourResult != NO_ERROR)
+            // Heaps can be created on several threads, only one may hook
+            static std::mutex heapReleaseHookMutex;
+            std::scoped_lock hookLock(heapReleaseHookMutex);
+
+            if (!o_HeapRelease)
             {
-                LOG_ERROR("Failed to hook Heap Release: {:X}", detourResult);
-                o_HeapRelease = nullptr;
+                PVOID* vtbl = *(PVOID**) heap;
+                o_HeapRelease = (PFN_HeapRelease) vtbl[2];
+                DetourTransactionBegin();
+                DetourUpdateThread(GetCurrentThread());
+                DetourAttach(&(PVOID&) o_HeapRelease, hkHeapRelease);
+                auto detourResult = DetourTransactionCommit();
+                if (detourResult != NO_ERROR)
+                {
+                    LOG_ERROR("Failed to hook Heap Release: {:X}", detourResult);
+                    o_HeapRelease = nullptr;
+                }
             }
         }
 
@@ -795,8 +780,15 @@ HRESULT ResTrack_Dx12::hkCreateDescriptorHeap(ID3D12Device* This, D3D12_DESCRIPT
         auto numDescriptors = pDescriptorHeapDesc->NumDescriptors;
         auto cpuStart = (SIZE_T) (heap->GetCPUDescriptorHandleForHeapStart().ptr);
         auto cpuEnd = cpuStart + (increment * numDescriptors);
-        auto gpuStart = (SIZE_T) (heap->GetGPUDescriptorHandleForHeapStart().ptr);
-        auto gpuEnd = gpuStart + (increment * numDescriptors);
+        // Only shader visible heaps have GPU handles
+        SIZE_T gpuStart = 0;
+        SIZE_T gpuEnd = 0;
+
+        if (pDescriptorHeapDesc->Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)
+        {
+            gpuStart = (SIZE_T) (heap->GetGPUDescriptorHandleForHeapStart().ptr);
+            gpuEnd = gpuStart + (increment * numDescriptors);
+        }
         auto type = (UINT) pDescriptorHeapDesc->Type;
 
         LOG_TRACE("Heap: {:X}, Heap type: {}, Cpu: {}-{}, Gpu: {}-{}, Desc count: {}", (size_t) *ppvHeap, type,
@@ -839,8 +831,8 @@ HRESULT ResTrack_Dx12::hkCreateDescriptorHeap(ID3D12Device* This, D3D12_DESCRIPT
         if (ppvHeap != nullptr && *ppvHeap != nullptr)
         {
             auto heap = (ID3D12DescriptorHeap*) (*ppvHeap);
-            LOG_TRACE("Skipping, Heap type: {}, Cpu: {}, Gpu: {}", (UINT) pDescriptorHeapDesc->Type,
-                      heap->GetCPUDescriptorHandleForHeapStart().ptr, heap->GetGPUDescriptorHandleForHeapStart().ptr);
+            LOG_TRACE("Skipping, Heap type: {}, Cpu: {}", (UINT) pDescriptorHeapDesc->Type,
+                      heap->GetCPUDescriptorHandleForHeapStart().ptr);
         }
     }
 
@@ -1091,6 +1083,12 @@ void ResTrack_Dx12::ClearBindingStates()
         std::lock_guard<BindingStateMutex> lock(shard.mutex);
         shard.map.clear();
     }
+}
+
+// Table and render target binds skip the lock while Hudfix is off, heaps and root signatures are always recorded
+static bool RecordsBinds()
+{
+    return Config::Instance()->FGHUDFix.value_or_default() && Config::Instance()->IsFGEnabled();
 }
 
 CommandListBindingState* ResTrack_Dx12::GetOrCreateBindingState(ID3D12GraphicsCommandList* commandList)
@@ -1701,7 +1699,7 @@ void ResTrack_Dx12::hkSetGraphicsRootDescriptorTable(ID3D12GraphicsCommandList* 
                                                      D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
     bool persistentBinding = false;
-    if (This != MenuOverlayDx::MenuCommandList() && !Hudfix_Dx12::SkipHudlessChecks())
+    if (This != MenuOverlayDx::MenuCommandList() && !Hudfix_Dx12::SkipHudlessChecks() && RecordsBinds())
     {
         if (auto* state = GetOrCreateBindingState(This);
             state != nullptr && RootParameterIndex < CommandListBindingState::MAX_ROOT_PARAMETERS)
@@ -1838,7 +1836,7 @@ void ResTrack_Dx12::hkOMSetRenderTargets(ID3D12GraphicsCommandList* This, UINT N
                                          D3D12_CPU_DESCRIPTOR_HANDLE* pDepthStencilDescriptor)
 {
     bool persistentBinding = false;
-    if (This != MenuOverlayDx::MenuCommandList() && !Hudfix_Dx12::SkipHudlessChecks())
+    if (This != MenuOverlayDx::MenuCommandList() && !Hudfix_Dx12::SkipHudlessChecks() && RecordsBinds())
     {
         if (auto* state = GetOrCreateBindingState(This); state != nullptr)
         {
@@ -1988,7 +1986,7 @@ void ResTrack_Dx12::hkSetComputeRootDescriptorTable(ID3D12GraphicsCommandList* T
                                                     D3D12_GPU_DESCRIPTOR_HANDLE BaseDescriptor)
 {
     bool persistentBinding = false;
-    if (This != MenuOverlayDx::MenuCommandList() && !Hudfix_Dx12::SkipHudlessChecks())
+    if (This != MenuOverlayDx::MenuCommandList() && !Hudfix_Dx12::SkipHudlessChecks() && RecordsBinds())
     {
         if (auto* state = GetOrCreateBindingState(This);
             state != nullptr && RootParameterIndex < CommandListBindingState::MAX_ROOT_PARAMETERS)
@@ -2476,6 +2474,12 @@ void ResTrack_Dx12::hkDispatch(ID3D12GraphicsCommandList* This, UINT ThreadGroup
 
 void ResTrack_Dx12::HookCommandList(ID3D12Device* InDevice)
 {
+    if (o_OMSetRenderTargets != nullptr)
+        return;
+
+    // Devices can be created on several threads, only one may hook
+    static std::mutex hookMutex;
+    std::scoped_lock hookLock(hookMutex);
 
     if (o_OMSetRenderTargets != nullptr)
         return;
@@ -2644,6 +2648,13 @@ void ResTrack_Dx12::HookDevice(ID3D12Device* device)
         return;
 
     if (device == nullptr)
+        return;
+
+    // Devices can be created on several threads, only one may hook
+    static std::mutex hookMutex;
+    std::scoped_lock hookLock(hookMutex);
+
+    if (o_CreateDescriptorHeap != nullptr)
         return;
 
     bool initializeTracking = false;

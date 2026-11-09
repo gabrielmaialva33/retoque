@@ -55,6 +55,42 @@ int main()
     DeferredRelease::FlushOwner(10);
     check(flushed == 2, "flushing for menu recreation keeps the live device open to enqueues");
 
+    int nested = 0;
+    DeferredRelease::RegisterOwner(11);
+    DeferredRelease::Enqueue(
+        [&]
+        {
+            ++nested;
+            DeferredRelease::Enqueue([&] { ++nested; }, 11);
+        },
+        11);
+    DeferredRelease::FlushOwner(11);
+    check(nested == 2, "idle flush also drains callbacks queued by destruction");
+    DeferredRelease::FlushOwner(0);
+    DeferredRelease::Enqueue(
+        [&]
+        {
+            ++nested;
+            DeferredRelease::Enqueue([&] { ++nested; }, 11);
+        },
+        11);
+    DeferredRelease::RetireOwner(11, true);
+    check(nested == 4, "proven retirement drains child callbacks before closing the owner");
+    DeferredRelease::Enqueue([&] { check(false, "retirement admits a late child"); }, 11);
+
+    int kept = 0, dropped = 0;
+    DeferredRelease::RegisterOwner(12);
+    DeferredRelease::RegisterOwner(13);
+    DeferredRelease::RegisterOwner(14);
+    DeferredRelease::Enqueue([&] { ++kept; }, 12);
+    DeferredRelease::Enqueue([&] { ++kept; }, 13);
+    DeferredRelease::Enqueue([&] { ++dropped; }, 14);
+    DeferredRelease::DropOwnersExcept({ 12, 13 });
+    DeferredRelease::FlushOwner(12);
+    DeferredRelease::FlushOwner(13);
+    DeferredRelease::FlushOwner(14);
+    check(kept == 2 && dropped == 0, "all live devices survive set-based owner filtering");
+
     // The collector extracts both callbacks before executing the first. Pause it there so retirement
     // must account for work no longer in the pending vector, not merely erase vector entries.
     std::mutex barrier;

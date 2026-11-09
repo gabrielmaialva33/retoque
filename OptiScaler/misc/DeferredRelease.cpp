@@ -47,13 +47,13 @@ void DeferredRelease::Enqueue(std::function<void()> destroy, uint64_t owner)
     entries.push_back({ std::move(destroy), owner, presentCounter, std::chrono::steady_clock::now() });
 }
 
-void DeferredRelease::DropOwnersExcept(uint64_t keep)
+void DeferredRelease::DropOwnersExcept(const std::unordered_set<uint64_t>& keep)
 {
     std::lock_guard executionLock(executionMutex);
     std::lock_guard lock(mutex);
 
     const auto dropped =
-        std::erase_if(entries, [keep](const Entry& entry) { return entry.owner != 0 && entry.owner != keep; });
+        std::erase_if(entries, [&keep](const Entry& entry) { return entry.owner != 0 && !keep.contains(entry.owner); });
 
     if (dropped > 0)
         LOG_WARN("Dropped {} deferred objects of a previous device", dropped);
@@ -61,6 +61,7 @@ void DeferredRelease::DropOwnersExcept(uint64_t keep)
 
 void DeferredRelease::RegisterOwner(uint64_t owner)
 {
+    std::lock_guard executionLock(executionMutex);
     std::lock_guard lock(mutex);
     retiredOwners.erase(owner);
 }
@@ -71,23 +72,34 @@ static void FinishOwner(uint64_t owner, bool destroy, bool retire)
         return;
 
     std::lock_guard executionLock(executionMutex);
-    std::vector<std::function<void()>> pending;
+    for (;;)
     {
-        std::lock_guard lock(mutex);
-        if (retire)
-            retiredOwners.insert(owner);
-        std::erase_if(entries,
-                      [&](Entry& entry)
-                      {
-                          if (entry.owner != owner)
-                              return false;
-                          if (destroy && !State::Instance().isShuttingDown)
-                              pending.push_back(std::move(entry.destroy));
-                          return true;
-                      });
+        std::vector<std::function<void()>> pending;
+        {
+            std::lock_guard lock(mutex);
+            if (retiredOwners.contains(owner))
+                return;
+            std::erase_if(entries,
+                          [&](Entry& entry)
+                          {
+                              if (entry.owner != owner)
+                                  return false;
+                              if (destroy && !State::Instance().isShuttingDown)
+                                  pending.push_back(std::move(entry.destroy));
+                              return true;
+                          });
+            if (pending.empty())
+            {
+                if (retire)
+                    retiredOwners.insert(owner);
+                return;
+            }
+        }
+        // Destruction can enqueue children. Keep execution ownership through the last batch;
+        // mark retired atomically with observing the empty queue so later enqueues are refused.
+        for (auto& release : pending)
+            release();
     }
-    for (auto& release : pending)
-        release();
 }
 
 void DeferredRelease::RetireOwner(uint64_t owner, bool destroy) { FinishOwner(owner, destroy, true); }

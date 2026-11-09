@@ -349,8 +349,7 @@ static void FailingCreateLeavesStateConsistent()
     auto queue = QueueOf(device, 0, 0);
     auto window = MakeWindow("window");
 
-    VkSwapchainKHR first = VK_NULL_HANDLE, failed = VK_NULL_HANDLE, second = VK_NULL_HANDLE,
-                   third = VK_NULL_HANDLE;
+    VkSwapchainKHR first = VK_NULL_HANDLE, failed = VK_NULL_HANDLE, second = VK_NULL_HANDLE, third = VK_NULL_HANDLE;
     GameCreateSwapchain(device, window, "sc1", 3, VK_NULL_HANDLE, &first);
 
     auto mark = Mark();
@@ -599,6 +598,49 @@ static void ProtectedQueuesNotFetched()
     End();
 }
 
+static void DeviceAndSwapchainIdentity()
+{
+    Begin("device/swapchain retirement identity and released-window handoff");
+    auto device = MakeDevice("first");
+    auto other = MakeDevice("second");
+    auto window = MakeWindow("firstWindow");
+    VkSwapchainKHR first = VK_NULL_HANDLE;
+    GameCreateSwapchain(device, window, "firstChain", 2, VK_NULL_HANDLE, &first);
+    auto mark = Mark();
+    MenuOverlayVk::ReleaseDevice(other);
+    MenuOverlayVk::DestroySwapchain(other, first);
+    Check(Disturbances(Since(mark)) == 0 && _menuSwapchain == first, "other device cannot disturb the menu");
+    _menuOldSwapchain = first;
+    MenuOverlayVk::DestroySwapchain(device, first);
+    Check(_menuSwapchain == first && _vulkanObjectsCreated, "old-handle alias destruction leaves the replacement");
+    MenuOverlayVk::DestroySwapchain(device, first);
+    Check(!_vulkanObjectsCreated && LiveCount() == 0, "current swapchain drains before freeing its views");
+    auto nextWindow = MakeWindow("nextWindow");
+    Check(!MenuOverlayVk::OnOtherWindow(nextWindow), "destroyed menu chain relinquishes its still-live window");
+    VkSwapchainKHR next = VK_NULL_HANDLE;
+    GameCreateSwapchain(other, nextWindow, "nextChain", 2, VK_NULL_HANDLE, &next);
+    Check(_menuSwapchain == next && _vulkanObjectsCreated, "next device/window acquires the menu");
+    End();
+}
+
+static void DyingDeviceAbandonsUnprovenObjects()
+{
+    Begin("dying device never leaves a retry against its dead handle");
+    auto device = MakeDevice("dying");
+    auto window = MakeWindow("dyingWindow");
+    VkSwapchainKHR chain = VK_NULL_HANDLE;
+    GameCreateSwapchain(device, window, "dyingChain", 2, VK_NULL_HANDLE, &chain);
+    g_idleResult = VK_ERROR_OUT_OF_HOST_MEMORY;
+    auto mark = Mark();
+    MenuOverlayVk::ReleaseDevice(device);
+    Check(Count(Since(mark), "destroy ") == 0, "failed drain destroys no GPU object");
+    Check(_vulkanDeviceLost && !_vulkanObjectsCreated && _ImVulkan_Info.Device == VK_NULL_HANDLE,
+          "unproven objects abandoned and dead handle removed");
+    Check(ImLive() == 0, "CPU frame arrays freed after their handles were abandoned");
+    Check(!_deviceQueueCounts.contains(device), "queue lookup cannot use the destroyed device");
+    // Deliberately abandoned Vulkan/backend handles remain in the fake driver's inventory until process exit.
+}
+
 int main()
 {
     SecondWindowLeavesMenuAlone();
@@ -613,6 +655,8 @@ int main()
     SurfaceHookRaceLeavesMenuAlone();
     NonMenuPresentPassesThrough();
     ProtectedQueuesNotFetched();
+    DeviceAndSwapchainIdentity();
+    DyingDeviceAbandonsUnprovenObjects();
 
     if (g_failures != 0)
     {

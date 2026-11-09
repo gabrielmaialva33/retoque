@@ -201,27 +201,27 @@ VKAPI_ATTR void VKAPI_CALL vkGetDeviceQueue(VkDevice device, uint32_t family, ui
     *queue = QueueOf(device, family, index);
 }
 
-#define FAKE_CREATE(Fn, Info, Type, kind)                                                                         \
-    VKAPI_ATTR VkResult VKAPI_CALL Fn(VkDevice, const Info*, const VkAllocationCallbacks*, Type* out)              \
-    {                                                                                                              \
-        if (Fails(#Fn))                                                                                            \
-        {                                                                                                          \
-            Ev(#Fn " -> VK_ERROR_OUT_OF_DEVICE_MEMORY");                                                           \
-            return VK_ERROR_OUT_OF_DEVICE_MEMORY;                                                                  \
-        }                                                                                                          \
-        *out = Mint<Type>();                                                                                       \
-        Live(*out, kind);                                                                                          \
-        Ev(std::string("create ") + kind);                                                                         \
-        return VK_SUCCESS;                                                                                         \
+#define FAKE_CREATE(Fn, Info, Type, kind)                                                                              \
+    VKAPI_ATTR VkResult VKAPI_CALL Fn(VkDevice, const Info*, const VkAllocationCallbacks*, Type* out)                  \
+    {                                                                                                                  \
+        if (Fails(#Fn))                                                                                                \
+        {                                                                                                              \
+            Ev(#Fn " -> VK_ERROR_OUT_OF_DEVICE_MEMORY");                                                               \
+            return VK_ERROR_OUT_OF_DEVICE_MEMORY;                                                                      \
+        }                                                                                                              \
+        *out = Mint<Type>();                                                                                           \
+        Live(*out, kind);                                                                                              \
+        Ev(std::string("create ") + kind);                                                                             \
+        return VK_SUCCESS;                                                                                             \
     }
 
-#define FAKE_DESTROY(Fn, Type, kind)                                                                              \
-    VKAPI_ATTR void VKAPI_CALL Fn(VkDevice, Type handle, const VkAllocationCallbacks*)                            \
-    {                                                                                                              \
-        if (handle == VK_NULL_HANDLE)                                                                              \
-            return;                                                                                                \
-        Dead(handle, kind);                                                                                        \
-        Ev(std::string("destroy ") + kind);                                                                        \
+#define FAKE_DESTROY(Fn, Type, kind)                                                                                   \
+    VKAPI_ATTR void VKAPI_CALL Fn(VkDevice, Type handle, const VkAllocationCallbacks*)                                 \
+    {                                                                                                                  \
+        if (handle == VK_NULL_HANDLE)                                                                                  \
+            return;                                                                                                    \
+        Dead(handle, kind);                                                                                            \
+        Ev(std::string("destroy ") + kind);                                                                            \
     }
 
 FAKE_CREATE(vkCreateDescriptorPool, VkDescriptorPoolCreateInfo, VkDescriptorPool, "descriptor pool")
@@ -404,7 +404,10 @@ void ImGui_ImplVulkan_Shutdown(bool)
 }
 
 void ImGui_ImplVulkan_NewFrame() {}
-void ImGui_ImplVulkan_RenderDrawData(ImDrawData*, VkCommandBuffer, VkPipeline) { Ev("ImGui_ImplVulkan_RenderDrawData"); }
+void ImGui_ImplVulkan_RenderDrawData(ImDrawData*, VkCommandBuffer, VkPipeline)
+{
+    Ev("ImGui_ImplVulkan_RenderDrawData");
+}
 void ImGui_ImplVulkan_SetQueue(VkQueue) {}
 
 // ---- MenuOverlayBase (MenuCommon's ImGui context and window) ------------------------------------
@@ -421,11 +424,11 @@ static int g_menuShutdowns = 0;
 // the deterministic interleaving point between OnOtherWindow's read and the locks.
 thread_local std::function<void()> t_afterIsInitedRead;
 
-HWND MenuOverlayBase::Handle() { return @HANDLE_READ@; }
+HWND MenuOverlayBase::Handle() { return PRODUCTION_HANDLE_READ; }
 
 bool MenuOverlayBase::IsInited()
 {
-    bool value = @INITED_READ@;
+    bool value = PRODUCTION_INITED_READ;
     if (t_afterIsInitedRead)
     {
         auto hook = std::move(t_afterIsInitedRead);
@@ -437,7 +440,7 @@ bool MenuOverlayBase::IsInited()
 
 void MenuOverlayBase::Init(HWND hwnd, bool, bool)
 {
-    if (@INITED_READ@)
+    if (PRODUCTION_INITED_READ)
         Fault("MenuOverlayBase::Init over a live context (ImGui::CreateContext leaks the old one)");
     Ev("MenuOverlayBase::Init " + N(hwnd));
     g_menuInits++;
@@ -447,7 +450,7 @@ void MenuOverlayBase::Init(HWND hwnd, bool, bool)
 
 void MenuOverlayBase::Shutdown()
 {
-    if (!@INITED_READ@)
+    if (!PRODUCTION_INITED_READ)
         return;
     // MenuCommon::Shutdown destroys the ImGui context; a renderer backend still attached leaks with it.
     if (ImGui::GetIO().BackendRendererUserData != nullptr)
@@ -461,3 +464,5 @@ void MenuOverlayBase::Shutdown()
 void MenuOverlayBase::VulkanReady() { Ev("MenuOverlayBase::VulkanReady"); }
 bool MenuOverlayBase::RenderMenu() { return true; }
 bool MenuOverlayBase::IsVisible() { return false; }
+
+void MenuOverlayBase::ApplyThemeStyle() { Ev("theme:apply"); }

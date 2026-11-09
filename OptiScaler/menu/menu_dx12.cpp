@@ -5,6 +5,7 @@
 
 #include "Config.h"
 #include "menu_common.h"
+#include <misc/DeferredRelease.h>
 #include <imgui/imgui_impl_dx12.h>
 #include <imgui/imgui_impl_win32.h>
 
@@ -110,7 +111,7 @@ bool Menu_Dx12::Render(ID3D12GraphicsCommandList* pCmdList, ID3D12Resource* outT
         // reused, and when the menu first opened and its vertex buffers grew, released buffers the GPU was
         // still reading: a page fault on a freed resource and a removed device. 8 outlives such a queue.
         initInfo.NumFramesInFlight = 8;
-        initInfo.RTVFormat = outDesc.Format;
+        initInfo.RTVFormat = TranslateTypelessFormats(outDesc.Format);
         initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
         initInfo.SrvDescriptorHeap = _srvDescHeap;
         initInfo.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo*, D3D12_CPU_DESCRIPTOR_HANDLE* out_cpu_handle,
@@ -136,7 +137,7 @@ bool Menu_Dx12::Render(ID3D12GraphicsCommandList* pCmdList, ID3D12Resource* outT
     auto backbuf = frameCounter % 2;
 
     D3D12_RENDER_TARGET_VIEW_DESC rtDesc = {};
-    rtDesc.Format = outDesc.Format;
+    rtDesc.Format = TranslateTypelessFormats(outDesc.Format);
     rtDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
     if ((outDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) > 0)
@@ -289,10 +290,11 @@ Menu_Dx12::~Menu_Dx12()
     ImGui_ImplDX12_Shutdown(true, !State::Instance().isShuttingDown);
     MenuCommon::Shutdown();
 
-    SAFE_RELEASE(_rtvDescHeap);
-    SAFE_RELEASE(_srvDescHeap);
-    SAFE_RELEASE(_renderTargetResource[0]);
-    SAFE_RELEASE(_renderTargetResource[1]);
+    // Last menu render can still be running
+    DeferredRelease::Release(_rtvDescHeap);
+    DeferredRelease::Release(_srvDescHeap);
+    DeferredRelease::Release(_renderTargetResource[0]);
+    DeferredRelease::Release(_renderTargetResource[1]);
 }
 
 void Menu_Dx12::CreateRenderTarget(const D3D12_RESOURCE_DESC& InDesc)
@@ -301,7 +303,8 @@ void Menu_Dx12::CreateRenderTarget(const D3D12_RESOURCE_DESC& InDesc)
     {
         auto rtDesc = _renderTargetResource[0]->GetDesc();
 
-        if (InDesc.Width != rtDesc.Width || InDesc.Height != rtDesc.Height || InDesc.Format != rtDesc.Format)
+        if (InDesc.Width != rtDesc.Width || InDesc.Height != rtDesc.Height ||
+            TranslateTypelessFormats(InDesc.Format) != rtDesc.Format)
         {
             RetireRenderTarget(_renderTargetResource[0]);
             RetireRenderTarget(_renderTargetResource[1]);
@@ -336,7 +339,7 @@ void Menu_Dx12::CreateRenderTarget(const D3D12_RESOURCE_DESC& InDesc)
             renderTarget->SetName(L"Imgui_Dx12_renderTarget");
 
             D3D12_RENDER_TARGET_VIEW_DESC rtDesc = {};
-            rtDesc.Format = InDesc.Format;
+            rtDesc.Format = desc.Format;
             rtDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
 
             _device->CreateRenderTargetView(renderTarget, &rtDesc, _renderTargetDescriptor[i]);

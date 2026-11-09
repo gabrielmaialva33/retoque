@@ -117,24 +117,22 @@ template <typename Gate> void HudlessFormat(const char* name, Gate gate)
     FrameResource frame { &resource };
     auto& state = State::Instance();
     const std::string label = std::string(name) + " HUD-less format";
-    for (int fIndex = 0; fIndex < BUFFER_COUNT; ++fIndex)
+    resource.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    for (int slot = 0; slot < BUFFER_COUNT; ++slot)
+        check(gate(HudlessColor, &frame, slot), label + ": initial format accepted in each slot");
+    check(!state.fgChanged, label + ": initial population does not restart");
+    // One transition updates the entire ring, so the remaining slots must not each restart FG.
+    for (auto format : { DXGI_FORMAT_R10G10B10A2_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM })
     {
-        resource.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        resource.format = format;
         state.fgChanged = false;
-        check(gate(HudlessColor, &frame, fIndex), label + ": first format accepted");
-        check(gate(HudlessColor, &frame, fIndex), label + ": same format accepted");
-        check(!state.fgChanged, label + ": no restart without a change");
-
-        resource.format = DXGI_FORMAT_R10G10B10A2_UNORM;
-        check(!gate(HudlessColor, &frame, fIndex), label + ": a changed format is refused once");
-        check(state.fgChanged, label + ": and frame generation restarts");
+        check(!gate(HudlessColor, &frame, 0), label + ": changed format refused once");
+        check(state.fgChanged, label + ": transition restarts FG");
         state.fgChanged = false;
-        for (int frameNumber = 0; frameNumber < 3; ++frameNumber)
+        for (int frameNumber = 0; frameNumber < 3 * BUFFER_COUNT; ++frameNumber)
         {
-            check(gate(HudlessColor, &frame, fIndex),
-                  label + ": the new format is accepted after the restart, frame " + std::to_string(frameNumber));
-            check(!state.fgChanged, label + ": no restart every frame, frame " + std::to_string(frameNumber));
-            state.fgChanged = false;
+            check(gate(HudlessColor, &frame, frameNumber % BUFFER_COUNT), label + ": new ring format accepted");
+            check(!state.fgChanged, label + ": no per-slot restart");
         }
     }
     // Other resources never pass through the gate

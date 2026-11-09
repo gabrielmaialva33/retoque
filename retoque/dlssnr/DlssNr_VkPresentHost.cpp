@@ -2692,18 +2692,18 @@ void AttachTarget(Targets<Pfn>& set, const std::array<void*, kTargets>& hooks, P
 
 // --- Device-level hooks, one instantiation per slot --------------------------------------------------------------
 
-void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator)
+std::optional<bool> PrepareDeviceDestroy(VkDevice device)
 {
     HostActivity activity("vkDestroyDevice", H(device));
     std::string line;
     std::vector<std::string> modelLines;
-    RecordId deviceId = 0;
+    bool tracked = false;
     bool destroyDeferred = false;
     {
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(device))
         {
-            deviceId = dev->id;
+            tracked = true;
             line = "DLSS-NR Vulkan present host: device " + Hex(H(device)) + " #" + std::to_string(dev->id) +
                    " destroyed; " + TeardownDevice(*dev, destroyDeferred);
             modelLines.swap(dev->lines);
@@ -2737,9 +2737,16 @@ void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocati
 
     // Shader_Vk now queues its destruction. Finish/drop this device's queue before its handle dies,
     // also waiting for callbacks detached by a concurrent collector. Never destroy after a failed drain.
-    DeferredRelease::RetireOwner(H(device), destroyDeferred);
+    if (tracked)
+        DeferredRelease::RetireOwner(H(device), destroyDeferred);
+    return tracked ? std::optional<bool>(destroyDeferred) : std::nullopt;
+}
 
-    activity.scope.Stage("calling down vkDestroyDevice");
+void OnDestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator)
+{
+    const auto drained = PrepareDeviceDestroy(device);
+    // A second hook may already have retired it; never infer completion from destroy itself.
+    DeferredRelease::RetireOwner(H(device), drained.value_or(false));
     next(device, allocator);
 }
 
@@ -4104,4 +4111,9 @@ void DlssNr::VkPresentHost::Install(HMODULE vulkan1)
                                             "beside frame generation the round trip is kept, without NR ([DlssNr] "
                                             "VulkanPresentFgTransport, the pacer experiment's submission-only arm)"
                                       : std::string());
+}
+
+std::optional<bool> DlssNr::VkPresentHost::PrepareForDeviceDestroy(VkDevice device)
+{
+    return PrepareDeviceDestroy(device);
 }

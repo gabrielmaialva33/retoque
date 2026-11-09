@@ -38,7 +38,7 @@ problems = []
 source = (ROOT / "OptiScaler/dllmain.cpp").read_text()
 if "#include <misc/UnrealDlssSearch.h>" not in source:
     problems.append("dllmain.cpp does not include misc/UnrealDlssSearch.h")
-last_search = source.find('Util::FindFilePath(exePath, "nvngx_dlssg.dll");')
+last_search = source.find('State::Instance().NVNGX_DLSSG_Path = findDll(L"nvngx_dlssg.dll");')
 start = source.find("        // Unreal Engine plugin folders", max(last_search, 0))
 decision = source.find('"nvngx_dlss.dll not found, disabling DLSS"')
 block = None

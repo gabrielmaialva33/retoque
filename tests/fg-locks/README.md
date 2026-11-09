@@ -22,3 +22,7 @@ instance for each pending lock transaction as well.
 The upstream release-order regression also observes the scripted provider teardown callback: the
 obsolete global swapchain is cleared before FSRFG/XeFG destroy their context, the acquired mutex
 stays held, and the LSFG notification follows presenter destruction. No real provider runs here.
+
+`teardown_cases.py` executes production ReleaseFGSwapchain with completion/refcount fakes. It refuses
+missing proof, retains a still-owned provider context and never consumes borrowed wrapper/swapchain refs;
+two mutants removing refusal or consuming a borrowed reference must fail.

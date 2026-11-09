@@ -13,6 +13,7 @@
 #define VK_KHR_EXTERNAL_MEMORY_WIN32_EXTENSION_NAME "VK_KHR_external_memory_win32"
 #define VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME "VK_KHR_external_semaphore_win32"
 
+#include <unordered_set>
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>

@@ -4,13 +4,22 @@
 #include <fstream>
 #include <optional>
 #include <string>
+#include <vector>
 
+#define LOG_INFO(...) ((void) 0)
 #define LOG_DEBUG(...) ((void) 0)
 #define LOG_WARN(...) ((void) 0)
 
+struct LibrarySetting : std::optional<std::wstring>
+{
+    using std::optional<std::wstring>::operator=;
+    void set_volatile_value(const std::wstring& value) { *this = value; }
+    void reset_volatile() { reset(); }
+};
+
 struct Config
 {
-    std::optional<std::wstring> NVNGX_DLSS_Library; // [Libraries] NvngxDlssPath, unset = auto
+    LibrarySetting NVNGX_DLSS_Library; // [Libraries] NvngxDlssPath, unset = auto
 
     static Config* Instance()
     {

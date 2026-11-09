@@ -19,11 +19,11 @@ bool DLSSDFeatureVk::InitInternal(VkCommandBuffer InCmdList, NVSDK_NGX_Parameter
 
     do
     {
-        if (!_dlssdInitedVk)
+        if (!_dlssdInited)
         {
-            _dlssdInitedVk = NVNGXProxy::InitVulkan(Instance, PhysicalDevice, Device, GIPA, GDPA);
+            _dlssdInited = NVNGXProxy::InitVulkan(Instance, PhysicalDevice, Device, GIPA, GDPA);
 
-            if (!_dlssdInitedVk)
+            if (!_dlssdInited)
                 return false;
 
             _moduleLoaded =
@@ -50,6 +50,7 @@ bool DLSSDFeatureVk::InitInternal(VkCommandBuffer InCmdList, NVSDK_NGX_Parameter
             if (nvResult != NVSDK_NGX_Result_Success)
             {
                 LOG_ERROR("_CreateFeature result: {0:X}", (unsigned int) nvResult);
+                _p_dlssdHandle = nullptr; // NGX never issued it
                 break;
             }
             else

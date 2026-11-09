@@ -28,6 +28,11 @@ def function_body(source, signature):
     if start < 0:
         return ''
     brace = source.index('{', start)
+    while ';' in source[start:brace]:
+        start = source.find(signature, start + len(signature))
+        if start < 0:
+            return ''
+        brace = source.index('{', start)
     depth = 0
     for i in range(brace, len(source)):
         depth += {'{': 1, '}': -1}.get(source[i], 0)

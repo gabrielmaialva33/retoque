@@ -412,11 +412,16 @@ static int OutputMaxInterpolationCount()
         static int xefgMax = 0;
         static bool xefgQueried = false;
 
+        // Current device is set with the swapchain, before it use the latest created one
+        auto device = state.currentD3D12Device;
+        if (device == nullptr)
+            device = state.LastD3D12Device();
+
         // GetState can be called every frame, only try once
-        if (!xefgQueried && state.currentD3D12Device != nullptr)
+        if (!xefgQueried && device != nullptr)
         {
             xefgQueried = true;
-            xefgMax = XeFG_Dx12::QueryMaxInterpolationCount(state.currentD3D12Device);
+            xefgMax = XeFG_Dx12::QueryMaxInterpolationCount(device);
         }
 
         if (xefgMax > 0)
@@ -732,7 +737,9 @@ sl::Result StreamlineHooks::hkslEvaluateFeature(sl::Feature feature, const sl::F
 {
     LOG_DEBUG("frameIndex: {}", static_cast<uint32_t>(frame));
 
-    if (State::Instance().activeFgInput == FGInput::DLSSG && numInputs > 0 && inputs != nullptr)
+    // D3D11 resources aren't supported, same as the tag hooks
+    if (State::Instance().activeFgInput == FGInput::DLSSG && numInputs > 0 && inputs != nullptr &&
+        renderApi != sl::RenderAPI::eD3D11)
     {
         for (uint32_t i = 0; i < numInputs; i++)
         {
@@ -1453,6 +1460,7 @@ static void UpdateDlssgMfgMax(uint32_t maximum, uint64_t generation, decltype(&s
     if (state.streamlineVersion < feature_version { 2, 7, 1 } || maximum == 0 || maximum >= 6)
         return;
 
+    maximum = Nvngx_FG::limitToProvider(maximum);
     if (state.dlssgMfgMax != static_cast<int>(maximum))
     {
         state.dlssgMfgMax = static_cast<int>(maximum);
@@ -1672,6 +1680,13 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
         }
     }
 
+    // Streamline's max can be over what an nvngx provider generates
+    if (newOptions.numFramesToGenerate > 1)
+    {
+        newOptions.numFramesToGenerate =
+            (uint32_t) Nvngx_FG::limitToProvider(static_cast<int>(newOptions.numFramesToGenerate));
+    }
+
     state.dlssgLastSetMode = newOptions.mode;
 
     return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));
@@ -1745,6 +1760,10 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     {
         Config::Instance()->FGDLSSGOverrideForceDMFG.set_volatile_value(false);
     }
+
+    // Streamline's max can be over what an nvngx provider generates
+    if (originalStructVersion >= 2)
+        state.numFramesToGenerateMax = Nvngx_FG::limitToProvider(state.numFramesToGenerateMax);
 
     auto& optiState = State::Instance();
 
@@ -1827,6 +1846,7 @@ sl::Result StreamlineHooks::hkslReflexSetOptions(const sl::ReflexOptions& option
     g_reflexOptionsGeneration.fetch_add(1, std::memory_order_relaxed);
 
     reflexGamesLastMode = options.mode;
+    reflexGamesLastOptions = options;
 
     sl::ReflexOptions newOptions = options;
 
@@ -2051,11 +2071,15 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
             sl::FrameToken* newFramePointer {};
             auto result = o_slGetNewFrameToken(newFramePointer, &newFrameId);
 
-            LOG_WARN("Simulation start marker sent after end marker, offset: {}", correction_offset);
-            InputCollection::getInstance().startCollectingForFrame(newFrameId);
+            // On failure send the marker uncorrected
+            if (result == sl::Result::eOk && newFramePointer != nullptr)
+            {
+                LOG_WARN("Simulation start marker sent after end marker, offset: {}", correction_offset);
+                InputCollection::getInstance().startCollectingForFrame(newFrameId);
 
-            result = o_slPCLSetMarker(marker, *newFramePointer);
-            return result;
+                result = o_slPCLSetMarker(marker, *newFramePointer);
+                return result;
+            }
         }
     }
 
@@ -2216,7 +2240,9 @@ void StreamlineHooks::updateForceReflex()
     // Not needed for Streamline v1 as slSetConstants is sent every frame
     if (o_slReflexSetOptions)
     {
-        sl::ReflexOptions options;
+        // Game's chain can point to its stack
+        sl::ReflexOptions options = reflexGamesLastOptions;
+        options.next = nullptr;
 
         auto forceReflex = Config::Instance()->FN_ForceReflex.value_or_default();
 
@@ -2316,8 +2342,43 @@ bool StreamlineHooks::unhookInterposer()
         o_logCallback = nullptr;
         o_logCallback_sl1 = nullptr;
         hookedInterposerModule = nullptr;
+        hookedInterposerInit = nullptr;
+        hookedInterposerPath.clear();
     }
     return detourResult == NO_ERROR;
+}
+
+// The image and its detours are gone, nothing to detach
+void StreamlineHooks::forgetInterposer()
+{
+    std::lock_guard<std::mutex> detoursLock(g_detoursTransactionMutex);
+    // The image is gone: no trampoline may be detached against its replacement.
+    s_interposerHooks.Detached(true);
+    o_slInit = nullptr;
+    o_slInit_sl1 = nullptr;
+    o_slSetTag = nullptr;
+    o_slSetTagForFrame = nullptr;
+    o_slEvaluateFeature = nullptr;
+    o_slSetConstants = nullptr;
+    o_slSetTag_sl1 = nullptr;
+    o_slSetConstants_interposer_sl1 = nullptr;
+    o_slEvaluateFeature_sl1 = nullptr;
+    o_slGetNativeInterface = nullptr;
+    o_slSetD3DDevice = nullptr;
+    o_slGetNewFrameToken = nullptr;
+    o_slIsFeatureSupported = nullptr;
+    o_slIsFeatureLoaded = nullptr;
+    o_slGetFeatureRequirements = nullptr;
+    o_slGetFeatureVersion = nullptr;
+    o_slGetFeatureFunction = nullptr;
+    o_slSetFeatureLoaded = nullptr;
+    o_slAllocateResources = nullptr;
+    o_slFreeResources = nullptr;
+    o_logCallback = nullptr;
+    o_logCallback_sl1 = nullptr;
+    hookedInterposerModule = nullptr;
+    hookedInterposerInit = nullptr;
+    hookedInterposerPath.clear();
 }
 
 // Call it just after sl.interposer's load or if sl.interposer is already loaded
@@ -2348,7 +2409,17 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
 
     // Interposer needs this or it might end in an infinite loop calling itself
     if (hookedInterposerModule == slInterposer)
-        return;
+    {
+        // Same path at the same address is the same layout, so the export can be read
+        if (hookedInterposerInit == nullptr || (GetModulePath(slInterposer) == hookedInterposerPath &&
+                                                memcmp(hookedInterposerInit, hookedInterposerPatch, kPatchBytes) == 0))
+        {
+            return;
+        }
+
+        LOG_DEBUG("sl.interposer was reloaded without its unload being seen");
+        forgetInterposer();
+    }
 
     // Looks like when reading DLL version load methods are called
     // To prevent loops disabling checks for sl.interposer.dll
@@ -2580,6 +2651,14 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
     }
 
     DlssNr::SlBoundaryProbe::Install(slInterposer);
+    if (o_slInit != nullptr || o_slInit_sl1 != nullptr)
+    {
+        hookedInterposerInit = KernelBaseProxy::GetProcAddress_()(slInterposer, "slInit");
+        hookedInterposerPath = GetModulePath(slInterposer);
+
+        if (hookedInterposerInit != nullptr)
+            memcpy(hookedInterposerPatch, hookedInterposerInit, kPatchBytes);
+    }
 
     State::EnableChecks(owner);
 }
@@ -2953,6 +3032,13 @@ void StreamlineHooks::onModuleFreed(PVOID module)
 {
     if (module == nullptr)
         return;
+
+    // A reload at the same address has to be hooked again
+    if ((HMODULE) module == hookedInterposerModule && GetModulePath(hookedInterposerModule).empty())
+    {
+        LOG_DEBUG("sl.interposer unloaded");
+        forgetInterposer();
+    }
 
     for (size_t p = 0; p < (size_t) SlPlugin::Count; p++)
     {

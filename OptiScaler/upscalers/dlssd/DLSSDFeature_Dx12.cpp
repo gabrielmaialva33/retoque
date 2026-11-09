@@ -19,11 +19,11 @@ bool DLSSDFeatureDx12::InitDLSSD(ID3D12GraphicsCommandList* InCommandList, NVSDK
         return false;
     }
 
-    if (!_dlssdInitedDx12)
+    if (!_dlssdInited)
     {
-        _dlssdInitedDx12 = NVNGXProxy::InitDx12(Device);
+        _dlssdInited = NVNGXProxy::InitDx12(Device);
 
-        if (!_dlssdInitedDx12)
+        if (!_dlssdInited)
             return false;
 
         _moduleLoaded =
@@ -56,6 +56,7 @@ bool DLSSDFeatureDx12::InitDLSSD(ID3D12GraphicsCommandList* InCommandList, NVSDK
         if (nvResult != NVSDK_NGX_Result_Success)
         {
             LOG_ERROR("_CreateFeature result: {0:X}", (unsigned int) nvResult);
+            _p_dlssdHandle = nullptr; // NGX never issued it
             return false;
         }
         else

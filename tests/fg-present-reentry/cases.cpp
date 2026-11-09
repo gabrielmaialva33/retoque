@@ -267,7 +267,8 @@ static void OtherThreadFgMutex()
         release.Open();
         presenter.join();
         caller.join();
-        check(ownerDuringWork == 3, label + ": device work ran under its own FG mutex (owner 3)");
+        check(ownerDuringWork == (std::string(reentry.name) == "SetFullscreenState" ? 7u : 3u),
+              label + ": device work ran under its acquired FG mutex (mode switch 7, resize 3)");
         check(fg.Mutex.getOwner() == 0, label + ": FG mutex released");
     }
 }

@@ -104,3 +104,6 @@ struct XeFG_Dx12 : Backend
 {
     bool ReleaseSwapchain(HWND hwnd);
 };
+
+inline bool InSendMessage() { return false; }
+inline void WaitForGPUIdle(void*) {}

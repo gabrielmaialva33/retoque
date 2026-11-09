@@ -27,3 +27,7 @@ runner results): `host` for `nr-control`, `public` for `nr-route-quiet` run with
 It requires exit 0, the runner's PASS, the exact loaded DLL and prefix core, and the consumer's own debug lines in
 order (bring-up or init, entry, core result 1, destruction); the host's "shut down" line alone is not a call.
 `test_vk_shutdown_evidence.py` (run by `run.py`) checks those refusals on synthetic runs.
+
+`clients_cases.py` also compiles the production client registry. Game, Streamline and plugin membership,
+repeated last-client shutdown, absent membership and numeric-handle reload are checked. This catches the
+empty-registry duplicate-shutdown regression without claiming real module unload coverage.

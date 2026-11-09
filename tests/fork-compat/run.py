@@ -30,6 +30,17 @@ optional = header[header.index('enum HasDefaultValue'):header.index('constexpr i
 declarations = '\n'.join(re.findall(r'^    CustomOptional<std::wstring, NoDefault> Xe(?:SS|FG|LL)Library;', header, re.M))
 reads = '\n'.join(re.findall(r'^\s*\w+\.set_from_config\(readWString\("Libraries", "Xe(?:SS|FG|LL)Path"\)\);', config, re.M))
 saves = '\n'.join(re.findall(r'ini\.SetValue\("Libraries", "Xe(?:SS|FG|LL)Path",.*?;', config, re.S))
+# New upstream settings use the same production parser/serializer as the path checks.
+new_keys = (("OptiFG", "HudlessFlip", "FGHudlessFlip"), ("Log", "CreateDumps", "CreateDumps"),
+            ("V-Sync", "VulkanPresentMode", "VulkanPresentMode"))
+for section, key, field in new_keys:
+    declarations += '\n' + re.search(r'^    CustomOptional<[^\n]+> ' + field + r'[^;]*;', header, re.M).group(0)
+    reads += '\n' + re.search(r'\b' + field + r'\.set_from_config\([^;]+;', config).group(0)
+    saves += '\n' + re.search(r'ini\.SetValue\("' + section + '", "' + key + r'",.*?;', config, re.S).group(0)
+    ini_text = (ROOT / 'OptiScaler.ini').read_text()
+    section_text = ini_text.split('[' + section + ']', 1)[1].split('\n[', 1)[0]
+    assert re.search(r'^' + key + r'=auto$', section_text, re.M), (section, key)
+serializer = function(config, 'std::string GetBoolValue(') + function(config, 'template <typename T> std::string GetIntValue(')
 config_source = '''#include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -43,13 +54,16 @@ config_source = '''#include <algorithm>
 #include <SimpleIni.h>
 std::string wstring_to_string(const std::wstring& value) { return {value.begin(), value.end()}; }
 std::wstring string_to_wstring(const std::string& value) { return {value.begin(), value.end()}; }
-''' + optional + '''
+''' + optional + serializer + '''
 class Config { public:
 ''' + declarations + '''
 CSimpleIniA ini;
 std::vector<std::string> _log;
 static Config* current;
 static Config* Instance() { return current; }
+std::optional<std::string> readString(std::string section, std::string key, bool lowercase = false);
+std::optional<bool> readBool(std::string section, std::string key);
+std::optional<int> readInt(std::string section, std::string key);
 std::optional<std::wstring> readWString(std::string section, std::string key, bool lowercase = false);
 void Read() {
 ''' + reads + '''
@@ -59,7 +73,7 @@ void Save() { current = this;
 }
 };
 Config* Config::current = nullptr;
-''' + function(config, 'std::optional<std::wstring> Config::readWString(') + (HERE / 'config-cases.cpp').read_text()
+''' + ''.join(function(config, anchor) for anchor in ('std::optional<std::string> Config::readString(', 'std::optional<bool> Config::readBool(', 'std::optional<int> Config::readInt(')) + function(config, 'std::optional<std::wstring> Config::readWString(') + (HERE / 'config-cases.cpp').read_text()
 
 hooks_source = (HERE / 'hook-fakes.h').read_text()
 for filename, anchor in [('Crypt32_Hooks.h', 'static BOOL hkCryptQueryObject('),
@@ -154,3 +168,5 @@ with tempfile.TemporaryDirectory(prefix='fork-compat-') as folder:
         print(f'PASS: {len(controls)} Streamline regression controls rejected')
 if failed:
     raise SystemExit('FAIL: ' + ', '.join(failed))
+
+subprocess.run(["python3", str(HERE / "parameter_cases.py")], check=True)

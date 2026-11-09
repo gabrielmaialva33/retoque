@@ -127,6 +127,7 @@ struct BridgeTracker
     {
         ++allocated;
     }
+    std::vector<VkCommandBuffer> GetPoolCommandBuffers(VkCommandPool) { return {}; }
     void OnDestroyPool(VkCommandPool) { ++destroyedPools; }
     void OnResetPool(VkCommandPool) { ++resetPools; }
 } cmdBufferStateTracker;
@@ -213,6 +214,10 @@ auto o_vkResetCommandBuffer = DriverReset;
 auto o_vkFreeCommandBuffers = DriverFree;
 auto o_vkResetCommandPool = DriverResetPool;
 auto o_vkDestroyCommandPool = DriverDestroyPool;
+
+// The bridge has no pending D3D12 interop submissions in these NR recording cases.
+static std::atomic<size_t> pendingSubmissionCount = 0;
+[[maybe_unused]] static void DiscardPendingInterop(VkCommandBuffer) {}
 
 struct Vulkan_wDx12
 {

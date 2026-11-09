@@ -19,6 +19,8 @@
 #include <vulkan/vulkan.h>
 #include <sl_helpers_vk.h>
 
+#include <wrl/client.h>
+
 #pragma comment(lib, "Version.lib")
 
 class StreamlineProxy
@@ -333,6 +335,21 @@ class StreamlineProxy
         return true;
     }
 
+    // The game gives NGX the real device, Streamline's NGX has to use the same one, not ReShade's proxy
+    static sl::Result SetD3D12Device(void* device, bool bind)
+    {
+        Microsoft::WRL::ComPtr<IUnknown> original;
+        original.Attach(Util::GetReShadeOriginal((IUnknown*) device));
+
+        if (original != nullptr)
+        {
+            LOG_INFO("Using the real device behind ReShade's proxy");
+            device = original.Get();
+        }
+
+        return bind ? SetD3DDeviceAndBind(device) : _slSetD3DDevice(device);
+    }
+
     // slSetD3DDevice, plus the feature binding that can only happen once it has returned.
     //
     // Deliberately NOT fatal, which is where this departs from upstream's version of the same fix.
@@ -472,10 +489,9 @@ class StreamlineProxy
         if (renderApi == sl::RenderAPI::eD3D12)
             pref.flags |= sl::PreferenceFlags::eUseDXGIFactoryProxy;
 
-        auto exePath = Util::ExePath().remove_filename();
-        auto nvngxDlssPath = Util::FindFilePath(exePath, "nvngx_dlss.dll");
-        auto nvngxDlssDPath = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
-        auto nvngxDlssGPath = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
+        std::optional<std::filesystem::path> nvngxDlssPath = State::Instance().NVNGX_DLSS_Path;
+        std::optional<std::filesystem::path> nvngxDlssDPath = State::Instance().NVNGX_DLSSD_Path;
+        std::optional<std::filesystem::path> nvngxDlssGPath = State::Instance().NVNGX_DLSSG_Path;
 
         std::vector<std::wstring> pathStorage;
 
@@ -607,7 +623,7 @@ class StreamlineProxy
             State::Instance().currentD3D11Device == nullptr)
             _isD3D12Inited = true;
         else
-            _isD3D12Inited = SetD3DDeviceAndBind(device) == sl::Result::eOk && DisableReflex();
+            _isD3D12Inited = SetD3D12Device(device, true) == sl::Result::eOk && DisableReflex();
 
         return _isD3D12Inited;
     }

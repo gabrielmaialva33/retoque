@@ -212,11 +212,13 @@ int main(int argc, char** argv)
     }
     else if (name == "lifetime")
     {
-        // Destroyed with the timer, once, except at process shutdown, where it is abandoned.
+        // Destructor queues the pool, once. Only retirement releases it; shutdown abandons it.
         {
             GpuTime_Vk other(device, physicalDevice);
         }
-        Check(destroys == 1, "destroyed with its timer");
+        Check(destroys == 0 && DeferredRelease::pending.size() == 1, "pool queued, not freed at destructor");
+        DeferredRelease::Drain();
+        Check(destroys == 1, "destroyed once on deferred retirement");
         State::Instance().isShuttingDown = true;
         {
             GpuTime_Vk other(device, physicalDevice);
