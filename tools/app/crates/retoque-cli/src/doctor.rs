@@ -126,6 +126,7 @@ pub fn run(game: &Path, json: bool) -> Result<(), Error> {
     // A CLI folder has no discovered parent installation; inspect only that explicit root.
     let dlss = retoque_data::dlss::inspect(game).map_err(io_error)?;
     findings.extend(doctor::diagnose_dlss(&dlss, false));
+    findings.extend(doctor::diagnose_reshade(&retoque_data::reshade::inspect(game)?));
     show(&findings, json)
 }
 fn show(findings: &[doctor::Finding], json: bool) -> Result<(), Error> {

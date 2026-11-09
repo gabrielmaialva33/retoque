@@ -28,6 +28,7 @@ const MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ComponentKind {
     DlssgSm86,
+    ReShade,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Component {

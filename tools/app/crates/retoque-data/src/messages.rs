@@ -13,6 +13,385 @@ pub fn text(key: &str, language: Language) -> &str {
         })
 }
 pub const TEXT: &[(&str, &str, &str)] = &[
+    ("rs.undo_addon", "Undo add-on changes", "Desfazer alterações do add-on"),
+    (
+        "rs.error.restored",
+        "original already restored",
+        "original já restaurado",
+    ),
+    (
+        "rs.error.0",
+        "ReShade size or SHA-256 mismatch",
+        "Tamanho ou SHA-256 do ReShade divergente",
+    ),
+    (
+        "rs.error.1",
+        "ReShade input exceeds size cap",
+        "Entrada do ReShade excede o limite de tamanho",
+    ),
+    (
+        "rs.error.2",
+        "ReShade input is not a PE executable",
+        "A entrada do ReShade não é um executável PE",
+    ),
+    (
+        "rs.error.3",
+        "ReShade setup has no appended ZIP",
+        "O instalador do ReShade não contém um ZIP anexado",
+    ),
+    (
+        "rs.error.4",
+        "ReShade ZIP has too many entries",
+        "O ZIP do ReShade contém entradas demais",
+    ),
+    (
+        "rs.error.5",
+        "ambiguous or linked ReShade64.dll",
+        "ReShade64.dll ambíguo ou um link",
+    ),
+    (
+        "rs.error.6",
+        "ReShade64.dll missing from setup",
+        "ReShade64.dll ausente no instalador",
+    ),
+    (
+        "rs.error.7",
+        "ReShade DLL exceeds size cap",
+        "A DLL do ReShade excede o limite de tamanho",
+    ),
+    ("rs.error.8", "invalid ReShade DLL", "DLL do ReShade inválida"),
+    (
+        "rs.error.9",
+        "ReShade file exceeds size cap",
+        "O arquivo do ReShade excede o limite de tamanho",
+    ),
+    (
+        "rs.error.10",
+        "invalid ReShade catalog id",
+        "Identificador do catálogo ReShade inválido",
+    ),
+    (
+        "rs.error.11",
+        "ReShade catalog integrity failure",
+        "Falha na integridade do catálogo ReShade",
+    ),
+    (
+        "rs.error.12",
+        "unrecognized ReShade DLL; require an x64 DLL with ReShade identification",
+        "DLL do ReShade não reconhecida; é necessária uma DLL x64 com identificação ReShade",
+    ),
+    (
+        "rs.error.13",
+        "ReShade cache disappeared",
+        "O cache do ReShade desapareceu",
+    ),
+    (
+        "rs.error.14",
+        "invalid ReShade filename",
+        "Nome de arquivo ReShade inválido",
+    ),
+    (
+        "rs.error.15",
+        "ReShade download requires confirmation",
+        "O download do ReShade exige confirmação",
+    ),
+    (
+        "rs.error.16",
+        "ReShade input is a link or not a regular file",
+        "A entrada do ReShade é um link ou não é um arquivo regular",
+    ),
+    (
+        "rs.error.17",
+        "ReShade input exceeds size limit",
+        "A entrada do ReShade excede o limite de tamanho",
+    ),
+    (
+        "rs.error.18",
+        "ambiguous ReShade filename casing",
+        "Nomes de arquivo ReShade ambíguos por diferenças de maiúsculas",
+    ),
+    (
+        "rs.error.19",
+        "AddonPath uses an unresolved Wine drive or network path",
+        "AddonPath usa uma unidade Wine não resolvida ou caminho de rede",
+    ),
+    ("rs.error.20", "AddonPath is a link", "AddonPath é um link"),
+    (
+        "rs.error.21",
+        "add-on scan limit exceeded",
+        "Limite de busca de add-ons excedido",
+    ),
+    (
+        "rs.error.22",
+        "non UTF-8 add-on filename",
+        "Nome de add-on não codificado em UTF-8",
+    ),
+    (
+        "rs.error.23",
+        "ambiguous add-on filename casing",
+        "Nomes de add-on ambíguos por diferenças de maiúsculas",
+    ),
+    (
+        "rs.error.24",
+        "add-on is a link or not a regular file",
+        "O add-on é um link ou não é um arquivo regular",
+    ),
+    (
+        "rs.error.25",
+        "add-on inspection exceeds size budget",
+        "A inspeção dos add-ons excede o limite de tamanho",
+    ),
+    (
+        "rs.error.26",
+        "ReShade state is not unchanged receipt-owned data",
+        "O estado do ReShade foi alterado ou não pertence ao recibo",
+    ),
+    ("rs.error.27", "invalid ReShade state", "Estado do ReShade inválido"),
+    (
+        "rs.error.28",
+        "ReShade undo history exceeds limit",
+        "Histórico de reversão do ReShade excede o limite",
+    ),
+    (
+        "rs.error.29",
+        "conflicting ReShade/add-on destination casing",
+        "Conflito de maiúsculas no destino ReShade/add-on",
+    ),
+    (
+        "rs.error.30",
+        "ReShade/add-on input is not an x64 PE DLL",
+        "A entrada ReShade/add-on não é uma DLL PE x64",
+    ),
+    (
+        "rs.error.31",
+        "Special K is present; it owns ReShade loading",
+        "Special K está presente e controla o carregamento do ReShade",
+    ),
+    (
+        "rs.error.32",
+        "another ReShade loader is present; use the existing keep_reshade migration first",
+        "Outro carregador ReShade está presente; use primeiro a migração existente keep_reshade",
+    ),
+    (
+        "rs.error.33",
+        "ReShade requires the proxy and executable in the same directory",
+        "ReShade exige o proxy e o executável no mesmo diretório",
+    ),
+    (
+        "rs.error.34",
+        "install Retoque before its ReShade component",
+        "Instale o Retoque antes de seu componente ReShade",
+    ),
+    (
+        "rs.error.35",
+        "OptiScaler.ini is missing",
+        "OptiScaler.ini está ausente",
+    ),
+    (
+        "rs.error.36",
+        "invalid lifecycle INI path",
+        "Caminho de INI de reversão inválido",
+    ),
+    (
+        "rs.error.37",
+        "invalid lifecycle edit identity",
+        "Identidade da edição de reversão inválida",
+    ),
+    (
+        "rs.error.38",
+        "LoadReshade changed since the reviewed install; preserve the undo state",
+        "LoadReshade mudou desde a instalação revisada; preserve o estado de reversão",
+    ),
+    (
+        "rs.error.39",
+        "component was not imported by Retoque",
+        "O componente não foi importado pelo Retoque",
+    ),
+    (
+        "rs.error.40",
+        "component state identity mismatch",
+        "Identidade do estado do componente divergente",
+    ),
+    (
+        "rs.error.41",
+        "imported file changed; no files were removed",
+        "O arquivo importado mudou; nenhum arquivo foi removido",
+    ),
+    (
+        "rs.error.42",
+        "ReShade backup changed; preserve the receipt",
+        "O backup do ReShade mudou; preserve o recibo",
+    ),
+    (
+        "rs.error.43",
+        "select an .addon64 or .addon file with a safe filename",
+        "Selecione um arquivo .addon64 ou .addon com nome seguro",
+    ),
+    (
+        "rs.error.44",
+        "AddonPath differs from the game folder; importing here would not load the add-on",
+        "AddonPath difere da pasta do jogo; importar aqui não carregaria o add-on",
+    ),
+    (
+        "rs.error.45",
+        "invalid add-on filename",
+        "Nome de arquivo do add-on inválido",
+    ),
+    (
+        "rs.error.46",
+        "add-on is not in ReShade's AddonPath",
+        "O add-on não está no AddonPath do ReShade",
+    ),
+    (
+        "rs.error.47",
+        "ReShade build is limited or unknown; full add-on support is not established",
+        "O build do ReShade é limitado ou desconhecido; o suporte completo a add-ons não está confirmado",
+    ),
+    (
+        "rs.error.48",
+        "Conservative INI undo: other edits are preserved; restoration is not byte-for-byte",
+        "Reversão conservadora do INI: outras edições são preservadas; a restauração não é byte a byte",
+    ),
+    (
+        "rs.error.49",
+        "identical existing file; preserve its original ownership",
+        "Arquivo existente idêntico; preservar sua propriedade original",
+    ),
+    ("rs.error.50", "invalid lifecycle INI undo", "Reversão do INI inválida"),
+    (
+        "rs.error.51",
+        "unknown ReShade/add-on option",
+        "Opção ReShade/add-on desconhecida",
+    ),
+    (
+        "rs.error.52",
+        "too many ReShade/add-on arguments",
+        "Argumentos ReShade/add-on demais",
+    ),
+    ("rs.error.53", "addon add needs a file", "addon add exige um arquivo"),
+    (
+        "rs.error.54",
+        "add-on filename required",
+        "É necessário informar o nome do add-on",
+    ),
+    (
+        "rs.error.55",
+        "unknown ReShade/add-on action",
+        "Ação ReShade/add-on desconhecida",
+    ),
+    ("rs.title", "ReShade and add-ons", "ReShade e add-ons"),
+    (
+        "rs.description",
+        "Retoque keeps the game proxy and loads ReShade64.dll.",
+        "O Retoque mantém o proxy do jogo e carrega ReShade64.dll.",
+    ),
+    ("rs.enabled", "Enabled", "Ativado"),
+    ("rs.disabled", "Disabled", "Desativado"),
+    ("rs.full", "Full add-on support", "Suporte completo a add-ons"),
+    (
+        "rs.limited",
+        "Limited build: external add-ons cannot load",
+        "Build limitado: add-ons externos não carregam",
+    ),
+    ("rs.unknown", "Unknown ReShade build", "Build do ReShade desconhecido"),
+    ("rs.missing", "ReShade is missing", "ReShade ausente"),
+    (
+        "rs.recommend",
+        "Install ReShade with add-on support",
+        "Instalar ReShade com suporte a add-ons",
+    ),
+    (
+        "rs.recommend_why",
+        "Add-ons are present, but full ReShade support is missing or unconfirmed. Review installation separately.",
+        "Há add-ons, mas o suporte completo do ReShade está ausente ou não confirmado. Revise a instalação separadamente.",
+    ),
+    (
+        "rs.static",
+        "Static evidence, medium confidence. Restart the game after changes; loading and compatibility remain untested.",
+        "Evidência estática, confiança média. Reinicie o jogo após alterações; carregamento e compatibilidade ainda não foram testados.",
+    ),
+    ("rs.addons", "Add-ons", "Add-ons"),
+    ("rs.build", "ReShade build", "Build do ReShade"),
+    (
+        "rs.install",
+        "Review ReShade installation",
+        "Revisar instalação do ReShade",
+    ),
+    ("rs.uninstall", "Remove ReShade component", "Remover componente ReShade"),
+    (
+        "rs.import",
+        "Import local ReShade DLL or setup",
+        "Importar DLL ou instalador local do ReShade",
+    ),
+    ("rs.add", "Import add-on", "Importar add-on"),
+    ("rs.remove_addon", "Remove imported add-on", "Remover add-on importado"),
+    (
+        "rs.review",
+        "Review ReShade / add-on changes",
+        "Revisar alterações do ReShade / add-on",
+    ),
+    (
+        "rs.drop_addon",
+        "Copy this add-on to the selected game through a reviewed plan.",
+        "Copiar este add-on para o jogo selecionado mediante revisão do plano.",
+    ),
+    (
+        "rs.select_game",
+        "Select a game before importing an add-on.",
+        "Selecione um jogo antes de importar um add-on.",
+    ),
+    ("rs.nr_off", "Neural Rendering: off", "Neural Rendering: desligado"),
+    (
+        "rs.nr_addon",
+        "Neural Rendering: by the add-on RenoDX DLSS5",
+        "Neural Rendering: pelo add-on RenoDX DLSS5",
+    ),
+    (
+        "rs.nr_retoque",
+        "Neural Rendering: by Retoque",
+        "Neural Rendering: pelo Retoque",
+    ),
+    (
+        "rs.yield",
+        "Let the NR add-on take over (default)",
+        "Deixar o add-on NR assumir (padrão)",
+    ),
+    (
+        "rs.ignore",
+        "Keep Retoque NR (experts)",
+        "Manter o NR do Retoque (avançado)",
+    ),
+    (
+        "rs.consent",
+        "Download ReShade 6.8.0 with full add-on support from reshade.me? The 4.3 MB official installer and extracted DLL have pinned SHA-256 hashes. BSD-3-Clause applies. Game changes require a separate review.",
+        "Baixar ReShade 6.8.0 com suporte completo a add-ons de reshade.me? O instalador oficial de 4,3 MB e a DLL extraída têm hashes SHA-256 fixados. Aplica-se a licença BSD-3-Clause. Alterações no jogo exigem revisão separada.",
+    ),
+    (
+        "rs.confirm_download",
+        "Confirm official download",
+        "Confirmar download oficial",
+    ),
+    ("rs.preparing", "Preparing ReShade…", "Preparando ReShade…"),
+    (
+        "rs.cli_confirm",
+        "Type yes to confirm the download:",
+        "Digite sim para confirmar o download:",
+    ),
+    (
+        "rs.download_first",
+        "Import or download ReShade first; dry-run does not download.",
+        "Importe ou baixe o ReShade primeiro; dry-run não faz download.",
+    ),
+    (
+        "rs.dry",
+        "Dry run: no game or catalog changes.",
+        "Simulação: nenhuma alteração no jogo ou catálogo.",
+    ),
+    (
+        "rs.done",
+        "Reviewed changes applied.",
+        "Alterações revisadas aplicadas.",
+    ),
     ("severity.warning", "Warning", "Aviso"),
     ("severity.error", "Error", "Erro"),
     (
@@ -255,6 +634,19 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "SHA256 do modelo da comunidade",
     ),
 ];
+/// Translate ReShade diagnostics without changing OS errors, paths or unrecognized evidence.
+pub fn reshade_diagnostic(message: &str, language: Language) -> String {
+    if language == Language::English {
+        return message.into();
+    }
+    for (key, en, pt) in TEXT {
+        if key.starts_with("rs.error.") && message.contains(en) {
+            return message.replace(en, pt);
+        }
+    }
+    message.into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

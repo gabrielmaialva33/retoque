@@ -67,7 +67,9 @@ pub(super) fn show_games(json: bool, home: Option<&Path>) {
             );
             // A corrupt/unreadable installation is not a clean slate for automatic recommendations.
             let errors: Vec<String> = [status.as_ref().err(), components.as_ref().err(), ini.as_ref().err()].into_iter().flatten().map(ToString::to_string).collect();
-            let recommendations: Vec<_> = if errors.is_empty() { recommend::recommend(retoque_data::gpu::primary(&gpus), &facts).into_iter().map(|r| json!({
+            let mut proposals=if errors.is_empty(){recommend::recommend(retoque_data::gpu::primary(&gpus), &facts)}else{Vec::new()};
+            if errors.is_empty() && let Ok(snapshot)=retoque_data::reshade::inspect(&target.path) && let Some(rec)=retoque_data::reshade::recommendation(&snapshot){proposals.push(rec);}
+            let recommendations: Vec<_> = if errors.is_empty() { proposals.into_iter().map(|r| json!({
                 "id":r.id,"title_key":r.title_key,"why_key":r.why_key,"actions":r.actions.iter().map(action_json).collect::<Vec<_>>(),"needs":r.needs.as_ref().map(need_json)
             })).collect() } else { Vec::new() };
             json!({"path":target.path,"executables":target.executables,"dlss":target.dlss,"installed":facts.installed,

@@ -201,6 +201,12 @@ impl RetoqueApp {
                             }
                             return;
                         }
+                        Some(Need::Component(ComponentKind::ReShade)) => {
+                            if ui.button(self.tr("rs.install")).clicked() {
+                                self.reshade_offer();
+                            }
+                            return;
+                        }
                         Some(Need::Component(_)) => {
                             ready &= self.autotune_component_picker(ui);
                         }
@@ -222,6 +228,8 @@ impl RetoqueApp {
                                         request.component = Some(ComponentChange::Install(c));
                                     }
                                 }
+                                Action::InstallComponent(ComponentKind::ReShade)
+                                | Action::RemoveComponent(ComponentKind::ReShade) => {}
                                 Action::RemoveComponent(ComponentKind::DlssgSm86) => {
                                     if let Some(id) = self
                                         .tuning

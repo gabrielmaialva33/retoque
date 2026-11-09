@@ -84,6 +84,68 @@ fn fixed_pair(b: &[u8]) -> Option<(u32, u32)> {
 
 /// Limits: 96 sections, 128 entries/directory, three resource levels, 4 MiB resource region.
 pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
+    read_details(r).map(|d| d.version)
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VersionInfo {
+    pub version: String,
+    pub product: Option<String>,
+}
+
+// Walk bounded VERSIONINFO children, rather than scanning the DLL for a product string.
+fn product_strings(block: &[u8], depth: usize, out: &mut Vec<String>) -> Option<()> {
+    if depth > 4 {
+        return None;
+    }
+    let len = usize::from(u16_at(block, 0)?);
+    let block = block.get(..len)?;
+    let value_len = usize::from(u16_at(block, 2)?);
+    let text = u16_at(block, 4)? == 1;
+    let mut at = 6;
+    let mut key = Vec::new();
+    loop {
+        let c = u16_at(block, at)?;
+        at += 2;
+        if c == 0 {
+            break;
+        }
+        key.push(c);
+        if key.len() > 256 {
+            return None;
+        }
+    }
+    at = (at + 3) & !3;
+    let value_end = at.checked_add(value_len.checked_mul(if text { 2 } else { 1 })?)?;
+    let value = block.get(at..value_end)?;
+    if key == "ProductName".encode_utf16().collect::<Vec<_>>() && text {
+        let words = value
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .take_while(|c| *c != 0)
+            .collect::<Vec<_>>();
+        if let Ok(v) = String::from_utf16(&words) {
+            out.push(v);
+        }
+    }
+    at = (value_end + 3) & !3;
+    let mut count = 0;
+    while at + 6 <= len {
+        count += 1;
+        if count > 128 {
+            return None;
+        }
+        let size = usize::from(u16_at(block, at)?);
+        if size < 6 {
+            return None;
+        }
+        product_strings(block.get(at..at.checked_add(size)?)?, depth + 1, out)?;
+        at = (at + size + 3) & !3;
+    }
+    Some(())
+}
+pub fn read_details<R: Read + Seek>(r: &mut R) -> Option<VersionInfo> {
     let mut dos = [0u8; 64];
     read_exact_at(r, 0, &mut dos)?;
     if &dos[..2] != b"MZ" {
@@ -141,6 +203,7 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
     }
     let resource = resource?;
     let mut first_ver: Option<(u32, u32)> = None;
+    let mut products = Vec::new();
     let mut leaves = 0usize;
     let mut dirs = 0usize;
     for (kind, names) in entries(&resource, 0)? {
@@ -170,7 +233,12 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
                 let leaf = leaf as usize;
                 let data = u32_at(&resource, leaf)?.checked_sub(rva)? as usize;
                 let len = u32_at(&resource, leaf.checked_add(4)?)? as usize;
-                let ver = fixed_pair(resource.get(data..data.checked_add(len)?)?)?;
+                let block = resource.get(data..data.checked_add(len)?)?;
+                let ver = fixed_pair(block)?;
+                let mut found = Vec::new();
+                if product_strings(block, 0, &mut found).is_some() {
+                    products.extend(found);
+                }
                 match first_ver {
                     None => first_ver = Some(ver),
                     Some(prev) if prev != ver => return None,
@@ -180,7 +248,12 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
         }
     }
     let (ms, ls) = first_ver?;
-    Some(format!("{}.{}.{}.{}", ms >> 16, ms & 65535, ls >> 16, ls & 65535))
+    products.sort();
+    products.dedup();
+    Some(VersionInfo {
+        version: format!("{}.{}.{}.{}", ms >> 16, ms & 65535, ls >> 16, ls & 65535),
+        product: if products.len() == 1 { products.pop() } else { None },
+    })
 }
 
 #[cfg(test)]

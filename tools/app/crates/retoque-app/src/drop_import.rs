@@ -3,6 +3,8 @@ use crate::app::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
     Model,
+    Addon,
+    ReShade,
     Component,
     Game,
     Unsupported,
@@ -30,7 +32,13 @@ pub(crate) fn classify(path: &Path) -> Route {
         .unwrap_or_default()
         .to_string_lossy()
         .to_ascii_lowercase();
-    if path.is_file() && name.starts_with("nvngx_dlssnr") && name.ends_with(".dll") {
+    if path.is_file() && retoque_core::reshade::addon_filename(&name) {
+        Route::Addon
+    } else if path.is_file()
+        && (name == "reshade64.dll" || (name.starts_with("reshade_setup_") && name.ends_with(".exe")))
+    {
+        Route::ReShade
+    } else if path.is_file() && name.starts_with("nvngx_dlssnr") && name.ends_with(".dll") {
         Route::Model
     } else if path.is_dir() && path.join("dlssg_sm86.ini").is_file() {
         Route::Component
@@ -88,6 +96,8 @@ impl RetoqueApp {
             if let Some((path, route)) = self.intuitive.drop.pending.first() {
                 ui.label(path.display().to_string());
                 ui.label(self.tr(match route {
+                    Route::Addon => "rs.drop_addon",
+                    Route::ReShade => "rs.import",
                     Route::Model => "drop.model",
                     Route::Component => "drop.component",
                     Route::Game => "drop.game",
@@ -110,6 +120,8 @@ impl RetoqueApp {
         } else if confirm {
             let (path, route) = self.intuitive.drop.pending.remove(0);
             match route {
+                Route::Addon => self.reshade_import(path, true),
+                Route::ReShade => self.reshade_import(path, false),
                 Route::Model => self.cmd_tx.send(AppCommand::ImportModel(path)),
                 Route::Component => self.autotune_catalog(Some(path), None),
                 Route::Game => {

@@ -5,6 +5,7 @@ macro_rules! println {
 mod autotune;
 mod doctor;
 mod output;
+mod reshade;
 
 use retoque_core::{
     Error, Foreign, InstallOptions, Refusal, Step, apply, plan_install, plan_settings, plan_uninstall, status,
@@ -14,6 +15,9 @@ use std::path::{Path, PathBuf};
 fn usage() {
     println!(
         "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque doctor [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque unset [--dry-run] <game-dir> <Section> <Key>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
+    );
+    println!(
+        "       retoque reshade install|uninstall [--dry-run] <game-dir> [ReShade64.dll|setup.exe]\n       retoque addon list|add|remove|enable|disable [--dry-run] <game-dir> [file]"
     );
 }
 fn expand(text: &str) -> PathBuf {
@@ -174,6 +178,9 @@ fn run() -> Result<(), Error> {
     if command == "--help" || command == "-h" {
         usage();
         return Ok(());
+    }
+    if command == "reshade" || command == "addon" {
+        return reshade::run(&command, args).map_err(reshade::localized);
     }
     let component_action = if command == "component" {
         let action = args

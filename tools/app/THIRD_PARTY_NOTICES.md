@@ -89,3 +89,12 @@ The app obtains them directly from NVIDIA after confirmation, pins their hashes 
 in the user's catalog. Distribution as a standalone SDK is restricted; application distribution has additional
 conditions, and the supplement specifies NVIDIA GPU interoperability and notification before commercial release.
 These files are not relicensed under Retoque's GPL license. This note records upstream terms, not a legal opinion.
+
+## ReShade (optional user-selected component)
+
+ReShade by Patrick Mours: https://github.com/crosire/reshade/tree/v6.8.0 — BSD-3-Clause,
+https://github.com/crosire/reshade/blob/v6.8.0/LICENSE.md. The exact license text is embedded in
+`retoque-data/src/reshade.rs` and saved beside each imported/downloaded DLL. Binaries are fetched only from the
+pinned official `https://reshade.me/downloads/ReShade_Setup_6.8.0_Addon.exe` after confirmation or imported from a
+user file. Retoque does not ship the installer/DLL or any third-party add-on. Individual add-ons retain their
+own licenses. No code is taken from or linked to RenoDX add-on binaries.

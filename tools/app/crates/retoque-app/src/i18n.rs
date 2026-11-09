@@ -1949,7 +1949,13 @@ pub fn t(lang: Lang, key: &str) -> &str {
             };
         }
     }
-    key
+    retoque_data::messages::text(
+        key,
+        match lang {
+            Lang::En => retoque_data::messages::Language::English,
+            Lang::Pt => retoque_data::messages::Language::Portuguese,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -1984,6 +1990,17 @@ mod tests {
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
+    let translated = retoque_data::messages::reshade_diagnostic(
+        message,
+        match lang {
+            Lang::En => retoque_data::messages::Language::English,
+            Lang::Pt => retoque_data::messages::Language::Portuguese,
+        },
+    );
+    if translated != message {
+        return translated;
+    }
+
     if let Some((key, en, _)) = TEXT
         .iter()
         .find(|(key, en, _)| key.starts_with("dlss.error.") && message.contains(en))
@@ -2152,7 +2169,10 @@ mod source_coverage {
         let mut checked = 0;
         for (file, source) in &all_sources {
             for key in literal_keys(source) {
-                let entry = TEXT.iter().find(|(k, _, _)| *k == key);
+                let entry = TEXT
+                    .iter()
+                    .chain(retoque_data::messages::TEXT)
+                    .find(|(k, _, _)| *k == key);
                 let (_, en, pt) = entry.unwrap_or_else(|| panic!("{file}: missing translation key {key}"));
                 assert!(!en.is_empty() && !pt.is_empty(), "{file}: incomplete translation {key}");
                 checked += 1;

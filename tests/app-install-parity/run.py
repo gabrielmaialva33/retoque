@@ -43,7 +43,8 @@ def main():
     from cli_contract import run as cli_contract
     from pending_journal import run as pending_journal
     from dlss_receipts import run as dlss_receipts
-    return cross_receipts(executable) or cli_contract(executable) or pending_journal(executable) or dlss_receipts(executable)
+    from reshade_receipts import run as reshade_receipts
+    return reshade_receipts(executable) or cross_receipts(executable) or cli_contract(executable) or pending_journal(executable) or dlss_receipts(executable)
 
 
 if __name__ == '__main__':

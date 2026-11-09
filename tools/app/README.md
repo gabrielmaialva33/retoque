@@ -219,3 +219,54 @@ digest, and only allowlisted paths are unpacked into app data (`payload-releases
 release has been published on GitHub yet, the app states so plainly and keeps the beside-app and chosen-folder
 sources. When a newer payload is active, “Check for updates” compares versions and offers updating installed
 games through the normal reviewed install `Plan`.
+
+## ReShade and add-ons
+
+The game page can prepare **ReShade 6.8.0 with full add-on support** from the official `reshade.me` installer,
+with confirmation before HTTPS access. Both installer and extracted x64 DLL have compiled SHA-256/size pins.
+The content-addressed app cache reuses the component catalog's capability-relative I/O and keeps the upstream
+BSD-3-Clause license. A local DLL or appended-ZIP setup can also be imported; the standard limited build warns
+that it cannot load external add-ons. No ReShade binary is committed or bundled.
+
+Retoque keeps its proxy and loads `ReShade64.dll` using `[Plugins] LoadReshade=true`. Installation refuses separate
+proxy/executable directories, a remaining ReShade proxy (use the existing `keep_reshade` migration), and Special K.
+Replacing a recognized limited companion preserves its original DLL in the ordinary v1 backup receipt. Unknown
+companions are refused. Settings undo lives in receipt-owned `.retoque/reshade.ini`; the v1 receipt syntax is unchanged.
+Uninstalling this component removes its own DLL or restores the original and reverses the loader setting, preserving
+`ReShade.ini`, presets and shaders. Exact INI undo requires the recorded resulting bytes; changed unrelated settings
+use a conservative key undo, while a changed loader key refuses restoration.
+
+The add-on list follows `[ADDON] AddonPath` (non-recursive) and the case-sensitive ReShade `DisabledAddons` rules:
+comma-separated entries with `,,` escaping and `name@filename` identities. Files are statically inspected, never loaded.
+Drops and file selection propose receipt-owned copies, never moves; different same-name files are refused, and
+identical preexisting files retain their ownership. Imports into the game root are refused when AddonPath points
+elsewhere. Add-on toggles preserve other INI bytes and record sparse undo in `.retoque/addon-<hash>.ini`. Removing
+an imported add-on restores its previous disabled state. External files are never removed by the add-on command.
+Unresolved Wine drives, linked files, ambiguous casing and scan/size budgets fail closed. A custom AddonPath outside
+the watched target needs a manual refresh after outside edits.
+
+Only enabled modules whose filenames contain `renodx-dlss` are NR candidates; HDR-only RenoDX mods never change the
+owner. The game page offers `[DlssNr] YieldToAddons=true` (absent/`auto` default) or expert `false`,
+writing only after a choice and review. This is configured/static ownership, not proof that ReShade or the add-on
+loaded; the runtime side is `[DlssNr] YieldToAddons` in OptiScaler (retoque/dlssnr/DlssNr_Consumers.h).
+Doctor offers the same reviewed ReShade repair for missing/limited builds. Automatic optimization never installs
+ReShade, even when it recommends it.
+
+```sh
+retoque reshade install --dry-run <game-dir> <ReShade64.dll-or-setup.exe>
+retoque reshade install <game-dir>                    # cached official build, or explicit download prompt
+retoque reshade uninstall --dry-run <game-dir>
+retoque addon list <game-dir>
+retoque addon add --dry-run <game-dir> <mod.addon64>
+retoque addon disable <game-dir> <mod.addon64>
+retoque addon enable <game-dir> <mod.addon64>
+retoque addon remove <game-dir> <mod.addon64>
+```
+
+A setup dry-run stages extraction in a temporary directory, removed on exit; it never changes the game or publishes
+the app cache. CLI `--yes-download` explicitly consents to the pinned official download; it does not bypass plan
+refusals. Game changes are shown before apply. All operations share stale-plan and running-game guards. Neither
+these host tests nor PE inspection qualify GPU behavior, game compatibility, or native Windows operation.
+
+The legacy Bash/PowerShell uninstallers consume the normal v1 file/backup records, but do not replay the new
+INI provenance. Use the app or CLI component/full uninstall for exact restoration of ReShade loader/add-on settings.

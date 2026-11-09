@@ -35,7 +35,13 @@ impl Changes {
                 logs: true,
                 captures: true,
             };
-        } else if name == ".retoque" || name.starts_with(".retoque/") || name.ends_with(".dll") {
+        } else if name == ".retoque"
+            || name.starts_with(".retoque/")
+            || name.ends_with(".dll")
+            || name.ends_with(".addon64")
+            || name.ends_with(".addon")
+            || name == "reshade.ini"
+        {
             self.status = true;
         } else if name == "optiscaler.ini" {
             self.ini = true;
