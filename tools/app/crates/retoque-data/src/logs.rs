@@ -536,7 +536,7 @@ mod tests {
         fs::create_dir_all(target.join(".retoque")).unwrap();
         for offset in 65510..65540 {
             let sample = format!(
-                "{} /home/other-synthetic-user/model.dll C:\\Users\\OtherSyntheticUser\\model.dll C:\\\\Users\\\\JsonSyntheticUser\\\\file /pfx/drive_c/users/WineSyntheticUser/file /Steam/userdata/76561198000000001/profile /Users/MacSyntheticUser/file",
+                "{} /home/other-synthetic-user/model.dll C:\\Users\\OtherSyntheticUser\\model.dll C:\\\\Users\\\\JsonSyntheticUser\\\\file /pfx/drive_c/users/WineSyntheticUser/file /Steam/userdata/76561198000000001/profile /Users/MacSyntheticUser/file", // privacy: allow (synthetic test path)
                 "x".repeat(offset)
             );
             for name in ["OptiScaler.log", "OptiScaler.ini", ".retoque/receipt.txt"] {
@@ -704,7 +704,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let target = temp.path().join("game");
         fs::create_dir_all(target.join(".retoque")).unwrap();
-        let sample = "/synthetic/home/test-person/data test-person Z:\\synthetic\\home\\test-person\\data C:\\Users\\test-person\\data";
+        let sample = "/synthetic/home/test-person/data test-person Z:\\synthetic\\home\\test-person\\data C:\\Users\\test-person\\data"; // privacy: allow (synthetic test path)
         for name in ["OptiScaler.log", "OptiScaler.ini", ".retoque/receipt.txt"] {
             fs::write(target.join(name), sample).unwrap();
         }
@@ -718,7 +718,7 @@ mod tests {
             .set_modified(SystemTime::now() + std::time::Duration::from_secs(60))
             .unwrap();
         let redactor = Redactor::new(
-            &["/synthetic/home/test-person".into(), "C:\\Users\\test-person".into()],
+            &["/synthetic/home/test-person".into(), "C:\\Users\\test-person".into()], // privacy: allow (synthetic test path)
             &["test-person".into()],
         );
         let path = bundle_with_redactor(&target, sample, &temp.path().join("out"), &redactor).unwrap();
@@ -735,9 +735,9 @@ mod tests {
 
     #[test]
     fn redacts_across_read_boundaries_and_json_escaped_paths() {
-        let r = Redactor::new(&["C:\\Users\\test-person".into()], &["test-person".into()]);
+        let r = Redactor::new(&["C:\\Users\\test-person".into()], &["test-person".into()]); // privacy: allow (synthetic test path)
         for offset in 65510..65540 {
-            let input = format!("{}C:\\\\Users\\\\test-person\\\\file test-person", "x".repeat(offset));
+            let input = format!("{}C:\\\\Users\\\\test-person\\\\file test-person", "x".repeat(offset)); // privacy: allow (synthetic test path)
             let mut out = Vec::new();
             r.copy(input.as_bytes(), &mut out).unwrap();
             assert_eq!(
@@ -766,7 +766,7 @@ mod tests {
                 format!("{separator}Users{separator}<user>{separator}file homeostasis userdataHome")
             );
         }
-        let input = r#"al also al.exe pal /home/alex/file C:\Users\Other User\file {"path":"C:\\Users\\Another User\\file"} /Steam/userdata/76561198000000001/profile"#;
+        let input = r#"al also al.exe pal /home/alex/file C:\Users\Other User\file {"path":"C:\\Users\\Another User\\file"} /Steam/userdata/76561198000000001/profile"#; // privacy: allow (synthetic test path)
         let mut out = Vec::new();
         redactor.copy(Tiny(input.as_bytes()), &mut out).unwrap();
         assert_eq!(

@@ -15,7 +15,7 @@
 	}
 	"1"
 	{
-		"path"		"/mnt/fast/SteamLibrary"
+		"path"		"/srv/fast/SteamLibrary"
 		"label"		"FastNVMe"
 		"contentid"		"2222222222222222222"
 		"totalsize"		"1000000000"

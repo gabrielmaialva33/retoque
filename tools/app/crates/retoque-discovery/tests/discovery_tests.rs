@@ -80,7 +80,7 @@ fn parse_vdf_two_libraries_fixture() {
         libs,
         vec![
             PathBuf::from("/opt/steam-main"),
-            PathBuf::from("/mnt/fast/SteamLibrary"),
+            PathBuf::from("/srv/fast/SteamLibrary"),
         ]
     );
 }

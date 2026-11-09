@@ -2051,7 +2051,7 @@ mod tests {
 
     #[test]
     fn model_file_values_map_back_to_host_paths() {
-        assert_eq!(host_path("Z:\\home\\u\\m.dll"), Some(PathBuf::from("/home/u/m.dll")));
+        assert_eq!(host_path("Z:\\home\\u\\m.dll"), Some(PathBuf::from("/home/u/m.dll"))); // privacy: allow (synthetic test path)
         assert_eq!(host_path("/abs/m.dll"), Some(PathBuf::from("/abs/m.dll")));
         assert_eq!(host_path("C:\\x.dll"), None);
         assert_eq!(host_path("nvngx_dlssnr.dll"), None);

@@ -252,7 +252,7 @@ pub fn status(game_dir: &Path) -> Result<Status, Error> {
     engine::status(game_dir)
 }
 
-/// A host path as a game under Proton/Wine sees it (`/home/u/x` -> `Z:\\home\\u\\x`): Wine maps drive Z: to `/`.
+/// A host path as a game under Proton/Wine sees it (`/home/<user>/x` -> `Z:\\home\\<user>\\x`): Wine maps drive Z: to `/`.
 /// On Windows the path is returned as it is.
 pub fn wine_path(host: &Path) -> String {
     let text = host.to_string_lossy();
@@ -270,8 +270,8 @@ mod tests {
     #[test]
     fn wine_path_maps_root_to_drive_z() {
         assert_eq!(
-            wine_path(Path::new("/home/u/Retoque models/a.dll")),
-            "Z:\\home\\u\\Retoque models\\a.dll"
+            wine_path(Path::new("/home/u/Retoque models/a.dll")), // privacy: allow (synthetic test path)
+            "Z:\\home\\u\\Retoque models\\a.dll"                  // privacy: allow (synthetic test path)
         );
         assert_eq!(wine_path(Path::new("relative/x")), "relative/x");
     }

@@ -406,6 +406,6 @@ mod uri_tests {
     #[cfg(not(windows))]
     #[test]
     fn unix_paths_keep_their_slashes() {
-        assert_eq!(file_uri(Path::new("/home/u/a b.jpg")), "file:///home/u/a b.jpg");
+        assert_eq!(file_uri(Path::new("/home/u/a b.jpg")), "file:///home/u/a b.jpg"); // privacy: allow (synthetic test path)
     }
 }
