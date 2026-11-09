@@ -116,6 +116,9 @@ class NVNGXProxy
 """ + vk_load + """    }
 """ + adapter + dx11_getter + getter + vk_getter + custom_shutdown + """};
 
+// The ABI fixture admits the caller; module/client policy is checked separately.
+struct Clients { bool Remove(void*) { return true; } } _clients;
+void* _ReturnAddress() { return nullptr; }
 // What the SDK input around the Vulkan shutdowns touches, faked.
 #define NVSDK_NGX_API
 static bool shutdown = false;
@@ -166,3 +169,5 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-ngx-shutdown-') as directory
     subprocess.run([str(binary)], check=True)
 # The runtime evidence judge for the existing Vulkan cases, against synthetic runs (no Wine or GPU here).
 subprocess.run([sys.executable, str(here / 'test_vk_shutdown_evidence.py')], check=True)
+
+subprocess.run([sys.executable, str(Path(__file__).with_name("clients_cases.py"))], check=True)

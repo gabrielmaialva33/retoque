@@ -97,7 +97,10 @@ for pattern in (r'^static VkDevice _device = VK_NULL_HANDLE;$',
                 r'^static PFN_vkGetInstanceProcAddr o_vkGetInstanceProcAddr = nullptr;$',
                 r'^static PFN_vkGetDeviceProcAddr o_vkGetDeviceProcAddr = nullptr;$',
                 r'^static PFN_vkGetPhysicalDeviceFeatures2 o_vkGetPhysicalDeviceFeatures2 = nullptr;$',
-                r'^static VkDevice _lowLatency2Device = VK_NULL_HANDLE;$'):
+                r'^static VkDevice _lowLatency2Device = VK_NULL_HANDLE;$',
+                r'^static VkDevice _fifoLatestReadyDevice = VK_NULL_HANDLE;$',
+                r'^static std::mutex _hookedDevicesMutex;$',
+                r'^static std::unordered_set<uint64_t> _hookedDevices;$'):
     production.append(line(hooks, pattern))
 production.append(block(hooks, 'static bool TimelineSemaphoresEnabled('))
 production.append(block(hooks, 'static void TrackPhysicalDevice('))

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <misc/DeferredRelease.h>
+#include <framegen/IFGFeature_Vk.h>
 #include "menu_overlay_base.h"
 #include "menu_overlay_vk.h"
 
@@ -24,7 +25,7 @@
 
 static bool _isInited = false;
 
-static bool _vulkanObjectsCreated = false;
+static std::atomic<bool> _vulkanObjectsCreated { false };
 static bool _vulkanDeviceLost = false;
 static bool _vulkanBackendInited = false;
 static std::mutex _vkCleanMutex;
@@ -332,7 +333,8 @@ void MenuOverlayVk::DeviceCreated(VkDevice device, const VkDeviceCreateInfo* pCr
     LOG_DEBUG("recorded {0} queue families for device {1:X}", families.size(), (UINT64) device);
 }
 
-static bool DestroyVulkanObjectsLocked(bool shutdown);
+static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying = false,
+                                       std::optional<bool> drainProof = std::nullopt);
 
 // These hooks see vkd3d-proton's presents as well as a native Vulkan game's. swapchainApi is DX12
 // only once a wrapped DXGI swapchain has presented from a D3D12 queue, which under Proton means
@@ -349,6 +351,8 @@ static bool DxOverlayOwnsBackend()
 
 // Swapchain the menu's frames were made for, other swapchains are presented without the menu
 static VkSwapchainKHR _menuSwapchain = VK_NULL_HANDLE;
+static VkSwapchainKHR _menuOldSwapchain = VK_NULL_HANDLE;
+static std::atomic<HWND> _releasedHwnd { nullptr };
 
 // menu background blur
 // Raw pointer, static destruction at exit would use an already destroyed device
@@ -432,6 +436,9 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
         LOG_DEBUG("vkd3d-proton D3D12 swapchain, MenuOverlayDx draws the overlay");
         return;
     }
+    const bool srgbTarget = IFGFeature_Vk::WithoutSrgb(pCreateInfo->imageFormat) != pCreateInfo->imageFormat;
+    const bool srgbChanged = std::exchange(State::Instance().menuTargetSrgb, srgbTarget) != srgbTarget;
+
     // Initialize ImGui
     if (!MenuOverlayBase::IsInited() || MenuOverlayBase::Handle() != hwnd)
     {
@@ -440,6 +447,10 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
 
         LOG_DEBUG("MenuOverlayBase::Init");
         MenuOverlayBase::Init(hwnd, false, true);
+    }
+    else if (srgbChanged)
+    {
+        MenuOverlayBase::ApplyThemeStyle();
     }
 
     // No lock is taken here. CreateSwapchain, the one caller, already holds _vkPresentMutex and
@@ -925,7 +936,7 @@ static void CreateVulkanObjects(VkDevice device, VkPhysicalDevice pd, VkInstance
 }
 
 // Caller holds _vkCleanMutex and _vkPresentMutex.
-static bool DestroyVulkanObjectsLocked(bool shutdown)
+static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying, std::optional<bool> drainProof)
 {
     State::Instance().menuOverlayIsVulkan = false;
 
@@ -938,18 +949,20 @@ static bool DestroyVulkanObjectsLocked(bool shutdown)
 
     _vulkanObjectsCreated = false;
 
-    auto result = vkDeviceWaitIdle(_ImVulkan_Info.Device);
+    const auto result = drainProof.has_value() ? (*drainProof ? VK_SUCCESS : VK_ERROR_DEVICE_LOST)
+                                               : vkDeviceWaitIdle(_ImVulkan_Info.Device);
     if (result != VK_SUCCESS && !shutdown)
         LOG_WARN("vkDeviceWaitIdle error: {0:X}", (UINT) result);
 
-    if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST)
+    if (result != VK_SUCCESS && result != VK_ERROR_DEVICE_LOST && !deviceDying)
     {
         // The GPU may still be using these objects. Keep both handles and backing allocations so
         // a later teardown can retry; creation must not overwrite them in the meantime.
         return false;
     }
 
-    _vulkanDeviceLost = result == VK_ERROR_DEVICE_LOST;
+    // A dying device cannot be retried. Abandon child objects whenever its drain is unproven.
+    _vulkanDeviceLost = result != VK_SUCCESS;
 
     // The blur's ImGui texture is a descriptor from ImGui's pool, so the blur goes before the backend.
     // Destroyed only on a drained device; on device loss it is abandoned like the backend below, and at
@@ -1024,13 +1037,13 @@ static bool DestroyVulkanObjectsLocked(bool shutdown)
             vkDestroyDescriptorPool(_ImVulkan_Info.Device, _ImVulkan_Info.DescriptorPool, VK_NULL_HANDLE);
     }
 
-    if (!_vulkanDeviceLost && !shutdown)
+    if (!drainProof.has_value() && !_vulkanDeviceLost && !shutdown)
     {
         // The successful device-wide idle above covers every queued shader destruction, including
         // the blur just released. Do not leave callbacks referring to this device after menu teardown.
         DeferredRelease::FlushOwner((uint64_t) _ImVulkan_Info.Device);
     }
-    else if (_vulkanDeviceLost)
+    else if (!drainProof.has_value() && _vulkanDeviceLost)
     {
         DeferredRelease::RetireOwner((uint64_t) _ImVulkan_Info.Device, false);
     }
@@ -1045,6 +1058,8 @@ static bool DestroyVulkanObjectsLocked(bool shutdown)
     _ImVulkan_Semaphores = nullptr;
     _scImageCount = 0;
     _ImVulkan_Info = {};
+    _menuSwapchain = VK_NULL_HANDLE;
+    _menuOldSwapchain = VK_NULL_HANDLE;
 
     _queueFamilyOfQueue.clear();
     _familyProps.clear();
@@ -1070,8 +1085,33 @@ bool MenuOverlayVk::DestroyVulkanObjects(bool shutdown, HWND hwnd)
         return false;
     }
 
-    DestroyVulkanObjectsLocked(shutdown);
-    return true;
+    return DestroyVulkanObjectsLocked(shutdown);
+}
+
+void MenuOverlayVk::ReleaseDevice(VkDevice device, std::optional<bool> drained)
+{
+    std::scoped_lock presentLock(_vkPresentMutex);
+    std::scoped_lock cleanLock(_vkCleanMutex);
+    if (device != VK_NULL_HANDLE && device == _ImVulkan_Info.Device)
+        DestroyVulkanObjectsLocked(false, true, drained);
+    std::lock_guard queuesLock(_deviceQueueCountsMutex);
+    _deviceQueueCounts.erase(device);
+}
+
+void MenuOverlayVk::DestroySwapchain(VkDevice device, VkSwapchainKHR swapchain)
+{
+    std::scoped_lock presentLock(_vkPresentMutex);
+    std::scoped_lock cleanLock(_vkCleanMutex);
+    if (swapchain == VK_NULL_HANDLE || swapchain != _menuSwapchain || device != _ImVulkan_Info.Device)
+        return;
+    // The FG wrapper may hand out the old handle for its replacement.
+    if (swapchain == _menuOldSwapchain)
+    {
+        _menuOldSwapchain = VK_NULL_HANDLE;
+        return;
+    }
+    if (DestroyVulkanObjectsLocked(false))
+        _releasedHwnd = MenuOverlayBase::Handle();
 }
 
 bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
@@ -1270,8 +1310,6 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
         _frameFencePending[idx] = false;
     }
 
-    vkResetFences(_ImVulkan_Info.Device, 1, &fd->Fence);
-
     {
         vkResetCommandPool(_ImVulkan_Info.Device, fd->CommandPool, 0);
         VkCommandBufferBeginInfo info = {};
@@ -1360,6 +1398,9 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &signalSemaphore;
 
+        if (fd->Fence == VK_NULL_HANDLE || vkResetFences(_ImVulkan_Info.Device, 1, &fd->Fence) != VK_SUCCESS)
+            return true;
+
         // On the queue that is presenting, not on the one captured at swapchain creation.
         auto qResult = vkQueueSubmit(queue, 1, &submit_info, fd->Fence);
 
@@ -1414,6 +1455,9 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
     release.signalSemaphoreCount = 1;
     release.pSignalSemaphores = &_xferToGraphics[idx];
 
+    if (fd->Fence == VK_NULL_HANDLE || vkResetFences(_ImVulkan_Info.Device, 1, &fd->Fence) != VK_SUCCESS)
+        return true;
+
     auto r1 = vkQueueSubmit(queue, 1, &release, VK_NULL_HANDLE);
 
     if (r1 != VK_SUCCESS)
@@ -1466,6 +1510,7 @@ bool MenuOverlayVk::QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo)
     {
         // The chain's last signalled semaphore still has its one wait to spend: hand it to the present.
         LOG_ERROR("vkQueueSubmit (acquire) error: {0:X}", (UINT) r3);
+        _vulkanObjectsCreated = false; // Teardown must prove device idle before any reuse.
         presentWaitSemaphore = chain;
     }
 
@@ -1543,6 +1588,8 @@ void MenuOverlayVk::CreateSwapchain(VkDevice device, VkPhysicalDevice pd, VkInst
     if (_vulkanObjectsCreated)
     {
         _menuSwapchain = *pSwapchain;
+        _menuOldSwapchain = pCreateInfo->oldSwapchain;
+        _releasedHwnd = nullptr;
         _isInited = true;
         MenuOverlayBase::VulkanReady();
         LOG_DEBUG("Vulkan ready");
@@ -1552,5 +1599,5 @@ void MenuOverlayVk::CreateSwapchain(VkDevice device, VkPhysicalDevice pd, VkInst
 bool MenuOverlayVk::OnOtherWindow(HWND hwnd)
 {
     auto menuHwnd = MenuOverlayBase::Handle();
-    return MenuOverlayBase::IsInited() && menuHwnd != hwnd && IsWindow(menuHwnd);
+    return MenuOverlayBase::IsInited() && menuHwnd != hwnd && menuHwnd != _releasedHwnd && IsWindow(menuHwnd);
 }

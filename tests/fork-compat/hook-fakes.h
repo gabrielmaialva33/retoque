@@ -64,10 +64,12 @@ struct WINTRUST_FILE_INFO_
 {
     const WCHAR* pcwszFilePath;
 };
+constexpr DWORD WTD_CHOICE_FILE = 1;
 struct WINTRUST_DATA
 {
     WINTRUST_FILE_INFO_* pFile;
     void* hWVTStateData;
+    DWORD dwUnionChoice = WTD_CHOICE_FILE;
 };
 std::wstring observedPath;
 const void* observedObject = nullptr;

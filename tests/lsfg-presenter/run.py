@@ -71,7 +71,7 @@ lsfg = (repo / 'retoque/lsfg/Lsfg.cpp').read_text()
 framegen = (repo / 'retoque/lsfg/LsfgFrameGen_Dx12.cpp').read_text()
 
 # 2a. FSRFG_Dx12.cpp: nothing aimed at the swapchain context goes to FFX unrouted.
-for call in ('D3D12_Configure(&_swapChainContext', 'D3D12_DestroyContext(&_swapChainContext'):
+for call in ('D3D12_Configure(&_swapChainContext', 'D3D12_DestroyContext(&context'):
     check(('FfxApiProxy::' + call) not in fsrfg, f'FSRFG_Dx12.cpp still calls FfxApiProxy::{call}')
     check(('Lsfg::Presenter::' + call) in fsrfg, f'FSRFG_Dx12.cpp does not route {call} through Lsfg::Presenter')
 

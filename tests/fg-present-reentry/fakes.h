@@ -84,10 +84,12 @@ struct FG
     OwnedMutex Mutex;
     bool active = true;
     bool IsActive() const { return active; }
+    bool IsPaused() const { return false; }
 };
 
 struct State
 {
+    void* currentSwapchain = nullptr;
     FG* currentFG = nullptr;
     FGOutput activeFgOutput = FGOutput::NoFG;
     FGNvngxReplacement activeFgNvngx = FGNvngxReplacement::None;
@@ -133,7 +135,7 @@ struct FakeSwapchain
 using IDXGISwapChain = FakeSwapchain;
 using IDXGISwapChain1 = FakeSwapchain;
 
-static HRESULT LocalPresent(IDXGISwapChain*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*, IUnknown*, HWND, bool)
+static HRESULT LocalPresent(IDXGISwapChain*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*, IUnknown*, HWND, bool, bool)
 {
     insidePresent();
     return S_OK;
@@ -157,3 +159,12 @@ class WrappedIDXGISwapChain4
     bool _uwp = false;
     OwnedMutex _localMutex;
 };
+
+inline bool InSendMessage() { return false; }
+inline void WaitForGPUIdle(void*) {}
+
+inline bool IsCurrentSwapchain(void* sc)
+{
+    return State::Instance().currentSwapchain == nullptr || State::Instance().currentSwapchain == sc;
+}
+#define FAILED(hr) ((hr) < 0)

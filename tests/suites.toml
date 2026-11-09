@@ -1192,3 +1192,11 @@ requires = ["python", "cargo"]
 tier = "host"
 timeout = 600
 summary = "Rust installer CLI against the deploy-safety synthetic fixtures and receipt reversibility cases."
+
+[upstream-review]
+path = "upstream-review"
+domain = "platform"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Production-slice regressions for upstream integration review: teardown, NGX, FG and bridge contracts."

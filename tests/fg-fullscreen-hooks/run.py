@@ -15,6 +15,7 @@ def between(start_marker, end_marker, start=0):
 
 
 parts = [
+    between("bool FGHooks::UseBorderless()", "HRESULT FGHooks::CreateSwapChain("),
     between("HRESULT FGHooks::hkSetFullscreenState(", "HANDLE FGHooks::hkGetFrameLatencyWaitableObject("),
     # hkGetFullscreenDesc and hkGetFullscreenState, which follows it
     between("HRESULT FGHooks::hkGetFullscreenDesc(", "HRESULT FGHooks::hkResizeBuffers("),
@@ -23,8 +24,10 @@ parts = [
 # The window cover at the end of both resize hooks, as functions of the resize's result
 for hook, name in (("hkResizeBuffers(", "CoverAfterResizeBuffers"), ("hkResizeBuffers1(", "CoverAfterResizeBuffers1")):
     body = source.index("HRESULT FGHooks::" + hook)
-    block = between("    // Resize window to cover the screen", "    return result;\n}", body)
+    block = between("    // Window is fixed on next present", "    return result;\n}", body)
     parts.append("void FGHooks::" + name + "(HRESULT result)\n{\n" + block + "}\n")
+pending = between("    if (_borderlessPending)", "    auto& state = State::Instance();", source.index("HRESULT FGHooks::FGPresent("))
+parts.append("void FGHooks::PresentPending() {\n" + pending + "}\n")
 unit = (HERE / "fakes.h").read_text() + "\n".join(parts) + (HERE / "cases.cpp").read_text()
 with tempfile.TemporaryDirectory(prefix="retoque-fg-fullscreen-hooks-") as folder:
     cpp, binary = Path(folder) / "cases.cpp", Path(folder) / "cases"

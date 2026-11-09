@@ -26,7 +26,7 @@ for name in ('ResizeBuffers', 'ResizeBuffers1'):
     # Only device work is replaced: acquisition, release and their original lexical scope stay verbatim.
     acquisition = body[body.index('#endif') + len('#endif'):body.index('    HRESULT result')]
     release = body[body.index('    LOG_DEBUG("result: {0:X}", (UINT) result);'):]
-    params = 'IUnknown* const* ppPresentQueue' if name.endswith('1') else ''
+    params = 'IUnknown* const* /*ppPresentQueue*/' if name.endswith('1') else ''
     parts.append('HRESULT ' + name + '(' + params + ') {\n' + acquisition +
                  '\nHRESULT result = operation();\n' + release)
 
@@ -53,3 +53,5 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-fg-locks-') as directory:
     results = [subprocess.run([str(binary), case]).returncode for case in ("resize", "release", "dispatch")]
     if any(results):
         sys.exit(1)
+
+subprocess.run(["python3", str(Path(__file__).with_name("teardown_cases.py"))], check=True)

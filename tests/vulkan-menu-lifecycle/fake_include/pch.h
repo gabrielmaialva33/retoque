@@ -14,6 +14,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <utility>
 
 #include <vulkan/vulkan.h>
 
@@ -48,6 +49,7 @@ enum class API
 struct State
 {
     bool menuOverlayIsVulkan = false;
+    bool menuTargetSrgb = false;
     bool isShuttingDown = false;
     API swapchainApi = API::NotSelected;
 

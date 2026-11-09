@@ -38,12 +38,13 @@ require('#include <dlssnr/DlssNr_Dx11Upscaler.h>' in dx11, 'NVNGX_DLSS_Dx11.cpp 
 # hooks, whose behavior is exercised separately by nr-render-geometry.
 
 create = function_body(dx11, 'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_CreateFeature(')
-default_at = create.find('upscalerChoice = Upscaler::DLSS;')
-call_at = create.find('upscalerChoice = DlssNr::Dx11DefaultUpscaler(upscalerChoice);')
+call_at = create.find('upscalerChoice = DlssNr::Dx11DefaultUpscaler(Upscaler::DLSS);')
+init_at = create.find('!NVNGXProxy::InitDx11(D3D11Device)')
 key_at = create.find('if (Config::Instance()->Dx11Upscaler.has_value())')
-require(0 <= default_at < call_at < key_at,
-        'CreateFeature must call Dx11DefaultUpscaler after its own DLSS default and before the Dx11Upscaler key, '
-        'so an explicit key still wins (cases.cpp mirrors that order)')
+require(0 <= call_at < init_at < key_at,
+        'CreateFeature chooses the NR bridge before native init, with explicit choice applied last')
+require('upscalerChoice == Upscaler::DLSS && !NVNGXProxy::InitDx11' in create,
+        'only the native automatic choice may initialize D3D11 NGX')
 require(create.count('Dx11DefaultUpscaler') == 1 and dx11.count('Dx11DefaultUpscaler') == 1,
         'Dx11DefaultUpscaler is called once, in CreateFeature')
 supersampling_at = create.find('if (InFeatureID == NVSDK_NGX_Feature_SuperSampling)')

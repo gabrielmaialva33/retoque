@@ -2,7 +2,7 @@
 
 Run `python3 tests/fork-compat/run.py` on the host with Python and g++.
 
-This suite slices the real production code into three small executables, compiled
+This suite slices the real production code into small executables, compiled
 with AddressSanitizer and UndefinedBehaviorSanitizer:
 
 - `Config.cpp`'s XeSS/XeFG/XeLL read/save statements and `readWString`, with
@@ -39,3 +39,8 @@ C++23 `to_underlying` alias is invalid under GCC. Other executables keep C++23.
 The tests do not call Windows trust providers, load a DLL, initialize Streamline
 plugins, exercise the GPU, or run NGX/a game. The shared `InitStreamline` shim
 means plugin discovery/preferences and SDK support checks are outside coverage.
+
+The parameter-allocation cases compile all three public API entry points. A loaded core may allocate
+before successful feature init; returning an internal table only because init failed breaks the later
+lazy native-DLSS create. Native allocator refusal/missing/disabled cases still fall back, and null output
+is refused. This was RED on upstream and GREEN on the restored allocator contract plus the real D3D12 loopback.

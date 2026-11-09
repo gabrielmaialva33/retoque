@@ -59,8 +59,20 @@ enum class FGOutput
     NoFG,
     DLSSG
 };
+enum class FGNvngxReplacement
+{
+    None,
+    Custom
+};
+struct Nvngx_FG
+{
+    static inline int maxFrames = 0;
+    static int getMaxFakeFramesCount() { return maxFrames; }
+    static int limitToProvider(int count);
+};
 struct State
 {
+    FGNvngxReplacement activeFgNvngx = FGNvngxReplacement::None;
     std::optional<int> dlssgMfgMax;
     feature_version streamlineVersion { 2, 7, 1 };
     FGInput activeFgInput = FGInput::NoFG;

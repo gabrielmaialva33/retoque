@@ -64,3 +64,22 @@ class XeFG_DynamicMFG
 
     float TargetFps(double nowMs, HWND window);
 };
+
+constexpr int S_OK = 0;
+constexpr UINT DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING = 2048;
+struct DXGI_SWAP_CHAIN_DESC
+{
+    UINT Flags = 0;
+    bool Windowed = true;
+};
+struct Swapchain
+{
+    int GetDesc(DXGI_SWAP_CHAIN_DESC* out)
+    {
+        out->Flags = State::Instance().SCAllowTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+        out->Windowed = !State::Instance().realExclusiveFullscreen;
+        return S_OK;
+    }
+};
+inline Swapchain chain;
+inline auto* This = &chain;

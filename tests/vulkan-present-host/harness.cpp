@@ -448,7 +448,10 @@ struct App
 
     void DestroyDevice(VkDevice device, const std::string& name)
     {
-        vkDestroyDevice(device, nullptr);
+        auto destroy = reinterpret_cast<PFN_vkDestroyDevice>(vkGetDeviceProcAddr(device, "vkDestroyDevice"));
+        if (destroy == nullptr)
+            throw std::runtime_error("vkDestroyDevice proc address is missing");
+        destroy(device, nullptr);
         for (auto& d : devices)
             if (d.name == name)
                 d.destroyed = true;

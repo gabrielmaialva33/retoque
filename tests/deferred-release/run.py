@@ -42,10 +42,11 @@ with tempfile.TemporaryDirectory(prefix='retoque-deferred-release-') as tmp:
     subprocess.run([str(exe)], check=True, timeout=30)
 
 host = (ROOT / 'retoque/dlssnr/DlssNr_VkPresentHost.cpp').read_text()
-destroy = host[host.index('void OnDestroyDevice('):host.index('\nvoid OnGetQueue(')]
-assert destroy.index('TeardownDevice(*dev, destroyDeferred)') < destroy.index('DeferredRelease::RetireOwner(H(device), destroyDeferred);')
-assert destroy.index('DeferredRelease::RetireOwner(H(device), destroyDeferred);') < destroy.index('next(device, allocator);')
-assert 'bool destroyDeferred = false;' in destroy
+prepare = host[host.index('std::optional<bool> PrepareDeviceDestroy('):host.index('void OnDestroyDevice(')]
+assert 'DeferredRelease::RetireOwner' not in prepare
+assert 'TeardownDevice(*dev, destroyDeferred)' in prepare
+assert 'DrainUntrackedDevice(device)' in prepare
+assert 'VulkanHooks::DestroyDevice(next, device, allocator);' in host
 assert 'destroyDeferred = false;' in host[host.index('std::string TeardownDevice('):]
 assert 'destroyDeferred = !unproven && !dev.leaked;' in host
 created = host[host.index('VkResult VKAPI_CALL hkCreateDevice('):]
@@ -53,12 +54,14 @@ assert created.index('DeferredRelease::RegisterOwner(H(*device));') < created.in
 print('PASS: NR teardown retires the owner before destroying its device; creation reopens reused handles')
 
 menu = (ROOT / 'OptiScaler/menu/menu_overlay_vk.cpp').read_text()
-cleanup = menu[menu.index('static bool DestroyVulkanObjectsLocked(bool shutdown)\n{'):menu.index('MenuOverlayVk::DestroyVulkanObjects(')]
+cleanup = menu[menu.index('static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying, std::optional<bool> drainProof)\n{'):menu.index('MenuOverlayVk::DestroyVulkanObjects(')]
 assert cleanup.index('vkDeviceWaitIdle(') < cleanup.index('DeferredRelease::FlushOwner(') < cleanup.index('_ImVulkan_Info = {};')
-assert 'if (!_vulkanDeviceLost && !shutdown)' in cleanup[:cleanup.index('DeferredRelease::FlushOwner(')]
+assert '!_vulkanDeviceLost && !shutdown)' in cleanup[:cleanup.index('DeferredRelease::FlushOwner(')]
 assert 'DeferredRelease::RetireOwner((uint64_t) _ImVulkan_Info.Device, false);' in cleanup
 print('PASS: drained menu cleanup flushes deferred resources; device loss abandons them')
 
 hooks = (ROOT / 'OptiScaler/hooks/Vulkan_Hooks.cpp').read_text()
 assert 'DeferredRelease::RegisterOwner((uint64_t) *pDevice);' in hooks
 print('PASS: the Vulkan bundle also reopens handles when the NR host is disabled')
+
+subprocess.run(["python3", str(Path(__file__).with_name("device_cases.py"))], check=True)

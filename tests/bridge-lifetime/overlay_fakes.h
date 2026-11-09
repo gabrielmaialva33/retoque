@@ -9,6 +9,7 @@
 #include <mutex>
 #include <algorithm>
 #include <thread>
+#include <cstring>
 using HRESULT = int32_t;
 using UINT = unsigned;
 using UINT64 = uint64_t;
@@ -215,9 +216,11 @@ namespace ImGui
 struct IO
 {
     void* BackendRendererUserData = nullptr;
+    const char* BackendRendererName = "imgui_impl_dx12";
 };
 inline IO io;
 inline IO& GetIO() { return io; }
+inline void* GetCurrentContext() { return &io; }
 } // namespace ImGui
 // Upstream f72e47b9's menu blur. The cleanup drops it before the ImGui backend, because its texture is a
 // descriptor from the ImGui heap; nothing here exercises it, the cleanup only has to compile and run past it.

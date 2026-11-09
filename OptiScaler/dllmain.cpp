@@ -55,11 +55,13 @@
 #include <dlssnr/DlssNr_Session.h>
 #include <dlssnr/DlssNr_CrashNote.h>
 #include <dlssnr/DlssNr_GameProfiles.h>
+#include <misc/CrashDumps.h>
 #include <sha1/sha1.hpp>
 
 static std::vector<HMODULE> _asiHandles;
 static std::vector<std::filesystem::directory_entry> _lateLoadingEntries;
 static bool _passThruMode = false;
+static bool _staticLoad = false;
 
 typedef const char*(CDECL* PFN_wine_get_version)(void);
 typedef void (*PFN_InitializeASI)(void);
@@ -195,26 +197,39 @@ static void RunAgilityUpgrade(HMODULE dx12Module)
 
             if (!pathSet)
             {
-                std::wstring widePath = Config::Instance()->MainDllPath.value();
-                widePath = std::filesystem::relative(widePath, Util::ExePath().parent_path());
-                widePath = widePath + L"\\D3D12_OptiScaler\\";
+                std::error_code ec;
+                std::wstring widePath = std::filesystem::relative(Config::Instance()->MainDllPath.value(),
+                                                                  Util::ExePath().parent_path(), ec);
 
-                // Properly convert wstring → string
-                int size = WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
-                path.resize(size - 1);
-                WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, path.data(), size, nullptr, nullptr);
+                // SDK path must be relative to the exe, not possible across drives
+                if (!widePath.empty())
+                {
+                    widePath = widePath + L"\\D3D12_OptiScaler\\";
+
+                    // Properly convert wstring → string
+                    int size = WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                    path.resize(size - 1);
+                    WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, path.data(), size, nullptr, nullptr);
+                }
 
                 pathSet = true;
             }
 
-            hr = sdkConfig->SetSDKVersion(customD3D12SDKVersion, reinterpret_cast<LPCSTR>(path.c_str()));
-            if (FAILED(hr))
+            if (path.empty())
             {
-                LOG_ERROR("Failed to upgrade Agility SDK: {0}", hr);
+                LOG_ERROR("Can't upgrade Agility SDK, Opti folder isn't reachable from the exe folder");
             }
             else
             {
-                LOG_INFO("Agility SDK upgraded successfully");
+                hr = sdkConfig->SetSDKVersion(customD3D12SDKVersion, reinterpret_cast<LPCSTR>(path.c_str()));
+                if (FAILED(hr))
+                {
+                    LOG_ERROR("Failed to upgrade Agility SDK: {0}", hr);
+                }
+                else
+                {
+                    LOG_INFO("Agility SDK upgraded successfully");
+                }
             }
         }
         else
@@ -275,12 +290,13 @@ void LoadAsiPlugins()
             std::transform(fileName.begin(), fileName.end(), fileName.begin(),
                            [](wchar_t c) { return std::towlower(c); });
 
-            HMODULE hMod = nullptr;
-
             if (fileName.rfind(L"-loadlate") != std::wstring::npos)
+            {
                 _lateLoadingEntries.push_back(entry);
-            else
-                hMod = NtdllProxy::LoadLibraryExW_Ldr(entry.path().c_str(), NULL, 0);
+                continue;
+            }
+
+            HMODULE hMod = NtdllProxy::LoadLibraryExW_Ldr(entry.path().c_str(), NULL, 0);
 
             if (hMod != nullptr)
             {
@@ -329,82 +345,81 @@ void LoadAsiPlugins()
                 DWORD err = GetLastError();
                 LOG_ERROR(L"Failed to load: {}, error {:X}", entry.path().wstring(), err);
             }
+        }
+    }
 
-            if (_lateLoadingEntries.size() > 0)
+    if (_lateLoadingEntries.size() > 0)
+    {
+        std::thread(
+            []()
             {
-                std::thread(
-                    []()
+                try
+                {
+
+                    auto delay = Config::Instance()->LateAsiPluginsDelay.value_or_default();
+                    LOG_INFO("Waiting {} seconds before loading late-load plugins...", delay);
+                    std::this_thread::sleep_for(std::chrono::seconds(delay));
+
+                    for (const auto& entry : _lateLoadingEntries)
                     {
-                        try
+                        HMODULE hMod = NtdllProxy::LoadLibraryExW_Ldr(entry.path().c_str(), NULL, 0);
+
+                        if (hMod != nullptr)
                         {
+                            LOG_INFO(L"Loaded late: {}", entry.path().wstring());
+                            _asiHandles.push_back(hMod);
 
-                            auto delay = Config::Instance()->LateAsiPluginsDelay.value_or_default();
-                            LOG_INFO("Waiting {} seconds before loading late-load plugins...", delay);
-                            std::this_thread::sleep_for(std::chrono::seconds(delay));
+                            auto init = (PFN_InitializeASI) KernelBaseProxy::GetProcAddress_()(hMod, "InitializeASI");
 
-                            for (const auto& entry : _lateLoadingEntries)
+                            auto patchResult =
+                                (PFN_PatchResult) KernelBaseProxy::GetProcAddress_()(hMod, "PatchResult");
+
+                            RegisterLoadedAsi(entry.path());
+
+                            if (init != nullptr)
+                                init();
+
+                            PluginApi::InitPlugin(
+                                hMod,
+                                (PFN_OptiPluginInit) KernelBaseProxy::GetProcAddress_()(hMod, OPTI_PLUGIN_INIT_NAME),
+                                entry.path());
+
+                            if (patchResult != nullptr)
                             {
-                                HMODULE hMod = NtdllProxy::LoadLibraryExW_Ldr(entry.path().c_str(), NULL, 0);
-
-                                if (hMod != nullptr)
+                                auto pr = patchResult();
+                                if (pr)
                                 {
-                                    LOG_INFO(L"Loaded late: {}", entry.path().wstring());
-                                    _asiHandles.push_back(hMod);
+                                    LOG_INFO("Game patching is successful");
+                                    State::Instance().isOptiPatcherSucceed = true;
+                                    LOG_INFO("Disabling spoofing");
 
-                                    auto init =
-                                        (PFN_InitializeASI) KernelBaseProxy::GetProcAddress_()(hMod, "InitializeASI");
+                                    if (!Config::Instance()->DxgiSpoofing.has_value())
+                                        Config::Instance()->DxgiSpoofing.set_volatile_value(false);
 
-                                    auto patchResult =
-                                        (PFN_PatchResult) KernelBaseProxy::GetProcAddress_()(hMod, "PatchResult");
-
-                                    RegisterLoadedAsi(entry.path());
-
-                                    if (init != nullptr)
-                                        init();
-
-                                    PluginApi::InitPlugin(hMod,
-                                                          (PFN_OptiPluginInit) KernelBaseProxy::GetProcAddress_()(
-                                                              hMod, OPTI_PLUGIN_INIT_NAME),
-                                                          entry.path());
-
-                                    if (patchResult != nullptr)
+                                    if (!Config::Instance()->VulkanSpoofing.has_value() ||
+                                        !Config::Instance()->VulkanSpoofing.value_for_config())
                                     {
-                                        auto pr = patchResult();
-                                        if (pr)
-                                        {
-                                            LOG_INFO("Game patching is successful");
-                                            State::Instance().isOptiPatcherSucceed = true;
-                                            LOG_INFO("Disabling spoofing");
-
-                                            if (!Config::Instance()->DxgiSpoofing.has_value())
-                                                Config::Instance()->DxgiSpoofing.set_volatile_value(false);
-
-                                            if (!Config::Instance()->VulkanSpoofing.has_value() ||
-                                                !Config::Instance()->VulkanSpoofing.value_for_config())
-                                            {
-                                                Config::Instance()->VulkanSpoofing.set_volatile_value(false);
-                                            }
-
-                                            if (!Config::Instance()->VulkanExtensionSpoofing.has_value())
-                                                Config::Instance()->VulkanExtensionSpoofing.set_volatile_value(false);
-                                        }
+                                        Config::Instance()->VulkanSpoofing.set_volatile_value(false);
                                     }
-                                }
-                                else
-                                {
-                                    DWORD err = GetLastError();
-                                    LOG_ERROR(L"Failed to load: {}, error {:X}", entry.path().wstring(), err);
+
+                                    if (!Config::Instance()->VulkanExtensionSpoofing.has_value())
+                                        Config::Instance()->VulkanExtensionSpoofing.set_volatile_value(false);
                                 }
                             }
                         }
-                        catch (...)
+                        else
                         {
-                            LOG_ERROR("Exception occurred while loading late-load plugins");
+                            DWORD err = GetLastError();
+                            LOG_ERROR(L"Failed to load: {}, error {:X}", entry.path().wstring(), err);
                         }
-                    })
-                    .detach();
-            }
-        }
+                    }
+                }
+                catch (...)
+                {
+                    LOG_ERROR("Exception occurred while loading late-load plugins");
+                }
+            })
+            .detach();
     }
 }
 
@@ -437,6 +452,146 @@ static void ResolveVulkanHookPolicy()
         LOG_WARN("vulkan-1.dll hooks will be skipped: optiscaler_skip_vulkan_hooks marker found (deprecated, "
                  "[Vulkan] SkipHooks=true is the supported way to ask)");
     }
+}
+
+// With Luma, both are loaded after its D3D12 device creation, Special K loads ReShade too
+static bool ShouldLoadSpecialK()
+{
+    return skModule == nullptr && Config::Instance()->LoadSpecialK.value_or_default() &&
+           !Config::Instance()->CreateD3D12DeviceForLuma.value_or_default();
+}
+
+static bool ShouldLoadReShade()
+{
+    return reshadeModule == nullptr && Config::Instance()->LoadReShade.value_or_default() &&
+           !Config::Instance()->CreateD3D12DeviceForLuma.value_or_default();
+}
+
+static bool ShouldLoadForLuma()
+{
+    return Config::Instance()->CreateD3D12DeviceForLuma.value_or_default() &&
+           ((skModule == nullptr && Config::Instance()->LoadSpecialK.value_or_default()) ||
+            (reshadeModule == nullptr && Config::Instance()->LoadReShade.value_or_default()));
+}
+
+static void LoadInjectedDlls()
+{
+    // No RESHADE_DISABLE_GRAPHICS_HOOK, Special K sets it itself when it wants ReShade without hooks
+    if (ShouldLoadSpecialK())
+    {
+        auto skFile = Util::ExePath().parent_path() / L"SpecialK64.dll";
+
+        State::EnableServeOriginal(200);
+        skModule = NtdllProxy::LoadLibraryExW_Ldr(skFile.c_str(), NULL, 0);
+        State::DisableServeOriginal(200);
+
+        LOG_INFO("Loading SpecialK64.dll, result: {0:X}", (UINT64) skModule);
+    }
+
+    // Special K loads ReShade itself
+    if (ShouldLoadReShade() && skModule != nullptr)
+    {
+        LOG_WARN("Special K is loaded, skipping ReShade");
+    }
+    else if (ShouldLoadReShade())
+    {
+        auto rsFile = Util::ReShadePath();
+        SetEnvironmentVariableW(L"RESHADE_DISABLE_LOADING_CHECK", L"1");
+
+        State::EnableServeOriginal(201);
+        reshadeModule = NtdllProxy::LoadLibraryExW_Ldr(rsFile.c_str(), NULL, 0);
+        State::DisableServeOriginal(201);
+
+        LOG_INFO("Loading {}, result: {:X}", rsFile.filename().string(), (size_t) reshadeModule);
+    }
+}
+
+DWORD WINAPI getGpuInfo(LPVOID hModuleVoid);
+
+typedef int(WINAPI* PFN_ExeEntry)(PVOID);
+static PFN_ExeEntry o_ExeEntry = nullptr;
+static std::atomic<bool> _entryLoadsStarted = false;
+static std::atomic<bool> _entryLoadsDone = false;
+static bool _asiAtEntry = false;
+
+// Not call_once, an asi creating a factory while loading would call this again
+static void RunEntryLoads()
+{
+    if (_entryLoadsStarted.exchange(true))
+        return;
+
+    // hkExeEntry waits for it, also when a load throws on another thread
+    struct DoneGuard
+    {
+        ~DoneGuard()
+        {
+            _entryLoadsDone = true;
+            _entryLoadsDone.notify_all();
+        }
+    } doneGuard;
+
+    LOG_INFO("Loading injected dlls");
+
+    // So ReShade hooks the factory methods after us, Special K should hook before us
+    if (skModule != nullptr || !Config::Instance()->LoadSpecialK.value_or_default())
+        DxgiHooks::HookFactoryMethods();
+
+    // Detection fails under the loader lock, nvapi loaded by an injected dll's DllMain would pick fakenvapi
+    IdentifyGpu::getAllGpus();
+
+    DxgiHooks::LoadForLuma();
+    LoadInjectedDlls();
+
+    if (_asiAtEntry)
+    {
+        spdlog::info("");
+        LoadAsiPlugins();
+    }
+
+    // Started here to not create a factory together with the one above
+    CreateThread(nullptr, 0, getGpuInfo, GetDllNameWModule(&dx12NamesW), 0, nullptr);
+}
+
+static int WINAPI hkExeEntry(PVOID param)
+{
+    // Restores the entry for anything checking the exe code
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourDetach(&(PVOID&) o_ExeEntry, hkExeEntry);
+    DetourTransactionCommit();
+
+    RunEntryLoads();
+
+    // Another thread's factory creation can run the loads, game code shouldn't start before they finish
+    _entryLoadsDone.wait(false);
+
+    return o_ExeEntry(param);
+}
+
+// Runs after the loader lock is released and before any game code
+static bool HookExeEntry()
+{
+    if (o_ExeEntry != nullptr)
+        return true;
+
+    o_ExeEntry = (PFN_ExeEntry) DetourGetEntryPoint(nullptr);
+
+    if (o_ExeEntry == nullptr)
+        return false;
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+    DetourAttach(&(PVOID&) o_ExeEntry, hkExeEntry);
+
+    if (DetourTransactionCommit() != NO_ERROR)
+    {
+        LOG_ERROR("Can't hook the exe entry, loading now");
+        o_ExeEntry = nullptr;
+        return false;
+    }
+
+    DxgiHooks::PendingLoads = RunEntryLoads;
+    return true;
 }
 
 static void CheckWorkingMode()
@@ -1045,8 +1200,8 @@ static void CheckWorkingMode()
     // On native NVIDIA the startup check (isNvidiaViaNvapi) now leaves nvapi64.dll loaded once it has
     // initialised it, so it is already present here and these hooks go in at startup rather than when
     // the game loads nvapi (the same hooks most games got anyway).
-    if (GetDllNameWModule(&nvapiNamesW) != nullptr || (Config::Instance()->DisableFlipMetering.value_or_default() &&
-                                                       IdentifyGpu::getPrimaryGpu().vendorId == VendorId::Nvidia))
+    if (GetDllNameWModule(&nvapiNamesW) != nullptr ||
+        (Config::Instance()->DisableFlipMetering.value_or_default() && IdentifyGpu::hasNvidiaHint()))
     {
         // This hooks nvapi as well when possible
         auto nvapi64 = LibraryLoadHooks::LoadNvApi();
@@ -1245,37 +1400,12 @@ static void CheckWorkingMode()
         RunAgilityUpgrade(GetDllNameWModule(&dx12NamesW));
     }
 
-    // SpecialK
-    if (skModule == nullptr && Config::Instance()->LoadSpecialK.value_or_default())
-    {
-        auto skFile = Util::ExePath().parent_path() / L"SpecialK64.dll";
-        SetEnvironmentVariableW(L"RESHADE_DISABLE_GRAPHICS_HOOK", L"1");
+    if ((ShouldLoadSpecialK() || ShouldLoadReShade()) && (!_staticLoad || !HookExeEntry()))
+        LoadInjectedDlls();
 
-        State::EnableServeOriginal(200);
-        skModule = NtdllProxy::LoadLibraryExW_Ldr(skFile.c_str(), NULL, 0);
-        State::DisableServeOriginal(200);
-
-        LOG_INFO("Loading SpecialK64.dll, result: {0:X}", (UINT64) skModule);
-    }
-
-    // ReShade
-    // Do not load Reshade here is Luma is active and we will create D3D12 device for it
-    // We will load Reshade after D3D12 device creation in that case
-    if (reshadeModule == nullptr && Config::Instance()->LoadReShade.value_or_default() &&
-        !Config::Instance()->CreateD3D12DeviceForLuma.value_or_default())
-    {
-        auto rsFile = Util::ReShadePath();
-        SetEnvironmentVariableW(L"RESHADE_DISABLE_LOADING_CHECK", L"1");
-
-        if (skModule != nullptr)
-            SetEnvironmentVariableW(L"RESHADE_DISABLE_GRAPHICS_HOOK", L"1");
-
-        State::EnableServeOriginal(201);
-        reshadeModule = NtdllProxy::LoadLibraryExW_Ldr(rsFile.c_str(), NULL, 0);
-        State::DisableServeOriginal(201);
-
-        LOG_INFO("Loading {}, result: {:X}", rsFile.filename().string(), (size_t) reshadeModule);
-    }
+    // Luma's device can't be created under the loader lock, without the entry hook the first factory does it
+    if (_staticLoad && ShouldLoadForLuma())
+        HookExeEntry();
 
     // Version check
     if (Config::Instance()->CheckForUpdate.value_or_default())
@@ -1609,6 +1739,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     {
         DisableThreadLibraryCalls(hModule);
 
+        // Only a static load runs before the exe entry
+        _staticLoad = lpReserved != nullptr;
+
         HMODULE handle = nullptr;
         OSVERSIONINFOW winVer { 0 };
 
@@ -1626,14 +1759,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         if (std::filesystem::path mainDllPath(Config::Instance()->MainDllPath.value()); mainDllPath.is_relative())
         {
-            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / mainDllPath);
+            Config::Instance()->MainDllPath.set_volatile_value(Util::DllPath().parent_path() / mainDllPath);
         }
 
-        // If path is invalid or doesn't exist, use the exe folder as main
+        // If path is invalid or doesn't exist, use Opti's folder as main
         if (!std::filesystem::exists(Config::Instance()->MainDllPath.value()) ||
             !std::filesystem::is_directory(Config::Instance()->MainDllPath.value()))
         {
-            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path());
+            Config::Instance()->MainDllPath.set_volatile_value(Util::DllPath().parent_path());
         }
 
         // Clean up path
@@ -1748,6 +1881,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         KernelBaseProxy::Init();
         Kernel32Proxy::Init();
 
+        CrashDumps::Init();
+
         // Check for Wine
         spdlog::info("");
         State::Instance().isRunningOnLinux = IsRunningOnWine();
@@ -1826,6 +1961,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         };
 
         bool possibleNvidia = isNvidiaViaNvapi();
+        IdentifyGpu::setNvidiaHint(possibleNvidia);
+
+        // Quirks can extend the DLL search
+        spdlog::info("");
+        CheckQuirks(possibleNvidia);
 
         spdlog::info("");
         spdlog::info("Check for DLSS files");
@@ -1833,39 +1973,61 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         auto exePath = Util::ExePath().remove_filename();
         auto optiDllPath = std::filesystem::path(Config::Instance()->MainDllPath.value());
 
+        // Same order as the NGX feature path list
+        std::vector<std::filesystem::path> dllFolders;
+
+        if (Config::Instance()->DLSSFeaturePath.has_value())
+            dllFolders.push_back(Config::Instance()->DLSSFeaturePath.value());
+
+        // Only the game folder is searched recursively
+        auto findDll = [&](const wchar_t* name) -> std::optional<std::filesystem::path>
+        {
+            for (const auto& folder : dllFolders)
+            {
+                std::error_code ec;
+
+                if (auto path = folder / name; std::filesystem::is_regular_file(path, ec))
+                {
+                    LOG_INFO(L"{} found at {}", name, folder.wstring());
+                    return path;
+                }
+            }
+
+            return Util::FindFilePath(exePath, name);
+        };
+
         if (Config::Instance()->NVNGX_DLSS_Library.has_value())
         {
             // NvngxDlssPath names the file or the folder holding it; the path kept is the file's, as a search
             // finds it, because its users take the folder with remove_filename / parent_path
             std::filesystem::path dlssPath(Config::Instance()->NVNGX_DLSS_Library.value());
+            std::error_code ec;
 
-            if (std::filesystem::is_directory(dlssPath))
+            // Accepts the dll or its folder
+            if (std::filesystem::is_directory(dlssPath, ec))
                 dlssPath /= L"nvngx_dlss.dll";
 
-            if (std::filesystem::is_regular_file(dlssPath))
+            if (std::filesystem::is_regular_file(dlssPath, ec))
             {
+                Config::Instance()->NVNGX_DLSS_Library.set_volatile_value(dlssPath.wstring());
                 State::Instance().NVNGX_DLSS_Path = dlssPath.wstring();
-                LOG_DEBUG("nvngx_dlss.dll found at {}", dlssPath.string());
+                dllFolders.push_back(dlssPath.parent_path());
+                LOG_INFO("nvngx_dlss.dll override found at {}", wstring_to_string(dlssPath.wstring()));
             }
             else
             {
-                LOG_WARN("NvngxDlssPath: no nvngx_dlss.dll at {}, searching for it instead", dlssPath.string());
+                LOG_WARN("nvngx_dlss.dll override not found at {}, ignoring it", wstring_to_string(dlssPath.wstring()));
+                Config::Instance()->NVNGX_DLSS_Library.reset_volatile();
             }
         }
 
-        if (!State::Instance().NVNGX_DLSS_Path.has_value())
-            State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(optiDllPath, "nvngx_dlss.dll");
+        dllFolders.push_back(optiDllPath);
 
         if (!State::Instance().NVNGX_DLSS_Path.has_value())
-            State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(exePath, "nvngx_dlss.dll");
+            State::Instance().NVNGX_DLSS_Path = findDll(L"nvngx_dlss.dll");
 
-        State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(optiDllPath, "nvngx_dlssd.dll");
-        if (!State::Instance().NVNGX_DLSSD_Path.has_value())
-            State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
-
-        State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(optiDllPath, "nvngx_dlssg.dll");
-        if (!State::Instance().NVNGX_DLSSG_Path.has_value())
-            State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
+        State::Instance().NVNGX_DLSSD_Path = findDll(L"nvngx_dlssd.dll");
+        State::Instance().NVNGX_DLSSG_Path = findDll(L"nvngx_dlssg.dll");
 
         // Unreal Engine plugin folders the searches above do not reach (the exe outside <Project>\Binaries\Win64),
         // only for a file they did not find (retoque/misc/UnrealDlssSearch.h)
@@ -1909,9 +2071,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             Config::Instance()->DLSSEnabled.set_volatile_value(false);
         }
 
-        spdlog::info("");
-        CheckQuirks(possibleNvidia);
-
         // Check for working mode and attach hooks
         spdlog::info("");
         CheckWorkingMode();
@@ -1947,11 +2106,18 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
                 Config::Instance()->FpsOverlayPosition.set_volatile_value(FpsOverlayPos_TopRight);
         }
 
-        // Asi plugins
+        // Asi plugins, after the injected dlls like before
         if (Config::Instance()->LoadAsiPlugins.value_or_default())
         {
-            spdlog::info("");
-            LoadAsiPlugins();
+            if (_staticLoad && HookExeEntry())
+            {
+                _asiAtEntry = true;
+            }
+            else
+            {
+                spdlog::info("");
+                LoadAsiPlugins();
+            }
         }
 
         if (!Config::Instance()->DxgiSpoofing.has_value() && !State::Instance().nvngxReplacement.has_value())
@@ -2025,7 +2191,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         spdlog::info("---------------------------------------------");
         spdlog::info("");
 
-        CreateThread(nullptr, 0, getGpuInfo, GetDllNameWModule(&dx12NamesW), 0, nullptr);
+        if (o_ExeEntry == nullptr)
+            CreateThread(nullptr, 0, getGpuInfo, GetDllNameWModule(&dx12NamesW), 0, nullptr);
 
 #ifndef _DEBUG
         if (Config::Instance()->LogLevel.value_or_default() == 0 && Config::Instance()->LogToFile.value_or_default())

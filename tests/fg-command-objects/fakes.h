@@ -3,6 +3,8 @@
 // creation call and returns null for it, as D3D12 does; every object counts its references so a leak, a double release
 // or a call on a missing object shows.
 #include <cstdint>
+#include <mutex>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <format>
@@ -35,7 +37,12 @@ using HANDLE = void*;
 constexpr BOOL FALSE = 0;
 constexpr HRESULT S_OK = 0;
 constexpr HRESULT E_OUTOFMEMORY = (HRESULT) 0x8007000Eu;
-constexpr DWORD WAIT_OBJECT_0 = 0;
+constexpr DWORD WAIT_OBJECT_0 = 0, WAIT_TIMEOUT = 258;
+inline UINT64 GetTickCount64()
+{
+    static UINT64 tick = 0;
+    return tick++;
+}
 #define FAILED(hr) (((HRESULT) (hr)) < 0)
 #define SUCCEEDED(hr) (((HRESULT) (hr)) >= 0)
 #define IID_PPV_ARGS(pp) 0, reinterpret_cast<void**>(pp)
@@ -114,7 +121,7 @@ struct ID3D12GraphicsCommandList : IUnknown
 using ID3D12CommandList = ID3D12GraphicsCommandList;
 struct ID3D12Fence : IUnknown
 {
-    UINT64 completed = ~0ull; // the GPU is idle in these cases
+    UINT64 completed = ~0ull - 1; // the GPU is idle in these cases
     UINT64 GetCompletedValue() { return completed; }
     HRESULT SetEventOnCompletion(UINT64, HANDLE) { return S_OK; }
 };
@@ -174,6 +181,7 @@ class IFGFeature_Dx12
     int GetIndex() { return index; }
 
     bool WaitForUIAllocator(UINT index);
+    bool WaitForFenceValue(ID3D12Fence*, HANDLE, UINT64);
     bool SubmitUICommandList(UINT index);
     ID3D12GraphicsCommandList* GetUICommandList(int index = -1);
     ID3D12GraphicsCommandList* GetSCCommandList(int index = -1);

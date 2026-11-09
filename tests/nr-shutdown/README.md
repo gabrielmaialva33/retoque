@@ -14,8 +14,10 @@ null inside the core. The public callable retains the SDK's one-argument type.
 
 The same harness compiles `CustomNgxModule` and `ShutdownCustomDx12` from production:
 uninitialized runtimes are inert, all-devices shutdown takes priority, the fallback calls the
-one-argument SDK entry, missing entries are tolerated, and the private core slot is never used.
-This preserves upstream's public-SDK contract for custom DLLs; it does not inspect arbitrary DLLs.
+two-argument raw-runtime entry with writable remaining-count storage; null-device fallback is refused
+when no all-device entry exists. Custom DLLs are loaded as NGX runtimes through GetProcAddress, not
+through the public SDK wrapper. The 2026-11-09 review corrects the earlier one-argument assumption;
+local core disassembly and the upstream loader agree. Arbitrary third-party DLLs are not qualified.
 
 These are host behavior checks; the driver ABI is established separately through binary inspection
 and the prior D3D12 Proton loopback and the D3D11 binary inspection. This fixture does not run the fixed DLL.
@@ -27,3 +29,7 @@ runner results): `host` for `nr-control`, `public` for `nr-route-quiet` run with
 It requires exit 0, the runner's PASS, the exact loaded DLL and prefix core, and the consumer's own debug lines in
 order (bring-up or init, entry, core result 1, destruction); the host's "shut down" line alone is not a call.
 `test_vk_shutdown_evidence.py` (run by `run.py`) checks those refusals on synthetic runs.
+
+`clients_cases.py` also compiles the production client registry. Game, Streamline and plugin membership,
+repeated last-client shutdown, absent membership and numeric-handle reload are checked. This catches the
+empty-registry duplicate-shutdown regression without claiming real module unload coverage.

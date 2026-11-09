@@ -626,3 +626,12 @@ The capture recording was discarded or invalidated; nothing was written.	A grava
 # Native Vulkan pre-upscale experiment
 Stage: before the upscaler requested (native Vulkan)	Estágio: solicitado antes do upscaler (Vulkan nativo)
 Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;\nthere is no after-upscale NR fallback. One outstanding recording is admitted.\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation.\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.	Rota experimental de entrada NGX em Vulkan nativo. Entradas não suportadas mantêm o Color original;\nnão há fallback para NR após o upscaler. Só uma gravação pendente é admitida.\nRequer ativação ao iniciar, layouts e ownership comprovados e uma geração pronta sem alterações.\nReconstruções e falta de evidências pulam o NR. A validação no DOOM Eternal ainda está pendente.
+
+# Controls introduced with upstream 34d492d6. Vulkan API mode names are retained.
+Flip HUDless	Inverter textura sem HUD
+Present Mode	Modo de apresentação
+Upscaler Debug View	Visualização de depuração do upscaler
+Game's	Do jogo
+Game's present mode: %s	Modo de apresentação do jogo: %s
+Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	Inverte a textura sem HUD\nO jogo também pode solicitar isso pelo parâmetro Opti.Hudless.Flip
+Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	Substitui o modo de apresentação Vulkan; o jogo recria a swapchain para aplicá-lo.\n\nImmediate: sem V-Sync, com cortes na imagem.\nMailbox: sem cortes; o quadro mais novo substitui o da fila.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, com cortes abaixo da taxa de atualização.\nFIFO Latest Ready: V-Sync, exibe o quadro pronto mais recente a cada atualização.\n\nMailbox e FIFO Latest Ready podem descartar quadros gerados acima da taxa de atualização.\nSão listados apenas os modos compatíveis com a tela.

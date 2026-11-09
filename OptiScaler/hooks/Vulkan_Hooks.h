@@ -32,6 +32,33 @@ class VulkanHooks
     // this one instead of a new one
     inline static thread_local VkSurfaceKHR existingSurface = VK_NULL_HANDLE;
 
+    // Present modes the override offers, bit i of State::vkPresentModeMask is entry i.
+    // The shared presentable image modes only work with a single image, they're left out.
+    struct PresentModeEntry
+    {
+        VkPresentModeKHR mode;
+        const char* name;
+    };
+
+    static constexpr PresentModeEntry PresentModes[] = {
+        { VK_PRESENT_MODE_IMMEDIATE_KHR, "Immediate (V-Sync Off)" },
+        { VK_PRESENT_MODE_MAILBOX_KHR, "Mailbox" },
+        { VK_PRESENT_MODE_FIFO_KHR, "FIFO (V-Sync On)" },
+        { VK_PRESENT_MODE_FIFO_RELAXED_KHR, "FIFO Relaxed (Adaptive)" },
+        { VK_PRESENT_MODE_FIFO_LATEST_READY_KHR, "FIFO Latest Ready" },
+    };
+
+    static const char* PresentModeName(int mode)
+    {
+        for (const auto& entry : PresentModes)
+        {
+            if (entry.mode == mode)
+                return entry.name;
+        }
+
+        return "Unknown";
+    }
+
     // The window a surface was created for
     static HWND SurfaceWindow(VkSurfaceKHR surface);
 
@@ -44,6 +71,9 @@ class VulkanHooks
     // The driver's swapchain function behind OptiScaler's hook, below hooks others put on the same function.
     // vkQueuePresentKHR's also times the presented frames for the menu. nullptr when it isn't hooked.
     static PFN_vkVoidFunction OriginalSwapchainFunction(const char* pName);
+
+    // One destruction protocol shared by the bundle and NR detours; next is this caller's trampoline.
+    static void DestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator);
 
     static void Hook(HMODULE vulkan1);
     static void Unhook();

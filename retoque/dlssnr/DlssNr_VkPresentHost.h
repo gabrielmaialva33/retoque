@@ -1,6 +1,7 @@
 #pragma once
 
 #include <windows.h>
+#include <optional>
 #include <vulkan/vulkan.h>
 
 // The Vulkan present host, stages 1 to 3: coverage, the submission-only control, and cold NR
@@ -43,6 +44,13 @@ namespace DlssNr::VkPresentHost
 // From VulkanHooks::Hook, on every call (startup, and each later load of vulkan-1.dll through the loader hook), before
 // its own [Vulkan] SkipHooks / marker check. Installs once; a no-op unless the configuration above holds.
 void Install(HMODULE vulkan1);
+
+// Called once by VulkanHooks::DestroyDevice, shared by both detour layers. Stops/drains NR,
+// or drains an untracked device under the host's transport/known-queue locks. False requires
+// abandonment. Child owners enqueue their releases afterward, before final deferred retirement.
+std::optional<bool> PrepareForDeviceDestroy(VkDevice device);
+// Called after all child owners and deferred retirement, before the real device destruction.
+void FinishDeviceDestroy(VkDevice device);
 
 // From OptiScaler's Streamline log callbacks (both SDK generations), every message: `level` 0 info, 1 warning, 2 error.
 // Counted for stage 4's pacer trace (DlssNr_VkPresentFg.h); returns at once unless [DlssNr] VulkanPresentTrace is on

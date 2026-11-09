@@ -42,7 +42,7 @@ constexpr HRESULT DXGI_ERROR_DEVICE_REMOVED = -4, DXGI_ERROR_DEVICE_HUNG = -5, D
 constexpr HRESULT DXGI_ERROR_DEVICE_RESET = -7;
 // The one result a takeover answers, at its real value: the production header compares against 0x80070005.
 constexpr HRESULT E_ACCESSDENIED = static_cast<HRESULT>(0x80070005u);
-constexpr UINT DXGI_PRESENT_TEST = 1;
+constexpr UINT DXGI_PRESENT_TEST = 1, DXGI_PRESENT_ALLOW_TEARING = 512;
 constexpr DWORD ERROR_TIMEOUT = 1460, WAIT_TIMEOUT = 258, WAIT_OBJECT_0 = 0, WAIT_FAILED = UINT32_MAX;
 constexpr UINT DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING = 2048, D3D12_FENCE_FLAG_NONE = 0;
 // DXGI's values, so a mask built from them means what it means in production.
@@ -237,6 +237,7 @@ struct Dx11Context : Ref
 void TransitionResource(ID3D12GraphicsCommandList*, ID3D12Resource*, int, int) {}
 struct DXGI_SWAP_CHAIN_DESC
 {
+    BOOL Windowed = TRUE;
     struct
     {
         UINT Width = 0, Height = 0;
@@ -424,9 +425,14 @@ struct ResTrack_Dx11
 // Present's HUD fix brackets; only reached with FGInput::Upscaler and [FrameGen] HUDFix on.
 namespace Hudfix_Dx11
 {
+inline void PublishGameHudless(void*) {}
 inline void PresentStart() {}
 inline void PresentEnd() {}
 } // namespace Hudfix_Dx11
+namespace Dx11WithDx12
+{
+inline void* GetD3D11DeviceContext() { return nullptr; }
+} // namespace Dx11WithDx12
 namespace Util
 {
 inline void GetDeviceRemovedReason(ID3D12Device*) {}
@@ -458,6 +464,7 @@ enum class FGOutput
 };
 struct State
 {
+    uint64_t frameCount = 0;
     FGInput activeFgInput = FGInput::NoFG;
     FGOutput activeFgOutput = FGOutput::NoFG;
     bool nrPresentHostActive = false;
@@ -738,6 +745,7 @@ class Dx11wDx12SC
         ++borderlessExits;
         _emulatedFullscreen = false;
     }
+    BOOL _fgResizedFullscreen = FALSE;
     bool _presenterResizeOwed = false, _presenterRecoveryArmed = false, _presenterRecoveryReported = false;
     // A refused presenter resize and its Present-time retries. run.py puts production's retry count here.
     // @kRefusedResizeRetries@

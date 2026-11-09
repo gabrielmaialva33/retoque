@@ -175,3 +175,16 @@ static PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice d, const char* name)
     ++counterLookups;
     return counterAvailable ? reinterpret_cast<PFN_vkVoidFunction>(Counter) : nullptr;
 }
+
+#include <functional>
+namespace DeferredRelease
+{
+inline std::vector<std::function<void()>> pending;
+inline void Enqueue(std::function<void()> fn, uint64_t) { pending.push_back(std::move(fn)); }
+inline void Drain()
+{
+    for (auto& fn : pending)
+        fn();
+    pending.clear();
+}
+} // namespace DeferredRelease

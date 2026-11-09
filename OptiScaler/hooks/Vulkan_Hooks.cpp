@@ -22,6 +22,10 @@
 #include <spoofing/Vulkan_Spoofing.h>
 #include <hudfix/Hudfix_Vk.h>
 #include <dlssnr/DlssNr_VkPreRuntime.h>
+#include <inputs/NVNGX_DLSS.h>
+#include <inputs/FfxApi_Vk.h>
+#include <inputs/FSR2_Vk.h>
+#include <inputs/XeSS_Vulkan.h>
 
 #include <vulkan/vulkan.h>
 
@@ -29,7 +33,10 @@
 #include <dlssnr/DlssNr_VkPresentHost.h>
 #include <dlssnr/DlssNr_DriverInitGate.h>
 #include <hooks/Vulkan_OwnedDeviceRequest.h>
+#include <algorithm>
+#include <span>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <detours/detours.h>
 #include <misc/IdentifyGpu.h>
@@ -48,6 +55,10 @@ static VkInstance _instance = VK_NULL_HANDLE;
 static VkPhysicalDevice _PD = VK_NULL_HANDLE;
 static HWND _hwnd = nullptr;
 
+// Devices created while hooked, their destroy goes through the hook too
+static std::mutex _hookedDevicesMutex;
+static std::unordered_set<uint64_t> _hookedDevices;
+
 static std::mutex _vkApiVersionMutex;
 static std::unordered_map<VkInstance, uint32_t> _instanceApiVersions;
 static std::unordered_map<VkPhysicalDevice, VkInstance> _physicalDeviceInstances;
@@ -55,12 +66,15 @@ static std::unordered_map<VkPhysicalDevice, VkInstance> _physicalDeviceInstances
 static std::mutex _surfaceWindowsMutex;
 static std::unordered_map<VkSurfaceKHR, HWND> _surfaceWindows;
 
-static std::mutex _vkPresentMutex;
+// Overlay and probe swapchains passed to the driver, swapchain handles are only unique per device
+static std::mutex _passThroughSwapchainsMutex;
+static std::vector<std::pair<VkDevice, VkSwapchainKHR>> _passThroughSwapchains;
 
 PFN_vkCreateDevice o_vkCreateDevice = nullptr;
 PFN_vkCreateInstance o_vkCreateInstance = nullptr;
 PFN_vkCreateWin32SurfaceKHR o_vkCreateWin32SurfaceKHR = nullptr;
 static PFN_vkDestroyInstance o_vkDestroyInstance = nullptr;
+static PFN_vkDestroyDevice o_vkDestroyDevice = nullptr;
 PFN_vkQueuePresentKHR o_QueuePresentKHR = nullptr;
 PFN_vkCreateSwapchainKHR o_CreateSwapchainKHR = nullptr;
 static PFN_vkDestroySwapchainKHR o_DestroySwapchainKHR = nullptr;
@@ -83,6 +97,12 @@ PFN_vkAntiLagUpdateAMD VulkanHooks::o_vkAntiLagUpdateAMD = nullptr;
 
 // The device with VK_NV_low_latency2 enabled
 static VkDevice _lowLatency2Device = VK_NULL_HANDLE;
+
+// Device with VK_KHR/EXT_present_mode_fifo_latest_ready, the override can only use the mode on it
+static VkDevice _fifoLatestReadyDevice = VK_NULL_HANDLE;
+
+// The game's swapchain, its next acquire makes the game recreate it when the present mode override changes
+static VkSwapchainKHR _gameSwapchain = VK_NULL_HANDLE;
 
 // Set while the FG output handles a swapchain call
 static thread_local bool _inFGCall = false;
@@ -109,6 +129,38 @@ static VkResult FGOutputQueuePresent(VkQueue queue, const VkPresentInfoKHR* pPre
 {
     MenuCommon::FGOutputPresent();
     return DlssNr::VkPresentHost::PresentFromFG(o_QueuePresentKHR, queue, pPresentInfo, _ReturnAddress());
+}
+
+// The present has no device, the handles are matched on their own like the menu's
+static bool IsPassThroughPresent(const VkPresentInfoKHR* pPresentInfo)
+{
+    if (pPresentInfo == nullptr || pPresentInfo->swapchainCount == 0)
+        return false;
+
+    std::scoped_lock lock(_passThroughSwapchainsMutex);
+
+    for (uint32_t i = 0; i < pPresentInfo->swapchainCount; i++)
+    {
+        if (std::ranges::find(_passThroughSwapchains, pPresentInfo->pSwapchains[i],
+                              &std::pair<VkDevice, VkSwapchainKHR>::second) == _passThroughSwapchains.end())
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool IsPassThroughSwapchain(VkDevice device, VkSwapchainKHR swapchain)
+{
+    std::scoped_lock lock(_passThroughSwapchainsMutex);
+    return std::ranges::find(_passThroughSwapchains, std::pair(device, swapchain)) != _passThroughSwapchains.end();
+}
+
+static bool ForgetPassThroughSwapchain(VkDevice device, VkSwapchainKHR swapchain)
+{
+    std::scoped_lock lock(_passThroughSwapchainsMutex);
+    return std::erase(_passThroughSwapchains, std::pair(device, swapchain)) > 0;
 }
 
 // OptiScaler's Streamline calls the driver's swapchain functions directly. Overlays like RTSS hook the same ones on top
@@ -591,6 +643,64 @@ static void hkvkDestroyInstance(VkInstance instance, const VkAllocationCallbacks
     o_vkDestroyInstance(instance, pAllocator);
 }
 
+void VulkanHooks::DestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const VkAllocationCallbacks* allocator)
+{
+    // A host detour can wrap the bundle hook. Only the outer call prepares/releases this device;
+    // each inner hook still forwards to its own trampoline once, without losing the drain result.
+    static thread_local std::vector<VkDevice> destroying;
+    if (std::find(destroying.begin(), destroying.end(), device) != destroying.end())
+    {
+        next(device, allocator);
+        return;
+    }
+    destroying.push_back(device);
+    struct Scope
+    {
+        std::vector<VkDevice>& stack;
+        ~Scope() { stack.pop_back(); }
+    } scope { destroying };
+
+    // Objects created on the device have to go before it
+    if (device != VK_NULL_HANDLE)
+    {
+        const bool drained = DlssNr::VkPresentHost::PrepareForDeviceDestroy(device).value_or(false);
+        {
+            std::scoped_lock lock(_hookedDevicesMutex);
+            _hookedDevices.erase((uint64_t) device);
+        }
+        // Its swapchains are already destroyed, the low latency output must not use one
+        if (device == _lowLatency2Device)
+            VulkanHooks::ForgetLowLatencySwapchain(VulkanHooks::LowLatencySwapchain());
+
+        if (device == _fifoLatestReadyDevice)
+            _fifoLatestReadyDevice = VK_NULL_HANDLE;
+
+        ReflexHooks::deviceDestroyed(device);
+        InputCommon::vk_device_destroyed(device);
+        NVNGXVkDeviceDestroyed(device);
+        FfxApiVkDeviceDestroyed(device);
+        FSR2VkDeviceDestroyed(device);
+        XeSSVkDeviceDestroyed(device);
+
+        // HudCopy/NGX and the overlay enqueue children before the owner is finally retired.
+        // The overlay consumes this exact proof; it must not retry idle after an NR drain failed.
+        MenuOverlayVk::ReleaseDevice(device, drained);
+        DeferredRelease::RetireOwner((uint64_t) device, drained);
+        DlssNr::VkPresentHost::FinishDeviceDestroy(device);
+
+        std::scoped_lock lock(_passThroughSwapchainsMutex);
+        std::erase_if(_passThroughSwapchains, [device](const auto& entry) { return entry.first == device; });
+    }
+
+    next(device, allocator);
+}
+
+VALIDATE_HOOK(hkvkDestroyDevice, PFN_vkDestroyDevice)
+static void hkvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* pAllocator)
+{
+    VulkanHooks::DestroyDevice(o_vkDestroyDevice, device, pAllocator);
+}
+
 VALIDATE_HOOK(hkvkCreateDevice, PFN_vkCreateDevice)
 static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* pCreateInfo,
                                  const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
@@ -662,6 +772,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
     VkResult result;
     bool timelineSemaphoresEnabled = false;
+    bool fifoLatestReadyEnabled = false;
     {
         VulkanDeviceFeatureState deviceFeatures(&localCreateInfo, getPhysicalDeviceFeatures2);
         VulkanDeviceFeatureState* featureState = nullptr;
@@ -754,15 +865,30 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
         // The driver-init gate is already released; installation must not run under it.
         if (result == VK_SUCCESS && !ScopedSkipVulkanHooks::Active() && !State::Instance().creatingD3DDevice)
             DlssNr::VkPre::Runtime::Install(*pDevice, &localCreateInfo, requestedApiVersion);
+
+        // Inspect the effective list while nrExtensions still owns its storage.
+        fifoLatestReadyEnabled = std::ranges::any_of(
+            std::span(localCreateInfo.ppEnabledExtensionNames, localCreateInfo.enabledExtensionCount),
+            [](const char* ext)
+            {
+                return std::strcmp(ext, VK_KHR_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME) == 0 ||
+                       std::strcmp(ext, VK_EXT_PRESENT_MODE_FIFO_LATEST_READY_EXTENSION_NAME) == 0;
+            });
     }
 
     if (Config::Instance()->DlssNrEnabled.value_or_default())
         LOG_INFO("DLSS-NR Vulkan: vkCreateDevice returned {} with {} extensions requested", (int) result,
                  localCreateInfo.enabledExtensionCount);
+    if (result == VK_SUCCESS && !State::Instance().creatingD3DDevice && fifoLatestReadyEnabled)
+        _fifoLatestReadyDevice = *pDevice;
+
     if (result == VK_SUCCESS)
     {
         DeferredRelease::RegisterOwner((uint64_t) *pDevice);
-        DeferredRelease::DropOwnersExcept((uint64_t) *pDevice);
+        std::scoped_lock lock(_hookedDevicesMutex);
+        _hookedDevices.insert((uint64_t) *pDevice);
+        // Retirement is explicit at destruction. A snapshot of this set would race another
+        // successful creation and could discard a live owner's callbacks.
     }
 
     if (result == VK_SUCCESS && fg != nullptr)
@@ -863,6 +989,13 @@ static VkResult hkvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPres
     // FFX presents the real swapchain from its own queue
     if (FromFGOutput(_ReturnAddress()) || (fg != nullptr && fg->OwnsQueue(queue)))
         return FGOutputQueuePresent(queue, pPresentInfo);
+
+    // Overlays' presents aren't frames of the game
+    if (IsPassThroughPresent(pPresentInfo))
+    {
+        ScopedVulkanCreatingSC scopedVulkanCreatingSC {};
+        return o_QueuePresentKHR(queue, pPresentInfo);
+    }
 
     LOG_FUNC();
 
@@ -981,6 +1114,27 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
 
     ScopedVulkanCreatingSC scopedVulkanCreatingSC {};
 
+    // Overlays and probes use tiny swapchains, they get no menu, FG or tracking like on DXGI
+    // A recreate keeps its chain, oldSwapchain can be an FG handle
+    if (pCreateInfo != nullptr &&
+        (pCreateInfo->oldSwapchain == VK_NULL_HANDLE || IsPassThroughSwapchain(device, pCreateInfo->oldSwapchain)) &&
+        Util::IsOverlaySwapchain(VulkanHooks::SurfaceWindow(pCreateInfo->surface), pCreateInfo->imageExtent.width,
+                                 pCreateInfo->imageExtent.height))
+    {
+        LOG_WARN("Overlay swapchain {}x{}", pCreateInfo->imageExtent.width, pCreateInfo->imageExtent.height);
+
+        ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
+        auto result = o_CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+
+        if (result == VK_SUCCESS)
+        {
+            std::scoped_lock lock(_passThroughSwapchainsMutex);
+            _passThroughSwapchains.emplace_back(device, *pSwapchain);
+        }
+
+        return result;
+    }
+
     // dxvk/vkd3d-proton swapchains get the menu on the DXGI swapchain
     const bool dxgiBacked = IsDxgiBackedCaller(_ReturnAddress());
 
@@ -997,6 +1151,71 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
             localCreateInfo = *pCreateInfo;
             localCreateInfo.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
             pCreateInfo = &localCreateInfo;
+        }
+    }
+
+    // Present mode override, the FG outputs create their swapchains from this create info too
+    if (pCreateInfo != nullptr && !ScopedSkipVulkanHooks::Active() && !dxgiBacked && _PD != VK_NULL_HANDLE)
+    {
+        auto& state = State::Instance();
+        state.vkGamePresentMode = pCreateInfo->presentMode;
+
+        uint32_t count = 0;
+        std::vector<VkPresentModeKHR> supported;
+
+        if (vkGetPhysicalDeviceSurfacePresentModesKHR(_PD, pCreateInfo->surface, &count, nullptr) == VK_SUCCESS)
+        {
+            supported.resize(count);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(_PD, pCreateInfo->surface, &count, supported.data());
+            supported.resize(count);
+        }
+
+        uint32_t mask = 0;
+        for (uint32_t i = 0; i < std::size(VulkanHooks::PresentModes); i++)
+        {
+            const auto mode = VulkanHooks::PresentModes[i].mode;
+
+            if (std::ranges::find(supported, mode) != supported.end() &&
+                (mode != VK_PRESENT_MODE_FIFO_LATEST_READY_KHR || device == _fifoLatestReadyDevice))
+            {
+                mask |= 1u << i;
+            }
+        }
+
+        state.vkPresentModeMask = mask;
+
+        // ponytail: games with VK_EXT_swapchain_maintenance1's present mode list keep their mode, the override would
+        // have to rewrite the list and the per present mode
+        bool gameModeList = false;
+        for (auto next = (const VkBaseInStructure*) pCreateInfo->pNext; next != nullptr; next = next->pNext)
+            gameModeList |= next->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT;
+
+        if (const auto& mode = Config::Instance()->VulkanPresentMode; mode.has_value() && !gameModeList)
+        {
+            const auto entry = std::ranges::find(VulkanHooks::PresentModes, (VkPresentModeKHR) mode.value(),
+                                                 &VulkanHooks::PresentModeEntry::mode);
+            const auto index = entry - std::begin(VulkanHooks::PresentModes);
+
+            if (entry != std::end(VulkanHooks::PresentModes) && (mask & (1u << index)) != 0)
+            {
+                LOG_INFO("Present mode {} -> {}", VulkanHooks::PresentModeName(pCreateInfo->presentMode), entry->name);
+
+                if (pCreateInfo != &localCreateInfo)
+                {
+                    localCreateInfo = *pCreateInfo;
+                    pCreateInfo = &localCreateInfo;
+                }
+
+                localCreateInfo.presentMode = entry->mode;
+            }
+            else
+            {
+                LOG_WARN("Present mode override {} isn't supported, keeping the game's", mode.value());
+            }
+        }
+        else if (gameModeList && mode.has_value())
+        {
+            LOG_WARN("Game uses a present mode list, keeping its present mode");
         }
     }
 
@@ -1035,6 +1254,7 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
     {
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
         bool fgSwapchain = false;
+        auto fg = State::Instance().currentVkFG;
 
         if (auto fg = State::Instance().currentVkFG;
             fg != nullptr && pCreateInfo != nullptr && !dxgiBacked && !ScopedSkipVulkanHooks::Active())
@@ -1044,7 +1264,21 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
         }
 
         if (!fgSwapchain)
+        {
+            // FG destroyed the old swapchain before failing
+            if (fg != nullptr && pCreateInfo != nullptr && fg->IsRetiredSwapchain(pCreateInfo->oldSwapchain))
+            {
+                if (pCreateInfo != &localCreateInfo)
+                {
+                    localCreateInfo = *pCreateInfo;
+                    pCreateInfo = &localCreateInfo;
+                }
+
+                localCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+            }
+
             result = o_CreateSwapchainKHR(device, pCreateInfo, pAllocator, pSwapchain);
+        }
     }
 
     if (result == VK_SUCCESS && lowLatencySwapchain)
@@ -1103,6 +1337,8 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
         _device = device;
         LOG_DEBUG("_device captured: {0:X}", (UINT64) _device);
 
+        _gameSwapchain = *pSwapchain;
+
         auto hwnd = VulkanHooks::SurfaceWindow(pCreateInfo->surface);
         MenuOverlayVk::CreateSwapchain(device, _PD, _instance, hwnd != nullptr ? hwnd : _hwnd, pCreateInfo, pAllocator,
                                        pSwapchain);
@@ -1115,14 +1351,19 @@ static VkResult hkvkCreateSwapchainKHR(VkDevice device, const VkSwapchainCreateI
 VALIDATE_HOOK(hkvkDestroySwapchainKHR, PFN_vkDestroySwapchainKHR)
 static void hkvkDestroySwapchainKHR(VkDevice device, VkSwapchainKHR swapchain, const VkAllocationCallbacks* pAllocator)
 {
-    if (FromFGOutput(_ReturnAddress()))
+    // Forgotten first on every path, the game's swapchain can reuse the handle
+    if ((swapchain != VK_NULL_HANDLE && ForgetPassThroughSwapchain(device, swapchain)) ||
+        FromFGOutput(_ReturnAddress()))
     {
         o_DestroySwapchainKHR(device, swapchain, pAllocator);
         return;
     }
 
     if (swapchain != VK_NULL_HANDLE)
+    {
         VulkanHooks::ForgetLowLatencySwapchain(swapchain);
+        MenuOverlayVk::DestroySwapchain(device, swapchain);
+    }
 
     if (auto fg = State::Instance().currentVkFG; fg != nullptr)
     {
@@ -1154,10 +1395,27 @@ static VkResult hkvkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapch
     return o_GetSwapchainImagesKHR(device, swapchain, pSwapchainImageCount, pSwapchainImages);
 }
 
+// A changed present mode override needs a new swapchain, the game recreates it on VK_ERROR_OUT_OF_DATE_KHR.
+// Nothing gets acquired or signaled then.
+static bool PresentModeRecreateRequested(VkSwapchainKHR swapchain, void* returnAddress)
+{
+    auto& state = State::Instance();
+
+    if (!state.vkPresentModeChanged || swapchain != _gameSwapchain || FromFGOutput(returnAddress))
+        return false;
+
+    state.vkPresentModeChanged = false;
+    LOG_INFO("Present mode override changed, making the game recreate its swapchain");
+    return true;
+}
+
 VALIDATE_HOOK(hkvkAcquireNextImageKHR, PFN_vkAcquireNextImageKHR)
 static VkResult hkvkAcquireNextImageKHR(VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout,
                                         VkSemaphore semaphore, VkFence fence, uint32_t* pImageIndex)
 {
+    if (PresentModeRecreateRequested(swapchain, _ReturnAddress()))
+        return VK_ERROR_OUT_OF_DATE_KHR;
+
     if (auto fg = State::Instance().currentVkFG;
         fg != nullptr && fg->OwnsSwapchain(swapchain) && !FromFGOutput(_ReturnAddress()))
     {
@@ -1174,6 +1432,9 @@ VALIDATE_HOOK(hkvkAcquireNextImage2KHR, PFN_vkAcquireNextImage2KHR)
 static VkResult hkvkAcquireNextImage2KHR(VkDevice device, const VkAcquireNextImageInfoKHR* pAcquireInfo,
                                          uint32_t* pImageIndex)
 {
+    if (pAcquireInfo != nullptr && PresentModeRecreateRequested(pAcquireInfo->swapchain, _ReturnAddress()))
+        return VK_ERROR_OUT_OF_DATE_KHR;
+
     if (auto fg = State::Instance().currentVkFG; fg != nullptr && pAcquireInfo != nullptr &&
                                                  fg->OwnsSwapchain(pAcquireInfo->swapchain) &&
                                                  !FromFGOutput(_ReturnAddress()))
@@ -1285,6 +1546,10 @@ PFN_vkVoidFunction hkvkGetInstanceProcAddr(VkInstance instance, const char* pNam
         LOG_DEBUG("vkCreateDevice");
         return (PFN_vkVoidFunction) hkvkCreateDevice;
     }
+    else if (procName == std::string("vkDestroyDevice") && o_vkDestroyDevice != nullptr)
+    {
+        return (PFN_vkVoidFunction) hkvkDestroyDevice;
+    }
 
     if (auto direct = StreamlineSwapchainFunction(pName, _ReturnAddress()))
         return direct;
@@ -1324,6 +1589,10 @@ PFN_vkVoidFunction hkvkGetDeviceProcAddr(VkDevice device, const char* pName)
 
         LOG_DEBUG("vkCreateDevice");
         return (PFN_vkVoidFunction) hkvkCreateDevice;
+    }
+    else if (procName == std::string("vkDestroyDevice") && o_vkDestroyDevice != nullptr)
+    {
+        return (PFN_vkVoidFunction) hkvkDestroyDevice;
     }
 
     if (auto direct = StreamlineSwapchainFunction(pName, _ReturnAddress()))
@@ -1480,6 +1749,7 @@ void VulkanHooks::Hook(HMODULE vulkan1)
     o_vkCreateDevice = (PFN_vkCreateDevice) KernelBaseProxy::GetProcAddress_()(vulkan1, "vkCreateDevice");
     o_vkCreateInstance = (PFN_vkCreateInstance) KernelBaseProxy::GetProcAddress_()(vulkan1, "vkCreateInstance");
     o_vkDestroyInstance = (PFN_vkDestroyInstance) KernelBaseProxy::GetProcAddress_()(vulkan1, "vkDestroyInstance");
+    o_vkDestroyDevice = (PFN_vkDestroyDevice) KernelBaseProxy::GetProcAddress_()(vulkan1, "vkDestroyDevice");
 
     address = KernelBaseProxy::GetProcAddress_()(vulkan1, "vkGetInstanceProcAddr");
     o_vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr) address;
@@ -1514,6 +1784,9 @@ void VulkanHooks::Hook(HMODULE vulkan1)
     if (o_vkCreateDevice != nullptr)
         DetourAttach(&(PVOID&) o_vkCreateDevice, hkvkCreateDevice);
 
+    if (o_vkDestroyDevice != nullptr)
+        DetourAttach(&(PVOID&) o_vkDestroyDevice, hkvkDestroyDevice);
+
     if (o_vkGetInstanceProcAddr != nullptr)
         DetourAttach(&(PVOID&) o_vkGetInstanceProcAddr, hkvkGetInstanceProcAddr);
 
@@ -1546,6 +1819,7 @@ void VulkanHooks::Hook(HMODULE vulkan1)
     {
         LOG_ERROR("Failed to hook Vulkan, error code: {:X}", detourResult);
         o_vkCreateDevice = nullptr;
+        o_vkDestroyDevice = nullptr;
         o_vkCreateInstance = nullptr;
         o_vkDestroyInstance = nullptr;
         o_vkGetInstanceProcAddr = nullptr;
@@ -1597,6 +1871,9 @@ void VulkanHooks::Unhook()
     if (o_vkCreateDevice != nullptr)
         DetourDetach(&(PVOID&) o_vkCreateDevice, hkvkCreateDevice);
 
+    if (o_vkDestroyDevice != nullptr)
+        DetourDetach(&(PVOID&) o_vkDestroyDevice, hkvkDestroyDevice);
+
     if (o_vkEnumeratePhysicalDevices != nullptr)
         DetourDetach(&(PVOID&) o_vkEnumeratePhysicalDevices, hkvkEnumeratePhysicalDevices);
 
@@ -1635,6 +1912,7 @@ void VulkanHooks::Unhook()
         o_WaitForPresentKHR = nullptr;
         o_WaitForPresent2KHR = nullptr;
         o_vkCreateDevice = nullptr;
+        o_vkDestroyDevice = nullptr;
         o_vkCreateInstance = nullptr;
         o_vkDestroyInstance = nullptr;
         o_vkGetInstanceProcAddr = nullptr;

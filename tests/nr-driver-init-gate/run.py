@@ -117,7 +117,7 @@ def strip(text):
             j = text.index(')' + delim + '"', i) + len(delim) + 2
             out[i:j] = [ch if ch == '\n' else ' ' for ch in text[i:j]]
             i = j
-        elif c in '"\'' and not (c == '\'' and i > 0 and (text[i - 1].isalnum())):
+        elif c in '"\'' and not (c == '\'' and i > 0 and re.search(r"\b(?:0[xX][0-9a-fA-F']+|[0-9][0-9']*)$", text[:i])):
             j = i + 1
             while text[j] != c:
                 j += 2 if text[j] == '\\' else 1

@@ -9,10 +9,10 @@ ROOT = HERE.parents[1]
 
 source = (ROOT / "OptiScaler/dllmain.cpp").read_text()
 start = source.index("        if (Config::Instance()->NVNGX_DLSS_Library.has_value())\n")
-end = source.index("        if (!State::Instance().NVNGX_DLSS_Path.has_value())\n", start)
+end = source.index("        dllFolders.push_back(optiDllPath);", start)
 block = source[start:end]
 
-unit = (HERE / "fakes.h").read_text() + "\nstatic void ResolveOverride()\n{\n" + block + "}\n" + (
+unit = (HERE / "fakes.h").read_text() + "\nstatic void ResolveOverride()\n{\nstd::vector<std::filesystem::path> dllFolders;\n" + block + "}\n" + (
     HERE / "cases.cpp").read_text()
 with tempfile.TemporaryDirectory(prefix="retoque-dlss-library-path-") as folder:
     cpp, binary = Path(folder) / "cases.cpp", Path(folder) / "cases"

@@ -41,6 +41,9 @@ class OwnedMutex
 
     uint32_t getOwner() { return owner.load(std::memory_order_seq_cst); }
 
+    // Upstream and fork callers share one holder identity.
+    bool isLockedByThisThread() const { return isHeldByCurrentThread(); }
+
     // Only the holding thread finds its own id here; any other thread reads another id or none
     bool isHeldByCurrentThread() const { return ownerThread.load() == std::this_thread::get_id(); }
 };

@@ -34,6 +34,7 @@
 
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
+#include <hooks/Vulkan_Hooks.h>
 
 #include <BuildInfo.h>
 #include <version_check.h>
@@ -56,7 +57,6 @@
 #include <hooks/Amdxc64_Hooks.h>
 #include <low_latency/input/input_common.h>
 #include <plugins/PluginApi.h>
-#include <hooks/Vulkan_Hooks.h>
 #include <low_latency/input/input_xell.h>
 
 enum class UiTargetMode
@@ -916,10 +916,8 @@ inline void MenuCommon::ReInitUpscaler()
     if (!State::Instance().currentFeature)
         return;
 
-    if (State::Instance().currentFeature->GetUpscalerType() == Upscaler::DLSSD)
-        State::Instance().newBackend = Upscaler::DLSSD;
-    else
-        State::Instance().newBackend = currentBackend;
+    // currentBackend is only updated while the menu is drawn
+    State::Instance().newBackend = State::Instance().currentFeature->GetUpscalerType();
 
     MARK_ALL_BACKENDS_CHANGED();
 }
@@ -1709,6 +1707,10 @@ static UiTargetMode getUiTargetMode()
 
         return UiTargetMode::SDR;
     }
+
+    // sRGB target encodes on write, colors need to be linear
+    if (state.menuTargetSrgb)
+        return UiTargetMode::LinearHDR;
 
     const auto& output = state.outputColorSpace;
 
@@ -3677,6 +3679,10 @@ void MenuCommon::RenderMainMenuHeaderMessages(RenderMenuContext& ctx)
         {
             LOG_ERROR("Version check failed: {0}", versionStatus.error);
             versionStatus.error.clear();
+
+            // The status is copied from State every frame
+            std::scoped_lock lock(state.versionCheckMutex);
+            state.versionCheckError.clear();
         }
         // Disabled error message
         // else if (!versionStatus.error.empty())
@@ -3978,6 +3984,14 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
         }
     }
 
+    constexpr auto fsr3DebugViewTooltip = "Top left: Dilated Motion Vectors\n"
+                                          "Top middle: Protected Areas\n"
+                                          "Top right: Dilated Depth\n"
+                                          "Middle: Upscaled frame\n"
+                                          "Bottom left: Disocclusion mask\n"
+                                          "Bottom middle: Reactiveness\n"
+                                          "Bottom right: Detail Protection Takedown";
+
     // FFX -----------------
     if (!usesDlssd && (currentBackend == Upscaler::FFX || currentBackend == Upscaler::FFX_on12))
     {
@@ -4172,7 +4186,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
             ImGui::Spacing();
 
             bool debugView = config->FsrDebugView.value_or_default();
-            if (ImGui::Checkbox("Upscaler Debug View", &debugView))
+            if (ImGui::Checkbox(Localization::Label("Upscaler Debug View"), &debugView))
             {
                 config->FsrDebugView = debugView;
 
@@ -4191,13 +4205,7 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
             }
             else
             {
-                ShowTooltip("Top left: Dilated Motion Vectors\n"
-                            "Top middle: Protected Areas\n"
-                            "Top right: Dilated Depth\n"
-                            "Middle: Upscaled frame\n"
-                            "Bottom left: Disocclusion mask\n"
-                            "Bottom middle: Reactiveness\n"
-                            "Bottom right: Detail Protection Takedown");
+                ShowTooltip(fsr3DebugViewTooltip);
             }
 
             if (majorFsrVersion > 3)
@@ -4346,6 +4354,18 @@ void MenuCommon::RenderActiveUpscalerSettings(RenderMenuContext& ctx)
                 ImGui::Spacing();
             }
         }
+    }
+
+    // FSR 3.1 Dx11 -----------------
+    if (!usesDlssd && currentBackend == Upscaler::FSR31)
+    {
+        ImGui::Spacing();
+
+        bool debugView = config->FsrDebugView.value_or_default();
+        if (ImGui::Checkbox(Localization::Label("Upscaler Debug View"), &debugView))
+            config->FsrDebugView = debugView;
+
+        ShowTooltip(fsr3DebugViewTooltip);
     }
 
     // DLSS -----------------
@@ -4786,7 +4806,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
     auto constexpr fgNvngxFfxIndex = (uint32_t) FGNvngxReplacement::FFX;
     if (state.swapchainApi == API::Vulkan)
-        nvngxOptions[fgNvngxFfxIndex].set_disabled(!FfxApiProxy::IsFGReadyVk(),
+        nvngxOptions[fgNvngxFfxIndex].set_disabled(!FfxApiProxy::IsFGReadyVk() && !FSR4DriverProviderVk::InitFg(),
                                                    "Missing amd_fidelityfx_framegeneration_vk.dll");
     else
         nvngxOptions[fgNvngxFfxIndex].set_disabled(!FfxApiProxy::IsFGReady(false),
@@ -5104,7 +5124,7 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
             {
                 config->FGUIPremultipliedAlpha = uiPremultipliedAlpha;
             }
-            ShowTooltip("If UI is too faint, disable this option");
+            ShowTooltip("If UI is too bright, disable this option");
 
             ImGui::EndDisabled();
         }
@@ -5475,9 +5495,12 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                         {
                             Util::SetFlagEnvVar(L"MLFI-WATERMARK", config->FSRFGEnableWatermark.value_or_default());
 
-                            // The driver reads the variable on context creation
+                            // The driver reads the variable on context creation, SCchanged also required
                             if (config->IsFGEnabled())
+                            {
                                 state.fgChanged = true;
+                                state.scChanged = true;
+                            }
                         }
                     }
 
@@ -6247,6 +6270,14 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
             ImGui::SameLine(0.0f, 16.0f);
 
+            bool hudlessFlip = config->FGHudlessFlip.value_or_default();
+            if (ImGui::Checkbox(Localization::Label("Flip HUDless"), &hudlessFlip))
+                config->FGHudlessFlip = hudlessFlip;
+            ShowTooltip(Localization::Tr(
+                "Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter"));
+
+            ImGui::SameLine(0.0f, 16.0f);
+
             bool resourceFlipOffset = config->FGResourceFlipOffset.value_or_default();
             if (ImGui::Checkbox("Flip Use Offset", &resourceFlipOffset))
                 config->FGResourceFlipOffset = resourceFlipOffset;
@@ -6511,14 +6542,15 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
                 config->FGHUDFixUITexture = uiTexture;
             ShowTooltip("Use the UI texture the game blends on the frame in its last compute pass");
 
-            ImGui::BeginDisabled(!uiTexture);
+            const bool dlssgOutput = state.activeFgOutput == FGOutput::DLSSG;
+            ImGui::BeginDisabled(!uiTexture || dlssgOutput);
             ImGui::SameLine(0.0f, 16.0f);
 
-            auto uiUnblend = config->FGHUDFixUIUnblend.value_or(state.activeFgOutput != FGOutput::DLSSG);
+            auto uiUnblend = !dlssgOutput && config->FGHUDFixUIUnblend.value_or(true);
             if (ImGui::Checkbox("Unblend UI", &uiUnblend))
                 config->FGHUDFixUIUnblend = uiUnblend;
             ShowTooltip("Rebuild the HUDless by removing the UI texture from the frame\n"
-                        "FSR-FG gets the UI only this way, DLSSG also takes the UI texture directly");
+                        "FSR-FG gets the UI only this way, DLSSG takes the UI texture directly");
 
             ImGui::EndDisabled();
 
@@ -6640,12 +6672,21 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
 
         if (isLoaded)
         {
-            if (activeNvngxFg == FGNvngxReplacement::Arturs || activeNvngxFg == FGNvngxReplacement::Combo)
+            // DLSS Enabler's own, or any custom provider reporting its antighosting version
+            if (Nvngx_FG::supportsDispatchFlags())
             {
-                auto featureVer = Nvngx_FG::version();
                 auto antighostingVer = Nvngx_FG::extraVersion();
-                ImGui::Text("DE Ver: %d.%d.%d.%d   GB Ver: %d.%d", featureVer.major, featureVer.minor, featureVer.patch,
-                            featureVer.reserved, antighostingVer.major, antighostingVer.minor);
+
+                if (activeNvngxFg == FGNvngxReplacement::Arturs || activeNvngxFg == FGNvngxReplacement::Combo)
+                {
+                    auto featureVer = Nvngx_FG::version();
+                    ImGui::Text("DE Ver: %d.%d.%d.%d   GB Ver: %d.%d", featureVer.major, featureVer.minor,
+                                featureVer.patch, featureVer.reserved, antighostingVer.major, antighostingVer.minor);
+                }
+                else
+                {
+                    ImGui::Text("GB Ver: %d.%d", antighostingVer.major, antighostingVer.minor);
+                }
 
                 static std::vector<FlagDefinition> common_flags = {
                     { "Antighosting (GB)", 0x00100000, "Enable anti-ghosting correction" },
@@ -7538,11 +7579,10 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                 ImGui::BeginDisabled(!config->ContrastEnabled.value_or_default());
 
                 float contrast = config->Contrast.value_or_default();
-                if (ImGui::SliderFloat("Contrast", &contrast, -2.0f, 2.0f, "%.2f"))
+                if (ImGui::SliderFloat("Contrast", &contrast, 0.0f, 2.0f, "%.2f"))
                     config->Contrast = contrast;
 
-                ShowTooltip("Positive values decrease sharpness at high contrast areas.\n"
-                            "Negative values increase sharpness at high contrast areas.");
+                ShowTooltip("Lowers sharpness at high contrast areas.");
 
                 ImGui::EndDisabled();
             }
@@ -8305,7 +8345,7 @@ void MenuCommon::RenderLoggingSettings(RenderMenuContext& ctx)
     }
 
     const char* logLevels[] = { "Trace", "Debug", "Information", "Warning", "Error" };
-    const char* selectedLevel = logLevels[config->LogLevel.value_or_default()];
+    const char* selectedLevel = logLevels[std::clamp(config->LogLevel.value_or_default(), 0, 4)];
 
     if (ImGui::BeginCombo("Log Level", selectedLevel))
     {
@@ -9178,6 +9218,61 @@ void MenuCommon::RenderVsyncSettings(RenderMenuContext& ctx)
             }
         }
     }
+    else
+    {
+        SectionTitle("V-Sync Settings");
+        {
+            ScopedID sectionId { "V-Sync Settings" };
+
+            const auto& forced = config->VulkanPresentMode;
+            const char* preview = forced.has_value() ? Localization::Tr(VulkanHooks::PresentModeName(forced.value()))
+                                                     : Localization::Tr("Game's");
+            bool changed = false;
+
+            if (ImGui::BeginCombo(Localization::Label("Present Mode"), preview))
+            {
+                if (ImGui::Selectable(Localization::Label("Game's"), !forced.has_value()))
+                {
+                    config->VulkanPresentMode.reset();
+                    changed = true;
+                }
+
+                for (uint32_t i = 0; i < std::size(VulkanHooks::PresentModes); i++)
+                {
+                    const auto& entry = VulkanHooks::PresentModes[i];
+
+                    if ((state.vkPresentModeMask & (1u << i)) == 0)
+                        continue;
+
+                    if (ImGui::Selectable(Localization::Label(entry.name),
+                                          forced.has_value() && forced.value() == entry.mode))
+                    {
+                        config->VulkanPresentMode = (int) entry.mode;
+                        changed = true;
+                    }
+                }
+
+                ImGui::EndCombo();
+            }
+
+            ShowTooltip(Localization::Tr(
+                "Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\n"
+                "Immediate: no V-Sync, tears.\n"
+                "Mailbox: no tearing, newest frame replaces the queued one.\n"
+                "FIFO: V-Sync.\n"
+                "FIFO Relaxed: V-Sync, tears when below the refresh rate.\n"
+                "FIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\n"
+                "Mailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\n"
+                "Only modes the display supports are listed."));
+
+            if (state.vkGamePresentMode >= 0)
+                ImGui::Text(Localization::Tr("Game's present mode: %s"),
+                            Localization::Tr(VulkanHooks::PresentModeName(state.vkGamePresentMode)));
+
+            if (changed)
+                state.vkPresentModeChanged = true;
+        }
+    }
 }
 
 void MenuCommon::RenderApiAndTextureSettings(RenderMenuContext& ctx)
@@ -9495,6 +9590,18 @@ static const char* ApiName(API api)
     return "Unknown";
 }
 
+// Set by the DLSS inputs, before an upscaler is created the swapchain shows it
+static API GameApi(const State& state)
+{
+    if (state.api != NotSelected)
+        return state.api;
+
+    if (state.swapchainInteropApi == SwapchainInteropApi::Dx11wDx12)
+        return DX11;
+
+    return state.swapchainApi;
+}
+
 // Filled dot for on / found, hollow dot for off / missing. Goes into the next table cell
 static void StatusFlag(const char* label, bool on, bool warnWhenOn = false)
 {
@@ -9664,7 +9771,7 @@ void MenuCommon::RenderStatusInfo(RenderMenuContext& ctx)
         {
             setupPairs();
 
-            pair("API", StrFmt("%s%s", ApiName(state.api),
+            pair("API", StrFmt("%s%s", ApiName(GameApi(state)),
                                IdentifyGpu::gameUsesDxvk()          ? " (DXVK)"
                                : IdentifyGpu::gameUsesVkd3dProton() ? " (VKD3D)"
                                                                     : ""));
@@ -10732,6 +10839,9 @@ void MenuCommon::RenderHudlessResourcesWindow(RenderMenuContext& ctx, ImGuiWindo
 
                 ankerl::unordered_dense::map<void*, CapturedHudlessInfo>::iterator it;
 
+                // Render threads add and remove entries
+                std::scoped_lock hudlessLock(state.capturedHudlessesMutex);
+
                 for (it = state.capturedHudlesses.begin(); it != state.capturedHudlesses.end(); it++)
                 {
                     ImGui::TableNextRow();
@@ -10785,7 +10895,7 @@ static void RenderGameInfoRow(State& state, const GpuInformation& primaryGpu)
 {
     // Game name is in the window title
     ScopedCard card;
-    std::string line = StrFmt("%s%s | %s | Input: %s", ApiName(state.api),
+    std::string line = StrFmt("%s%s | %s | Input: %s", ApiName(GameApi(state)),
                               IdentifyGpu::gameUsesDxvk()          ? " (DXVK)"
                               : IdentifyGpu::gameUsesVkd3dProton() ? " (VKD3D)"
                                                                    : "",
@@ -11043,6 +11153,10 @@ bool MenuCommon::RenderMenu()
     RenderMenuContext ctx { State::Instance(), Config::Instance(), ImGui::GetIO() };
     ctx.now = Util::MillisecondsNow();
     ctx.currentFeature = ctx.state.currentFeature;
+
+    // Applied here, the feature isn't safe to read from the plugin's thread, kept until there is one
+    if (ctx.currentFeature != nullptr && PluginApi::TakeReInitRequest())
+        ReInitUpscaler();
 
     // 1) Collect timing and input state before any ImGui drawing.
     UpdateRenderTiming(ctx);

@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 
 #include "SysUtils.h"
 #include <vulkan/vulkan.h>
@@ -15,6 +16,9 @@ bool QueuePresent(VkQueue queue, VkPresentInfoKHR* pPresentInfo);
 // With a window, asks OnOtherWindow(hwnd) again under the overlay's locks and keeps the menu (returns
 // false) when it is on another window by then: the caller's own check ran before them
 bool DestroyVulkanObjects(bool shutdown, HWND hwnd = nullptr);
+
+void ReleaseDevice(VkDevice device, std::optional<bool> drained = std::nullopt);
+void DestroySwapchain(VkDevice device, VkSwapchainKHR swapchain);
 
 // The menu stays on its window while that exists, games can have more than one
 bool OnOtherWindow(HWND hwnd);

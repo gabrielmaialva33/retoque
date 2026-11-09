@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 OptiScaler contributors
+
 /*
  * OptiScaler plugin API
  *
@@ -44,7 +47,7 @@ extern "C"
 {
 #endif
 
-#define OPTI_PLUGIN_API_VERSION 1
+#define OPTI_PLUGIN_API_VERSION 2
 
     // Handle of the calling plugin, given to OptiPluginInit
     typedef struct OptiPlugin OptiPlugin;
@@ -141,6 +144,13 @@ extern "C"
 
         // Writes to the OptiScaler log, prefixed with the plugin name
         void (*Log)(OptiPlugin* plugin, OptiLogLevel level, const char* message);
+
+        // Upscaler (version 2) ----------------------------------------------------------------------------------
+
+        // Recreates all active upscalers with their current settings, applied on the next frame with an upscaler.
+        // Returns false while the OptiScaler menu isn't initialized, it applies the request.
+        // Can be called from any thread. Check with OPTI_API_HAS(api, ReInitUpscalers).
+        bool (*ReInitUpscalers)(OptiPlugin* plugin);
 
     } OptiPluginApi;
 

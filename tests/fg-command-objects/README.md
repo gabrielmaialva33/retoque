@@ -21,3 +21,6 @@ format gate from both backends' `SetResource`.
 
 Limits: fakes only. Barrier correctness, Streamline/XeFG acceptance and GPU timing need the D3D12 debug layer on
 native Windows and a game with HUD-less input.
+
+`fence_cases.py` adds production SC/UI and FSR prepare waits, failed queue Signal, lost-device sentinel,
+missing event/fence and stale-wake cases. Failed proof must stop before allocator Reset.

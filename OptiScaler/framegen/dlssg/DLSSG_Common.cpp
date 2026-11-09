@@ -4,6 +4,7 @@
 
 #include <hooks/Reflex_Hooks.h>
 #include <hooks/Streamline_Hooks.h>
+#include <framegen/nvngx/Nvngx_FG.h>
 
 #include <magic_enum.hpp>
 
@@ -25,6 +26,14 @@ void DLSSG_Common::Activate()
 
     if (!_isActive)
     {
+        // Present markers sent while Reflex is off are dropped, the first dispatch comes after the present start
+        sl::ReflexOptions reflexConst = {};
+        reflexConst.mode = sl::ReflexMode::eLowLatency;
+        ScopedOptiScalerReflex optiScalerCall {};
+
+        if (StreamlineProxy::ReflexSetOptions() != nullptr)
+            StreamlineProxy::ReflexSetOptions()(reflexConst);
+
         UpdateTarget();
         _isActive = true;
     }
@@ -81,9 +90,11 @@ void DLSSG_Common::QueryState()
     sl::DLSSGOptions dlssgOptions {};
     if (StreamlineProxy::DLSSGGetState()(_viewport, dlssgState, &dlssgOptions) == sl::Result::eOk)
     {
-        State::Instance().dlssgMfgMax = dlssgState.numFramesToGenerateMax;
-        _maxInterpolationCount = dlssgState.numFramesToGenerateMax;
-        LOG_INFO("Max supported interpolations: {}", dlssgState.numFramesToGenerateMax);
+        _streamlineMaxInterpolationCount = dlssgState.numFramesToGenerateMax;
+        _maxInterpolationCount = Nvngx_FG::limitToProvider(dlssgState.numFramesToGenerateMax);
+        State::Instance().dlssgMfgMax = _maxInterpolationCount;
+        LOG_INFO("Max supported interpolations: {} (Streamline's: {})", _maxInterpolationCount,
+                 dlssgState.numFramesToGenerateMax);
 
         _supportsDMFG = dlssgState.bIsDynamicMFGSupported == sl::Boolean::eTrue;
     }

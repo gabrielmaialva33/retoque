@@ -33,7 +33,11 @@ unsigned CoreDx11Shutdown(ID3D11Device* device, unsigned* remaining)
     ++dx11Calls;
     return result;
 }
-unsigned CoreDx11AllShutdown() { ++dx11AllCalls; return result; }
+unsigned CoreDx11AllShutdown()
+{
+    ++dx11AllCalls;
+    return result;
+}
 
 unsigned vkCalls = 0, vkAllCalls = 0;
 VkDevice expectedVk = nullptr;
@@ -45,7 +49,11 @@ unsigned CoreVkShutdown(VkDevice device, unsigned* remaining)
     ++vkCalls;
     return result;
 }
-unsigned CoreVkAllShutdown() { ++vkAllCalls; return result; }
+unsigned CoreVkAllShutdown()
+{
+    ++vkAllCalls;
+    return result;
+}
 
 // The adapter's two debug lines for one device call: entry, then the core's result and remaining count.
 void ExpectCoreCallAt(size_t at, VkDevice device, unsigned coreResult, unsigned remaining)
@@ -70,7 +78,8 @@ void ExpectPublicBracket(size_t at, VkDevice device, bool coreCalled, unsigned c
     const size_t ret = at + (coreCalled ? 3 : 1);
     assert(debugLog.size() == ret + 1);
     const auto pointer = static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(device));
-    assert(debugLog[at].function == "NVSDK_NGX_VULKAN_Shutdown1" && debugLog[at].format == std::string("device 0x{0:X}"));
+    assert(debugLog[at].function == "NVSDK_NGX_VULKAN_Shutdown1" &&
+           debugLog[at].format == std::string("device 0x{0:X}"));
     assert(debugLog[at].values == std::vector<unsigned long long>({ pointer }));
     if (coreCalled)
         ExpectCoreCallAt(at + 1, device, coreResult, 5);
@@ -119,7 +128,8 @@ void VulkanCases()
     assert(vkCalls == 3 && vkAllCalls == 1 && NVNGXProxy::_vulkanInited);
     ExpectCoreCallLogged(4, &device, 1, 5);
 
-    // The SDK input: the device entry once, the runtime cleared, so the all-devices shutdown it ends in is not repeated.
+    // The SDK input: the device entry once, the runtime cleared, so the all-devices shutdown it ends in is not
+    // repeated.
     assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
     assert(vkCalls == 4 && vkAllCalls == 1 && !NVNGXProxy::_vulkanInited);
     ExpectPublicBracket(6, &device, true);
@@ -157,9 +167,9 @@ void VulkanCases()
     NVNGXProxy::_vulkanInited = false;
     NVNGXProxy::_module.VULKAN_Shutdown = nullptr;
 
-    assert((std::is_same_v<decltype(NVNGXProxy::VULKAN_Shutdown1()), PFN_VULKAN_Shutdown1>));
-    assert((std::is_same_v<decltype(NVNGXProxy::_module.VULKAN_Shutdown1),
-                           NVSDK_NGX_Result (*)(VkDevice, unsigned*)>));
+    assert((std::is_same_v<decltype(NVNGXProxy::VULKAN_Shutdown1()), PFN_VULKAN_Shutdown1>) );
+    assert(
+        (std::is_same_v<decltype(NVNGXProxy::_module.VULKAN_Shutdown1), NVSDK_NGX_Result (*)(VkDevice, unsigned*)>) );
 }
 
 int main()
@@ -167,8 +177,8 @@ int main()
     VulkanCases();
     static_assert(std::is_same_v<decltype(NVNGXProxy::D3D12_Shutdown1()), PFN_D3D12_Shutdown1>);
     static_assert(std::is_same_v<decltype(NVNGXProxy::D3D11_Shutdown1()), PFN_D3D11_Shutdown1>);
-    static_assert(std::is_same_v<decltype(NVNGXProxy::_module.D3D11_Shutdown1),
-                                 NVSDK_NGX_Result (*)(ID3D11Device*, unsigned*)>);
+    static_assert(
+        std::is_same_v<decltype(NVNGXProxy::_module.D3D11_Shutdown1), NVSDK_NGX_Result (*)(ID3D11Device*, unsigned*)>);
     KernelBaseProxy::address = reinterpret_cast<void*>(&CoreDx11Shutdown);
     NVNGXProxy::LoadDx11();
     NVNGXProxy::_module.D3D11_Shutdown = &CoreDx11AllShutdown;
@@ -209,24 +219,26 @@ int main()
     assert(allCalls == 2 && deviceCalls == 2);
     NVNGXProxy::_module.D3D12_Shutdown1 = nullptr;
     assert(NVNGXProxy::D3D12_Shutdown1() == nullptr);
-    // A custom runtime keeps the public SDK signature and must never use the private core slot.
+    // Custom DLLs are raw NGX runtimes too, reached through the core slot.
     CustomNgxModule custom;
-    custom.shutdown1 = &SdkDeviceShutdown;
     custom.module.D3D12_Shutdown1 = &CoreDeviceShutdown;
     NVNGXProxy::ShutdownCustomDx12(custom, &device);
-    assert(sdkCalls == 0 && deviceCalls == 2);
+    assert(deviceCalls == 2);
     custom.dx12Inited = true;
     NVNGXProxy::ShutdownCustomDx12(custom, &device);
-    assert(sdkCalls == 1 && deviceCalls == 2 && !custom.dx12Inited);
+    assert(deviceCalls == 3 && !custom.dx12Inited);
     custom.dx12Inited = true;
     custom.module.D3D12_Shutdown = &CoreAllShutdown;
     NVNGXProxy::ShutdownCustomDx12(custom, &device);
-    assert(allCalls == 3 && sdkCalls == 1 && !custom.dx12Inited);
+    assert(allCalls == 3 && deviceCalls == 3 && !custom.dx12Inited);
     custom.dx12Inited = true;
     custom.module.D3D12_Shutdown = nullptr;
-    custom.shutdown1 = nullptr;
+    NVNGXProxy::ShutdownCustomDx12(custom, nullptr);
+    assert(deviceCalls == 3 && !custom.dx12Inited);
+    custom.dx12Inited = true;
+    custom.module.D3D12_Shutdown1 = nullptr;
     NVNGXProxy::ShutdownCustomDx12(custom, &device);
-    assert(allCalls == 3 && sdkCalls == 1 && deviceCalls == 2 && !custom.dx12Inited);
+    assert(allCalls == 3 && deviceCalls == 3 && !custom.dx12Inited);
     std::cout << "PASS: production D3D11/D3D12/Vulkan core shutdown adapters, writable output, result propagation, "
-                 "null-device routing, both Vulkan consumers and custom SDK shutdown\n";
+                 "null-device routing, both Vulkan consumers and custom raw-runtime shutdown\n";
 }

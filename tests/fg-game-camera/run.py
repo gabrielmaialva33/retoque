@@ -34,7 +34,7 @@ harness = (here / 'test.cpp').read_text()
 frame_source = (repo / 'OptiScaler/framegen/IFGFeature.cpp').read_text()
 frame_slices = ''
 for signature in ('int IFGFeature::GetIndex()', 'UINT64 IFGFeature::StartNewFrame()',
-                  'int IFGFeature::GetDispatchIndex(', 'bool IFGFeature::IsActive()',
+                  'UINT64 IFGFeature::NextDispatchFrame()', 'int IFGFeature::GetDispatchIndex(', 'bool IFGFeature::IsActive()',
                   'bool IFGFeature::IsPaused()', 'bool IFGFeature::IsDispatched()',
                   'void IFGFeature::SetFrameCount(', 'UINT64 IFGFeature::FrameCount()'):
     frame_slices += function(signature, frame_source) + '\n'
