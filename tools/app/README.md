@@ -56,3 +56,31 @@ The catalog metadata format remains schema 1. Reads are limited to 512 MiB per p
 Game status/diagnostics read the PE VERSIONINFO resource of the recognized OptiScaler proxy and NR forwarder.
 Missing, malformed or conflicting resources are unknown; two known unequal file versions produce a warning,
 without changing install eligibility. These checks never load a DLL or execute GPU code.
+
+## Read-only doctor and evidence APIs
+
+`retoque doctor [--json] <game-dir>` reads installation status, settings, the selected model, local GPU identity,
+LSFG readiness and the newest recognized log. Exit **0** means no findings in the available evidence; **6** means
+findings were reported; **1** means usage or inspection failed. The command never repairs or creates a catalog.
+Text output supports `RETOQUE_LANG=en` and `RETOQUE_LANG=pt`; JSON carries stable IDs, localized-message keys,
+evidence and repair proposals. No findings is not runtime qualification.
+
+`retoque_data::doctor::diagnose(&Inputs)` is pure. `Repair` only describes settings, reinstall/reconciliation or
+component removal; a caller must build a fresh core `Plan`, display it and honor all refusals before applying it.
+Supply the selected game's runtime, actual launch-configuration evidence, model inspection, catalog and GPU.
+Unknown is not absent: an unresolved Wine drive cannot prove a model missing, and an absent log cannot prove a
+missing launch override. The CLI deliberately leaves runtime/launch options and catalog alternatives unknown
+because a folder alone does not identify the launch configuration. Multiple detected GPUs leave GPU choice unknown.
+The API can propose an exact compatible catalog model when the caller supplies one.
+
+`logs::diagnose` uses production NR messages and returns redacted log evidence. It keeps initialization,
+CPU-observed evaluation and confirmed GPU timing distinct. A driver probe alone is not proof that `_nvngx.dll`
+is missing; that diagnosis also requires Wine/Proton context and an explicit absent-file inspection.
+Paths with recognized home/userdata components are redacted; this is not a general secret scanner.
+
+Recommendations include facts, confidence and an optional qualification message (`caveat_key`).
+The sm86 0.4.1 README specifies Windows 10/11 x64 and D3D12; its Vulkan note points to community patches and limited
+coverage. Therefore Proton/Wine suggestions are experimental, and a last-session D3D11/Vulkan API suppresses the
+sm86 proposal. The verified confidence tier is reserved for feature-specific runtime proof: API detection or NR
+initialization never upgrades a frame-generation proposal. UI consumers can translate the new keys through
+`retoque_data::messages::text`; existing recommendation title/why keys remain unchanged.

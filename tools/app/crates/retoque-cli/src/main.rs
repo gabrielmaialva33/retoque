@@ -1,4 +1,5 @@
 mod autotune;
+mod doctor;
 
 use retoque_core::{
     Error, Foreign, InstallOptions, Refusal, Step, apply, plan_install, plan_settings, plan_uninstall, status,
@@ -7,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 fn usage() {
     println!(
-        "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
+        "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque doctor [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
     );
 }
 fn expand(text: &str) -> PathBuf {
@@ -171,7 +172,18 @@ fn run() -> Result<(), Error> {
     } else {
         None
     };
-    if !["install", "uninstall", "status", "set", "component", "gpu", "games"].contains(&command.as_str()) {
+    if ![
+        "install",
+        "uninstall",
+        "status",
+        "doctor",
+        "set",
+        "component",
+        "gpu",
+        "games",
+    ]
+    .contains(&command.as_str())
+    {
         return Err(Error::Other(format!("unknown command: {command}")));
     }
     let mut opts = InstallOptions {
@@ -192,7 +204,7 @@ fn run() -> Result<(), Error> {
             "--dry-run" | "-n" if ["install", "uninstall", "set", "component"].contains(&command.as_str()) => {
                 dry = true
             }
-            "--json" if ["status", "gpu", "games"].contains(&command.as_str()) => json = true,
+            "--json" if ["status", "doctor", "gpu", "games"].contains(&command.as_str()) => json = true,
             "--home" if command == "games" => {
                 home = Some(expand(
                     &args
@@ -240,6 +252,9 @@ fn run() -> Result<(), Error> {
         return Ok(());
     }
     opts.game_dir = expand(&positional[0]);
+    if command == "doctor" {
+        return doctor::run(&opts.game_dir, json);
+    }
     if command == "status" {
         return show_status(&opts.game_dir, json);
     }
