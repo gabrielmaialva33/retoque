@@ -325,6 +325,15 @@ fn label(value: Option<&str>) -> io::Result<String> {
     }
     Ok(value.into())
 }
+fn clean_version(value: Option<&str>) -> io::Result<Option<String>> {
+    let Some(v) = value.map(str::trim).filter(|v| !v.is_empty()) else {
+        return Ok(None);
+    };
+    if v.len() > 64 || v.chars().any(char::is_control) {
+        return Err(invalid("invalid component version"));
+    }
+    Ok(Some(v.into()))
+}
 
 /// Read-only validation/hash for CLI dry-run; no catalogue is opened or created. Extra release documentation,
 /// archives and alternative proxy loaders are intentionally not deployment members.
@@ -409,10 +418,15 @@ impl ComponentCatalog {
         if paths != manifest.files.keys().cloned().collect::<Vec<_>>() {
             return Err(invalid("component members changed"));
         }
-        let (files, version) = scan(&dir, &paths, None)?;
-        if files != manifest.files || manifest_id(&files) != id || version != manifest.version {
+        let (files, pe_version) = scan(&dir, &paths, None)?;
+        let manifest_version = clean_version(manifest.version.as_deref())?;
+        if files != manifest.files
+            || manifest_id(&files) != id
+            || (pe_version.is_some() && pe_version != manifest_version)
+        {
             return Err(invalid("component integrity check failed"));
         }
+        let version = pe_version.or(manifest_version);
         self.held.current()?;
         Ok(Component {
             id: id.into(),
@@ -424,10 +438,19 @@ impl ComponentCatalog {
         })
     }
     pub fn import_dir(&self, source: &Path, name: Option<&str>) -> io::Result<Component> {
+        self.import_dir_with_version(source, name, None)
+    }
+    pub fn import_dir_with_version(
+        &self,
+        source: &Path,
+        name: Option<&str>,
+        release_version: Option<&str>,
+    ) -> io::Result<Component> {
         self.held.current()?;
         let source = HeldDir::open(source)?;
         let paths = members(&source.dir)?;
         let label = label(name)?;
+        let fallback_version = clean_version(release_version)?;
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let mut stage = None;
         for _ in 0..128 {
@@ -452,8 +475,9 @@ impl ComponentCatalog {
             .dir
             .as_ref()
             .ok_or_else(|| invalid("component staging directory unavailable"))?;
-        let (files, version) = scan(&source.dir, &paths, Some(dir))?;
+        let (files, pe_version) = scan(&source.dir, &paths, Some(dir))?;
         source.current()?;
+        let version = pe_version.or_else(|| fallback_version.clone());
         let id = manifest_id(&files);
         let manifest = Manifest {
             schema: 1,
@@ -468,12 +492,18 @@ impl ComponentCatalog {
         drop(metadata);
         // The parent stays pinned while Windows handles to the staged directory close for rename.
         drop(stage.dir.take());
+        let with_fallback = |mut c: Component| {
+            if c.version.is_none() {
+                c.version = fallback_version.clone();
+            }
+            c
+        };
         if self.held.dir.try_exists(&id)? {
-            return self.entry(&id);
+            return self.entry(&id).map(with_fallback);
         }
         match self.held.dir.rename(&stage.name, &self.held.dir, &id) {
-            Ok(()) => self.entry(&id),
-            Err(_) if self.held.dir.try_exists(&id)? => self.entry(&id),
+            Ok(()) => self.entry(&id).map(with_fallback),
+            Err(_) if self.held.dir.try_exists(&id)? => self.entry(&id).map(with_fallback),
             Err(e) => Err(e),
         }
     }

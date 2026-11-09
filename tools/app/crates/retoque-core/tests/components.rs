@@ -296,3 +296,173 @@ fn legacy_proxy_does_not_authorize_replacing_foreign_runtime_files() {
     assert!(apply(&p, &mut |_| {}).is_err());
     assert_eq!(fs::read(f.game.join("version.dll")).unwrap(), b"dlssg_sm86 old");
 }
+
+fn pe_versioninfo_with_string(key: &str, value: &str, extra: &[u8]) -> Vec<u8> {
+    let mut b = b"MZ\0\0\0\0".to_vec();
+    for ch in "VS_VERSION_INFO\0".encode_utf16() {
+        b.extend_from_slice(&ch.to_le_bytes());
+    }
+    for ch in key.encode_utf16().chain([0]) {
+        b.extend_from_slice(&ch.to_le_bytes());
+    }
+    b.extend_from_slice(&[0, 0]);
+    for ch in value.encode_utf16().chain([0]) {
+        b.extend_from_slice(&ch.to_le_bytes());
+    }
+    b.extend_from_slice(extra);
+    b
+}
+
+#[test]
+fn optiscaler_proxies_with_sm86_probe_strings_are_not_refused_as_foreign_sm86_loaders() {
+    // 1. Marker-recognized OptiScaler proxy containing dlssg_sm86 probe strings.
+    let f = Fixture::new();
+    fs::write(
+        f.game.join("dxgi.dll"),
+        b"MZ OptiScaler working as dxgi.dll; probes dlssg_sm86 and DLSSG SM86",
+    )
+    .unwrap();
+    let p = plan_component_install(&f.game, &f.component).unwrap();
+    assert!(p.refusals().is_empty(), "{:?}", p.refusals());
+
+    // 2. PE VERSIONINFO FileDescription / ProductName "OptiScaler" without ASCII marker, containing dlssg_sm86.
+    for key in ["FileDescription", "ProductName"] {
+        let f = Fixture::new();
+        let bytes = pe_versioninfo_with_string(key, "OptiScaler", b"dlssg_sm86 probe");
+        fs::write(f.game.join("dxgi.dll"), &bytes).unwrap();
+        let p = plan_component_install(&f.game, &f.component).unwrap();
+        assert!(p.refusals().is_empty(), "{key}: {:?}", p.refusals());
+    }
+
+    // 3. Receipt-owned proxy containing dlssg_sm86 probe strings.
+    let f = Fixture::new();
+    fs::write(f.game.join("dxgi.dll"), b"MZ custom proxy with dlssg_sm86 probe").unwrap();
+    fs::create_dir(f.game.join(".retoque")).unwrap();
+    let r = receipt::Receipt {
+        status: receipt::ReceiptStatus::Complete,
+        updated: String::new(),
+        records: vec![receipt::Record::Proxy {
+            name: "dxgi.dll".into(),
+        }],
+    };
+    fs::write(f.game.join(".retoque/receipt.txt"), r.to_text()).unwrap();
+    let p = plan_component_install(&f.game, &f.component).unwrap();
+    assert!(p.refusals().is_empty(), "{:?}", p.refusals());
+
+    // 4. Real second sm86 loaders (dxgi.dll, winmm.dll, dinput8.dll) are still refused.
+    for proxy in ["dxgi.dll", "winmm.dll", "dinput8.dll"] {
+        let f = Fixture::new();
+        let bytes = pe_versioninfo_with_string("ProductName", "dlssg_for_sm86", b"dlssg_sm86 loader");
+        fs::write(f.game.join(proxy), bytes).unwrap();
+        let p = plan_component_install(&f.game, &f.component).unwrap();
+        assert!(
+            p.refusals()
+                .iter()
+                .any(|r| matches!(r, Refusal::Usage(msg) if msg.contains("is another sm86 loader"))),
+            "{proxy}: {:?}",
+            p.refusals()
+        );
+    }
+}
+
+#[test]
+fn adopting_manual_install_keeps_identical_nested_files_and_supports_windows_paths() {
+    let mut f = Fixture::new();
+    let nested = [
+        ("dlssg_sm86/backend/sm86_backend.dll", b"MZ backend".as_slice()),
+        ("dlssg_sm86/kernels/fg_kernels.dll", b"MZ kernels".as_slice()),
+        ("dlssg_sm86/runtime/nvngx_dlssg.dll", b"synthetic runtime".as_slice()),
+        ("dlssg_sm86/sr/sr_kernels.dll", b"MZ sr".as_slice()),
+        ("dlssg_sm86/xefg/xefg_kernels.dll", b"MZ xefg".as_slice()),
+    ];
+    for (rel, bytes) in nested {
+        let src = f.component.source_root.join(rel);
+        fs::create_dir_all(src.parent().unwrap()).unwrap();
+        fs::write(&src, bytes).unwrap();
+        let dst = f.game.join(rel);
+        fs::create_dir_all(dst.parent().unwrap()).unwrap();
+        fs::write(&dst, bytes).unwrap();
+    }
+    fs::write(
+        f.game.join("version.dll"),
+        fs::read(f.component.source_root.join("version.dll")).unwrap(),
+    )
+    .unwrap();
+    fs::write(f.game.join("dlssg_sm86.ini"), b"[General]\nEnabled=1\nHud=1\n").unwrap();
+    // Supply Windows-style backslash paths in ComponentFiles.files to verify separator normalization.
+    f.component.files = vec![
+        "version.dll".into(),
+        "dlssg_sm86.ini".into(),
+        r"dlssg_sm86\backend\sm86_backend.dll".into(),
+        r"dlssg_sm86\kernels\fg_kernels.dll".into(),
+        r"dlssg_sm86\runtime\nvngx_dlssg.dll".into(),
+        r"dlssg_sm86\sr\sr_kernels.dll".into(),
+        r"dlssg_sm86\xefg\xefg_kernels.dll".into(),
+    ];
+
+    let plan = plan_component_install(&f.game, &f.component).unwrap();
+    assert!(plan.refusals().is_empty(), "{:?}", plan.refusals());
+    assert!(
+        !plan
+            .steps()
+            .iter()
+            .any(|s| matches!(s, Step::Copy { .. } | Step::Backup { .. })),
+        "expected only SetIni and Keep steps when adopting identical files + user ini: {:?}",
+        plan.steps()
+    );
+    for (rel, _) in nested {
+        assert!(
+            plan.steps()
+                .iter()
+                .any(|s| matches!(s, Step::Keep { path, why } if path == rel && why == "identical component file")),
+            "missing Keep for {rel}: {:?}",
+            plan.steps()
+        );
+    }
+    apply(&plan, &mut |_| {}).unwrap();
+    assert_eq!(
+        fs::read(f.game.join("dlssg_sm86.ini")).unwrap(),
+        b"[General]\nEnabled=1\nHud=1\n"
+    );
+
+    // Uninstalling removes the adopted component DLLs and index, but keeps the user's pre-existing dlssg_sm86.ini.
+    let uninstall = plan_component_uninstall(&f.game, "synthetic-1").unwrap();
+    assert!(uninstall.refusals().is_empty());
+    apply(&uninstall, &mut |_| {}).unwrap();
+    assert!(installed_components(&f.game).unwrap().is_empty());
+    assert!(!f.game.join("version.dll").exists());
+    for (rel, _) in nested {
+        assert!(!f.game.join(rel).exists(), "{rel} should be removed");
+    }
+    assert_eq!(
+        fs::read(f.game.join("dlssg_sm86.ini")).unwrap(),
+        b"[General]\nEnabled=1\nHud=1\n"
+    );
+}
+
+#[test]
+fn fresh_install_copies_default_ini_and_uninstall_preserves_user_edited_ini() {
+    let f = Fixture::new();
+    let plan = plan_component_install(&f.game, &f.component).unwrap();
+    assert!(
+        plan.steps()
+            .iter()
+            .any(|s| matches!(s, Step::Copy { to, .. } if to == "dlssg_sm86.ini"))
+    );
+    apply(&plan, &mut |_| {}).unwrap();
+    assert_eq!(
+        fs::read(f.game.join("dlssg_sm86.ini")).unwrap(),
+        b"[General]\nEnabled=1\n"
+    );
+
+    // User edits dlssg_sm86.ini after fresh install; uninstall must not delete it and must still remove the component.
+    fs::write(f.game.join("dlssg_sm86.ini"), b"[General]\nEnabled=1\nUserEdited=1\n").unwrap();
+    let uninstall = plan_component_uninstall(&f.game, "synthetic-1").unwrap();
+    apply(&uninstall, &mut |_| {}).unwrap();
+    assert!(installed_components(&f.game).unwrap().is_empty());
+    assert!(!f.game.join("version.dll").exists());
+    assert_eq!(
+        fs::read(f.game.join("dlssg_sm86.ini")).unwrap(),
+        b"[General]\nEnabled=1\nUserEdited=1\n"
+    );
+}

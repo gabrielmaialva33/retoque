@@ -362,6 +362,13 @@ impl Cache {
     /// Prefer the newest locally verified official release after restart; explicit UI selections still win.
     pub fn prefer_latest(&self, catalog: &mut [Component]) -> io::Result<()> {
         let records = self.records()?;
+        for c in catalog.iter_mut() {
+            if c.version.is_none()
+                && let Some(r) = records.iter().find(|r| r.component_id == c.id)
+            {
+                c.version = Some(r.release.version.clone());
+            }
+        }
         let key = |c: &Component| {
             records
                 .iter()
@@ -431,7 +438,7 @@ impl Cache {
             self.held.current()?;
             let payload = self.held.root.join(&name).join("payload");
             let label = format!("DLSS-G for sm86 {} · {}", release.version, release.published_at);
-            let component = catalog.import_dir(&payload, Some(&label))?;
+            let component = catalog.import_dir_with_version(&payload, Some(&label), Some(&release.version))?;
             let record = Record {
                 release: release.clone(),
                 sha256: hash,
@@ -578,6 +585,8 @@ mod tests {
         let cache = Cache::open(&t.path().join("cache")).unwrap();
         let catalog = ComponentCatalog::open(Some(&t.path().join("catalog"))).unwrap();
         let (c, r) = cache.download(&fetcher, &release, &catalog, &mut |_| {}).unwrap();
+        assert_eq!(c.version.as_deref(), Some("0.4.1"));
+        assert_eq!(catalog.list().unwrap()[0].version.as_deref(), Some("0.4.1"));
         assert!(c.files.contains(&"dlssg_sm86/sr/sr_kernels.dll".into()));
         assert!(c.files.contains(&"dlssg_sm86/sr/nvngx_dlss.dll".into()));
         assert!(!c.root.join("LICENSE.md").exists());
@@ -606,8 +615,11 @@ mod tests {
         assert!(!cache.contains(&r, &catalog.list().unwrap()).unwrap());
         let (new_component, _) = cache.import_archive(&r, &new, &catalog).unwrap();
         let mut choices = vec![old_component, new_component.clone()];
+        choices[0].version = None;
         cache.prefer_latest(&mut choices).unwrap();
         assert_eq!(choices[0].id, new_component.id);
+        assert_eq!(choices[0].version.as_deref(), Some("0.4.10"));
+        assert_eq!(choices[1].version.as_deref(), Some("0.4.1"));
         assert!(cache.contains(&r, &choices).unwrap());
         catalog.remove(&new_component.id).unwrap();
         assert!(!cache.contains(&r, &catalog.list().unwrap()).unwrap());
