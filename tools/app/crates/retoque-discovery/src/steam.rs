@@ -107,7 +107,7 @@ pub fn parse_vdf(text: &str) -> Result<Vec<(String, VdfValue)>, String> {
         return Err(format!("VDF size ({}) exceeds limit ({MAX_TEXT_BYTES})", text.len()));
     }
     let tokens = tokenize_vdf(text)?;
-    parse_vdf_iterative(&tokens)
+    parse_vdf_iterative(tokens)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -118,136 +118,152 @@ enum Token {
 }
 
 fn tokenize_vdf(text: &str) -> Result<Vec<Token>, String> {
-    let mut tokens = Vec::new();
-    let chars: Vec<char> = text.chars().collect();
-    let n = chars.len();
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let bytes = text.as_bytes();
+    let n = bytes.len();
+    let mut tokens = Vec::with_capacity(n / 16);
     let mut i = 0;
 
-    // Skip UTF-8 BOM if present.
-    if i < n && chars[i] == '\u{feff}' {
-        i += 1;
-    }
-
     while i < n {
-        let c = chars[i];
-        if c.is_whitespace() {
+        let b = bytes[i];
+        if b.is_ascii_whitespace() {
             i += 1;
             continue;
         }
-        if c == '/' && i + 1 < n && chars[i + 1] == '/' {
+        if b >= 0x80 {
+            let ch = text[i..].chars().next().unwrap();
+            if ch.is_whitespace() {
+                i += ch.len_utf8();
+                continue;
+            }
+        }
+        if b == b'/' && i + 1 < n && bytes[i + 1] == b'/' {
             i += 2;
-            while i < n && chars[i] != '\n' {
+            while i < n && bytes[i] != b'\n' {
                 i += 1;
             }
             continue;
         }
-        if c == '{' {
+        if b == b'{' {
             tokens.push(Token::OpenBrace);
             i += 1;
             continue;
         }
-        if c == '}' {
+        if b == b'}' {
             tokens.push(Token::CloseBrace);
             i += 1;
             continue;
         }
-        if c == '"' {
+        if b == b'"' {
             i += 1;
-            let mut s = String::new();
+            let start = i;
+            let mut has_escape = false;
             let mut closed = false;
             while i < n {
-                let ch = chars[i];
-                if ch == '"' {
-                    i += 1;
+                let cur = bytes[i];
+                if cur == b'"' {
                     closed = true;
                     break;
                 }
-                if ch == '\\' && i + 1 < n {
-                    let next = chars[i + 1];
-                    match next {
-                        '\\' => {
-                            s.push('\\');
-                            i += 2;
-                        }
-                        '"' => {
-                            s.push('"');
-                            i += 2;
-                        }
-                        'n' => {
-                            s.push('\n');
-                            i += 2;
-                        }
-                        't' => {
-                            s.push('\t');
-                            i += 2;
-                        }
-                        _ => {
-                            s.push(ch);
-                            i += 1;
-                        }
-                    }
-                } else {
-                    s.push(ch);
+                if cur == b'\\' {
+                    has_escape = true;
                     i += 1;
+                    if i < n {
+                        let ch = text[i..].chars().next().unwrap();
+                        i += ch.len_utf8();
+                    }
+                    continue;
                 }
+                i += 1;
             }
             if !closed {
                 return Err("unterminated quoted string in VDF".to_string());
             }
-            tokens.push(Token::Str(s));
+            let slice = &text[start..i];
+            i += 1; // consume closing '"'
+            if !has_escape {
+                tokens.push(Token::Str(slice.to_string()));
+            } else {
+                let mut s = String::with_capacity(slice.len());
+                let mut chars = slice.chars();
+                while let Some(ch) = chars.next() {
+                    if ch == '\\' {
+                        match chars.next() {
+                            Some('\\') => s.push('\\'),
+                            Some('"') => s.push('"'),
+                            Some('n') => s.push('\n'),
+                            Some('t') => s.push('\t'),
+                            Some(other) => {
+                                s.push('\\');
+                                s.push(other);
+                            }
+                            None => s.push('\\'),
+                        }
+                    } else {
+                        s.push(ch);
+                    }
+                }
+                tokens.push(Token::Str(s));
+            }
             continue;
         }
 
         // Unquoted token fallback.
-        let mut s = String::new();
-        while i < n && !chars[i].is_whitespace() && chars[i] != '{' && chars[i] != '}' && chars[i] != '"' {
-            s.push(chars[i]);
-            i += 1;
+        let start = i;
+        while i < n {
+            let cur = bytes[i];
+            if cur.is_ascii_whitespace() || cur == b'{' || cur == b'}' || cur == b'"' {
+                break;
+            }
+            if cur >= 0x80 {
+                let ch = text[i..].chars().next().unwrap();
+                if ch.is_whitespace() {
+                    break;
+                }
+                i += ch.len_utf8();
+            } else {
+                i += 1;
+            }
         }
-        if !s.is_empty() {
-            tokens.push(Token::Str(s));
+        if i > start {
+            tokens.push(Token::Str(text[start..i].to_string()));
         }
     }
 
     Ok(tokens)
 }
 
-fn parse_vdf_iterative(tokens: &[Token]) -> Result<Vec<(String, VdfValue)>, String> {
+fn parse_vdf_iterative(tokens: Vec<Token>) -> Result<Vec<(String, VdfValue)>, String> {
     let mut root: Vec<(String, VdfValue)> = Vec::new();
     let mut stack: Vec<(String, Vec<(String, VdfValue)>)> = Vec::new();
-    let mut pos = 0;
+    let mut iter = tokens.into_iter();
 
-    while pos < tokens.len() {
-        match &tokens[pos] {
+    while let Some(tok) = iter.next() {
+        match tok {
             Token::CloseBrace => {
                 let Some((key, entries)) = stack.pop() else {
                     return Err("unexpected '}' in VDF".to_string());
                 };
                 let target = stack.last_mut().map(|(_, e)| e).unwrap_or(&mut root);
                 target.push((key, VdfValue::Map(entries)));
-                pos += 1;
             }
             Token::OpenBrace => {
                 return Err("unexpected '{' in VDF where key was expected".to_string());
             }
             Token::Str(key) => {
-                let key = key.clone();
-                pos += 1;
-                if pos >= tokens.len() {
+                let Some(next_tok) = iter.next() else {
                     return Err(format!("unexpected end of VDF after key '{key}'"));
-                }
-                match &tokens[pos] {
+                };
+                match next_tok {
                     Token::Str(val) => {
                         let target = stack.last_mut().map(|(_, e)| e).unwrap_or(&mut root);
-                        target.push((key, VdfValue::Str(val.clone())));
-                        pos += 1;
+                        target.push((key, VdfValue::Str(val)));
                     }
                     Token::OpenBrace => {
                         if stack.len() >= MAX_VDF_DEPTH {
                             return Err(format!("VDF nesting depth exceeds limit ({MAX_VDF_DEPTH})"));
                         }
                         stack.push((key, Vec::new()));
-                        pos += 1;
                     }
                     Token::CloseBrace => {
                         return Err(format!("unexpected '}}' after key '{key}' in VDF"));

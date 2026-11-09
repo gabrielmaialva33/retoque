@@ -1,0 +1,63 @@
+[package]
+name = "retoque-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+retoque-core = { path = "../crates/retoque-core" }
+retoque-data = { path = "../crates/retoque-data" }
+retoque-discovery = { path = "../crates/retoque-discovery" }
+
+[[bin]]
+name = "pe_version"
+path = "fuzz_targets/pe_version.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "model_compat"
+path = "fuzz_targets/model_compat.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "steam_vdf"
+path = "fuzz_targets/steam_vdf.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lutris_yaml"
+path = "fuzz_targets/lutris_yaml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "epic_manifest"
+path = "fuzz_targets/epic_manifest.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ini_parse"
+path = "fuzz_targets/ini_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "receipt_parse"
+path = "fuzz_targets/receipt_parse.rs"
+test = false
+doc = false
+bench = false

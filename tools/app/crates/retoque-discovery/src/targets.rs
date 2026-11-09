@@ -291,22 +291,44 @@ pub fn find_dlss_anywhere_with_targets(install_dir: &Path, targets: &[TargetDir]
     if !targets.is_empty() {
         // `find_targets` already walked the binary folders up to depth 5; only Unreal `Plugins`
         // subtrees (`Engine/Plugins`, `<Project>/Engine/Plugins`, `<Project>/Plugins`) remain.
-        let mut plugin_roots = vec![install_dir.join("Engine/Plugins"), install_dir.join("Plugins")];
-        if let Ok(rd) = fs::read_dir(install_dir) {
-            for entry in rd.flatten() {
-                if entry.file_type().is_ok_and(|ft| ft.is_dir()) {
-                    let p = entry.path();
-                    plugin_roots.push(p.join("Engine/Plugins"));
-                    plugin_roots.push(p.join("Plugins"));
-                }
-            }
-        }
-        for proot in plugin_roots {
+        for rel in ["Engine/Plugins", "Plugins"] {
             if has_core_dlss(&found) || budget == 0 {
                 break;
             }
+            let proot = install_dir.join(rel);
             if proot.is_dir() {
                 walk_dlss_anywhere(&proot, 2, true, &mut budget, &mut found);
+            }
+        }
+        if !has_core_dlss(&found)
+            && budget > 0
+            && let Ok(rd) = fs::read_dir(install_dir)
+        {
+            for entry in rd.flatten() {
+                if has_core_dlss(&found) || budget == 0 {
+                    break;
+                }
+                if !entry.file_type().is_ok_and(|ft| ft.is_dir()) {
+                    continue;
+                }
+                let fname = entry.file_name();
+                let name_cow = fname.to_string_lossy();
+                let skip = with_ascii_lower(&name_cow, |lower| {
+                    lower == "engine" || lower == "plugins" || should_skip_dlss_subdir(lower)
+                });
+                if skip {
+                    continue;
+                }
+                let p = entry.path();
+                for rel in ["Engine/Plugins", "Plugins"] {
+                    if has_core_dlss(&found) || budget == 0 {
+                        break;
+                    }
+                    let proot = p.join(rel);
+                    if proot.is_dir() {
+                        walk_dlss_anywhere(&proot, 2, true, &mut budget, &mut found);
+                    }
+                }
             }
         }
     } else {
@@ -315,6 +337,22 @@ pub fn find_dlss_anywhere_with_targets(install_dir: &Path, targets: &[TargetDir]
 
     found.sort();
     found
+}
+
+fn with_ascii_lower<R>(s: &str, f: impl FnOnce(&str) -> R) -> R {
+    if !s.bytes().any(|b| b.is_ascii_uppercase()) {
+        return f(s);
+    }
+    if s.len() <= 128 {
+        let mut buf = [0u8; 128];
+        buf[..s.len()].copy_from_slice(s.as_bytes());
+        buf[..s.len()].make_ascii_lowercase();
+        if let Ok(lower) = std::str::from_utf8(&buf[..s.len()]) {
+            return f(lower);
+        }
+    }
+    let owned = s.to_ascii_lowercase();
+    f(&owned)
 }
 
 fn has_core_dlss(found: &[String]) -> bool {
@@ -342,23 +380,29 @@ fn walk_dlss_anywhere(dir: &Path, depth: usize, in_plugins_or_bins: bool, budget
         };
         let file_name = entry.file_name();
         let name_cow = file_name.to_string_lossy();
-        let lower = name_cow.to_ascii_lowercase();
 
         if ft.is_dir() {
-            if depth < MAX_DLSS_DEPTH && should_enter_dlss_subdir(&lower, depth, in_plugins_or_bins) {
-                let next_in_plugins = in_plugins_or_bins
-                    || matches!(
-                        lower.as_str(),
-                        "plugins" | "thirdparty" | "streamline" | "streamlinecore" | "dlss"
-                    );
-                let prio = dlss_subdir_priority(&lower);
-                subdirs.push((prio, next_in_plugins, entry.path()));
+            if depth < MAX_DLSS_DEPTH {
+                with_ascii_lower(&name_cow, |lower| {
+                    if should_enter_dlss_subdir(lower, depth, in_plugins_or_bins) {
+                        let next_in_plugins = in_plugins_or_bins
+                            || matches!(
+                                lower,
+                                "plugins" | "thirdparty" | "streamline" | "streamlinecore" | "dlss"
+                            );
+                        let prio = dlss_subdir_priority(lower);
+                        subdirs.push((prio, next_in_plugins, entry.path()));
+                    }
+                });
             }
-        } else if ft.is_file()
-            && let Some(&canonical) = DLSS_DLLS.iter().find(|&&d| d == lower)
-            && !found.iter().any(|d| d == canonical)
-        {
-            found.push(canonical.to_string());
+        } else if ft.is_file() && matches!(name_cow.len(), 14 | 15 | 17) {
+            with_ascii_lower(&name_cow, |lower| {
+                if let Some(&canonical) = DLSS_DLLS.iter().find(|&&d| d == lower)
+                    && !found.iter().any(|d| d == canonical)
+                {
+                    found.push(canonical.to_string());
+                }
+            });
         }
     }
 
@@ -596,13 +640,16 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
         return;
     };
 
-    let mut inspection = DirInspection {
-        has_receipt: dir.join(".retoque").join("receipt.txt").is_file(),
-        ..DirInspection::default()
-    };
+    let mut inspection = DirInspection::default();
     let mut subdirs: Vec<(i32, PathBuf)> = Vec::new();
     let rel_dir = dir.strip_prefix(root).unwrap_or(Path::new(""));
+    let in_root_engine = rel_dir
+        .components()
+        .next()
+        .is_some_and(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("engine"));
 
+    let mut has_retoque_dir = false;
+    let mut has_retoque_companion = false;
     let mut has_sm86_ini = false;
     let mut sm86_dir_path: Option<PathBuf> = None;
     let mut has_reshade_file = false;
@@ -621,18 +668,27 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
         let file_name = entry.file_name();
         let name_cow = file_name.to_string_lossy();
         let name_str = name_cow.as_ref();
-        let lower = name_str.to_ascii_lowercase();
 
         if ft.is_dir() {
-            let sub_path = entry.path();
-            if lower == "dlssg_sm86" {
-                sm86_dir_path = Some(sub_path);
+            if name_str == ".retoque" {
+                has_retoque_dir = true;
                 continue;
             }
-            if depth < MAX_WALK_DEPTH && !should_skip_subdir(root, &sub_path, name_str) {
-                let priority = subdir_walk_priority(&lower);
-                subdirs.push((priority, sub_path));
+            if name_str.starts_with('.') {
+                continue;
             }
+            with_ascii_lower(name_str, |lower| {
+                if lower == "dlssg_sm86" {
+                    sm86_dir_path = Some(entry.path());
+                } else if depth < MAX_WALK_DEPTH
+                    && !in_root_engine
+                    && !(depth == 0 && lower == "engine")
+                    && !should_skip_subdir_lower(lower)
+                {
+                    let priority = subdir_walk_priority(lower);
+                    subdirs.push((priority, entry.path()));
+                }
+            });
             continue;
         }
 
@@ -640,57 +696,80 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
             continue;
         }
 
-        if lower == "dlssg_sm86.ini" {
-            has_sm86_ini = true;
+        // Fast suffix filter: only .exe, .dll, and .ini files matter inside walk_dir.
+        let b = name_str.as_bytes();
+        if b.len() < 4 || b[b.len() - 4] != b'.' {
             continue;
         }
-        if matches!(lower.as_str(), "reshade64.dll" | "reshade32.dll" | "reshade.ini") {
-            has_reshade_file = true;
-            continue;
-        }
-        if matches!(
-            lower.as_str(),
-            "specialk64.dll" | "specialk32.dll" | "specialk.dll" | "specialk.ini"
-        ) {
-            has_specialk_file = true;
+        let ext = [
+            b[b.len() - 3].to_ascii_lowercase(),
+            b[b.len() - 2].to_ascii_lowercase(),
+            b[b.len() - 1].to_ascii_lowercase(),
+        ];
+        if !matches!(&ext, b"exe" | b"dll" | b"ini") {
             continue;
         }
 
-        if let Some(&canonical_dlss) = DLSS_DLLS.iter().find(|&&d| d == lower) {
-            if !inspection.dlss.iter().any(|d| d == canonical_dlss) {
-                inspection.dlss.push(canonical_dlss.to_string());
+        with_ascii_lower(name_str, |lower| {
+            if lower == "dlssg_sm86.ini" {
+                has_sm86_ini = true;
+                return;
             }
-            continue;
-        }
+            if matches!(lower, "optiscaler.dll" | "nvngx.dll_dlssnr.dll") {
+                has_retoque_companion = true;
+                return;
+            }
+            if matches!(lower, "reshade64.dll" | "reshade32.dll" | "reshade.ini") {
+                has_reshade_file = true;
+                return;
+            }
+            if matches!(
+                lower,
+                "specialk64.dll" | "specialk32.dll" | "specialk.dll" | "specialk.ini"
+            ) {
+                has_specialk_file = true;
+                return;
+            }
 
-        if let Some(&canonical_proxy) = PROXY_DLLS.iter().find(|&&p| p == lower)
-            && !inspection.proxies.iter().any(|p| p == canonical_proxy)
-        {
-            inspection.proxies.push(canonical_proxy.to_string());
-        }
+            if let Some(&canonical_dlss) = DLSS_DLLS.iter().find(|&&d| d == lower) {
+                if !inspection.dlss.iter().any(|d| d == canonical_dlss) {
+                    inspection.dlss.push(canonical_dlss.to_string());
+                }
+                return;
+            }
 
-        if LOADER_CANDIDATE_DLLS.contains(&lower.as_str()) {
-            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-            candidate_loader_dlls.push((lower, entry.path(), size));
-            continue;
-        }
+            if let Some(&canonical_proxy) = PROXY_DLLS.iter().find(|&&p| p == lower)
+                && !inspection.proxies.iter().any(|p| p == canonical_proxy)
+            {
+                inspection.proxies.push(canonical_proxy.to_string());
+            }
 
-        if lower.ends_with(".exe") && !is_ignored_exe(name_str, rel_dir) {
-            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
-            inspection.exes.push(ExeCandidate {
-                name: name_cow.into_owned(),
-                size,
-            });
-        }
+            if LOADER_CANDIDATE_DLLS.contains(&lower) {
+                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                candidate_loader_dlls.push((lower.to_string(), entry.path(), size));
+                return;
+            }
+
+            if ext == *b"exe" && !is_ignored_exe(name_str, rel_dir) {
+                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                inspection.exes.push(ExeCandidate {
+                    name: name_cow.clone().into_owned(),
+                    size,
+                });
+            }
+        });
     }
 
     let has_emulator = inspection.exes.iter().any(|e| emulator_name_for_exe(&e.name).is_some());
 
     if !inspection.exes.is_empty() {
+        inspection.has_receipt = has_retoque_dir && dir.join(".retoque/receipt.txt").is_file();
+        has_retoque_companion |= inspection.has_receipt;
         inspection.dlss.sort();
         inspection.proxies.sort();
         inspection.loaders = detect_loaders(
             dir,
+            has_retoque_companion,
             has_sm86_ini,
             sm86_dir_path.as_deref(),
             has_reshade_file,
@@ -720,6 +799,7 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
 
 fn detect_loaders(
     dir: &Path,
+    has_retoque_companion: bool,
     has_sm86_ini: bool,
     sm86_dir: Option<&Path>,
     mut has_reshade: bool,
@@ -735,9 +815,6 @@ fn detect_loaders(
         })
     });
 
-    let has_retoque_companion = dir.join(".retoque/receipt.txt").is_file()
-        || dir.join("OptiScaler.dll").is_file()
-        || dir.join("nvngx.dll_dlssnr.dll").is_file();
     let mut has_sm86_dll_marker = false;
     let mut has_monolithic_sm86_dll = false;
 
@@ -851,16 +928,12 @@ fn subdir_walk_priority(lower_name: &str) -> i32 {
     }
 }
 
-fn should_skip_subdir(root: &Path, sub_path: &Path, dir_name: &str) -> bool {
-    if dir_name.starts_with('.') {
-        return true;
-    }
-    let lower = dir_name.to_ascii_lowercase();
+fn should_skip_subdir_lower(lower: &str) -> bool {
     if lower.ends_with("_data") || lower.ends_with(".pak") || lower.starts_with("dw_dlc") {
         return true;
     }
-    if matches!(
-        lower.as_str(),
+    matches!(
+        lower,
         "dlssg_sm86"
             | "_commonredist"
             | "redist"
@@ -927,7 +1000,14 @@ fn should_skip_subdir(root: &Path, sub_path: &Path, dir_name: &str) -> bool {
             | "cheats"
             | "cheats_ws"
             | "cheats_ni"
-    ) {
+    )
+}
+
+fn should_skip_subdir(root: &Path, sub_path: &Path, dir_name: &str) -> bool {
+    if dir_name.starts_with('.') {
+        return true;
+    }
+    if with_ascii_lower(dir_name, should_skip_subdir_lower) {
         return true;
     }
 
@@ -948,192 +1028,205 @@ fn should_skip_subdir(root: &Path, sub_path: &Path, dir_name: &str) -> bool {
 /// Returns `true` if `exe_name` in `rel_dir` is a known non-game executable (crash reporter,
 /// redistributable/prerequisite installer, anti-cheat setup, launcher helper, or uninstaller).
 pub fn is_ignored_exe(exe_name: &str, rel_dir: &Path) -> bool {
-    let lower = exe_name.to_ascii_lowercase();
-    let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
+    with_ascii_lower(exe_name, |lower| {
+        let stem = lower.strip_suffix(".exe").unwrap_or(lower);
 
-    // Check directory components for non-game and mod-tool subdirectories.
-    let mut in_loader_dir = false;
-    let mut in_server_dir = false;
-    for comp in rel_dir.components() {
-        let cl = comp.as_os_str().to_string_lossy().to_ascii_lowercase();
-        if cl == "loader" {
-            in_loader_dir = true;
+        // Check directory components for non-game and mod-tool subdirectories.
+        let mut in_loader_dir = false;
+        let mut in_server_dir = false;
+        for comp in rel_dir.components() {
+            let comp_cow = comp.as_os_str().to_string_lossy();
+            let skip_dir = with_ascii_lower(&comp_cow, |cl| {
+                if cl == "loader" {
+                    in_loader_dir = true;
+                }
+                if cl == "server" || cl.contains("server redirector") {
+                    in_server_dir = true;
+                }
+                matches!(
+                    cl,
+                    "_commonredist"
+                        | "redist"
+                        | "redistributables"
+                        | "prereq"
+                        | "prerequisites"
+                        | "directx"
+                        | "vcredist"
+                        | "dotnet"
+                        | "dotnetcore"
+                        | "easyanticheat"
+                        | "battleye"
+                        | "crashreporter"
+                        | "crashreport"
+                        | "installer"
+                        | "__installer"
+                        | "modengine"
+                        | "modengine2"
+                        | "me2"
+                        | "me3"
+                        | "randomizer"
+                        | "scyllahide"
+                        | "convergenceer"
+                        | "mods"
+                        | "mods instalados"
+                )
+            });
+            if skip_dir {
+                return true;
+            }
         }
-        if cl == "server" || cl.contains("server redirector") {
-            in_server_dir = true;
-        }
-        if matches!(
-            cl.as_str(),
-            "_commonredist"
-                | "redist"
-                | "redistributables"
-                | "prereq"
-                | "prerequisites"
-                | "directx"
-                | "vcredist"
-                | "dotnet"
-                | "dotnetcore"
-                | "easyanticheat"
-                | "battleye"
-                | "crashreporter"
-                | "crashreport"
-                | "installer"
-                | "__installer"
-                | "modengine"
-                | "modengine2"
-                | "me2"
-                | "me3"
-                | "randomizer"
-                | "scyllahide"
-                | "convergenceer"
-                | "mods"
-                | "mods instalados"
-        ) {
+
+        if (stem == "loader" && in_loader_dir) || (stem == "server" && in_server_dir) {
             return true;
         }
-    }
 
-    if (stem == "loader" && in_loader_dir) || (stem == "server" && in_server_dir) {
-        return true;
-    }
+        // Mod-tool, randomizer, injector, downloader, and seamless-coop launcher binaries.
+        if stem.starts_with("modengine")
+            || stem == "me3"
+            || stem.starts_with("me3-")
+            || stem.starts_with("me3_")
+            || stem.ends_with("sc_launcher")
+            || stem.starts_with("injectorcli")
+            || stem.contains("downloader")
+            || stem.contains("customserverlauncher")
+            || stem.contains("randomizer")
+        {
+            return true;
+        }
 
-    // Mod-tool, randomizer, injector, downloader, and seamless-coop launcher binaries.
-    if stem.starts_with("modengine")
-        || stem == "me3"
-        || stem.starts_with("me3-")
-        || stem.starts_with("me3_")
-        || stem.ends_with("sc_launcher")
-        || stem.starts_with("injectorcli")
-        || stem.contains("downloader")
-        || stem.contains("customserverlauncher")
-        || stem.contains("randomizer")
-    {
-        return true;
-    }
+        // Crash reporters and handlers.
+        if stem.contains("crashreport")
+            || stem.contains("crashhandler")
+            || stem.starts_with("unitycrashhandler")
+            || stem.contains("crashpad")
+            || stem.contains("errorreporter")
+            || stem.contains("bugreport")
+            || stem.starts_with("crs-handler")
+            || stem.starts_with("crs-uploader")
+            || stem.contains("senddebug")
+            || stem.contains("minidump")
+        {
+            return true;
+        }
 
-    // Crash reporters and handlers.
-    if stem.contains("crashreport")
-        || stem.contains("crashhandler")
-        || stem.starts_with("unitycrashhandler")
-        || stem.contains("crashpad")
-        || stem.contains("errorreporter")
-        || stem.contains("bugreport")
-        || stem.starts_with("crs-handler")
-        || stem.starts_with("crs-uploader")
-        || stem.contains("senddebug")
-        || stem.contains("minidump")
-    {
-        return true;
-    }
+        // Redistributable and prerequisite installers.
+        if stem.starts_with("vc_redist")
+            || stem.starts_with("vcredist")
+            || stem.starts_with("ueprereqsetup")
+            || stem.starts_with("ue4prereqsetup")
+            || stem.contains("prereqsetup")
+            || stem.contains("redist")
+            || stem == "dxsetup"
+            || stem.starts_with("dotnetfx")
+            || stem.starts_with("ndp4")
+            || stem.starts_with("windowsdesktop-runtime")
+            || stem == "oalinst"
+            || stem.starts_with("physx")
+            || stem.starts_with("directx")
+        {
+            return true;
+        }
 
-    // Redistributable and prerequisite installers.
-    if stem.starts_with("vc_redist")
-        || stem.starts_with("vcredist")
-        || stem.starts_with("ueprereqsetup")
-        || stem.starts_with("ue4prereqsetup")
-        || stem.contains("prereqsetup")
-        || stem.contains("redist")
-        || stem == "dxsetup"
-        || stem.starts_with("dotnetfx")
-        || stem.starts_with("ndp4")
-        || stem.starts_with("windowsdesktop-runtime")
-        || stem == "oalinst"
-        || stem.starts_with("physx")
-        || stem.starts_with("directx")
-    {
-        return true;
-    }
+        // EasyAntiCheat and BattlEye setup / service binaries.
+        if stem.contains("easyanticheat")
+            || stem.contains("eac_setup")
+            || stem.starts_with("beservice")
+            || stem.starts_with("beclient")
+            || stem.contains("battleye")
+            || stem.contains("eaanticheat")
+        {
+            return true;
+        }
 
-    // EasyAntiCheat and BattlEye setup / service binaries.
-    if stem.contains("easyanticheat")
-        || stem.contains("eac_setup")
-        || stem.starts_with("beservice")
-        || stem.starts_with("beclient")
-        || stem.contains("battleye")
-        || stem.contains("eaanticheat")
-    {
-        return true;
-    }
+        // Uninstallers.
+        if stem.starts_with("unins") || stem.contains("uninstall") {
+            return true;
+        }
 
-    // Uninstallers.
-    if stem.starts_with("unins") || stem.contains("uninstall") {
-        return true;
-    }
-
-    // Known launcher and engine helper binaries.
-    matches!(
-        stem,
-        "7za"
-            | "7z"
-            | "cefsharp.browsersubprocess"
-            | "unrealcefsubprocess"
-            | "epicwebhelper"
-            | "steamerrorreporter"
-            | "d3d12stateobjectcompiler"
-            | "d3dconfig"
-            | "driverversionchecker"
-            | "layerschecker"
-            | "supporttool"
-            | "redprelauncher"
-            | "rockstar-games-launcher"
-            | "social-club-setup"
-            | "activationui"
-            | "touchup"
-            | "cleanup"
-            | "shadercompileworker"
-            | "zenserver"
-            | "benchmark"
-    )
+        // Known launcher and engine helper binaries.
+        matches!(
+            stem,
+            "7za"
+                | "7z"
+                | "cefsharp.browsersubprocess"
+                | "unrealcefsubprocess"
+                | "epicwebhelper"
+                | "steamerrorreporter"
+                | "d3d12stateobjectcompiler"
+                | "d3dconfig"
+                | "driverversionchecker"
+                | "layerschecker"
+                | "supporttool"
+                | "redprelauncher"
+                | "rockstar-games-launcher"
+                | "social-club-setup"
+                | "activationui"
+                | "touchup"
+                | "cleanup"
+                | "shadercompileworker"
+                | "zenserver"
+                | "benchmark"
+        )
+    })
 }
 
 fn is_unreal_win64_dir(root: &Path, dir: &Path) -> bool {
     let Ok(rel) = dir.strip_prefix(root) else {
         return false;
     };
-    let comps: Vec<String> = rel
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy().to_ascii_lowercase())
-        .collect();
-    if comps.first().is_some_and(|c| c == "engine") {
+    let mut comps = rel.components();
+    let Some(last) = comps.next_back() else {
+        return false;
+    };
+    let Some(prev) = comps.next_back() else {
+        return false;
+    };
+    if let Some(first) = rel.components().next()
+        && first.as_os_str().to_string_lossy().eq_ignore_ascii_case("engine")
+    {
         return false;
     }
-    let n = comps.len();
-    n >= 2 && comps[n - 2] == "binaries" && (comps[n - 1] == "win64" || comps[n - 1] == "wingdk")
+    let last_s = last.as_os_str().to_string_lossy();
+    let prev_s = prev.as_os_str().to_string_lossy();
+    prev_s.eq_ignore_ascii_case("binaries")
+        && (last_s.eq_ignore_ascii_case("win64") || last_s.eq_ignore_ascii_case("wingdk"))
 }
 
 fn is_unreal_shipping_exe(exe_name: &str) -> bool {
-    let lower = exe_name.to_ascii_lowercase();
-    lower.ends_with("-win64-shipping.exe") || lower.ends_with("-wingdk-shipping.exe")
+    with_ascii_lower(exe_name, |lower| {
+        lower.ends_with("-win64-shipping.exe") || lower.ends_with("-wingdk-shipping.exe")
+    })
 }
 
 fn score_single_exe(exe_name: &str, size: u64, game_name: &str, hinted_exe: Option<&str>) -> i32 {
-    let mut score = 0;
-    let lower = exe_name.to_ascii_lowercase();
-    let stem = lower.strip_suffix(".exe").unwrap_or(&lower);
+    with_ascii_lower(exe_name, |lower| {
+        let mut score = 0;
+        let stem = lower.strip_suffix(".exe").unwrap_or(lower);
 
-    if hinted_exe.is_some_and(|h| h == lower) {
-        score += 100;
-    }
-    if emulator_name_for_exe(exe_name).is_some() {
-        score += 80;
-    }
-    if is_unreal_shipping_exe(exe_name) {
-        score += 60;
-    }
-    if exe_matches_game_name(stem, game_name) {
-        score += 30;
-    }
-    if stem.contains("launcher") || stem == "start_protected_game" || stem.ends_with("_be") {
-        score -= 20;
-    }
-    if size >= 50 * 1024 * 1024 {
-        score += 30;
-    } else if size >= 10 * 1024 * 1024 {
-        score += 20;
-    } else if size >= 1024 * 1024 {
-        score += 10;
-    }
-    score
+        if hinted_exe.is_some_and(|h| h == lower) {
+            score += 100;
+        }
+        if emulator_name_for_exe(exe_name).is_some() {
+            score += 80;
+        }
+        if lower.ends_with("-win64-shipping.exe") || lower.ends_with("-wingdk-shipping.exe") {
+            score += 60;
+        }
+        if exe_matches_game_name(stem, game_name) {
+            score += 30;
+        }
+        if stem.contains("launcher") || stem == "start_protected_game" || stem.ends_with("_be") {
+            score -= 20;
+        }
+        if size >= 50 * 1024 * 1024 {
+            score += 30;
+        } else if size >= 10 * 1024 * 1024 {
+            score += 20;
+        } else if size >= 1024 * 1024 {
+            score += 10;
+        }
+        score
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1171,39 +1264,46 @@ fn score_directory(
 
     // 3. Common binary directory paths vs bonus/soundtrack/devtools/launcher folders.
     if let Ok(rel) = dir.strip_prefix(root) {
-        let comps: Vec<String> = rel
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy().to_ascii_lowercase())
-            .collect();
-
-        if comps
-            .iter()
-            .any(|c| matches!(c.as_str(), "bin" | "bin64" | "x64" | "x64_dx12" | "game" | "defed"))
-        {
+        let mut has_bin = false;
+        let mut has_dx12 = false;
+        let mut has_penalty = false;
+        for c in rel.components() {
+            let cow = c.as_os_str().to_string_lossy();
+            with_ascii_lower(&cow, |cl| {
+                if matches!(cl, "bin" | "bin64" | "x64" | "x64_dx12" | "game" | "defed") {
+                    has_bin = true;
+                }
+                if cl.contains("dx12") {
+                    has_dx12 = true;
+                }
+                if matches!(
+                    cl,
+                    "devtools"
+                        | "artbook"
+                        | "artbookost"
+                        | "erd_artbookost"
+                        | "ost"
+                        | "soundtrack"
+                        | "bonus"
+                        | "classic"
+                        | "sandbox"
+                        | "doomsandbox"
+                        | "launcher"
+                        | "tools"
+                        | "sdk"
+                        | "editor"
+                ) {
+                    has_penalty = true;
+                }
+            });
+        }
+        if has_bin {
             score += 15;
         }
-        if comps.iter().any(|c| c.contains("dx12")) {
+        if has_dx12 {
             score += 5;
         }
-        if comps.iter().any(|c| {
-            matches!(
-                c.as_str(),
-                "devtools"
-                    | "artbook"
-                    | "artbookost"
-                    | "erd_artbookost"
-                    | "ost"
-                    | "soundtrack"
-                    | "bonus"
-                    | "classic"
-                    | "sandbox"
-                    | "doomsandbox"
-                    | "launcher"
-                    | "tools"
-                    | "sdk"
-                    | "editor"
-            )
-        }) {
+        if has_penalty {
             score -= 45;
         }
     }

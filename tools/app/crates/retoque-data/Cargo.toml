@@ -20,3 +20,11 @@ retoque-discovery.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
+
+[dev-dependencies]
+divan.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "model_compat_bench"
+harness = false

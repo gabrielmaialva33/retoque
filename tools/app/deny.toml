@@ -1,0 +1,91 @@
+# cargo-deny configuration for Retoque app workspace (GPL-3.0-only distribution).
+# Run from tools/app: `cargo deny check`
+
+[graph]
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-pc-windows-gnu" },
+]
+all-features = false
+
+[advisories]
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+unmaintained = "workspace"
+unsound = "all"
+yanked = "deny"
+ignore = [
+    # retoque-discovery (lutris.rs:130, validate_wal_pair) explicitly verifies that the SQLite
+    # header page size equals the WAL header page size (db_ps == wal_ps) in Rust before SQLite
+    # ever opens a pga.db + pga.db-wal snapshot.
+    { id = "RUSTSEC-2026-0459", reason = "lutris.rs validate_wal_pair enforces db_ps == wal_ps before SQLite opens any WAL file" },
+    # retoque-data (logs.rs, owned by app-smart) only uses zip::ZipWriter to create diagnostic
+    # bundles and never calls ZipArchive::extract() or ZipStreamReader::extract().
+    { id = "RUSTSEC-2026-0367", reason = "ZipArchive::extract is never used; retoque-data only writes diagnostic zips via ZipWriter" },
+    { id = "RUSTSEC-2026-0368", reason = "ZipArchive::extract is never used; retoque-data only writes diagnostic zips via ZipWriter" },
+    { id = "RUSTSEC-2026-0369", reason = "ZipStreamReader::extract is never used; retoque-data only writes diagnostic zips via ZipWriter" },
+    { id = "RUSTSEC-2026-0429", reason = "ZipArchive::extract is never used; retoque-data only writes diagnostic zips via ZipWriter" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+unused-allowed-license = "allow"
+# Every license not listed in `allow` is denied by cargo-deny, including:
+# - GPL-2.0-only (incompatible with GPL-3.0-only without "or later" clause)
+# - CC-BY-NC-ND-4.0 / BUSL-1.1 / proprietary / non-free licenses
+# - Unknown or missing license metadata
+allow = [
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "MPL-2.0",
+    "BSL-1.0",
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+]
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+highlight = "all"
+# Enforce architectural rules from APP-MODERN.md: no async runtime, no network client,
+# and no crates pinning older egui versions on Linux or Windows targets.
+deny = [
+    { name = "tokio" },
+    { name = "async-std" },
+    { name = "reqwest" },
+    { name = "ureq" },
+    { name = "ehttp" },
+    { name = "hyper" },
+    { name = "curl" },
+    { name = "egui_inbox" },
+    { name = "egui-toast" },
+    { name = "egui-modal" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
