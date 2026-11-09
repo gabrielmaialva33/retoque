@@ -220,6 +220,8 @@ fn running_game_refused_during_plan_and_when_starting_after_preview() {
     let f = Fixture::new(INI_NAME, b"[A]\nk=v\n");
     let edits = [edit("A", "k", "new")];
     let plan = plan_settings(&f.game, &edits).unwrap();
+    let removal = [("A".into(), "k".into(), None)];
+    let removal_plan = plan_settings_edits(&f.game, &removal).unwrap();
     let mut child=Command::new("python3").args(["-c","import mmap,sys\nf=open(sys.argv[1],'rb')\nm=mmap.mmap(f.fileno(),0,access=mmap.ACCESS_READ)\nprint('ready',flush=True)\nsys.stdin.read()"]).arg(&f.ini).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
     let mut line = String::new();
     BufReader::new(child.stdout.take().unwrap())
@@ -227,10 +229,14 @@ fn running_game_refused_during_plan_and_when_starting_after_preview() {
         .unwrap();
     let refused = plan_settings(&f.game, &edits).unwrap();
     let result = apply(&plan, &mut |_| {});
+    let removal_refused = plan_settings_edits(&f.game, &removal).unwrap();
+    let removal_result = apply(&removal_plan, &mut |_| {});
     drop(child.stdin.take());
     child.wait().unwrap();
     assert!(refused.refusals().iter().any(|r| r.exit_code() == 3));
     assert!(matches!(result,Err(Error::Refused(r)) if r.iter().any(|r|r.exit_code()==3)));
+    assert!(removal_refused.refusals().iter().any(|r| r.exit_code() == 3));
+    assert!(matches!(removal_result,Err(Error::Refused(r)) if r.iter().any(|r|r.exit_code()==3)));
     assert_eq!(fs::read(&f.ini).unwrap(), b"[A]\nk=v\n");
     assert!(!f.game.join(STATE_DIR).exists());
 }
@@ -295,4 +301,77 @@ fn apply(
     progress: &mut dyn FnMut(retoque_core::StepDone),
 ) -> Result<(), retoque_core::Error> {
     retoque_core::apply(&plan.clone().into_verified()?, progress)
+}
+
+#[test]
+fn unset_plans_duplicates_noops_rechecks_and_preserves_receipt() {
+    let original = b"\xef\xbb\xbf[A]\r\nk=one\r\n;keep\n[A]\nk=two\nj=keep\n";
+    let f = Fixture::new(INI_NAME, original);
+    let receipt = f.receipt();
+    let receipt_bytes = fs::read(&receipt).unwrap();
+    let edits = [("a".into(), "k".into(), None), ("A".into(), "absent".into(), None)];
+    let plan = plan_settings_edits(&f.game, &edits).unwrap();
+    assert_eq!(plan.steps().len(), 1);
+    assert!(matches!(&plan.steps()[0], Step::UnsetIni {old: Some(v), ..} if v == "two"));
+    apply(&plan, &mut |_| {}).unwrap();
+    assert_eq!(fs::read(&f.ini).unwrap(), b"\xef\xbb\xbf[A]\r\n;keep\n[A]\nj=keep\n");
+    assert_eq!(fs::read(&receipt).unwrap(), receipt_bytes);
+    assert!(!f.game.join(".retoque/pending-receipt.txt").exists());
+    let noop = plan_settings_edits(&f.game, &edits).unwrap();
+    assert!(noop.steps().is_empty());
+    apply(&noop, &mut |_| panic!("no steps")).unwrap();
+
+    fs::write(&f.ini, original).unwrap();
+    let plan = plan_settings_edits(
+        &f.game,
+        &[("A".into(), "k".into(), None), ("A".into(), "j".into(), None)],
+    )
+    .unwrap();
+    let mut count = 0;
+    assert!(
+        apply(&plan, &mut |_| {
+            count += 1;
+            fs::write(&f.ini, b"external bytes").unwrap();
+        })
+        .is_err()
+    );
+    assert_eq!(count, 1);
+    assert_eq!(fs::read(&f.ini).unwrap(), b"external bytes");
+}
+
+#[test]
+fn exact_undo_is_sealed_and_rechecks_between_steps() {
+    let f = Fixture::new(INI_NAME, b"[A]");
+    let plan = plan_settings(&f.game, &[edit("A", "k", "v"), edit("A", "j", "v")]).unwrap();
+    let provenance = plan.settings_undo().to_vec();
+    apply(&plan, &mut |_| {}).unwrap();
+    let inverse = [("A".into(), "j".into(), None), ("A".into(), "k".into(), None)];
+    let undo = plan_settings_undo(&f.game, &inverse, &provenance).unwrap();
+    assert!(undo.notes().iter().any(|n| n.contains("original bytes")));
+    let mut count = 0;
+    assert!(
+        apply(&undo, &mut |_| {
+            count += 1;
+            fs::write(&f.ini, b"external bytes").unwrap();
+        })
+        .is_err()
+    );
+    assert_eq!(count, 1);
+    assert_eq!(fs::read(&f.ini).unwrap(), b"external bytes");
+}
+
+#[test]
+fn exact_provenance_must_match_requested_steps_and_invalid_removals_refuse() {
+    let f = Fixture::new(INI_NAME, b"[A]");
+    let plan = plan_settings(&f.game, &[edit("A", "k", "v")]).unwrap();
+    let provenance = plan.settings_undo().to_vec();
+    apply(&plan, &mut |_| {}).unwrap();
+    assert!(plan_settings_undo(&f.game, &[], &provenance).is_err());
+    assert!(plan_settings_undo(&f.game, &[("A".into(), "other".into(), None)], &provenance).is_err());
+    for (s, k) in [("A\n[B]", "k"), ("A", "k=other")] {
+        let plan = plan_settings_edits(&f.game, &[(s.into(), k.into(), None)]).unwrap();
+        assert!(usage(&plan));
+        assert!(apply(&plan, &mut |_| {}).is_err());
+    }
+    assert_eq!(fs::read(&f.ini).unwrap(), b"[A]\nk=v\n");
 }

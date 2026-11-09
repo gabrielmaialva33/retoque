@@ -81,7 +81,28 @@ if a later step is refused. No global cross-process writer lock or multi-key rol
 Zero-step plans may be applied: empty settings plans write nothing, while uninstall can still clean up an
 empty/partial receipt. Progress callbacks occur only for actual steps, with zero-based indices as before.
 
-The CLI also exposes `retoque set [--dry-run] <game-dir> <Section> <Key> <Value>` through this same plan/apply API.
+The CLI exposes `retoque set [--dry-run] <game-dir> <Section> <Key> <Value>` and
+`retoque unset [--dry-run] <game-dir> <Section> <Key>` through this same plan/apply API.
+
+`plan_settings_edits` accepts `(section, key, Option<value>)`: `None` plans `Step::UnsetIni`, removing every copy
+of a key while preserving all other bytes, including comments, empty section headers and line endings.
+`SetIni` retains its existing fields and meaning; the separate removal step keeps existing callers, plan sealing,
+process/path checks and CLI previews explicit. Settings removals never enter the install journal or change receipt v1.
+
+`Plan::settings_undo()` exposes sparse provenance for ordinary settings edits: original/edited hashes plus only
+the inserted or replaced byte spans. `plan_settings_undo` receives inverse edits in reverse order. It uses exact
+provenance only if the current INI matches the recorded final hash, and validates each patch by reconstructing
+and replaying its original edit. The sealed plan retains these patches and rechecks the INI between steps.
+This restores created sections/newlines and original duplicate values/spacing without storing the entire INI.
+The app stores this optional data in its bounded app-owned history only after successful apply and a matching
+post-apply read. Legacy history (string `after`, no provenance) still loads.
+
+When the hash changed or provenance is absent, undo conservatively sets old values/removes previously absent
+keys and its review explicitly says restoration is not byte-for-byte (English and pt-BR). It never guesses whether
+an empty section or newline was created by a prior edit. For example, `[A]` and `[A]\n` both become `[A]\nk=v\n`;
+only provenance distinguishes their exact inverse. A changed target value still refuses undo, and stale reviewed
+plans still refuse apply. Undoing an exact undo can fall back to the conservative path: inverse byte patches are
+not recorded as fresh ordinary edits. No GPU or native Windows runtime behavior is certified by host tests.
 
 ## Interrupted installs and recovery
 

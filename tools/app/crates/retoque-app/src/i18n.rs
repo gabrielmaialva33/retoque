@@ -1405,6 +1405,36 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Pending draft; review to apply",
         "Rascunho pendente; revise para aplicar",
     ),
+    (
+        "undo.exact",
+        "INI undo restores the original bytes; the recorded post-apply hash still matches.",
+        "O desfazer restaura os bytes originais do INI; o hash registrado após aplicar ainda corresponde.",
+    ),
+    (
+        "undo.conservative",
+        "Conservative INI undo: the file changed or exact history is unavailable. Other bytes are preserved; restoration is not byte-for-byte.",
+        "Desfazer conservador do INI: o arquivo mudou ou não há histórico exato. Os demais bytes são preservados; a restauração não é byte a byte.",
+    ),
+    (
+        "undo.provenance_mismatch",
+        "INI undo provenance does not match the requested edits",
+        "Os metadados para desfazer o INI não correspondem aos ajustes solicitados",
+    ),
+    (
+        "undo.invalid_provenance",
+        "invalid INI undo provenance; no files were changed",
+        "Metadados inválidos para desfazer o INI; nenhum arquivo foi alterado",
+    ),
+    (
+        "undo.stale_provenance",
+        "INI undo provenance no longer matches; plan again",
+        "Os metadados para desfazer não correspondem mais ao INI; revise um novo plano",
+    ),
+    (
+        "undo.stale_value",
+        "INI value changed since planning; plan again",
+        "O valor do INI mudou após a revisão; revise um novo plano",
+    ),
     ("undo.title", "Undo last change…", "Desfazer última alteração…"),
     (
         "undo.empty",
@@ -1423,8 +1453,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "undo.auto_note",
-        "Undo is reviewed before applying. Previously absent keys return to auto.",
-        "O desfazer é revisado antes de aplicar. Chaves antes ausentes voltam para auto.",
+        "Undo is reviewed before applying. Previously absent keys are removed.",
+        "O desfazer é revisado antes de aplicar. Chaves antes ausentes são removidas.",
     ),
     (
         "drop.hover",
@@ -1967,6 +1997,12 @@ pub fn diagnostic(lang: Lang, message: &str) -> String {
         return t(lang, key).into();
     }
     for key in [
+        "undo.exact",
+        "undo.conservative",
+        "undo.provenance_mismatch",
+        "undo.invalid_provenance",
+        "undo.stale_provenance",
+        "undo.stale_value",
         "note.sm86_upgrade",
         "note.sm86_install",
         "note.resume",

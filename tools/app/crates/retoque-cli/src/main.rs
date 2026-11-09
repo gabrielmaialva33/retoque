@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 fn usage() {
     println!(
-        "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque doctor [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
+        "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque doctor [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque unset [--dry-run] <game-dir> <Section> <Key>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
     );
 }
 fn expand(text: &str) -> PathBuf {
@@ -67,6 +67,15 @@ fn describe(step: &Step, uninstall: bool) -> String {
             old,
         } => format!(
             "set [{section}] {key}={value} in {file} (was {})",
+            old.as_deref().unwrap_or("<absent>")
+        ),
+        Step::UnsetIni {
+            file,
+            section,
+            key,
+            old,
+        } => format!(
+            "remove [{section}] {key} from {file} (was {})",
             old.as_deref().unwrap_or("<absent>")
         ),
         Step::Remove { path } => format!("remove {path}"),
@@ -183,6 +192,7 @@ fn run() -> Result<(), Error> {
         "status",
         "doctor",
         "set",
+        "unset",
         "component",
         "gpu",
         "games",
@@ -206,7 +216,7 @@ fn run() -> Result<(), Error> {
                 usage();
                 return Ok(());
             }
-            "--dry-run" | "-n" if ["install", "uninstall", "set", "component"].contains(&command.as_str()) => {
+            "--dry-run" | "-n" if ["install", "uninstall", "set", "unset", "component"].contains(&command.as_str()) => {
                 dry = true
             }
             "--json" if ["status", "doctor", "gpu", "games"].contains(&command.as_str()) => json = true,
@@ -241,6 +251,7 @@ fn run() -> Result<(), Error> {
     if match command.as_str() {
         "install" => !(1..=2).contains(&positional.len()),
         "set" => positional.len() != 4,
+        "unset" => positional.len() != 3,
         "component" => positional.len() != 2,
         "gpu" | "games" => !positional.is_empty(),
         _ => positional.len() != 1,
@@ -268,6 +279,8 @@ fn run() -> Result<(), Error> {
         autotune::component_plan(&opts.game_dir, &positional[1], uninstall)?
     } else if uninstall {
         plan_uninstall(&opts.game_dir)?
+    } else if command == "unset" {
+        retoque_core::plan_settings_edits(&opts.game_dir, &[(positional[1].clone(), positional[2].clone(), None)])?
     } else if command == "set" {
         plan_settings(
             &opts.game_dir,
@@ -307,7 +320,7 @@ fn run() -> Result<(), Error> {
             "[ok] {}",
             if uninstall {
                 "Uninstalled what could be; the receipt lists anything left."
-            } else if command == "set" {
+            } else if command == "set" || command == "unset" {
                 "Settings saved; install receipt left unchanged."
             } else {
                 "Deployment completed successfully!"

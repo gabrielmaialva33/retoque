@@ -3369,6 +3369,7 @@ dependencies = [
  "chrono",
  "divan",
  "proptest",
+ "serde",
  "sha2",
  "tempfile",
  "thiserror 2.0.21",
