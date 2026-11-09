@@ -12,3 +12,6 @@ pub mod lsfg;
 pub mod recommend;
 
 pub mod model_compat;
+
+pub mod doctor;
+pub mod messages;

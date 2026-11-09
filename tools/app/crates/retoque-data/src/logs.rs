@@ -30,6 +30,10 @@ pub struct Summary {
     pub nr_route: Option<String>,
     /// At least one successful model initialization or evaluate observed; not current running state.
     pub nr_initialized: bool,
+    /// Successful evaluate observed on CPU; not proof of GPU completion.
+    pub nr_evaluated: bool,
+    /// First evidence per diagnostic rule, independent of highlight/error quotas.
+    pub diagnostic_lines: Vec<String>,
     /// First 100 actionable problem lines; routine Streamline callbacks do not consume this quota.
     pub errors: Vec<String>,
     pub warnings: usize,
@@ -221,6 +225,15 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
         result.truncated_lines += usize::from(truncated);
         let decoded = String::from_utf8_lossy(&bytes);
         let line = decoded.trim();
+        for kind in signal_kinds(line) {
+            if !result
+                .diagnostic_lines
+                .iter()
+                .any(|old| signal_kinds(old).contains(&kind))
+            {
+                result.diagnostic_lines.push(line.to_owned());
+            }
+        }
         let lower = line.to_ascii_lowercase();
         let severe = ["faulted", "device removed", "device_removed", "hung", "0x887a"]
             .iter()
@@ -254,6 +267,7 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
             if nr.starts_with(" coverage stage=") {
                 if let Some(cov) = coverage(nr) {
                     result.nr_initialized |= cov.model_ok > 0;
+                    result.nr_evaluated |= cov.model_ok > 0;
                     result.coverage = Some(cov);
                 }
                 result.nr_route = Some(format!("DLSS-NR{nr}"));
@@ -284,6 +298,7 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
                     && dispatch >= 0.0
                     && model >= 0.0
                 {
+                    result.nr_evaluated = true;
                     result.timing_samples += 1;
                     mean += (dispatch - mean) / result.timing_samples as f64;
                     result.nr_initialized = true;
@@ -795,5 +810,222 @@ mod tests {
         let mut zip = zip::ZipArchive::new(File::open(path).unwrap()).unwrap();
         assert_eq!(zip.len(), 1);
         assert_eq!(zip.by_index(0).unwrap().name(), "status.txt");
+    }
+}
+
+/// Evidence from observed production messages, never a guess from an error-level line alone.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct LogDiagnosis {
+    pub id: &'static str,
+    pub title_key: &'static str,
+    pub why_key: &'static str,
+    pub evidence_line: String,
+    pub repair: Option<crate::doctor::Repair>,
+}
+// Sources: DlssNrFeature_Vk.cpp init/drain failure; DlssNr_Dx12_Model.cpp proxy probe;
+// DlssNr_Dx12.cpp coverage emission. pre is retained for the older summary fixtures.
+fn signal_kinds(line: &str) -> Vec<u8> {
+    let mut kinds = Vec::new();
+    if line.contains("DLSS-NR direct: ") && line.contains(" would not load (error ") {
+        kinds.push(5);
+    }
+    if line.contains("DLSS-NR Vulkan: the device was lost while draining it for a resize") {
+        kinds.push(0);
+    }
+    if let Some((_, rest)) = line.split_once("DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned ")
+        && rest
+            .split_whitespace()
+            .next()
+            .and_then(|s| s.parse::<i64>().ok())
+            .is_some_and(|result| result != 1)
+    {
+        kinds.push(1);
+    }
+    if let Some((_, rest)) = line.split_once("DLSS-NR coverage stage=")
+        && let Some(cov) = coverage(&format!("stage={rest}"))
+    {
+        if cov.model_failed > 0 {
+            kinds.push(2);
+        }
+        if ["before", "pre"].contains(&cov.stage.as_str()) && cov.fallback > 0 {
+            kinds.push(3);
+        }
+    }
+    if line.contains("DLSS-NR proxy probe: the driver's nvngx is not initialised here, nothing to ask") {
+        kinds.push(4);
+    }
+    kinds
+}
+/// Redacts known home/userdata path forms plus identities explicitly supplied by the caller.
+/// Pure; no environment or filesystem access. Not a general-purpose secret scanner.
+pub fn redact_line(line: &str, homes: &[String], users: &[String]) -> String {
+    let mut out = Vec::new();
+    Redactor::new(homes, users)
+        .copy(line.as_bytes(), &mut out)
+        .expect("Vec write cannot fail");
+    String::from_utf8_lossy(&out).into_owned()
+}
+/// Historical observations in this summary, not a statement that the game is running now.
+/// A failed evaluate is not necessarily a loading failure; compatibility corroborates a possible cause.
+pub fn diagnose(
+    summary: &Summary,
+    runtime: crate::recommend::Runtime,
+    compatibility: crate::model_compat::Compatibility,
+    driver_nvngx_present: Option<bool>,
+) -> Vec<LogDiagnosis> {
+    use crate::{doctor::setting, model_compat::Compatibility};
+    let mut results = Vec::new();
+    let mut seen = [false; 6];
+    for line in summary
+        .diagnostic_lines
+        .iter()
+        .chain(&summary.errors)
+        .chain(&summary.highlights)
+    {
+        for kind in signal_kinds(line) {
+            if seen[kind as usize] {
+                continue;
+            }
+            if kind == 4 && (!runtime.is_wine() || driver_nvngx_present != Some(false) || summary.nr_evaluated) {
+                continue;
+            }
+            seen[kind as usize] = true;
+            let (id, title_key, why_key, repair) = match kind {
+                0 => (
+                    "vulkan_device_lost",
+                    "log.vulkan.title",
+                    "log.vulkan.why",
+                    Some(setting("DlssNr", "Enabled", "false")),
+                ),
+                1 => ("ngx_init_failed", "log.ngx.title", "log.ngx.why", None),
+                2 => (
+                    "model_failed",
+                    "log.model.title",
+                    if compatibility == Compatibility::Incompatible {
+                        "log.model.incompatible"
+                    } else {
+                        "log.model.why"
+                    },
+                    None,
+                ),
+                3 => (
+                    "pre_stage_fallback",
+                    "log.pre.title",
+                    "log.pre.why",
+                    Some(setting("DlssNr", "Stage", "0")),
+                ),
+                5 => (
+                    "model_load_failed",
+                    "log.load.title",
+                    if compatibility == Compatibility::Incompatible {
+                        "log.model.incompatible"
+                    } else {
+                        "log.load.why"
+                    },
+                    None,
+                ),
+                _ => ("wine_nvngx_missing", "log.nvngx.title", "log.nvngx.why", None),
+            };
+            results.push(LogDiagnosis {
+                id,
+                title_key,
+                why_key,
+                evidence_line: redact_line(line, &[], &[]),
+                repair,
+            });
+        }
+    }
+    results
+}
+
+#[cfg(test)]
+mod diagnosis_tests {
+    use super::*;
+    use crate::{model_compat::Compatibility, recommend::Runtime};
+    fn summary(text: &str) -> Summary {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("OptiScaler.log");
+        fs::write(&path, text).unwrap();
+        summarize(&path).unwrap()
+    }
+    #[test]
+    fn each_rule_positive_negative_and_compatibility_crosscheck() {
+        for (positive, negative, id) in [
+            (
+                "[E] DLSS-NR direct: selected.dll would not load (error 126)",
+                "[I] DLSS-NR direct: selected.dll loaded",
+                "model_load_failed",
+            ),
+            (
+                "[E] DLSS-NR Vulkan: the device was lost while draining it for a resize; its objects are abandoned",
+                "[I] Vulkan hook installed",
+                "vulkan_device_lost",
+            ),
+            (
+                "[E] DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned 0",
+                "[I] DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned 1",
+                "ngx_init_failed",
+            ),
+            (
+                "[I] DLSS-NR coverage stage=before calls=2 model_ok=0 model_failed=1 skipped=0 fallback=0",
+                "[I] DLSS-NR coverage stage=before calls=2 model_ok=2 model_failed=0 skipped=0 fallback=0",
+                "model_failed",
+            ),
+            (
+                "[I] DLSS-NR coverage stage=before calls=2 model_ok=0 model_failed=0 skipped=0 fallback=2",
+                "[I] DLSS-NR coverage stage=after calls=2 model_ok=0 model_failed=0 skipped=0 fallback=2",
+                "pre_stage_fallback",
+            ),
+            (
+                "[I] DLSS-NR proxy probe: the driver's nvngx is not initialised here, nothing to ask",
+                "[I] DLSS-NR: model loader is direct",
+                "wine_nvngx_missing",
+            ),
+        ] {
+            let good = diagnose(&summary(positive), Runtime::Proton, Compatibility::Unknown, Some(false));
+            assert_eq!(good.len(), 1, "{id}");
+            assert_eq!(good[0].id, id);
+            assert!(
+                diagnose(&summary(negative), Runtime::Proton, Compatibility::Unknown, Some(false)).is_empty(),
+                "{id}"
+            );
+            if id == "model_failed" || id == "model_load_failed" {
+                assert_eq!(
+                    diagnose(
+                        &summary(positive),
+                        Runtime::Proton,
+                        Compatibility::Incompatible,
+                        Some(false)
+                    )[0]
+                    .why_key,
+                    "log.model.incompatible"
+                );
+            }
+            if id == "wine_nvngx_missing" {
+                for runtime in [Runtime::Unknown, Runtime::Windows] {
+                    assert!(diagnose(&summary(positive), runtime, Compatibility::Unknown, Some(false)).is_empty());
+                }
+                for exists in [None, Some(true)] {
+                    assert!(diagnose(&summary(positive), Runtime::Proton, Compatibility::Unknown, exists).is_empty());
+                }
+            }
+        }
+    }
+    #[test]
+    fn diagnostic_quota_redaction_and_cpu_gpu_distinction() {
+        let mut text = "[E] unrelated\n".repeat(250);
+        text.push_str("[E] DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned 0 at /home/fixtureperson/model.dll\n"); // privacy: allow
+        text.push_str("[E] DLSS-NR Vulkan: NVSDK_NGX_VULKAN_Init_Ext returned 0\n");
+        let s = summary(&text);
+        let results = diagnose(&s, Runtime::Unknown, Compatibility::Unknown, None);
+        assert_eq!(results.len(), 1);
+        assert!(!results[0].evidence_line.contains("fixtureperson"));
+        let initialized = summary("[I] DLSS-NR Vulkan: feature up at 1920x1080\n");
+        assert!(initialized.nr_initialized && !initialized.nr_evaluated && initialized.nr_gpu_ms.is_none());
+        let evaluated =
+            summary("[I] DLSS-NR coverage stage=before calls=2 model_ok=2 model_failed=0 skipped=0 fallback=0\n");
+        assert!(evaluated.nr_initialized && evaluated.nr_evaluated && evaluated.nr_gpu_ms.is_none());
+        let timed = summary("[I] DLSS-NR gpu timing confirmed: stage=before carried=false dispatch_ms=1 model_ms=1\n");
+        assert!(timed.nr_initialized && timed.nr_evaluated && timed.nr_gpu_ms == Some(1.0));
     }
 }

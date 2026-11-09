@@ -7,8 +7,55 @@ use crate::{
 use serde::Serialize;
 use std::path::Path;
 
+/// Unknown never silently means native Windows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+pub enum Runtime {
+    #[default]
+    Unknown,
+    Windows,
+    Proton,
+    Wine,
+}
+impl Runtime {
+    pub fn is_wine(self) -> bool {
+        matches!(self, Self::Proton | Self::Wine)
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum Confidence {
+    /// Reserved for feature-specific runtime evidence, never inferred from an API or NR initialization.
+    VerifiedInLastSession,
+    StaticMatchUntested,
+    ExperimentalUnderProton,
+}
+impl Confidence {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::VerifiedInLastSession => "confidence.verified",
+            Self::StaticMatchUntested => "confidence.static",
+            Self::ExperimentalUnderProton => "confidence.proton",
+        }
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct FactEvidence {
+    pub key: &'static str,
+    pub value: String,
+}
+impl FactEvidence {
+    pub fn new(key: &'static str, value: impl Into<String>) -> Self {
+        Self {
+            key,
+            value: value.into(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct GameFacts {
+    pub runtime: Runtime,
+    /// Explicit API from the most recent log; hook installation alone is not evidence.
+    pub last_session_api: Option<String>,
     pub has_dlss: bool,
     pub has_dlssg: bool,
     pub installed: bool,
@@ -49,6 +96,13 @@ pub fn facts_for(
         sm86_installed: !components.is_empty() || loader("dlssg_for_sm86") || sm86_legacy,
         sm86_legacy,
         lsfg_enabled: None,
+        runtime: match game.runtime {
+            retoque_discovery::Runtime::Windows => Runtime::Windows,
+            retoque_discovery::Runtime::Proton { .. } => Runtime::Proton,
+            retoque_discovery::Runtime::Wine { .. } => Runtime::Wine,
+            _ => Runtime::Unknown,
+        },
+        last_session_api: None,
     }
 }
 
@@ -87,6 +141,10 @@ pub struct Recommendation {
     pub why_key: &'static str,
     pub actions: Vec<Action>,
     pub needs: Option<Need>,
+    pub evidence: Vec<FactEvidence>,
+    pub confidence: Confidence,
+    /// Additional qualification text from messages::text; keeps existing GUI why keys stable.
+    pub caveat_key: Option<&'static str>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Need {
@@ -112,6 +170,9 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             why_key: "rec.install.why",
             actions: vec![],
             needs: Some(Need::RetoqueInstalled),
+            evidence: evidence(gpu, game),
+            confidence: Confidence::StaticMatchUntested,
+            caveat_key: None,
         }];
     }
     if game.untracked {
@@ -121,6 +182,9 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             why_key: "rec.adopt.why",
             actions: vec![],
             needs: Some(Need::RetoqueInstalled),
+            evidence: evidence(gpu, game),
+            confidence: Confidence::StaticMatchUntested,
+            caveat_key: None,
         }];
     }
     let Some(gpu) = gpu else {
@@ -129,7 +193,11 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
     if gpu.vendor != Vendor::Nvidia {
         return vec![];
     }
-    if matches!(gpu.arch, Arch::Ampere | Arch::Turing) && game.has_dlssg && (!game.sm86_installed || game.sm86_legacy) {
+    if matches!(gpu.arch, Arch::Ampere | Arch::Turing)
+        && game.has_dlssg
+        && (!game.sm86_installed || game.sm86_legacy)
+        && game.last_session_api.as_deref().is_none_or(|api| api == "D3D12")
+    {
         let mut actions = vec![Action::InstallComponent(ComponentKind::DlssgSm86)];
         actions.extend(ini_actions(lsfg_off_edits()));
         return vec![Recommendation {
@@ -146,6 +214,20 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             },
             actions,
             needs: Some(Need::Component(ComponentKind::DlssgSm86)),
+            evidence: {
+                let mut facts = evidence(Some(gpu), game);
+                facts.push(FactEvidence::new(
+                    "evidence.sm86_docs",
+                    "dlssg_for_sm86 0.4.1 README.en.md:92-98; MANUAL.en.html:141",
+                ));
+                facts
+            },
+            caveat_key: game.runtime.is_wine().then_some("confidence.sm86_proton"),
+            confidence: if game.runtime.is_wine() {
+                Confidence::ExperimentalUnderProton
+            } else {
+                Confidence::StaticMatchUntested
+            },
         }];
     }
     if matches!(gpu.arch, Arch::Turing | Arch::Ampere | Arch::Ada | Arch::Blackwell)
@@ -162,6 +244,13 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             why_key: "rec.lsfg.why",
             actions: ini_actions(edits),
             needs: Some(Need::LosslessScaling),
+            evidence: evidence(Some(gpu), game),
+            caveat_key: None,
+            confidence: if game.runtime.is_wine() {
+                Confidence::ExperimentalUnderProton
+            } else {
+                Confidence::StaticMatchUntested
+            },
         }];
     }
     vec![]
@@ -594,5 +683,69 @@ mod nr_tests {
                 .1
                 .is_none()
         );
+    }
+}
+
+fn evidence(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<FactEvidence> {
+    let mut facts = vec![
+        FactEvidence::new("evidence.installed", game.installed.to_string()),
+        FactEvidence::new("evidence.tracked", (game.installed && !game.untracked).to_string()),
+        FactEvidence::new("evidence.runtime", format!("{:?}", game.runtime)),
+        FactEvidence::new("evidence.dlss", game.has_dlss.to_string()),
+        FactEvidence::new("evidence.dlssg", game.has_dlssg.to_string()),
+        FactEvidence::new("evidence.sm86", game.sm86_installed.to_string()),
+        FactEvidence::new("evidence.sm86_legacy", game.sm86_legacy.to_string()),
+        FactEvidence::new("evidence.lsfg", format!("{:?}", game.lsfg_enabled)),
+    ];
+    if let Some(gpu) = gpu {
+        facts.push(FactEvidence::new(
+            "evidence.gpu",
+            format!("{:?} {:?} {:?}", gpu.vendor, gpu.arch, gpu.compute_cap),
+        ));
+    }
+    if let Some(api) = &game.last_session_api {
+        facts.push(FactEvidence::new("evidence.api", api));
+    }
+    facts
+}
+
+#[cfg(test)]
+mod confidence_tests {
+    use super::*;
+    #[test]
+    fn sm86_runtime_and_api_are_evidence_not_qualification() {
+        let gpu = crate::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288").remove(0);
+        for runtime in [Runtime::Unknown, Runtime::Windows, Runtime::Proton, Runtime::Wine] {
+            for api in [None, Some("D3D12"), Some("D3D11"), Some("Vulkan")] {
+                let facts = GameFacts {
+                    installed: true,
+                    has_dlssg: true,
+                    runtime,
+                    last_session_api: api.map(str::to_owned),
+                    ..Default::default()
+                };
+                let result = recommend(Some(&gpu), &facts);
+                if api.is_some_and(|a| a != "D3D12") {
+                    assert!(result.is_empty());
+                    continue;
+                }
+                assert_eq!(
+                    result[0].confidence,
+                    if runtime.is_wine() {
+                        Confidence::ExperimentalUnderProton
+                    } else {
+                        Confidence::StaticMatchUntested
+                    }
+                );
+                assert!(result[0].evidence.iter().any(|e| e.key == "evidence.sm86_docs"));
+                assert_eq!(
+                    result[0].evidence.iter().any(|e| e.key == "evidence.api"),
+                    api.is_some()
+                );
+                if runtime.is_wine() {
+                    assert_eq!(result[0].caveat_key, Some("confidence.sm86_proton"));
+                }
+            }
+        }
     }
 }
