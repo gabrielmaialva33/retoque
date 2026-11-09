@@ -24,6 +24,8 @@ const PENDING: &str = ".retoque/pending-receipt.txt";
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Execution {
     operation: Operation,
+    pub(crate) settings_undo: Vec<ini::IniUndo>,
+    exact_undo: Vec<ini::IniUndo>,
     component_only: bool,
     process_roots: Vec<PathBuf>,
     component_completion: Option<ReceiptStatus>,
@@ -290,7 +292,7 @@ fn step_paths(step: &Step) -> Vec<&str> {
         Step::Copy { to, .. } => vec![to],
         Step::Backup { path, copy } => vec![path, copy],
         Step::Rename { from, to } => vec![from, to],
-        Step::SetIni { file, .. } => vec![file],
+        Step::SetIni { file, .. } | Step::UnsetIni { file, .. } => vec![file],
         Step::Remove { path } | Step::Keep { path, .. } => vec![path],
         Step::Restore { copy, to } => vec![copy, to],
     }
@@ -1062,6 +1064,7 @@ fn perform(plan: &Plan, step: &Step, index: usize, receipt: &mut Receipt) -> Res
             write_intent(game, receipt, index)?;
             put_atomic(game, &path, &bytes, mode)?;
         }
+        Step::UnsetIni { .. } => return Err(Error::Other("unset is only supported in settings plans".into())),
         Step::Remove { path } => {
             fs::remove_file(game.join(path)).map_err(|e| io(&game.join(path), e))?;
             sync_directory(game.join(path).parent().unwrap())?;
@@ -1398,6 +1401,18 @@ fn valid_edit(section: &str, key: &str, value: &str) -> bool {
 }
 
 pub(crate) fn plan_settings(game_dir: &Path, edits: &[(String, String, String)]) -> Result<Plan, Error> {
+    let edits = edits
+        .iter()
+        .map(|(s, k, v)| (s.clone(), k.clone(), Some(v.clone())))
+        .collect::<Vec<_>>();
+    plan_settings_edits(game_dir, &edits, None)
+}
+
+pub(crate) fn plan_settings_edits(
+    game_dir: &Path,
+    edits: &[(String, String, Option<String>)],
+    provenance: Option<&[ini::IniUndo]>,
+) -> Result<Plan, Error> {
     let mut plan = new_plan(game_dir, Operation::Settings)?;
     let (path, bytes) = match read_ini_at(&plan.game_dir) {
         Ok(Some(value)) => value,
@@ -1415,21 +1430,55 @@ pub(crate) fn plan_settings(game_dir: &Path, edits: &[(String, String, String)])
     };
     let file = path.file_name().unwrap().to_string_lossy().into_owned();
     let mut ini = Ini::parse(&bytes);
-    for (section, key, value) in edits {
-        if !valid_edit(section, key, value) {
+    let exact = provenance.filter(|p| p.last().is_some_and(|u| u.matches_after(&bytes)));
+    if let Some(provenance) = exact {
+        if provenance.len() != edits.len() {
+            return Err(usage_error("INI undo provenance does not match the requested edits"));
+        }
+        plan.execution.exact_undo = provenance.iter().rev().cloned().collect();
+    }
+    if provenance.is_some() {
+        plan.notes.push(if exact.is_some() {
+            "INI undo restores the original bytes; the recorded post-apply hash still matches."
+        } else {
+            "Conservative INI undo: the file changed or exact history is unavailable. Other bytes are preserved; restoration is not byte-for-byte."
+        }.into());
+    }
+    for (index, (section, key, value)) in edits.iter().enumerate() {
+        if !valid_edit(section, key, value.as_deref().unwrap_or("")) {
             plan.refusals.push(Refusal::Usage(
                 "INI edits require single-line section, key and value without structural separators".into(),
             ));
             continue;
         }
         let old = ini.get(section, key).map(str::to_owned);
-        if ini.set(section, key, value) {
-            plan.steps.push(Step::SetIni {
-                file: file.clone(),
-                section: section.clone(),
-                key: key.clone(),
-                old,
-                value: value.clone(),
+        let changed = if let Some(undo) = plan.execution.exact_undo.get(index) {
+            if !undo.matches_inverse(section, key, value.as_deref()) || !ini.undo(undo) {
+                return Err(usage_error("invalid INI undo provenance; no files were changed"));
+            }
+            true
+        } else if let Some(undo) = ini.edit_with_undo(section, key, value.as_deref()) {
+            plan.execution.settings_undo.push(undo);
+            true
+        } else {
+            false
+        };
+        if changed {
+            plan.steps.push(if let Some(value) = value {
+                Step::SetIni {
+                    file: file.clone(),
+                    section: section.clone(),
+                    key: key.clone(),
+                    old,
+                    value: value.clone(),
+                }
+            } else {
+                Step::UnsetIni {
+                    file: file.clone(),
+                    section: section.clone(),
+                    key: key.clone(),
+                    old,
+                }
             });
         }
     }
@@ -1474,15 +1523,21 @@ fn replace_settings_ini(path: &Path, bytes: &[u8]) -> Result<(), Error> {
 fn apply_settings(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(), Error> {
     let mut expected = plan.execution.snapshots.clone();
     for (index, step) in plan.steps.iter().enumerate() {
-        let Step::SetIni {
-            file,
-            section,
-            key,
-            value,
-            ..
-        } = step
-        else {
-            return Err(Error::Other("invalid step in settings plan".into()));
+        let (file, section, key, old, value) = match step {
+            Step::SetIni {
+                file,
+                section,
+                key,
+                old,
+                value,
+            } => (file, section, key, old, Some(value.as_str())),
+            Step::UnsetIni {
+                file,
+                section,
+                key,
+                old,
+            } => (file, section, key, old, None),
+            _ => return Err(Error::Other("invalid step in settings plan".into())),
         };
         check_parents(&plan.game_dir, file)?;
         let path = plan.game_dir.join(file);
@@ -1496,7 +1551,20 @@ fn apply_settings(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(),
             ));
         }
         let mut ini = Ini::parse(&read(&path)?);
-        ini.set(section, key, value);
+        if ini.get(section, key) != old.as_deref() {
+            return Err(Error::StalePlan("INI value changed since planning; plan again".into()));
+        }
+        if let Some(undo) = plan.execution.exact_undo.get(index) {
+            if !ini.undo(undo) {
+                return Err(Error::StalePlan(
+                    "INI undo provenance no longer matches; plan again".into(),
+                ));
+            }
+        } else if let Some(value) = value {
+            ini.set(section, key, value);
+        } else {
+            ini.unset(section, key);
+        }
         let bytes = ini.to_bytes();
         replace_settings_ini(&path, &bytes)?;
         if let Some(Fingerprint::File(hash, _)) = expected.get_mut(&path) {

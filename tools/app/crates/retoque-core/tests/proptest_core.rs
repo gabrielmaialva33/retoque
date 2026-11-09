@@ -192,3 +192,38 @@ proptest! {
         }
     }
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    #[test]
+    fn prop_set_unset_inverse_under_existing_terminated_header(
+        comment in prop::collection::vec(0x80u8..=0xff, 0..128),
+        crlf in any::<bool>(),
+        key in ident_strategy(),
+        value in value_strategy(),
+    ) {
+        let mut original = b"\xef\xbb\xbf;".to_vec();
+        original.extend(comment);
+        original.extend(if crlf { b"\r\n[A]\r\n".as_slice() } else { b"\n[A]\n" });
+        let mut ini = Ini::parse(&original);
+        ini.set("A", &key, &value);
+        // Removal must also work after a fresh parse, without in-memory insertion state.
+        let mut ini = Ini::parse(&ini.to_bytes());
+        prop_assert!(ini.unset("A", &key));
+        prop_assert_eq!(ini.to_bytes(), original);
+    }
+
+    #[test]
+    fn prop_sparse_exact_undo_arbitrary_bytes_after_reparse(
+        original in prop::collection::vec(any::<u8>(), 0..512),
+        section in ident_strategy(), key in ident_strategy(), value in value_strategy(),
+    ) {
+        let mut ini = Ini::parse(&original);
+        if let Some(undo) = ini.edit_with_undo(&section, &key, Some(&value)) {
+            let mut reloaded = Ini::parse(&ini.to_bytes());
+            prop_assert!(reloaded.undo(&undo));
+            prop_assert_eq!(reloaded.to_bytes(), original);
+        }
+    }
+}

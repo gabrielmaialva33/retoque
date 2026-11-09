@@ -71,3 +71,29 @@ fn set_missing_ini_refuses_and_negative_value_is_not_a_flag() {
     );
     assert_eq!(f.run(&["set"]).status.code(), Some(1));
 }
+
+#[test]
+fn unset_review_and_apply_remove_key_without_receipt_or_other_changes() {
+    let f = Fixture::new();
+    let ini = f.0.join("OptiScaler.ini");
+    let original = b"[LSFG]\r\nDllPath=custom\r\n;DllPath=comment\r\nDllPath=last\n[Other]\nDllPath=keep";
+    fs::write(&ini, original).unwrap();
+    for dry in [true, false] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_retoque"));
+        command.arg("unset");
+        if dry {
+            command.arg("--dry-run");
+        }
+        let output = command.arg(&f.0).args(["LSFG", "DllPath"]).output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert!(String::from_utf8_lossy(&output.stdout).contains("remove [LSFG] DllPath"));
+        if dry {
+            assert_eq!(fs::read(&ini).unwrap(), original);
+        }
+    }
+    assert_eq!(
+        fs::read(&ini).unwrap(),
+        b"[LSFG]\r\n;DllPath=comment\r\n[Other]\nDllPath=keep"
+    );
+    assert!(!f.0.join(".retoque").exists());
+}

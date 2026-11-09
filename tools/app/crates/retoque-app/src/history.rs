@@ -20,12 +20,14 @@ pub(crate) struct Change {
     pub section: String,
     pub key: String,
     pub before: Option<String>,
-    pub after: String,
+    pub after: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Applied {
     pub time_unix: u64,
     pub changes: Vec<Change>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    exact: Vec<retoque_core::ini::IniUndo>,
 }
 #[derive(Default, Serialize, Deserialize)]
 struct History {
@@ -65,6 +67,7 @@ pub(crate) fn capture(plan: &Plan) -> Applied {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
+        exact: plan.settings_undo().to_vec(),
         changes: plan
             .steps()
             .iter()
@@ -75,11 +78,17 @@ pub(crate) fn capture(plan: &Plan) -> Applied {
                     old,
                     value,
                     ..
-                } if old.as_ref() != Some(value) => Some(Change {
+                } => Some(Change {
                     section: section.clone(),
                     key: key.clone(),
                     before: old.clone(),
-                    after: value.clone(),
+                    after: Some(value.clone()),
+                }),
+                Step::UnsetIni { section, key, old, .. } => Some(Change {
+                    section: section.clone(),
+                    key: key.clone(),
+                    before: old.clone(),
+                    after: None,
                 }),
                 _ => None,
             })
@@ -89,6 +98,16 @@ pub(crate) fn capture(plan: &Plan) -> Applied {
 pub(crate) fn record(root: &Path, target: &Path, mut entry: Applied) -> io::Result<()> {
     if entry.changes.is_empty() {
         return Ok(());
+    }
+    // Persist exact provenance only after the successful apply still matches the planned final hash.
+    // Never attach an externally changed post-apply snapshot to the planned inverse.
+    if !entry.exact.is_empty() {
+        let matches = retoque_core::read_ini(target)
+            .map_err(io::Error::other)?
+            .is_some_and(|(_, bytes)| entry.exact.last().is_some_and(|u| u.matches_after(&bytes)));
+        if !matches {
+            entry.exact.clear();
+        }
     }
     entry.time_unix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -113,7 +132,7 @@ pub(crate) fn record(root: &Path, target: &Path, mut entry: Applied) -> io::Resu
     Ok(())
 }
 /// A fresh sealed core plan binds the inverse to exactly the INI bytes checked here.
-/// Missing original keys restore `auto`; removal is not an operation supported by the INI engine.
+/// Missing original keys are removed. Exact provenance is optional for backward-compatible history.
 pub(crate) fn undo_plan(root: &Path, target: &Path, lang: Lang) -> Result<Plan, AppError> {
     let path = file(root, target).map_err(AppError::from)?;
     let history = load(&path).map_err(|e| AppError::io(path, e))?;
@@ -121,28 +140,28 @@ pub(crate) fn undo_plan(root: &Path, target: &Path, lang: Lang) -> Result<Plan, 
         .entries
         .last()
         .ok_or_else(|| AppError::from(t(lang, "undo.empty")))?;
-    let edits: Vec<Edit> = entry
+    let edits = entry
         .changes
         .iter()
-        .map(|c| {
-            (
-                c.section.clone(),
-                c.key.clone(),
-                c.before.clone().unwrap_or_else(|| "auto".into()),
-            )
-        })
-        .collect();
-    let plan = retoque_core::plan_settings(target, &edits).map_err(AppError::from)?;
+        .rev()
+        .map(|c| (c.section.clone(), c.key.clone(), c.before.clone()))
+        .collect::<Vec<_>>();
+    let plan = retoque_core::plan_settings_undo(target, &edits, &entry.exact).map_err(AppError::from)?;
     if !plan.refusals().is_empty() {
         return Ok(plan);
     }
     // Inspect the old values *inside* the sealed plan, never an earlier UI snapshot/read.
     // Missing steps (already reverted or externally changed to the inverse) also refuse undo.
-    for c in &entry.changes {
-        let matches = plan.steps().iter().any(|s| {
-            matches!(s, Step::SetIni { section, key, old, .. }
-            if section == &c.section && key == &c.key && old.as_ref() == Some(&c.after))
-        });
+    if plan.steps().len() != entry.changes.len() {
+        return Err(t(lang, "undo.conflict").into());
+    }
+    for (c, step) in entry.changes.iter().rev().zip(plan.steps()) {
+        let matches = match step {
+            Step::SetIni { section, key, old, .. } | Step::UnsetIni { section, key, old, .. } => {
+                section == &c.section && key == &c.key && old == &c.after
+            }
+            _ => false,
+        };
         if !matches {
             return Err(format!("{} [{}] {}", t(lang, "undo.conflict"), c.section, c.key).into());
         }
@@ -230,7 +249,7 @@ mod tests {
         );
     }
     #[test]
-    fn failed_apply_never_records_and_missing_before_restores_auto() {
+    fn failed_apply_never_records_and_missing_before_is_removed() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("history");
         let ini = dir.path().join("OptiScaler.ini");
@@ -256,6 +275,193 @@ mod tests {
         fs::write(&ini, "[DlssNr]\nStage=1\n").unwrap();
         record(&root, dir.path(), entry).unwrap();
         let inverse = undo_plan(&root, dir.path(), Lang::En).unwrap();
-        assert!(matches!(&inverse.steps()[0], Step::SetIni {value, ..} if value == "auto"));
+        assert!(matches!(&inverse.steps()[0], Step::UnsetIni {old: Some(v), ..} if v == "1"));
+    }
+}
+
+#[cfg(test)]
+mod exact_undo_tests {
+    use super::*;
+
+    fn apply_and_record(target: &Path, root: &Path, edits: &[(String, String, String)]) {
+        let plan = retoque_core::plan_settings(target, edits).unwrap();
+        let (tx, _) = std::sync::mpsc::channel();
+        assert!(matches!(
+            apply_recorded(
+                Some(root),
+                PlanKind::Settings,
+                plan,
+                target.into(),
+                vec![],
+                &tx,
+                &egui::Context::default()
+            ),
+            Outcome::Applied { result: Ok(()), .. }
+        ));
+    }
+
+    #[test]
+    fn lsfg_x2_roundtrip_restores_original_bytes_including_absent_section() {
+        for original in [
+            b"\xef\xbb\xbf;preserve\r\n[OptiFG]\r\nFGInput = auto \r\n[LSFG]\r\n;DllPath=comment\r\n".as_slice(),
+            b"[OptiFG]\nFGInput=auto\n;no LSFG section\n",
+            b"[OptiFG]\nFGInput=auto\n[LSFG]",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let target = dir.path().join("game");
+            let root = dir.path().join("history");
+            fs::create_dir(&target).unwrap();
+            let ini = target.join("OptiScaler.ini");
+            fs::write(&ini, original).unwrap();
+            apply_and_record(
+                &target,
+                &root,
+                &[
+                    ("LSFG".into(), "DllPath".into(), "C:\\Games\\LS\\lsfg-vk.dll".into()),
+                    ("LSFG".into(), "ShaderDir".into(), "C:\\Shaders".into()),
+                    ("OptiFG".into(), "FGInput".into(), "upscaler".into()),
+                ],
+            );
+            let after = fs::read(&ini).unwrap();
+            for lang in [Lang::En, Lang::Pt] {
+                let undo = undo_plan(&root, &target, lang).unwrap();
+                assert_eq!(fs::read(&ini).unwrap(), after, "planning cannot write");
+                assert_eq!(
+                    undo.steps()
+                        .iter()
+                        .filter(|s| matches!(s, Step::UnsetIni { .. }))
+                        .count(),
+                    2
+                );
+                assert_eq!(crate::i18n::diagnostic(lang, &undo.notes()[0]), t(lang, "undo.exact"));
+                for step in undo.steps().iter().filter(|s| matches!(s, Step::UnsetIni { .. })) {
+                    let (label, text, _) = crate::format::step_text(lang, step);
+                    assert_eq!(label, t(lang, "step.remove"));
+                    assert!(text.contains("[LSFG]"));
+                }
+                retoque_core::apply(&undo.into_verified().unwrap(), &mut |_| {}).unwrap();
+                assert_eq!(fs::read(&ini).unwrap(), original);
+                assert!(!target.join(".retoque").exists());
+                fs::write(&ini, &after).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn exact_history_remembers_header_termination_and_duplicate_formatting() {
+        for original in [
+            b"[A]".as_slice(),
+            b"[A]\n",
+            b"",
+            b"\n[A]\n",
+            b"[A]\nk= one \r\n[A]\nk=two\n",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("history");
+            let ini = dir.path().join("OptiScaler.ini");
+            fs::write(&ini, original).unwrap();
+            apply_and_record(dir.path(), &root, &[("A".into(), "k".into(), "v".into())]);
+            let undo = undo_plan(&root, dir.path(), Lang::En).unwrap();
+            retoque_core::apply(&undo.into_verified().unwrap(), &mut |_| {}).unwrap();
+            assert_eq!(fs::read(&ini).unwrap(), original);
+        }
+    }
+
+    #[test]
+    fn changed_file_and_legacy_entries_use_conservative_removal_and_localized_notice() {
+        for legacy in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("history");
+            let ini = dir.path().join("OptiScaler.ini");
+            fs::write(&ini, b"[A]").unwrap();
+            apply_and_record(dir.path(), &root, &[("A".into(), "k".into(), "v".into())]);
+            if legacy {
+                // Literal old schema: string `after`, no optional exact metadata.
+                fs::write(
+                    file(&root, dir.path()).unwrap(),
+                    br#"{"entries":[{"time_unix":0,"changes":[{"section":"A","key":"k","before":null,"after":"v"}]}]}"#,
+                )
+                .unwrap();
+            } else {
+                fs::write(&ini, b"[A]\nk=v\n; external comment\r\n").unwrap();
+            }
+            for lang in [Lang::En, Lang::Pt] {
+                let undo = undo_plan(&root, dir.path(), lang).unwrap();
+                assert_eq!(
+                    crate::i18n::diagnostic(lang, &undo.notes()[0]),
+                    t(lang, "undo.conservative")
+                );
+                assert!(matches!(undo.steps()[0], Step::UnsetIni { .. }));
+            }
+            let undo = undo_plan(&root, dir.path(), Lang::En).unwrap();
+            retoque_core::apply(&undo.into_verified().unwrap(), &mut |_| {}).unwrap();
+            assert_eq!(
+                fs::read(&ini).unwrap(),
+                if legacy {
+                    b"[A]\n".as_slice()
+                } else {
+                    b"[A]\n; external comment\r\n"
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn repeated_key_edits_reverse_in_order_and_recorded_unset_can_be_undone() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("history");
+        let ini = dir.path().join("OptiScaler.ini");
+        fs::write(&ini, b"[A]").unwrap();
+        apply_and_record(
+            dir.path(),
+            &root,
+            &[
+                ("A".into(), "k".into(), "one".into()),
+                ("A".into(), "k".into(), "two".into()),
+            ],
+        );
+        let undo = undo_plan(&root, dir.path(), Lang::En).unwrap();
+        let entry = capture(&undo);
+        retoque_core::apply(&undo.into_verified().unwrap(), &mut |_| {}).unwrap();
+        assert_eq!(fs::read(&ini).unwrap(), b"[A]");
+        record(&root, dir.path(), entry).unwrap();
+        let redo = undo_plan(&root, dir.path(), Lang::En).unwrap();
+        retoque_core::apply(&redo.into_verified().unwrap(), &mut |_| {}).unwrap();
+        assert_eq!(
+            retoque_core::ini::Ini::parse(&fs::read(&ini).unwrap()).get("A", "k"),
+            Some("two")
+        );
+    }
+
+    #[test]
+    fn insertion_history_does_not_copy_unrelated_ini_contents() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("history");
+        let ini = dir.path().join("OptiScaler.ini");
+        let original = format!(";{}\n[A]", "x".repeat(100_000));
+        fs::write(&ini, original.as_bytes()).unwrap();
+        apply_and_record(dir.path(), &root, &[("A".into(), "k".into(), "v".into())]);
+        assert!(fs::metadata(file(&root, dir.path()).unwrap()).unwrap().len() < 2048);
+        let undo = undo_plan(&root, dir.path(), Lang::En).unwrap();
+        retoque_core::apply(&undo.into_verified().unwrap(), &mut |_| {}).unwrap();
+        assert_eq!(fs::read(&ini).unwrap(), original.as_bytes());
+    }
+
+    #[test]
+    fn no_exact_snapshot_if_changed_after_apply_before_history_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("history");
+        let ini = dir.path().join("OptiScaler.ini");
+        fs::write(&ini, b"[A]").unwrap();
+        let plan = retoque_core::plan_settings(dir.path(), &[("A".into(), "k".into(), "v".into())]).unwrap();
+        let entry = capture(&plan);
+        retoque_core::apply(&plan.into_verified().unwrap(), &mut |_| {}).unwrap();
+        fs::write(&ini, b"[A]\nk=v\n; later\n").unwrap();
+        record(&root, dir.path(), entry).unwrap();
+        assert!(
+            load(&file(&root, dir.path()).unwrap()).unwrap().entries[0]
+                .exact
+                .is_empty()
+        );
     }
 }

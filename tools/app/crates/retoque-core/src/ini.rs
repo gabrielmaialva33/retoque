@@ -1,5 +1,38 @@
 //! Byte-preserving ini editing. Names compare without ASCII case; the last key wins.
 
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct Splice {
+    offset: usize,
+    before: Vec<u8>,
+    after: Vec<u8>,
+}
+
+/// Sparse provenance for one INI edit. Includes only replaced/inserted bytes, not an INI backup.
+/// Deserialized provenance is validated by replaying the original edit before it can undo anything.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IniUndo {
+    section: String,
+    key: String,
+    before_value: Option<String>,
+    after_value: Option<String>,
+    before_hash: String,
+    after_hash: String,
+    splices: Vec<Splice>,
+}
+
+impl IniUndo {
+    pub fn matches_after(&self, bytes: &[u8]) -> bool {
+        self.after_hash == format!("{:x}", Sha256::digest(bytes))
+    }
+
+    pub(crate) fn matches_inverse(&self, section: &str, key: &str, value: Option<&str>) -> bool {
+        self.section == section && self.key == key && self.before_value.as_deref() == value
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Entry {
     section: (usize, usize),
@@ -108,57 +141,139 @@ impl Ini {
 
     /// Replaces every copy; a missing key goes directly below the first matching header, as in both scripts.
     pub fn set(&mut self, section: &str, key: &str, value: &str) -> bool {
+        !self.edit(section, key, Some(value)).is_empty()
+    }
+
+    /// Removes every matching key line. All other bytes, including empty sections, are preserved.
+    /// Exact reversal of inserted headers/newlines requires `edit_with_undo` provenance.
+    pub fn unset(&mut self, section: &str, key: &str) -> bool {
+        !self.edit(section, key, None).is_empty()
+    }
+
+    pub fn edit_with_undo(&mut self, section: &str, key: &str, value: Option<&str>) -> Option<IniUndo> {
+        let before_hash = format!("{:x}", Sha256::digest(&self.bytes));
+        let before_value = self.get(section, key).map(str::to_owned);
+        let splices = self.edit(section, key, value);
+        if splices.is_empty() {
+            return None;
+        }
+        Some(IniUndo {
+            section: section.into(),
+            key: key.into(),
+            before_value,
+            after_value: value.map(str::to_owned),
+            before_hash,
+            after_hash: format!("{:x}", Sha256::digest(&self.bytes)),
+            splices,
+        })
+    }
+
+    /// Validates the current hash and the complete sparse edit by replay; failure leaves this INI intact.
+    pub fn undo(&mut self, undo: &IniUndo) -> bool {
+        if !undo.matches_after(&self.bytes) {
+            return false;
+        }
+        let mut restored = self.bytes.clone();
+        // Splices use original offsets and are applied from end to start. Undo from start to end.
+        for splice in &undo.splices {
+            let Some(end) = splice.offset.checked_add(splice.after.len()) else {
+                return false;
+            };
+            if restored.get(splice.offset..end) != Some(splice.after.as_slice()) {
+                return false;
+            }
+            restored.splice(splice.offset..end, splice.before.iter().copied());
+        }
+        let mut replay = Self::parse(&restored);
+        if replay
+            .edit_with_undo(&undo.section, &undo.key, undo.after_value.as_deref())
+            .as_ref()
+            != Some(undo)
+            || replay.bytes != self.bytes
+        {
+            return false;
+        }
+        self.bytes = restored;
+        self.rebuild_entries();
+        true
+    }
+
+    fn edit(&mut self, section: &str, key: &str, value: Option<&str>) -> Vec<Splice> {
         let sec_bytes = section.as_bytes();
         let key_bytes = key.as_bytes();
-        let insert = !self.entries.iter().any(|e| {
-            self.bytes[e.section.0..e.section.1].eq_ignore_ascii_case(sec_bytes)
-                && self.bytes[e.key.0..e.key.1].eq_ignore_ascii_case(key_bytes)
-        });
+        let insert = value.is_some()
+            && !self.entries.iter().any(|e| {
+                self.bytes[e.section.0..e.section.1].eq_ignore_ascii_case(sec_bytes)
+                    && self.bytes[e.key.0..e.key.1].eq_ignore_ascii_case(key_bytes)
+            });
         let mut inside = false;
         let mut inserted = false;
-        let mut out = Vec::with_capacity(self.bytes.len() + section.len() + key.len() + value.len() + 8);
+        let mut splices = Vec::new();
         for line in self.bytes.split_inclusive(|b| *b == b'\n') {
+            let start = subslice_range(&self.bytes, line).0;
             if let Some(name) = header(line) {
                 inside = name.eq_ignore_ascii_case(sec_bytes);
-                out.extend_from_slice(line);
                 if inside && insert && !inserted {
+                    let mut after = Vec::new();
                     if !line.ends_with(b"\n") {
-                        out.push(b'\n');
+                        after.push(b'\n');
                     }
                     let end: &[u8] = if line.ends_with(b"\r\n") { b"\r\n" } else { b"\n" };
-                    out.extend_from_slice(key_bytes);
-                    out.push(b'=');
-                    out.extend_from_slice(value.as_bytes());
-                    out.extend_from_slice(end);
+                    after.extend_from_slice(key_bytes);
+                    after.push(b'=');
+                    after.extend_from_slice(value.unwrap().as_bytes());
+                    after.extend_from_slice(end);
+                    splices.push(Splice {
+                        offset: start + line.len(),
+                        before: Vec::new(),
+                        after,
+                    });
                     inserted = true;
                 }
             } else if inside && key_value(line).is_some_and(|(name, _)| name.eq_ignore_ascii_case(key_bytes)) {
-                let eq = line.iter().position(|b| *b == b'=').unwrap();
-                out.extend_from_slice(&line[..=eq]);
-                out.extend_from_slice(value.as_bytes());
-                out.extend_from_slice(&line[body(line).len()..]);
-            } else {
-                out.extend_from_slice(line);
+                let (offset, before, after) = if let Some(value) = value {
+                    let eq = line.iter().position(|b| *b == b'=').unwrap();
+                    (start + eq + 1, &line[eq + 1..body(line).len()], value.as_bytes())
+                } else {
+                    (start, line, &b""[..])
+                };
+                if before != after {
+                    splices.push(Splice {
+                        offset,
+                        before: before.to_vec(),
+                        after: after.to_vec(),
+                    });
+                }
             }
         }
         if insert && !inserted {
-            if !out.is_empty() && !out.ends_with(b"\n") {
-                out.push(b'\n');
+            let mut after = Vec::new();
+            if !self.bytes.is_empty() && !self.bytes.ends_with(b"\n") {
+                after.push(b'\n');
             }
-            out.extend_from_slice(b"\n[");
-            out.extend_from_slice(sec_bytes);
-            out.extend_from_slice(b"]\n");
-            out.extend_from_slice(key_bytes);
-            out.push(b'=');
-            out.extend_from_slice(value.as_bytes());
-            out.push(b'\n');
+            after.extend_from_slice(b"\n[");
+            after.extend_from_slice(sec_bytes);
+            after.extend_from_slice(b"]\n");
+            after.extend_from_slice(key_bytes);
+            after.push(b'=');
+            after.extend_from_slice(value.unwrap().as_bytes());
+            after.push(b'\n');
+            splices.push(Splice {
+                offset: self.bytes.len(),
+                before: Vec::new(),
+                after,
+            });
         }
-        let changed = out != self.bytes;
-        if changed {
-            self.bytes = out;
+        for splice in splices.iter().rev() {
+            self.bytes.splice(
+                splice.offset..splice.offset + splice.before.len(),
+                splice.after.iter().copied(),
+            );
+        }
+        if !splices.is_empty() {
             self.rebuild_entries();
         }
-        changed
+        splices
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -204,5 +319,70 @@ mod tests {
         assert_eq!(ini.get("a", "k"), Some("1"));
         ini.set("a", "k", "2");
         assert_eq!(ini.to_bytes(), b"\xef\xbb\xbf[A]\r\nk=2\r\n;\xff");
+    }
+}
+
+#[cfg(test)]
+mod unset_tests {
+    use super::*;
+
+    #[test]
+    fn unset_removes_all_copies_and_preserves_every_other_byte() {
+        let mut ini = Ini::parse(b"\xef\xbb\xbf[ A ]\r\n K =\xff\r\n;K=comment\n#K=comment\r\nq=untouched\n[a]\nk=two\r\n[B]\nk=other\n[A]\nk=end");
+        assert!(ini.unset("a", "K"));
+        assert_eq!(
+            ini.to_bytes(),
+            b"\xef\xbb\xbf[ A ]\r\n;K=comment\n#K=comment\r\nq=untouched\n[a]\n[B]\nk=other\n[A]\n"
+        );
+        assert!(!ini.unset("a", "k"));
+        assert_eq!(ini.get("B", "k"), Some("other"));
+    }
+
+    #[test]
+    fn exact_insert_undo_distinguishes_created_headers_and_newlines_after_reparse() {
+        for original in [
+            b"".as_slice(),
+            b"[A]",
+            b"[A]\n",
+            b"\n[A]\n",
+            b"[A]\r",
+            b"\xef\xbb\xbf[A]\r\n",
+            b";\xff\n[B]\nk=1",
+        ] {
+            let mut ini = Ini::parse(original);
+            let undo = ini.edit_with_undo("A", "k", Some("value")).unwrap();
+            let mut reloaded = Ini::parse(&ini.to_bytes());
+            assert!(reloaded.undo(&undo));
+            assert_eq!(reloaded.to_bytes(), original);
+        }
+    }
+
+    #[test]
+    fn exact_undo_preserves_duplicate_values_and_whitespace() {
+        let original = b"[A]\nk= one \r\n;keep\n[A]\nk=two\n";
+        let mut ini = Ini::parse(original);
+        let undo = ini.edit_with_undo("A", "k", Some("new")).unwrap();
+        assert!(ini.undo(&undo));
+        assert_eq!(ini.to_bytes(), original);
+        let undo = ini.edit_with_undo("A", "k", None).unwrap();
+        assert!(ini.undo(&undo));
+        assert_eq!(ini.to_bytes(), original);
+    }
+
+    #[test]
+    fn stale_and_forged_provenance_leave_bytes_unchanged() {
+        let mut ini = Ini::parse(b"[A]\n");
+        let mut undo = ini.edit_with_undo("A", "k", Some("v")).unwrap();
+        let after = ini.to_bytes();
+        undo.splices[0].before = b"unreviewed=change\n".to_vec();
+        assert!(!ini.undo(&undo));
+        assert_eq!(ini.to_bytes(), after);
+        undo.splices[0].offset = usize::MAX;
+        assert!(!ini.undo(&undo));
+        assert_eq!(ini.to_bytes(), after);
+        ini.set("A", "other", "external");
+        let changed = ini.to_bytes();
+        assert!(!ini.undo(&undo));
+        assert_eq!(ini.to_bytes(), changed);
     }
 }

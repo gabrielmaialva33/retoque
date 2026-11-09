@@ -82,6 +82,13 @@ pub enum Step {
         old: Option<String>,
         value: String,
     },
+    /// Remove every copy of a key, preserving other bytes unless a verified undo has exact provenance.
+    UnsetIni {
+        file: String,
+        section: String,
+        key: String,
+        old: Option<String>,
+    },
     Remove {
         path: String,
     },
@@ -175,6 +182,10 @@ impl Plan {
     }
     pub fn refusals(&self) -> &[Refusal] {
         &self.refusals
+    }
+    /// Sparse provenance captured from the bytes used to plan user settings.
+    pub fn settings_undo(&self) -> &[ini::IniUndo] {
+        &self.execution.settings_undo
     }
     pub fn notes(&self) -> &[String] {
         &self.notes
@@ -278,6 +289,22 @@ pub fn read_ini(game_dir: &Path) -> Result<Option<(PathBuf, Vec<u8>)>, Error> {
 /// Apply rechecks the file snapshot and processes; these user edits never update or create an install receipt.
 pub fn plan_settings(game_dir: &Path, edits: &[(String, String, String)]) -> Result<Plan, Error> {
     engine::plan_settings(game_dir, edits)
+}
+
+/// Plans settings with `None` meaning removal of every matching key line. Existing sections are kept.
+pub fn plan_settings_edits(game_dir: &Path, edits: &[(String, String, Option<String>)]) -> Result<Plan, Error> {
+    engine::plan_settings_edits(game_dir, edits, None)
+}
+
+/// Plans inverse edits in reverse application order. Exact provenance is used only when its final hash
+/// matches the current INI; otherwise the review carries a conservative-restoration note. Provenance is
+/// replay-validated and bound to the supplied edits. Receipt v1 is never modified by settings operations.
+pub fn plan_settings_undo(
+    game_dir: &Path,
+    edits: &[(String, String, Option<String>)],
+    provenance: &[ini::IniUndo],
+) -> Result<Plan, Error> {
+    engine::plan_settings_edits(game_dir, edits, Some(provenance))
 }
 
 /// Carries out an unmodified plan with no refusals. Install/uninstall rechecks files and processes between

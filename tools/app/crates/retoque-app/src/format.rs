@@ -56,6 +56,11 @@ pub(crate) fn step_text(lang: Lang, step: &Step) -> (&'static str, String, Color
                 theme::ACCENT,
             )
         }
+        Step::UnsetIni { file, section, key, .. } => (
+            t(lang, "step.remove"),
+            format!("[{section}] {key} ({file})"),
+            theme::ACCENT,
+        ),
         Step::Remove { path } => (t(lang, "step.remove"), path.clone(), theme::BAD),
         Step::Restore { copy, to } => (t(lang, "step.restore"), format!("{to}  <- {copy}"), theme::WARN),
         Step::Keep { path, why } => (
@@ -181,7 +186,7 @@ pub(crate) fn step_group(step: &Step, steps: &[Step], destination_exists: bool) 
     match step {
         Step::Keep { .. } => 2,
         Step::Remove { .. } => 3,
-        Step::SetIni { .. } => 4,
+        Step::SetIni { .. } | Step::UnsetIni { .. } => 4,
         Step::Backup { .. } | Step::Rename { .. } | Step::Restore { .. } => 1,
         Step::Copy { to, .. }
             if destination_exists
