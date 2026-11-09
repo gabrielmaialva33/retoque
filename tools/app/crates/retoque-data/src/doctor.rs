@@ -18,6 +18,9 @@ pub enum Severity {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum Repair {
+    InstallReShade,
+    /// `[INPUT] InputProcessing=1` in ReShade.ini (retoque_core::reshade::plan_menu_input).
+    ReShadeMenuInput,
     UpdateDlss,
     RestoreDlss,
     Settings(Vec<Action>),
@@ -355,6 +358,29 @@ pub fn diagnose_dlss(files: &[crate::dlss::GameDll], root_incomplete: bool) -> V
         });
     }
     findings
+}
+
+/// Static add-on candidates are evidence of a missing prerequisite, not proof of a successful load.
+pub fn diagnose_reshade(snapshot: &crate::reshade::Snapshot) -> Vec<Finding> {
+    crate::reshade::recommendation(snapshot)
+        .map(|r| Finding {
+            id: "reshade_addons",
+            severity: Severity::Warning,
+            title_key: r.title_key,
+            why_key: r.why_key,
+            evidence: r.evidence,
+            repair: Some(Repair::InstallReShade),
+        })
+        .into_iter()
+        .chain(snapshot.menu_input_blocked.then(|| Finding {
+            id: "reshade_menu_input",
+            severity: Severity::Warning,
+            title_key: "rs.input_title",
+            why_key: "rs.input_why",
+            evidence: vec![FactEvidence::new("rs.input_mode", "InputProcessing=2")],
+            repair: Some(Repair::ReShadeMenuInput),
+        }))
+        .collect()
 }
 
 #[cfg(test)]

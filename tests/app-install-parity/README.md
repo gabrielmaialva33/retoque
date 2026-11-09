@@ -27,3 +27,7 @@ not Windows module enumeration or exclusive opens, native Windows operation, or 
 python3 tests/app-install-parity/run.py
 python3 tests/deploy-safety/run.py --impl /path/to/retoque
 ```
+
+The ReShade case checks the separate component/add-on commands, no-write game dry runs, source preservation,
+byte-exact app undo, and Bash removal/restoration of ordinary v1 component file/backup records. Legacy scripts
+do not replay the new INI provenance; exact setting undo is an app/core operation.

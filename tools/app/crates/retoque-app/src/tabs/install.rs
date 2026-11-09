@@ -32,6 +32,7 @@ impl RetoqueApp {
                 crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx, self.payload.is_some())
             });
         }
+        self.reshade_card(ui);
         self.autotune_card(ui);
         self.autotune_lsfg(ui);
         ui.add_space(12.0);

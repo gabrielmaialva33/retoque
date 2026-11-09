@@ -2,6 +2,8 @@
 pub(crate) mod components;
 #[path = "dlss.rs"]
 pub(crate) mod dlss;
+#[path = "reshade.rs"]
+pub mod reshade;
 
 use crate::{
     ini::Ini,
@@ -26,6 +28,9 @@ pub(crate) struct Execution {
     operation: Operation,
     pub(crate) settings_undo: Vec<ini::IniUndo>,
     exact_undo: Vec<ini::IniUndo>,
+    // Lifecycle INI edits preserve user ownership and optionally replay exact undo.
+    user_ini: BTreeMap<usize, Option<ini::IniUndo>>,
+    lifecycle_removal: bool,
     component_only: bool,
     process_roots: Vec<PathBuf>,
     component_completion: Option<ReceiptStatus>,
@@ -731,9 +736,10 @@ pub(crate) fn plan_install(options: &InstallOptions) -> Result<Plan, Error> {
 }
 
 pub(crate) fn plan_uninstall(game: &Path) -> Result<Plan, Error> {
-    let plan = new_plan(game, Operation::Uninstall)?;
+    let mut plan = new_plan(game, Operation::Uninstall)?;
     let receipt =
         load_receipt(&plan.game_dir)?.ok_or_else(|| Error::Other("no receipt; nothing was touched".into()))?;
+    reshade::before_uninstall(&mut plan, &receipt)?;
     uninstall_steps(plan, &receipt)
 }
 
@@ -1044,27 +1050,37 @@ fn perform(plan: &Plan, step: &Step, index: usize, receipt: &mut Receipt) -> Res
                     .retain(|r| !matches!(r,Record::Rename { from: f,to: t,.. } if f == to && t == from));
             }
         }
-        Step::SetIni {
-            file,
-            section,
-            key,
-            value,
-            ..
-        } => {
+        Step::SetIni { file, section, key, .. } | Step::UnsetIni { file, section, key, .. } => {
+            let value = match step {
+                Step::SetIni { value, .. } => Some(value.as_str()),
+                _ => None,
+            };
             let path = game.join(file);
             let mut ini = if exists(&path) {
                 Ini::parse(&read(&path)?)
             } else {
                 Ini::default()
             };
-            ini.set(section, key, value);
+            if file.eq_ignore_ascii_case("ReShade.ini") {
+                ini = Ini::parse_sensitive(&ini.to_bytes());
+            }
+            if let Some(Some(undo)) = plan.execution.user_ini.get(&index) {
+                if !undo.matches_inverse(section, key, value) || !ini.undo(undo) {
+                    return Err(usage_error("invalid lifecycle INI undo"));
+                }
+            } else if let Some(value) = value {
+                ini.set(section, key, value);
+            } else {
+                ini.unset(section, key);
+            }
             let mode = fs::metadata(&path).ok().map(|m| m.permissions());
             let bytes = ini.to_bytes();
-            remember(receipt, file, format!("{:x}", Sha256::digest(&bytes)));
+            if !plan.execution.user_ini.contains_key(&index) {
+                remember(receipt, file, format!("{:x}", Sha256::digest(&bytes)));
+            }
             write_intent(game, receipt, index)?;
             put_atomic(game, &path, &bytes, mode)?;
         }
-        Step::UnsetIni { .. } => return Err(Error::Other("unset is only supported in settings plans".into())),
         Step::Remove { path } => {
             fs::remove_file(game.join(path)).map_err(|e| io(&game.join(path), e))?;
             sync_directory(game.join(path).parent().unwrap())?;
@@ -1257,7 +1273,9 @@ pub(crate) fn apply(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(
             fs::remove_file(plan.game_dir.join(RECEIPT)).map_err(|e| io(&plan.game_dir.join(RECEIPT), e))?;
             let _ = fs::remove_dir(plan.game_dir.join(STATE_DIR));
         } else {
-            if plan.execution.component_only && !exists(&plan.game_dir.join(components::INDEX)) {
+            if plan.execution.lifecycle_removal
+                || (plan.execution.component_only && !exists(&plan.game_dir.join(components::INDEX)))
+            {
                 receipt.status = plan.execution.component_completion.unwrap_or(ReceiptStatus::Complete);
             }
             write_receipt(&plan.game_dir, &mut receipt)?;

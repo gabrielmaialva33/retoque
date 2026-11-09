@@ -21,9 +21,14 @@ pub struct IniUndo {
     before_hash: String,
     after_hash: String,
     splices: Vec<Splice>,
+    #[serde(default)]
+    case_sensitive: bool,
 }
 
 impl IniUndo {
+    pub(crate) fn matches_before(&self, bytes: &[u8]) -> bool {
+        self.before_hash == format!("{:x}", Sha256::digest(bytes))
+    }
     pub fn matches_after(&self, bytes: &[u8]) -> bool {
         self.after_hash == format!("{:x}", Sha256::digest(bytes))
     }
@@ -44,6 +49,7 @@ struct Entry {
 pub struct Ini {
     bytes: Vec<u8>,
     entries: Vec<Entry>,
+    case_sensitive: bool,
 }
 
 impl PartialEq for Ini {
@@ -68,10 +74,15 @@ fn subslice_range(base: &[u8], sub: &[u8]) -> (usize, usize) {
     (start, start + sub.len())
 }
 
-fn header(line: &[u8]) -> Option<&[u8]> {
+fn header(line: &[u8], case_sensitive: bool) -> Option<&[u8]> {
     let b = body(line);
     let text = trim(b.strip_prefix(b"\xef\xbb\xbf").unwrap_or(b));
-    let name = text.strip_prefix(b"[")?.strip_suffix(b"]")?;
+    let content = text.strip_prefix(b"[")?;
+    let name = if case_sensitive {
+        &content[..content.iter().position(|b| *b == b']')?]
+    } else {
+        content.strip_suffix(b"]")?
+    };
     (!name.contains(&b']')).then(|| trim(name))
 }
 
@@ -90,16 +101,33 @@ impl Ini {
         let mut ini = Ini {
             bytes: bytes.to_vec(),
             entries: Vec::new(),
+            case_sensitive: false,
         };
         ini.rebuild_entries();
         ini
+    }
+
+    /// ReShade uses case-sensitive section/key names. OptiScaler keeps the default behavior.
+    pub fn parse_sensitive(bytes: &[u8]) -> Ini {
+        let mut ini = Self::parse(bytes);
+        ini.case_sensitive = true;
+        ini.rebuild_entries();
+        ini
+    }
+
+    fn names_match(&self, a: &[u8], b: &[u8]) -> bool {
+        if self.case_sensitive {
+            a == b
+        } else {
+            a.eq_ignore_ascii_case(b)
+        }
     }
 
     fn rebuild_entries(&mut self) {
         self.entries.clear();
         let mut current_section: Option<(usize, usize)> = None;
         for line in self.bytes.split_inclusive(|b| *b == b'\n') {
-            if let Some(name) = header(line) {
+            if let Some(name) = header(line, self.case_sensitive) {
                 current_section = Some(subslice_range(&self.bytes, name));
             } else if let Some(section) = current_section
                 && let Some((k, v)) = key_value(line)
@@ -120,8 +148,8 @@ impl Ini {
             .iter()
             .rev()
             .find(|e| {
-                self.bytes[e.section.0..e.section.1].eq_ignore_ascii_case(sec_bytes)
-                    && self.bytes[e.key.0..e.key.1].eq_ignore_ascii_case(key_bytes)
+                self.names_match(&self.bytes[e.section.0..e.section.1], sec_bytes)
+                    && self.names_match(&self.bytes[e.key.0..e.key.1], key_bytes)
             })
             .and_then(|e| std::str::from_utf8(&self.bytes[e.value.0..e.value.1]).ok())
     }
@@ -132,8 +160,8 @@ impl Ini {
         self.entries
             .iter()
             .filter(|e| {
-                self.bytes[e.section.0..e.section.1].eq_ignore_ascii_case(sec_bytes)
-                    && self.bytes[e.key.0..e.key.1].eq_ignore_ascii_case(key_bytes)
+                self.names_match(&self.bytes[e.section.0..e.section.1], sec_bytes)
+                    && self.names_match(&self.bytes[e.key.0..e.key.1], key_bytes)
             })
             .map(|e| &self.bytes[e.value.0..e.value.1])
             .collect()
@@ -165,6 +193,7 @@ impl Ini {
             before_hash,
             after_hash: format!("{:x}", Sha256::digest(&self.bytes)),
             splices,
+            case_sensitive: self.case_sensitive,
         })
     }
 
@@ -185,6 +214,8 @@ impl Ini {
             restored.splice(splice.offset..end, splice.before.iter().copied());
         }
         let mut replay = Self::parse(&restored);
+        replay.case_sensitive = undo.case_sensitive;
+        replay.rebuild_entries();
         if replay
             .edit_with_undo(&undo.section, &undo.key, undo.after_value.as_deref())
             .as_ref()
@@ -203,16 +234,16 @@ impl Ini {
         let key_bytes = key.as_bytes();
         let insert = value.is_some()
             && !self.entries.iter().any(|e| {
-                self.bytes[e.section.0..e.section.1].eq_ignore_ascii_case(sec_bytes)
-                    && self.bytes[e.key.0..e.key.1].eq_ignore_ascii_case(key_bytes)
+                self.names_match(&self.bytes[e.section.0..e.section.1], sec_bytes)
+                    && self.names_match(&self.bytes[e.key.0..e.key.1], key_bytes)
             });
         let mut inside = false;
         let mut inserted = false;
         let mut splices = Vec::new();
         for line in self.bytes.split_inclusive(|b| *b == b'\n') {
             let start = subslice_range(&self.bytes, line).0;
-            if let Some(name) = header(line) {
-                inside = name.eq_ignore_ascii_case(sec_bytes);
+            if let Some(name) = header(line, self.case_sensitive) {
+                inside = self.names_match(name, sec_bytes);
                 if inside && insert && !inserted {
                     let mut after = Vec::new();
                     if !line.ends_with(b"\n") {
@@ -230,7 +261,7 @@ impl Ini {
                     });
                     inserted = true;
                 }
-            } else if inside && key_value(line).is_some_and(|(name, _)| name.eq_ignore_ascii_case(key_bytes)) {
+            } else if inside && key_value(line).is_some_and(|(name, _)| self.names_match(name, key_bytes)) {
                 let (offset, before, after) = if let Some(value) = value {
                     let eq = line.iter().position(|b| *b == b'=').unwrap();
                     (start + eq + 1, &line[eq + 1..body(line).len()], value.as_bytes())

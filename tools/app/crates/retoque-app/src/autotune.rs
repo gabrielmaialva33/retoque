@@ -12,6 +12,7 @@ pub mod optimize;
 
 #[derive(Clone, Debug)]
 pub enum ComponentChange {
+    ReShade(crate::reshade_ui::Change),
     Install(components::Component),
     Remove(String),
     Retoque {
@@ -86,6 +87,7 @@ fn plan_post_install_component(
     install_options: Option<&retoque_core::InstallOptions>,
 ) -> Result<Plan, AppError> {
     match change {
+        ComponentChange::ReShade(change) => change.plan(target).map_err(AppError::from),
         ComponentChange::Install(c) => {
             let files = ComponentFiles {
                 id: c.id.clone(),
@@ -323,6 +325,10 @@ fn replan_intermediate(prepared: &Prepared, index: usize) -> Result<Option<Plan>
                 detail: e.into(),
             })?
         }
+        (Some(ComponentChange::ReShade(change)), _) => change.plan(&prepared.target).map_err(|e| ApplyFailure {
+            completed: index,
+            detail: e.into(),
+        })?,
         (Some(ComponentChange::Install(c)), _) => plan_component_install(
             &prepared.target,
             &ComponentFiles {
@@ -391,6 +397,7 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
 #[derive(Default)]
 pub struct UiState {
     pub dlss: crate::dlss_ui::State,
+    pub reshade: crate::reshade_ui::State,
     pub sm86: optimize::UiState,
     pub gpus: Option<Vec<gpu::Gpu>>,
     pub detected_lossless: Option<PathBuf>,

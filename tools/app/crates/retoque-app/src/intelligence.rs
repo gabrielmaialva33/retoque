@@ -108,6 +108,10 @@ impl Snapshot {
                     .and_then(|s| s.receipt)
                     .is_some_and(|r| r.status != ReceiptStatus::Complete));
         findings.extend(doctor::diagnose_dlss(&dlss_files, root_incomplete));
+        let reshade = retoque_data::reshade::inspect(&self.target).ok();
+        if let Some(snapshot) = &reshade {
+            findings.extend(doctor::diagnose_reshade(snapshot));
+        }
         findings.sort_by_key(|f| match f.severity {
             doctor::Severity::Error => 0,
             doctor::Severity::Warning => 1,
@@ -124,11 +128,14 @@ impl Snapshot {
             .as_ref()
             .map(|log| logs::diagnose(log, self.facts.runtime, compatibility, driver))
             .unwrap_or_default();
-        let recommendations = if self.status.is_some() && self.components_known {
+        let mut recommendations = if self.status.is_some() && self.components_known {
             recommend::recommend(self.gpu.as_ref(), &self.facts)
         } else {
             Vec::new()
         };
+        if let Some(rec) = reshade.as_ref().and_then(retoque_data::reshade::recommendation) {
+            recommendations.push(rec);
+        }
         Assessment {
             target: self.target,
             findings,
@@ -218,6 +225,8 @@ impl RetoqueApp {
             return;
         }
         match repair {
+            Repair::InstallReShade => self.reshade_offer(),
+            Repair::ReShadeMenuInput => self.reshade_menu_input(),
             Repair::UpdateDlss => self.dlss_request_update(),
             Repair::RestoreDlss => self.dlss_restore(),
             Repair::Settings(actions) => {

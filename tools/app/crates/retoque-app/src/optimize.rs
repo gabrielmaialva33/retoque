@@ -80,6 +80,14 @@ pub fn compose(selection: Selection<'_>) -> Result<Composition, &'static str> {
     let mut need_install = false;
     let mut adopt_legacy = false;
     for rec in selection.recommendations {
+        // ReShade/add-ons are always an explicit user operation, never a one-click prerequisite.
+        if rec.needs
+            == Some(recommend::Need::Component(
+                retoque_data::components::ComponentKind::ReShade,
+            ))
+        {
+            continue;
+        }
         if rec.is_primary_install_action() {
             need_install = true;
             adopt_legacy |= rec.id == "adopt_retoque";

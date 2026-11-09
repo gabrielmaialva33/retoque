@@ -6,7 +6,9 @@
 
 use std::path::{Path, PathBuf};
 
+mod addon_pe;
 mod engine;
+pub use engine::reshade;
 pub mod ini;
 pub mod pe_version;
 mod process;

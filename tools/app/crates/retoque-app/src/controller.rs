@@ -236,6 +236,7 @@ impl RetoqueApp {
                         self.lsfg_recheck();
                     }
                 }
+                Outcome::ReShade(event) => self.reshade_event(*event),
                 Outcome::Dlss(event) => self.dlss_event(event),
                 Outcome::Lsfg(event) => self.lsfg_event(event),
                 Outcome::PayloadFetch(event) => self.payload_event(*event),
@@ -427,6 +428,9 @@ impl RetoqueApp {
                 Outcome::Failed { job, target, message } => {
                     self.toast(self.tr("shell.failed").into(), Some(message.clone().into()), true);
                     self.error = Some(format!("{} ({job}): {message}", self.tr("job.failed")).into());
+                    if job == "reshade-download" || job == "reshade-import" {
+                        self.tuning.reshade.failed();
+                    }
                     if job == "dlss-download" {
                         self.tuning.dlss.download_failed();
                     }
