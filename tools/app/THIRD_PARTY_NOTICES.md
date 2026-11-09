@@ -46,9 +46,37 @@ in redistributed binary documentation and do not use the authors' names to endor
 - Linux asset: `linux_dxc_2025_07_14.x86_64.tar.gz`, SHA-256 `f2213da1fc99dc8778c8823078e16ba97c7f80f86a1d4520ab1adf4b462bc48c`
 
 The download implementation uses `ureq` (MIT/Apache-2.0) with `rustls` (Apache-2.0/ISC/MIT) and Mozilla-derived
-`webpki-roots` (MPL-2.0). Dynamic loading uses `libloading` (ISC); gzip/tar extraction uses `flate2` (MIT/Apache-2.0)
+`webpki-roots` (CDLA-Permissive-2.0). Dynamic loading uses `libloading` (ISC); gzip/tar extraction uses `flate2` (MIT/Apache-2.0)
 and `tar` (MIT/Apache-2.0). No async runtime is introduced.
 
 The Windows GNU target statically links the MinGW GCC C++ runtime to avoid requiring a MinGW installation on
 end-user machines. GCC's runtime is GPL-3.0 with the GCC Runtime Library Exception 3.1; retain the applicable
 runtime notices. See <https://www.gnu.org/licenses/gcc-exception-3.1.html>.
+
+## Official dlssg_for_sm86 downloads (optional; not embedded in the application)
+
+The app can fetch `sdli1995/dlssg_for_sm86`'s official GitHub release only after confirmation.
+The first-run cache builder is an explicit opt-in and stores the unmodified official archive and
+its GitHub SHA-256 digest. The app verifies it again before import. Never commit these binaries.
+
+The upstream 0.4.1 `THIRD_PARTY_NOTICES.txt` attributes MIT to the project's own C++ source,
+Detours, nlohmann/json and d3dx12, but explicitly excludes its binary kernel images from that grant.
+It describes NVIDIA's unmodified DLSS-G runtime, derived FG/SR kernel packs and SR snippet as
+third-party material retaining its own terms. The XeSS/MFG-Unlocker material also has separate
+notices; not all of it is covered by the wrapper's MIT license. This is **not** a claim that the
+complete release is MIT, GPL-compatible source, or freely redistributable under the app's license.
+The application performs a user-directed download from upstream, does not link this payload into
+itself, and preserves license/notice texts in `sm86-releases/<version>/notices` in app data.
+
+- Official source: <https://github.com/sdli1995/dlssg_for_sm86>
+- Upstream notices: <https://github.com/sdli1995/dlssg_for_sm86/blob/main/THIRD_PARTY_NOTICES.txt>
+- Runtime layout, including optional SR kernels: <https://github.com/sdli1995/dlssg_for_sm86/blob/main/README.en.md>
+
+## Synchronous HTTPS dependencies
+
+`ureq` 3.4.2 is MIT/Apache-2.0; its `rustls` feature uses `rustls` (Apache-2.0/ISC/MIT),
+`webpki-roots` (CDLA-Permissive-2.0), and `ring` (Apache-2.0 AND ISC; additional MIT notices for once_cell code). The distributed application retains the
+licenses of these Rust dependencies. No async runtime, telemetry, or native-TLS dependency is added.
+Sources and license texts are included in the corresponding crates' source packages:
+<https://crates.io/crates/ureq/3.4.2>, <https://github.com/rustls/rustls>,
+<https://github.com/rustls/webpki-roots>, <https://github.com/briansmith/ring>.

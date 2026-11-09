@@ -17,3 +17,4 @@ pub mod doctor;
 pub mod messages;
 
 pub mod lsfg_prepare;
+pub mod sm86;

@@ -19,6 +19,8 @@ pub(crate) struct State {
     cancel: Arc<AtomicBool>,
     progress: Option<prepare::Progress>,
     result: Option<prepare::Result<prepare::PreparedCache>>,
+    /// "Optimize automatically" waiting for these shaders: the game and the facts generation it was asked for.
+    pub(crate) then_optimize: Option<(PathBuf, u64)>,
 }
 impl Drop for State {
     fn drop(&mut self) {
@@ -42,6 +44,19 @@ impl RetoqueApp {
             .as_deref()
             .or(self.tuning.lossless.as_deref())
             .or(self.tuning.detected_lossless.as_deref())
+    }
+    /// Starts (or joins) shader preparation for "Optimize automatically". App data only; false when there is no
+    /// Lossless Scaling folder to prepare from.
+    pub(crate) fn lsfg_prepare_for_optimize(&mut self, target: PathBuf) -> bool {
+        self.lsfg_ensure_started();
+        if self.lsfg.source.is_none() {
+            return false;
+        }
+        if !self.lsfg.running {
+            self.lsfg_start(false);
+        }
+        self.lsfg.then_optimize = Some((target, self.tuning.facts_generation));
+        true
     }
     fn lsfg_ensure_started(&mut self) {
         if self.lsfg_source() != self.lsfg.source.as_deref() {
@@ -102,7 +117,19 @@ impl RetoqueApp {
             }
             Event::Finished { request, result } if request == self.lsfg.request => {
                 self.lsfg.running = false;
+                let failed = result.is_err();
                 self.lsfg.result = Some(result);
+                // Resume a one-click optimization only for the same game and facts it was started for.
+                if let Some((target, generation)) = self.lsfg.then_optimize.take() {
+                    let same = self.view.target.as_ref() == Some(&target) && self.tuning.facts_generation == generation;
+                    if failed {
+                        if same {
+                            self.tuning.sm86.error = Some(self.tr("optimize.lsfg_failed").into());
+                        }
+                    } else if same {
+                        self.optimize_automatically();
+                    }
+                }
             }
             _ => {}
         }
@@ -259,6 +286,78 @@ mod tests {
             assert!(!harness.state().lsfg.running);
             assert!(!harness.state().jobs.busy());
         }
+    }
+    #[test]
+    fn one_click_resumes_only_for_the_same_game_after_shaders_are_ready() {
+        let lang = Lang::En;
+        let ready = || {
+            Ok(prepare::PreparedCache {
+                directory: "/synthetic/cache".into(),
+                dll_sha256: "hash".into(),
+            })
+        };
+        let setup = || {
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.saved.lossless_dir = Some("/synthetic/LS".into());
+            app.lsfg.source = app.saved.lossless_dir.clone();
+            // A preparation already in flight: joining it must not spawn another worker.
+            app.lsfg.running = true;
+            app.lsfg.request = 7;
+            app.view.target = Some("/synthetic/game".into());
+            app.tuning.facts_generation = 3;
+            assert!(app.lsfg_prepare_for_optimize("/synthetic/game".into()));
+            assert!(!app.jobs.busy());
+            app
+        };
+        // Same game and facts: the optimization runs again (here it finds nothing else to do).
+        let mut app = setup();
+        app.lsfg_event(Event::Finished {
+            request: 7,
+            result: ready(),
+        });
+        assert!(app.lsfg.then_optimize.is_none());
+        assert!(app.autotune_ready());
+        let message = app
+            .tuning
+            .sm86
+            .error
+            .as_ref()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        assert_ne!(message, t(lang, "optimize.lsfg_preparing"));
+        assert!(app.review.is_none());
+        // The user moved to another game meanwhile: nothing resumes.
+        let mut app = setup();
+        app.view.target = Some("/synthetic/other".into());
+        app.tuning.sm86.error = None;
+        app.lsfg_event(Event::Finished {
+            request: 7,
+            result: ready(),
+        });
+        assert!(app.lsfg.then_optimize.is_none());
+        assert!(app.tuning.sm86.error.is_none());
+        assert!(app.review.is_none());
+        // Preparation failed: say so, apply nothing.
+        let mut app = setup();
+        app.lsfg_event(Event::Finished {
+            request: 7,
+            result: Err(prepare::Error::Failed("synthetic".into())),
+        });
+        let message = app
+            .tuning
+            .sm86
+            .error
+            .as_ref()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
+        assert_eq!(message, t(lang, "optimize.lsfg_failed"));
+        assert!(app.review.is_none());
+        // No Lossless Scaling folder at all: refuse up front.
+        let mut app = crate::app_tests::shell_tests::app();
+        app.view.target = Some("/synthetic/game".into());
+        assert!(!app.lsfg_prepare_for_optimize("/synthetic/game".into()));
+        assert!(app.lsfg.then_optimize.is_none());
     }
     #[test]
     fn cancel_and_stale_results_do_not_publish_or_enable() {

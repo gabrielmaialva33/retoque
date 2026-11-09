@@ -6,6 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
 cap-std = "4"
 cap-fs-ext = "4"
 retoque-core.workspace = true
@@ -19,7 +20,6 @@ spirv-cross2 = { version = "=0.7.2", default-features = false, features = ["hlsl
 spirv-cross-sys = { version = "=0.7.4", default-features = false }
 libloading = "0.8"
 regex = "1"
-ureq = { version = "3", default-features = false, features = ["rustls"] }
 flate2 = "1"
 tar = "0.4"
 

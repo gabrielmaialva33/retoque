@@ -7,6 +7,9 @@ use crate::autotune::{
     recommend::{self, Action, GameFacts, Need},
 };
 
+#[path = "sm86_ui.rs"]
+mod sm86_ui;
+
 impl RetoqueApp {
     pub(crate) fn autotune_start(&mut self) {
         self.jobs.spawn("autotune-environment", None, |_| {
@@ -32,7 +35,24 @@ impl RetoqueApp {
     }
     pub(crate) fn autotune_event(&mut self, event: Event) {
         match event {
-            Event::Environment { gpus, lossless } => {
+            Event::Sm86Progress(bytes) => self.tuning.sm86.downloaded = bytes,
+            Event::Sm86Release(result) => {
+                self.tuning.sm86.busy = false;
+                match result {
+                    Ok((release, available)) => {
+                        self.tuning.sm86.release = Some(release);
+                        self.tuning.sm86.available = available;
+                    }
+                    Err(e) => self.tuning.sm86.error = Some(e),
+                }
+            }
+            Event::Sm86Downloaded(result) => self.sm86_downloaded(result),
+            Event::Environment {
+                gpus,
+                lossless,
+                kit_cache,
+            } => {
+                self.tuning.sm86.kit_cache = kit_cache;
                 self.tuning.gpus = Some(gpus);
                 self.tuning.detected_lossless = lossless;
             }
@@ -64,7 +84,8 @@ impl RetoqueApp {
             _ => {}
         }
     }
-    pub(crate) fn autotune_gpu(&self, ui: &mut egui::Ui) {
+    pub(crate) fn autotune_gpu(&mut self, ui: &mut egui::Ui) {
+        self.sm86_dialog(ui.ctx());
         let Some(gpus) = &self.tuning.gpus else {
             ui.add(egui::Label::new(self.tr("auto.gpu_reading")).wrap());
             return;
@@ -154,6 +175,7 @@ impl RetoqueApp {
                 }
                 return;
             }
+            self.optimize_controls(ui);
             let recs = self.view.intelligence.recommendations.clone();
             if recs.is_empty() {
                 ui.add(egui::Label::new(self.tr("auto.none")).wrap());
@@ -251,12 +273,7 @@ impl RetoqueApp {
                 });
         }
         if selected.is_none() {
-            ui.add(egui::Label::new(self.tr("auto.import_help")).wrap());
-            if ui.button(self.tr("auto.import")).clicked()
-                && let Some(dir) = rfd::FileDialog::new().pick_folder()
-            {
-                self.autotune_catalog(Some(dir), None);
-            }
+            self.sm86_download_controls(ui);
         }
         selected.is_some()
     }
@@ -265,12 +282,7 @@ impl RetoqueApp {
         ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("auto.components"));
-            ui.add(egui::Label::new(self.tr("auto.import_help")).wrap());
-            if ui.button(self.tr("auto.import")).clicked()
-                && let Some(dir) = rfd::FileDialog::new().pick_folder()
-            {
-                self.autotune_catalog(Some(dir), None);
-            }
+            self.sm86_download_controls(ui);
             match self.tuning.catalog.clone() {
                 None => {
                     ui.spinner();
