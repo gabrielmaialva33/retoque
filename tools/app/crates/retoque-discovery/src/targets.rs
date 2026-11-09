@@ -1,10 +1,16 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use crate::TargetDir;
 use crate::io::{open_regular_file, read_bounded_bytes};
+
+fn observed_retoque_dirs() -> &'static Mutex<HashMap<PathBuf, bool>> {
+    static DIRS: OnceLock<Mutex<HashMap<PathBuf, bool>>> = OnceLock::new();
+    DIRS.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 const MAX_WALK_DEPTH: usize = 5;
 const MAX_WALK_ENTRIES: usize = 10_000;
@@ -76,6 +82,7 @@ pub fn detect_emulator_name(targets: &[TargetDir]) -> Option<&'static str> {
 }
 
 const MARK_OPTISCALER: &[u8] = b"OptiScaler working as";
+const MARK_FORWARDER: &[u8] = b"dlssnr_call_";
 const MARK_SM86_ROLE: &[u8] = b"DlssgProxy_Role";
 const MARK_SM86_INFO: &[u8] = b"DlssgMod_GetInfo";
 const MARK_RESHADE: &[u8] = b"ReShade";
@@ -94,7 +101,59 @@ struct DirInspection {
     dlss: Vec<String>,
     proxies: Vec<String>,
     has_receipt: bool,
+    has_retoque: bool,
     loaders: Vec<String>,
+}
+
+/// Returns `true` if the `.retoque/receipt.txt` in `dir` is a standalone DLSS update receipt
+/// (owning `.retoque/dlss.txt` / `nvngx_dlss*.dll` without a Retoque proxy record).
+pub fn is_standalone_dlss_receipt(dir: &Path) -> bool {
+    let receipt_path = dir.join(".retoque/receipt.txt");
+    let Ok(bytes) = read_bounded_bytes(&receipt_path, 64 * 1024) else {
+        return false;
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    let has_proxy = text.lines().any(|l| l.starts_with("proxy\t"));
+    if has_proxy {
+        return false;
+    }
+    if dir.join(".retoque/dlss.txt").is_file() {
+        return true;
+    }
+    text.lines()
+        .any(|l| l.contains(".retoque/dlss.txt") || l.to_ascii_lowercase().contains("nvngx_dlss"))
+}
+
+/// Returns `true` when `target` has a Retoque installation (either a Retoque receipt or an
+/// observed OptiScaler proxy / companion DLL). Standalone DLSS root receipts do not count.
+pub fn target_has_retoque(target: &TargetDir) -> bool {
+    if target.has_receipt && (target.path.as_os_str().is_empty() || !is_standalone_dlss_receipt(&target.path)) {
+        return true;
+    }
+    if target.path.as_os_str().is_empty() {
+        return false;
+    }
+    if let Ok(map) = observed_retoque_dirs().lock()
+        && let Some(&cached) = map.get(&target.path)
+        && cached
+    {
+        return true;
+    }
+    if target.path.join(".retoque/receipt.txt").is_file() && !is_standalone_dlss_receipt(&target.path) {
+        return true;
+    }
+    if target.path.join("OptiScaler.dll").is_file() || target.path.join("nvngx.dll_dlssnr.dll").is_file() {
+        return true;
+    }
+    for proxy in &target.proxies_present {
+        let p = target.path.join(proxy);
+        if let Ok(bytes) = read_bounded_bytes(&p, MAX_DLL_PROBE_BYTES)
+            && (contains_subslice(&bytes, MARK_OPTISCALER) || contains_subslice(&bytes, MARK_FORWARDER))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Normalize a launcher executable hint against `install_dir` (and optional Wine `prefix`),
@@ -763,19 +822,24 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
     let has_emulator = inspection.exes.iter().any(|e| emulator_name_for_exe(&e.name).is_some());
 
     if !inspection.exes.is_empty() {
-        inspection.has_receipt = has_retoque_dir && dir.join(".retoque/receipt.txt").is_file();
-        has_retoque_companion |= inspection.has_receipt;
-        inspection.dlss.sort();
-        inspection.proxies.sort();
-        inspection.loaders = detect_loaders(
+        inspection.has_receipt =
+            has_retoque_dir && dir.join(".retoque/receipt.txt").is_file() && !is_standalone_dlss_receipt(dir);
+        let (loaders, has_optiscaler_proxy) = detect_loaders(
             dir,
-            has_retoque_companion,
+            has_retoque_companion || inspection.has_receipt,
             has_sm86_ini,
             sm86_dir_path.as_deref(),
             has_reshade_file,
             has_specialk_file,
             &candidate_loader_dlls,
         );
+        inspection.has_retoque = inspection.has_receipt || has_retoque_companion || has_optiscaler_proxy;
+        if let Ok(mut map) = observed_retoque_dirs().lock() {
+            map.insert(dir.to_path_buf(), inspection.has_retoque);
+        }
+        inspection.dlss.sort();
+        inspection.proxies.sort();
+        inspection.loaders = loaders;
         out.insert(dir.to_path_buf(), inspection);
     }
 
@@ -805,7 +869,7 @@ fn detect_loaders(
     mut has_reshade: bool,
     mut has_specialk: bool,
     candidate_dlls: &[(String, PathBuf, u64)],
-) -> Vec<String> {
+) -> (Vec<String>, bool) {
     let has_sm86_runtime_dir = sm86_dir.is_some_and(|d| {
         fs::read_dir(d).is_ok_and(|rd| {
             rd.flatten().any(|e| {
@@ -817,6 +881,7 @@ fn detect_loaders(
 
     let mut has_sm86_dll_marker = false;
     let mut has_monolithic_sm86_dll = false;
+    let mut has_optiscaler_proxy = false;
 
     for (lower_name, dll_path, size) in candidate_dlls {
         // A >= 20 MiB dxgi.dll/winmm.dll alongside Retoque companions is OptiScaler (~30 MiB);
@@ -826,6 +891,7 @@ fn detect_loaders(
             && (lower_name == "dxgi.dll" || lower_name == "winmm.dll")
             && !has_sm86_ini
         {
+            has_optiscaler_proxy = true;
             continue;
         }
         // Heuristic for monolithic 0.3.x version.dll (~30 MB) when alongside dlssg_sm86.ini or named version.dll.
@@ -835,13 +901,14 @@ fn detect_loaders(
                 continue;
             }
         }
-        if (has_sm86_ini || has_sm86_runtime_dir) && has_reshade && has_specialk {
+        if (has_sm86_ini || has_sm86_runtime_dir) && has_reshade && has_specialk && has_optiscaler_proxy {
             continue;
         }
         let Ok(bytes) = read_bounded_bytes(dll_path, MAX_DLL_PROBE_BYTES) else {
             continue;
         };
-        if contains_subslice(&bytes, MARK_OPTISCALER) {
+        if contains_subslice(&bytes, MARK_OPTISCALER) || contains_subslice(&bytes, MARK_FORWARDER) {
+            has_optiscaler_proxy = true;
             continue;
         }
         if contains_subslice(&bytes, MARK_SM86_ROLE) || contains_subslice(&bytes, MARK_SM86_INFO) {
@@ -899,7 +966,7 @@ fn detect_loaders(
 
     loaders.sort();
     loaders.dedup();
-    loaders
+    (loaders, has_optiscaler_proxy)
 }
 
 fn contains_subslice(haystack: &[u8], needle: &[u8]) -> bool {
@@ -1313,8 +1380,11 @@ fn score_directory(
         score += 40 + (info.dlss.len() as i32 * 5);
     }
 
-    // 5. Existing `.retoque/receipt.txt`.
-    if info.has_receipt {
+    // 5. Existing `.retoque/receipt.txt` or observed Retoque proxy/companion.
+    // A root receipt without an OptiScaler proxy when a strong binary subdirectory exists is a
+    // root-level DLSS/shared receipt and must not promote the root stub over the binary folder.
+    let root_only_receipt = dir == root && has_strong_subdir && info.proxies.is_empty();
+    if (info.has_receipt || info.has_retoque) && !root_only_receipt {
         score += 30;
     }
 

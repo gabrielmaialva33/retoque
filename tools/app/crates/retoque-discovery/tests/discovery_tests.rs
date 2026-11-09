@@ -1232,3 +1232,181 @@ fn roots_fix3_synthetic_big_tree_performance() {
         elapsed.as_millis()
     );
 }
+
+#[test]
+fn fixlib1_manual_drive_root_steamlibrary_and_multi_game_folder_classification() {
+    use retoque_discovery::{ManualFolderKind, classify_manual_folder, is_drive_root};
+
+    assert!(is_drive_root(Path::new(r"F:\")));
+    assert!(is_drive_root(Path::new("F:/")));
+    assert!(is_drive_root(Path::new("f:")));
+    assert!(is_drive_root(Path::new("/")));
+    assert_eq!(classify_manual_folder(Path::new(r"F:\")), ManualFolderKind::DriveRoot);
+    assert_eq!(
+        classify_manual_folder(Path::new(r"F:\SteamLibrary")),
+        ManualFolderKind::Library
+    );
+
+    let tmp = TempDir::new("fixlib1-classify");
+    let home = tmp.path().join("empty-home");
+    fs::create_dir_all(&home).unwrap();
+
+    // 1. Folder containing steamapps/ with a game inside.
+    let custom_steam_lib = tmp.path().join("MySteamDisk");
+    let steam_game_bin = custom_steam_lib.join("steamapps/common/CyberGame/bin/x64");
+    fs::create_dir_all(&steam_game_bin).unwrap();
+    fs::write(steam_game_bin.join("CyberGame.exe"), b"MZ").unwrap();
+    fs::write(
+        steam_game_bin.join("dxgi.dll"),
+        b"MZ OptiScaler working as dxgi synthetic",
+    )
+    .unwrap();
+    assert_eq!(classify_manual_folder(&custom_steam_lib), ManualFolderKind::Library);
+
+    // 2. Folder holding several game folders (no root exe, >= 2 child game folders).
+    let multi_dir = tmp.path().join("GamesCollection");
+    let alpha_dir = multi_dir.join("AlphaGame");
+    let beta_dir = multi_dir.join("BetaGame/Binaries/Win64");
+    fs::create_dir_all(&alpha_dir).unwrap();
+    fs::create_dir_all(&beta_dir).unwrap();
+    fs::write(alpha_dir.join("Alpha.exe"), b"MZ").unwrap();
+    fs::write(beta_dir.join("Beta-Win64-Shipping.exe"), b"MZ").unwrap();
+    assert_eq!(classify_manual_folder(&multi_dir), ManualFolderKind::Library);
+
+    // 3. Even if passed in `config.manual`, drive roots are dropped and Steam/multi-game folders
+    // are scanned as libraries rather than turning into single games named "SteamLibrary" or "Manual".
+    let (games, skipped) = discover(&Config {
+        manual: vec![PathBuf::from(r"F:\"), custom_steam_lib, multi_dir],
+        home: Some(home),
+        ..Config::default()
+    });
+    assert!(skipped.is_empty(), "unexpected skipped: {skipped:?}");
+    let names: Vec<&str> = games.iter().map(|g| g.name.as_str()).collect();
+    assert_eq!(names, vec!["AlphaGame", "BetaGame", "CyberGame"]);
+    assert!(!names.contains(&"Manual"));
+    assert!(!names.contains(&"SteamLibrary"));
+    assert!(!names.contains(&"MySteamDisk"));
+}
+
+#[test]
+fn fixlib2_non_game_steam_apps_flagged_while_tmodloader_stays_playable() {
+    use retoque_discovery::is_steam_non_game_app;
+
+    assert!(is_steam_non_game_app(993090, "Lossless Scaling", "Lossless Scaling"));
+    assert!(is_steam_non_game_app(
+        556450,
+        "The Forest Dedicated Server",
+        "The Forest Dedicated Server"
+    ));
+    assert!(is_steam_non_game_app(
+        715850,
+        "The Divinity Engine 2",
+        "The Divinity Engine 2"
+    ));
+    assert!(is_steam_non_game_app(0, "Palworld Dedicated Server", "PalServer"));
+    assert!(is_steam_non_game_app(0, "Source SDK", "SourceSDK"));
+    assert!(is_steam_non_game_app(0, "Frostpunk 2 Mod Editor", "Frostpunk2Editor"));
+
+    // Playable games (including tModLoader and games with "Engine" not at the end) must not be flagged.
+    assert!(!is_steam_non_game_app(1281930, "tModLoader", "tModLoader"));
+    assert!(!is_steam_non_game_app(0, "tModLoader", "tModLoader"));
+    assert!(!is_steam_non_game_app(244850, "Space Engineers", "SpaceEngineers"));
+    assert!(!is_steam_non_game_app(1001, "Photon Blade", "PhotonBlade"));
+
+    // Manifest with explicit non-game type is also detected via Game::is_non_game.
+    let tmp = TempDir::new("fixlib2-steam");
+    let home = tmp.path();
+    let steamapps = home.join(".local/share/Steam/steamapps");
+    let common = steamapps.join("common");
+    fs::create_dir_all(common.join("Lossless Scaling")).unwrap();
+    fs::create_dir_all(common.join("The Forest Dedicated Server")).unwrap();
+    fs::create_dir_all(common.join("The Divinity Engine 2")).unwrap();
+    fs::create_dir_all(common.join("tModLoader")).unwrap();
+    fs::write(common.join("Lossless Scaling/LosslessScaling.exe"), b"MZ").unwrap();
+    fs::write(common.join("The Forest Dedicated Server/ForestServer.exe"), b"MZ").unwrap();
+    fs::write(common.join("The Divinity Engine 2/DivinityEngine2.exe"), b"MZ").unwrap();
+    fs::write(common.join("tModLoader/tModLoader.exe"), b"MZ").unwrap();
+
+    fs::write(
+        steamapps.join("appmanifest_993090.acf"),
+        r#""AppState" { "appid" "993090" "name" "Lossless Scaling" "installdir" "Lossless Scaling" }"#,
+    )
+    .unwrap();
+    fs::write(
+        steamapps.join("appmanifest_556450.acf"),
+        r#""AppState" { "appid" "556450" "name" "The Forest Dedicated Server" "installdir" "The Forest Dedicated Server" }"#,
+    )
+    .unwrap();
+    fs::write(
+        steamapps.join("appmanifest_715850.acf"),
+        r#""AppState" { "appid" "715850" "name" "The Divinity Engine 2" "installdir" "The Divinity Engine 2" "type" "Tool" }"#,
+    )
+    .unwrap();
+    fs::write(
+        steamapps.join("appmanifest_1281930.acf"),
+        r#""AppState" { "appid" "1281930" "name" "tModLoader" "installdir" "tModLoader" }"#,
+    )
+    .unwrap();
+
+    let (games, skipped) = discover(&Config {
+        home: Some(home.to_path_buf()),
+        ..Config::default()
+    });
+    assert!(skipped.is_empty());
+    assert_eq!(games.len(), 4, "all 4 still count as discovered");
+    for g in &games {
+        if g.name == "tModLoader" {
+            assert!(!g.is_non_game(), "tModLoader must not be marked non-game");
+        } else {
+            assert!(g.is_non_game(), "{} must be marked non-game", g.name);
+        }
+    }
+}
+
+#[test]
+fn fixlib3_mortal_shell_ii_two_targets_root_dlss_receipt_and_untracked_proxy() {
+    use retoque_discovery::target_has_retoque;
+
+    let tmp = TempDir::new("fixlib3-ms2");
+    let sparta = tmp.path().join("Sparta");
+    let win64 = sparta.join("MortalShell2/Binaries/Win64");
+    fs::create_dir_all(&win64).unwrap();
+    fs::write(sparta.join("Sparta.exe"), b"MZ-root-stub").unwrap();
+    fs::write(win64.join("MortalShell2-Win64-Shipping.exe"), b"MZ-shipping").unwrap();
+    // Old-script Retoque install in Binaries\Win64 (no .retoque/receipt.txt).
+    fs::write(
+        win64.join("dxgi.dll"),
+        b"MZ OptiScaler working as dxgi synthetic old script",
+    )
+    .unwrap();
+    fs::write(win64.join("OptiScaler.dll"), b"MZ OptiScaler working as").unwrap();
+
+    // Simulate a standalone DLSS update receipt at the install root Sparta.
+    fs::create_dir_all(sparta.join(".retoque")).unwrap();
+    fs::write(sparta.join(".retoque/dlss.txt"), b"Retoque DLSS receipt v1\n").unwrap();
+    fs::write(
+        sparta.join(".retoque/receipt.txt"),
+        b"version\t1\nstatus\tcomplete\nfile\t.retoque/dlss.txt\tabc\nfile\tEngine/Plugins/nvngx_dlss.dll\tdef\n",
+    )
+    .unwrap();
+
+    let found_with_dlss_receipt = targets(&sparta);
+    assert_eq!(found_with_dlss_receipt.len(), 2);
+    assert_eq!(
+        found_with_dlss_receipt[0].path, win64,
+        "Binaries/Win64 must remain the primary target when a root DLSS receipt exists"
+    );
+    assert!(target_has_retoque(&found_with_dlss_receipt[0]));
+    assert!(
+        !found_with_dlss_receipt[1].has_receipt,
+        "standalone DLSS root receipt must not mark the root stub as a Retoque target receipt"
+    );
+    assert!(!target_has_retoque(&found_with_dlss_receipt[1]));
+
+    // Now remove the root DLSS receipt (simulating DLSS restore at the root).
+    fs::remove_dir_all(sparta.join(".retoque")).unwrap();
+    let found_after_restore = targets(&sparta);
+    assert_eq!(found_after_restore.len(), 2);
+    assert_eq!(found_after_restore[0].path, win64);
+    assert!(target_has_retoque(&found_after_restore[0]));
+}

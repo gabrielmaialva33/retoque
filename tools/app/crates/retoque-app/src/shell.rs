@@ -84,6 +84,7 @@ impl RetoqueApp {
     }
 
     pub(crate) fn library(&mut self, ui: &mut egui::Ui) {
+        self.migrate_saved_folders();
         ui.add_space(6.0);
         self.search_field(ui);
         ui.horizontal(|ui| {
@@ -98,6 +99,7 @@ impl RetoqueApp {
             });
         });
         self.folders_button(ui);
+        self.migration_notice_ui(ui);
         ui.separator();
         if self.scanning && self.library_state.games.is_empty() {
             ui.horizontal(|ui| {
@@ -150,19 +152,28 @@ impl RetoqueApp {
                     }
                 }
             }
-            if !self.skipped.is_empty() {
-                ui.add_space(8.0);
-                ui.label(
-                    RichText::new(format!("{}: {}", self.tr("lib.skipped"), self.skipped.join("; ")))
-                        .small()
-                        .weak(),
-                );
-            }
+            self.skipped_note(ui);
         });
         self.library_has_focus = list_focus;
         if let Some(id) = clicked {
             self.select_id(id);
         }
+    }
+
+    pub(crate) fn skipped_note(&self, ui: &mut egui::Ui) {
+        if self.skipped.is_empty() {
+            return;
+        }
+        ui.add_space(8.0);
+        let header = format!("{} ({})", self.tr("lib.skipped"), self.skipped.len());
+        egui::CollapsingHeader::new(RichText::new(header).small().color(theme::MUTED))
+            .id_salt("skipped_entries")
+            .default_open(false)
+            .show(ui, |ui| {
+                for entry in &self.skipped {
+                    ui.label(RichText::new(entry).small().color(theme::MUTED));
+                }
+            });
     }
 
     pub(crate) fn game(&mut self, ui: &mut egui::Ui) {
@@ -356,6 +367,7 @@ impl RetoqueApp {
     }
 
     pub(crate) fn home_grid(&mut self, ui: &mut egui::Ui) {
+        self.migrate_saved_folders();
         ui.heading(self.tr("welcome.title"));
         self.refresh_library_cache();
         let installed = self.library_state.derived.installed_count;
@@ -400,11 +412,13 @@ impl RetoqueApp {
             }
             self.folders_button(ui);
         });
+        self.migration_notice_ui(ui);
         if self.library_state.games.is_empty() {
             widgets::card(ui, |ui| {
                 widgets::card_title(ui, self.tr(if self.scanning { "lib.scanning" } else { "lib.empty" }));
                 ui.label(self.tr("shell.home_help"));
             });
+            self.skipped_note(ui);
             return;
         }
         self.refresh_library_cache();
@@ -453,6 +467,7 @@ impl RetoqueApp {
                 });
                 ui.add_space(20.0);
             }
+            self.skipped_note(ui);
         });
         if let Some(id) = clicked {
             self.select_id(id);
