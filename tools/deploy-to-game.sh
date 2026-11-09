@@ -1094,6 +1094,11 @@ deploy() {
     echo "      WINEDLLOVERRIDES=\"${PROXY_NAME%.*}=n,b\" %command%"
 }
 
+# The app's write-ahead intent is not part of the v1 receipt this script understands. Refuse even
+# dry runs (and malformed/dangling entries), before reading or rewriting any recovery state.
+if exists .retoque/pending-receipt.txt; then
+    die 1 "An interrupted Retoque app operation must be recovered with the app or 'retoque' first; nothing was written."
+fi
 check_parents .retoque/receipt.txt
 
 if (( UNINSTALL )); then

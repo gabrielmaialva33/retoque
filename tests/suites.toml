@@ -1184,3 +1184,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Forwarder resource shares OptiScaler's numeric file/product version, follows a synthetic version bump, and is wired into MSBuild and MSVC CMake; four source controls. No PE execution."
+
+[app-install-parity]
+path = "app-install-parity"
+domain = "platform"
+requires = ["python", "cargo"]
+tier = "host"
+timeout = 600
+summary = "Rust installer CLI against the deploy-safety synthetic fixtures and receipt reversibility cases."

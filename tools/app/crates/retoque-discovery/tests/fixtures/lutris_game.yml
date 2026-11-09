@@ -1,0 +1,7 @@
+game:
+  arch: win64
+  exe: '/opt/games/lutris/StarRunner/bin/x64/StarRunner.exe'
+  prefix: /opt/prefixes/lutris/star-runner
+  working_dir: /opt/games/lutris/StarRunner
+wine:
+  version: wine-ge-8-26-x86_64

@@ -1,0 +1,16 @@
+[package]
+name = "retoque-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "retoque"
+path = "src/main.rs"
+
+[dependencies]
+retoque-core.workspace = true
+retoque-data.workspace = true
+retoque-discovery.workspace = true
+serde_json = "1"

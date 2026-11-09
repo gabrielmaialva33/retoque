@@ -1,0 +1,22 @@
+[package]
+name = "retoque-data"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+cap-std = "4"
+cap-fs-ext = "4"
+retoque-core.workspace = true
+sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+
+retoque-discovery.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.10"

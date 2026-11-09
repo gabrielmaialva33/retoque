@@ -1,0 +1,1279 @@
+//! The app's text in English and Brazilian Portuguese. A key missing from the table shows the key itself, so a gap
+//! is visible instead of silently empty.
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Lang {
+    En,
+    Pt,
+}
+
+impl Lang {
+    /// pt-BR when the system locale is Portuguese, English otherwise.
+    pub fn from_system() -> Lang {
+        // RETOQUE_LANG=en|pt forces the language (tests, screenshots); otherwise the system locale decides.
+        if let Ok(forced) = std::env::var("RETOQUE_LANG") {
+            return if forced.to_ascii_lowercase().starts_with("pt") {
+                Lang::Pt
+            } else {
+                Lang::En
+            };
+        }
+        match sys_locale::get_locale() {
+            Some(l) if l.to_ascii_lowercase().starts_with("pt") => Lang::Pt,
+            _ => Lang::En,
+        }
+    }
+}
+
+// (key, English, Portuguese)
+const TEXT: &[(&str, &str, &str)] = &[
+    (
+        "mdl.incompatible",
+        "This NR model has no compatible kernels for the detected GPU. Choose another model.",
+        "Este modelo NR não tem kernels compatíveis com a GPU detectada. Escolha outro modelo.",
+    ),
+    (
+        "mdl.arch_match",
+        "CUDA target matches this GPU. Runtime operation is not verified.",
+        "O alvo CUDA corresponde à GPU. O funcionamento não foi verificado em execução.",
+    ),
+    (
+        "mdl.compat_unknown",
+        "NR model compatibility is unknown. This file or GPU has not been identified reliably.",
+        "Compatibilidade do modelo NR desconhecida. Este arquivo ou GPU não foi identificado com segurança.",
+    ),
+    ("mdl.archs", "CUDA targets found:", "Alvos CUDA encontrados:"),
+    (
+        "mdl.suggest",
+        "Catalog model with matching CUDA targets:",
+        "Modelo do catálogo com alvos CUDA compatíveis:",
+    ),
+    ("mdl.use_suggested", "Review model change", "Revisar troca de modelo"),
+    ("ver.unknown", "unknown", "desconhecida"),
+    (
+        "ver.mismatch",
+        "OptiScaler and the NR forwarder have different file versions. Update them together; installation is still allowed.",
+        "OptiScaler e o forwarder NR têm versões de arquivo diferentes. Atualize os dois juntos; a instalação continua permitida.",
+    ),
+    ("welcome.title", "Your games, with Retoque", "Seus jogos, com Retoque"),
+    (
+        "welcome.body",
+        "Install Retoque, tune each game, choose your NR model and understand its logs.",
+        "Instale o Retoque, ajuste cada jogo, escolha seu modelo NR e consulte os logs.",
+    ),
+    ("welcome.found", "games found", "jogos encontrados"),
+    ("welcome.installed", "with Retoque", "com Retoque"),
+    ("set.nr", "Neural Rendering", "Renderização neural"),
+    ("set.upscalers", "Upscalers", "Ampliadores"),
+    ("set.framegen", "Frame generation", "Geração de quadros"),
+    ("set.lsfg", "LSFG (study build)", "LSFG (versão de estudo)"),
+    (
+        "set.lsfg_note",
+        "Study build only. Requires FSR FG output and your own Lossless Scaling files; unavailable features cannot run.",
+        "Somente na versão de estudo. Requer saída FSR FG e seus próprios arquivos do Lossless Scaling; recursos indisponíveis não funcionam.",
+    ),
+    ("mdl.default", "Default search", "Busca padrão"),
+    ("mdl.named", "Selected file", "Arquivo selecionado"),
+    ("mdl.empty_title", "Bring your own model", "Adicione seu modelo"),
+    ("mdl.version", "Version", "Versão"),
+    ("mdl.dll_filter", "Model DLL", "DLL do modelo"),
+    ("unit.mib", "MiB", "MiB"),
+    ("unit.ms", "ms", "ms"),
+    ("unknown", "—", "—"),
+    (
+        "log.route_unknown",
+        "No route reported yet.",
+        "Nenhuma rota informada ainda.",
+    ),
+    (
+        "log.evidence_note",
+        "Initialization records describe this session; they do not prove NR is still running. GPU time includes confirmed samples only.",
+        "O início registrado vale para esta sessão; não prova que o NR continua ativo. O tempo de GPU considera apenas amostras confirmadas.",
+    ),
+    ("log.showing", "Showing", "Exibindo"),
+    (
+        "log.limited",
+        "The summary is limited; the log file contains the full record.",
+        "O resumo tem limites; consulte o arquivo de log para ver o registro completo.",
+    ),
+    ("inst.advanced", "Advanced", "Avançado"),
+    ("st.build", "build", "versão"),
+    ("inst.notes", "Notes", "Observações"),
+    ("dismiss", "×", "×"),
+    ("dismiss.help", "Dismiss message", "Fechar mensagem"),
+    ("brand", "Retoque", "Retoque"),
+    ("lang.en", "English", "English"),
+    ("lang.pt", "Português (BR)", "Português (BR)"),
+    ("step.copy", "Copy", "Copiar"),
+    ("step.backup", "Back up", "Salvar cópia"),
+    ("step.rename", "Rename", "Renomear"),
+    ("step.ini", "Set", "Ajustar"),
+    ("step.remove", "Remove", "Remover"),
+    ("step.restore", "Restore", "Restaurar"),
+    ("step.keep", "Keep", "Preservar"),
+    ("value.unset", "unset", "não definido"),
+    ("ref.unknown_file", "unknown file", "arquivo desconhecido"),
+    ("ref.reshade", "ReShade", "ReShade"),
+    ("kind.install", "install", "instalação"),
+    ("kind.uninstall", "uninstall", "remoção"),
+    ("kind.settings", "settings", "ajustes"),
+    ("store.steam", "Steam", "Steam"),
+    ("store.heroic", "Heroic", "Heroic"),
+    ("store.lutris", "Lutris", "Lutris"),
+    ("store.epic", "Epic", "Epic"),
+    ("store.gog", "GOG", "GOG"),
+    ("store.manual", "Manual", "Adicionado manualmente"),
+    ("runtime.windows", "Windows", "Windows"),
+    ("runtime.proton", "Proton", "Proton"),
+    ("runtime.wine", "Wine", "Wine"),
+    ("runtime.linux", "Linux", "Linux"),
+    (
+        "job.failed",
+        "The operation could not finish",
+        "Não foi possível concluir a operação",
+    ),
+    ("technical.details", "Technical details", "Detalhes técnicos"),
+    (
+        "note.resume",
+        "The last deploy here stopped part-way; its records are kept and this one carries on from them",
+        "A instalação anterior foi interrompida. Seus registros foram preservados e esta instalação continua de onde ela parou.",
+    ),
+    (
+        "note.driver",
+        "NVIDIA Wine _nvngx.dll not found; install your driver Wine NGX component or supply it beside the game.",
+        "O _nvngx.dll do driver NVIDIA para Wine não foi encontrado. Instale o componente Wine NGX do driver ou coloque o arquivo junto do jogo.",
+    ),
+    (
+        "note.model",
+        "Supply your own nvngx_dlssnr.dll beside the game (or name another copy with [DlssNr] ModelFile); the model is not included.",
+        "Coloque seu próprio nvngx_dlssnr.dll junto do jogo ou indique outra cópia em [DlssNr] ModelFile. O modelo não está incluído.",
+    ),
+    (
+        "note.vk_skip",
+        "Vulkan hooks: skipped via marker file",
+        "Hooks Vulkan: desativados pelo arquivo marcador",
+    ),
+    (
+        "note.vk_disabled",
+        "Vulkan hooks: ACTIVE (marker present but disabled)",
+        "Hooks Vulkan: ATIVOS (o marcador existe, mas está desativado)",
+    ),
+    (
+        "note.vk_active",
+        "Vulkan hooks: ACTIVE (no marker); set [Vulkan] SkipHooks=true if the device is lost",
+        "Hooks Vulkan: ATIVOS (sem marcador). Se ocorrer perda do dispositivo, use [Vulkan] SkipHooks=true.",
+    ),
+    (
+        "keep.same",
+        "already this build, left as it is",
+        "já corresponde a esta compilação; mantido como está",
+    ),
+    (
+        "keep.model",
+        "NVIDIA's model, never removed; left in place",
+        "modelo da NVIDIA; preservado, nunca é removido",
+    ),
+    ("keep.gone", "already gone", "já foi removido"),
+    (
+        "keep.changed",
+        "left in place, it changed since this script wrote it",
+        "preservado porque foi alterado após a instalação",
+    ),
+    (
+        "keep.no_backup",
+        "not restored (model or missing backup)",
+        "não restaurado: é um modelo ou a cópia de segurança não existe",
+    ),
+    (
+        "keep.no_rename",
+        "not renamed (model or already gone)",
+        "não renomeado: é um modelo ou já foi removido",
+    ),
+    (
+        "keep.rename_changed",
+        "not renamed back, it changed since",
+        "nome original não restaurado porque o arquivo foi alterado",
+    ),
+    (
+        "ref.ini_missing",
+        "OptiScaler.ini is missing; install or supply it before editing settings",
+        "O OptiScaler.ini não existe. Instale o Retoque ou forneça o arquivo antes de editar os ajustes.",
+    ),
+    (
+        "ref.ini_value",
+        "INI edits require single-line section, key and value without structural separators",
+        "A seção, a chave e o valor do INI devem ocupar uma única linha, sem separadores estruturais.",
+    ),
+    (
+        "note.windows_denied",
+        "Windows denies write access to {path}; apply will refuse until permissions are corrected",
+        "O Windows negou acesso de gravação a {path}. Corrija as permissões para continuar.",
+    ),
+    (
+        "note.second_proxy",
+        "{path} also holds an OptiScaler build; deploying anyway (--allow-second-proxy)",
+        "{path} também contém o OptiScaler. A instalação continuará com --allow-second-proxy.",
+    ),
+    (
+        "keep.destination",
+        "{path}: not restored, a file is still there",
+        "{path}: não restaurado porque já existe um arquivo no destino",
+    ),
+    (
+        "keep.blocked",
+        "not renamed back, {path} is in the way",
+        "nome original não restaurado: {path} ocupa o destino",
+    ),
+    (
+        "ref.proxy",
+        "{path} is not a name OptiScaler answers to",
+        "O nome {path} não é aceito como proxy pelo OptiScaler",
+    ),
+    ("app.refresh", "Rescan library", "Buscar jogos novamente"),
+    ("app.payload", "Retoque files", "Arquivos do Retoque"),
+    (
+        "app.payload.none",
+        "not next to the app: choose the folder with OptiScaler.dll to install or update",
+        "não estão ao lado do app: escolha a pasta com o OptiScaler.dll para instalar ou atualizar",
+    ),
+    ("app.payload.choose", "Choose…", "Escolher…"),
+    ("app.lang", "Language", "Idioma"),
+    ("lib.search", "Search games", "Buscar jogos"),
+    ("lib.installed_only", "Installed only", "Só instalados"),
+    ("lib.add_folder", "Add folder…", "Adicionar pasta…"),
+    ("lib.scanning", "Looking for games…", "Procurando jogos…"),
+    (
+        "lib.empty",
+        "No games found. Add a game folder by hand.",
+        "Nenhum jogo encontrado. Adicione a pasta de um jogo à mão.",
+    ),
+    ("lib.skipped", "Could not read", "Não foi possível ler"),
+    ("game.none", "Choose a game on the left.", "Escolha um jogo à esquerda."),
+    ("game.root", "game folder", "pasta do jogo"),
+    ("game.target", "Executable folder", "Pasta do executável"),
+    (
+        "game.no_target",
+        "No executable folder found in this game.",
+        "Nenhuma pasta com executável encontrada neste jogo.",
+    ),
+    (
+        "game.native",
+        "Native Linux build: Retoque works only with the Windows version under Proton or Wine.",
+        "Versão nativa de Linux: o Retoque só funciona com a versão de Windows no Proton ou no Wine.",
+    ),
+    ("tab.install", "Install", "Retoque"),
+    ("tab.settings", "Settings", "Ajustes"),
+    ("tab.model", "NR model", "Modelo NR"),
+    ("tab.compare", "Before / after", "Antes e depois"),
+    ("tab.logs", "Logs", "Logs"),
+    (
+        "set.invalid",
+        "OptiScaler does not accept this value; fix it to review the changes.",
+        "O OptiScaler não aceita este valor; corrija para revisar as mudanças.",
+    ),
+    ("st.installed", "Retoque installed", "Retoque instalado"),
+    ("st.partial", "Install stopped part-way", "Instalação interrompida"),
+    (
+        "st.uninstall_incomplete",
+        "Uninstall stopped part-way",
+        "Remoção interrompida",
+    ),
+    ("st.not_installed", "Not installed", "Não instalado"),
+    (
+        "st.untracked",
+        "OptiScaler present without a receipt",
+        "OptiScaler presente sem recibo",
+    ),
+    ("st.nr_on", "NR on", "NR ligado"),
+    ("st.nr_off", "NR off", "NR desligado"),
+    (
+        "st.model_missing",
+        "no nvngx_dlssnr.dll beside the game",
+        "sem nvngx_dlssnr.dll junto do jogo",
+    ),
+    ("st.model_present", "model beside the game", "modelo junto do jogo"),
+    (
+        "st.running",
+        "The game is running. Close it first.",
+        "O jogo está aberto. Feche-o antes.",
+    ),
+    ("inst.proxy", "Load as", "Carregar como"),
+    ("inst.enable_nr", "Turn Neural Rendering on", "Ligar o Neural Rendering"),
+    (
+        "inst.keep_reshade",
+        "Keep ReShade (load it through OptiScaler)",
+        "Manter o ReShade (carregado pelo OptiScaler)",
+    ),
+    (
+        "inst.replace_foreign",
+        "Replace a file that is not ours (kept as a backup)",
+        "Substituir um arquivo que não é nosso (fica uma cópia)",
+    ),
+    (
+        "inst.second_proxy",
+        "Allow a second OptiScaler proxy",
+        "Permitir um segundo proxy do OptiScaler",
+    ),
+    (
+        "inst.copy_nvngx",
+        "Copy the driver's _nvngx.dll for Wine",
+        "Copiar o _nvngx.dll do driver para o Wine",
+    ),
+    ("inst.preview", "Preview install", "Ver o que a instalação faz"),
+    ("inst.preview_uninstall", "Preview uninstall", "Ver o que a remoção faz"),
+    ("inst.install", "Install", "Instalar"),
+    ("inst.update", "Update", "Atualizar"),
+    ("inst.uninstall", "Uninstall", "Remover"),
+    ("inst.plan", "What will be done", "O que será feito"),
+    ("inst.nothing", "Nothing to change.", "Nada a mudar."),
+    ("inst.refused", "Nothing will be written:", "Nada será gravado:"),
+    ("inst.working", "Working…", "Trabalhando…"),
+    ("inst.done", "Done.", "Pronto."),
+    ("inst.launch", "Steam launch option", "Opção de inicialização da Steam"),
+    (
+        "inst.launch_help",
+        "Under Proton the game must be told to load this DLL: paste this into the game's launch options in Steam.",
+        "No Proton o jogo precisa ser avisado para carregar esta DLL: cole isto nas opções de inicialização do jogo na Steam.",
+    ),
+    ("inst.copy", "Copy", "Copiar"),
+    ("inst.copied", "Copied", "Copiado"),
+    (
+        "ref.running",
+        "The game is running (exit 3):",
+        "O jogo está aberto (saída 3):",
+    ),
+    (
+        "ref.foreign",
+        "A file at one of our names is not ours (exit 4):",
+        "Um arquivo com um dos nossos nomes não é nosso (saída 4):",
+    ),
+    (
+        "ref.second",
+        "Another proxy already holds OptiScaler (exit 5):",
+        "Outro proxy já tem o OptiScaler (saída 5):",
+    ),
+    (
+        "ref.receipt",
+        "The receipt cannot be used:",
+        "O recibo não pode ser usado:",
+    ),
+    ("ref.usage", "Cannot do this:", "Não dá para fazer isto:"),
+    (
+        "set.none",
+        "Install Retoque first: there is no OptiScaler.ini here.",
+        "Instale o Retoque antes: não há OptiScaler.ini aqui.",
+    ),
+    ("set.save", "Review changes", "Revisar mudanças"),
+    ("set.revert", "Undo changes", "Desfazer mudanças"),
+    (
+        "set.saved",
+        "Written. The game reads it at its next start.",
+        "Gravado. O jogo lê na próxima vez que abrir.",
+    ),
+    ("set.changed", "changed", "alterado(s)"),
+    (
+        "set.missing",
+        "not in this ini yet: saving adds it",
+        "ainda não está neste ini: salvar acrescenta",
+    ),
+    ("mdl.current", "This game uses", "Modelo deste jogo"),
+    (
+        "mdl.auto",
+        "the default search (nvngx_dlssnr.dll beside OptiScaler, then beside the game)",
+        "a busca padrão (nvngx_dlssnr.dll junto do OptiScaler, depois junto do jogo)",
+    ),
+    (
+        "mdl.missing_file",
+        "This file does not exist: NR will be unavailable in this game.",
+        "Este arquivo não existe: o NR ficará indisponível neste jogo.",
+    ),
+    ("mdl.catalog", "Your models", "Catálogo do aplicativo"),
+    ("mdl.import", "Import a model…", "Importar um modelo…"),
+    ("mdl.use", "Use in this game", "Usar neste jogo"),
+    ("mdl.in_use", "In use", "Em uso"),
+    ("mdl.use_auto", "Use the default search", "Usar a busca padrão"),
+    ("mdl.remove", "Remove from the list", "Tirar da lista"),
+    (
+        "mdl.empty",
+        "No models yet. Import the nvngx_dlssnr.dll files you have; they are copied into the app's folder and never shared.",
+        "Nenhum modelo ainda. Importe os nvngx_dlssnr.dll que você tem; eles são copiados para a pasta do app e nunca compartilhados.",
+    ),
+    (
+        "mdl.needs_ini",
+        "Install Retoque first: the choice is saved in OptiScaler.ini.",
+        "Instale o Retoque antes: a escolha fica no OptiScaler.ini.",
+    ),
+    (
+        "log.none",
+        "No OptiScaler log here yet: play the game once with Retoque installed.",
+        "Ainda não há log do OptiScaler aqui: jogue uma vez com o Retoque instalado.",
+    ),
+    ("log.dlss", "DLSS", "DLSS"),
+    ("log.api", "API", "API"),
+    ("log.route", "NR route", "Rota do NR"),
+    ("log.nr_init", "NR started", "NR iniciou"),
+    ("log.gpu", "NR GPU time", "Tempo de GPU do NR"),
+    ("log.errors", "Errors", "Erros"),
+    ("log.warnings", "Warnings", "Avisos"),
+    ("log.lines", "Lines worth reading", "Linhas que importam"),
+    ("log.bundle", "Make a diagnostic file", "Gerar diagnóstico…"),
+    (
+        "log.bundle_done",
+        "Written (home folder and user name removed):",
+        "Gravado (pasta pessoal e nome de usuário removidos):",
+    ),
+    ("log.open_folder", "Open folder", "Abrir pasta"),
+    (
+        "app.wait_write",
+        "A write is still running: wait for it to finish before closing.",
+        "Uma gravação ainda está em andamento: espere terminar antes de fechar.",
+    ),
+    (
+        "inst.stale",
+        "The options or the Retoque files changed after this preview: preview again.",
+        "As opções ou os arquivos do Retoque mudaram depois desta prévia: veja de novo.",
+    ),
+    ("set.apply", "Write these changes", "Gravar estas mudanças"),
+    (
+        "mdl.remove_help",
+        "Deletes the catalog's copy. A game that names this file loses NR until it gets another model.",
+        "Apaga a cópia do catálogo. Um jogo que aponta para este arquivo fica sem NR até receber outro modelo.",
+    ),
+    (
+        "app.tagline",
+        "Neural Rendering for your games",
+        "Neural Rendering nos seus jogos",
+    ),
+    ("lib.group_installed", "With Retoque", "Com Retoque"),
+    ("lib.group_other", "Other games", "Outros jogos"),
+    ("lib.state_installed", "Retoque", "Retoque"),
+    ("card.install", "Install", "Instalação"),
+    ("card.launch", "Steam launch option", "Opção de inicialização da Steam"),
+    ("yes", "yes", "sim"),
+    ("no", "no", "não"),
+    ("error", "Error", "Erro"),
+    ("cancel", "Cancel", "Cancelar"),
+    // Before / after viewer (compare.rs).
+    ("canvas", "Comparison image", "Imagem de comparação"),
+    ("title", "Before / after", "Antes / depois"),
+    ("captures", "Captures", "Capturas"),
+    ("refresh", "Refresh", "Atualizar"),
+    ("loading", "Loading capture…", "Carregando captura…"),
+    ("scanning", "Looking for captures…", "Buscando capturas…"),
+    ("empty", "No complete captures yet", "Nenhuma captura completa ainda"),
+    (
+        "empty_help",
+        "Run the game with NR enabled. In Retoque's in-game menu, open Compare and press “Capture original and processed”. Return here and refresh. Both images must finish saving beside the game's proxy, in retoque-captures.",
+        "Abra o jogo com o NR ativado. No menu do Retoque dentro do jogo, abra Comparação e clique em “Capturar original e processado”. Volte aqui e atualize. As duas imagens precisam terminar de salvar na pasta retoque-captures, ao lado da DLL do Retoque.",
+    ),
+    (
+        "scan_error",
+        "Could not read the capture folder. Check that it exists and is readable, then refresh.",
+        "Não foi possível ler a pasta de capturas. Confira se ela existe e se há permissão de leitura, depois atualize.",
+    ),
+    (
+        "load_error",
+        "Could not load this pair. A file may be incomplete, unsupported or have different dimensions. Refresh to retry.",
+        "Não foi possível abrir este par. Um arquivo pode estar incompleto, ter formato incompatível ou dimensões diferentes. Atualize para tentar de novo.",
+    ),
+    ("wipe", "Wipe", "Divisor"),
+    ("side", "Side by side", "Lado a lado"),
+    ("flip", "Flip", "Alternar"),
+    ("diff", "Difference", "Diferença"),
+    ("fit", "Fit", "Ajustar à janela"),
+    ("one", "1:1", "1:1"),
+    ("original", "Original", "Original"),
+    ("processed", "Retoque NR", "Retoque NR"),
+    ("hold", "Hold to see original", "Segure para ver o original"),
+    (
+        "interaction",
+        "Wheel: zoom · Drag: pan · Drag divider: compare · Space: original in Flip",
+        "Roda: zoom · Arraste: mover · Arraste o divisor: comparar · Espaço: original em Alternar",
+    ),
+    ("stats", "Display preview", "Prévia de exibição"),
+    ("psnr", "PSNR", "PSNR"),
+    ("changed", "Changed >5%", "Variação >5%"),
+    ("mad", "Mean difference", "Diferença média"),
+    (
+        "stats_help",
+        "RGB PSNR and mean absolute difference use 8-bit display values; changed pixels have an absolute luma-code difference above 5%. These are not raw HDR metrics or a quality score.",
+        "PSNR RGB e diferença média absoluta usam os valores de exibição de 8 bits; pixels alterados têm diferença absoluta de luma acima de 5%. Não são métricas do HDR bruto nem uma nota de qualidade.",
+    ),
+    (
+        "hdr",
+        "HDR to SDR preview · ACES + sRGB · shared exposure",
+        "Prévia HDR em SDR · ACES + sRGB · exposição compartilhada",
+    ),
+    (
+        "sdr",
+        "SDR capture · original display values",
+        "Captura SDR · valores originais de exibição",
+    ),
+    (
+        "hdr_note",
+        "The game's own tonemapping and post-processing are not reproduced here.",
+        "O tonemapping e o pós-processamento do jogo não são reproduzidos aqui.",
+    ),
+    (
+        "diff_key",
+        "Heatmap · fixed 8× gain · black = equal, blue, yellow, red = increasing difference",
+        "Mapa de diferenças · ganho fixo de 8× · preto = igual, azul, amarelo, vermelho = diferença crescente",
+    ),
+    ("provenance", "Capture provenance", "Dados da captura"),
+    (
+        "no_provenance",
+        "No sidecar or embedded provenance found.",
+        "Nenhum metadado encontrado no JSON ou na imagem.",
+    ),
+    ("model", "Model", "Modelo"),
+    ("route", "Route", "Rota"),
+    ("working", "Working size", "Resolução de processamento"),
+    ("settings", "Settings", "Ajustes"),
+    ("cmp.unknown", "Not recorded", "Não registrado"),
+    ("loaded", "Loaded in", "Carregado em"),
+    ("window", "Retoque comparison", "Comparação do Retoque"),
+    ("exposure", "Exposure", "Exposição"),
+    ("exposure_reset", "Reset exposure", "Redefinir exposição"),
+    (
+        "exposure_help",
+        "0 EV uses the automatic or recorded exposure. Each stop doubles or halves the light, equally on both images. The preview updates when you release the slider.",
+        "0 EV usa a exposição automática ou registrada. Cada ponto dobra ou reduz pela metade a luz nas duas imagens. A prévia atualiza ao soltar o controle.",
+    ),
+    ("exposure_updating", "Updating preview…", "Atualizando prévia…"),
+    ("thumbnail_loading", "Loading thumbnail…", "Carregando miniatura…"),
+    ("thumbnail_error", "Thumbnail unavailable", "Miniatura indisponível"),
+    ("shell.uninstall_open", "Uninstall…", "Desinstalar…"),
+    ("shell.discard", "Discard", "Descartar"),
+    (
+        "shell.done_details",
+        "Only the changes approved in the review were applied. Restart the game to use the updated files or settings.",
+        "Foram aplicadas apenas as mudanças aprovadas na revisão. Reinicie o jogo para usar os arquivos ou ajustes atualizados.",
+    ),
+    (
+        "shell.library_checking",
+        "Checking installed versions…",
+        "Conferindo as versões instaladas…",
+    ),
+    ("shell.model_version", "model", "modelo"),
+    (
+        "shell.model_unknown",
+        "Model found · version unknown",
+        "Modelo encontrado · versão não identificada",
+    ),
+    (
+        "shell.review_shortcut",
+        "Review changes (Ctrl+Enter); nothing is written until confirmation.",
+        "Revisar mudanças (Ctrl+Enter); nada será gravado antes da confirmação.",
+    ),
+    ("shell.progress_install", "Installing…", "Instalando…"),
+    ("shell.progress_update", "Updating…", "Atualizando…"),
+    ("shell.progress_remove", "Removing…", "Removendo…"),
+    ("shell.progress_save", "Saving…", "Salvando…"),
+    // UX shell / worker A
+    ("shell.home", "Back to the library", "Voltar à biblioteca"),
+    ("shell.library", "Games", "Jogos"),
+    ("shell.details", "Details", "Detalhes"),
+    ("shell.bundle_done", "Diagnostic file created", "Diagnóstico criado"),
+    (
+        "shell.failed",
+        "The action could not be completed",
+        "Não foi possível concluir",
+    ),
+    (
+        "shell.catalog_changed",
+        "Model catalogue updated",
+        "Catálogo de modelos atualizado",
+    ),
+    ("shell.checking", "Checking installation…", "Verificando instalação…"),
+    ("shell.update_available", "Update available", "Atualização disponível"),
+    ("shell.up_to_date", "Up to date", "Atualizado"),
+    (
+        "shell.partial",
+        "Installation needs cleanup",
+        "Instalação precisa de limpeza",
+    ),
+    (
+        "shell.review_update",
+        "Review Retoque update",
+        "Revisar atualização do Retoque",
+    ),
+    (
+        "shell.review_install",
+        "Review Retoque installation",
+        "Revisar instalação do Retoque",
+    ),
+    (
+        "shell.review_remove",
+        "Review Retoque removal",
+        "Revisar remoção do Retoque",
+    ),
+    (
+        "shell.review_note",
+        "Nothing changes until you confirm.",
+        "Nada será alterado antes da sua confirmação.",
+    ),
+    (
+        "shell.resolve",
+        "Resolve the issue above, close this review and try again.",
+        "Resolva o impedimento acima, feche esta revisão e tente novamente.",
+    ),
+    ("shell.add", "Add", "Adicionar"),
+    ("shell.replace", "Replace or restore", "Substituir ou restaurar"),
+    ("shell.keep", "Keep", "Manter"),
+    ("shell.remove", "Remove", "Remover"),
+    ("shell.settings", "Settings", "Ajustes"),
+    ("shell.games", "games", "jogos"),
+    ("shell.updates", "updates available", "atualizações disponíveis"),
+    (
+        "shell.home_help",
+        "Add a game folder or scan your launchers to get started.",
+        "Adicione a pasta de um jogo ou busque os jogos dos seus launchers para começar.",
+    ),
+    ("shell.reinstall", "Reinstall…", "Reinstalar…"),
+    ("shell.resume", "Resume cleanup…", "Retomar limpeza…"),
+    ("shell.update", "Update Retoque…", "Atualizar Retoque…"),
+    ("shell.install", "Install Retoque…", "Instalar Retoque…"),
+    ("shell.open_folder", "Open game folder", "Abrir pasta do jogo"),
+    ("shell.pending", "unsaved changes", "alterações não salvas"),
+    ("shell.preparing", "Preparing your review…", "Preparando a revisão…"),
+    (
+        "shell.installed_done",
+        "Retoque installation updated",
+        "Instalação do Retoque atualizada",
+    ),
+    ("shell.removed_done", "Retoque removed", "Retoque removido"),
+    ("shell.settings_done", "Changes saved", "Ajustes salvos"),
+    // Worker B: settings, current model and session summary.
+    ("set.advanced", "Advanced settings", "Ajustes avançados"),
+    ("set.game_default", "Game default", "Padrão do jogo"),
+    ("set.model_link", "Choose in NR model…", "Escolher em Modelo NR…"),
+    ("set.custom", "Custom value", "Valor personalizado"),
+    ("set.automatic", "Automatic", "Automático"),
+    (
+        "tab.install_first",
+        "Install Retoque to set up this game",
+        "Instale o Retoque para configurar este jogo",
+    ),
+    ("tab.review_install", "Review installation…", "Revisar instalação…"),
+    ("tab.loading", "Reading game settings…", "Lendo os ajustes do jogo…"),
+    ("mdl.loading", "Reading model version…", "Lendo a versão do modelo…"),
+    ("mdl.beside", "Found beside the game", "Encontrado na pasta do jogo"),
+    (
+        "mdl.from_catalog",
+        "From your app catalogue",
+        "Do catálogo do aplicativo",
+    ),
+    ("mdl.from_path", "From the configured file", "Do arquivo configurado"),
+    (
+        "mdl.version_unknown",
+        "Version not identified",
+        "Versão não identificada",
+    ),
+    (
+        "mdl.unresolved",
+        "This path cannot be verified on this system. Check it in the game.",
+        "Este caminho não pode ser verificado neste sistema. Confira no jogo.",
+    ),
+    (
+        "mdl.auto_unresolved",
+        "No model beside the executable. The default search may find one in another folder.",
+        "Não há modelo junto do executável. A busca padrão pode encontrar um em outra pasta.",
+    ),
+    (
+        "mdl.next_start",
+        "This is the file selected for the next start, not evidence of what a running game loaded.",
+        "Este é o arquivo selecionado para a próxima abertura, não uma confirmação do que o jogo aberto carregou.",
+    ),
+    (
+        "mdl.catalog_empty",
+        "Your app catalogue is empty",
+        "O catálogo do aplicativo está vazio",
+    ),
+    (
+        "mdl.optional",
+        "This game already has a model. Importing another is optional.",
+        "Este jogo já tem um modelo. Importar outro é opcional.",
+    ),
+    (
+        "mdl.drop",
+        "Drop a model DLL here, or choose a file",
+        "Solte a DLL do modelo aqui ou escolha um arquivo",
+    ),
+    (
+        "mdl.import_review",
+        "Import this file into your catalogue? The game folder stays unchanged.",
+        "Importar este arquivo para o catálogo? A pasta do jogo permanece como está.",
+    ),
+    (
+        "mdl.confirm_import",
+        "Import into catalogue",
+        "Importar para o catálogo",
+    ),
+    ("mdl.used_games", "games using this model", "jogos usando este modelo"),
+    ("mdl.refresh", "Check model again", "Verificar modelo novamente"),
+    ("log.loading", "Reading log…", "Lendo registro…"),
+    ("log.latest", "Latest session", "Última sessão"),
+    ("log.history", "Session log", "Registro da sessão"),
+    ("log.no_sample", "No confirmed sample", "Sem amostra confirmada"),
+    ("log.details", "Technical details", "Detalhes técnicos"),
+    (
+        "log.no_evidence",
+        "No NR activity confirmed in this log",
+        "Sem atividade de NR confirmada neste registro",
+    ),
+    (
+        "log.initialized_only",
+        "NR initialized; evaluation is not confirmed",
+        "NR iniciou; a execução não foi confirmada",
+    ),
+    ("log.ran", "NR evaluation recorded", "Execução de NR registrada"),
+    ("log.stage_pre", "before the upscaler", "antes da ampliação"),
+    ("log.stage_post", "after the upscaler", "depois da ampliação"),
+    ("log.stage_present", "at presentation", "na apresentação"),
+    ("log.on_api", "on", "em"),
+    ("log.error_count", "errors", "erros"),
+    (
+        "log.hint_errors",
+        "Review the errors below. Make a diagnostic file if you need help.",
+        "Confira os erros abaixo. Gere um diagnóstico se precisar de ajuda.",
+    ),
+    (
+        "log.hint_inactive",
+        "Check that NR is enabled and a model is available, then start the game again.",
+        "Confira se NR está ligado e se há um modelo disponível; depois abra o jogo novamente.",
+    ),
+    (
+        "log.hint_timing",
+        "No confirmed GPU timing was recorded. This alone does not mean NR failed.",
+        "Não há tempo de GPU confirmado no registro. Isso, por si só, não indica falha do NR.",
+    ),
+    (
+        "log.no_log_bundle",
+        "The diagnostic includes available settings and installation state even without a log.",
+        "O diagnóstico inclui os ajustes disponíveis e o estado da instalação, mesmo sem registro.",
+    ),
+    ("log.repeat", "occurrences", "ocorrências"),
+    ("log.retry", "Read again", "Ler novamente"),
+    // Comparison UX (worker C): keep this block together for the integration merge.
+    (
+        "cmp.empty.no_shortcut",
+        "The menu shortcut is disabled. Set Menu.ShortcutKey in OptiScaler.ini, then restart the game.",
+        "O atalho do menu está desativado. Configure Menu.ShortcutKey no OptiScaler.ini e reinicie o jogo.",
+    ),
+    ("cmp.fit.short", "Fit", "Ajustar"),
+    ("cmp.reset.short", "0", "0"),
+    ("cmp.tools", "Viewer options", "Opções da comparação"),
+    ("cmp.more", "…", "…"),
+    ("cmp.expand", "Enlarge comparison", "Ampliar comparação"),
+    ("cmp.close", "Close enlarged view", "Fechar comparação ampliada"),
+    ("cmp.details", "Capture details", "Detalhes da captura"),
+    ("cmp.shortcuts", "Keyboard shortcuts", "Atalhos de teclado"),
+    (
+        "cmp.keyboard",
+        "Focus the image: 1–4 modes · F fit · Space original · arrows pan · Shift + left/right moves the divider · +/− zoom · Esc leaves enlarged view.",
+        "Com foco na imagem: 1–4 modos · F ajustar · Espaço original · setas mover · Shift + esquerda/direita move o divisor · +/− zoom · Esc sai da ampliação.",
+    ),
+    ("cmp.divider", "Comparison position", "Posição da comparação"),
+    ("cmp.zoom_in", "Zoom in", "Aproximar"),
+    ("cmp.zoom_out", "Zoom out", "Afastar"),
+    ("cmp.preview", "SDR preview", "Prévia SDR"),
+    ("cmp.empty.title", "Your first comparison", "Sua primeira comparação"),
+    (
+        "cmp.empty.install",
+        "Start in the {tab} tab to review installation, then open the game with NR enabled.",
+        "Comece na aba {tab} para revisar a instalação. Depois, abra o jogo com o NR ativado.",
+    ),
+    (
+        "cmp.empty.run",
+        "Open the game with Retoque and NR enabled.",
+        "Abra o jogo com o Retoque e o NR ativado.",
+    ),
+    (
+        "cmp.empty.menu",
+        "Press {key} to open Retoque's in-game menu.",
+        "Pressione {key} para abrir o menu do Retoque no jogo.",
+    ),
+    (
+        "cmp.empty.custom",
+        "Open Retoque's in-game menu with your configured menu key.",
+        "Abra o menu do Retoque no jogo com a tecla configurada para o menu.",
+    ),
+    (
+        "cmp.empty.disabled",
+        "The in-game menu is disabled in this game's configuration. Enable it before capturing.",
+        "O menu no jogo está desativado na configuração deste jogo. Ative-o antes de capturar.",
+    ),
+    (
+        "cmp.empty.capture",
+        "In Compare, choose “Capture original and processed”. Wait for both files to finish, then refresh here.",
+        "Em Comparar, escolha “Capturar original e processado”. Aguarde as duas imagens terminarem de salvar e atualize aqui.",
+    ),
+    ("cmp.empty.refresh", "Look for captures", "Buscar capturas"),
+    ("cmp.strip", "Capture filmstrip", "Faixa de capturas"),
+    // Autotune / worker F
+    ("auto.gpu_reading", "Detecting GPU…", "Detectando a placa de vídeo…"),
+    ("auto.gpu_unknown", "GPU not detected", "Placa de vídeo não detectada"),
+    ("auto.turing", "Turing", "Turing"),
+    ("auto.ampere", "Ampere", "Ampere"),
+    ("auto.ada", "Ada", "Ada"),
+    ("auto.blackwell", "Blackwell", "Blackwell"),
+    ("auto.older", "Earlier NVIDIA GPU", "NVIDIA de geração anterior"),
+    ("auto.other", "GPU", "GPU"),
+    ("auto.unknown", "Unknown architecture", "Arquitetura desconhecida"),
+    ("auto.gb", "GB", "GB"),
+    ("auto.driver", "Driver", "Driver"),
+    (
+        "auto.title",
+        "Optimised for your GPU",
+        "Ajustes para sua placa de vídeo",
+    ),
+    ("auto.checking", "Checking this game…", "Conferindo este jogo…"),
+    (
+        "auto.none",
+        "No automatic changes recommended for this GPU and game.",
+        "Nenhuma mudança automática recomendada para esta placa e este jogo.",
+    ),
+    (
+        "auto.need_install",
+        "Install Retoque in this game first.",
+        "Instale o Retoque neste jogo primeiro.",
+    ),
+    (
+        "auto.prepare_install",
+        "Review Retoque installation",
+        "Revisar instalação do Retoque",
+    ),
+    ("auto.apply", "Apply recommendation…", "Aplicar recomendação…"),
+    ("auto.confirm", "Confirm changes", "Confirmar mudanças"),
+    ("auto.done", "Optimisation applied", "Ajustes aplicados"),
+    (
+        "auto.partial",
+        "Not fully applied; completed operations",
+        "Aplicação incompleta; operações concluídas",
+    ),
+    (
+        "auto.lsfg",
+        "Lossless Scaling frame generation",
+        "Geração de quadros com Lossless Scaling",
+    ),
+    (
+        "auto.ls_help",
+        "Select a multiplier to review the changes. Your Lossless Scaling files are referenced, never copied. Restart the game after applying.",
+        "Escolha o multiplicador para revisar os ajustes. Seus arquivos do Lossless Scaling são usados no local, sem cópia. Reinicie o jogo após aplicar.",
+    ),
+    ("auto.off", "Off", "Desligado"),
+    ("auto.x2", "x2", "x2"),
+    ("auto.x3", "x3", "x3"),
+    ("auto.x4", "x4", "x4"),
+    (
+        "auto.ls_ready",
+        "Lossless Scaling shaders ready",
+        "Shaders do Lossless Scaling prontos",
+    ),
+    (
+        "auto.ls_shaders",
+        "Lossless Scaling needs a shader cache",
+        "Falta preparar os shaders do Lossless Scaling",
+    ),
+    (
+        "auto.ls_missing",
+        "Lossless Scaling not found",
+        "Lossless Scaling não encontrado",
+    ),
+    (
+        "auto.ls_checking",
+        "Checking Lossless Scaling…",
+        "Conferindo o Lossless Scaling…",
+    ),
+    (
+        "auto.choose_lossless",
+        "Choose Lossless Scaling folder…",
+        "Escolher pasta do Lossless Scaling…",
+    ),
+    (
+        "auto.ls_conflict",
+        "Remove the installed sm86 component in the NR model tab before enabling LSFG.",
+        "Remova o componente sm86 instalado na aba Modelo NR antes de ligar o LSFG.",
+    ),
+    (
+        "auto.components",
+        "Frame generation components",
+        "Componentes de geração de quadros",
+    ),
+    (
+        "auto.import_help",
+        "Import your own dlssg_for_sm86 release folder (version.dll, dlssg_sm86.ini and dlssg_sm86/). No runtime is downloaded or included with Retoque.",
+        "Importe sua própria pasta do dlssg_for_sm86 (version.dll, dlssg_sm86.ini e dlssg_sm86/). O Retoque não baixa nem distribui esse runtime.",
+    ),
+    ("auto.import", "Import sm86 folder…", "Importar pasta sm86…"),
+    (
+        "auto.no_component",
+        "No sm86 component in your catalogue",
+        "Nenhum componente sm86 no catálogo",
+    ),
+    (
+        "auto.component_installed",
+        "Component installed in this game",
+        "Componente instalado neste jogo",
+    ),
+    (
+        "auto.component_install",
+        "Review component installation",
+        "Revisar instalação do componente",
+    ),
+    (
+        "auto.component_remove",
+        "Review component removal",
+        "Revisar remoção do componente",
+    ),
+    (
+        "auto.catalog_remove",
+        "Remove from component catalogue",
+        "Remover do catálogo de componentes",
+    ),
+    (
+        "auto.none_installed",
+        "No managed component installed in this game.",
+        "Nenhum componente gerenciado instalado neste jogo.",
+    ),
+    (
+        "rec.sm86.title",
+        "DLSS frame generation for your GPU",
+        "Geração de quadros DLSS para sua placa",
+    ),
+    (
+        "rec.sm86.why",
+        "This game has DLSS-G. Your imported sm86 loader can provide frame generation on Turing or Ampere; LSFG will be turned off.",
+        "Este jogo tem DLSS-G. O carregador sm86 importado pode fornecer geração de quadros em Turing ou Ampere; o LSFG será desligado.",
+    ),
+    ("rec.lsfg.title", "Lossless Scaling x2", "Lossless Scaling x2"),
+    (
+        "rec.lsfg.why",
+        "This game has no detected DLSS-G. Use your Lossless Scaling installation to generate an extra frame for each real frame.",
+        "Não foi detectado DLSS-G neste jogo. Use seu Lossless Scaling para gerar um quadro extra a cada quadro real.",
+    ),
+    (
+        "rec.install.title",
+        "Install Retoque first",
+        "Instale o Retoque primeiro",
+    ),
+    (
+        "rec.install.why",
+        "GPU-specific settings become available after installing Retoque in this game.",
+        "Os ajustes para sua placa ficam disponíveis depois de instalar o Retoque neste jogo.",
+    ),
+    (
+        "rec.adopt.title",
+        "Register this Retoque install",
+        "Registrar esta instalação do Retoque",
+    ),
+    (
+        "rec.adopt.why",
+        "Retoque is here without a receipt (installed by an older script). Reinstalling through the app records every file, so it can be updated and removed safely later.",
+        "O Retoque está aqui sem recibo (foi instalado por um script antigo). Reinstalar pelo app registra cada arquivo, para atualizar e remover com segurança depois.",
+    ),
+    (
+        "rec.sm86_update.title",
+        "Update DLSS-G for RTX 30 (dlssg_for_sm86)",
+        "Atualizar o DLSS-G para RTX 30 (dlssg_for_sm86)",
+    ),
+    (
+        "rec.sm86_update.why",
+        "This game has an older dlssg_for_sm86 (0.3.x). The version in your catalogue replaces it; the old files are kept as a backup.",
+        "Este jogo tem um dlssg_for_sm86 antigo (0.3.x). A versão do seu catálogo o substitui; os arquivos antigos ficam guardados como cópia.",
+    ),
+    (
+        "auto.shader_hint",
+        "From the Retoque source checkout, run: python3 tools/lsfg-study/convert.py \"<Lossless Scaling>/lsfg-vk.dll\" --out \"<shader folder>\". Requires spirv-cross and dxc. Then set [LSFG] ShaderDir to that folder (0.cso through 98.cso), or use --cache-dir \"<game proxy folder>/lsfg-cache\" to create the runtime's hash-keyed cache. The app does not copy or convert Lossless Scaling files.",
+        "No código-fonte do Retoque, execute: python3 tools/lsfg-study/convert.py \"<Lossless Scaling>/lsfg-vk.dll\" --out \"<pasta de shaders>\". É preciso ter spirv-cross e dxc. Depois, aponte [LSFG] ShaderDir para essa pasta (0.cso a 98.cso), ou use --cache-dir \"<pasta do proxy do jogo>/lsfg-cache\" para criar o cache identificado pelo hash do DLL. O aplicativo não copia nem converte arquivos do Lossless Scaling.",
+    ),
+    // Discovery folders / worker t117
+    ("store.xbox", "Xbox", "Xbox"),
+    ("folders.title", "Your folders", "Suas pastas"),
+    (
+        "folders.question",
+        "What does this folder contain?",
+        "O que há nesta pasta?",
+    ),
+    ("folders.game", "One game", "Um jogo"),
+    (
+        "folders.library",
+        "A folder with several games",
+        "Uma pasta com vários jogos",
+    ),
+    (
+        "folders.game_help",
+        "Choose the folder of one game or emulator.",
+        "Escolha a pasta de um jogo ou emulador.",
+    ),
+    (
+        "folders.library_help",
+        "Each child folder is checked for a game. Choose the parent that contains them.",
+        "Cada subpasta será examinada em busca de um jogo. Escolha a pasta que reúne esses jogos.",
+    ),
+    (
+        "folders.help",
+        "These folders are checked when you rescan. Removing an entry only stops checking that folder; no files are deleted.",
+        "Estas pastas entram na busca de jogos. Remover uma entrada apenas retira a pasta da busca; nenhum arquivo é apagado.",
+    ),
+    (
+        "folders.empty",
+        "No folders added yet.",
+        "Você ainda não adicionou pastas.",
+    ),
+    (
+        "folders.games",
+        "Individual games and emulators",
+        "Jogos e emuladores individuais",
+    ),
+    (
+        "folders.libraries",
+        "Folders with several games",
+        "Pastas com vários jogos",
+    ),
+    ("folders.remove", "Remove", "Remover"),
+    (
+        "folders.remove_help",
+        "Remove from this list only. Files stay where they are.",
+        "Remover apenas desta lista. Os arquivos ficam onde estão.",
+    ),
+    ("folders.close", "Close", "Fechar"),
+    (
+        "folders.unregistered",
+        "Not in the store’s list",
+        "Não consta na lista da loja",
+    ),
+];
+
+pub fn t(lang: Lang, key: &str) -> &str {
+    for (k, en, pt) in TEXT {
+        if *k == key {
+            return match lang {
+                Lang::En => en,
+                Lang::Pt => pt,
+            };
+        }
+    }
+    key
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_recommendation_key_has_both_languages() {
+        // Recommendation texts are keys stored in retoque-data, not literal t() calls, so the source scan above
+        // cannot see them.
+        let source = include_str!("../../retoque-data/src/recommend.rs");
+        for piece in source.split('"').skip(1).step_by(2) {
+            if piece.starts_with("rec.") && (piece.ends_with(".title") || piece.ends_with(".why")) {
+                assert!(
+                    TEXT.iter().any(|(k, _, _)| *k == piece),
+                    "untranslated recommendation key {piece}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn keys_are_unique_and_filled() {
+        let mut seen = std::collections::HashSet::new();
+        for (k, en, pt) in TEXT {
+            assert!(seen.insert(*k), "duplicate key {k}");
+            assert!(!en.is_empty() && !pt.is_empty(), "empty text for {k}");
+        }
+    }
+}
+
+/// Translate known engine messages without changing filenames, configuration values or original log records.
+/// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
+pub fn diagnostic(lang: Lang, message: &str) -> String {
+    for key in [
+        "note.resume",
+        "note.driver",
+        "note.model",
+        "note.vk_skip",
+        "note.vk_disabled",
+        "note.vk_active",
+        "keep.same",
+        "keep.model",
+        "keep.gone",
+        "keep.changed",
+        "keep.no_backup",
+        "keep.no_rename",
+        "keep.rename_changed",
+        "ref.ini_missing",
+        "ref.ini_value",
+    ] {
+        if message == t(Lang::En, key) {
+            return t(lang, key).into();
+        }
+    }
+    for key in [
+        "note.windows_denied",
+        "note.second_proxy",
+        "keep.destination",
+        "keep.blocked",
+        "ref.proxy",
+    ] {
+        if let Some((prefix, suffix)) = t(Lang::En, key).split_once("{path}")
+            && let Some(path) = message.strip_prefix(prefix).and_then(|s| s.strip_suffix(suffix))
+        {
+            return t(lang, key).replace("{path}", path);
+        }
+    }
+    message.to_owned()
+}
+
+#[cfg(test)]
+mod source_coverage {
+    use super::*;
+
+    const SOURCES: &[(&str, &str)] = &[
+        ("app.rs", include_str!("app.rs")),
+        ("folders_ui.rs", include_str!("folders_ui.rs")),
+        ("autotune.rs", include_str!("autotune.rs")),
+        ("autotune_ui.rs", include_str!("autotune_ui.rs")),
+        ("compare.rs", include_str!("compare.rs")),
+        ("i18n.rs", include_str!("i18n.rs")),
+        ("jobs.rs", include_str!("jobs.rs")),
+        ("lib.rs", include_str!("lib.rs")),
+        ("main.rs", include_str!("main.rs")),
+        ("model.rs", include_str!("model.rs")),
+        ("theme.rs", include_str!("theme.rs")),
+        ("widgets.rs", include_str!("widgets.rs")),
+    ];
+
+    // Tokenize only enough Rust to find literal translation arguments, ignoring comments and strings containing
+    // sample code. This avoids a regex dependency and handles multiline calls and qualified Lang expressions.
+    fn literal_keys(source: &str) -> Vec<String> {
+        let bytes = source.as_bytes();
+        let mut tokens: Vec<(bool, String)> = Vec::new();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i..].starts_with(b"//") {
+                i += bytes[i..].iter().position(|b| *b == b'\n').unwrap_or(bytes.len() - i);
+            } else if bytes[i..].starts_with(b"/*") {
+                i += 2;
+                let mut depth = 1;
+                while i < bytes.len() && depth > 0 {
+                    if bytes[i..].starts_with(b"/*") {
+                        depth += 1;
+                        i += 2;
+                    } else if bytes[i..].starts_with(b"*/") {
+                        depth -= 1;
+                        i += 2;
+                    } else {
+                        i += 1;
+                    }
+                }
+            } else if bytes[i] == b'"' {
+                i += 1;
+                let start = i;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    if bytes[i] == b'\\' {
+                        i += 1;
+                    }
+                    i += 1;
+                }
+                tokens.push((true, source[start..i.min(bytes.len())].to_owned()));
+                i += 1;
+            } else if bytes[i] == b'\'' && bytes.get(i + 2) == Some(&b'\'') {
+                i += 3;
+            } else if bytes[i..].starts_with(b"'\\") && bytes.get(i + 3) == Some(&b'\'') {
+                i += 4;
+            } else if bytes[i].is_ascii_alphabetic() || bytes[i] == b'_' {
+                let start = i;
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
+                    i += 1;
+                }
+                tokens.push((false, source[start..i].to_owned()));
+            } else {
+                if !bytes[i].is_ascii_whitespace() {
+                    tokens.push((false, char::from(bytes[i]).to_string()));
+                }
+                i += 1;
+            }
+        }
+        let mut keys = Vec::new();
+        for (at, (literal, name)) in tokens.iter().enumerate() {
+            if *literal || !matches!(name.as_str(), "t" | "tr") || tokens.get(at + 1).is_none_or(|t| t.1 != "(") {
+                continue;
+            }
+            let mut argument = at + 2;
+            if name == "t" {
+                let mut depth = 0;
+                while let Some((_, token)) = tokens.get(argument) {
+                    if token == "," && depth == 0 {
+                        argument += 1;
+                        break;
+                    }
+                    if token == ")" && depth == 0 {
+                        break;
+                    }
+                    if token == "(" {
+                        depth += 1;
+                    }
+                    if token == ")" {
+                        depth -= 1;
+                    }
+                    argument += 1;
+                }
+            }
+            if let Some((true, key)) = tokens.get(argument) {
+                keys.push(key.clone());
+            }
+        }
+        keys
+    }
+
+    #[test]
+    fn every_literal_translation_call_has_both_languages() {
+        let actual: std::collections::BTreeSet<_> = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/src"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".rs"))
+            .collect();
+        let included: std::collections::BTreeSet<_> = SOURCES.iter().map(|(name, _)| name.to_string()).collect();
+        assert_eq!(
+            actual, included,
+            "include new Rust source files in translation coverage"
+        );
+        let mut checked = 0;
+        for (file, source) in SOURCES {
+            for key in literal_keys(source) {
+                let entry = TEXT.iter().find(|(k, _, _)| *k == key);
+                let (_, en, pt) = entry.unwrap_or_else(|| panic!("{file}: missing translation key {key}"));
+                assert!(!en.is_empty() && !pt.is_empty(), "{file}: incomplete translation {key}");
+                checked += 1;
+            }
+        }
+        assert!(
+            checked > 80,
+            "translation-call scanner unexpectedly stopped finding calls"
+        );
+    }
+
+    #[test]
+    fn scanner_finds_multiline_calls_and_ignores_examples() {
+        let source = "// t(lang, \"ignored\")\n t(\n Lang::En,\n \"set.save\"); self.tr (\"set.apply\"); let s = \"tr(\\\"ignored\\\")\"; t(lang, \"missing.key\")";
+        assert_eq!(literal_keys(source), vec!["set.save", "set.apply", "missing.key"]);
+        assert!(TEXT.iter().all(|(key, _, _)| *key != "missing.key"));
+    }
+
+    #[test]
+    fn diagnostics_translate_known_reasons_without_translating_paths() {
+        assert_eq!(diagnostic(Lang::Pt, "already gone"), "já foi removido");
+        assert_eq!(
+            diagnostic(Lang::Pt, "dxgi.dll: not restored, a file is still there"),
+            "dxgi.dll: não restaurado porque já existe um arquivo no destino"
+        );
+        assert_eq!(
+            diagnostic(Lang::Pt, "driver result 0xBAD00001"),
+            "driver result 0xBAD00001"
+        );
+    }
+}

@@ -43,6 +43,9 @@ Cases:
   a game's own `winmm.dll` not refused; a case variant (`DXGI.DLL`) refused on a case-sensitive file system;
 - the game running (exit 3, nothing written, for install, uninstall and dry run) through each of the two checks;
   see below for what that means here;
+- a pending app journal (`.retoque/pending-receipt.txt`) refuses install, uninstall and both dry runs
+  with exit 1 and instructions to recover with the app or `retoque` first; ordinary/empty journal files,
+  missing base receipt, directory and dangling-link entries all leave the full snapshot intact;
 - dry runs write nothing; a failure injected after step 2 (`RETOQUE_DEPLOY_TEST_FAIL_AFTER_STEP`, the variable
   the Linux script reads) leaves a `partial` receipt listing exactly those two files, which `-Uninstall`
   empties and a later install completes;

@@ -90,7 +90,7 @@ def check_registry(manifest: dict[str, dict]) -> list[str]:
                 problems.append(f"{name}: domain must be a nonempty string")
             requirements = entry.get("requires", default_requirements(entry["tier"]))
             if (not isinstance(requirements, list) or
-                    any(r not in ("python", "cxx", "wine-toolchain") for r in requirements)):
+                    any(r not in ("python", "cxx", "wine-toolchain", "cargo") for r in requirements)):
                 problems.append(f"{name}: unknown/invalid requires")
         except ValueError as error:
             problems.append(f"{name}: {error}")
@@ -142,6 +142,8 @@ def entry_blocker(entry: dict) -> str:
             reason = tier_blocker("host")
         elif requirement == "wine-toolchain":
             reason = tier_blocker("wine")
+        elif requirement == "cargo":
+            reason = "" if shutil.which("cargo") else "needs cargo on PATH"
         elif requirement == "python":
             reason = ""  # This runner is already executing under Python.
         else:

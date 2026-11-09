@@ -1,0 +1,18 @@
+[workspace]
+resolver = "3"
+members = ["crates/retoque-core", "crates/retoque-discovery", "crates/retoque-data", "crates/retoque-cli", "crates/retoque-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+publish = false
+
+[workspace.dependencies]
+retoque-core = { path = "crates/retoque-core" }
+retoque-discovery = { path = "crates/retoque-discovery" }
+retoque-data = { path = "crates/retoque-data" }
+
+[profile.release]
+lto = "thin"
+strip = true
