@@ -102,14 +102,17 @@ NvAPI_Status ReflexHooks::processGameMarker(IUnknown* pDev, NV_LATENCY_MARKER_PA
     // LOG_DEBUG("frameID: {}, markerType: {}", pSetLatencyMarkerParams->frameID,
     //           magic_enum::enum_name(pSetLatencyMarkerParams->markerType));
 
-    // Some games just stop sending any async markers when DLSSG is disabled, so a reset is needed
-    if (_lastAsyncMarkerFrameId + 10 < pSetLatencyMarkerParams->frameID)
+    const bool isRtssMarker = (pSetLatencyMarkerParams->frameID >> 32) != 0;
+
+    // Only a game that sent async markers can stop sending them. RTSS's high-bit frame IDs are not game frames.
+    if (!isRtssMarker && _lastAsyncMarkerFrameId != 0 &&
+        _lastAsyncMarkerFrameId + 10 < pSetLatencyMarkerParams->frameID)
     {
         _FgNumFramesToGenerate = 0;
     }
 
     // RTSS reflex markers have a frameid marker in the high bits
-    if (pSetLatencyMarkerParams->frameID >> 32)
+    if (isRtssMarker)
     {
         if (!State::Instance().rtssReflexInjection && State::Instance().activeFgOutput == FGOutput::XeFG)
         {

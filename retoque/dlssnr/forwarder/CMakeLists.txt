@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD 17)
 # return address and refuses anything whose path does not contain "nvngx.dll", so the calls have to
 # originate from a module named like this one. Nothing else about it is special.
 add_library(dlssnr_forwarder SHARED dlssnr_forwarder.cpp)
+if(MSVC)
+    enable_language(RC)
+    target_sources(dlssnr_forwarder PRIVATE dlssnr_forwarder.rc)
+endif()
 target_link_libraries(dlssnr_forwarder PRIVATE d3d12)
 set_target_properties(dlssnr_forwarder PROPERTIES
     OUTPUT_NAME "nvngx.dll_dlssnr" SUFFIX ".dll" PREFIX "")

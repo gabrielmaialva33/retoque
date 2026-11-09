@@ -25,3 +25,8 @@ model again -- release included, because a model that faulted can be left holdin
 host reads `dlssnr_fault_state` and switches Neural Rendering off for the session with the exception
 code and faulting module in its log. A forwarder built before this has no such export; a host built
 before it never asks, and still gets the refusals.
+
+The version resource shares the fixed numeric file/product version in `OptiScaler/resource.h`. Both
+MSBuild and MSVC CMake include it. Its string versions are the stable release number, without the main
+DLL's descriptive build metadata; compare the fixed fields for release matching. This does not replace
+the ABI handshake or binary hashes for exact build identity.
