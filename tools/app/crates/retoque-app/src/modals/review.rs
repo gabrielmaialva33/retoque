@@ -49,7 +49,7 @@ pub(crate) fn show(
         .max_height((ui.ctx().content_rect().height() - 290.0).max(160.0))
         .show(ui, |ui| {
             for (index, plan) in session.plans.iter().enumerate() {
-                ui.label(plan.game_dir().display().to_string());
+                ui.label(crate::format::display_path(plan.game_dir()));
                 for refusal in plan.refusals() {
                     let (key, detail) = refusal_text(lang, refusal);
                     ui.colored_label(theme::BAD, format!("{} {detail}", t(lang, key)));

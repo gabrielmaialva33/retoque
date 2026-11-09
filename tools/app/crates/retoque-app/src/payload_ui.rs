@@ -368,7 +368,7 @@ impl RetoqueApp {
                     short_path(p)
                 };
                 ui.label(RichText::new(text).small().monospace().color(theme::MUTED))
-                    .on_hover_text(p.display().to_string());
+                    .on_hover_text(crate::format::display_path(p));
             }
             None => {
                 ui.colored_label(theme::WARN, RichText::new(self.tr("app.payload.none")).small());

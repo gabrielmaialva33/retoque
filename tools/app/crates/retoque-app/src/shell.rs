@@ -261,7 +261,7 @@ impl RetoqueApp {
                     )
                     .truncate(),
                 )
-                .on_hover_text(game.targets[0].path.display().to_string());
+                .on_hover_text(crate::format::display_path(&game.targets[0].path));
                 return;
             }
             let shown = current

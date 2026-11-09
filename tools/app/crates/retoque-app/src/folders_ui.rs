@@ -270,7 +270,7 @@ impl RetoqueApp {
                                                     [width, 20.],
                                                     egui::Label::new(short_path(path)).truncate(),
                                                 )
-                                                .on_hover_text(path.display().to_string());
+                                                .on_hover_text(crate::format::display_path(path));
                                                 let name =
                                                     format!("{} · {}", self.tr("folders.remove"), short_path(path));
                                                 let response = ui

@@ -288,7 +288,7 @@ pub(crate) fn plan_install(game: &Path, component: &ComponentFiles) -> Result<Pl
                     plan.execution.forget.insert(index, record);
                     plan.steps.push(Step::Keep {
                         path: file.clone(),
-                        why: "left in place, it changed since this script wrote it".into(),
+                        why: "your own settings file, kept as it is".into(),
                     });
                     continue;
                 }

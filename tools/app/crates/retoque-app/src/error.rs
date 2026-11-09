@@ -30,7 +30,7 @@ impl AppError {
     pub fn io(path: PathBuf, source: std::io::Error) -> Self {
         Self {
             target: None,
-            message: format!("{}: {source}", path.display()),
+            message: format!("{}: {source}", crate::format::display_path(&path)),
             kind: ErrorKind::Io {
                 path: Some(path),
                 source: Arc::new(source),

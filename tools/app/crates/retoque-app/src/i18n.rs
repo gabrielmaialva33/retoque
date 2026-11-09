@@ -497,6 +497,16 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("keep.gone", "already gone", "já foi removido"),
     (
+        "keep.identical_component",
+        "identical component file",
+        "idêntico ao arquivo do componente",
+    ),
+    (
+        "keep.user_settings",
+        "your own settings file, kept as it is",
+        "seu arquivo de configuração, mantido como está",
+    ),
+    (
         "keep.changed",
         "left in place, it changed since this script wrote it",
         "preservado porque foi alterado após a instalação",
@@ -1968,6 +1978,8 @@ pub fn diagnostic(lang: Lang, message: &str) -> String {
         "keep.same",
         "keep.model",
         "keep.gone",
+        "keep.identical_component",
+        "keep.user_settings",
         "keep.changed",
         "keep.no_backup",
         "keep.no_rename",

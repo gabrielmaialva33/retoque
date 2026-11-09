@@ -116,7 +116,7 @@ impl RetoqueApp {
                         )
                         .truncate(),
                     )
-                    .on_hover_text(path.display().to_string());
+                    .on_hover_text(crate::format::display_path(path));
                 }
                 Some(info) => {
                     let key = if is_auto {

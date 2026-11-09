@@ -88,7 +88,7 @@ impl RetoqueApp {
                             }
                         })
                         .response
-                        .on_hover_text(s.path.display().to_string());
+                        .on_hover_text(crate::format::display_path(&s.path));
                     if selected != s.path {
                         commands.send(AppCommand::ReadLogs(Some(selected)));
                     }

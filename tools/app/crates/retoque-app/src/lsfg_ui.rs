@@ -186,7 +186,7 @@ impl RetoqueApp {
         }
         if let Some(dir) = &self.lsfg.source {
             ui.label(RichText::new(short_path(dir)).small())
-                .on_hover_text(dir.display().to_string());
+                .on_hover_text(crate::format::display_path(dir));
         }
         if ui.button(self.tr("auto.choose_lossless")).clicked()
             && let Some(path) = rfd::FileDialog::new().pick_folder()
