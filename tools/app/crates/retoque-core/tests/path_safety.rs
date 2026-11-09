@@ -70,7 +70,7 @@ fn refused(result: Result<Plan, Error>) {
         Err(Error::Refused(_)) => {}
         Err(error) => panic!("unexpected error instead of safety refusal: {error}"),
         Ok(plan) => {
-            assert!(!plan.refusals.is_empty(), "unexpected applicable plan: {plan:?}");
+            assert!(!plan.refusals().is_empty(), "unexpected applicable plan: {plan:?}");
             assert!(apply(&plan, &mut |_| panic!("refused plan made progress")).is_err());
         }
     }
@@ -78,8 +78,8 @@ fn refused(result: Result<Plan, Error>) {
 
 fn round_trip(f: &Fixture, chosen: &Path) {
     let plan = plan_install(&f.options(chosen)).unwrap();
-    assert!(plan.refusals.is_empty(), "{:?}", plan.refusals);
-    assert_eq!(plan.game_dir, f.game.canonicalize().unwrap());
+    assert!(plan.refusals().is_empty(), "{:?}", plan.refusals());
+    assert_eq!(plan.game_dir(), f.game.canonicalize().unwrap());
     apply(&plan, &mut |_| {}).unwrap();
     let (ini, bytes) = read_ini(chosen).unwrap().unwrap();
     assert_eq!(ini, f.game.canonicalize().unwrap().join(INI_NAME));
@@ -88,7 +88,7 @@ fn round_trip(f: &Fixture, chosen: &Path) {
     let receipt = fs::read(&receipt_path).unwrap();
     for value in ["true", "auto"] {
         let settings = plan_settings(chosen, &[("DlssNr".into(), "Enabled".into(), value.into())]).unwrap();
-        assert!(settings.refusals.is_empty());
+        assert!(settings.refusals().is_empty());
         apply(&settings, &mut |_| {}).unwrap();
         assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
         assert_eq!(
@@ -128,7 +128,7 @@ fn retargeting_selected_alias_after_preview_does_not_redirect_apply() {
     let alias = f.temp.path().join("game-alias");
     link_dir(&f.game, &alias);
     let plan = plan_install(&f.options(&alias)).unwrap();
-    assert!(plan.refusals.is_empty());
+    assert!(plan.refusals().is_empty());
     let outside = f.temp.path().join("outside");
     fs::create_dir(&outside).unwrap();
     remove_link(&alias);
@@ -205,4 +205,12 @@ fn replacing_resolved_root_between_settings_steps_stops_writes() {
     assert_eq!(progress, 1);
     assert_eq!(fs::read(parked.join(INI_NAME)).unwrap(), b"[A]\nk=two\nj=one\n");
     assert!(!parked.join(STATE_DIR).exists());
+}
+
+// Test adapter keeps existing refusal/staleness probes at the same boundary after typestate migration.
+fn apply(
+    plan: &retoque_core::Plan,
+    progress: &mut dyn FnMut(retoque_core::StepDone),
+) -> Result<(), retoque_core::Error> {
+    retoque_core::apply(&plan.clone().into_verified()?, progress)
 }

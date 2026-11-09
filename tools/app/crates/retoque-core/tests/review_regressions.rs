@@ -128,11 +128,11 @@ fn second_proxy_content_change_invalidates_preview_without_writes() {
     let proxy = f.game.join("winmm.dll");
     fs::write(&proxy, b"foreign existing file").unwrap();
     let plan = f.plan();
-    assert!(plan.refusals.is_empty());
+    assert!(plan.refusals().is_empty());
     fs::write(&proxy, b"MZ OptiScaler working as another proxy").unwrap();
     assert!(
         f.plan()
-            .refusals
+            .refusals()
             .iter()
             .any(|r| matches!(r, Refusal::SecondProxy { .. }))
     );
@@ -155,12 +155,15 @@ fn source_symlink_target_changes_cannot_supply_unreviewed_bytes() {
 }
 
 #[test]
-fn clearing_public_refusals_cannot_authorize_a_sealed_plan() {
+fn clearing_copied_refusals_cannot_authorize_a_sealed_plan() {
     let f = Fixture::new();
     fs::write(f.game.join("winmm.dll"), b"MZ OptiScaler working as another proxy").unwrap();
-    let mut plan = f.plan();
-    assert!(!plan.refusals.is_empty());
-    plan.refusals.clear();
+    let plan = f.plan();
+    assert!(!plan.refusals().is_empty());
+    let mut copied = plan.refusals().to_vec();
+    copied.clear();
+    assert!(copied.is_empty());
+    assert!(!plan.refusals().is_empty());
     assert!(apply(&plan, &mut |_| panic!("refused plan made progress")).is_err());
     assert!(!f.game.join(STATE_DIR).exists());
 }
@@ -220,7 +223,7 @@ mod linux {
         let child = Mapped::new(&f.game.join("mapped.bin"));
         assert!(running_processes(&f.game).iter().any(|(pid, _)| *pid == child.0.id()));
         let plan = f.plan();
-        assert!(plan.refusals.iter().any(|r| matches!(r, Refusal::GameRunning { .. })));
+        assert!(plan.refusals().iter().any(|r| matches!(r, Refusal::GameRunning { .. })));
         assert!(apply(&plan, &mut |_| {}).is_err());
         assert!(!f.game.join(STATE_DIR).exists());
     }
@@ -274,7 +277,7 @@ fn incomplete_or_changed_backup_is_never_restored() {
     fs::write(f.game.join(&copy), b"incomplete backup").unwrap();
     let plan = plan_uninstall(&f.game).unwrap();
     assert!(
-        plan.steps
+        plan.steps()
             .iter()
             .any(|s| matches!(s, Step::Keep { path,why } if path == &copy && why.contains("incomplete")))
     );
@@ -282,4 +285,12 @@ fn incomplete_or_changed_backup_is_never_restored() {
     assert!(!f.game.join("dxgi.dll").exists());
     assert_eq!(fs::read(f.game.join(copy)).unwrap(), b"incomplete backup");
     assert!(f.game.join(".retoque/receipt.txt").exists());
+}
+
+// Test adapter keeps existing refusal/staleness probes at the same boundary after typestate migration.
+fn apply(
+    plan: &retoque_core::Plan,
+    progress: &mut dyn FnMut(retoque_core::StepDone),
+) -> Result<(), retoque_core::Error> {
+    retoque_core::apply(&plan.clone().into_verified()?, progress)
 }

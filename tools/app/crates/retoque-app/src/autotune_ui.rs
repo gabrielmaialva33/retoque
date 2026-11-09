@@ -1,5 +1,5 @@
 //! GPU recommendations and reviewed frame-generation operations in the existing shell.
-use super::*;
+use crate::app::*;
 use crate::autotune::{
     self, ComponentChange, Event, Request,
     components::ComponentKind,
@@ -9,19 +9,19 @@ use crate::autotune::{
 };
 
 impl RetoqueApp {
-    pub(super) fn autotune_start(&mut self) {
+    pub(crate) fn autotune_start(&mut self) {
         self.jobs.spawn("autotune-environment", None, |_| {
             Outcome::Auto(Box::new(autotune::environment()))
         });
         self.autotune_catalog(None, None);
     }
-    pub(super) fn autotune_catalog(&mut self, import: Option<PathBuf>, remove: Option<String>) {
+    pub(crate) fn autotune_catalog(&mut self, import: Option<PathBuf>, remove: Option<String>) {
         self.tuning.catalog = None;
         self.jobs.spawn("autotune-catalog", None, move |_| {
             Outcome::Auto(Box::new(autotune::catalog(import, remove)))
         });
     }
-    pub(super) fn autotune_refresh(&mut self, target: PathBuf) {
+    pub(crate) fn autotune_refresh(&mut self, target: PathBuf) {
         self.tuning.facts_generation += 1;
         let generation = self.tuning.facts_generation;
         self.tuning.installed = None;
@@ -31,7 +31,7 @@ impl RetoqueApp {
             Outcome::Auto(Box::new(autotune::facts(target, generation, dir)))
         });
     }
-    pub(super) fn autotune_event(&mut self, event: Event) {
+    pub(crate) fn autotune_event(&mut self, event: Event) {
         match event {
             Event::Environment { gpus, lossless } => {
                 self.tuning.gpus = Some(gpus);
@@ -54,12 +54,18 @@ impl RetoqueApp {
                 request,
                 result,
             } if self.view.target.as_ref() == Some(&target) && request == self.tuning.request => {
-                self.tuning.review = Some((self.tuning.review_title.clone(), result));
+                self.review = Some(result.map(|p| ReviewSession {
+                    title: self.tuning.review_title.clone(),
+                    kind: ReviewKind::Autotune(p.request),
+                    plans: p.plans,
+                    groups: p.groups,
+                    request_id: request,
+                }));
             }
             _ => {}
         }
     }
-    pub(super) fn autotune_gpu(&self, ui: &mut egui::Ui) {
+    pub(crate) fn autotune_gpu(&self, ui: &mut egui::Ui) {
         let Some(gpus) = &self.tuning.gpus else {
             ui.add(egui::Label::new(self.tr("auto.gpu_reading")).wrap());
             return;
@@ -173,7 +179,7 @@ impl RetoqueApp {
             self.autotune_choose_lossless();
         }
     }
-    pub(super) fn autotune_card(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn autotune_card(&mut self, ui: &mut egui::Ui) {
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
         ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         widgets::card(ui, |ui| {
@@ -183,7 +189,7 @@ impl RetoqueApp {
             if self.tuning.gpus.is_none() || self.view.status.is_none() || !self.autotune_known_components() {
                 ui.add(egui::Label::new(self.tr("auto.checking")).wrap());
                 if let Some(Err(e)) = &self.tuning.installed {
-                    ui.colored_label(theme::BAD, e);
+                    crate::error::card(ui, e, self.lang, &self.cmd_tx);
                 }
                 return;
             }
@@ -262,7 +268,7 @@ impl RetoqueApp {
         edits.extend(recommend::lsfg_input_edits(facts));
         edits
     }
-    pub(super) fn autotune_lsfg(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn autotune_lsfg(&mut self, ui: &mut egui::Ui) {
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
         ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         ui.add_space(12.0);
@@ -348,7 +354,7 @@ impl RetoqueApp {
         }
         selected.is_some()
     }
-    pub(super) fn autotune_components(&mut self, ui: &mut egui::Ui) {
+    pub(crate) fn autotune_components(&mut self, ui: &mut egui::Ui) {
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
         ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         widgets::card(ui, |ui| {
@@ -364,7 +370,7 @@ impl RetoqueApp {
                     ui.spinner();
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(theme::BAD, e);
+                    crate::error::card(ui, e, self.lang, &self.cmd_tx);
                 }
                 Some(Ok(items)) => {
                     if items.is_empty() {
@@ -444,7 +450,7 @@ impl RetoqueApp {
                     }
                 }
                 Some(Err(e)) => {
-                    ui.colored_label(theme::BAD, e);
+                    crate::error::card(ui, e, self.lang, &self.cmd_tx);
                 }
                 None => {
                     ui.add(egui::Label::new(self.tr("auto.checking")).wrap());
@@ -453,7 +459,7 @@ impl RetoqueApp {
         });
         ui.add_space(12.0);
     }
-    fn autotune_request(&mut self, title: String, request: Request) {
+    pub(crate) fn autotune_request(&mut self, title: String, request: Request) {
         let Some(target) = self.view.target.clone() else { return };
         if self.busy() {
             return;
@@ -461,9 +467,8 @@ impl RetoqueApp {
         self.next_request += 1;
         let serial = self.next_request;
         self.tuning.request = serial;
-        self.tuning.review = None;
+        self.review = None;
         self.tuning.review_title = title;
-        self.tuning.active = true;
         self.review_open = true;
         self.origin_focus = self.context.memory(|m| m.focused());
         self.jobs.spawn("autotune-plan", None, move |_| {
@@ -474,91 +479,12 @@ impl RetoqueApp {
             }))
         });
     }
-    pub(super) fn autotune_review(&mut self, ui: &mut egui::Ui) {
-        ui.heading(&self.tuning.review_title);
-        ui.add(egui::Label::new(self.tr("inst.plan")).wrap());
-        ui.add(egui::Label::new(self.tr("shell.review_note")).wrap());
-        let prepared = self.tuning.review.as_ref().map(|(_, r)| r.clone());
-        let mut can_apply = false;
-        match &prepared {
-            Some(Ok(p)) => {
-                egui::ScrollArea::vertical()
-                    .max_height((ui.ctx().content_rect().height() - 290.).max(160.))
-                    .show(ui, |ui| {
-                        for (index, plan) in p.plans.iter().enumerate() {
-                            for refusal in &plan.refusals {
-                                let (key, detail) = refusal_text(self.lang, refusal);
-                                ui.colored_label(theme::BAD, format!("{} {detail}", self.tr(key)));
-                            }
-                            for (group, key) in [
-                                "shell.add",
-                                "shell.replace",
-                                "shell.keep",
-                                "shell.remove",
-                                "shell.settings",
-                            ]
-                            .into_iter()
-                            .enumerate()
-                            {
-                                let steps: Vec<_> = plan
-                                    .steps
-                                    .iter()
-                                    .enumerate()
-                                    .filter(|(i, _)| p.groups[index][*i] == group)
-                                    .map(|(_, s)| s)
-                                    .collect();
-                                if steps.is_empty() {
-                                    continue;
-                                }
-                                ui.add_space(8.);
-                                ui.label(RichText::new(self.tr(key)).strong());
-                                for step in steps {
-                                    let (_, text, color) = step_text(self.lang, step);
-                                    ui.add(egui::Label::new(RichText::new(text).color(color)).wrap());
-                                }
-                            }
-                            for note in &plan.notes {
-                                ui.add(egui::Label::new(diagnostic(self.lang, note)).wrap());
-                            }
-                        }
-                    });
-                can_apply = !self.busy()
-                    && !p.plans.is_empty()
-                    && p.plans.iter().all(|p| p.refusals.is_empty())
-                    && p.plans.iter().any(|p| !p.steps.is_empty());
-                if p.plans.iter().all(|p| p.steps.is_empty()) {
-                    ui.add(egui::Label::new(self.tr("inst.nothing")).wrap());
-                }
-            }
-            Some(Err(e)) => {
-                ui.colored_label(theme::BAD, e);
-            }
-            None => {
-                ui.spinner();
-                ui.add(egui::Label::new(self.tr("shell.preparing")).wrap());
-            }
-        }
-        ui.separator();
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(self.tr("cancel")).clicked() {
-                self.review_open = false;
-                self.restore_focus();
-            }
-            if ui
-                .add_enabled(can_apply, theme::primary(self.tr("auto.confirm")))
-                .clicked()
-                && let Some(Ok(p)) = prepared
-            {
-                self.autotune_apply(p);
-            }
-        });
-    }
-    fn autotune_apply(&mut self, p: autotune::Prepared) {
+    pub(crate) fn autotune_apply(&mut self, p: autotune::Prepared) {
         let target = p.target.clone();
         if self.writing.contains_key(&target) || self.view.target.as_ref() != Some(&target) {
             return;
         }
-        let total = p.plans.iter().map(|p| p.steps.len()).sum();
+        let total = p.plans.iter().map(|p| p.steps().len()).sum();
         self.writing.insert(target.clone(), (0, total));
         self.write_kinds.insert(target.clone(), PlanKind::Settings);
         self.tuning.writes.insert(target.clone());
@@ -575,13 +501,12 @@ impl RetoqueApp {
                 ctx.request_repaint();
             })
             .map_err(|failure| {
-                format!(
-                    "{} {}/{}: {}",
+                failure.detail.for_target(target.clone()).with_context(format!(
+                    "{} {}/{}",
                     t(lang, "auto.partial"),
                     failure.completed,
-                    p.plans.len(),
-                    failure.detail
-                )
+                    p.plans.len()
+                ))
             });
             Outcome::Applied {
                 target,

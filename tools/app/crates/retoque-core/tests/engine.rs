@@ -64,20 +64,21 @@ fn changed_payload_invalidates_plan_without_writes() {
     assert_eq!(fs::read_dir(&f.game).unwrap().count(), 0);
 }
 #[test]
-fn modified_public_steps_cannot_bypass_model_protection() {
+fn copied_steps_cannot_change_the_sealed_plan() {
     let f = Fixture::new();
-    let mut plan = plan_install(&f.options()).unwrap();
-    plan.steps.push(Step::Remove {
+    fs::write(f.game.join(MODEL_NAME), b"user model").unwrap();
+    let plan = plan_install(&f.options()).unwrap();
+    let original = plan.steps().to_vec();
+    let mut copied = plan.steps().to_vec();
+    copied.push(Step::Remove {
         path: MODEL_NAME.into(),
     });
-    assert!(
-        apply(&plan, &mut |_| {})
-            .unwrap_err()
-            .to_string()
-            .contains("plan was modified")
-    );
-    assert_eq!(fs::read_dir(&f.game).unwrap().count(), 0);
+    assert_ne!(copied, plan.steps());
+    assert_eq!(plan.steps(), original);
+    apply(&plan, &mut |_| {}).unwrap();
+    assert_eq!(fs::read(f.game.join(MODEL_NAME)).unwrap(), b"user model");
 }
+
 #[test]
 fn status_and_reversible_ini_and_progress() {
     let f = Fixture::new();
@@ -86,7 +87,7 @@ fn status_and_reversible_ini_and_progress() {
     let plan = plan_install(&opts).unwrap();
     let mut steps = Vec::new();
     apply(&plan, &mut |done| steps.push(done)).unwrap();
-    assert_eq!(steps.len(), plan.steps.len());
+    assert_eq!(steps.len(), plan.steps().len());
     assert!(
         steps
             .iter()
@@ -127,9 +128,9 @@ fn asi_and_optiscaler_proxy_do_not_duplicate_file_steps() {
         let mut opts = f.options();
         opts.proxy = name.into();
         let plan = plan_install(&opts).unwrap();
-        assert!(plan.refusals.is_empty());
+        assert!(plan.refusals().is_empty());
         assert_eq!(
-            plan.steps
+            plan.steps()
                 .iter()
                 .filter(|s| matches!(s,Step::Copy { to,.. } if to == "OptiScaler.dll"))
                 .count(),
@@ -192,4 +193,12 @@ fn process_starting_after_plan_blocks_apply() {
     assert!(processes.iter().any(|(pid, _)| *pid == child.id()));
     assert!(matches!(result,Err(Error::Refused(r)) if r.iter().any(|r| r.exit_code() == 3)));
     assert!(f.game.join("dxgi.dll").exists());
+}
+
+// Test adapter keeps existing refusal/staleness probes at the same boundary after typestate migration.
+fn apply(
+    plan: &retoque_core::Plan,
+    progress: &mut dyn FnMut(retoque_core::StepDone),
+) -> Result<(), retoque_core::Error> {
+    retoque_core::apply(&plan.clone().into_verified()?, progress)
 }

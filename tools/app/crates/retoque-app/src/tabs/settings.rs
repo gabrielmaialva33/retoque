@@ -1,0 +1,278 @@
+use crate::app::*;
+
+impl RetoqueApp {
+    pub(crate) fn settings_tab(
+        &self,
+        ui: &mut egui::Ui,
+        edits: &mut BTreeMap<(String, String), String>,
+        commands: &CommandSender,
+    ) {
+        if self.view.target.is_none() {
+            return;
+        }
+        match &self.view.ini {
+            None => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(self.tr("tab.loading"));
+                });
+                return;
+            }
+            Some(Err(e)) => {
+                crate::error::card(ui, e, self.lang, &self.cmd_tx);
+                return;
+            }
+            Some(Ok(None)) => {
+                self.tab_install_prompt(ui);
+                return;
+            }
+            Some(Ok(Some(_))) => (),
+        };
+        for (section, title) in [
+            ("DlssNr", "set.nr"),
+            ("Upscalers", "set.upscalers"),
+            ("FrameGen", "set.framegen"),
+            ("LSFG", "set.lsfg"),
+        ] {
+            widgets::card(ui, |ui| {
+                if section == "LSFG" {
+                    egui::CollapsingHeader::new(RichText::new(self.tr(title)).size(16.0).strong())
+                        .id_salt("lsfg_settings")
+                        .default_open(false)
+                        .show(ui, |ui| self.settings_section(ui, section, edits, commands));
+                    ui.label(RichText::new(self.tr("set.lsfg_note")).small().color(theme::MUTED));
+                } else {
+                    widgets::card_title(ui, self.tr(title));
+                    self.settings_section(ui, section, edits, commands);
+                }
+            });
+            ui.add_space(12.0);
+        }
+        // Review and Discard live in the pending-changes footer (pending_footer), outside the scroll area.
+        self.settings_plan(ui);
+    }
+
+    pub(crate) fn settings_section(
+        &self,
+        ui: &mut egui::Ui,
+        section: &str,
+        edits: &mut BTreeMap<(String, String), String>,
+        commands: &CommandSender,
+    ) {
+        self.settings_rows(ui, section, false, edits, commands);
+        if section == "DlssNr" {
+            ui.add_space(8.0);
+            egui::CollapsingHeader::new(self.tr("set.advanced"))
+                .id_salt("nr_advanced")
+                .show(ui, |ui| self.settings_rows(ui, section, true, edits, commands));
+        }
+    }
+
+    pub(crate) fn settings_rows(
+        &self,
+        ui: &mut egui::Ui,
+        section: &str,
+        advanced: bool,
+        edits: &mut BTreeMap<(String, String), String>,
+        commands: &CommandSender,
+    ) {
+        let lang = self.lang;
+        for s in settings::all().iter().filter(|s| s.section == section) {
+            if section == "DlssNr" {
+                let common = matches!(s.key, "Enabled" | "Stage" | "WorkingScale" | "ApplyModel" | "ModelFile");
+                if common == advanced {
+                    continue;
+                }
+            }
+            if s.key == "ModelFile" {
+                ui.add_space(8.0);
+                if ui.link(t(lang, "set.model_link")).clicked() {
+                    commands.send(AppCommand::SwitchTab(Tab::Model));
+                }
+                continue;
+            }
+            let compare = edits
+                .get(&("DlssNr".into(), "Compare".into()))
+                .map(String::as_str)
+                .or_else(|| self.view.ini_values.get("DlssNr", "Compare"))
+                .unwrap_or("auto");
+            if s.section == "DlssNr"
+                && ((s.key == "CompareSplit" && compare != "2")
+                    || (s.key == "CompareSwap" && !matches!(compare, "1" | "2")))
+            {
+                continue;
+            }
+            let (label, help) = match lang {
+                Lang::En => (s.label_en, s.help_en),
+                Lang::Pt => (s.label_pt, s.help_pt),
+            };
+            let key = (s.section.to_owned(), s.key.to_owned());
+            let present = self.view.ini_values.get(s.section, s.key);
+            let on_disk = present.unwrap_or("auto");
+            let mut value = edits.get(&key).cloned().unwrap_or_else(|| on_disk.into());
+            let before = value.clone();
+            ui.add_space(8.0);
+            let width = ui.available_width();
+            let control_width = (width * 0.50).clamp(220.0, 300.0).min(width);
+            let label_width = (width - control_width - 20.0).max(40.0);
+            ui.horizontal_top(|ui| {
+                let label_id = ui
+                    .allocate_ui_with_layout(
+                        egui::vec2(label_width, 0.0),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            ui.set_width(label_width);
+                            let response = ui.add(egui::Label::new(RichText::new(label).strong()).wrap());
+                            ui.label(RichText::new(help).size(13.0).color(theme::MUTED));
+                            if present.is_none() {
+                                ui.label(RichText::new(t(lang, "set.game_default")).small().color(theme::MUTED));
+                            }
+                            response.id
+                        },
+                    )
+                    .inner;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(control_width, 0.0),
+                    egui::Layout::right_to_left(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(control_width);
+                        value_widget(ui, s, &mut value, &format!("{}.{}", s.section, s.key), lang)
+                            .labelled_by(label_id);
+                    },
+                );
+            });
+            // A value OptiScaler would not accept is kept as typed (so the user can fix it) but blocks the review.
+            if edits.get(&key).is_some_and(|v| !s.accepts(v)) {
+                ui.colored_label(theme::BAD, RichText::new(t(lang, "set.invalid")).small());
+            }
+            if value != before {
+                if value == on_disk {
+                    edits.remove(&key);
+                } else {
+                    edits.insert(key, value);
+                }
+            }
+            ui.add_space(6.0);
+            ui.separator();
+        }
+    }
+
+    pub(crate) fn settings_plan(&self, ui: &mut egui::Ui) {
+        match &self.view.applied {
+            Some((PlanKind::Settings, Ok(()))) => {
+                ui.colored_label(theme::GOOD, self.tr("set.saved"));
+            }
+            Some((PlanKind::Settings, Err(e))) => {
+                crate::error::card(ui, e, self.lang, &self.cmd_tx);
+            }
+            _ => {}
+        }
+    }
+}
+pub(crate) fn value_widget(
+    ui: &mut egui::Ui,
+    setting: &settings::Setting,
+    value: &mut String,
+    id: &str,
+    lang: Lang,
+) -> egui::Response {
+    let raw = value.clone();
+    let response = match &setting.kind {
+        &Kind::Bool | &Kind::Choice(&["auto", "true", "false"]) => {
+            ui.push_id(id, |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    let mut responses = ["auto", "true", "false"].into_iter().map(|option| {
+                        let label = choice_label(setting, option, lang);
+                        let response = ui.add(
+                            egui::Button::selectable(
+                                value.eq_ignore_ascii_case(option),
+                                RichText::new(label).size(13.0),
+                            )
+                            .wrap_mode(egui::TextWrapMode::Extend),
+                        );
+                        if response.clicked() {
+                            *value = option.into();
+                        }
+                        response.on_hover_text(format!(
+                            "{}: {}",
+                            match lang {
+                                Lang::En => setting.label_en,
+                                Lang::Pt => setting.label_pt,
+                            },
+                            option
+                        ))
+                    });
+                    let first = responses.next().unwrap();
+                    responses.fold(first, |all, response| all.union(response))
+                })
+                .inner
+            })
+            .inner
+        }
+        Kind::Choice(options) => {
+            let label = choice_label(setting, value, lang).to_owned();
+            egui::ComboBox::from_id_salt(id)
+                .selected_text(&label)
+                .width(ui.available_width())
+                .truncate()
+                .show_ui(ui, |ui| {
+                    for o in options.iter() {
+                        ui.selectable_value(value, o.to_string(), choice_label(setting, o, lang))
+                            .on_hover_text(*o);
+                    }
+                })
+                .response
+                .on_hover_text(label)
+        }
+        Kind::Float { min, max } => {
+            ui.horizontal(|ui| {
+                let automatic = value.eq_ignore_ascii_case("auto");
+                let toggle = ui.add(egui::Button::selectable(automatic, t(lang, "set.automatic")));
+                if toggle.clicked() {
+                    *value = if automatic {
+                        1.0_f32.clamp(*min, *max).to_string()
+                    } else {
+                        "auto".into()
+                    };
+                }
+                if automatic {
+                    return toggle;
+                }
+                match value.trim().parse::<f32>() {
+                    Ok(mut f) => {
+                        let response = ui.add(egui::DragValue::new(&mut f).range(*min..=*max).speed(0.01));
+                        if response.changed() {
+                            *value = format!("{f:.2}");
+                        }
+                        toggle.union(response)
+                    }
+                    Err(_) => toggle.union(ui.add(egui::TextEdit::singleline(value).desired_width(70.0))),
+                }
+            })
+            .inner
+        }
+        Kind::Int { min, max } => match value.trim().parse::<i64>() {
+            Ok(mut i) => {
+                let response = ui.add(egui::DragValue::new(&mut i).range(*min..=*max));
+                if response.changed() {
+                    *value = i.to_string();
+                }
+                response
+            }
+            Err(_) => ui.add(egui::TextEdit::singleline(value).desired_width(ui.available_width().min(120.0))),
+        },
+        Kind::Text => ui.add(egui::TextEdit::singleline(value).desired_width(ui.available_width())),
+    };
+    response.on_hover_text(raw)
+}
+
+pub(crate) fn choice_label<'a>(setting: &settings::Setting, value: &'a str, lang: Lang) -> &'a str {
+    match setting.choice_labels(value) {
+        Some((en, pt)) => match lang {
+            Lang::En => en,
+            Lang::Pt => pt,
+        },
+        None => t(lang, "set.custom"),
+    }
+}

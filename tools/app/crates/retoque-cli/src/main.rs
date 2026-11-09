@@ -260,27 +260,29 @@ fn run() -> Result<(), Error> {
         }
         plan_install(&opts)?
     };
-    if !plan.refusals.is_empty() {
-        return Err(Error::Refused(plan.refusals));
+    if !plan.refusals().is_empty() {
+        return Err(Error::Refused(plan.refusals().to_vec()));
     }
-    for note in &plan.notes {
+    for note in plan.notes() {
         println!("[=] {note}");
     }
     if dry {
-        for step in &plan.steps {
+        for step in plan.steps() {
             println!("[plan] {}", describe(step, uninstall));
         }
-        if plan.steps.is_empty() {
+        if plan.steps().is_empty() {
             println!("[plan] nothing to do");
         }
         println!("[=] Dry run: nothing was written.");
     } else {
         if command == "component" {
-            for step in &plan.steps {
+            for step in plan.steps() {
                 println!("[plan] {}", describe(step, uninstall));
             }
         }
-        apply(&plan, &mut |done| println!("[+] {}", describe(&done.step, uninstall)))?;
+        apply(&plan.into_verified()?, &mut |done| {
+            println!("[+] {}", describe(&done.step, uninstall))
+        })?;
         println!(
             "[ok] {}",
             if uninstall {

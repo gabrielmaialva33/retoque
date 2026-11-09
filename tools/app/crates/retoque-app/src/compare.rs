@@ -192,15 +192,23 @@ impl Worker {
                             .map_err(|_| ()),
                     ),
                     WorkKind::Load(id, pair, ev) => {
-                        let result = prepare(&pair, ev).map(Box::new).map_err(|_| ());
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            prepare(&pair, ev).map(Box::new).map_err(|_| ())
+                        }))
+                        .unwrap_or(Err(()));
                         if id != current_request.load(Ordering::Relaxed) {
                             continue;
                         }
                         Reply::Loaded(job.epoch, id, result)
                     }
-                    WorkKind::Thumbnail(index, pair) => {
-                        Reply::Thumbnail(job.epoch, index, thumbnails.get(&pair).map_err(|_| ()))
-                    }
+                    WorkKind::Thumbnail(index, pair) => Reply::Thumbnail(
+                        job.epoch,
+                        index,
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            thumbnails.get(&pair).map_err(|_| ())
+                        }))
+                        .unwrap_or(Err(())),
+                    ),
                 };
                 if job.epoch != current.load(Ordering::Relaxed) {
                     continue;

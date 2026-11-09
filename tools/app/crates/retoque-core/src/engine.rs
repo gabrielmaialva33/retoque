@@ -842,7 +842,7 @@ fn checked_payload(plan: &Plan, path: &Path) -> Result<Vec<u8>, Error> {
     if path.canonicalize().map_err(|e| io(path, e))? != *resolved
         || format!("{:x}", Sha256::digest(&bytes)) != *expected
     {
-        return Err(Error::Other("source changed since planning; plan again".into()));
+        return Err(Error::StalePlan("source changed since planning; plan again".into()));
     }
     Ok(bytes)
 }
@@ -1113,7 +1113,7 @@ fn validate_snapshots(plan: &Plan, expected: &BTreeMap<PathBuf, Fingerprint>) ->
     }
     for (path, before) in expected {
         if fingerprint(path)? != *before {
-            return Err(Error::Other(format!(
+            return Err(Error::StalePlan(format!(
                 "{} changed since planning; plan again",
                 path.display()
             )));
@@ -1121,7 +1121,7 @@ fn validate_snapshots(plan: &Plan, expected: &BTreeMap<PathBuf, Fingerprint>) ->
     }
     for (path, before) in &plan.execution.observed_files {
         if observed_file(path)? != *before {
-            return Err(Error::Other(format!(
+            return Err(Error::StalePlan(format!(
                 "{} source changed since planning; plan again",
                 path.display()
             )));
@@ -1143,7 +1143,7 @@ fn refresh_expected(game: &Path, expected: &mut BTreeMap<PathBuf, Fingerprint>, 
     }
     Ok(())
 }
-pub(crate) fn apply(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(), Error> {
+pub(crate) fn verify(plan: &Plan) -> Result<(), Error> {
     if !plan.refusals.is_empty() {
         return Err(Error::Refused(plan.refusals.clone()));
     }
@@ -1152,8 +1152,12 @@ pub(crate) fn apply(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(
         || plan.steps != plan.execution.steps
         || plan.game_dir != plan.execution.game_dir
     {
-        return Err(Error::Other("plan was modified; plan again before applying".into()));
+        return Err(Error::StalePlan("plan was modified; plan again before applying".into()));
     }
+    Ok(())
+}
+pub(crate) fn apply(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(), Error> {
+    verify(plan)?;
     validate_snapshots(plan, &plan.execution.snapshots)?;
     #[cfg(windows)]
     {
@@ -1423,7 +1427,7 @@ pub(crate) fn plan_settings(game_dir: &Path, edits: &[(String, String, String)])
     let expected = fingerprint(&path)?;
     let planned_hash = format!("{:x}", Sha256::digest(&bytes));
     if !matches!(&expected,Fingerprint::File(hash,_) if hash == &planned_hash) {
-        return Err(Error::Other("INI changed while planning; plan again".into()));
+        return Err(Error::StalePlan("INI changed while planning; plan again".into()));
     }
     plan.execution.snapshots.insert(path, expected);
     plan.execution
@@ -1475,7 +1479,7 @@ fn apply_settings(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(),
             return Err(Error::Refused(vec![Refusal::GameRunning { processes }]));
         }
         if expected.get(&path) != Some(&fingerprint(&path)?) {
-            return Err(Error::Other(
+            return Err(Error::StalePlan(
                 "INI changed since planning or the last settings step; plan again".into(),
             ));
         }

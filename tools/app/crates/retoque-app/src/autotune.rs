@@ -1,4 +1,5 @@
 //! GUI orchestration: one reviewed component operation followed by settings, one writer lock.
+use crate::error::AppError;
 use crate::model::Edit;
 use retoque_core::{Plan, Step, StepDone};
 use std::path::{Path, PathBuf};
@@ -24,7 +25,7 @@ pub struct Prepared {
     pub groups: Vec<Vec<usize>>,
 }
 
-pub fn prepare(target: &Path, request: Request) -> Result<Prepared, String> {
+pub fn prepare(target: &Path, request: Request) -> Result<Prepared, AppError> {
     let mut plans = Vec::new();
     if let Some(change) = &request.component {
         let p = match change {
@@ -38,20 +39,20 @@ pub fn prepare(target: &Path, request: Request) -> Result<Prepared, String> {
             ),
             ComponentChange::Remove(id) => plan_component_uninstall(target, id),
         }
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
         plans.push(p);
     }
     if !request.edits.is_empty() {
-        plans.push(retoque_core::plan_settings(target, &request.edits).map_err(|e| e.to_string())?);
+        plans.push(retoque_core::plan_settings(target, &request.edits).map_err(AppError::from)?);
     }
     let groups = plans
         .iter()
         .map(|p| {
-            p.steps
+            p.steps()
                 .iter()
                 .map(|step| {
-                    let exists = matches!(step,Step::Copy{to,..} if p.game_dir.join(to).exists());
-                    crate::app::step_group(step, &p.steps, exists)
+                    let exists = matches!(step,Step::Copy{to,..} if p.game_dir().join(to).exists());
+                    crate::app::step_group(step, p.steps(), exists)
                 })
                 .collect()
         })
@@ -66,16 +67,16 @@ pub fn prepare(target: &Path, request: Request) -> Result<Prepared, String> {
 #[derive(Debug)]
 pub struct ApplyFailure {
     pub completed: usize,
-    pub detail: String,
+    pub detail: AppError,
 }
 pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<(), ApplyFailure> {
-    if prepared.plans.iter().any(|p| !p.refusals.is_empty()) || prepared.plans.is_empty() {
+    if prepared.plans.iter().any(|p| !p.refusals().is_empty()) || prepared.plans.is_empty() {
         return Err(ApplyFailure {
             completed: 0,
             detail: "plan refused or empty".into(),
         });
     }
-    let total: usize = prepared.plans.iter().map(|p| p.steps.len()).sum();
+    let total: usize = prepared.plans.iter().map(|p| p.steps().len()).sum();
     let mut offset = 0;
     for (index, original) in prepared.plans.iter().enumerate() {
         // A component updates the receipt. Rebase only the subsequent INI edit, never a component source.
@@ -84,9 +85,9 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
             fresh =
                 retoque_core::plan_settings(&prepared.target, &prepared.request.edits).map_err(|e| ApplyFailure {
                     completed: index,
-                    detail: e.to_string(),
+                    detail: e.into(),
                 })?;
-            if fresh.steps != original.steps || !fresh.refusals.is_empty() {
+            if fresh.steps() != original.steps() || !fresh.refusals().is_empty() {
                 return Err(ApplyFailure {
                     completed: index,
                     detail: "settings changed since review".into(),
@@ -96,16 +97,20 @@ pub fn apply(prepared: &Prepared, progress: &mut dyn FnMut(StepDone)) -> Result<
         } else {
             original
         };
-        retoque_core::apply(plan, &mut |mut done| {
-            done.index += offset;
-            done.total = total;
-            progress(done);
-        })
-        .map_err(|e| ApplyFailure {
-            completed: index,
-            detail: e.to_string(),
-        })?;
-        offset += plan.steps.len();
+        plan.clone()
+            .into_verified()
+            .and_then(|verified| {
+                retoque_core::apply(&verified, &mut |mut done| {
+                    done.index += offset;
+                    done.total = total;
+                    progress(done);
+                })
+            })
+            .map_err(|e| ApplyFailure {
+                completed: index,
+                detail: e.into(),
+            })?;
+        offset += plan.steps().len();
     }
     Ok(())
 }
@@ -115,15 +120,13 @@ pub struct UiState {
     pub gpus: Option<Vec<gpu::Gpu>>,
     pub detected_lossless: Option<PathBuf>,
     pub selected_component: Option<String>,
-    pub catalog: Option<Result<Vec<components::Component>, String>>,
-    pub installed: Option<Result<Vec<String>, String>>,
+    pub catalog: Option<Result<Vec<components::Component>, AppError>>,
+    pub installed: Option<Result<Vec<String>, AppError>>,
     pub readiness: Option<lsfg::LsfgReadiness>,
     pub lossless: Option<PathBuf>,
     pub facts_generation: u64,
     pub request: u64,
-    pub review: Option<(String, Result<Prepared, String>)>,
     pub review_title: String,
-    pub active: bool,
     pub writes: std::collections::HashSet<PathBuf>,
 }
 pub enum Event {
@@ -131,18 +134,18 @@ pub enum Event {
         gpus: Vec<gpu::Gpu>,
         lossless: Option<PathBuf>,
     },
-    Catalog(Result<Vec<components::Component>, String>),
+    Catalog(Result<Vec<components::Component>, AppError>),
     Facts {
         target: PathBuf,
         generation: u64,
-        installed: Result<Vec<String>, String>,
+        installed: Result<Vec<String>, AppError>,
         lossless: Option<PathBuf>,
         readiness: lsfg::LsfgReadiness,
     },
     Plan {
         target: PathBuf,
         request: u64,
-        result: Result<Prepared, String>,
+        result: Result<Prepared, AppError>,
     },
 }
 pub fn environment() -> Event {
@@ -163,7 +166,7 @@ pub fn catalog(import: Option<PathBuf>, remove: Option<String>) -> Event {
             }
             c.list()
         })()
-        .map_err(|e: std::io::Error| e.to_string()),
+        .map_err(AppError::from),
     )
 }
 pub fn facts(target: PathBuf, generation: u64, selected_lossless: Option<PathBuf>) -> Event {
@@ -196,7 +199,7 @@ pub fn facts(target: PathBuf, generation: u64, selected_lossless: Option<PathBuf
     // turning one into a target-relative absolute path would falsely qualify it as Ready.
     let readiness = lsfg::lsfg_readiness_for_game(lossless.as_deref(), shader, Some(&target), None);
     Event::Facts {
-        installed: installed_components(&target).map_err(|e| e.to_string()),
+        installed: installed_components(&target).map_err(AppError::from),
         target,
         generation,
         lossless,
@@ -334,7 +337,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(!p.plans[0].refusals.is_empty());
+        assert!(!p.plans[0].refusals().is_empty());
         assert!(apply(&p, &mut |_| panic!("must not write")).is_err());
         assert!(!temp.path().join("OptiScaler.ini").exists());
     }

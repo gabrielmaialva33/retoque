@@ -30,7 +30,7 @@ fn edit(section: &str, key: &str, value: &str) -> (String, String, String) {
     (section.into(), key.into(), value.into())
 }
 fn usage(plan: &Plan) -> bool {
-    plan.refusals.iter().any(|r| matches!(r, Refusal::Usage(_)))
+    plan.refusals().iter().any(|r| matches!(r, Refusal::Usage(_)))
 }
 
 #[test]
@@ -61,9 +61,9 @@ fn plans_exact_changes_with_sequential_old_values_and_never_touches_receipt() {
     )
     .unwrap();
     assert_eq!(fs::read(&f.ini).unwrap(), original);
-    assert_eq!(plan.steps.len(), 3);
+    assert_eq!(plan.steps().len(), 3);
     let old: Vec<_> = plan
-        .steps
+        .steps()
         .iter()
         .map(|s| {
             if let Step::SetIni { old, .. } = s {
@@ -91,7 +91,7 @@ fn noops_leave_file_and_directory_unchanged_and_create_no_receipt() {
     let before = fs::metadata(&f.ini).unwrap().modified().unwrap();
     for edits in [vec![], vec![edit("a", "k", "v")]] {
         let plan = plan_settings(&f.game, &edits).unwrap();
-        assert!(plan.steps.is_empty());
+        assert!(plan.steps().is_empty());
         apply(&plan, &mut |_| panic!("no progress for zero steps")).unwrap();
         assert_eq!(fs::metadata(&f.ini).unwrap().modified().unwrap(), before);
         assert_eq!(fs::read_dir(&f.game).unwrap().count(), 1);
@@ -101,7 +101,7 @@ fn noops_leave_file_and_directory_unchanged_and_create_no_receipt() {
 fn duplicate_keys_old_is_last_and_every_copy_is_replaced() {
     let f = Fixture::new(INI_NAME, b"[A]\nk=one\nk=two\n");
     let plan = plan_settings(&f.game, &[edit("A", "k", "two")]).unwrap();
-    assert!(matches!(&plan.steps[0],Step::SetIni { old: Some(old),.. } if old == "two"));
+    assert!(matches!(&plan.steps()[0],Step::SetIni { old: Some(old),.. } if old == "two"));
     apply(&plan, &mut |_| {}).unwrap();
     assert_eq!(fs::read(&f.ini).unwrap(), b"[A]\nk=two\nk=two\n");
 }
@@ -161,8 +161,8 @@ fn zero_step_uninstall_removes_proxy_only_partial_receipt() {
     };
     fs::write(state.join("receipt.txt"), receipt.to_text()).unwrap();
     let plan = plan_uninstall(temp.path()).unwrap();
-    assert!(plan.steps.is_empty());
-    assert!(plan.refusals.is_empty());
+    assert!(plan.steps().is_empty());
+    assert!(plan.refusals().is_empty());
     apply(&plan, &mut |_| panic!("no file steps")).unwrap();
     assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
 }
@@ -229,7 +229,7 @@ fn running_game_refused_during_plan_and_when_starting_after_preview() {
     let result = apply(&plan, &mut |_| {});
     drop(child.stdin.take());
     child.wait().unwrap();
-    assert!(refused.refusals.iter().any(|r| r.exit_code() == 3));
+    assert!(refused.refusals().iter().any(|r| r.exit_code() == 3));
     assert!(matches!(result,Err(Error::Refused(r)) if r.iter().any(|r|r.exit_code()==3)));
     assert_eq!(fs::read(&f.ini).unwrap(), b"[A]\nk=v\n");
     assert!(!f.game.join(STATE_DIR).exists());
@@ -250,8 +250,8 @@ fn install_ini_steps_include_old_effective_value() {
         ..Default::default()
     };
     let plan = plan_install(&opts).unwrap();
-    assert!(plan.refusals.is_empty());
-    assert!(plan.steps.iter().any(
+    assert!(plan.refusals().is_empty());
+    assert!(plan.steps().iter().any(
         |s| matches!(s,Step::SetIni {old:Some(old),key,value,..} if key=="Enabled" && old=="auto" && value=="true")
     ));
 }
@@ -287,4 +287,12 @@ fn settings_are_user_changes_and_uninstall_keeps_them() {
         ReceiptStatus::UninstallIncomplete
     );
     assert!(!game.join("dxgi.dll").exists());
+}
+
+// Test adapter keeps existing refusal/staleness probes at the same boundary after typestate migration.
+fn apply(
+    plan: &retoque_core::Plan,
+    progress: &mut dyn FnMut(retoque_core::StepDone),
+) -> Result<(), retoque_core::Error> {
+    retoque_core::apply(&plan.clone().into_verified()?, progress)
 }

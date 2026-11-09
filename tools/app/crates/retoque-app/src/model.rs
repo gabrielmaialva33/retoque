@@ -2,11 +2,12 @@
 //! the folder the GUI asked about (never the engine's canonical spelling of it), so they are routed to the view that
 //! asked, and a late answer for a folder the user has left is dropped.
 
+use crate::error::AppError;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
 
-use retoque_core::{InstallOptions, Plan, Status, StepDone};
+use retoque_core::{InstallOptions, Plan, Status, Step, StepDone};
 use retoque_data::logs::Summary;
 use retoque_data::models::{Catalog, Model};
 use retoque_discovery::{Artwork, Game};
@@ -23,6 +24,17 @@ pub enum PlanKind {
 }
 
 pub enum Outcome {
+    Scoped {
+        epoch: Option<u64>,
+        request: u64,
+        name: &'static str,
+        outcome: Box<Outcome>,
+    },
+    Payload(PathBuf, Result<String, AppError>),
+    Library(u64, PathBuf, Box<Status>),
+    LibraryDone(u64),
+    ModelInspection(crate::app::ModelInspection),
+    ModelUsage(HashMap<PathBuf, usize>),
     Auto(Box<crate::autotune::Event>),
     Discovered {
         games: Vec<Game>,
@@ -31,19 +43,20 @@ pub enum Outcome {
     },
     Status {
         target: PathBuf,
-        result: Result<Status, String>,
+        result: Result<Status, AppError>,
     },
     /// The ini's actual path (its spelling may differ in case) and bytes, or None when the folder has none.
     Ini {
         target: PathBuf,
-        result: Result<Option<(PathBuf, Vec<u8>)>, String>,
+        result: Result<Option<(PathBuf, Vec<u8>)>, AppError>,
     },
     Plan {
         target: PathBuf,
         kind: PlanKind,
         /// Which preview this answers; only the newest one is shown.
         request: u64,
-        result: Result<Plan, String>,
+        result: Result<Plan, AppError>,
+        groups: Vec<usize>,
     },
     Progress {
         target: PathBuf,
@@ -54,19 +67,19 @@ pub enum Outcome {
         kind: PlanKind,
         /// For a settings plan, the edits it carried, so only those leave the pending list.
         edits: Vec<Edit>,
-        result: Result<(), String>,
+        result: Result<(), AppError>,
     },
     Logs {
         target: PathBuf,
         files: Vec<PathBuf>,
-        result: Result<Option<Summary>, String>,
+        result: Result<Option<Summary>, AppError>,
     },
     Bundle {
         target: PathBuf,
-        result: Result<PathBuf, String>,
+        result: Result<PathBuf, AppError>,
     },
     Catalog {
-        result: Result<Vec<Model>, String>,
+        result: Result<Vec<Model>, AppError>,
     },
     /// A job panicked. `target` lets the app release the folder's write lock and reload it.
     Failed {
@@ -107,12 +120,12 @@ pub fn discover(manual: Vec<PathBuf>, libraries: Vec<PathBuf>) -> Outcome {
 }
 
 pub fn status(target: PathBuf) -> Outcome {
-    let result = retoque_core::status(&target).map_err(|e| e.to_string());
+    let result = retoque_core::status(&target).map_err(|e| AppError::from(e).for_target(target.clone()));
     Outcome::Status { target, result }
 }
 
 pub fn read_ini(target: PathBuf) -> Outcome {
-    let result = retoque_core::read_ini(&target).map_err(|e| e.to_string());
+    let result = retoque_core::read_ini(&target).map_err(|e| AppError::from(e).for_target(target.clone()));
     Outcome::Ini { target, result }
 }
 
@@ -122,8 +135,21 @@ pub fn plan(kind: PlanKind, request: u64, target: PathBuf, options: InstallOptio
         PlanKind::Uninstall => retoque_core::plan_uninstall(&target),
         PlanKind::Settings => retoque_core::plan_settings(&target, &edits),
     }
-    .map_err(|e| e.to_string());
+    .map_err(|e| AppError::from(e).for_target(target.clone()));
+    let groups = result
+        .as_ref()
+        .map(|plan| {
+            plan.steps()
+                .iter()
+                .map(|step| {
+                    let exists = matches!(step, Step::Copy { to, .. } if plan.game_dir().join(to).exists());
+                    crate::app::step_group(step, plan.steps(), exists)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Outcome::Plan {
+        groups,
         target,
         kind,
         request,
@@ -139,14 +165,18 @@ pub fn apply(
     progress: &Sender<Outcome>,
     ctx: &egui::Context,
 ) -> Outcome {
-    let result = retoque_core::apply(&plan, &mut |done| {
-        let _ = progress.send(Outcome::Progress {
-            target: target.clone(),
-            done,
-        });
-        ctx.request_repaint();
-    })
-    .map_err(|e| e.to_string());
+    let result = plan
+        .into_verified()
+        .and_then(|plan| {
+            retoque_core::apply(&plan, &mut |done| {
+                let _ = progress.send(Outcome::Progress {
+                    target: target.clone(),
+                    done,
+                });
+                ctx.request_repaint();
+            })
+        })
+        .map_err(|e| AppError::from(e).for_target(target.clone()));
     Outcome::Applied {
         target,
         kind,
@@ -160,34 +190,35 @@ pub fn logs(target: PathBuf) -> Outcome {
     let result = match files.first() {
         Some(newest) => retoque_data::logs::summarize(newest)
             .map(Some)
-            .map_err(|e| e.to_string()),
+            .map_err(|e| AppError::io(newest.clone(), e).for_target(target.clone())),
         None => Ok(None),
     };
     Outcome::Logs { target, files, result }
 }
 
 pub fn bundle(target: PathBuf, status_text: String, out_dir: PathBuf) -> Outcome {
-    let result = retoque_data::logs::bundle(&target, &status_text, &out_dir).map_err(|e| e.to_string());
+    let result = retoque_data::logs::bundle(&target, &status_text, &out_dir)
+        .map_err(|e| AppError::io(out_dir, e).for_target(target.clone()));
     Outcome::Bundle { target, result }
 }
 
 pub fn catalog_list() -> Outcome {
     Outcome::Catalog {
-        result: Catalog::open(None).and_then(|c| c.list()).map_err(|e| e.to_string()),
+        result: Catalog::open(None).and_then(|c| c.list()).map_err(AppError::from),
     }
 }
 
 pub fn catalog_import(file: PathBuf) -> Outcome {
     let result = Catalog::open(None)
         .and_then(|c| c.import(&file, None).and_then(|_| c.list()))
-        .map_err(|e| e.to_string());
+        .map_err(|e| AppError::io(file, e));
     Outcome::Catalog { result }
 }
 
 pub fn catalog_remove(sha256: String) -> Outcome {
     let result = Catalog::open(None)
         .and_then(|c| c.remove(&sha256).and_then(|_| c.list()))
-        .map_err(|e| e.to_string());
+        .map_err(AppError::from);
     Outcome::Catalog { result }
 }
 
