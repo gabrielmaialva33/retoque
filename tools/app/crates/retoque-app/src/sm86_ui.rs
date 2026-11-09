@@ -116,7 +116,7 @@ impl RetoqueApp {
                     && self.next_request == pending.review_request
                     && let Some(component) = component
                 {
-                    pending.request.component = Some(ComponentChange::Install(component));
+                    pending.request.set_component(ComponentChange::Install(component));
                     self.autotune_request(self.tr("optimize.title").into(), pending.request);
                 }
             }
@@ -172,9 +172,39 @@ impl RetoqueApp {
             ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
         }
     }
+    pub(crate) fn optimize_recommendations(&mut self) -> Arc<Vec<autotune::recommend::Recommendation>> {
+        let recs_ptr = Arc::as_ptr(&self.view.intelligence.recommendations) as usize;
+        let facts_ptr = Arc::as_ptr(&self.view.intelligence.facts) as usize;
+        let has_install_inputs = self.view.target.is_some() && self.payload.is_some();
+        if let Some(cached) = &self.tuning.sm86.cached_recs
+            && cached.target == self.view.target
+            && cached.generation == self.tuning.facts_generation
+            && cached.recs_ptr == recs_ptr
+            && cached.facts_ptr == facts_ptr
+            && cached.has_install_inputs == has_install_inputs
+        {
+            return cached.combined.clone();
+        }
+        let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
+        let combined = Arc::new(optimize::recommendations_for_optimize(
+            &self.view.intelligence.recommendations,
+            gpu,
+            &self.view.intelligence.facts,
+            has_install_inputs,
+        ));
+        self.tuning.sm86.cached_recs = Some(optimize::CachedRecs {
+            target: self.view.target.clone(),
+            generation: self.tuning.facts_generation,
+            recs_ptr,
+            facts_ptr,
+            has_install_inputs,
+            combined: combined.clone(),
+        });
+        combined
+    }
     pub(crate) fn optimize_controls(&mut self, ui: &mut egui::Ui) {
         self.dlss_optimize_checkbox(ui);
-        let recs = self.view.intelligence.recommendations.clone();
+        let recs = self.optimize_recommendations();
         let target = self.view.target.as_ref();
         let mut experimental = target.is_some() && self.tuning.sm86.experimental_for.as_ref() == target;
         if recs
@@ -233,6 +263,11 @@ impl RetoqueApp {
         {
             self.view.intelligence.recommendations = saved_recs;
         }
+        let recs = self.optimize_recommendations();
+        let need_install = recs.iter().any(|r| r.is_primary_install_action())
+            || self.view.intelligence.facts.untracked
+            || (!self.view.intelligence.facts.installed && self.payload.is_some());
+        let install = need_install.then(|| self.install_inputs()).flatten();
         let component = self.autotune_selected_component();
         let models = self
             .catalog
@@ -241,22 +276,23 @@ impl RetoqueApp {
             .map(Vec::as_slice)
             .unwrap_or(&[]);
         let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
-        let nr_enabled = self
-            .view
-            .ini
-            .as_ref()
-            .and_then(|r| r.as_ref().ok())
-            .and_then(|i| i.as_ref())
-            .and_then(|i| i.get("DlssNr", "Enabled"))
-            .map(|s| !matches!(s.trim().to_ascii_lowercase().as_str(), "false" | "0"))
-            .or_else(|| {
-                self.view
-                    .status
-                    .as_ref()
-                    .and_then(|r| r.as_ref().ok())
-                    .and_then(|s| s.nr_enabled)
-            })
-            .unwrap_or(true);
+        let nr_enabled = install.as_ref().is_some_and(|o| o.enable_nr)
+            || self
+                .view
+                .ini
+                .as_ref()
+                .and_then(|r| r.as_ref().ok())
+                .and_then(|i| i.as_ref())
+                .and_then(|i| i.get("DlssNr", "Enabled"))
+                .map(|s| !matches!(s.trim().to_ascii_lowercase().as_str(), "false" | "0"))
+                .or_else(|| {
+                    self.view
+                        .status
+                        .as_ref()
+                        .and_then(|r| r.as_ref().ok())
+                        .and_then(|s| s.nr_enabled)
+                })
+                .unwrap_or(true);
         let model_incompatible =
             self.view.inspection.as_ref().is_some_and(|m| {
                 m.compatibility.for_gpu(gpu) == retoque_data::model_compat::Compatibility::Incompatible
@@ -292,7 +328,8 @@ impl RetoqueApp {
         let wine = self.view.intelligence.facts.runtime.is_wine();
         let model_edit = model.map(|m| ("DlssNr".into(), "ModelFile".into(), Catalog::model_file_value(m, wine)));
         let mut composed = optimize::compose(optimize::Selection {
-            recommendations: &self.view.intelligence.recommendations,
+            install,
+            recommendations: &recs,
             component: component.as_ref(),
             installed_ids: self
                 .tuning
@@ -315,6 +352,14 @@ impl RetoqueApp {
             if c.request.dlss.is_none() {
                 self.tuning.sm86.error = Some(self.tr("dlss.download_first").into());
                 return;
+            }
+            if need_install && c.request.retoque_install().is_none() {
+                if let Some(options) = self.install_inputs() {
+                    c.request.set_install(options);
+                } else {
+                    self.tuning.sm86.error = Some(self.tr("optimize.install_first").into());
+                    return;
+                }
             }
         }
         self.tuning.sm86.error = None;
