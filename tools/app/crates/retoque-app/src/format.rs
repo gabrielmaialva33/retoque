@@ -106,20 +106,39 @@ pub(crate) fn runtime_text(lang: Lang, runtime: &Runtime) -> String {
     }
 }
 
-pub(crate) fn short_path(p: &Path) -> String {
-    if let Some(home) = dirs::home_dir()
-        && let Ok(rest) = p.strip_prefix(&home)
-    {
-        return format!("~/{}", rest.display());
+pub(crate) fn display_path(p: impl AsRef<Path>) -> String {
+    let s = p.as_ref().display().to_string();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        if let Some(unc) = rest.strip_prefix(r"UNC\").or_else(|| rest.strip_prefix(r"unc\")) {
+            return format!(r"\\{unc}");
+        }
+        return rest.to_owned();
     }
-    p.display().to_string()
+    s
+}
+
+pub(crate) fn short_path(p: &Path) -> String {
+    let clean = display_path(p);
+    if let Some(home) = dirs::home_dir() {
+        let home_clean = display_path(&home);
+        if let Ok(rest) = Path::new(&clean).strip_prefix(Path::new(&home_clean)) {
+            return if rest.as_os_str().is_empty() {
+                "~".into()
+            } else {
+                format!("~/{}", rest.display())
+            };
+        }
+    }
+    clean
 }
 
 pub(crate) fn relative_to(p: &Path, base: &Path, root: &str) -> String {
-    match p.strip_prefix(base) {
+    let clean_p = display_path(p);
+    let clean_base = display_path(base);
+    match Path::new(&clean_p).strip_prefix(Path::new(&clean_base)) {
         Ok(rest) if rest.as_os_str().is_empty() => root.into(),
         Ok(rest) => rest.display().to_string(),
-        Err(_) => short_path(p),
+        Err(_) => short_path(Path::new(&clean_p)),
     }
 }
 
@@ -231,5 +250,34 @@ pub(crate) fn inspect_model(target: &Path, configured: &str) -> ModelInspection 
         present,
         version,
         compatibility,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_path_and_short_path_strip_windows_verbatim_prefixes() {
+        assert_eq!(
+            display_path(Path::new(r"\\?\F:\Sparta\MortalShell2\Binaries\Win64")),
+            r"F:\Sparta\MortalShell2\Binaries\Win64"
+        );
+        assert_eq!(
+            display_path(Path::new(r"\\?\UNC\server\share\Games\Win64")),
+            r"\\server\share\Games\Win64"
+        );
+        assert_eq!(
+            short_path(Path::new(r"\\?\F:\Sparta\MortalShell2\Binaries\Win64")),
+            r"F:\Sparta\MortalShell2\Binaries\Win64"
+        );
+        assert_eq!(
+            relative_to(
+                Path::new(r"\\?\F:\Sparta\MortalShell2"),
+                Path::new(r"F:\Sparta\MortalShell2"),
+                "root"
+            ),
+            "root"
+        );
     }
 }

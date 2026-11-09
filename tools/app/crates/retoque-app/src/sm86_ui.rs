@@ -5,6 +5,10 @@ use crate::autotune::{
     optimize::{self, Consent, Pending, Prerequisite},
     sm86,
 };
+use std::sync::{Arc, Mutex};
+
+type PendingRecs = (PathBuf, u64, Arc<Vec<autotune::recommend::Recommendation>>);
+static PENDING_RECS: Mutex<Option<PendingRecs>> = Mutex::new(None);
 
 impl RetoqueApp {
     pub(crate) fn sm86_dialog(&mut self, ctx: &egui::Context) {
@@ -80,7 +84,9 @@ impl RetoqueApp {
                         }
                     })?
                 };
-                Ok(Event::Sm86Downloaded(Ok((catalog.list()?, record))))
+                let mut items = catalog.list()?;
+                cache.prefer_latest(&mut items)?;
+                Ok(Event::Sm86Downloaded(Ok((items, record))))
             })();
             Outcome::Auto(Box::new(match result {
                 Ok(event) => event,
@@ -219,6 +225,14 @@ impl RetoqueApp {
     }
     pub(crate) fn optimize_automatically(&mut self) {
         let Some(target) = self.view.target.clone() else { return };
+        if self.view.intelligence.recommendations.is_empty()
+            && let Ok(mut guard) = PENDING_RECS.lock()
+            && let Some((saved_target, saved_gen, saved_recs)) = guard.take()
+            && saved_target == target
+            && saved_gen == self.tuning.facts_generation
+        {
+            self.view.intelligence.recommendations = saved_recs;
+        }
         let component = self.autotune_selected_component();
         let models = self
             .catalog
@@ -312,6 +326,13 @@ impl RetoqueApp {
         match composed {
             Err(e) => self.tuning.sm86.error = Some(self.tr(e).into()),
             Ok(c) if c.prerequisites.contains(&Prerequisite::NrModel) => {
+                if let Ok(mut guard) = PENDING_RECS.lock() {
+                    *guard = Some((
+                        target.clone(),
+                        self.tuning.facts_generation,
+                        self.view.intelligence.recommendations.clone(),
+                    ));
+                }
                 if !self.nr_fetch_prepare_for_optimize(target) {
                     self.tuning.sm86.error = Some(self.tr(Prerequisite::NrModel.unavailable_key()).into());
                 }
@@ -319,6 +340,13 @@ impl RetoqueApp {
             Ok(c) if c.prerequisites.contains(&Prerequisite::LsfgShaders) => {
                 // Shaders are prepared in app data first; the optimization resumes when they are ready
                 // (lsfg_ui::lsfg_event). Nothing is applied to the game before that single review.
+                if let Ok(mut guard) = PENDING_RECS.lock() {
+                    *guard = Some((
+                        target.clone(),
+                        self.tuning.facts_generation,
+                        self.view.intelligence.recommendations.clone(),
+                    ));
+                }
                 if self.lsfg_prepare_for_optimize(target) {
                     self.tuning.sm86.error = Some(self.tr("optimize.lsfg_preparing").into());
                 } else {
