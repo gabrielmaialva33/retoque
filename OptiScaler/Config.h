@@ -343,6 +343,10 @@ class Config
     // Session guard: after a session that ended without closing while NR ran, keep NR off for the next
     // launch (this session only, the ini is not rewritten) and say why. See dlssnr/DlssNr_Session.h.
     CustomOptional<bool> DlssNrSessionGuard { false };
+    // When another DLSS 5 neural producer is loaded in this process (a ReShade add-on such as renodx-dlss5),
+    // hand NR to it for this session instead of running a second neural pass over the same frame. See
+    // dlssnr/DlssNr_Consumers.h. False keeps ours running beside it (the frame gets two passes).
+    CustomOptional<bool> DlssNrYieldToAddons { true };
     // The keys a game needs before NR can run in it at all (HookMethod=2 for a D3D11 game with no upscaler, the
     // Vulkan present host for DOOM Eternal, ...), applied at start-up only where the user's ini leaves them unset,
     // and never written back. Also finds Proton's nvapi64.dll for a prefix Proton gave none. Only with NR on. See

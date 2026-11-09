@@ -4,7 +4,7 @@
     "const char* NgxResultName(unsigned int r)": "e8ccfdd5c24a7e7462dcc7f0421018d37700dce2a2774dd80fcafe4ff20f03e7",
     "void ProbeProxyDispatch(ID3D12GraphicsCommandList* cmdList)": "da61933e0c19fe29385632d65f73e41fcbe7fdfe973003c2c32906f9d79333cd",
     "bool EnsureDirectRuntime()": "d8293cf715069adc43deeea8b0d21407a34fa8e38b0c86deb959a8979493f52f",
-    "bool EnsureForwarder()": "e69535ce98a5e4fd2819827d1ad48a8ed2609053940037746afe4f8dae9d2905",
+    "bool EnsureForwarder()": "f838fba82435357262a40c2f26fb37972b5018fb5a1afba88e124040228f4647",
     "bool NoteModelFault()": "301fde34ac811679b98074fcc87728a678d64743ea3c1c5c4158c862b3bd88b4",
     "bool EnsureCapabilityParams(ID3D12Device* device)": "3fa06d54c6e43880a136f9cb97ddb6dbb821803d96f632270cb4b95ee7246d05",
     "void ReportScalingRatios()\n{": "8a6a69c414010ef8755fc6eae93af8f82d294e19289a34c081ef96636801f7e8",
@@ -16,6 +16,7 @@
   },
   "reviewed_changes": [
     "2026-10-30: ProbeProxyDispatch, EnsureCapabilityParams and ProbeD3D11 take the driver-init gate around their NGX create/init calls (retoque/dlssnr/DlssNr_DriverInitGate.h; tests/nr-driver-init-gate)",
-    "2026-10-30: EnsureDirectRuntime and EnsureForwarder also resolve the model's stats query (DirectRuntime::QueryStats / the optional dlssnr_query_stats and dlssnr_last_stats_result exports); nothing else in either changed, and an old forwarder without the export is still accepted (docs/dlssnr/design/model-vram-stats.md; tests/nr-model-stats)"
+    "2026-10-30: EnsureDirectRuntime and EnsureForwarder also resolve the model's stats query (DirectRuntime::QueryStats / the optional dlssnr_query_stats and dlssnr_last_stats_result exports); nothing else in either changed, and an old forwarder without the export is still accepted (docs/dlssnr/design/model-vram-stats.md; tests/nr-model-stats)",
+    "2026-11-09: EnsureForwarder hands NR to another neural producer in the process before loading anything of the model (DlssNr::Consumers::HandOverIfCompeting, [DlssNr] YieldToAddons; tests/nr-consumers); nothing else changed"
   ]
 }

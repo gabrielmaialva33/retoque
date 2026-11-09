@@ -470,6 +470,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrDx11SceneStage.set_from_config(readBool("DlssNr", "Dx11SceneStage"));
             DlssNrEnabled.set_from_config(readBool("DlssNr", "Enabled"));
             DlssNrSessionGuard.set_from_config(readBool("DlssNr", "SessionGuard"));
+            DlssNrYieldToAddons.set_from_config(readBool("DlssNr", "YieldToAddons"));
             DlssNrGameProfiles.set_from_config(readBool("DlssNr", "GameProfiles"));
             DlssNrShowAllSettings.set_from_config(readBool("DlssNr", "ShowAllSettings"));
             DlssNrDred.set_from_config(readBool("DlssNr", "Dred"));
@@ -1923,6 +1924,8 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->DlssNrDx11SceneStage.value_for_config()).c_str());
         ini.SetValue("DlssNr", "Enabled", GetBoolValue(Instance()->DlssNrEnabled.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SessionGuard", GetBoolValue(Instance()->DlssNrSessionGuard.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "YieldToAddons",
+                     GetBoolValue(Instance()->DlssNrYieldToAddons.value_for_config()).c_str());
         ini.SetValue("DlssNr", "GameProfiles", GetBoolValue(Instance()->DlssNrGameProfiles.value_for_config()).c_str());
         ini.SetValue("DlssNr", "ShowAllSettings",
                      GetBoolValue(Instance()->DlssNrShowAllSettings.value_for_config()).c_str());

@@ -994,6 +994,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_WorkingScale.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_SubmissionModel.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PassSettings.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_ConsumerMarkers.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Consumers.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ModelLog.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_GameProfiles.h" />

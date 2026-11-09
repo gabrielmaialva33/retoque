@@ -1,6 +1,8 @@
 #include "pch.h"
 
 #include "DlssNr_Consumers.h"
+#include "DlssNr_ConsumerMarkers.h"
+#include <Config.h>
 #include <Logger.h>
 #include <filesystem>
 #include <mutex>
@@ -11,34 +13,13 @@ namespace DlssNr::Consumers
 namespace
 {
 
-// A marker that appears in the module name of another neural consumer and in nothing else. Matched
-// case-insensitively against the base file name of every module in the process.
-//
-// Not a substring of "nvngx" anywhere: the driver core (_nvngx.dll), our own module under whatever
-// name it was installed as, and our forwarder (nvngx.dll_dlssnr.dll) all legitimately carry that,
-// and our dlss backend calling the core is exactly how the upscaler is supposed to work.
-struct Competitor
+struct Found
 {
-    const wchar_t* marker;
-    const char* project;
+    const Competitor* competitor = nullptr;
+    std::string module;
 };
 
-constexpr Competitor kCompetitors[] = {
-    { L"deep-fried-chicken", "Deep Fried Chicken" },
-    { L"renodx", "RenoDX (renodx-dlss / renodx-dlss5)" },
-    { L"dlss5-feed", "DLSS5-Feeder" },
-    { L"dlss5_feed", "DLSS5-Feeder" },
-};
-
-// Lowercase in place, ASCII only. The markers are ASCII and module names that matter here are too.
-void Fold(std::wstring& s)
-{
-    for (wchar_t& c : s)
-        if (c >= L'A' && c <= L'Z')
-            c = static_cast<wchar_t>(c - L'A' + L'a');
-}
-
-void Scan()
+Found Scan()
 {
     HMODULE modules[1024] {};
     DWORD needed = 0;
@@ -54,7 +35,7 @@ void Scan()
     if (enumModules == nullptr || !enumModules(GetCurrentProcess(), modules, sizeof(modules), &needed))
     {
         LOG_DEBUG("could not enumerate process modules; the competing-consumer check did not run");
-        return;
+        return {};
     }
 
     DWORD count = needed / sizeof(HMODULE);
@@ -70,33 +51,67 @@ void Scan()
             continue;
 
         const std::filesystem::path module = buffer;
-        std::wstring folded = module.filename().wstring();
-        Fold(folded);
 
-        for (const auto& competitor : kCompetitors)
-        {
-            if (folded.find(competitor.marker) == std::wstring::npos)
-                continue;
-
-            LOG_ERROR("another DLSS 5 neural consumer is in this process: {} (module {}). It reaches the "
-                      "model by detouring NVIDIA's core, and we ARE the module the process talks to, so "
-                      "our upscaler's call into the core fires its detour as well -- the frame gets TWO "
-                      "neural passes. Remove one of them: either that add-on, or set [DlssNr] "
-                      "Enabled=false here.",
-                      competitor.project, module.filename().string());
-            return;
-        }
+        if (const Competitor* competitor = MatchModuleName(module.filename().wstring()))
+            return { competitor, module.filename().string() };
     }
 
     LOG_DEBUG("no competing DLSS 5 neural consumer found in this process");
+    return {};
+}
+
+// Once per process. Producers are loaded by the time our model loader runs (DlssNr_Consumers.h), and
+// one that arrives later is still caught by WarnIfCompeting's own scan at forwarder load.
+const Found& Competing()
+{
+    static std::once_flag once;
+    static Found found;
+    std::call_once(once, [] { found = Scan(); });
+    return found;
 }
 
 } // namespace
 
+bool HandOverIfCompeting()
+{
+    const Found& found = Competing();
+
+    if (found.competitor == nullptr || !Config::Instance()->DlssNrYieldToAddons.value_or_default())
+        return false;
+
+    static std::once_flag said;
+    std::call_once(said,
+                   [&found]
+                   {
+                       LOG_INFO("DLSS-NR: Neural Rendering is handed to {} (module {}) for this session: ours stays "
+                                "off so the frame gets one neural pass, and that add-on runs over our upscaler's "
+                                "output. Set [DlssNr] YieldToAddons=false to run ours beside it (two passes).",
+                                found.competitor->project, found.module);
+                   });
+
+    // The toggle key's own mechanism: off for this session, the ini is not rewritten.
+    Config::Instance()->DlssNrEnabled.set_volatile_value(false);
+    return true;
+}
+
 void WarnIfCompeting()
 {
+    const Found& found = Competing();
+
+    if (found.competitor == nullptr)
+        return;
+
     static std::once_flag once;
-    std::call_once(once, Scan);
+    std::call_once(once,
+                   [&found]
+                   {
+                       LOG_ERROR("another DLSS 5 neural consumer is in this process: {} (module {}). It reaches "
+                                 "the model by detouring NVIDIA's core, and we ARE the module the process talks "
+                                 "to, so our upscaler's call into the core fires its detour as well -- the frame "
+                                 "gets TWO neural passes. Remove one of them: either that add-on, or set [DlssNr] "
+                                 "Enabled=false here (YieldToAddons=true does that for the session).",
+                                 found.competitor->project, found.module);
+                   });
 }
 
 } // namespace DlssNr::Consumers

@@ -302,6 +302,14 @@ tier = "host"
 timeout = 300
 summary = "Pass-settings codec and the four-point Config round trip for the master keys."
 
+[nr-consumers]
+path = "nr-consumers"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Neural-producer markers and the YieldToAddons hand-over before every model load."
+
 [nr-exposure-scan]
 path = "nr-exposure-scan"
 domain = "nr"
