@@ -28,7 +28,8 @@ Run Cargo from `tools/app` so `.cargo/config.toml` statically links the MinGW C+
 `--manifest-path` from another directory, also set `CXXSTDLIB_STATIC_x86_64_pc_windows_gnu=1`; the kit script does so.
 
 The payload, the files that go into a game folder, is found beside the executable in a release, under `x64/out` when
-the app runs from a checkout, in `RETOQUE_SOURCE_DIR`, or in the folder chosen in the window.
+the app runs from a checkout, in `RETOQUE_SOURCE_DIR`, in the folder chosen in the window, or downloaded after
+confirmation from our official GitHub releases (`gabrielmaialva33/retoque`).
 
 ## Rules the app keeps
 
@@ -155,3 +156,35 @@ GitHub metadata in `first-run-cache/sm86`, requiring a published SHA-256 digest.
 again and imports it after confirmation without downloading. `verify_sm86_cache` can exercise that import
 against an explicit scratch catalog. These archives/runtimes are never committed. See the additional
 [third-party notices](THIRD_PARTY_NOTICES.md); the full upstream package is not covered by its wrapper's MIT license.
+
+## Official Retoque payload releases (`gabrielmaialva33/retoque`)
+
+The bottom status bar (`Retoque files`) supports three payload sources:
+
+1. **Beside the app** (`OptiScaler.dll` and `nvngx.dll_dlssnr.dll` next to the executable, in `RETOQUE_SOURCE_DIR`, or in `x64/out` from a checkout)
+2. **A chosen folder** picked by the user
+3. **Our latest GitHub release** from `gabrielmaialva33/retoque` (`retoque_data::payload_fetch` and `retoque-app::payload_ui`)
+
+Release assets follow [docs/releases/PAYLOAD.md](../../docs/releases/PAYLOAD.md):
+`retoque-payload-<version>-x64.zip` (containing `OptiScaler.dll`, `nvngx.dll_dlssnr.dll`, release-configured
+`OptiScaler.ini`, `Licenses/`, `translations/` and optional `OptiScaler/`) plus `SHA256SUMS`. Build them locally
+from `x64/out` and the repository with:
+
+```bash
+bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/payload --version retoque-v0.3.0
+```
+
+The script checks the forwarder exports, verifies that `OptiScaler.dll` and `nvngx.dll_dlssnr.dll` have matching
+PE `VERSIONINFO` file versions, applies the release INI defaults (`LogToFile=true`, `LogLevel=2`, `ShortcutKey=0x24`,
+refusing any `Enabled=true`), enforces the forbidden-file guard (never NVIDIA models, `_nvngx.dll`, `dlssg_for_sm86`,
+Lossless Scaling or `.pdb`/`.lib`/`.exp`/`.ilk` files), writes the archive and `SHA256SUMS`, and prints the
+`gh release create` command it would run without executing it.
+
+In the app, checking for updates or downloading a release requires explicit confirmation. Network requests use
+synchronous `ureq` + `rustls` limited to `api.github.com/repos/gabrielmaialva33/retoque/releases`, that
+repository's release download URLs, and GitHub's release asset CDNs (`release-assets.githubusercontent.com`,
+`objects.githubusercontent.com`). The archive is verified against both `SHA256SUMS` and the GitHub asset SHA-256
+digest, and only allowlisted paths are unpacked into app data (`payload-releases/<version>/payload`). When no
+release has been published on GitHub yet, the app states so plainly and keeps the beside-app and chosen-folder
+sources. When a newer payload is active, “Check for updates” compares versions and offers updating installed
+games through the normal reviewed install `Plan`.

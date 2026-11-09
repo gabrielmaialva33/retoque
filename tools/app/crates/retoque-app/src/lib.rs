@@ -40,3 +40,4 @@ mod intuitive_tests;
 pub(crate) mod watcher;
 
 pub(crate) mod lsfg_ui;
+pub(crate) mod payload_ui;

@@ -1454,6 +1454,125 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("watch.refresh", "Refresh selected game", "Atualizar jogo selecionado"),
     ("log.diagnoses", "Log diagnosis", "Diagnóstico do log"),
+    // Payload release fetch (app-payload-fetch): append-only translation keys.
+    (
+        "payload.source.beside",
+        "Use files beside app",
+        "Usar arquivos ao lado do app",
+    ),
+    ("payload.source.folder", "Use chosen folder", "Usar pasta escolhida"),
+    (
+        "payload.source.release",
+        "Use downloaded release",
+        "Usar versão baixada",
+    ),
+    ("payload.download", "Get release…", "Baixar versão…"),
+    ("payload.download_now", "Download update…", "Baixar atualização…"),
+    ("payload.check", "Check for updates…", "Verificar atualizações…"),
+    (
+        "payload.consent_title",
+        "Official Retoque release",
+        "Versão oficial do Retoque",
+    ),
+    (
+        "payload.check_consent",
+        "Query GitHub Releases (gabrielmaialva33/retoque) to check for a newer Retoque payload?",
+        "Consultar o GitHub Releases (gabrielmaialva33/retoque) para verificar se há uma versão mais nova do Retoque?",
+    ),
+    (
+        "payload.download_consent",
+        "Download and verify the latest Retoque payload (OptiScaler.dll, forwarder and INI) from gabrielmaialva33/retoque into app data? Game folders are not modified until you review an installation.",
+        "Baixar e verificar o pacote mais recente do Retoque (OptiScaler.dll, forwarder e INI) de gabrielmaialva33/retoque na pasta de dados do app? Nenhum jogo será alterado antes da revisão da instalação.",
+    ),
+    (
+        "payload.hosts_note",
+        "Allowed HTTPS hosts: api.github.com, github.com/gabrielmaialva33/retoque and release-assets.githubusercontent.com. Verified with SHA256SUMS and the GitHub SHA-256 digest.",
+        "Hosts HTTPS permitidos: api.github.com, github.com/gabrielmaialva33/retoque e release-assets.githubusercontent.com. Verificado com SHA256SUMS e digest SHA-256 do GitHub.",
+    ),
+    ("payload.confirm", "Continue", "Continuar"),
+    ("payload.later", "Not now", "Agora não"),
+    (
+        "payload.progress",
+        "Downloading Retoque payload…",
+        "Baixando arquivos do Retoque…",
+    ),
+    (
+        "payload.no_release",
+        "No official release is published on GitHub yet; keeping local folder or files beside the app.",
+        "Ainda não há versão oficial publicada no GitHub; mantendo a pasta escolhida ou os arquivos ao lado do app.",
+    ),
+    ("payload.new_release", "New release available", "Nova versão disponível"),
+    ("payload.up_to_date", "Release up to date", "Versão atualizada"),
+    (
+        "payload.update_game",
+        "Review game update…",
+        "Revisar atualização do jogo…",
+    ),
+    (
+        "payload.error.0",
+        "payload SHA-256 does not match GitHub asset digest",
+        "O SHA-256 do pacote não corresponde ao digest publicado pelo GitHub.",
+    ),
+    (
+        "payload.error.1",
+        "payload SHA-256 does not match SHA256SUMS",
+        "O SHA-256 do pacote não corresponde ao arquivo SHA256SUMS.",
+    ),
+    (
+        "payload.error.2",
+        "SHA256SUMS digest mismatch",
+        "O SHA-256 do arquivo SHA256SUMS não corresponde ao digest publicado.",
+    ),
+    (
+        "payload.error.3",
+        "SHA256SUMS does not list payload archive",
+        "O arquivo SHA256SUMS não contém o pacote de payload.",
+    ),
+    (
+        "payload.error.4",
+        "forbidden file in payload archive",
+        "Arquivo proibido encontrado no pacote de payload.",
+    ),
+    (
+        "payload.error.5",
+        "unexpected extra file in payload archive",
+        "Arquivo extra não permitido encontrado no pacote de payload.",
+    ),
+    (
+        "payload.error.6",
+        "OptiScaler.dll and nvngx.dll_dlssnr.dll file versions do not match",
+        "As versões de arquivo do OptiScaler.dll e do nvngx.dll_dlssnr.dll não coincidem.",
+    ),
+    (
+        "payload.error.7",
+        "incomplete payload release archive",
+        "Faltam arquivos obrigatórios no pacote de payload.",
+    ),
+    (
+        "payload.error.8",
+        "invalid official payload release metadata",
+        "Os metadados da release oficial do Retoque são inválidos.",
+    ),
+    (
+        "payload.error.9",
+        "payload HTTPS request failed",
+        "A requisição HTTPS da release do Retoque falhou.",
+    ),
+    (
+        "payload.error.10",
+        "non-official payload URL",
+        "URL fora do repositório oficial do Retoque.",
+    ),
+    (
+        "payload.error.11",
+        "refused payload release redirect",
+        "Redirecionamento da release do Retoque recusado.",
+    ),
+    (
+        "payload.error.12",
+        "payload release changed since first download",
+        "O pacote desta versão mudou após o primeiro download.",
+    ),
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {
@@ -1502,7 +1621,7 @@ mod tests {
 pub fn diagnostic(lang: Lang, message: &str) -> String {
     if let Some((key, _, _)) = TEXT
         .iter()
-        .find(|(key, en, _)| key.starts_with("sm86.error.") && *en == message)
+        .find(|(key, en, _)| (key.starts_with("sm86.error.") || key.starts_with("payload.error.")) && *en == message)
     {
         return t(lang, key).into();
     }

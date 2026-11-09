@@ -78,20 +78,9 @@ impl RetoqueApp {
                 }
                 return;
             }
-            ui.label(RichText::new(self.tr("app.payload")).small().color(theme::MUTED));
-            match &self.payload {
-                Some(p) => {
-                    ui.label(RichText::new(short_path(p)).small().monospace().color(theme::MUTED))
-                        .on_hover_text(p.display().to_string());
-                }
-                None => {
-                    ui.colored_label(theme::WARN, RichText::new(self.tr("app.payload.none")).small());
-                }
-            }
-            if ui.small_button(self.tr("app.payload.choose")).clicked() {
-                self.cmd_tx.send(AppCommand::Remedy(Remedy::ChoosePayloadDir, None));
-            }
+            self.payload_bar(ui);
         });
+        self.payload_dialog(ui.ctx());
     }
 
     pub(crate) fn library(&mut self, ui: &mut egui::Ui) {
