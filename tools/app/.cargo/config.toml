@@ -1,0 +1,3 @@
+# SPIRV-Cross is C++. Keep the Windows kit independent of a MinGW runtime install.
+[env]
+CXXSTDLIB_STATIC_x86_64_pc_windows_gnu = "1"

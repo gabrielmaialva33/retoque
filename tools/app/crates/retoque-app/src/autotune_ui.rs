@@ -4,7 +4,6 @@ use crate::autotune::{
     self, ComponentChange, Event, Request,
     components::ComponentKind,
     gpu::Arch,
-    lsfg::LsfgReadiness,
     recommend::{self, Action, GameFacts, Need},
 };
 
@@ -139,48 +138,8 @@ impl RetoqueApp {
             ..GameFacts::default()
         }
     }
-    fn autotune_ready(&self) -> bool {
-        matches!(self.tuning.readiness, Some(LsfgReadiness::Ready))
-    }
-    fn autotune_known_components(&self) -> bool {
+    pub(crate) fn autotune_known_components(&self) -> bool {
         matches!(self.tuning.installed, Some(Ok(_)))
-    }
-    fn autotune_choose_lossless(&mut self) {
-        if let Some(path) = rfd::FileDialog::new().pick_folder() {
-            self.saved.lossless_dir = Some(path);
-            if let Some(target) = self.view.target.clone() {
-                self.autotune_refresh(target);
-            }
-        }
-    }
-    fn autotune_readiness(&mut self, ui: &mut egui::Ui) {
-        match &self.tuning.readiness {
-            Some(LsfgReadiness::Ready) => {
-                ui.colored_label(theme::GOOD, self.tr("auto.ls_ready"));
-            }
-            Some(LsfgReadiness::NeedsShaderCache { hint }) => {
-                ui.colored_label(theme::WARN, self.tr("auto.ls_shaders"));
-                if hint.starts_with("From the Retoque source checkout, run:") {
-                    ui.add(egui::Label::new(self.tr("auto.shader_hint")).wrap());
-                } else {
-                    ui.add(egui::Label::new(diagnostic(self.lang, hint)).wrap());
-                }
-            }
-            Some(LsfgReadiness::NoLosslessScaling) => {
-                ui.colored_label(theme::WARN, self.tr("auto.ls_missing"));
-            }
-            None => {
-                ui.spinner();
-                ui.add(egui::Label::new(self.tr("auto.ls_checking")).wrap());
-            }
-        }
-        if let Some(dir) = &self.tuning.lossless {
-            ui.label(RichText::new(short_path(dir)).small())
-                .on_hover_text(dir.display().to_string());
-        }
-        if ui.button(self.tr("auto.choose_lossless")).clicked() {
-            self.autotune_choose_lossless();
-        }
     }
     pub(crate) fn autotune_card(&mut self, ui: &mut egui::Ui) {
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
@@ -264,66 +223,8 @@ impl RetoqueApp {
             }
         });
     }
-    fn autotune_lsfg_edits(&self, multiplier: u8, facts: &GameFacts) -> Vec<Edit> {
-        let wine = matches!(
-            self.selected_game().map(|g| &g.runtime),
-            Some(Runtime::Wine { .. } | Runtime::Proton { .. })
-        );
-        let mut edits = recommend::lsfg_edits(multiplier, self.tuning.lossless.as_deref(), wine);
-        edits.extend(recommend::lsfg_input_edits(facts));
-        edits
-    }
     pub(crate) fn autotune_lsfg(&mut self, ui: &mut egui::Ui) {
-        // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
-        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
-        ui.add_space(12.0);
-        widgets::card(ui, |ui| {
-            let facts = self.view.intelligence.facts.clone();
-            widgets::card_title(ui, self.tr("auto.lsfg"));
-            ui.add(egui::Label::new(self.tr("auto.ls_help")).wrap());
-            let ini = self
-                .view
-                .ini
-                .as_ref()
-                .and_then(|r| r.as_ref().ok())
-                .and_then(|i| i.as_ref());
-            let current = if facts.lsfg_enabled == Some(true) {
-                ini.and_then(|i| i.get("LSFG", "Multiplier"))
-                    .and_then(|s| s.parse::<u8>().ok())
-                    .unwrap_or(2)
-            } else {
-                0
-            };
-            let can_on = self.autotune_ready() && self.autotune_known_components() && !facts.sm86_installed;
-            ui.horizontal_wrapped(|ui| {
-                for (value, key) in [(0, "auto.off"), (2, "auto.x2"), (3, "auto.x3"), (4, "auto.x4")] {
-                    if ui
-                        .add_enabled(
-                            facts.installed && !self.busy() && (value == 0 || can_on),
-                            egui::Button::new(self.tr(key)).selected(current == value),
-                        )
-                        .clicked()
-                    {
-                        let edits = if value == 0 {
-                            recommend::lsfg_off_edits()
-                        } else {
-                            self.autotune_lsfg_edits(value, &facts)
-                        };
-                        self.autotune_request(
-                            format!("{} · {}", self.tr("auto.lsfg"), self.tr(key)),
-                            Request { component: None, edits },
-                        );
-                    }
-                }
-            });
-            if !facts.installed {
-                ui.add(egui::Label::new(self.tr("auto.need_install")).wrap());
-            }
-            if facts.sm86_installed {
-                ui.colored_label(theme::WARN, self.tr("auto.ls_conflict"));
-            }
-            self.autotune_readiness(ui);
-        });
+        self.lsfg_card(ui);
     }
     fn autotune_selected_component(&self) -> Option<autotune::components::Component> {
         let items = self.tuning.catalog.as_ref()?.as_ref().ok()?;

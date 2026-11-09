@@ -24,6 +24,7 @@ pub enum PlanKind {
 }
 
 pub enum Outcome {
+    Lsfg(crate::lsfg_ui::Event),
     HistoryWritten(Result<(), AppError>),
     DropClassified {
         request: u64,

@@ -24,6 +24,8 @@ cargo test --workspace
 
 The Windows build needs `rustup target add x86_64-pc-windows-gnu` and mingw-w64. Run cargo inside a memory-capped
 scope on the workstation (see the repository's CLAUDE.md).
+Run Cargo from `tools/app` so `.cargo/config.toml` statically links the MinGW C++ runtime. If invoking Cargo with
+`--manifest-path` from another directory, also set `CXXSTDLIB_STATIC_x86_64_pc_windows_gnu=1`; the kit script does so.
 
 The payload, the files that go into a game folder, is found beside the executable in a release, under `x64/out` when
 the app runs from a checkout, in `RETOQUE_SOURCE_DIR`, or in the folder chosen in the window.
@@ -84,3 +86,41 @@ coverage. Therefore Proton/Wine suggestions are experimental, and a last-session
 sm86 proposal. The verified confidence tier is reserved for feature-specific runtime proof: API detection or NR
 initialization never upgrades a frame-generation proposal. UI consumers can translate the new keys through
 `retoque_data::messages::text`; existing recommendation title/why keys remain unchanged.
+
+## Automatic Lossless Scaling shader preparation
+
+The LSFG card finds the user's `lsfg-vk.dll` and prepares all 99 shaders on the heavy worker lane. It uses a bounded
+PE resource reader, statically linked SPIRV-Cross (`spirv-cross2` 0.7.2), and dynamically loaded Microsoft DXC
+v1.8.2505.1. There is no Python, Wine, command-line compiler, or system DXC dependency. SM 6.0, `main`, `-O3`, and
+the binding-to-register-space remap match `tools/lsfg-study/convert.py`; this does not enable native FP16.
+
+DXC libraries are looked up beside the app executable, then in the app data folder under `dxc/v1.8.2505.1`.
+If missing, the UI asks before downloading the pinned official Microsoft GitHub release over HTTPS. The only
+redirect destination permitted is GitHub's release asset CDN (`release-assets.githubusercontent.com`). The download
+has a 64 MiB cap, a timeout and a compiled-in SHA-256; archive extraction only accepts the needed library and
+license filenames. The app performs no other network operation. Tests use injected fetchers and never download.
+
+App data is `$XDG_DATA_HOME/retoque` or `$HOME/.local/share/retoque` on Linux, `%LOCALAPPDATA%/Retoque` on Windows.
+Completed shaders live in `lsfg-cache/<sha256-of-user-dll>/0.cso` through `98.cso`. Publication uses a temporary
+sibling directory followed by rename; a manifest verifies the pipeline version and each shader's SHA-256 before
+reuse. Cancel is checked between shaders and download chunks; an active DXC call completes before cancellation.
+The source folder and all game folders are untouched during preparation. Enabling LSFG proposes `[LSFG] ShaderDir`
+to that cache through the existing settings review, with `Z:\...` mapping under Wine/Proton. Cache readiness is
+not GPU, image-quality or Windows runtime qualification.
+
+The library entry point is `retoque_data::lsfg::ensure_lsfg_shaders` (or `lsfg_prepare::ensure_lsfg_shaders`), with
+explicit source, data and executable directories, download consent, a cancellation flag and progress callback.
+`lsfg_prepare::prepared_cache` verifies the app cache; `lsfg::lsfg_preparation_readiness` returns `Ready` for it. Existing `lsfg_readiness_for_game` continues to inspect the
+actual game configuration, so a prepared but unconfigured app cache does not hide a game's invalid ShaderDir.
+`lsfg_prepare::shader_dir_edit` returns the settings proposal for callers such as one-click optimization.
+
+Windows kit builds run `bash tools/app/scripts/fetch-dxc.sh <kit-directory>` to download and verify the pinned
+Windows package, stage `dxcompiler.dll` and `dxil.dll` beside the app, and include its license files. This is a
+build-time download only, not a game payload. The workstation's `build-kit.sh` invokes this helper. Never put
+Lossless Scaling DLLs, SPIR-V or generated `.cso` files into a distribution or Git.
+
+Offline parity/diagnostic runner (all paths are supplied explicitly):
+
+```bash
+cargo run -p retoque-data --example prepare_lsfg -- '<Lossless Scaling folder>' '<app data folder>' '<DXC library folder>'
+```

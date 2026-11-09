@@ -15,3 +15,5 @@ pub mod model_compat;
 
 pub mod doctor;
 pub mod messages;
+
+pub mod lsfg_prepare;

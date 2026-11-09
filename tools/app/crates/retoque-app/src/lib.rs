@@ -38,3 +38,5 @@ pub(crate) mod intuitive;
 #[cfg(test)]
 mod intuitive_tests;
 pub(crate) mod watcher;
+
+pub(crate) mod lsfg_ui;

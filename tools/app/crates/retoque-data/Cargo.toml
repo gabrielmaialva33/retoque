@@ -15,6 +15,13 @@ serde_json = "1"
 tempfile = "3"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
+spirv-cross2 = { version = "=0.7.2", default-features = false, features = ["hlsl"] }
+spirv-cross-sys = { version = "=0.7.4", default-features = false }
+libloading = "0.8"
+regex = "1"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+flate2 = "1"
+tar = "0.4"
 
 retoque-discovery.workspace = true
 
