@@ -155,3 +155,19 @@ inspects local releases without importing/copying a catalog; dry runs write noth
 complete plan before its first write. `games` reports per-target status, recommendations and errors; unreadable
 state suppresses recommendations for that target. It uses the first detected GPU; this is not per-game adapter
 selection or proof that a recommended runtime works on that GPU.
+
+## DLSS swaps and two receipts
+
+`plan_dlss_update(install_dir, target, catalog, files)` accepts only existing SR/RR/FG names at safe relative paths.
+It backs up unowned originals, preserves the first backup on subsequent updates, refuses changed owned DLLs and
+uses the ordinary sealed File/Backup/journal engine. The data layer separately pins NVIDIA hashes and versions.
+Sources, all destination parents and case ambiguities are checked before planning. Whole-install running checks
+are retained in the plan and repeated at mutation boundaries, including when the receipt is in a nested target.
+
+When a DLL lies outside the target, a standalone v1 receipt lives at the known installation root, never above it.
+Its owned `.retoque/dlss.txt` identity prevents treating an unrelated root installation as a DLSS receipt.
+`plan_game_restore` reviews the root before the target; changed DLLs keep the root identity for later recovery.
+Existing Bash/PowerShell readers need no syntax changes, but must be invoked at each receipt root separately.
+`combine_install_plans` merges only same-root disjoint installs before review, retaining source observations;
+`validate_plan` provides a read-only preflight for all plans before a compound apply. Multi-root applies are not
+atomic: interruption can leave the root completed and the target pending; replan restoration to finish.

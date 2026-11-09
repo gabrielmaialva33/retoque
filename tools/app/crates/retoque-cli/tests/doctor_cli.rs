@@ -127,3 +127,66 @@ fn orphan_pending_journal_is_a_finding_and_remains_untouched() {
     assert_eq!(fs::read(&path).unwrap(), b"malformed pending journal");
     assert!(!fixture.0.join(".retoque/receipt.txt").exists());
 }
+
+#[test]
+fn doctor_reports_outdated_dlss_with_review_proposal_in_both_languages() {
+    fn put16(b: &mut [u8], at: usize, n: u16) {
+        b[at..at + 2].copy_from_slice(&n.to_le_bytes());
+    }
+    fn put32(b: &mut [u8], at: usize, n: u32) {
+        b[at..at + 4].copy_from_slice(&n.to_le_bytes());
+    }
+    let fixture = Fixture::new();
+    let mut bytes = vec![0u8; 1024];
+    bytes[..2].copy_from_slice(b"MZ");
+    put32(&mut bytes, 60, 64);
+    bytes[64..68].copy_from_slice(b"PE\0\0");
+    put16(&mut bytes, 70, 1);
+    put16(&mut bytes, 84, 240);
+    put16(&mut bytes, 88, 0x20b);
+    put32(&mut bytes, 196, 16);
+    put32(&mut bytes, 216, 0x1000);
+    put32(&mut bytes, 220, 256);
+    put32(&mut bytes, 340, 0x1000);
+    put32(&mut bytes, 344, 256);
+    put32(&mut bytes, 348, 512);
+    let r = &mut bytes[512..];
+    for (at, id, to) in [(0, 16, 0x80000020), (32, 1, 0x80000040), (64, 1033, 96)] {
+        put16(r, at + 14, 1);
+        put32(r, at + 16, id);
+        put32(r, at + 20, to);
+    }
+    put32(r, 96, 0x1080);
+    put32(r, 100, 92);
+    put16(r, 128, 92);
+    put16(r, 130, 52);
+    for (i, c) in "VS_VERSION_INFO\0".encode_utf16().enumerate() {
+        put16(r, 134 + i * 2, c);
+    }
+    put32(r, 168, 0xfeef04bd);
+    put32(r, 172, 0x10000);
+    put32(r, 176, 310 << 16 | 1);
+    put32(r, 180, 0);
+    let directory = fixture.0.join("Engine/Plugins/DLSS");
+    fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("nvngx_dlss.dll");
+    fs::write(&path, &bytes).unwrap();
+    let output = fixture.run(true, "en");
+    assert_eq!(output.status.code(), Some(6));
+    let findings: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        findings
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["id"] == "dlss_outdated" && f["severity"] == "Info" && f["repair"] == "UpdateDlss")
+    );
+    for (lang, phrase) in [
+        ("en", "A newer DLSS is available"),
+        ("pt", "Uma versão mais nova do DLSS está disponível"),
+    ] {
+        assert!(String::from_utf8_lossy(&fixture.run(false, lang).stdout).contains(phrase));
+    }
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert!(!fixture.0.join(".retoque").exists());
+}

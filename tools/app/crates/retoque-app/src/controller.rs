@@ -80,7 +80,10 @@ impl RetoqueApp {
     }
 
     pub(crate) fn busy(&self) -> bool {
-        self.view.target.as_ref().is_some_and(|t| self.writing.contains_key(t))
+        self.view
+            .target
+            .as_ref()
+            .is_some_and(|t| self.writing.keys().any(|p| t.starts_with(p) || p.starts_with(t)))
     }
 
     pub(crate) fn install_inputs(&self) -> Option<InstallOptions> {
@@ -99,6 +102,10 @@ impl RetoqueApp {
 
     pub(crate) fn start_plan(&mut self, kind: PlanKind, inputs: PlanInputs) {
         let Some(target) = self.view.target.clone() else { return };
+        if kind == PlanKind::Uninstall && self.selected_game().is_some_and(|g| g.install_dir != target) {
+            self.dlss_restore();
+            return;
+        }
         self.review_open = true;
         self.origin_focus = self.context.memory(|m| m.focused());
         self.next_request += 1;
@@ -215,6 +222,7 @@ impl RetoqueApp {
                         self.lsfg_recheck();
                     }
                 }
+                Outcome::Dlss(event) => self.dlss_event(event),
                 Outcome::Lsfg(event) => self.lsfg_event(event),
                 Outcome::Discovered { games, skipped, art } => {
                     if self.rescan_pending {
@@ -314,6 +322,11 @@ impl RetoqueApp {
                     self.finish_compound_history(&target, result.is_ok());
                     // The folder is free again whether or not the user is still looking at it.
                     self.jobs.end_write(&target);
+                    if let Some(roots) = self.tuning.write_roots.remove(&target) {
+                        for root in roots {
+                            self.writing.remove(&root);
+                        }
+                    }
                     self.writing.remove(&target);
                     self.write_kinds.remove(&target);
                     let game_name = self
@@ -398,6 +411,9 @@ impl RetoqueApp {
                 Outcome::Failed { job, target, message } => {
                     self.toast(self.tr("shell.failed").into(), Some(message.clone().into()), true);
                     self.error = Some(format!("{} ({job}): {message}", self.tr("job.failed")).into());
+                    if job == "dlss-download" {
+                        self.tuning.dlss.download_failed();
+                    }
                     if job == "autotune-plan" {
                         self.review = Some(Err(message.clone().into()));
                     }
@@ -417,6 +433,11 @@ impl RetoqueApp {
                         self.finish_compound_history(&t, false);
                         self.tuning.writes.remove(&t);
                         self.jobs.end_write(&t);
+                        if let Some(roots) = self.tuning.write_roots.remove(&t) {
+                            for root in roots {
+                                self.writing.remove(&root);
+                            }
+                        }
                         self.writing.remove(&t);
                         self.write_kinds.remove(&t);
                         if ours(&t) {
@@ -662,7 +683,7 @@ impl RetoqueApp {
                 self.capture_compound_history(&target, &review.plans);
                 self.autotune_apply(crate::autotune::Prepared {
                     target,
-                    request,
+                    request: *request,
                     plans: review.plans,
                     groups: review.groups,
                 });
@@ -695,6 +716,11 @@ impl RetoqueApp {
                     Some(Ok(review)) => {
                         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
                         let label = self.tr(match review.kind {
+                            ReviewKind::Autotune(ref r)
+                                if matches!(r.dlss, Some(crate::dlss_ui::Change::Restore { .. })) =>
+                            {
+                                "inst.uninstall"
+                            }
                             ReviewKind::Autotune(_) => "auto.confirm",
                             ReviewKind::Standard(PlanKind::Install) if installed => "inst.update",
                             ReviewKind::Standard(PlanKind::Install) => "inst.install",
@@ -797,7 +823,7 @@ impl RetoqueApp {
                 if let Some(Ok(review)) = self.review.clone()
                     && let ReviewKind::Autotune(request) = review.kind
                 {
-                    self.autotune_request(review.title, request);
+                    self.autotune_request(review.title, *request);
                 } else if let Some(inputs) = self.view.inputs.clone() {
                     let kind = match &inputs {
                         PlanInputs::Install(_) => PlanKind::Install,

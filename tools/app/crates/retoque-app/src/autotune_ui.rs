@@ -75,7 +75,7 @@ impl RetoqueApp {
             } if self.view.target.as_ref() == Some(&target) && request == self.tuning.request => {
                 self.review = Some(result.map(|p| ReviewSession {
                     title: self.tuning.review_title.clone(),
-                    kind: ReviewKind::Autotune(p.request),
+                    kind: ReviewKind::Autotune(Box::new(p.request)),
                     plans: p.plans,
                     groups: p.groups,
                     request_id: request,
@@ -278,6 +278,7 @@ impl RetoqueApp {
         selected.is_some()
     }
     pub(crate) fn autotune_components(&mut self, ui: &mut egui::Ui) {
+        self.dlss_card(ui);
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
         ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         widgets::card(ui, |ui| {
@@ -324,6 +325,7 @@ impl RetoqueApp {
                                     self.autotune_request(
                                         self.tr("auto.component_install").into(),
                                         Request {
+                                            dlss: None,
                                             component: Some(ComponentChange::Install(c.clone())),
                                             edits: recommend::lsfg_off_edits(),
                                         },
@@ -359,6 +361,7 @@ impl RetoqueApp {
                                 self.autotune_request(
                                     self.tr("auto.component_remove").into(),
                                     Request {
+                                        dlss: None,
                                         component: Some(ComponentChange::Remove(id)),
                                         edits: vec![],
                                     },
@@ -399,14 +402,36 @@ impl RetoqueApp {
     }
     pub(crate) fn autotune_apply(&mut self, p: autotune::Prepared) {
         let target = p.target.clone();
-        if self.writing.contains_key(&target) || self.view.target.as_ref() != Some(&target) {
+        let mut roots = p.plans.iter().map(|p| p.game_dir().to_owned()).collect::<Vec<_>>();
+        if let Some(change) = &p.request.dlss {
+            roots.push(match change {
+                crate::dlss_ui::Change::Update(u) => u.install_dir.clone(),
+                crate::dlss_ui::Change::Restore { install_dir } => install_dir.clone(),
+            });
+        }
+        roots.sort();
+        roots.dedup();
+        if roots
+            .iter()
+            .any(|root| self.writing.keys().any(|p| p.starts_with(root) || root.starts_with(p)))
+            || self.view.target.as_ref() != Some(&target)
+        {
             return;
         }
+        let kind = if matches!(p.request.dlss, Some(crate::dlss_ui::Change::Restore { .. })) {
+            PlanKind::Uninstall
+        } else {
+            PlanKind::Settings
+        };
         let total = p.plans.iter().map(|p| p.steps().len()).sum();
         self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, total));
-        self.write_kinds.insert(target.clone(), PlanKind::Settings);
+        self.write_kinds.insert(target.clone(), kind);
         self.tuning.writes.insert(target.clone());
+        for root in &roots {
+            self.writing.insert(root.clone(), (0, total));
+        }
+        self.tuning.write_roots.insert(target.clone(), roots);
         self.review_open = false;
         self.restore_focus();
         let ctx = self.context.clone();
@@ -429,7 +454,7 @@ impl RetoqueApp {
             });
             Outcome::Applied {
                 target,
-                kind: PlanKind::Settings,
+                kind,
                 edits: p.request.edits,
                 result,
             }

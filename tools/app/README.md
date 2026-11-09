@@ -155,3 +155,34 @@ GitHub metadata in `first-run-cache/sm86`, requiring a published SHA-256 digest.
 again and imports it after confirmation without downloading. `verify_sm86_cache` can exercise that import
 against an explicit scratch catalog. These archives/runtimes are never committed. See the additional
 [third-party notices](THIRD_PARTY_NOTICES.md); the full upstream package is not covered by its wrapper's MIT license.
+
+## Per-game NVIDIA DLSS updates
+
+The DLSS card downloads NVIDIA DLSS **310.9.16** SR/RR/FG directly from the official `NVIDIA/DLSS` tag after
+confirmation. Only a compiled pin table can introduce another version. SHA-256 and exact sizes are enforced for
+each DLL and `LICENSE.txt`; legal text, version, source URL and hashes remain in `dlss/310.9.16` under app data.
+These tag files are ordinary Git blobs, not LFS pointers. Redirects are restricted to approved GitHub raw/LFS/asset
+hosts, HTTPS only. No binaries are bundled or redistributed by Retoque. NVIDIA's separate license applies.
+
+The card reads bounded PE VERSIONINFO resources and shows each discovered path/version. Unknown PE versions stay
+unknown. The additive `retoque_discovery::find_dlss_paths` returns all copies under the known game installation,
+excluding links, reparse points and loader/catalog directories. Exhausted scan budgets fail closed. The updater
+replaces only SR/RR/FG kinds already present, including Unreal plugin paths; newer/equal known versions are skipped.
+It never adds a missing frame-generation DLL. “Optimize automatically” includes this only with its optional checkbox
+selected (off by default); obtain the catalog first. Doctor reports known older versions as informational findings.
+
+Every game change uses a sealed reviewed plan with regular v1 File/Backup records and the existing pending journal.
+If all DLLs being replaced descend from the executable target, its ordinary receipt is reused. Otherwise the
+known `install_dir` holds a separate `.retoque/receipt.txt`, with an owned `.retoque/dlss.txt` identity marker.
+An unrelated root receipt is refused. Changing receipt roots requires restoring the previous layout first.
+Running-game checks cover the whole install root and target, during planning and before each mutation.
+
+The app's uninstall review restores the root receipt before the executable receipt. Partial operations are visible
+in Doctor and can be reviewed again. **Legacy Bash/PowerShell uninstallers restore each v1 receipt only when invoked
+at that receipt's directory**; uninstalling only the executable folder does not restore a separate root receipt.
+A legacy partial uninstall may remove the root identity marker; preserve its receipt/backups and finish that same
+legacy uninstall at the root. The app refuses to guess ownership when the marker has been lost or changed.
+Concurrent external filesystem races retain the engine limitations documented in the core README.
+Anti-cheat/game compatibility is not inferred from successful download or installation; the UI shows a generic
+compatibility caution because discovery has no anti-cheat flag. Tests use synthetic files and injected transports,
+never real games or network requests, and do not qualify native Windows, Proton, GPU behavior or image quality.

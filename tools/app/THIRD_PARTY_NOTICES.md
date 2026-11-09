@@ -80,3 +80,12 @@ licenses of these Rust dependencies. No async runtime, telemetry, or native-TLS 
 Sources and license texts are included in the corresponding crates' source packages:
 <https://crates.io/crates/ureq/3.4.2>, <https://github.com/rustls/rustls>,
 <https://github.com/rustls/webpki-roots>, <https://github.com/briansmith/ring>.
+
+### NVIDIA DLSS catalog (external download only)
+
+Source: https://github.com/NVIDIA/DLSS/tree/v310.9.16 . NVIDIA RTX SDKs license:
+https://github.com/NVIDIA/DLSS/blob/v310.9.16/LICENSE.txt . SR/RR/FG DLLs are not bundled or hosted by Retoque.
+The app obtains them directly from NVIDIA after confirmation, pins their hashes and preserves the complete license
+in the user's catalog. Distribution as a standalone SDK is restricted; application distribution has additional
+conditions, and the supplement specifies NVIDIA GPU interoperability and notification before commercial release.
+These files are not relicensed under Retoque's GPL license. This note records upstream terms, not a legal opinion.

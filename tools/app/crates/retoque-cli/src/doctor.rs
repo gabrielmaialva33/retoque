@@ -122,7 +122,10 @@ pub fn run(game: &Path, json: bool) -> Result<(), Error> {
         Runtime::Unknown
     };
     inputs.pending_journal = pending;
-    let findings = doctor::diagnose(&inputs);
+    let mut findings = doctor::diagnose(&inputs);
+    // A CLI folder has no discovered parent installation; inspect only that explicit root.
+    let dlss = retoque_data::dlss::inspect(game).map_err(io_error)?;
+    findings.extend(doctor::diagnose_dlss(&dlss, false));
     show(&findings, json)
 }
 fn show(findings: &[doctor::Finding], json: bool) -> Result<(), Error> {
@@ -147,6 +150,7 @@ fn show(findings: &[doctor::Finding], json: bool) -> Result<(), Error> {
                 "[{}] {}: {}",
                 messages::text(
                     match finding.severity {
+                        doctor::Severity::Info => "severity.info",
                         doctor::Severity::Warning => "severity.warning",
                         doctor::Severity::Error => "severity.error",
                     },

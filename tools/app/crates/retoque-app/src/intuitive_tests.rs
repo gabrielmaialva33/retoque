@@ -450,6 +450,7 @@ fn compound_settings_review_records_history_only_after_success() {
         let prepared = crate::autotune::prepare(
             &target,
             crate::autotune::Request {
+                dlss: None,
                 component: None,
                 edits: vec![("DlssNr".into(), "Stage".into(), "1".into())],
             },
@@ -461,7 +462,7 @@ fn compound_settings_review_records_history_only_after_success() {
         app.review_open = true;
         app.review = Some(Ok(ReviewSession {
             title: "synthetic settings".into(),
-            kind: ReviewKind::Autotune(prepared.request),
+            kind: ReviewKind::Autotune(Box::new(prepared.request)),
             plans: prepared.plans,
             groups: prepared.groups,
             request_id: 1,

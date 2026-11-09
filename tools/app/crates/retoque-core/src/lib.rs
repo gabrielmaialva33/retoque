@@ -318,3 +318,24 @@ mod tests {
         assert_eq!(wine_path(Path::new("relative/x")), "relative/x");
     }
 }
+
+/// Replace only existing SR/RR/FG DLLs; paths are relative to the discovered installation root.
+pub fn plan_dlss_update(install_dir: &Path, target: &Path, catalog: &Path, files: &[String]) -> Result<Plan, Error> {
+    engine::dlss::plan(install_dir, target, catalog, files)
+}
+/// Recognize only the app's standalone DLSS receipt. Foreign root receipts are refused.
+pub fn dlss_root_state(install_dir: &Path) -> Result<Option<receipt::ReceiptStatus>, Error> {
+    engine::dlss::root_state(install_dir)
+}
+/// Root receipt first, then executable receipt. Each returned plan must be reviewed before apply.
+pub fn plan_game_restore(install_dir: &Path, target: &Path, root_only: bool) -> Result<Vec<Plan>, Error> {
+    engine::dlss::restore(install_dir, target, root_only)
+}
+pub fn combine_install_plans(first: Plan, second: Plan) -> Result<Plan, Error> {
+    engine::combine_installs(first, second)
+}
+
+/// Read-only preflight of a sealed plan before a compound operation. Apply rechecks every step.
+pub fn validate_plan(plan: &Plan) -> Result<(), Error> {
+    engine::validate_plan(plan)
+}

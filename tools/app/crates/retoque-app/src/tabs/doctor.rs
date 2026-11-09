@@ -64,6 +64,7 @@ pub(crate) fn show(
         for finding in &card.findings {
             ui.push_id(finding.id, |ui| {
                 let (severity, color) = match finding.severity {
+                    Severity::Info => ("severity.info", theme::MUTED),
                     Severity::Error => ("severity.error", theme::BAD),
                     Severity::Warning => ("severity.warning", theme::WARN),
                 };

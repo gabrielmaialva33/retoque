@@ -28,6 +28,7 @@ pub struct Assessment {
     pub(crate) elapsed: Duration,
 }
 struct Snapshot {
+    install_dir: PathBuf,
     target: PathBuf,
     status: Option<Status>,
     ini: Option<Ini>,
@@ -91,9 +92,18 @@ impl Snapshot {
                 }
             }
         }
+        let dlss_files = retoque_data::dlss::inspect(&self.install_dir).unwrap_or_default();
+        let root_incomplete = self.install_dir != self.target
+            && (std::fs::symlink_metadata(self.install_dir.join(".retoque/pending-receipt.txt")).is_ok()
+                || retoque_core::status(&self.install_dir)
+                    .ok()
+                    .and_then(|s| s.receipt)
+                    .is_some_and(|r| r.status != ReceiptStatus::Complete));
+        findings.extend(doctor::diagnose_dlss(&dlss_files, root_incomplete));
         findings.sort_by_key(|f| match f.severity {
             doctor::Severity::Error => 0,
             doctor::Severity::Warning => 1,
+            doctor::Severity::Info => 2,
         });
         let compatibility = self
             .model
@@ -126,6 +136,7 @@ impl RetoqueApp {
         let facts = self.autotune_game_facts();
         self.view.intelligence.facts = Arc::new(facts.clone());
         let snapshot = Snapshot {
+            install_dir: self.dlss_install_dir().unwrap_or_else(|| target.clone()),
             target: target.clone(),
             status: self.view.status.as_ref().and_then(|s| s.as_ref().ok()).cloned(),
             ini: self
@@ -200,6 +211,8 @@ impl RetoqueApp {
             return;
         }
         match repair {
+            Repair::UpdateDlss => self.dlss_request_update(),
+            Repair::RestoreDlss => self.dlss_restore(),
             Repair::Settings(actions) => {
                 let edits: Option<Vec<_>> = actions
                     .into_iter()
@@ -221,6 +234,7 @@ impl RetoqueApp {
             Repair::RemoveComponent { id } => self.autotune_request(
                 self.tr("doctor.prepare").into(),
                 crate::autotune::Request {
+                    dlss: None,
                     component: Some(crate::autotune::ComponentChange::Remove(id)),
                     edits: vec![],
                 },
