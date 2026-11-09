@@ -53,7 +53,8 @@ impl LibraryState {
         d.details.clear();
         d.installed_count = 0;
         d.updates = 0;
-        let needle = self.search.to_lowercase();
+        let mut search = crate::fuzzy::Search::new(&self.search);
+        let mut scores = vec![0; self.games.len()];
         for (index, game) in self.games.iter().enumerate() {
             let target = targets
                 .get(&game.id)
@@ -76,15 +77,26 @@ impl LibraryState {
                 store_name(lang, game.store),
                 runtime_short(lang, &game.runtime)
             ));
-            if !needle.is_empty() && !game.name.to_lowercase().contains(&needle) {
+            let Some(score) = search.score(&game.name) else {
                 continue;
-            }
+            };
+            scores[index] = score;
             if installed {
                 d.installed.push(index);
             } else if !self.installed_only {
                 d.others.push(index);
             }
         }
+        let order = |a: &usize, b: &usize| {
+            scores[*b]
+                .cmp(&scores[*a])
+                .then_with(|| self.games[*a].name.cmp(&self.games[*b].name))
+        };
+        d.installed.sort_by(order);
+        d.others.sort_by(order);
+    }
+    pub fn generation(&self) -> u64 {
+        self.generation
     }
 }
 

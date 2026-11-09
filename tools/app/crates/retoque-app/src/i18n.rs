@@ -1062,6 +1062,84 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Not in the store’s list",
         "Não consta na lista da loja",
     ),
+    // Intuitive shell: append-only translation keys.
+    ("palette.language", "Language", "Idioma"),
+    ("palette.title", "Commands", "Comandos"),
+    (
+        "palette.search",
+        "Search games, tabs, settings and actions",
+        "Buscar jogos, abas, ajustes e ações",
+    ),
+    (
+        "palette.keys",
+        "Up/Down Select · Enter Open · Esc Close",
+        "Cima/Baixo Selecionar · Enter Abrir · Esc Fechar",
+    ),
+    ("palette.empty", "No matches", "Nenhum resultado"),
+    ("palette.game", "Game", "Jogo"),
+    ("palette.focus", "Focus current search", "Focar busca atual"),
+    ("set.filter", "Filter settings", "Filtrar ajustes"),
+    ("set.only_changed", "Only changed", "Somente alterados"),
+    ("set.reset", "Reset to auto", "Restaurar automático"),
+    (
+        "set.source_auto",
+        "Source: auto (game default)",
+        "Origem: auto (padrão do jogo)",
+    ),
+    ("set.source_ini", "Source: INI", "Origem: INI"),
+    (
+        "set.source_draft",
+        "Pending draft; review to apply",
+        "Rascunho pendente; revise para aplicar",
+    ),
+    ("undo.title", "Undo last change…", "Desfazer última alteração…"),
+    (
+        "undo.empty",
+        "No saved settings change to undo for this game.",
+        "Nenhuma alteração salva para desfazer neste jogo.",
+    ),
+    (
+        "undo.conflict",
+        "Undo refused: this INI value changed since the recorded edit. Review the current settings:",
+        "Desfazer recusado: este valor do INI mudou após a alteração registrada. Revise os ajustes atuais:",
+    ),
+    (
+        "undo.save_failed",
+        "Settings applied, but undo history could not be saved",
+        "Ajustes aplicados, mas não foi possível salvar o histórico",
+    ),
+    (
+        "undo.auto_note",
+        "Undo is reviewed before applying. Previously absent keys return to auto.",
+        "O desfazer é revisado antes de aplicar. Chaves antes ausentes voltam para auto.",
+    ),
+    (
+        "drop.hover",
+        "Drop to review model import, component import or game addition",
+        "Solte para revisar a importação de modelo, componente ou adição de jogo",
+    ),
+    ("drop.title", "Review dropped item", "Revisar item solto"),
+    (
+        "drop.model",
+        "Import this NR model into the app catalog?",
+        "Importar este modelo NR para o catálogo do aplicativo?",
+    ),
+    (
+        "drop.component",
+        "Import this sm86 component into the app catalog? Installation requires a separate review.",
+        "Importar este componente sm86 para o catálogo? A instalação exige outra revisão.",
+    ),
+    (
+        "drop.game",
+        "Register this game folder in the library? No game files will be modified.",
+        "Registrar esta pasta de jogo na biblioteca? Nenhum arquivo do jogo será alterado.",
+    ),
+    (
+        "drop.unsupported",
+        "Unsupported item. Choose an nvngx_dlssnr*.dll file or a game/component folder.",
+        "Item não suportado. Escolha nvngx_dlssnr*.dll ou uma pasta de jogo/componente.",
+    ),
+    ("drop.confirm", "Confirm", "Confirmar"),
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {

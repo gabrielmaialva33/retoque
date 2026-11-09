@@ -24,6 +24,11 @@ pub enum PlanKind {
 }
 
 pub enum Outcome {
+    HistoryWritten(Result<(), AppError>),
+    DropClassified {
+        request: u64,
+        paths: Vec<(PathBuf, crate::drop_import::Route)>,
+    },
     Scoped {
         epoch: Option<u64>,
         request: u64,

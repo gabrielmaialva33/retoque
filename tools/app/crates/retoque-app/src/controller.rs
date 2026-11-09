@@ -132,8 +132,9 @@ impl RetoqueApp {
         self.writing.insert(target.clone(), (0, plan.steps().len()));
         self.write_kinds.insert(target.clone(), kind);
         let t = target.clone();
+        let history_root = self.intuitive.history_root.clone();
         self.jobs.spawn("apply", Some(target), move |tx| {
-            model::apply(kind, plan, t, edits, tx, &ctx)
+            crate::history::apply_recorded(history_root.as_deref(), kind, plan, t, edits, tx, &ctx)
         });
     }
 
@@ -146,6 +147,10 @@ impl RetoqueApp {
             let current = self.view.target.clone();
             let ours = |t: &Path| current.as_deref() == Some(t);
             match outcome {
+                Outcome::DropClassified { request, paths } => self.intuitive.drop.receive(request, paths),
+                Outcome::HistoryWritten(Err(error)) => {
+                    self.toast(self.tr("undo.save_failed").into(), Some(error), true)
+                }
                 Outcome::Payload(path, result) if self.payload.as_ref() == Some(&path) => {
                     self.payload_build = Some(result)
                 }
@@ -230,6 +235,11 @@ impl RetoqueApp {
                         PlanKind::Uninstall => "shell.review_remove",
                         PlanKind::Settings => "set.save",
                     });
+                    let title = if self.intuitive.undo_request == Some(request) {
+                        self.tr("undo.title")
+                    } else {
+                        title
+                    };
                     let game = self.selected_game().map(|g| g.name.as_str()).unwrap_or("");
                     self.review = Some(result.map(|plan| ReviewSession {
                         title: format!("{title} · {game}"),
@@ -250,6 +260,7 @@ impl RetoqueApp {
                     edits,
                     result,
                 } => {
+                    self.finish_compound_history(&target, result.is_ok());
                     // The folder is free again whether or not the user is still looking at it.
                     self.writing.remove(&target);
                     self.write_kinds.remove(&target);
@@ -341,6 +352,7 @@ impl RetoqueApp {
                     }
                     // A write that died part-way may have changed the folder: release it and read it again.
                     if let Some(t) = target {
+                        self.finish_compound_history(&t, false);
                         self.tuning.writes.remove(&t);
                         self.writing.remove(&t);
                         self.write_kinds.remove(&t);
@@ -356,6 +368,9 @@ impl RetoqueApp {
     }
 
     pub(crate) fn shell_shortcuts(&mut self, ctx: &egui::Context) {
+        if self.intuitive_shortcuts(ctx) {
+            return;
+        }
         if self.review_open || self.folder_dialog.is_some() {
             return;
         }
@@ -474,6 +489,7 @@ impl RetoqueApp {
         while let Ok(command) = self.cmd_rx.try_recv() {
             match command {
                 AppCommand::SelectGame(id) => self.select_game(id),
+                AppCommand::UndoSettings(target) => self.start_undo(target),
                 AppCommand::RequestPlan(target, kind, inputs) => {
                     if self.view.target.as_ref() == Some(&target) {
                         self.start_plan(kind, inputs);
@@ -566,6 +582,7 @@ impl RetoqueApp {
             }
             ReviewKind::Autotune(request) => {
                 let Some(target) = self.view.target.clone() else { return };
+                self.capture_compound_history(&target, &review.plans);
                 self.autotune_apply(crate::autotune::Prepared {
                     target,
                     request,
@@ -607,6 +624,9 @@ impl RetoqueApp {
                             ReviewKind::Standard(PlanKind::Uninstall) => "inst.uninstall",
                             ReviewKind::Standard(PlanKind::Settings) => "set.apply",
                         });
+                        if self.intuitive.undo_request == Some(review.request_id) {
+                            ui.label(self.tr("undo.auto_note"));
+                        }
                         crate::modals::review::show(
                             ui,
                             review,

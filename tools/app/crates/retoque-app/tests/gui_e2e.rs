@@ -20,11 +20,10 @@ type Window = Harness<'static, RetoqueApp>;
 const SAVED: &str = "Written. The game reads it at its next start.";
 
 fn window() -> Window {
-    // Existing settings fields lack accessible names. Keep interaction through AccessKit, but leave
-    // the global naming audit to a separate accessibility test until those labels are attached.
+    // Include the naming audit: composite settings inputs are labelled by their row.
     Harness::builder()
         .with_size([1400., 900.])
-        .with_accessibility_check(false)
+        .with_accessibility_check(true)
         .build_eframe(|cc| RetoqueApp::new(cc))
 }
 

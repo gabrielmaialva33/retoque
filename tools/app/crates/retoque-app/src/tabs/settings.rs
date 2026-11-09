@@ -2,7 +2,7 @@ use crate::app::*;
 
 impl RetoqueApp {
     pub(crate) fn settings_tab(
-        &self,
+        &mut self,
         ui: &mut egui::Ui,
         edits: &mut BTreeMap<(String, String), String>,
         commands: &CommandSender,
@@ -28,6 +28,37 @@ impl RetoqueApp {
             }
             Some(Ok(Some(_))) => (),
         };
+        ui.horizontal_wrapped(|ui| {
+            let label = ui.label(t(self.lang, "set.filter"));
+            let response = ui
+                .add(
+                    egui::TextEdit::singleline(&mut self.intuitive.settings.query)
+                        .id(egui::Id::unique("settings_filter")),
+                )
+                .labelled_by(label.id)
+                .on_hover_text("/");
+            if self.intuitive.settings.focus {
+                response.request_focus();
+                self.intuitive.settings.focus = false;
+            }
+            ui.checkbox(
+                &mut self.intuitive.settings.only_changed,
+                t(self.lang, "set.only_changed"),
+            );
+            if ui
+                .add_enabled(!self.busy(), egui::Button::new(t(self.lang, "undo.title")))
+                .clicked()
+                && let Some(target) = &self.view.target
+            {
+                commands.send(AppCommand::UndoSettings(target.clone()));
+            }
+        });
+        ui.label(
+            RichText::new(t(self.lang, "undo.auto_note"))
+                .small()
+                .color(theme::MUTED),
+        );
+        self.intuitive.settings.refresh(self.lang);
         for (section, title) in [
             ("DlssNr", "set.nr"),
             ("Upscalers", "set.upscalers"),
@@ -35,7 +66,7 @@ impl RetoqueApp {
             ("LSFG", "set.lsfg"),
         ] {
             widgets::card(ui, |ui| {
-                if section == "LSFG" {
+                if section == "LSFG" && !self.intuitive.settings.active() {
                     egui::CollapsingHeader::new(RichText::new(self.tr(title)).size(16.0).strong())
                         .id_salt("lsfg_settings")
                         .default_open(false)
@@ -62,9 +93,13 @@ impl RetoqueApp {
         self.settings_rows(ui, section, false, edits, commands);
         if section == "DlssNr" {
             ui.add_space(8.0);
-            egui::CollapsingHeader::new(self.tr("set.advanced"))
-                .id_salt("nr_advanced")
-                .show(ui, |ui| self.settings_rows(ui, section, true, edits, commands));
+            if self.intuitive.settings.active() {
+                self.settings_rows(ui, section, true, edits, commands);
+            } else {
+                egui::CollapsingHeader::new(self.tr("set.advanced"))
+                    .id_salt("nr_advanced")
+                    .show(ui, |ui| self.settings_rows(ui, section, true, edits, commands));
+            }
         }
     }
 
@@ -77,7 +112,16 @@ impl RetoqueApp {
         commands: &CommandSender,
     ) {
         let lang = self.lang;
-        for s in settings::all().iter().filter(|s| s.section == section) {
+        for (index, s) in settings::all().iter().enumerate().filter(|(_, s)| s.section == section) {
+            let key = (s.section.to_owned(), s.key.to_owned());
+            let on_disk = self.view.ini_values.get(s.section, s.key).unwrap_or("auto");
+            if !self
+                .intuitive
+                .settings
+                .includes(index, on_disk, edits.get(&key).map(String::as_str))
+            {
+                continue;
+            }
             if section == "DlssNr" {
                 let common = matches!(s.key, "Enabled" | "Stage" | "WorkingScale" | "ApplyModel" | "ModelFile");
                 if common == advanced {
@@ -89,7 +133,6 @@ impl RetoqueApp {
                 if ui.link(t(lang, "set.model_link")).clicked() {
                     commands.send(AppCommand::SwitchTab(Tab::Model));
                 }
-                continue;
             }
             let compare = edits
                 .get(&("DlssNr".into(), "Compare".into()))
@@ -124,8 +167,20 @@ impl RetoqueApp {
                             ui.set_width(label_width);
                             let response = ui.add(egui::Label::new(RichText::new(label).strong()).wrap());
                             ui.label(RichText::new(help).size(13.0).color(theme::MUTED));
-                            if present.is_none() {
-                                ui.label(RichText::new(t(lang, "set.game_default")).small().color(theme::MUTED));
+                            ui.label(
+                                RichText::new(t(
+                                    lang,
+                                    if on_disk.eq_ignore_ascii_case("auto") {
+                                        "set.source_auto"
+                                    } else {
+                                        "set.source_ini"
+                                    },
+                                ))
+                                .small()
+                                .color(theme::MUTED),
+                            );
+                            if edits.contains_key(&key) {
+                                ui.label(RichText::new(t(lang, "set.source_draft")).small().color(theme::WARN));
                             }
                             response.id
                         },
@@ -136,10 +191,24 @@ impl RetoqueApp {
                     egui::Layout::right_to_left(egui::Align::Min),
                     |ui| {
                         ui.set_width(control_width);
-                        value_widget(ui, s, &mut value, &format!("{}.{}", s.section, s.key), lang)
-                            .labelled_by(label_id);
+                        ui.label_inputs_by(label_id, |ui| {
+                            value_widget(ui, s, &mut value, &format!("{}.{}", s.section, s.key), lang)
+                                .labelled_by(label_id);
+                        });
                     },
                 );
+            });
+            ui.push_id((s.section, s.key, "reset"), |ui| {
+                if ui
+                    .add_enabled(
+                        !value.eq_ignore_ascii_case("auto"),
+                        egui::Button::new(t(lang, "set.reset")),
+                    )
+                    .on_hover_text(format!("[{}] {}", s.section, s.key))
+                    .clicked()
+                {
+                    value = "auto".into();
+                }
             });
             // A value OptiScaler would not accept is kept as typed (so the user can fix it) but blocks the review.
             if edits.get(&key).is_some_and(|v| !s.accepts(v)) {

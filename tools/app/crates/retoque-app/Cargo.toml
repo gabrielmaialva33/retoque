@@ -15,6 +15,7 @@ name = "retoque-app"
 path = "src/main.rs"
 
 [dependencies]
+tempfile = "3.27.0"
 thiserror = "2.0.21"
 sha2 = "0.10"
 retoque-core.workspace = true
@@ -29,10 +30,10 @@ rfd = "0.17.2"
 dirs = "7.0.0"
 egui_extras = { version = "0.37", features = ["image", "file"] }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"] }
+nucleo-matcher = "0.3.1"
 
 [dev-dependencies]
 egui_kittest = { version = "0.37", features = ["eframe"] }
-tempfile = "3.27.0"
 
 # OpenGL on Linux (works on every desktop we target and keeps the binary small); wgpu on Windows, where it renders
 # through Direct3D 12 and does not depend on the quality of a vendor's OpenGL driver.
