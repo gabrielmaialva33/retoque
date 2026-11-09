@@ -224,6 +224,7 @@ impl RetoqueApp {
                 }
                 Outcome::Dlss(event) => self.dlss_event(event),
                 Outcome::Lsfg(event) => self.lsfg_event(event),
+                Outcome::PayloadFetch(event) => self.payload_event(*event),
                 Outcome::Discovered { games, skipped, art } => {
                     if self.rescan_pending {
                         self.scanning = false;
@@ -804,6 +805,7 @@ impl RetoqueApp {
             Remedy::ChoosePayloadDir => {
                 if let Some(dir) = rfd::FileDialog::new().pick_folder() {
                     if model::is_payload(&dir) {
+                        self.saved.payload_source = Some(crate::payload_ui::PayloadSource::Folder);
                         self.saved.payload = Some(dir.clone());
                         self.payload = Some(dir);
                         self.hash_payload();

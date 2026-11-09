@@ -26,6 +26,7 @@ pub enum PlanKind {
 pub enum Outcome {
     Dlss(crate::dlss_ui::Event),
     Lsfg(crate::lsfg_ui::Event),
+    PayloadFetch(Box<crate::payload_ui::Event>),
     HistoryWritten(Result<(), AppError>),
     DropClassified {
         request: u64,

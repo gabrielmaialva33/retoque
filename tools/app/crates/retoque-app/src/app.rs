@@ -45,6 +45,8 @@ pub(crate) struct Saved {
     pub(crate) lossless_dir: Option<PathBuf>,
     #[serde(default)]
     pub(crate) sm86_offer_seen: bool,
+    #[serde(default)]
+    pub(crate) payload_source: Option<crate::payload_ui::PayloadSource>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -134,6 +136,7 @@ pub struct RetoqueApp {
     pub(crate) process_notice: Option<Vec<(u32, String)>>,
     pub(crate) tuning: crate::autotune::UiState,
     pub(crate) lsfg: crate::lsfg_ui::State,
+    pub(crate) payload_ui: crate::payload_ui::State,
     pub(crate) folder_dialog: Option<FolderDialog>,
     pub(crate) folder_focus: Option<egui::Id>,
     pub(crate) folder_restore: u8,
@@ -147,7 +150,14 @@ impl RetoqueApp {
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
             .unwrap_or_default();
         let lang = saved.lang.unwrap_or_else(Lang::from_system);
-        let payload = model::find_payload().or_else(|| saved.payload.clone().filter(|p| model::is_payload(p)));
+        let payload = match saved.payload_source {
+            Some(crate::payload_ui::PayloadSource::Folder) => saved
+                .payload
+                .clone()
+                .filter(|p| model::is_payload(p))
+                .or_else(model::find_payload),
+            _ => model::find_payload().or_else(|| saved.payload.clone().filter(|p| model::is_payload(p))),
+        };
         let (cmd_tx, cmd_rx) = CommandSender::channel();
         let mut app = RetoqueApp {
             intuitive: crate::intuitive::State {
@@ -175,6 +185,7 @@ impl RetoqueApp {
             process_notice: None,
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
+            payload_ui: crate::payload_ui::State::default(),
             folder_dialog: None,
             folder_focus: None,
             folder_restore: 0,
@@ -208,6 +219,7 @@ impl RetoqueApp {
             app.sidebar_visible = false;
         }
         app.autotune_start();
+        app.payload_init();
         app.hash_payload();
         app.rescan();
         app.jobs.spawn("catalog", None, |_| model::catalog_list());

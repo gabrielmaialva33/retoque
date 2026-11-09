@@ -6,6 +6,8 @@ actually exercised those bytes. None may silently stand in for another. Publicat
 ## Artifact contract
 
 A distributable CI draft contains `Retoque-vX.Y.Z.zip` and `Retoque-vX.Y.Z.zip.manifest.json`.
+For the desktop app's payload-only release asset (`retoque-payload-<version>-x64.zip` and `SHA256SUMS`), see
+[PAYLOAD.md](PAYLOAD.md).
 The version-1 `retoque-release-manifest` sidecar records:
 
 - Full packaging checkout commit and dirty state, plus declared build configuration/mode/toolchain.

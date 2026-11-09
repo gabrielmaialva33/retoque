@@ -17,6 +17,7 @@ pub mod doctor;
 pub mod messages;
 
 pub mod lsfg_prepare;
+pub mod payload_fetch;
 pub mod sm86;
 
 pub mod dlss;
