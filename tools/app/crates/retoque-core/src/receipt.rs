@@ -27,15 +27,17 @@ pub struct Receipt {
 pub(crate) const HEADER: &str = "# Retoque deploy receipt: what tools/deploy-to-game.sh wrote, set aside or renamed here.\n# --uninstall reads it. Tab-separated; paths are relative to the game directory.\n";
 
 /// Uses the stricter Windows rules on both platforms, so receipts remain portable.
-pub(crate) fn safe_rel(path: &str) -> bool {
+pub fn safe_rel(path: &str) -> bool {
     !path.is_empty()
         && !path
-            .chars()
-            .any(|c| c.is_control() || matches!(c, '\\' | ':' | '<' | '>' | '\"' | '|' | '?' | '*'))
+            .bytes()
+            .any(|b| b.is_ascii_control() || matches!(b, b'\\' | b':' | b'<' | b'>' | b'"' | b'|' | b'?' | b'*'))
+        && !path.chars().any(char::is_control)
         && path
             .split('/')
             .all(|part| !part.is_empty() && part != "." && part != ".." && !part.ends_with(['.', ' ']))
 }
+
 impl Record {
     pub(crate) fn paths(&self) -> Vec<&str> {
         match self {
@@ -45,7 +47,26 @@ impl Record {
             Self::Rename { from, to, .. } => vec![from, to],
         }
     }
+
+    fn has_safe_paths(&self) -> bool {
+        match self {
+            Self::Proxy { name } => safe_rel(name),
+            Self::File { path, .. } => safe_rel(path),
+            Self::Backup { path, copy, .. } => safe_rel(path) && safe_rel(copy),
+            Self::Rename { from, to, .. } => safe_rel(from) && safe_rel(to),
+        }
+    }
+
+    fn kind_order(&self) -> u8 {
+        match self {
+            Self::Proxy { .. } => 0,
+            Self::File { .. } => 1,
+            Self::Backup { .. } => 2,
+            Self::Rename { .. } => 3,
+        }
+    }
 }
+
 impl Receipt {
     pub fn parse(text: &str) -> Result<Receipt, String> {
         let mut receipt = Receipt {
@@ -58,14 +79,15 @@ impl Receipt {
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
-            let fields: Vec<_> = line.split('\t').collect();
-            let record = match fields.as_slice() {
-                ["version", "1"] => {
+            let mut it = line.split('\t');
+            let first = it.next().unwrap_or("");
+            let record = match (first, it.next(), it.next(), it.next(), it.next()) {
+                ("version", Some("1"), None, None, None) => {
                     version = true;
                     continue;
                 }
-                ["status", status] => {
-                    receipt.status = match *status {
+                ("status", Some(status), None, None, None) => {
+                    receipt.status = match status {
                         "complete" => ReceiptStatus::Complete,
                         "partial" => ReceiptStatus::Partial,
                         "uninstall-incomplete" => ReceiptStatus::UninstallIncomplete,
@@ -73,28 +95,28 @@ impl Receipt {
                     };
                     continue;
                 }
-                ["updated", updated] => {
+                ("updated", Some(updated), None, None, None) => {
                     receipt.updated = updated.to_string();
                     continue;
                 }
-                ["proxy", name] => Record::Proxy { name: name.to_string() },
-                ["file", sha, path] => Record::File {
+                ("proxy", Some(name), None, None, None) => Record::Proxy { name: name.to_string() },
+                ("file", Some(sha), Some(path), None, None) => Record::File {
                     sha256: sha.to_string(),
                     path: path.to_string(),
                 },
-                ["backup", sha, path, copy] => Record::Backup {
+                ("backup", Some(sha), Some(path), Some(copy), None) => Record::Backup {
                     sha256: sha.to_string(),
                     path: path.to_string(),
                     copy: copy.to_string(),
                 },
-                ["rename", sha, from, to] => Record::Rename {
+                ("rename", Some(sha), Some(from), Some(to), None) => Record::Rename {
                     sha256: sha.to_string(),
                     from: from.to_string(),
                     to: to.to_string(),
                 },
-                _ => return Err(format!("unrecognised or invalid receipt record: {}", fields[0])),
+                _ => return Err(format!("unrecognised or invalid receipt record: {first}")),
             };
-            if record.paths().iter().any(|p| !safe_rel(p)) {
+            if !record.has_safe_paths() {
                 return Err("unsafe path in receipt".into());
             }
             match &record {
@@ -116,26 +138,56 @@ impl Receipt {
         if !version {
             return Err("receipt must declare version 1".into());
         }
+        receipt.records.sort_by_key(Record::kind_order);
         Ok(receipt)
     }
+
     pub fn to_text(&self) -> String {
         let status = match self.status {
             ReceiptStatus::Complete => "complete",
             ReceiptStatus::Partial => "partial",
             ReceiptStatus::UninstallIncomplete => "uninstall-incomplete",
         };
-        let mut text = format!("{HEADER}version\t1\nstatus\t{status}\nupdated\t{}\n", self.updated);
+        let mut text = String::with_capacity(HEADER.len() + 64 + self.records.len() * 96);
+        text.push_str(HEADER);
+        text.push_str("version\t1\nstatus\t");
+        text.push_str(status);
+        text.push_str("\nupdated\t");
+        text.push_str(&self.updated);
+        text.push('\n');
         // Both scripts group record kinds, preserving first-write order within each kind.
         for kind in 0..4 {
             for record in &self.records {
                 match record {
-                    Record::Proxy { name } if kind == 0 => text.push_str(&format!("proxy\t{name}\n")),
-                    Record::File { sha256, path } if kind == 1 => text.push_str(&format!("file\t{sha256}\t{path}\n")),
+                    Record::Proxy { name } if kind == 0 => {
+                        text.push_str("proxy\t");
+                        text.push_str(name);
+                        text.push('\n');
+                    }
+                    Record::File { sha256, path } if kind == 1 => {
+                        text.push_str("file\t");
+                        text.push_str(sha256);
+                        text.push('\t');
+                        text.push_str(path);
+                        text.push('\n');
+                    }
                     Record::Backup { sha256, path, copy } if kind == 2 => {
-                        text.push_str(&format!("backup\t{sha256}\t{path}\t{copy}\n"))
+                        text.push_str("backup\t");
+                        text.push_str(sha256);
+                        text.push('\t');
+                        text.push_str(path);
+                        text.push('\t');
+                        text.push_str(copy);
+                        text.push('\n');
                     }
                     Record::Rename { sha256, from, to } if kind == 3 => {
-                        text.push_str(&format!("rename\t{sha256}\t{from}\t{to}\n"))
+                        text.push_str("rename\t");
+                        text.push_str(sha256);
+                        text.push('\t');
+                        text.push_str(from);
+                        text.push('\t');
+                        text.push_str(to);
+                        text.push('\n');
                     }
                     _ => {}
                 }
@@ -174,5 +226,11 @@ mod tests {
         for text in ["version\t2\n", "version\t1\nwhatever\tx\n", "file\tabc\tx\n"] {
             assert!(Receipt::parse(text).is_err());
         }
+    }
+    #[test]
+    fn interleaved_record_kinds_canonicalize_on_parse_and_roundtrip() {
+        let interleaved = "version\t1\nfile\tabc\trenamdxgi.dll\nbackup\tdef\tdxgi.dll\t.retoque/b/dxgi.dackup/dxgi.dll\nrename\t1kup\tdef\t1\nfile\tabc\trenamdxgi.dfll\nbackup\tp/dxgi.d\tabc\trena\n";
+        let r = Receipt::parse(interleaved).unwrap();
+        assert_eq!(Receipt::parse(&r.to_text()).unwrap(), r);
     }
 }

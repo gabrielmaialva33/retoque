@@ -182,28 +182,133 @@ fn fatbin<R: Read + Seek>(r: &mut R, offset: u64, len: u64, budget: &mut usize) 
     }
     Ok(vec![])
 }
+
+const LO_BITS: u64 = 0x0101_0101_0101_0101;
+const HI_BITS: u64 = 0x8080_8080_8080_8080;
+
+#[inline(always)]
+fn has_byte(word: u64, byte: u8) -> u64 {
+    let x = word ^ (LO_BITS * u64::from(byte));
+    x.wrapping_sub(LO_BITS) & !x & HI_BITS
+}
+
+#[inline(always)]
+fn check_position(
+    window: &[u8],
+    i: usize,
+    base: u64,
+    archs: &mut BTreeSet<u16>,
+    fatbin_offsets: &mut Vec<u64>,
+    candidates: &mut usize,
+) -> io::Result<()> {
+    let b0 = window[i];
+    if b0 == 0x7f {
+        if window.get(i + 1..i + 4) == Some(b"ELF".as_slice())
+            && let Some(sm) = elf_arch(&window[i..])
+        {
+            *candidates += 1;
+            if *candidates > 4096 {
+                return Err(invalid());
+            }
+            archs.insert(sm);
+        }
+    } else if b0 == 0x50 && window.get(i + 1..i + 4) == Some([0xed, 0x55, 0xba].as_slice()) {
+        fatbin_offsets.push(base + i as u64);
+        if *candidates + fatbin_offsets.len() > 4096 {
+            return Err(invalid());
+        }
+    }
+    Ok(())
+}
+
+fn scan_window(
+    window: &[u8],
+    scan_end: usize,
+    base: u64,
+    archs: &mut BTreeSet<u16>,
+    fatbin_offsets: &mut Vec<u64>,
+    candidates: &mut usize,
+) -> io::Result<()> {
+    let mut i = 0;
+    while i + 32 <= scan_end {
+        let w0 = u64::from_le_bytes(window[i..i + 8].try_into().unwrap());
+        let w1 = u64::from_le_bytes(window[i + 8..i + 16].try_into().unwrap());
+        let w2 = u64::from_le_bytes(window[i + 16..i + 24].try_into().unwrap());
+        let w3 = u64::from_le_bytes(window[i + 24..i + 32].try_into().unwrap());
+        let m0 = has_byte(w0, 0x7f) | has_byte(w0, 0x50);
+        let m1 = has_byte(w1, 0x7f) | has_byte(w1, 0x50);
+        let m2 = has_byte(w2, 0x7f) | has_byte(w2, 0x50);
+        let m3 = has_byte(w3, 0x7f) | has_byte(w3, 0x50);
+        if (m0 | m1 | m2 | m3) != 0 {
+            for (off, mut mask) in [(i, m0), (i + 8, m1), (i + 16, m2), (i + 24, m3)] {
+                while mask != 0 {
+                    let lane = (mask.trailing_zeros() / 8) as usize;
+                    check_position(window, off + lane, base, archs, fatbin_offsets, candidates)?;
+                    mask &= mask - 1;
+                }
+            }
+        }
+        i += 32;
+    }
+    while i < scan_end {
+        check_position(window, i, base, archs, fatbin_offsets, candidates)?;
+        i += 1;
+    }
+    Ok(())
+}
+
 /// Stream the actual file identity before trusting the table/cache. Never trust a catalog directory name.
 /// At most 512 MiB per linear pass plus 1 MiB of fatbin headers; ~64 KiB scan memory; bounded hash cache.
 pub fn inspect<R: Read + Seek>(r: &mut R) -> io::Result<ModelCompatibility> {
     r.seek(SeekFrom::Start(0))?;
     let mut hash = Sha256::new();
     let mut len = 0u64;
-    let mut block = [0; 65536];
+    let mut buf = [0u8; 65536 + 63];
+    let mut carry = 0usize;
+    let mut base = 0u64;
+    let mut archs = BTreeSet::new();
+    let mut fatbin_offsets = Vec::new();
+    let mut elf_candidates = 0usize;
+
     loop {
-        let n = r.read(&mut block)?;
+        let n = r.read(&mut buf[carry..carry + 65536])?;
         if n == 0 {
+            let tail_end = carry.saturating_sub(3);
+            scan_window(
+                &buf[..carry],
+                tail_end,
+                base,
+                &mut archs,
+                &mut fatbin_offsets,
+                &mut elf_candidates,
+            )?;
             break;
         }
         len += n as u64;
         if len > MAX_MODEL_BYTES {
             return Err(invalid());
         }
-        hash.update(&block[..n]);
+        let total = carry + n;
+        hash.update(&buf[carry..total]);
+        let scan_end = total.saturating_sub(63);
+        scan_window(
+            &buf[..total],
+            scan_end,
+            base,
+            &mut archs,
+            &mut fatbin_offsets,
+            &mut elf_candidates,
+        )?;
+        let keep = total.min(63);
+        buf.copy_within(total - keep..total, 0);
+        carry = keep;
+        base = len - keep as u64;
     }
+
     let hash = format!("{:x}", hash.finalize());
-    if let Some((_, _, archs)) = KNOWN.iter().find(|(h, s, _)| *h == hash && *s == len) {
+    if let Some((_, _, known_archs)) = KNOWN.iter().find(|(h, s, _)| *h == hash && *s == len) {
         return Ok(ModelCompatibility {
-            archs: archs.to_vec(),
+            archs: known_archs.to_vec(),
             known: true,
         });
     }
@@ -212,51 +317,19 @@ pub fn inspect<R: Read + Seek>(r: &mut R) -> io::Result<ModelCompatibility> {
     if let Some(hit) = cache.lock().unwrap_or_else(|e| e.into_inner()).get(&hash) {
         return Ok(hit.clone());
     }
-    let mut archs = BTreeSet::new();
+
     let mut budget = 16384;
-    let mut scan_hash = Sha256::new();
-    let mut offset = 0u64;
-    let mut tail = vec![];
-    let mut candidates = 0;
-    r.seek(SeekFrom::Start(0))?;
-    loop {
-        let n = r.read(&mut block)?;
-        if n == 0 {
-            break;
-        }
-        if offset + n as u64 > len {
-            return Err(invalid());
-        }
-        scan_hash.update(&block[..n]);
-        tail.extend_from_slice(&block[..n]);
-        let base = offset.saturating_sub((tail.len() - n) as u64);
-        let resume = offset + n as u64;
-        for i in 0..tail.len().saturating_sub(3) {
-            if &tail[i..i + 4] == b"\x7fELF"
-                && let Some(sm) = elf_arch(&tail[i..])
-            {
-                candidates += 1;
-                if candidates > 4096 {
-                    return Err(invalid());
-                }
-                archs.insert(sm);
+    let mut candidates = elf_candidates;
+    for fb_pos in fatbin_offsets {
+        if fb_pos + 16 <= len {
+            candidates += 1;
+            if candidates > 4096 {
+                return Err(invalid());
             }
-            if tail[i..i + 4] == [0x50, 0xed, 0x55, 0xba] && base + i as u64 + 16 <= len {
-                candidates += 1;
-                if candidates > 4096 {
-                    return Err(invalid());
-                }
-                archs.extend(fatbin(r, base + i as u64, len, &mut budget)?);
-            }
+            archs.extend(fatbin(r, fb_pos, len, &mut budget)?);
         }
-        r.seek(SeekFrom::Start(resume))?;
-        let keep = tail.len().min(63);
-        tail.drain(..tail.len() - keep);
-        offset = resume;
     }
-    if offset != len || format!("{:x}", scan_hash.finalize()) != hash {
-        return Err(invalid());
-    }
+
     let info = ModelCompatibility {
         archs: archs.into_iter().collect(),
         known: false,

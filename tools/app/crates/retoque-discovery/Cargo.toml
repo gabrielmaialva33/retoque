@@ -13,3 +13,11 @@ yaml-rust2 = "0.10"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.10"
+
+[dev-dependencies]
+divan.workspace = true
+proptest.workspace = true
+
+[[bench]]
+name = "discovery_bench"
+harness = false

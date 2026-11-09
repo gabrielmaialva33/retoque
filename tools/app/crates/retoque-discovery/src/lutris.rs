@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use rusqlite::Connection;
+use yaml_rust2::parser::{Event, MarkedEventReceiver, Parser};
 use yaml_rust2::{Yaml, YamlLoader};
 
 use crate::io::{MAX_DB_BYTES, MAX_TEXT_BYTES, read_bounded_bytes, read_bounded_string};
@@ -330,6 +331,10 @@ fn query_games_from_conn(conn: &Connection) -> Result<Vec<LutrisDbGame>, String>
     Ok(out)
 }
 
+const MAX_YAML_DEPTH: usize = 64;
+const MAX_YAML_EVENTS: usize = 16_384;
+const MAX_YAML_ALIASES: usize = 64;
+
 /// Fallible YAML parser for a Lutris game YAML configuration file (`<configpath>.yml`).
 pub fn try_parse_lutris_yaml(text: &str) -> Result<LutrisYamlConfig, String> {
     if text.len() > MAX_TEXT_BYTES {
@@ -339,10 +344,67 @@ pub fn try_parse_lutris_yaml(text: &str) -> Result<LutrisYamlConfig, String> {
         ));
     }
 
-    let docs = YamlLoader::load_from_str(text).map_err(|e| format!("invalid Lutris YAML: {e}"))?;
-    let mut cfg = LutrisYamlConfig::default();
+    let mut parser = Parser::new_from_str(text);
+    let mut loader = YamlLoader::default();
+    let mut depth = 0usize;
+    let mut events = 0usize;
+    let mut aliases = 0usize;
+    let mut expected_docs = 0usize;
 
-    for doc in &docs {
+    loop {
+        let (ev, mark) = parser.next_token().map_err(|e| format!("invalid Lutris YAML: {e}"))?;
+        events += 1;
+        if events > MAX_YAML_EVENTS {
+            return Err(format!("Lutris YAML event count exceeds limit ({MAX_YAML_EVENTS})"));
+        }
+
+        let forwarded = match ev {
+            Event::StreamEnd => {
+                loader.on_event(Event::StreamEnd, mark);
+                break;
+            }
+            Event::SequenceStart(_, tag) => {
+                depth += 1;
+                if depth > MAX_YAML_DEPTH {
+                    return Err(format!("Lutris YAML nesting depth exceeds limit ({MAX_YAML_DEPTH})"));
+                }
+                // Strip collection anchors so alias expansion cannot trigger exponential Billion Laughs cloning.
+                Event::SequenceStart(0, tag)
+            }
+            Event::MappingStart(_, tag) => {
+                depth += 1;
+                if depth > MAX_YAML_DEPTH {
+                    return Err(format!("Lutris YAML nesting depth exceeds limit ({MAX_YAML_DEPTH})"));
+                }
+                Event::MappingStart(0, tag)
+            }
+            Event::SequenceEnd | Event::MappingEnd => {
+                depth = depth.saturating_sub(1);
+                ev
+            }
+            Event::Alias(_) => {
+                aliases += 1;
+                if aliases > MAX_YAML_ALIASES {
+                    return Err(format!("Lutris YAML alias count exceeds limit ({MAX_YAML_ALIASES})"));
+                }
+                ev
+            }
+            Event::DocumentEnd => {
+                expected_docs += 1;
+                loader.on_event(Event::DocumentEnd, mark);
+                if loader.documents().len() != expected_docs {
+                    return Err("invalid Lutris YAML: duplicate key in mapping".to_string());
+                }
+                continue;
+            }
+            other => other,
+        };
+
+        loader.on_event(forwarded, mark);
+    }
+
+    let mut cfg = LutrisYamlConfig::default();
+    for doc in loader.documents() {
         if let Some(game_sec) = yaml_get_case_insensitive(doc, "game") {
             extract_lutris_yaml_fields(game_sec, &mut cfg);
         }

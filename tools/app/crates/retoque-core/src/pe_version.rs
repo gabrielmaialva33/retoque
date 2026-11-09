@@ -4,21 +4,41 @@ use std::{
     io::{Read, Seek, SeekFrom},
     path::Path,
 };
+
+const VS_VERSION_INFO_UTF16LE: [u8; 32] = [
+    b'V', 0, b'S', 0, b'_', 0, b'V', 0, b'E', 0, b'R', 0, b'S', 0, b'I', 0, b'O', 0, b'N', 0, b'_', 0, b'I', 0, b'N',
+    0, b'F', 0, b'O', 0, 0, 0,
+];
+
 fn u16_at(b: &[u8], n: usize) -> Option<u16> {
     Some(u16::from_le_bytes(b.get(n..n.checked_add(2)?)?.try_into().ok()?))
 }
+
 fn u32_at(b: &[u8], n: usize) -> Option<u32> {
     Some(u32::from_le_bytes(b.get(n..n.checked_add(4)?)?.try_into().ok()?))
 }
+
+fn read_exact_at<R: Read + Seek>(r: &mut R, at: u64, out: &mut [u8]) -> Option<()> {
+    r.seek(SeekFrom::Start(at)).ok()?;
+    r.read_exact(out).ok()
+}
+
 fn read_at<R: Read + Seek>(r: &mut R, at: u64, len: usize) -> Option<Vec<u8>> {
     if len > 4 * 1024 * 1024 {
         return None;
     }
     r.seek(SeekFrom::Start(at)).ok()?;
-    let mut b = vec![0; len];
-    r.read_exact(&mut b).ok()?;
-    Some(b)
+    if len <= 65536 {
+        let mut b = vec![0; len];
+        r.read_exact(&mut b).ok()?;
+        Some(b)
+    } else {
+        let mut b = Vec::with_capacity(65536);
+        r.take(len as u64).read_to_end(&mut b).ok()?;
+        (b.len() == len).then_some(b)
+    }
 }
+
 pub fn file_version(path: &Path) -> Option<String> {
     let mut file = File::open(path).ok()?;
     if !file.metadata().ok()?.is_file() {
@@ -26,46 +46,56 @@ pub fn file_version(path: &Path) -> Option<String> {
     }
     read_version(&mut file)
 }
-fn entries(b: &[u8], at: usize) -> Option<Vec<(u32, u32)>> {
-    let count = usize::from(u16_at(b, at + 12)?) + usize::from(u16_at(b, at + 14)?);
+
+fn entries(b: &[u8], at: usize) -> Option<impl Iterator<Item = (u32, u32)> + '_> {
+    let count = usize::from(u16_at(b, at.checked_add(12)?)?) + usize::from(u16_at(b, at.checked_add(14)?)?);
     if count > 128 {
         return None;
     }
-    (0..count)
-        .map(|i| Some((u32_at(b, at + 16 + i * 8)?, u32_at(b, at + 20 + i * 8)?)))
-        .collect()
+    let start = at.checked_add(16)?;
+    let end = start.checked_add(count * 8)?;
+    let table = b.get(start..end)?;
+    Some(table.as_chunks::<8>().0.iter().map(|c| {
+        (
+            u32::from_le_bytes([c[0], c[1], c[2], c[3]]),
+            u32::from_le_bytes([c[4], c[5], c[6], c[7]]),
+        )
+    }))
 }
-fn fixed(b: &[u8]) -> Option<String> {
+
+fn fixed_pair(b: &[u8]) -> Option<(u32, u32)> {
     let len = usize::from(u16_at(b, 0)?);
     let b = b.get(..len)?;
     if u16_at(b, 2)? != 52 || u16_at(b, 4)? != 0 {
         return None;
     }
-    let key: Vec<u8> = "VS_VERSION_INFO\0".encode_utf16().flat_map(u16::to_le_bytes).collect();
-    if b.get(6..6 + key.len())? != key {
+    if b.get(6..6 + VS_VERSION_INFO_UTF16LE.len())? != VS_VERSION_INFO_UTF16LE {
         return None;
     }
-    let at = (6 + key.len() + 3) & !3;
+    let at = (6 + VS_VERSION_INFO_UTF16LE.len() + 3) & !3;
     b.get(at..at + 52)?;
     if u32_at(b, at)? != 0xfeef04bd || u32_at(b, at + 4)? != 0x10000 {
         return None;
     }
     let ms = u32_at(b, at + 8)?;
     let ls = u32_at(b, at + 12)?;
-    Some(format!("{}.{}.{}.{}", ms >> 16, ms & 65535, ls >> 16, ls & 65535))
+    Some((ms, ls))
 }
+
 /// Limits: 96 sections, 128 entries/directory, three resource levels, 4 MiB resource region.
 pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
-    let dos = read_at(r, 0, 64)?;
-    if dos.get(..2)? != b"MZ" {
+    let mut dos = [0u8; 64];
+    read_exact_at(r, 0, &mut dos)?;
+    if &dos[..2] != b"MZ" {
         return None;
     }
     let pe = u64::from(u32_at(&dos, 60)?);
     if pe > 16 * 1024 * 1024 {
         return None;
     }
-    let coff = read_at(r, pe, 24)?;
-    if coff.get(..4)? != b"PE\0\0" {
+    let mut coff = [0u8; 24];
+    read_exact_at(r, pe, &mut coff)?;
+    if &coff[..4] != b"PE\0\0" {
         return None;
     }
     let sections = usize::from(u16_at(&coff, 6)?);
@@ -76,21 +106,25 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
     if optional_len > 4096 {
         return None;
     }
-    let optional = read_at(r, pe + 24, optional_len)?;
-    let dir = match u16_at(&optional, 0)? {
+    let mut optional_buf = [0u8; 4096];
+    let optional = &mut optional_buf[..optional_len];
+    read_exact_at(r, pe + 24, optional)?;
+    let dir = match u16_at(optional, 0)? {
         0x10b => 96,
         0x20b => 112,
         _ => return None,
     };
-    if u32_at(&optional, dir - 4)? < 3 {
+    if u32_at(optional, dir - 4)? < 3 {
         return None;
     }
-    let rva = u32_at(&optional, dir + 16)?;
-    let size = u32_at(&optional, dir + 20)?;
+    let rva = u32_at(optional, dir + 16)?;
+    let size = u32_at(optional, dir + 20)?;
     if rva == 0 || !(16..=4 * 1024 * 1024).contains(&size) {
         return None;
     }
-    let table = read_at(r, pe + 24 + optional_len as u64, sections * 40)?;
+    let mut table_buf = [0u8; 96 * 40];
+    let table = &mut table_buf[..sections * 40];
+    read_exact_at(r, pe + 24 + optional_len as u64, table)?;
     let mut resource = None;
     for s in table.as_chunks::<40>().0 {
         let va = u32_at(s, 12)?;
@@ -106,8 +140,9 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
         }
     }
     let resource = resource?;
-    let mut versions = Vec::new();
-    let mut leaves = 0;
+    let mut first_ver: Option<(u32, u32)> = None;
+    let mut leaves = 0usize;
+    let mut dirs = 0usize;
     for (kind, names) in entries(&resource, 0)? {
         if kind != 16 {
             continue;
@@ -115,8 +150,16 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
         if names & 0x80000000 == 0 {
             return None;
         }
+        dirs += 1;
+        if dirs > 128 {
+            return None;
+        }
         for (_, langs) in entries(&resource, (names & 0x7fffffff) as usize)? {
             if langs & 0x80000000 == 0 {
+                return None;
+            }
+            dirs += 1;
+            if dirs > 128 {
                 return None;
             }
             for (_, leaf) in entries(&resource, (langs & 0x7fffffff) as usize)? {
@@ -126,14 +169,18 @@ pub fn read_version<R: Read + Seek>(r: &mut R) -> Option<String> {
                 }
                 let leaf = leaf as usize;
                 let data = u32_at(&resource, leaf)?.checked_sub(rva)? as usize;
-                let len = u32_at(&resource, leaf + 4)? as usize;
-                let version = fixed(resource.get(data..data.checked_add(len)?)?)?;
-                versions.push(version);
+                let len = u32_at(&resource, leaf.checked_add(4)?)? as usize;
+                let ver = fixed_pair(resource.get(data..data.checked_add(len)?)?)?;
+                match first_ver {
+                    None => first_ver = Some(ver),
+                    Some(prev) if prev != ver => return None,
+                    Some(_) => {}
+                }
             }
         }
     }
-    let first = versions.first()?;
-    versions.iter().all(|v| v == first).then(|| first.clone())
+    let (ms, ls) = first_ver?;
+    Some(format!("{}.{}.{}.{}", ms >> 16, ms & 65535, ls >> 16, ls & 65535))
 }
 
 #[cfg(test)]
