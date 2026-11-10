@@ -158,7 +158,16 @@ optimize” for an install an old script made (registered under the proxy name i
 left out. Tiles under the banner show the graphics card, Retoque, Neural Rendering, frame generation and the
 game's DLSS files from facts already inspected.
 
-“Last session” on the Retoque tab reads the newest log the page already summarized (`retoque_data::session`,
+The page has five tabs: Overview, Settings, Components, Before / after and Logs. Before install, Overview shows only
+“What Retoque will do in this game” (the items that one-click review would include, read-only, with the install
+options closed inside), plus the health check when it found something and ReShade when the game has it. After an
+install under Proton or Wine, the launch option comes first in an accent card whose words follow the store (Steam
+launch options; a `WINEDLLOVERRIDES` variable in Heroic or Lutris; any other launcher) until the newest log shows
+Retoque loaded; it then stays under “Reinstall options”. ReShade stays folded unless the game has it. Components
+groups the NR model, DLSS and frame generation (sm86 and LSFG side by side). The sm86 download is offered only
+inside “Install and optimize” or on its card, never at startup, and the home screen has no model offer of its own.
+
+“Last session” on the Overview tab reads the newest log the page already summarized (`retoque_data::session`,
 bounded memory): real and on-screen frame rates from the runtime's periodic status lines, measured from the
 time between them; the worst 5% of windows; how much of the session frame generation ran and what it multiplied;
 the share of drops below 80% of the median; and the real rate over time. Its advice covers a base too low for

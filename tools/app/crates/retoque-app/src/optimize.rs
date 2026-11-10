@@ -431,10 +431,11 @@ mod tests {
         }
     }
     #[test]
-    fn first_run_offer_and_cancel_never_contact_network_or_write_games() {
+    fn startup_never_opens_the_sm86_offer_or_contacts_the_network() {
         for lang in [Lang::En, Lang::Pt] {
             let mut app = crate::app_tests::shell_tests::app();
             app.lang = lang;
+            // An eligible card with nothing downloaded yet used to get the sm86 modal before choosing a game.
             app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
             app.tuning.catalog = Some(Ok(vec![]));
             let mut h = Harness::builder().with_size([1000., 800.]).build_ui_state(
@@ -443,12 +444,8 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_label(t(lang, "sm86.consent_title"));
-            assert!(!h.state().jobs.busy());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "sm86.later"))
-                .click();
             h.run_steps(3);
-            assert!(h.state().saved.sm86_offer_seen);
+            assert!(h.query_by_label(t(lang, "sm86.consent_title")).is_none());
             assert!(h.state().tuning.sm86.consent.is_none());
             assert!(!h.state().jobs.busy());
         }

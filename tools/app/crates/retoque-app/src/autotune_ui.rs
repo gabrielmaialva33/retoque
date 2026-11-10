@@ -296,7 +296,6 @@ impl RetoqueApp {
         selected.is_some()
     }
     pub(crate) fn autotune_components(&mut self, ui: &mut egui::Ui) {
-        self.dlss_card(ui);
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("auto.components"));
             self.sm86_download_controls(ui);
@@ -394,7 +393,6 @@ impl RetoqueApp {
                 }
             }
         });
-        ui.add_space(12.0);
     }
     pub(crate) fn autotune_request(&mut self, title: String, request: Request) {
         let Some(target) = self.view.target.clone() else { return };

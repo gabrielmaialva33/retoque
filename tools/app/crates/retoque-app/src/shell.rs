@@ -279,9 +279,16 @@ impl RetoqueApp {
                 self.settings_tab(ui, &mut edits, &commands);
                 self.view.edits = edits;
             }
+            // Components, in the order a game uses them: the NR model, DLSS, then frame generation (sm86 and LSFG
+            // side by side, so their conflict is explained in one place).
             Tab::Model => {
-                self.autotune_components(ui);
+                widgets::section_header(ui, self.tr("comp.nr"));
                 self.model_tab(ui, &self.cmd_tx);
+                widgets::section_header(ui, self.tr("comp.dlss"));
+                self.dlss_card(ui);
+                widgets::section_header(ui, self.tr("comp.fg"));
+                self.autotune_components(ui);
+                self.autotune_lsfg(ui);
             }
             Tab::Compare => {}
             Tab::Logs => self.logs_tab(ui, &self.cmd_tx),
@@ -431,7 +438,6 @@ impl RetoqueApp {
             );
         }
         ui.add_space(12.0);
-        self.first_run_nr_card(ui);
         // Search and its filters on one line: the field takes what the controls on its right leave.
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

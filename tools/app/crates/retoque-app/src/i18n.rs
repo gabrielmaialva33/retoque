@@ -294,8 +294,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "optimize.lsfg_unavailable",
-        "Lossless Scaling was not found, so LSFG shaders cannot be prepared. Choose its folder in the LSFG card. No changes were applied.",
-        "O Lossless Scaling não foi encontrado, então os shaders do LSFG não podem ser preparados. Escolha a pasta dele no cartão do LSFG. Nenhuma alteração foi aplicada.",
+        "Lossless Scaling was not found, so LSFG shaders cannot be prepared. Choose its folder in Components › Frame generation. No changes were applied.",
+        "O Lossless Scaling não foi encontrado, então os shaders do LSFG não podem ser preparados. Escolha a pasta dele em Componentes › Geração de quadros. Nenhuma alteração foi aplicada.",
     ),
     (
         "optimize.lsfg_preparing",
@@ -304,8 +304,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "optimize.lsfg_failed",
-        "LSFG shader preparation failed; see the LSFG card. No changes were applied.",
-        "A preparação dos shaders do LSFG falhou; veja o cartão do LSFG. Nenhuma alteração foi aplicada.",
+        "LSFG shader preparation failed; see Components › Frame generation. No changes were applied.",
+        "A preparação dos shaders do LSFG falhou; veja Componentes › Geração de quadros. Nenhuma alteração foi aplicada.",
     ),
     (
         "optimize.experimental_omitted",
@@ -600,9 +600,13 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Native Linux build: Retoque works only with the Windows version under Proton or Wine.",
         "Versão nativa de Linux: o Retoque só funciona com a versão de Windows no Proton ou no Wine.",
     ),
-    ("tab.install", "Install", "Retoque"),
+    ("tab.install", "Overview", "Visão geral"),
     ("tab.settings", "Settings", "Ajustes"),
-    ("tab.model", "NR model", "Modelo NR"),
+    ("tab.model", "Components", "Componentes"),
+    // The Components tab's sections, in the order a game uses them.
+    ("comp.nr", "NR model", "Modelo NR"),
+    ("comp.dlss", "DLSS", "DLSS"),
+    ("comp.fg", "Frame generation", "Geração de quadros"),
     ("tab.compare", "Before / after", "Antes e depois"),
     ("tab.logs", "Logs", "Logs"),
     (
@@ -664,6 +668,16 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.update", "Update", "Atualizar"),
     ("inst.uninstall", "Uninstall", "Remover"),
     ("inst.plan", "What will be done", "O que será feito"),
+    (
+        "inst.plan_title",
+        "What Retoque will do in this game",
+        "O que o Retoque vai fazer neste jogo",
+    ),
+    (
+        "inst.plan_install",
+        "Install Retoque files in this game",
+        "Instalar os arquivos do Retoque neste jogo",
+    ),
     ("inst.nothing", "Nothing to change.", "Nada a mudar."),
     ("inst.refused", "Nothing will be written:", "Nada será gravado:"),
     ("inst.working", "Working…", "Trabalhando…"),
@@ -671,9 +685,25 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.launch", "Steam launch option", "Opção de inicialização da Steam"),
     (
         "inst.launch_help",
-        "Under Proton the game must be told to load this DLL: paste this into the game's launch options in Steam.",
-        "No Proton o jogo precisa ser avisado para carregar esta DLL: cole isto nas opções de inicialização do jogo na Steam.",
+        "Paste this in the game's Properties › Launch options.",
+        "Cole isto em Propriedades › Opções de inicialização do jogo.",
     ),
+    (
+        "inst.launch_help_heroic",
+        "In Heroic, open the game's settings › Advanced › Environment variables and add WINEDLLOVERRIDES with this value.",
+        "No Heroic, abra as configurações do jogo › Avançado › Variáveis de ambiente e adicione WINEDLLOVERRIDES com este valor.",
+    ),
+    (
+        "inst.launch_help_lutris",
+        "In Lutris, open the game's Configure › System options › Environment variables and add WINEDLLOVERRIDES with this value.",
+        "No Lutris, abra Configurar › Opções do sistema › Variáveis de ambiente do jogo e adicione WINEDLLOVERRIDES com este valor.",
+    ),
+    (
+        "inst.launch_help_other",
+        "The game must load Retoque when it starts: put this in your launcher's launch options, before the command that starts the game.",
+        "O jogo precisa carregar o Retoque ao abrir: coloque isto nas opções de inicialização do seu iniciador, antes do comando que abre o jogo.",
+    ),
+    ("inst.launch_label", "Launch option", "Opção de inicialização"),
     ("inst.copy", "Copy", "Copiar"),
     ("inst.copied", "Copied", "Copiado"),
     (
@@ -788,6 +818,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("lib.state_installed", "Retoque", "Retoque"),
     ("card.install", "Install", "Instalação"),
     ("card.install_options", "Install options", "Opções de instalação"),
+    ("card.reinstall_options", "Reinstall options", "Opções de reinstalação"),
     (
         "left.title",
         "Left behind by uninstalled games",
@@ -878,7 +909,26 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Neural Rendering was switched off during the session (its key in the game).",
         "O Neural Rendering foi desligado durante a sessão (pela tecla dele no jogo).",
     ),
-    ("card.launch", "Steam launch option", "Opção de inicialização da Steam"),
+    (
+        "card.launch",
+        "Last step: Steam launch option",
+        "Último passo: opção de inicialização da Steam",
+    ),
+    (
+        "card.launch_heroic",
+        "Last step: environment variable in Heroic",
+        "Último passo: variável de ambiente no Heroic",
+    ),
+    (
+        "card.launch_lutris",
+        "Last step: Lutris option",
+        "Último passo: opção do Lutris",
+    ),
+    (
+        "card.launch_other",
+        "Last step: launch option",
+        "Último passo: opção de inicialização",
+    ),
     ("yes", "yes", "sim"),
     ("no", "no", "não"),
     ("error", "Error", "Erro"),
@@ -1086,7 +1136,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     // Worker B: settings, current model and session summary.
     ("set.advanced", "Advanced settings", "Ajustes avançados"),
     ("set.game_default", "Game default", "Padrão do jogo"),
-    ("set.model_link", "Choose in NR model…", "Escolher em Modelo NR…"),
+    (
+        "set.model_link",
+        "Choose the NR model in Components",
+        "Escolher modelo NR em Componentes",
+    ),
     ("set.custom", "Custom value", "Valor personalizado"),
     ("set.automatic", "Automatic", "Automático"),
     (
@@ -1379,8 +1433,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.ls_conflict",
-        "Remove the installed sm86 component in the NR model tab before enabling LSFG.",
-        "Remova o componente sm86 instalado na aba Modelo NR antes de ligar o LSFG.",
+        "Uninstall sm86 in Components › Frame generation before turning LSFG on.",
+        "Desinstale o sm86 em Componentes › Geração de quadros antes de ligar o LSFG.",
     ),
     (
         "auto.components",
@@ -1702,8 +1756,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "dlss.download_first",
-        "Get DLSS from the DLSS card first, then review the update.",
-        "Obtenha o DLSS no cartão DLSS primeiro; depois revise a atualização.",
+        "Download DLSS in Components › DLSS first, then review the update.",
+        "Baixe o DLSS em Componentes › DLSS primeiro; depois revise a atualização.",
     ),
     (
         "dlss.consent",
@@ -1995,7 +2049,6 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Baixar este pacote por HTTPS para o catálogo do aplicativo, verificar o tamanho e o SHA-256 e extrair apenas nvngx_dlssnr.dll? Os ajustes do jogo são revisados separadamente antes de qualquer gravação.",
     ),
     ("nr_fetch.confirm", "Confirm download", "Confirmar download"),
-    ("nr_fetch.later", "Later", "Agora não"),
     (
         "nr_fetch.refresh_catalog",
         "Refresh community catalog…",

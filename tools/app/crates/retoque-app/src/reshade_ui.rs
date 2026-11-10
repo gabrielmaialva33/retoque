@@ -36,6 +36,16 @@ pub struct State {
     error: Option<AppError>,
 }
 impl State {
+    /// ReShade or its add-ons are in the game, or a ReShade task (consent, download, import, error) is under way:
+    /// the Overview then shows the ReShade card open instead of folded away.
+    pub(crate) fn in_view(&self) -> bool {
+        self.snapshot
+            .as_ref()
+            .is_some_and(|s| s.build.is_some() || !s.addons.is_empty())
+            || self.consent
+            || self.busy
+            || self.error.is_some()
+    }
     pub(crate) fn failed(&mut self) {
         self.busy = false;
     }
@@ -121,7 +131,7 @@ impl RetoqueApp {
             Outcome::ReShade(Box::new(Event::Picked { target, addon, path }))
         });
     }
-    fn reshade_inspect(&mut self) {
+    pub(crate) fn reshade_inspect(&mut self) {
         let Some(target) = self.view.target.as_ref() else {
             return;
         };

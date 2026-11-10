@@ -13,6 +13,27 @@ fn gpu_arch_key(arch: Arch) -> &'static str {
     }
 }
 
+/// The launch card's title and help for a store.
+fn launch_keys(store: Store) -> (&'static str, &'static str) {
+    match store {
+        Store::Steam => ("card.launch", "inst.launch_help"),
+        Store::Heroic => ("card.launch_heroic", "inst.launch_help_heroic"),
+        Store::Lutris => ("card.launch_lutris", "inst.launch_help_lutris"),
+        _ => ("card.launch_other", "inst.launch_help_other"),
+    }
+}
+
+/// `dxgi=n,b` out of `WINEDLLOVERRIDES="dxgi=n,b" %command%`: what Heroic's and Lutris's variable fields take.
+fn launch_env_value(option: &str) -> Option<&str> {
+    let value = option
+        .trim()
+        .strip_suffix("%command%")?
+        .trim_end()
+        .strip_prefix("WINEDLLOVERRIDES=")?
+        .trim_matches('"');
+    (!value.is_empty()).then_some(value)
+}
+
 impl RetoqueApp {
     pub(crate) fn install_tab(&mut self, ui: &mut egui::Ui) {
         let Some(target) = self.view.target.clone() else { return };
@@ -41,48 +62,180 @@ impl RetoqueApp {
             });
             ui.add_space(12.0);
         }
+        let launch = self.launch_step();
+        if let Some((option, store)) = &launch
+            && installed
+            && !self.launch_confirmed()
+        {
+            self.launch_card(ui, option, *store);
+            ui.add_space(theme::CARD_GAP);
+        }
+        // Before install the page stays short: what "Install and optimize" will do, and the Diagnóstico only when it
+        // found something. ReShade shows up when the game already has it.
+        if !installed {
+            if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target)
+                && !card.findings.is_empty()
+            {
+                ui.add_enabled_ui(!self.busy(), |ui| {
+                    crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx, self.payload.is_some())
+                });
+            }
+            self.reshade_inspect();
+            if self.tuning.reshade.in_view() {
+                self.reshade_card(ui);
+                ui.add_space(theme::CARD_GAP);
+            }
+            self.plan_card(ui, busy);
+            return;
+        }
         self.session_card(ui);
         if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target) {
             ui.add_enabled_ui(!self.busy(), |ui| {
                 crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx, self.payload.is_some())
             });
         }
-        self.reshade_card(ui);
+        // ReShade is open when the game has it; otherwise it stays one click away, folded.
+        self.reshade_inspect();
+        if self.tuning.reshade.in_view() {
+            self.reshade_card(ui);
+        } else {
+            widgets::collapsible(
+                ui,
+                "reshade_section",
+                self.tr("rs.title"),
+                widgets::Fold::Section,
+                |ui| self.reshade_card(ui),
+            );
+        }
         self.autotune_card(ui);
-        self.autotune_lsfg(ui);
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
         let _ = &target;
         widgets::card(ui, |ui| {
-            egui::CollapsingHeader::new(RichText::new(t(self.lang, "card.install_options")).strong())
-                .id_salt("install_options_section")
-                .show(ui, |ui| {
+            widgets::collapsible(
+                ui,
+                "install_options_section",
+                self.tr("card.reinstall_options"),
+                widgets::Fold::Section,
+                |ui| {
                     ui.add_enabled_ui(!busy, |ui| self.install_options(ui, installed));
-                });
-        });
-        if let Some(Ok(s)) = &self.view.status
-            && let Some(option) = s.launch_option.clone()
-        {
-            ui.add_space(12.0);
-            widgets::card(ui, |ui| {
-                widgets::card_title(ui, t(self.lang, "card.launch"));
-                ui.label(RichText::new(t(self.lang, "inst.launch_help")).color(theme::MUTED));
-                ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    ui.add(egui::Label::new(
-                        RichText::new(&option).monospace().color(theme::TEXT_STRONG),
-                    ));
-                    let label = if self.view.copied {
-                        t(self.lang, "inst.copied")
-                    } else {
-                        t(self.lang, "inst.copy")
-                    };
-                    if ui.button(label).clicked() {
-                        ui.ctx().copy_text(option.clone());
-                        self.view.copied = true;
+                    // Once the game has loaded Retoque the launch option leaves the top of the page; it stays here.
+                    if let Some((option, store)) = &launch
+                        && self.launch_confirmed()
+                    {
+                        ui.add_space(8.0);
+                        ui.label(RichText::new(self.tr("inst.launch_label")).strong());
+                        self.launch_value(ui, option, *store);
                     }
-                });
-            });
+                },
+            );
+        });
+    }
+
+    /// Before install: what "Install and optimize" will do in this game, as read-only bullets (the recommendations
+    /// that one-click review would include), and the install options closed at the end. Nothing here applies.
+    fn plan_card(&mut self, ui: &mut egui::Ui, busy: bool) {
+        use crate::autotune::recommend::{Confidence, Need};
+        let checking = self.tuning.gpus.is_none() || self.view.status.is_none() || !self.autotune_known_components();
+        let recs = if checking {
+            Default::default()
+        } else {
+            self.optimize_recommendations()
+        };
+        let target = self.view.target.as_ref();
+        let experimental = target.is_some() && self.tuning.sm86.experimental_for.as_ref() == target;
+        let lsfg = target.is_some() && self.tuning.sm86.lsfg_for.as_ref() == target;
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("inst.plan_title"));
+            if checking {
+                ui.add(egui::Label::new(RichText::new(self.tr("auto.checking")).color(theme::MUTED)).wrap());
+            }
+            for rec in recs.iter() {
+                // The same filter the one-click review uses: ReShade is always the user's own step, and experimental
+                // or LSFG items need a choice that only exists once Retoque is installed.
+                let skipped = matches!(
+                    rec.needs,
+                    Some(Need::Component(retoque_data::components::ComponentKind::ReShade))
+                ) || (rec.confidence == Confidence::ExperimentalUnderProton && !experimental)
+                    || (rec.needs == Some(Need::LosslessScaling) && !lsfg);
+                if skipped {
+                    continue;
+                }
+                let title = if rec.id == "install_retoque" {
+                    self.tr("inst.plan_install")
+                } else {
+                    t(self.lang, rec.title_key)
+                };
+                ui.add(egui::Label::new(format!("•  {title}")).wrap())
+                    .on_hover_text(t(self.lang, rec.why_key));
+            }
+            ui.add_space(4.0);
+            ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::MUTED)).wrap());
+            if let Some(error) = &self.tuning.sm86.error {
+                ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+            }
+            ui.add_space(4.0);
+            widgets::collapsible(
+                ui,
+                "install_options_section",
+                self.tr("card.install_options"),
+                widgets::Fold::Section,
+                |ui| {
+                    ui.add_enabled_ui(!busy, |ui| self.install_options(ui, false));
+                },
+            );
+        });
+    }
+
+    /// The launch option the game needs under Proton or Wine, and the store whose words explain where it goes.
+    /// None on Windows, where the game loads Retoque by itself.
+    fn launch_step(&self) -> Option<(String, Store)> {
+        let option = self.view.status.as_ref()?.as_ref().ok()?.launch_option.clone()?;
+        let store = self.selected_game().map_or(Store::Manual, |g| g.store);
+        Some((option, store))
+    }
+
+    /// The Diagnóstico's evidence that the launch option is in place: the game's newest log shows Retoque loaded.
+    fn launch_confirmed(&self) -> bool {
+        self.view
+            .intelligence
+            .latest_log
+            .as_ref()
+            .is_some_and(crate::intelligence::proxy_loaded)
+    }
+
+    /// The last step after an install under Proton or Wine, first on the page in the accent tint until the game has
+    /// loaded Retoque once. Its words follow the store, because each one keeps the setting somewhere else.
+    fn launch_card(&mut self, ui: &mut egui::Ui, option: &str, store: Store) {
+        let (title, help) = launch_keys(store);
+        widgets::tinted_card(ui, theme::ACCENT.gamma_multiply(0.12), |ui| {
+            widgets::card_title(ui, self.tr(title));
+            ui.add(egui::Label::new(RichText::new(self.tr(help)).color(theme::TEXT)).wrap());
+            ui.add_space(4.0);
+            self.launch_value(ui, option, store);
+        });
+    }
+
+    /// The text to paste and its copy button. Heroic and Lutris take a variable and a value, not a Steam command.
+    fn launch_value(&mut self, ui: &mut egui::Ui, option: &str, store: Store) {
+        let value = match store {
+            Store::Heroic | Store::Lutris => launch_env_value(option).unwrap_or(option),
+            _ => option,
         }
+        .to_owned();
+        ui.horizontal_wrapped(|ui| {
+            ui.add(egui::Label::new(
+                RichText::new(&value).monospace().color(theme::TEXT_STRONG),
+            ));
+            let label = if self.view.copied {
+                t(self.lang, "inst.copied")
+            } else {
+                t(self.lang, "inst.copy")
+            };
+            if ui.button(label).clicked() {
+                ui.ctx().copy_text(value.clone());
+                self.view.copied = true;
+            }
+        });
     }
 
     pub(crate) fn install_options(&mut self, ui: &mut egui::Ui, installed: bool) {
@@ -365,5 +518,184 @@ impl RetoqueApp {
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::autotune::recommend::{self, GameFacts};
+    use egui_kittest::{Harness, kittest::Queryable};
+    use retoque_discovery::TargetDir;
+    use std::sync::Arc;
+
+    const OPTION: &str = "WINEDLLOVERRIDES=\"dxgi=n,b\" %command%";
+
+    fn game(store: Store, target: &Path) -> Game {
+        Game {
+            id: "synthetic".into(),
+            name: "Synthetic game".into(),
+            store,
+            install_dir: target.into(),
+            runtime: Runtime::Proton {
+                app_id: 1,
+                prefix: None,
+            },
+            targets: vec![TargetDir {
+                path: target.into(),
+                executables: vec!["game.exe".into()],
+                score: 1,
+                dlss: vec![],
+                has_receipt: false,
+                proxies_present: vec![],
+                loaders: vec![],
+            }],
+            dlss_anywhere: vec![],
+            registered: true,
+        }
+    }
+
+    /// A game page on the Overview: installed (complete receipt, with the Proton launch option) or not.
+    fn app(lang: Lang, store: Store, target: &Path, installed: bool) -> RetoqueApp {
+        let mut app = crate::app_tests::shell_tests::app();
+        app.lang = lang;
+        app.library_state.games.push(game(store, target));
+        app.selected = Some("synthetic".into());
+        app.view.target = Some(target.into());
+        app.view.status = Some(Ok(Status {
+            receipt: installed.then(|| retoque_core::receipt::Receipt {
+                status: ReceiptStatus::Complete,
+                updated: String::new(),
+                records: vec![],
+            }),
+            launch_option: installed.then(|| OPTION.into()),
+            ..Default::default()
+        }));
+        app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
+        app.tuning.installed = Some(Ok(vec![]));
+        let facts = GameFacts {
+            installed,
+            runtime: recommend::Runtime::Proton,
+            ..Default::default()
+        };
+        let gpu = app.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
+        app.view.intelligence.recommendations = Arc::new(recommend::recommend(gpu, &facts));
+        app.view.intelligence.facts = Arc::new(facts);
+        app
+    }
+
+    fn overview(app: RetoqueApp) -> Harness<'static, RetoqueApp> {
+        let mut h = Harness::builder()
+            .with_size([1000., 1400.])
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.install_tab(ui), app);
+        h.run_steps(2);
+        h
+    }
+
+    #[test]
+    fn launch_words_and_value_follow_the_store() {
+        assert_eq!(launch_env_value(OPTION), Some("dxgi=n,b"));
+        assert_eq!(
+            launch_env_value("WINEDLLOVERRIDES=\"winmm=n,b\" %command%"),
+            Some("winmm=n,b")
+        );
+        assert_eq!(launch_env_value("something else"), None);
+        let mut seen = std::collections::BTreeSet::new();
+        for store in [Store::Steam, Store::Heroic, Store::Lutris, Store::Manual] {
+            let (title, help) = launch_keys(store);
+            assert!(seen.insert(title), "{store:?} needs its own title");
+            for lang in [Lang::En, Lang::Pt] {
+                assert_ne!(t(lang, title), title);
+                assert_ne!(t(lang, help), help);
+            }
+        }
+        // Stores that run through Heroic, Lutris or Steam on Linux elsewhere get the general words.
+        assert_eq!(launch_keys(Store::Epic), launch_keys(Store::Manual));
+    }
+
+    #[test]
+    fn before_install_the_overview_says_what_will_happen_and_nothing_else() {
+        for lang in [Lang::En, Lang::Pt] {
+            let temp = tempfile::tempdir().unwrap();
+            let h = overview(app(lang, Store::Steam, temp.path(), false));
+            h.get_by_label(t(lang, "inst.plan_title"));
+            assert!(
+                h.query_by_label_contains(t(lang, "inst.plan_install")).is_some(),
+                "the install itself is the first thing listed"
+            );
+            assert!(h.query_by_label_contains(t(lang, "rec.rtx30_nr.title")).is_some());
+            // LSFG needs a choice that only exists after install, so it is not promised here.
+            assert!(h.query_by_label_contains(t(lang, "rec.lsfg.title")).is_none());
+            // The options stay reachable, closed, inside that card.
+            h.get_by_label(t(lang, "card.install_options"));
+            for absent in [
+                "card.reinstall_options",
+                "auto.lsfg",
+                "rs.title",
+                "auto.title",
+                "card.launch",
+            ] {
+                assert!(h.query_by_label(t(lang, absent)).is_none(), "{absent} before install");
+            }
+        }
+    }
+
+    #[test]
+    fn after_install_the_launch_step_comes_first_until_the_game_loads_retoque() {
+        for lang in [Lang::En, Lang::Pt] {
+            for (store, title, shown) in [
+                (Store::Steam, "card.launch", OPTION),
+                (Store::Heroic, "card.launch_heroic", "dxgi=n,b"),
+                (Store::Lutris, "card.launch_lutris", "dxgi=n,b"),
+                (Store::Manual, "card.launch_other", OPTION),
+            ] {
+                let temp = tempfile::tempdir().unwrap();
+                let mut h = overview(app(lang, store, temp.path(), true));
+                let top = h.get_by_label(t(lang, title)).rect().min.y;
+                h.get_by_label(shown);
+                let options = h.get_by_label(t(lang, "card.reinstall_options")).rect().min.y;
+                assert!(top < h.get_by_label(t(lang, "auto.title")).rect().min.y);
+                assert!(top < options);
+                // Folded, but still there for a game without ReShade.
+                h.get_by_label(t(lang, "rs.title"));
+                assert!(h.query_by_label(t(lang, "inst.plan_title")).is_none());
+                assert!(
+                    h.query_by_label(t(lang, "auto.lsfg")).is_none(),
+                    "LSFG lives in Components"
+                );
+                // The newest log shows Retoque loaded: the launch option works and leaves the top of the page.
+                h.state_mut().view.intelligence.latest_log = Some(Summary {
+                    nr_initialized: true,
+                    ..Default::default()
+                });
+                h.run_steps(2);
+                assert!(h.query_by_label(t(lang, title)).is_none());
+            }
+        }
+    }
+
+    #[test]
+    fn components_tab_reads_nr_model_then_dlss_then_frame_generation() {
+        for lang in [Lang::En, Lang::Pt] {
+            let temp = tempfile::tempdir().unwrap();
+            let mut app = app(lang, Store::Steam, temp.path(), true);
+            app.tab = Tab::Model;
+            app.view.ini = Some(Ok(None));
+            app.tuning.catalog = Some(Ok(vec![]));
+            let mut h = Harness::builder()
+                .with_size([1400., 1000.])
+                .build_ui_state(|ui, app: &mut RetoqueApp| app.game(ui), app);
+            h.run_steps(2);
+            let y = |key: &str| h.get_by_label(t(lang, key)).rect().min.y;
+            let order = [
+                y("comp.nr"),
+                y("tab.install_first"),
+                y("dlss.title"),
+                y("auto.components"),
+                y("auto.lsfg"),
+            ];
+            assert!(order.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+            h.get_by_role_and_label(egui::Role::Tab, t(lang, "tab.model"));
+        }
     }
 }
