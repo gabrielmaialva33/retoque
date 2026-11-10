@@ -39,10 +39,12 @@ impl RetoqueApp {
         let Some(target) = self.view.target.clone() else { return };
         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
         let busy = self.busy();
-        // The banner's button is the way to install; progress and the outcome of the last change still show here,
-        // first, and only while there is one. The proxy name and the other options sit closed at the end.
+        // The banner's button is the way to install; progress and a failed last change still show here, first, and
+        // only while there is one (a success is the toast's). The proxy name and the other options sit closed at the
+        // end.
         let writing = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied();
-        if writing.is_some() || self.view.applied.is_some() {
+        let failed = matches!(&self.view.applied, Some((_, Err(_))));
+        if writing.is_some() || failed {
             widgets::card(ui, |ui| {
                 if let Some((done, total)) = writing {
                     ui.add(
@@ -50,14 +52,11 @@ impl RetoqueApp {
                             .text(format!("{} {done}/{total}", t(self.lang, "inst.working"))),
                     );
                 }
-                if let Some((kind, result)) = &self.view.applied {
-                    match result {
-                        Ok(()) => ui.colored_label(theme::GOOD, t(self.lang, "inst.done")),
-                        Err(e) => ui.colored_label(
-                            theme::BAD,
-                            format!("{} ({}): {e}", t(self.lang, "error"), plan_kind_name(self.lang, *kind)),
-                        ),
-                    };
+                if let Some((kind, Err(e))) = &self.view.applied {
+                    ui.colored_label(
+                        theme::BAD,
+                        format!("{} ({}): {e}", t(self.lang, "error"), plan_kind_name(self.lang, *kind)),
+                    );
                 }
             });
             ui.add_space(12.0);

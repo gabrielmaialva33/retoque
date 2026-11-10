@@ -255,14 +255,9 @@ impl RetoqueApp {
     }
 
     pub(crate) fn settings_plan(&self, ui: &mut egui::Ui) {
-        match &self.view.applied {
-            Some((PlanKind::Settings, Ok(()))) => {
-                ui.colored_label(theme::GOOD, self.tr("set.saved"));
-            }
-            Some((PlanKind::Settings, Err(e))) => {
-                crate::error::card(ui, e, self.lang, &self.cmd_tx);
-            }
-            _ => {}
+        // A success is told by the toast alone; only a failure stays on the page.
+        if let Some((PlanKind::Settings, Err(e))) = &self.view.applied {
+            crate::error::card(ui, e, self.lang, &self.cmd_tx);
         }
     }
 }

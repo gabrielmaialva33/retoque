@@ -62,7 +62,8 @@ impl RetoqueApp {
         if !self.intuitive.palette.open {
             return;
         }
-        let key = (self.library_state.generation(), self.lang);
+        let optimize = self.optimize_action_key();
+        let key = (self.library_state.generation(), self.lang, optimize);
         if self.intuitive.palette.catalog_key != Some(key) {
             let mut entries: Vec<_> = self
                 .library_state
@@ -70,31 +71,44 @@ impl RetoqueApp {
                 .iter()
                 .map(|g| Entry {
                     label: format!("{} · {}", g.name, t(self.lang, "palette.game")),
+                    search: String::new(),
                     destination: Destination::Game(g.id.clone()),
                 })
                 .collect();
             entries.extend(TABS.into_iter().map(|(tab, label, shortcut)| Entry {
                 label: format!("{} · {shortcut}", t(self.lang, label)),
+                search: String::new(),
                 destination: Destination::Tab(tab),
             }));
+            // A setting reads "{name} · Settings"; its INI name stays searchable without being shown.
             entries.extend(settings::all().iter().map(|s| Entry {
                 label: format!(
-                    "{} · [{}] {}",
+                    "{} · {}",
                     match self.lang {
                         Lang::En => s.label_en,
                         Lang::Pt => s.label_pt,
                     },
-                    s.section,
-                    s.key
+                    t(self.lang, "tab.settings")
                 ),
+                search: format!("[{}] {}", s.section, s.key),
                 destination: Destination::Setting(s.key),
             }));
-            entries.extend(PaletteAction::ALL.into_iter().map(|action| Entry {
-                label: action.label(self.lang).into(),
-                destination: Destination::Action(action),
+            entries.extend(PaletteAction::ALL.into_iter().map(|action| {
+                let (label, search) = if action == PaletteAction::Optimize {
+                    // Found by any of the main action's names, whichever one the open game shows.
+                    (t(self.lang, optimize), self.optimize_names())
+                } else {
+                    (t(self.lang, action.label_key()), String::new())
+                };
+                Entry {
+                    label: label.into(),
+                    search,
+                    destination: Destination::Action(action),
+                }
             }));
             entries.push(Entry {
                 label: format!("{} · /", t(self.lang, "palette.focus")),
+                search: String::new(),
                 destination: Destination::FocusSearch,
             });
             self.intuitive.palette.entries = entries;
@@ -114,9 +128,10 @@ impl RetoqueApp {
                 Destination::FocusSearch => self.focus_current_search(),
                 Destination::Action(action) => match action {
                     PaletteAction::RescanLibrary => self.cmd_tx.send(AppCommand::RescanLibrary),
-                    PaletteAction::ReviewInstall => {
-                        if let Some(inputs) = self.install_inputs() {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(inputs));
+                    // The banner's action, with the same readiness: nothing opens before the facts are known.
+                    PaletteAction::Optimize => {
+                        if self.optimize_ready() {
+                            self.optimize_automatically();
                         }
                     }
                     PaletteAction::ReviewUninstall => self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall),

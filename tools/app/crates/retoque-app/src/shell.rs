@@ -17,8 +17,25 @@ impl RetoqueApp {
                 self.selected = None;
                 self.open_target(None);
             }
-            if self.selected.is_some() && ui.button(self.tr("shell.library")).clicked() {
-                self.sidebar_visible = !self.sidebar_visible;
+            if self.selected.is_some() {
+                // A visible way back to the library grid, beside the brand that also leads there.
+                if ui
+                    .button(self.tr("shell.back_library"))
+                    .on_hover_text(self.tr("shell.home"))
+                    .clicked()
+                {
+                    self.selected = None;
+                    self.open_target(None);
+                } else if ui
+                    .button(self.tr(if self.sidebar_visible {
+                        "shell.library_hide"
+                    } else {
+                        "shell.library_show"
+                    }))
+                    .clicked()
+                {
+                    self.sidebar_visible = !self.sidebar_visible;
+                }
             }
             if ui.available_width() > 1000.0 {
                 ui.label(RichText::new(self.tr("app.tagline")).color(theme::MUTED));
@@ -421,24 +438,32 @@ impl RetoqueApp {
         self.library_state.refresh(&self.saved.targets, payload, self.lang);
     }
 
+    /// "12 jogos · 3 com Retoque · 1 atualização disponível": singular for one, and no update part when there are
+    /// none.
+    pub(crate) fn home_count_line(&self, installed: usize, updates: usize) -> String {
+        let games = self.library_state.games.len();
+        let plural = |n: usize, one: &'static str, other: &'static str| {
+            format!("{n} {}", self.tr(if n == 1 { one } else { other }))
+        };
+        let mut line = format!(
+            "{} · {installed} {}",
+            plural(games, "shell.games_one", "shell.games_other"),
+            self.tr("welcome.installed")
+        );
+        if updates > 0 {
+            line.push_str(" · ");
+            line.push_str(&plural(updates, "shell.updates_one", "shell.updates_other"));
+        }
+        line
+    }
+
     pub(crate) fn home_grid(&mut self, ui: &mut egui::Ui) {
         self.migrate_saved_folders();
         ui.heading(self.tr("welcome.title"));
         self.refresh_library_cache();
         let installed = self.library_state.derived.installed_count;
         let updates = self.library_state.derived.updates;
-        ui.label(
-            RichText::new(format!(
-                "{} {} · {} {} · {} {}",
-                self.library_state.games.len(),
-                self.tr("shell.games"),
-                installed,
-                self.tr("welcome.installed"),
-                updates,
-                self.tr("shell.updates")
-            ))
-            .color(theme::MUTED),
-        );
+        ui.label(RichText::new(self.home_count_line(installed, updates)).color(theme::MUTED));
         if self.library_pending {
             ui.label(
                 RichText::new(self.tr("shell.library_checking"))
@@ -627,80 +652,40 @@ impl RetoqueApp {
             });
             let ready = self.optimize_ready();
             child.horizontal_wrapped(|ui| {
-                // One big action, like a GPU panel: a game without Retoque (or with an old script's install) gets
-                // "Install and optimize", which opens one review for Retoque plus everything this card and GPU need.
-                match state {
-                    Some(InstallState::Partial) => {
-                        if ui
-                            .add(theme::primary(self.tr("shell.resume")))
-                            .on_hover_text(self.tr("shell.review_shortcut"))
-                            .clicked()
-                        {
-                            self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
-                        }
+                // The page's one primary, named for what it does here: "Install and optimize" opens one review for
+                // Retoque plus everything this card and GPU need; an update or an old script's install goes into
+                // the same review. Every other action sits in "More actions" beside it.
+                if state == Some(InstallState::Partial) {
+                    if ui
+                        .add(theme::primary(self.tr("shell.resume")))
+                        .on_hover_text(self.tr("shell.review_shortcut"))
+                        .clicked()
+                    {
+                        self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
                     }
-                    Some(InstallState::Missing | InstallState::Untracked) | None => {
-                        let label = if state == Some(InstallState::Untracked) {
-                            "shell.register_optimize"
+                } else {
+                    let key = self.optimize_action_key();
+                    let only_optimize = key == "shell.optimize";
+                    let response = ui
+                        .add_enabled(
+                            state.is_some() && ready && (only_optimize || self.payload.is_some()),
+                            theme::primary(self.tr(key)),
+                        )
+                        .on_hover_text(self.tr(if only_optimize {
+                            "shell.optimize_hint"
                         } else {
-                            "shell.install_optimize"
-                        };
-                        let response = ui
-                            .add_enabled(
-                                state.is_some() && self.payload.is_some() && ready,
-                                theme::primary(self.tr(label)).min_size(egui::vec2(190.0, 38.0)),
-                            )
-                            .on_hover_text(self.tr("shell.install_optimize_hint"))
-                            .on_disabled_hover_text(self.tr(if self.payload.is_none() {
-                                "shell.no_payload"
-                            } else {
-                                "shell.checking"
-                            }));
-                        if response.clicked() {
-                            self.optimize_automatically();
-                        }
-                        if ui
-                            .add_enabled(
-                                state.is_some() && self.payload.is_some() && !self.busy(),
-                                egui::Button::new(self.tr("shell.install_only")),
-                            )
-                            .clicked()
-                            && let Some(options) = self.install_inputs()
-                        {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                        }
-                    }
-                    Some(InstallState::Update) => {
-                        if ui
-                            .add_enabled(self.payload.is_some(), theme::primary(self.tr("shell.update")))
-                            .on_hover_text(self.tr("shell.review_shortcut"))
-                            .clicked()
-                            && let Some(options) = self.install_inputs()
-                        {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                        }
-                        if ui
-                            .add_enabled(ready, egui::Button::new(self.tr("shell.optimize")))
-                            .clicked()
-                        {
-                            self.optimize_automatically();
-                        }
-                    }
-                    Some(InstallState::Current | InstallState::Installed) => {
-                        if ui
-                            .add_enabled(ready, theme::primary(self.tr("shell.optimize")))
-                            .on_hover_text(self.tr("shell.optimize_hint"))
-                            .clicked()
-                        {
-                            self.optimize_automatically();
-                        }
-                        if ui.button(self.tr("shell.reinstall")).clicked()
-                            && let Some(options) = self.install_inputs()
-                        {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                        }
+                            "shell.install_optimize_hint"
+                        }))
+                        .on_disabled_hover_text(self.tr(if self.payload.is_none() && !only_optimize {
+                            "shell.no_payload"
+                        } else {
+                            "shell.checking"
+                        }));
+                    if response.clicked() {
+                        self.optimize_automatically();
                     }
                 }
+                self.banner_more_actions(ui, state, game);
                 let download = if self.nr_fetch.busy {
                     Some(("nr_fetch.downloading", self.nr_fetch.downloaded))
                 } else if self.tuning.sm86.busy {
@@ -720,16 +705,6 @@ impl RetoqueApp {
                     };
                     ui.label(RichText::new(text).small());
                 }
-                if matches!(
-                    state,
-                    Some(InstallState::Current | InstallState::Update | InstallState::Installed)
-                ) && ui.button(self.tr("shell.uninstall_open")).clicked()
-                {
-                    self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
-                }
-                if ui.button(self.tr("shell.open_folder")).clicked() {
-                    model::open_folder(&game.install_dir);
-                }
             });
         }
         child.label(
@@ -742,6 +717,56 @@ impl RetoqueApp {
             .color(theme::MUTED),
         );
         ui.add_space(12.0);
+    }
+
+    /// The banner's secondary actions in one menu beside its primary: install or update without optimizing,
+    /// reinstall, uninstall, undo and the game folder. Each still opens its own review.
+    fn banner_more_actions(&mut self, ui: &mut egui::Ui, state: Option<InstallState>, game: &Game) {
+        let installed = matches!(
+            state,
+            Some(InstallState::Current | InstallState::Update | InstallState::Installed)
+        );
+        let can_write = self.payload.is_some() && !self.busy();
+        ui.menu_button(self.tr("shell.more"), |ui| {
+            let install = match state {
+                Some(InstallState::Missing | InstallState::Untracked) => Some("shell.install_only"),
+                Some(InstallState::Update) => Some("shell.update"),
+                Some(InstallState::Current | InstallState::Installed) => Some("shell.reinstall"),
+                Some(InstallState::Partial) | None => None,
+            };
+            if let Some(key) = install
+                && ui
+                    .add_enabled(can_write, egui::Button::new(self.tr(key)))
+                    .on_disabled_hover_text(self.tr(if self.payload.is_none() {
+                        "shell.no_payload"
+                    } else {
+                        "shell.checking"
+                    }))
+                    .clicked()
+                && let Some(options) = self.install_inputs()
+            {
+                self.request_plan(PlanKind::Install, PlanInputs::Install(options));
+            }
+            if installed
+                && ui
+                    .add_enabled(!self.busy(), egui::Button::new(self.tr("shell.uninstall_open")))
+                    .clicked()
+            {
+                self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
+            }
+            // Undo also covers what an optimization wrote, not only the Settings tab's edits.
+            if installed
+                && ui
+                    .add_enabled(!self.busy(), egui::Button::new(self.tr("undo.title")))
+                    .clicked()
+                && let Some(target) = self.view.target.clone()
+            {
+                self.cmd_tx.send(AppCommand::UndoSettings(target));
+            }
+            if ui.button(self.tr("shell.open_folder")).clicked() {
+                model::open_folder(&game.install_dir);
+            }
+        });
     }
 
     pub(crate) fn pending_footer(&mut self, ui: &mut egui::Ui) {

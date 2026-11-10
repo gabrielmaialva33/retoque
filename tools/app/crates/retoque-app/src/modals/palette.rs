@@ -23,6 +23,8 @@ pub(crate) enum Destination {
 }
 pub(crate) struct Entry {
     pub label: String,
+    /// Matched like the label but never shown: a setting's INI name, or the other names of an action.
+    pub search: String,
     pub destination: Destination,
 }
 #[derive(Default)]
@@ -31,7 +33,8 @@ pub(crate) struct Palette {
     pub query: String,
     pub entries: Vec<Entry>,
     pub results: Vec<usize>,
-    pub catalog_key: Option<(u64, Lang)>,
+    /// Library generation, language and the main action's current name.
+    pub catalog_key: Option<(u64, Lang, &'static str)>,
     query_key: Option<String>,
     selected: usize,
     focus: bool,
@@ -69,7 +72,12 @@ impl Palette {
             .entries
             .iter()
             .enumerate()
-            .filter_map(|(i, e)| search.score(&e.label).map(|score| (i, score)))
+            .filter_map(|(i, e)| {
+                search
+                    .score(&e.label)
+                    .or_else(|| (!e.search.is_empty()).then(|| search.score(&e.search)).flatten())
+                    .map(|score| (i, score))
+            })
             .collect();
         ranked.sort_by(|(a, sa), (b, sb)| {
             sb.cmp(sa)

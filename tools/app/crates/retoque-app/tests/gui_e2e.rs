@@ -20,7 +20,8 @@ use retoque_core::{ini::Ini, receipt::ReceiptStatus};
 use retoque_data::models::Catalog;
 
 type Window = Harness<'static, RetoqueApp>;
-const SAVED: &str = "Written. The game reads it at its next start.";
+// A settings write is told by its toast ("Settings applied · {game}"), not by a line on the page.
+const SAVED: &str = "Settings applied";
 
 fn window() -> Window {
     // Include the naming audit: composite settings inputs are labelled by their row.
@@ -113,7 +114,7 @@ fn review_stage(ui: &mut Window, game: &Path, before: &str, after: &str) {
     click(ui, Role::Button, "Review changes");
     wait_label(ui, &format!("[DlssNr] Stage: {before} -> {after}"));
     assert_eq!(snapshot(game), unchanged, "preview must not write");
-    click(ui, Role::Button, "Write these changes");
+    click(ui, Role::Button, "Apply");
     wait(ui, "settings write and UI result", |ui| {
         label(ui, SAVED) && ini_value(game, "Stage") == after
     });
@@ -274,7 +275,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     click(&mut ui, Role::Button, "Use in this game: Synthetic model");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: auto -> {model_value}"));
     assert_eq!(snapshot(&game), before_model);
-    click(&mut ui, Role::Button, "Write these changes");
+    click(&mut ui, Role::Button, "Apply");
     wait(&mut ui, "model write", |ui| {
         label(ui, SAVED) && ini_value(&game, "ModelFile") == model_value
     });
@@ -328,7 +329,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     click(&mut ui, Role::Tab, "Components");
     click(&mut ui, Role::Button, "Use the default search");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: {model_value} -> auto"));
-    click(&mut ui, Role::Button, "Write these changes");
+    click(&mut ui, Role::Button, "Apply");
     wait(&mut ui, "restore default model", |ui| {
         label(ui, SAVED) && ini_value(&game, "ModelFile") == "auto"
     });

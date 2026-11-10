@@ -208,20 +208,8 @@ impl RetoqueApp {
                     recommendation_evidence(ui, self.lang, rec);
                     let mut ready = !self.busy();
                     match &rec.needs {
-                        Some(Need::RetoqueInstalled) => {
-                            ui.add(egui::Label::new(self.tr("auto.need_install")).wrap());
-                            if ui
-                                .add_enabled(
-                                    self.install_inputs().is_some() && !self.busy(),
-                                    theme::primary(self.tr("auto.prepare_install")),
-                                )
-                                .clicked()
-                                && let Some(options) = self.install_inputs()
-                            {
-                                self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                            }
-                            return;
-                        }
+                        // Games without (tracked) Retoque returned above: the banner's action installs it.
+                        Some(Need::RetoqueInstalled) => return,
                         Some(Need::Component(ComponentKind::ReShade)) => {
                             if ui.button(self.tr("rs.install")).clicked() {
                                 self.reshade_offer();
@@ -237,7 +225,16 @@ impl RetoqueApp {
                         }
                         None => {}
                     }
-                    if ui.add_enabled(ready, theme::primary(self.tr("auto.apply"))).clicked() {
+                    // One recommendation alone: a plain button, the banner keeps the page's primary.
+                    let apply = ui.add_enabled(ready, egui::Button::new(self.tr("auto.apply")));
+                    apply.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::Role::Button,
+                            ready,
+                            format!("{}: {}", self.tr("auto.apply"), t(self.lang, rec.title_key)),
+                        )
+                    });
+                    if apply.clicked() {
                         let mut request = Request::default();
                         for action in &rec.actions {
                             match action {
@@ -450,6 +447,22 @@ impl RetoqueApp {
             }))
         });
     }
+    /// What the success toast says, repeating the action: Retoque installed, registered or updated with the
+    /// optimization, the optimization alone, or other reviewed changes.
+    pub(crate) fn tuning_done_key(&self, request: &Request) -> &'static str {
+        let status = self.view.status.as_ref().and_then(|r| r.as_ref().ok());
+        if request.retoque_install().is_some() {
+            match status {
+                Some(s) if s.receipt.is_some() => "auto.done_update",
+                Some(s) if !s.optiscaler_proxies.is_empty() => "auto.done_register",
+                _ => "auto.done_install",
+            }
+        } else if matches!(&self.review, Some(Ok(r)) if self.optimize_verb(&r.title).is_some()) {
+            "auto.done_optimize"
+        } else {
+            "auto.done"
+        }
+    }
     pub(crate) fn autotune_apply(&mut self, p: autotune::Prepared) {
         let target = p.target.clone();
         let mut roots = vec![target.clone()];
@@ -484,7 +497,8 @@ impl RetoqueApp {
         self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, total));
         self.write_kinds.insert(target.clone(), kind);
-        self.tuning.writes.insert(target.clone());
+        let done = self.tuning_done_key(&p.request);
+        self.tuning.writes.insert(target.clone(), done);
         for root in &roots {
             self.writing.insert(root.clone(), (0, total));
         }

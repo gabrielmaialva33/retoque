@@ -40,11 +40,13 @@ impl CommandSender {
     }
 }
 
-/// Stable actions for the command palette; labels share the ordinary UI's translations.
+/// Stable actions for the command palette; labels share the ordinary UI's translations and say what happens.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PaletteAction {
     RescanLibrary,
-    ReviewInstall,
+    /// The game page's main action, under the banner's name for the open game (install, register, update or only
+    /// optimize).
+    Optimize,
     ReviewUninstall,
     ReviewSettings,
     UndoSettings,
@@ -53,22 +55,20 @@ pub enum PaletteAction {
 impl PaletteAction {
     pub const ALL: [Self; 5] = [
         Self::RescanLibrary,
-        Self::ReviewInstall,
+        Self::Optimize,
         Self::ReviewUninstall,
         Self::ReviewSettings,
         Self::UndoSettings,
     ];
 
-    pub fn label(self, lang: crate::i18n::Lang) -> &'static str {
-        crate::i18n::t(
-            lang,
-            match self {
-                Self::RescanLibrary => "app.refresh",
-                Self::ReviewInstall => "kind.install",
-                Self::ReviewUninstall => "kind.uninstall",
-                Self::ReviewSettings => "kind.settings",
-                Self::UndoSettings => "undo.title",
-            },
-        )
+    /// The label's key; `Optimize` gives its plainest name, the shell shows the banner's current one instead.
+    pub fn label_key(self) -> &'static str {
+        match self {
+            Self::RescanLibrary => "app.refresh",
+            Self::Optimize => "shell.optimize",
+            Self::ReviewUninstall => "palette.uninstall",
+            Self::ReviewSettings => "palette.review_settings",
+            Self::UndoSettings => "undo.title",
+        }
     }
 }
