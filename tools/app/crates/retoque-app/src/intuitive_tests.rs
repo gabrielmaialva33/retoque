@@ -278,6 +278,7 @@ fn matching_cost_500_games() {
         .iter()
         .map(|g| crate::modals::palette::Entry {
             label: g.name.clone(),
+            search: String::new(),
             destination: crate::modals::palette::Destination::Game(g.id.clone()),
         })
         .collect();

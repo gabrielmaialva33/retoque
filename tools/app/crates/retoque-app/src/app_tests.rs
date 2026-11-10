@@ -643,13 +643,13 @@ pub(crate) mod measurements {
 }
 
 #[test]
-fn remedies_show_pids_in_both_languages_without_starting_a_write() {
+fn remedies_show_program_names_in_both_languages_without_starting_a_write() {
     use egui_kittest::kittest::Queryable;
     for lang in [Lang::En, Lang::Pt] {
         let mut app = shell_tests::app();
         app.lang = lang;
         let error = AppError::from(retoque_core::Error::Refused(vec![Refusal::GameRunning {
-            processes: vec![(42, "synthetic-game".into())],
+            processes: vec![(42, "synthetic-game".into()), (43, "synthetic-game".into())],
         }]));
         let mut h = egui_kittest::Harness::new_ui_state(
             move |ui, app: &mut RetoqueApp| {
@@ -662,7 +662,17 @@ fn remedies_show_pids_in_both_languages_without_starting_a_write() {
         h.get_by_role_and_label(egui::Role::Button, t(lang, "remedy.processes"))
             .click_accesskit();
         h.run_steps(3);
-        h.get_by_label("synthetic-game · PID 42");
+        // One line per program, no PIDs; an information dialog closes with "Close" and offers "Try again".
+        assert_eq!(h.query_all_by_label("synthetic-game").count(), 1);
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "remedy.retry"));
+        assert!(
+            h.query_by_role_and_label(egui::Role::Button, t(lang, "cancel"))
+                .is_none()
+        );
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "close"))
+            .click_accesskit();
+        h.run_steps(3);
+        assert!(h.state().process_notice.is_none());
         assert!(h.state().writing.is_empty());
         assert!(h.state().review.is_none());
     }

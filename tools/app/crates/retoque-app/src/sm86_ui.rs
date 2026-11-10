@@ -10,6 +10,14 @@ use std::sync::{Arc, Mutex};
 type PendingRecs = (PathBuf, u64, Arc<Vec<autotune::recommend::Recommendation>>);
 static PENDING_RECS: Mutex<Option<PendingRecs>> = Mutex::new(None);
 
+/// The names of the game page's main action, one per install state (see `optimize_action_key`).
+const OPTIMIZE_ACTIONS: [&str; 4] = [
+    "shell.install_optimize",
+    "shell.register_optimize",
+    "shell.update_optimize",
+    "shell.optimize",
+];
+
 impl RetoqueApp {
     pub(crate) fn sm86_dialog(&mut self, ctx: &egui::Context) {
         let eligible = self.tuning.gpus.as_deref().is_some_and(optimize::first_run_eligible);
@@ -117,7 +125,7 @@ impl RetoqueApp {
                     && let Some(component) = component
                 {
                     pending.request.set_component(ComponentChange::Install(component));
-                    self.autotune_request(self.tr("optimize.title").into(), pending.request);
+                    self.autotune_request(self.optimize_title(), pending.request);
                 }
             }
             Err(error) => {
@@ -218,6 +226,46 @@ impl RetoqueApp {
             && self.view.status.is_some()
             && self.autotune_known_components()
     }
+    /// The game page's one main action, named for what it will do here: install Retoque, register an old script's
+    /// install, update it, or only optimize. The banner, the command palette and the review share it.
+    pub(crate) fn optimize_action_key(&self) -> &'static str {
+        let payload = self
+            .payload_build
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .map(String::as_str);
+        let state = self
+            .view
+            .status
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .map(|s| install_state(s, payload));
+        let facts = &self.view.intelligence.facts;
+        match state {
+            Some(InstallState::Missing) => "shell.install_optimize",
+            Some(InstallState::Untracked) => "shell.register_optimize",
+            Some(InstallState::Update) => "shell.update_optimize",
+            Some(InstallState::Current | InstallState::Installed | InstallState::Partial) => "shell.optimize",
+            None if facts.untracked => "shell.register_optimize",
+            None if !facts.installed => "shell.install_optimize",
+            None => "shell.optimize",
+        }
+    }
+    /// The review's title: the clicked label without its "…".
+    pub(crate) fn optimize_title(&self) -> String {
+        self.tr(self.optimize_action_key()).trim_end_matches('…').to_owned()
+    }
+    /// All of the main action's names, for search.
+    pub(crate) fn optimize_names(&self) -> String {
+        OPTIMIZE_ACTIONS.map(|key| self.tr(key)).join(" ")
+    }
+    /// The main action's verb when a review was opened by it (its title), so the confirm repeats that verb.
+    pub(crate) fn optimize_verb(&self, title: &str) -> Option<&'static str> {
+        OPTIMIZE_ACTIONS
+            .iter()
+            .map(|key| self.tr(key).trim_end_matches('…'))
+            .find(|verb| *verb == title)
+    }
     pub(crate) fn optimize_controls(&mut self, ui: &mut egui::Ui) {
         self.dlss_optimize_checkbox(ui);
         let recs = self.optimize_recommendations();
@@ -240,8 +288,9 @@ impl RetoqueApp {
         {
             self.tuning.sm86.lsfg_for = if lsfg { target.cloned() } else { None };
         }
+        // The banner holds the page's primary; this card's button opens the same review.
         if ui
-            .add_enabled(self.optimize_idle(), theme::primary(self.tr("optimize.title")))
+            .add_enabled(self.optimize_idle(), egui::Button::new(self.tr("optimize.review")))
             .clicked()
         {
             self.optimize_automatically();
@@ -273,9 +322,11 @@ impl RetoqueApp {
             self.view.intelligence.recommendations = saved_recs;
         }
         let recs = self.optimize_recommendations();
+        // An available Retoque update goes into the same review ("Update and optimize").
         let need_install = recs.iter().any(|r| r.is_primary_install_action())
             || self.view.intelligence.facts.untracked
-            || (!self.view.intelligence.facts.installed && self.payload.is_some());
+            || (!self.view.intelligence.facts.installed && self.payload.is_some())
+            || self.optimize_action_key() == "shell.update_optimize";
         let install = need_install.then(|| self.install_inputs()).flatten();
         let component = self.autotune_selected_component();
         let models = self
@@ -426,7 +477,7 @@ impl RetoqueApp {
                     || c.request.retoque_install().is_some() =>
             {
                 let omitted = c.experimental_omitted;
-                self.autotune_request(self.tr("optimize.title").into(), c.request);
+                self.autotune_request(self.optimize_title(), c.request);
                 if omitted {
                     // The review still opens (Retoque is installed); say what was left out and how to include it.
                     self.tuning.sm86.error = Some(self.tr("optimize.experimental_omitted").into());

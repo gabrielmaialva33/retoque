@@ -374,17 +374,17 @@ impl RetoqueApp {
                         .find(|g| g.targets.iter().any(|t| t.path == target))
                         .map(|g| g.name.clone())
                         .unwrap_or_else(|| short_path(&target));
-                    if self.tuning.writes.remove(&target) {
-                        self.toast(
-                            format!(
-                                "{} · {game_name}",
-                                self.tr(if result.is_ok() { "auto.done" } else { "shell.failed" })
+                    if let Some(done) = self.tuning.writes.remove(&target) {
+                        match &result {
+                            Ok(()) => self.success_toast(done, &game_name),
+                            Err(error) => self.toast(
+                                format!("{} · {game_name}", self.tr("shell.failed")),
+                                Some(error.clone()),
+                                true,
                             ),
-                            result.as_ref().err().cloned(),
-                            result.is_err(),
-                        );
+                        }
                     } else {
-                        self.notify_action(kind, &game_name, &result);
+                        self.notify_action(kind, &target, &game_name, &result);
                     }
                     if result.is_ok()
                         && let Some(draft) = self.drafts.get_mut(&target)
@@ -784,18 +784,21 @@ impl RetoqueApp {
                 match &self.review {
                     Some(Ok(review)) => {
                         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
-                        let label = self.tr(match review.kind {
+                        let label = match review.kind {
                             ReviewKind::Autotune(ref r)
                                 if matches!(r.dlss, Some(crate::dlss_ui::Change::Restore { .. })) =>
                             {
-                                "inst.uninstall"
+                                self.tr("inst.uninstall")
                             }
-                            ReviewKind::Autotune(_) => "auto.confirm",
-                            ReviewKind::Standard(PlanKind::Install) if installed => "inst.update",
-                            ReviewKind::Standard(PlanKind::Install) => "inst.install",
-                            ReviewKind::Standard(PlanKind::Uninstall) => "inst.uninstall",
-                            ReviewKind::Standard(PlanKind::Settings) => "set.apply",
-                        });
+                            // The main action's review is confirmed with its own verb ("Install and optimize").
+                            ReviewKind::Autotune(_) => {
+                                self.optimize_verb(&review.title).unwrap_or(self.tr("auto.confirm"))
+                            }
+                            ReviewKind::Standard(PlanKind::Install) if installed => self.tr("inst.update"),
+                            ReviewKind::Standard(PlanKind::Install) => self.tr("inst.install"),
+                            ReviewKind::Standard(PlanKind::Uninstall) => self.tr("inst.uninstall"),
+                            ReviewKind::Standard(PlanKind::Settings) => self.tr("set.apply"),
+                        };
                         if self.intuitive.undo_request == Some(review.request_id) {
                             ui.label(self.tr("undo.auto_note"));
                         }
@@ -829,22 +832,38 @@ impl RetoqueApp {
         }
     }
 
-    pub(crate) fn notify_action(&mut self, kind: PlanKind, game: &str, result: &Result<(), AppError>) {
-        let key = match (kind, result.is_ok()) {
-            (_, false) => "shell.failed",
-            (PlanKind::Install, true) => "shell.installed_done",
-            (PlanKind::Uninstall, true) => "shell.removed_done",
-            (PlanKind::Settings, true) => "shell.settings_done",
+    /// The toast after a reviewed write repeats the action: "Retoque installed · {game}" for a first install,
+    /// "Retoque updated · {game}" over an existing one. The status read before the write tells them apart.
+    pub(crate) fn notify_action(&mut self, kind: PlanKind, target: &Path, game: &str, result: &Result<(), AppError>) {
+        let Err(error) = result else {
+            let had_receipt = if self.view.target.as_deref() == Some(target) {
+                matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some())
+            } else {
+                self.library_state
+                    .status
+                    .get(target)
+                    .is_some_and(|s| s.receipt.is_some())
+            };
+            let key = match kind {
+                PlanKind::Install if had_receipt => "shell.updated_done",
+                PlanKind::Install => "shell.installed_done",
+                PlanKind::Uninstall => "shell.removed_done",
+                PlanKind::Settings => "shell.settings_done",
+            };
+            self.success_toast(key, game);
+            return;
         };
         self.toast(
-            format!("{} · {game}", self.tr(key)),
-            result
-                .as_ref()
-                .err()
-                .cloned()
-                .or_else(|| Some(self.tr("shell.done_details").into())),
-            result.is_err(),
+            format!("{} · {game}", self.tr("shell.failed")),
+            Some(error.clone()),
+            true,
         );
+    }
+
+    /// A success says what was done, to which game, and that the game reads it at its next start; no Details.
+    pub(crate) fn success_toast(&mut self, key: &'static str, game: &str) {
+        let message = format!("{} · {game}\n{}", self.tr(key), self.tr("shell.restart_hint"));
+        self.toast(message, None, false);
     }
 
     pub(crate) fn toast(&mut self, message: String, detail: Option<AppError>, failed: bool) {
@@ -927,15 +946,33 @@ impl RetoqueApp {
     }
     pub(crate) fn show_process_notice(&mut self, ctx: &egui::Context) {
         let Some(processes) = &self.process_notice else { return };
-        let response = egui::Modal::new(egui::Id::unique("running_processes")).show(ctx, |ui| {
-            ui.heading(self.tr("remedy.close_processes"));
-            for (pid, name) in processes {
-                ui.label(format!("{name} · PID {pid}"));
-            }
-            ui.button(self.tr("cancel")).clicked()
-        });
-        if response.inner || response.should_close() {
+        // An information dialog: the program names (a game often runs several processes of one name), "Close",
+        // and "Try again" for when the user has closed them.
+        let mut names: Vec<&str> = processes.iter().map(|(_, name)| name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        let response = egui::Modal::new(egui::Id::unique("running_processes"))
+            .frame(widgets::modal_frame())
+            .show(ctx, |ui| {
+                ui.heading(self.tr("remedy.close_processes"));
+                for name in &names {
+                    ui.label(*name);
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    let retry = ui.button(self.tr("remedy.retry")).clicked();
+                    let close = ui.button(self.tr("close")).clicked();
+                    (retry, close)
+                })
+                .inner
+            });
+        let (retry, close) = response.inner;
+        if retry || close || response.should_close() {
             self.process_notice = None;
+        }
+        if retry {
+            self.cmd_tx
+                .send(AppCommand::Remedy(Remedy::ReplanStale, self.view.target.clone()));
         }
     }
 }
