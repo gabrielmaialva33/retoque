@@ -167,6 +167,13 @@ log there is no card. Install options (proxy name, NR on, previews) sit closed a
 shows one line (Retoque's build, updates) and opens the payload source controls under “Advanced”, or by itself
 when no Retoque files are found.
 
+A store's uninstall removes only the files it installed, so a game folder can outlive its game with Retoque's
+files in it. Discovery reports unregistered Steam folders with no executable and a Retoque marker
+(`retoque_discovery::leftover`); the home screen offers them under “Left behind by uninstalled games”, and the
+review lists per folder what goes and what stays. `retoque_core::leftovers` removes only files Retoque, OptiScaler,
+sm86, ReShade or their caches put there, never follows links, keeps every other file (saves, store stamps) and
+its folder, refuses a folder with an executable, and refuses a folder that changed since the review.
+
 On RTX 30 (Ampere) two tuning items come from one field session (Dying Light: The Beast, RTX 3060, Windows,
 2026-11-10, DLSS-G through sm86 at 4.0x on screen with NR on): with sm86 and a game that ships DLSS-G,
 `[FrameGen] FGNvngxReplacement=None` and `[DLSSG] OverrideInterpolationCount=3` (MFG x4); for a D3D12 game,

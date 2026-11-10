@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 pub mod art;
 pub mod heroic;
 pub mod io;
+pub mod leftover;
 pub mod lutris;
 pub mod steam;
 pub mod targets;
@@ -308,6 +309,13 @@ pub struct Config {
 
 /// Every game found, sorted by name. A store that cannot be read is skipped and named in the second value.
 pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
+    let (games, skipped, _) = discover_with_leftovers(config);
+    (games, skipped)
+}
+
+/// `discover`, plus the Steam library folders that hold only what Retoque left behind after the store uninstalled
+/// the game (`leftover::looks_like_leftover`), sorted.
+pub fn discover_with_leftovers(config: &Config) -> (Vec<Game>, Vec<String>, Vec<PathBuf>) {
     let home = config.home.clone().or_else(default_home_dir);
     let mut games = Vec::new();
     let mut skipped = Vec::new();
@@ -368,8 +376,10 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
     }
 
     let windows_steam_runtime = cfg!(windows) && config.home.is_none();
-    let (steam_games, steam_skipped) =
-        steam::discover_steam(home.as_deref(), &extra_steam_roots, windows_steam_runtime);
+    let (steam_games, steam_skipped, mut leftovers) =
+        steam::discover_steam_with_leftovers(home.as_deref(), &extra_steam_roots, windows_steam_runtime);
+    leftovers.sort();
+    leftovers.dedup();
     games.extend(steam_games);
     skipped.extend(steam_skipped);
 
@@ -517,7 +527,7 @@ pub fn discover(config: &Config) -> (Vec<Game>, Vec<String>) {
             .then_with(|| a.id.cmp(&b.id))
     });
 
-    (games, skipped)
+    (games, skipped, leftovers)
 }
 
 /// The candidate executable folders under an install folder, best first.

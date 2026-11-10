@@ -426,7 +426,12 @@ impl RetoqueApp {
         }
         self.refresh_library_cache();
         let mut clicked = None;
-        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+        // A new scan reorders and resizes the grid; an offset kept from before would open it cut off at the top.
+        let mut scroll = egui::ScrollArea::vertical().auto_shrink([false, false]);
+        if std::mem::take(&mut self.library_state.scroll_to_top) {
+            scroll = scroll.vertical_scroll_offset(0.0);
+        }
+        scroll.show(ui, |ui| {
             for installed_group in [true, false] {
                 if !installed_group && self.library_state.installed_only {
                     continue;
@@ -470,8 +475,10 @@ impl RetoqueApp {
                 });
                 ui.add_space(20.0);
             }
+            self.leftovers_card(ui);
             self.skipped_note(ui);
         });
+        self.leftovers_modal(ui.ctx());
         if let Some(id) = clicked {
             self.select_id(id);
         }

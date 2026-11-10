@@ -5,6 +5,7 @@ pub mod app;
 pub mod compare;
 pub mod i18n;
 pub mod jobs;
+pub mod leftovers_ui;
 pub mod model;
 pub mod theme;
 pub mod widgets;

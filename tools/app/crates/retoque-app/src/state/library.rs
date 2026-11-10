@@ -15,6 +15,12 @@ pub(crate) struct LibraryState {
     pub search: String,
     pub installed_only: bool,
     pub migration: crate::folders_ui::FolderMigration,
+    /// What uninstalled games left behind, from the last scan; the review modal and its job.
+    pub leftovers: Vec<retoque_core::leftovers::Leftover>,
+    pub leftovers_review: bool,
+    pub leftovers_busy: bool,
+    /// Set by each completed scan: the home grid opens at its top.
+    pub scroll_to_top: bool,
     generation: u64,
     pub derived: DerivedLibrary,
 }
