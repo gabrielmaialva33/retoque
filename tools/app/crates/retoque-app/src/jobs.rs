@@ -1,5 +1,6 @@
 //! Bounded worker lanes, shared by the shell and tabs. Selected-game reads carry an epoch;
-//! writes and global discovery always finish even after the selection changes.
+//! writes and global discovery always finish even after the selection changes. Consented downloads each get
+//! their own thread: they wait on the network for minutes and must not hold up local work or one another.
 use crate::model::Outcome;
 use std::path::PathBuf;
 use std::sync::{
@@ -12,6 +13,7 @@ use std::sync::{
 pub enum Lane {
     Fast,
     Heavy,
+    Net,
     Watcher,
 }
 type Work = Box<dyn FnOnce() + Send>;
@@ -79,6 +81,7 @@ impl TaskHub {
     ) {
         let lane = match name {
             "status" | "ini" | "logs" | "model-usage" | "doctor" => Lane::Fast,
+            "dlss-download" | "nr-model-fetch" | "sm86-download" | "payload-fetch" | "reshade-download" => Lane::Net,
             _ => Lane::Heavy,
         };
         let scoped = matches!(
@@ -139,11 +142,16 @@ impl TaskHub {
             let _ = tx.send(Outcome::Finished);
             ctx.request_repaint();
         });
-        let worker = match lane {
-            Lane::Fast | Lane::Watcher => &self.fast,
-            Lane::Heavy => &self.heavy,
+        let sent = match lane {
+            Lane::Fast | Lane::Watcher => self.fast.send(job).is_ok(),
+            Lane::Heavy => self.heavy.send(job).is_ok(),
+            // Each user-confirmed download is its own short-lived thread; a busy flag per kind prevents repeats.
+            Lane::Net => std::thread::Builder::new()
+                .name(format!("retoque-net-{name}"))
+                .spawn(job)
+                .is_ok(),
         };
-        if worker.send(job).is_err() {
+        if !sent {
             let _ = self.tx.send(Outcome::Failed {
                 job: name,
                 target,
@@ -227,6 +235,28 @@ mod tests {
         let events = until(&mut hub, |e| !e.is_empty());
         assert!(matches!(&events[0], Outcome::Failed { message, .. } if message == "synthetic fast failure"));
         release.send(()).unwrap();
+        until(&mut hub, |e| e.iter().any(|e| matches!(e, Outcome::Catalog { .. })));
+    }
+    #[test]
+    fn a_slow_download_holds_up_neither_heavy_work_nor_another_download() {
+        let mut hub = TaskHub::new(egui::Context::default());
+        let (release_dlss, dlss_blocked) = channel();
+        let (release_model, model_blocked) = channel();
+        hub.spawn("dlss-download", None, move |_| {
+            dlss_blocked.recv().unwrap();
+            Outcome::Catalog { result: Ok(vec![]) }
+        });
+        hub.spawn("nr-model-fetch", None, move |_| {
+            model_blocked.recv().unwrap();
+            Outcome::Catalog { result: Ok(vec![]) }
+        });
+        hub.spawn("hash", None, |_| panic!("heavy work ran"));
+        let events = until(&mut hub, |e| !e.is_empty());
+        assert!(matches!(&events[0], Outcome::Failed { job: "hash", .. }));
+        assert!(hub.busy());
+        release_model.send(()).unwrap();
+        until(&mut hub, |e| e.iter().any(|e| matches!(e, Outcome::Catalog { .. })));
+        release_dlss.send(()).unwrap();
         until(&mut hub, |e| e.iter().any(|e| matches!(e, Outcome::Catalog { .. })));
     }
     #[test]
