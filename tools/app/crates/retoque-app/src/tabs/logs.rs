@@ -5,7 +5,7 @@ impl RetoqueApp {
         let Some(target) = self.view.target.clone() else { return };
         ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(!self.busy(), theme::primary(self.tr("log.bundle")))
+                .add_enabled(!self.busy(), egui::Button::new(self.tr("log.bundle")))
                 .clicked()
             {
                 commands.send(AppCommand::Bundle);

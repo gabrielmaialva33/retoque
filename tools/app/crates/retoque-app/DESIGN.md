@@ -17,8 +17,13 @@ Use these instead of building a look by hand.
 | Any other button | `ui.button` (32 px, never `small_button`) |
 | Closing a notice | `widgets::close_button` |
 | Work in progress | `widgets::busy` (always with a sentence; a bar when the total is known) |
-| A download or change the user must agree to | `widgets::consent_modal` |
+| A download or change the user must agree to | `widgets::consent_modal` (`consent_modal_when` to hold the confirm while a write runs); the confirm label from `format::download_label` ("Baixar (115 MB)") |
+| Deleting something the app keeps | `widgets::delete_modal` (a `danger` "Apagar") |
 | Any other modal | `egui::Modal` with `widgets::modal_frame()` |
+| A failure | `error::card` on a page, `error::body` inside a dialog, `error::summary` in a bar; all use `AppError::user_text` and fold the raw text under Details |
+| Information or a warning that is not a failure | `AppError::info` / `AppError::warning`, shown with `error::notice` (MUTED / WARN, never BAD) |
+| A repeated button (one per card or row) | `widgets::name_after` so screen readers hear "{action}: {item}" |
+| A setting changed but not yet applied; back to automatic | `widgets::change_bar`; `widgets::reset_button` |
 | A size | `format::size_text` (KB/MB/GB, decimal comma in Portuguese) |
 | Status tiles in a row | `widgets::feature_tile` / `stat_tile_width` sized by `widgets::row_width` |
 

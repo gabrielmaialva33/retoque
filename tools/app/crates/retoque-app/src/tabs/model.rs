@@ -443,7 +443,8 @@ impl RetoqueApp {
                 if ui
                     .add_enabled(
                         compatible.is_some() && !self.busy() && !self.nr_fetch.busy,
-                        theme::primary(self.tr("nr_fetch.get_compatible")),
+                        // The banner holds the page's one primary; this is one of several actions here.
+                        egui::Button::new(self.tr("nr_fetch.get_compatible")),
                     )
                     .clicked()
                 {
