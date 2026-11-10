@@ -456,10 +456,10 @@ mod tests {
         assert!(meta.imported_unix_seconds > 0);
         assert_eq!(Catalog::model_file_value(&model, false), model.path.to_string_lossy());
         let mut verbatim = model.clone();
-        verbatim.path = PathBuf::from(r"\\?\C:\Users\Someone\AppData\Local\Retoque\models\ab\nvngx_dlssnr.dll");
+        verbatim.path = PathBuf::from(r"\\?\D:\Retoque\models\ab\nvngx_dlssnr.dll");
         assert_eq!(
             Catalog::model_file_value(&verbatim, false),
-            r"C:\Users\Someone\AppData\Local\Retoque\models\ab\nvngx_dlssnr.dll"
+            r"D:\Retoque\models\ab\nvngx_dlssnr.dll"
         );
         verbatim.path = PathBuf::from(r"\\?\UNC\server\share\models\ab\nvngx_dlssnr.dll");
         assert_eq!(
