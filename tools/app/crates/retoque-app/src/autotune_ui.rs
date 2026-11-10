@@ -79,6 +79,7 @@ impl RetoqueApp {
                     plans: p.plans,
                     groups: p.groups,
                     request_id: request,
+                    target: Some(p.target),
                 }));
             }
             _ => {}

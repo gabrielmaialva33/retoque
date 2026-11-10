@@ -771,6 +771,60 @@ mod tests {
         assert!(!game.join(".retoque/receipt.txt").exists());
     }
     #[test]
+    fn uninstalled_game_settings_are_never_planned_against_the_payload_folder() {
+        // On Windows the app runs from the payload folder: a plan aimed there is refused as "in use" by the running-file
+        // check (Rafael's RTX 3060, 2026-11-10, Grounded 2), and could only ever describe the payload's own INI.
+        let temp = tempfile::tempdir().unwrap();
+        let payload = payload_dir(temp.path());
+        let payload_ini = fs::read(payload.join("OptiScaler.ini")).unwrap();
+        let c = component(temp.path());
+        let game = temp.path().join("fresh-game");
+        fs::create_dir(&game).unwrap();
+        let gpu = retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288").remove(0);
+        let facts = recommend::GameFacts {
+            installed: false,
+            has_dlss: true,
+            has_dlssg: true,
+            runtime: recommend::Runtime::Windows,
+            ..Default::default()
+        };
+        let recs = recommendations_for_optimize(&recommend::recommend(Some(&gpu), &facts), Some(&gpu), &facts, true);
+        let composed = compose(Selection {
+            install: Some(retoque_core::InstallOptions {
+                game_dir: game.clone(),
+                proxy: "dxgi.dll".into(),
+                source_dir: payload.clone(),
+                enable_nr: true,
+                copy_nvngx: false,
+                ..Default::default()
+            }),
+            recommendations: &recs,
+            component: Some(&c),
+            model_edit: Some(("DlssNr".into(), "ModelFile".into(), "synthetic.dll".into())),
+            ..Default::default()
+        })
+        .unwrap();
+        let prepared = prepare(&game, composed.request).unwrap();
+        let canonical_payload = payload.canonicalize().unwrap();
+        for plan in &prepared.plans {
+            assert!(plan.refusals().is_empty(), "{:?}", plan.refusals());
+            assert!(
+                !plan.game_dir().starts_with(&payload) && !plan.game_dir().starts_with(&canonical_payload),
+                "a plan is aimed at the payload folder: {}",
+                plan.game_dir().display()
+            );
+        }
+        apply(&prepared, &mut |_| {}).unwrap();
+        let ini = retoque_core::ini::Ini::parse(&fs::read(game.join("OptiScaler.ini")).unwrap());
+        assert_eq!(ini.get("DlssNr", "ModelFile"), Some("synthetic.dll"));
+        assert_eq!(ini.get("DlssNr", "Enabled"), Some("true"));
+        assert_eq!(
+            fs::read(payload.join("OptiScaler.ini")).unwrap(),
+            payload_ini,
+            "payload INI changed"
+        );
+    }
+    #[test]
     fn foreign_proxy_refusal_in_install_plan_is_shown_and_blocks_whole_review_in_both_languages() {
         for lang in [Lang::En, Lang::Pt] {
             let temp = tempfile::tempdir().unwrap();

@@ -945,6 +945,11 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Nada será alterado antes da sua confirmação.",
     ),
     (
+        "shell.undo_record",
+        "Retoque's record for undoing this",
+        "Registro do Retoque para desfazer",
+    ),
+    (
         "shell.resolve",
         "Resolve the issue above, close this review and try again.",
         "Resolva o impedimento acima, feche esta revisão e tente novamente.",
