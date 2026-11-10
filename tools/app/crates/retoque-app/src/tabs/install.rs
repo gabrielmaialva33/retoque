@@ -18,28 +18,30 @@ impl RetoqueApp {
         let Some(target) = self.view.target.clone() else { return };
         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
         let busy = self.busy();
-        widgets::card(ui, |ui| {
-            widgets::card_title(ui, t(self.lang, "card.install"));
-            ui.add_enabled_ui(!busy, |ui| self.install_options(ui, installed));
-            if let Some(&(done, total)) = self.view.target.as_ref().and_then(|t| self.writing.get(t)) {
-                ui.add_space(8.0);
-                ui.add(
-                    egui::ProgressBar::new(done as f32 / total.max(1) as f32)
-                        .text(format!("{} {done}/{total}", t(self.lang, "inst.working"))),
-                );
-            }
-            if let Some((kind, result)) = &self.view.applied {
-                ui.add_space(8.0);
-                match result {
-                    Ok(()) => ui.colored_label(theme::GOOD, t(self.lang, "inst.done")),
-                    Err(e) => ui.colored_label(
-                        theme::BAD,
-                        format!("{} ({}): {e}", t(self.lang, "error"), plan_kind_name(self.lang, *kind)),
-                    ),
-                };
-            }
-        });
-        ui.add_space(12.0);
+        // The banner's button is the way to install; progress and the outcome of the last change still show here,
+        // first, and only while there is one. The proxy name and the other options sit closed at the end.
+        let writing = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied();
+        if writing.is_some() || self.view.applied.is_some() {
+            widgets::card(ui, |ui| {
+                if let Some((done, total)) = writing {
+                    ui.add(
+                        egui::ProgressBar::new(done as f32 / total.max(1) as f32)
+                            .text(format!("{} {done}/{total}", t(self.lang, "inst.working"))),
+                    );
+                }
+                if let Some((kind, result)) = &self.view.applied {
+                    match result {
+                        Ok(()) => ui.colored_label(theme::GOOD, t(self.lang, "inst.done")),
+                        Err(e) => ui.colored_label(
+                            theme::BAD,
+                            format!("{} ({}): {e}", t(self.lang, "error"), plan_kind_name(self.lang, *kind)),
+                        ),
+                    };
+                }
+            });
+            ui.add_space(12.0);
+        }
+        self.session_card(ui);
         if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target) {
             ui.add_enabled_ui(!self.busy(), |ui| {
                 crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx, self.payload.is_some())
@@ -50,6 +52,13 @@ impl RetoqueApp {
         self.autotune_lsfg(ui);
         ui.add_space(12.0);
         let _ = &target;
+        widgets::card(ui, |ui| {
+            egui::CollapsingHeader::new(RichText::new(t(self.lang, "card.install_options")).strong())
+                .id_salt("install_options_section")
+                .show(ui, |ui| {
+                    ui.add_enabled_ui(!busy, |ui| self.install_options(ui, installed));
+                });
+        });
         if let Some(Ok(s)) = &self.view.status
             && let Some(option) = s.launch_option.clone()
         {
@@ -176,11 +185,19 @@ impl RetoqueApp {
                 InstallState::Missing => theme::MUTED,
             };
             let detail = match (&status.build_sha256, state) {
-                (_, InstallState::Untracked) => self.tr("tile.no_receipt").to_owned(),
+                (_, InstallState::Untracked) => self.tr("tile.old_install").to_owned(),
                 (Some(hash), _) => format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
                 (None, _) => String::new(),
             };
-            widgets::feature_tile(ui, "Retoque", self.tr(state.label()), &detail, color);
+            let value = self.tr(match state {
+                InstallState::Current => "tile.st_current",
+                InstallState::Update => "tile.st_update",
+                InstallState::Installed => "tile.st_installed",
+                InstallState::Partial => "tile.st_partial",
+                InstallState::Untracked => "tile.st_untracked",
+                InstallState::Missing => "tile.st_missing",
+            });
+            widgets::feature_tile(ui, "Retoque", value, &detail, color);
             // Neural Rendering.
             let model = self.view.inspection.as_ref();
             let (value, detail, color) = match status.nr_enabled {
@@ -257,7 +274,9 @@ impl RetoqueApp {
         ui.add_space(12.0);
     }
 
-    pub(crate) fn status_chips(&self, ui: &mut egui::Ui) {
+    /// The banner's status line. Under the full banner the tiles already say installed, update, NR and model, so the
+    /// line keeps only what they do not: the OptiScaler and forwarder versions. The compact banner keeps it all.
+    pub(crate) fn status_chips(&self, ui: &mut egui::Ui, technical_only: bool) {
         match &self.view.status {
             None => {
                 ui.label(self.tr("shell.checking"));
@@ -273,6 +292,20 @@ impl RetoqueApp {
                         .and_then(|r| r.as_ref().ok())
                         .map(String::as_str),
                 );
+                if technical_only {
+                    if status.version_mismatch() {
+                        ui.colored_label(theme::WARN, self.tr("ver.mismatch"));
+                    }
+                    if !status.optiscaler_proxies.is_empty() {
+                        let proxy = status.proxy_version.as_deref().unwrap_or(self.tr("ver.unknown"));
+                        let mut line = format!("OptiScaler {proxy}");
+                        if let Some(forwarder) = &status.forwarder_version {
+                            line.push_str(&format!(" · NR forwarder {forwarder}"));
+                        }
+                        ui.label(RichText::new(line).small().color(theme::TEXT));
+                    }
+                    return;
+                }
                 let mut parts = vec![
                     self.tr(if matches!(state, InstallState::Current | InstallState::Update) {
                         "st.installed"

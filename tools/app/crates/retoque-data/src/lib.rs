@@ -4,6 +4,7 @@
 pub mod captures;
 pub mod logs;
 pub mod models;
+pub mod session;
 pub mod settings;
 
 pub mod components;

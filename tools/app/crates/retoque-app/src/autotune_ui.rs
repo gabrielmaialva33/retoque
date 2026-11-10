@@ -165,7 +165,12 @@ impl RetoqueApp {
     }
     pub(crate) fn autotune_card(&mut self, ui: &mut egui::Ui) {
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
-        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
+        // Never wider than the page column the other cards follow (the clip rect runs to the window's edge).
+        ui.set_width(
+            ui.available_width()
+                .min(ui.clip_rect().right() - ui.next_widget_position().x - 4.0)
+                .max(100.0),
+        );
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("auto.title"));
             self.nr_compatibility_notice(ui);
@@ -300,7 +305,12 @@ impl RetoqueApp {
     pub(crate) fn autotune_components(&mut self, ui: &mut egui::Ui) {
         self.dlss_card(ui);
         // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
-        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
+        // Never wider than the page column the other cards follow (the clip rect runs to the window's edge).
+        ui.set_width(
+            ui.available_width()
+                .min(ui.clip_rect().right() - ui.next_widget_position().x - 4.0)
+                .max(100.0),
+        );
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("auto.components"));
             self.sm86_download_controls(ui);

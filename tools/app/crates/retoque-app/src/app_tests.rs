@@ -158,7 +158,7 @@ pub(crate) mod shell_tests {
         }));
         let mut h = Harness::builder()
             .with_size([1100., 400.])
-            .build_ui_state(|ui, app: &mut RetoqueApp| app.status_chips(ui), app);
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.status_chips(ui, false), app);
         h.run_steps(2);
         h.get_by_label(t(Lang::En, "ver.mismatch"));
         h.state_mut()
