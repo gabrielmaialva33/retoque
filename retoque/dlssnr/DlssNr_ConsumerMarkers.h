@@ -10,7 +10,11 @@
 //     it was installed as, and our forwarder (nvngx.dll_dlssnr.dll) all carry it;
 //   - never plain "renodx": RenoDX's per-game HDR add-ons (renodx-<game>.addon64) are ReShade
 //     add-ons that do not run the neural model, and a user combining one with our NR is the normal
-//     case, not a double pass. Only its DLSS builds (renodx-dlss.addon64, renodx-dlss5.addon64) run it.
+//     case, not a double pass. Only its DLSS builds (renodx-dlss.addon64, renodx-dlss5.addon64) run it;
+//   - for AMDLSS5 (github.com/Wehaveall/AMDLSS5, the NR network on Radeon cards), never its proxy
+//     version.dll, its nr_host.dll (a substring of a name like "dlssnr_host") or the network
+//     nvngx_dlssnr.dll it loads from its own folder: only its engine, nr_native_adapter.dll (1.6.1 and
+//     2.0.0, checked against the 2.0.0 release package), and anything named after the project.
 
 #include <cstddef>
 #include <string_view>
@@ -29,6 +33,8 @@ inline constexpr Competitor kCompetitors[] = {
     { L"renodx_dlss", "RenoDX DLSS (renodx-dlss / renodx-dlss5)" },
     { L"dlss5-feed", "DLSS5-Feeder" },
     { L"dlss5_feed", "DLSS5-Feeder" },
+    { L"amdlss5", "AMDLSS5" },
+    { L"nr_native_adapter", "AMDLSS5" },
 };
 
 // The producer a module base file name belongs to, or nullptr. ASCII case folding only: the
