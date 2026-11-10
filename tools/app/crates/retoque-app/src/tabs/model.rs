@@ -147,7 +147,7 @@ impl RetoqueApp {
                 {
                     action = Some("auto".into());
                 }
-                if ui.small_button(self.tr("mdl.refresh")).clicked() {
+                if ui.button(self.tr("mdl.refresh")).clicked() {
                     commands.send(AppCommand::RefreshModel);
                 }
             });
@@ -223,7 +223,7 @@ impl RetoqueApp {
                         action = Some(value.clone());
                     }
                     if ui
-                        .add_enabled(!in_use, egui::Button::new(self.tr("mdl.remove")).small())
+                        .add_enabled(!in_use, egui::Button::new(self.tr("mdl.remove")))
                         .on_hover_text(self.tr("mdl.remove_help"))
                         .clicked()
                     {
@@ -531,7 +531,7 @@ impl RetoqueApp {
                             if ui
                                 .add_enabled(
                                     !self.busy() && !self.nr_fetch.busy,
-                                    egui::Button::new(self.tr("nr_fetch.download_variant")).small(),
+                                    egui::Button::new(self.tr("nr_fetch.download_variant")),
                                 )
                                 .clicked()
                             {

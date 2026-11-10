@@ -14,7 +14,7 @@ impl RetoqueApp {
                 self.selected = None;
                 self.open_target(None);
             }
-            if self.selected.is_some() && ui.small_button(self.tr("shell.library")).clicked() {
+            if self.selected.is_some() && ui.button(self.tr("shell.library")).clicked() {
                 self.sidebar_visible = !self.sidebar_visible;
             }
             if ui.available_width() > 1000.0 {
@@ -93,7 +93,7 @@ impl RetoqueApp {
                 t(self.lang, "lib.installed_only"),
             );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button(self.tr("lib.add_folder")).clicked() {
+                if ui.button(self.tr("lib.add_folder")).clicked() {
                     self.folders_open(FolderDialog::Add);
                 }
             });
@@ -394,27 +394,25 @@ impl RetoqueApp {
                     .color(theme::MUTED),
             );
         }
-        if let Some(Ok(hash)) = &self.payload_build {
-            ui.label(
-                RichText::new(format!("{} {}", self.tr("app.payload"), &hash[..8]))
-                    .small()
-                    .color(theme::MUTED),
-            );
-        }
         ui.add_space(12.0);
         self.first_run_nr_card(ui);
-        self.search_field(ui);
-        self.library_keyboard(ui);
+        // Search and its filters on one line: the field takes what the controls on its right leave.
         ui.horizontal(|ui| {
-            ui.checkbox(
-                &mut self.library_state.installed_only,
-                t(self.lang, "lib.installed_only"),
-            );
-            if ui.button(self.tr("lib.add_folder")).clicked() {
-                self.folders_open(FolderDialog::Add);
-            }
-            self.folders_button(ui);
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.folders_button(ui);
+                if ui.button(self.tr("lib.add_folder")).clicked() {
+                    self.folders_open(FolderDialog::Add);
+                }
+                ui.checkbox(
+                    &mut self.library_state.installed_only,
+                    t(self.lang, "lib.installed_only"),
+                );
+                ui.add_space(6.0);
+                self.search_field(ui);
+            });
         });
+        self.library_keyboard(ui);
+        ui.add_space(6.0);
         self.migration_notice_ui(ui);
         if self.library_state.games.is_empty() {
             widgets::card(ui, |ui| {
@@ -454,13 +452,16 @@ impl RetoqueApp {
                     games.len(),
                 );
                 ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(20.0, 20.0);
+                    ui.spacing_mut().item_spacing = egui::vec2(18.0, 22.0);
+                    // As many covers as fit at 150 points, widened together so each row ends at the column's edge.
+                    let cover_w = widgets::row_width(usize::MAX, ui.available_width(), 150.0, 18.0).min(210.0);
                     for &index in games {
                         let game = &self.library_state.games[index];
                         let state = self.library_state.derived.states[index];
                         let art = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
                         if widgets::cover_card(
                             ui,
+                            cover_w,
                             &game.name,
                             art,
                             self.tr(state.label()),
@@ -512,8 +513,11 @@ impl RetoqueApp {
         } else {
             ui.painter().rect_filled(rect, 12, theme::CARD);
         }
-        ui.painter()
-            .rect_filled(rect, 12, Color32::from_black_alpha(if compact { 200 } else { 175 }));
+        if compact {
+            ui.painter().rect_filled(rect, 12, Color32::from_black_alpha(200));
+        } else {
+            widgets::hero_shade(ui.painter(), rect, 12.0);
+        }
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(rect.shrink(16.0))
@@ -524,7 +528,7 @@ impl RetoqueApp {
         } else if let Some(logo) = art.logo.as_deref() {
             child.add(
                 egui::Image::new(widgets::file_uri(logo))
-                    .fit_to_exact_size(egui::vec2(220.0, 70.0))
+                    .fit_to_exact_size(egui::vec2(300.0, 96.0))
                     .maintain_aspect_ratio(true),
             );
         } else {
@@ -638,16 +642,24 @@ impl RetoqueApp {
                         }
                     }
                 }
-                if self.tuning.sm86.busy || self.nr_fetch.busy {
+                let download = if self.nr_fetch.busy {
+                    Some(("nr_fetch.downloading", self.nr_fetch.downloaded))
+                } else if self.tuning.sm86.busy {
+                    Some(("sm86.progress", self.tuning.sm86.downloaded))
+                } else {
+                    self.tuning
+                        .dlss
+                        .download_progress()
+                        .map(|bytes| ("dlss.downloading", bytes))
+                };
+                if let Some((label, bytes)) = download {
                     ui.spinner();
-                    ui.label(
-                        RichText::new(self.tr(if self.nr_fetch.busy {
-                            "nr_fetch.downloading"
-                        } else {
-                            "sm86.progress"
-                        }))
-                        .small(),
-                    );
+                    let text = if bytes > 0 {
+                        format!("{} · {:.0} MiB", self.tr(label), bytes as f64 / 1048576.)
+                    } else {
+                        self.tr(label).to_string()
+                    };
+                    ui.label(RichText::new(text).small());
                 }
                 if matches!(
                     state,

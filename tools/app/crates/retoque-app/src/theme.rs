@@ -80,7 +80,7 @@ pub fn apply(ctx: &egui::Context) {
         style.wrap_mode = Some(egui::TextWrapMode::Wrap);
         style.spacing.item_spacing = egui::vec2(10.0, 8.0);
         style.spacing.button_padding = egui::vec2(12.0, 6.0);
-        style.spacing.interact_size.y = 30.0;
+        style.spacing.interact_size.y = 32.0;
         style.text_styles.insert(TextStyle::Body, FontId::proportional(14.5));
         style.text_styles.insert(TextStyle::Button, FontId::proportional(14.5));
         style.text_styles.insert(TextStyle::Small, FontId::proportional(13.0));
@@ -97,7 +97,7 @@ pub fn primary(text: &str) -> egui::Button<'static> {
             .color(Color32::from_rgb(0x1A, 0x14, 0x0A)),
     )
     .fill(ACCENT)
-    .min_size(egui::vec2(120.0, 34.0))
+    .min_size(egui::vec2(120.0, 32.0))
 }
 
 #[cfg(test)]

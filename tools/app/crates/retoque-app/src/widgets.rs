@@ -228,12 +228,10 @@ pub fn game_row(
 /// A small heading between library groups.
 pub fn group_label(ui: &mut egui::Ui, text: &str, count: usize) {
     ui.add_space(8.0);
-    ui.label(
-        RichText::new(format!("{}  {count}", text.to_uppercase()))
-            .size(11.5)
-            .color(theme::MUTED)
-            .strong(),
-    );
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(text).size(17.0).strong().color(theme::TEXT_STRONG));
+        ui.label(RichText::new(count.to_string()).size(15.0).color(theme::MUTED));
+    });
     ui.add_space(2.0);
 }
 
@@ -311,7 +309,12 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
 
 /// Compact, fixed-width facts wrap as a group at narrow widths; the value never competes with its caption.
 pub fn stat_tile(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
-    let width = 160.0_f32.min(ui.max_rect().width());
+    stat_tile_width(ui, 160.0, label, value, color);
+}
+
+/// `stat_tile` at a given width, for rows laid out with `row_width`.
+pub fn stat_tile_width(ui: &mut egui::Ui, width: f32, label: &str, value: &str, color: Color32) {
+    let width = width.min(ui.max_rect().width());
     let (rect, response) = ui.allocate_exact_size(vec2(width, 90.0), Sense::hover());
     ui.painter().rect_filled(rect, 8.0, theme::CARD);
     ui.painter()
@@ -327,10 +330,63 @@ pub fn stat_tile(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{label}: {value}")));
 }
 
+/// The shade over a game's hero art: dark on the left where the name, status and actions sit, opening to the art
+/// on the right, with a little weight at the bottom edge. Rounded ends match the art's corners.
+pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
+    let dark = Color32::from_black_alpha(232);
+    let mid = Color32::from_black_alpha(150);
+    let light = Color32::from_black_alpha(40);
+    let r = radius;
+    painter.rect_filled(
+        Rect::from_min_max(rect.min, pos2(rect.left() + r, rect.bottom())),
+        egui::CornerRadius {
+            nw: r as u8,
+            sw: r as u8,
+            ne: 0,
+            se: 0,
+        },
+        dark,
+    );
+    let stops = [(0.0, dark), (0.42, mid), (1.0, light)];
+    let inner = Rect::from_min_max(pos2(rect.left() + r, rect.top()), pos2(rect.right() - r, rect.bottom()));
+    let mut mesh = egui::Mesh::default();
+    for (i, (at, color)) in stops.iter().enumerate() {
+        let x = inner.left() + inner.width() * at;
+        mesh.colored_vertex(pos2(x, inner.top()), *color);
+        mesh.colored_vertex(pos2(x, inner.bottom()), *color);
+        if i > 0 {
+            let b = (i as u32) * 2;
+            mesh.add_triangle(b - 2, b - 1, b);
+            mesh.add_triangle(b - 1, b, b + 1);
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+    painter.rect_filled(
+        Rect::from_min_max(pos2(rect.right() - r, rect.top()), rect.max),
+        egui::CornerRadius {
+            nw: 0,
+            sw: 0,
+            ne: r as u8,
+            se: r as u8,
+        },
+        light,
+    );
+}
+
+/// Width for `count` items of at least `min` points that share a row of `available` points with `gap` between
+/// them, so every row ends flush with the column (a fixed width leaves a ragged strip at the right edge). Wraps
+/// to further equal rows when even `min` does not fit them all.
+pub fn row_width(count: usize, available: f32, min: f32, gap: f32) -> f32 {
+    // Half a point of slack so rounding never pushes the last item of a full row onto the next one.
+    let available = (available - 1.0).max(0.0);
+    let fits = (((available + gap) / (min + gap)).floor() as usize).max(1);
+    let n = fits.min(count.max(1));
+    ((available - gap * (n as f32 - 1.0)) / n as f32).max(min.min(available))
+}
+
 /// A feature tile in the style of a GPU control panel: a status bar on the left, a caption, the value in large
 /// type and one detail line. Read by screen readers as "caption: value, detail".
-pub fn feature_tile(ui: &mut egui::Ui, caption: &str, value: &str, detail: &str, color: Color32) {
-    let width = 196.0_f32.min(ui.max_rect().width());
+pub fn feature_tile(ui: &mut egui::Ui, width: f32, caption: &str, value: &str, detail: &str, color: Color32) {
     let (rect, response) = ui.allocate_exact_size(vec2(width, 80.0), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, 10.0, theme::CARD);
@@ -345,7 +401,7 @@ pub fn feature_tile(ui: &mut egui::Ui, caption: &str, value: &str, detail: &str,
     };
     painter.galley(
         rect.min + vec2(16.0, 10.0),
-        line(&caption.to_uppercase(), 11.5, theme::MUTED),
+        line(caption, 12.5, theme::MUTED),
         theme::MUTED,
     );
     painter.galley(rect.min + vec2(16.0, 28.0), line(value, 18.5, color), color);
@@ -365,13 +421,13 @@ pub fn feature_tile(ui: &mut egui::Ui, caption: &str, value: &str, detail: &str,
 /// One cover is one focusable button; wrapping moves the whole card, including its title and state.
 pub fn cover_card(
     ui: &mut egui::Ui,
+    width: f32,
     name: &str,
     capsule: Option<&Path>,
     state: &str,
     color: Color32,
     hint: Option<&str>,
 ) -> egui::Response {
-    let width = 150.0_f32.min(ui.max_rect().width());
     let (rect, response) = ui.allocate_exact_size(
         vec2(width, width * 1.5 + if hint.is_some() { 86.0 } else { 66.0 }),
         Sense::click(),

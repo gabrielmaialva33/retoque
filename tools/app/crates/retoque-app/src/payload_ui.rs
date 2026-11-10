@@ -391,7 +391,7 @@ impl RetoqueApp {
         if advanced {
             if let Some(beside) = self.beside_payload_dir()
                 && self.payload.as_ref() != Some(&beside)
-                && ui.small_button(self.tr("payload.source.beside")).clicked()
+                && ui.button(self.tr("payload.source.beside")).clicked()
             {
                 self.saved.payload_source = Some(PayloadSource::BesideApp);
                 self.payload = Some(beside);
@@ -402,13 +402,13 @@ impl RetoqueApp {
                 self.hash_payload();
             }
 
-            if ui.small_button(self.tr("app.payload.choose")).clicked() {
+            if ui.button(self.tr("app.payload.choose")).clicked() {
                 self.cmd_tx.send(AppCommand::Remedy(Remedy::ChoosePayloadDir, None));
             }
 
             if let Some(folder) = self.saved.payload.clone().filter(|p| model::is_payload(p))
                 && self.payload.as_ref() != Some(&folder)
-                && ui.small_button(self.tr("payload.source.folder")).clicked()
+                && ui.button(self.tr("payload.source.folder")).clicked()
             {
                 self.saved.payload_source = Some(PayloadSource::Folder);
                 self.payload = Some(folder);
@@ -422,7 +422,7 @@ impl RetoqueApp {
             if let Some(rec) = self.payload_ui.record.clone()
                 && self.payload.as_ref() != Some(&rec.payload_dir)
                 && model::is_payload(&rec.payload_dir)
-                && ui.small_button(self.tr("payload.source.release")).clicked()
+                && ui.button(self.tr("payload.source.release")).clicked()
             {
                 self.saved.payload_source = Some(PayloadSource::Release);
                 self.payload = Some(rec.payload_dir.clone());
@@ -432,10 +432,7 @@ impl RetoqueApp {
             }
 
             if ui
-                .add_enabled(
-                    !self.payload_ui.busy,
-                    egui::Button::new(self.tr("payload.download")).small(),
-                )
+                .add_enabled(!self.payload_ui.busy, egui::Button::new(self.tr("payload.download")))
                 .clicked()
             {
                 self.payload_ui.consent = Some(Consent::Download);
@@ -443,10 +440,7 @@ impl RetoqueApp {
         }
 
         if ui
-            .add_enabled(
-                !self.payload_ui.busy,
-                egui::Button::new(self.tr("payload.check")).small(),
-            )
+            .add_enabled(!self.payload_ui.busy, egui::Button::new(self.tr("payload.check")))
             .clicked()
         {
             self.payload_ui.consent = Some(Consent::Check);
@@ -470,7 +464,7 @@ impl RetoqueApp {
                     theme::ACCENT,
                     RichText::new(format!("{}: v{}", self.tr("payload.new_release"), rel.version)).small(),
                 );
-                if ui.small_button(self.tr("payload.download_now")).clicked() {
+                if ui.button(self.tr("payload.download_now")).clicked() {
                     self.payload_ui.consent = Some(Consent::Download);
                 }
             } else {
@@ -484,7 +478,7 @@ impl RetoqueApp {
 
         if self.outdated_installed_game().is_some()
             && ui
-                .add_enabled(!self.busy(), egui::Button::new(self.tr("payload.update_game")).small())
+                .add_enabled(!self.busy(), egui::Button::new(self.tr("payload.update_game")))
                 .clicked()
         {
             self.review_outdated_game_update();
@@ -500,10 +494,7 @@ impl RetoqueApp {
             } else {
                 self.tr("payload.advanced_show")
             };
-            if ui
-                .add(egui::Button::new(RichText::new(label).small()).frame(false))
-                .clicked()
-            {
+            if ui.add(egui::Button::new(label)).clicked() {
                 self.payload_ui.advanced = !self.payload_ui.advanced;
             }
         }
