@@ -56,8 +56,8 @@ pub(crate) fn show(
     commands: &CommandSender,
     can_reinstall: bool,
 ) {
+    // A healthy game needs no sentence: the Doctor shows up only when it has something to say.
     if card.findings.is_empty() {
-        ui.label(RichText::new(text(lang, "doctor.healthy")).small().color(theme::MUTED));
         return;
     }
     widgets::card(ui, |ui| {
@@ -77,12 +77,16 @@ pub(crate) fn show(
                     ui.strong(text(lang, finding.title_key));
                 });
                 ui.label(text(lang, finding.why_key));
-                ui.collapsing(t(lang, "doctor.evidence"), |ui| evidence(ui, lang, &finding.evidence));
+                let title = t(lang, "doctor.evidence");
+                widgets::collapsible(ui, "evidence", title, widgets::Fold::Details, |ui| {
+                    evidence(ui, lang, &finding.evidence)
+                });
                 repair_button(ui, finding.repair.as_ref(), target, lang, commands, can_reinstall);
                 ui.add_space(8.0);
             });
         }
     });
+    ui.add_space(theme::CARD_GAP);
 }
 
 /// The library row's mark: a warning dot painted inside the row's own rect (rows take the full width, so a
@@ -99,7 +103,7 @@ pub(crate) fn row_badge(ui: &egui::Ui, row: egui::Response, count: usize, lang: 
         egui::Align2::CENTER_CENTER,
         "!",
         egui::FontId::proportional(13.0),
-        egui::Color32::from_rgb(0x1A, 0x14, 0x0A),
+        theme::ON_ACCENT,
     );
     row.on_hover_text(format!("{} ({count})", t(lang, "doctor.badge")))
 }

@@ -151,10 +151,15 @@ fn settings_filter_only_changed_reset_and_composite_accessibility_both_languages
         h.get_by_role_and_label(egui::Role::CheckBox, t(lang, "set.only_changed"))
             .click();
         h.run_steps(2);
-        h.get_by_label(t(lang, "set.source_ini"));
-        h.get_by_role_and_label(egui::Role::Button, t(lang, "set.reset"))
-            .click();
+        // A value that is not automatic has a reset named after its setting; there is no per-row origin caption.
+        let reset = t(lang, "set.reset").replace("{label}", actual_label);
+        assert!(h.query_by_label_contains("INI").is_none());
+        assert!(h.query_by_label(t(lang, "set.source_draft")).is_none());
+        h.get_by_role_and_label(egui::Role::Button, &reset).click();
         h.run_steps(3);
+        // Back on automatic: the reset is gone and the row carries the draft mark until it is reviewed.
+        assert!(h.query_by_role_and_label(egui::Role::Button, &reset).is_none());
+        h.get_by_label(t(lang, "set.source_draft"));
         assert_eq!(
             h.state()
                 .view

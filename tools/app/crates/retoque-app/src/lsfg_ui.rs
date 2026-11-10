@@ -236,7 +236,6 @@ impl RetoqueApp {
         edits
     }
     pub(crate) fn lsfg_card(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
         widgets::card(ui, |ui| {
             self.lsfg_ensure_started();
             let facts = self.view.intelligence.facts.clone();
@@ -289,6 +288,7 @@ impl RetoqueApp {
             }
             self.autotune_readiness(ui);
         });
+        ui.add_space(theme::CARD_GAP);
     }
 }
 

@@ -220,9 +220,9 @@ impl RetoqueApp {
                         .iter()
                         .map(|a| {
                             format!(
-                                "{} · {} B · {} · {}",
+                                "{} · {} · {} · {}",
                                 a.file,
-                                a.size,
+                                crate::format::size_text(self.lang, a.size),
                                 a.version.as_deref().unwrap_or(self.tr("mdl.version_unknown")),
                                 a.product.as_deref().unwrap_or(&a.name)
                             )
@@ -384,8 +384,9 @@ impl RetoqueApp {
             if let Some(error) = &self.tuning.reshade.error {
                 ui.colored_label(theme::BAD, diagnostic(lang, error));
             }
-            ui.label(t(lang, "rs.static"));
+            ui.label(RichText::new(t(lang, "rs.static")).small().color(theme::MUTED));
         });
+        ui.add_space(theme::CARD_GAP);
         if let Some(change) = change {
             self.reshade_request(change);
         }

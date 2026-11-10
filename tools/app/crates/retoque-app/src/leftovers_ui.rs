@@ -42,7 +42,7 @@ impl RetoqueApp {
                 }
             });
         });
-        ui.add_space(20.0);
+        ui.add_space(theme::CARD_GAP);
     }
 
     pub(crate) fn leftovers_modal(&mut self, ctx: &egui::Context) {
@@ -81,15 +81,8 @@ impl RetoqueApp {
                                     .color(theme::MUTED),
                             );
                             if !leftover.keep.is_empty() {
-                                egui::CollapsingHeader::new(
-                                    RichText::new(
-                                        t(lang, "left.keeps").replace("{count}", &leftover.keep.len().to_string()),
-                                    )
-                                    .small()
-                                    .color(theme::MUTED),
-                                )
-                                .id_salt("keeps")
-                                .show(ui, |ui| {
+                                let keeps = t(lang, "left.keeps").replace("{count}", &leftover.keep.len().to_string());
+                                widgets::collapsible(ui, "keeps", &keeps, widgets::Fold::Details, |ui| {
                                     for path in leftover.keep.iter().take(12) {
                                         ui.label(RichText::new(path).small().monospace());
                                     }

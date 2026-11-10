@@ -97,7 +97,7 @@ impl RetoqueApp {
                 ui.label(path.display().to_string());
                 ui.label(self.tr(match route {
                     Route::Addon => "rs.drop_addon",
-                    Route::ReShade => "rs.import",
+                    Route::ReShade => "rs.drop_reshade",
                     Route::Model => "drop.model",
                     Route::Component => "drop.component",
                     Route::Game => "drop.game",

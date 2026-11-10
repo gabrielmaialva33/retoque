@@ -19,7 +19,7 @@ impl RetoqueApp {
         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
         let busy = self.busy();
         // The banner's button is the way to install; progress and the outcome of the last change still show here,
-        // first, and only while there is one. The proxy name and the other options sit closed at the end.
+        // first, and only while there is one. The loader file name and the other options sit closed at the end.
         let writing = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied();
         if writing.is_some() || self.view.applied.is_some() {
             widgets::card(ui, |ui| {
@@ -39,7 +39,7 @@ impl RetoqueApp {
                     };
                 }
             });
-            ui.add_space(12.0);
+            ui.add_space(theme::CARD_GAP);
         }
         self.session_card(ui);
         if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target) {
@@ -50,14 +50,12 @@ impl RetoqueApp {
         self.reshade_card(ui);
         self.autotune_card(ui);
         self.autotune_lsfg(ui);
-        ui.add_space(12.0);
         let _ = &target;
         widgets::card(ui, |ui| {
-            egui::CollapsingHeader::new(RichText::new(t(self.lang, "card.install_options")).strong())
-                .id_salt("install_options_section")
-                .show(ui, |ui| {
-                    ui.add_enabled_ui(!busy, |ui| self.install_options(ui, installed));
-                });
+            let title = t(self.lang, "card.install_options");
+            widgets::collapsible(ui, "install_options_section", title, widgets::Fold::Section, |ui| {
+                ui.add_enabled_ui(!busy, |ui| self.install_options(ui, installed));
+            });
         });
         if let Some(Ok(s)) = &self.view.status
             && let Some(option) = s.launch_option.clone()
@@ -87,26 +85,30 @@ impl RetoqueApp {
 
     pub(crate) fn install_options(&mut self, ui: &mut egui::Ui, installed: bool) {
         {
-            egui::Grid::new("install_options")
-                .num_columns(2)
-                .min_col_width(160.0)
-                .spacing([16.0, 8.0])
-                .show(ui, |ui| {
-                    let label = ui.add(egui::Label::new(self.tr("inst.proxy")).wrap_mode(egui::TextWrapMode::Extend));
-                    egui::ComboBox::from_id_salt("proxy")
-                        .width(180.0)
-                        .selected_text(self.view.options.proxy.clone())
-                        .show_ui(ui, |ui| {
-                            for name in retoque_core::PROXY_NAMES {
-                                ui.selectable_value(&mut self.view.options.proxy, name.to_string(), name);
-                            }
-                        })
-                        .response
-                        .labelled_by(label.id);
-                    ui.end_row();
-                });
             ui.checkbox(&mut self.view.options.enable_nr, t(self.lang, "inst.enable_nr"));
-            ui.collapsing(RichText::new(self.tr("inst.advanced")).weak(), |ui| {
+            let advanced = self.tr("inst.advanced");
+            widgets::collapsible(ui, "install_advanced", advanced, widgets::Fold::Section, |ui| {
+                // The loader file name only matters when a game does not start with the default one.
+                egui::Grid::new("install_options")
+                    .num_columns(2)
+                    .min_col_width(160.0)
+                    .spacing([16.0, 8.0])
+                    .show(ui, |ui| {
+                        let label =
+                            ui.add(egui::Label::new(self.tr("inst.proxy")).wrap_mode(egui::TextWrapMode::Extend));
+                        egui::ComboBox::from_id_salt("proxy")
+                            .width(180.0)
+                            .selected_text(self.view.options.proxy.clone())
+                            .show_ui(ui, |ui| {
+                                for name in retoque_core::PROXY_NAMES {
+                                    ui.selectable_value(&mut self.view.options.proxy, name.to_string(), name);
+                                }
+                            })
+                            .response
+                            .labelled_by(label.id);
+                        ui.end_row();
+                    });
+                ui.label(RichText::new(self.tr("inst.proxy_help")).small().color(theme::MUTED));
                 ui.checkbox(&mut self.view.options.keep_reshade, t(self.lang, "inst.keep_reshade"));
                 ui.checkbox(
                     &mut self.view.options.replace_foreign,
@@ -188,7 +190,7 @@ impl RetoqueApp {
             };
             let detail = match (&status.build_sha256, state) {
                 (_, InstallState::Untracked) => self.tr("tile.old_install").to_owned(),
-                (Some(hash), _) => format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
+                (Some(hash), _) => self.build_text(hash),
                 (None, _) => String::new(),
             };
             let value = self.tr(match state {
@@ -199,7 +201,10 @@ impl RetoqueApp {
                 InstallState::Untracked => "tile.st_untracked",
                 InstallState::Missing => "tile.st_missing",
             });
-            widgets::feature_tile(ui, tile_w, "Retoque", value, &detail, color);
+            let tile = widgets::feature_tile(ui, tile_w, self.tr("brand"), value, &detail, color);
+            if let Some(hash) = &status.build_sha256 {
+                tile.on_hover_text(self.build_hover(hash));
+            }
             // Neural Rendering.
             let model = self.view.inspection.as_ref();
             let (value, detail, color) = match status.nr_enabled {
@@ -223,7 +228,7 @@ impl RetoqueApp {
                 Some(false) => (self.tr("tile.off"), String::new(), theme::MUTED),
                 None => (self.tr("tile.unknown"), String::new(), theme::MUTED),
             };
-            widgets::feature_tile(ui, tile_w, "Neural Rendering", value, &detail, color);
+            widgets::feature_tile(ui, tile_w, self.tr("tile.nr"), value, &detail, color);
             // Frame generation: ours (LSFG, sm86) first, then the game's own DLSS-G where this card can run it.
             let lsfg_multiplier = ini.and_then(|i| i.get("LSFG", "Multiplier")).map(str::trim);
             let older = gpu.is_some_and(|g| matches!(g.arch, Arch::Turing | Arch::Ampere));
@@ -271,7 +276,14 @@ impl RetoqueApp {
             } else {
                 (parts.join(" · "), theme::GOOD)
             };
-            widgets::feature_tile(ui, tile_w, "DLSS", &value, self.tr("tile.dlss_detail"), color);
+            widgets::feature_tile(
+                ui,
+                tile_w,
+                self.tr("tile.dlss"),
+                &value,
+                self.tr("tile.dlss_detail"),
+                color,
+            );
         });
         ui.add_space(12.0);
     }
@@ -302,7 +314,7 @@ impl RetoqueApp {
                         let proxy = status.proxy_version.as_deref().unwrap_or(self.tr("ver.unknown"));
                         let mut line = format!("OptiScaler {proxy}");
                         if let Some(forwarder) = &status.forwarder_version {
-                            line.push_str(&format!(" · NR forwarder {forwarder}"));
+                            line.push_str(&format!(" · {}", self.tr("ver.forwarder").replace("{v}", forwarder)));
                         }
                         ui.label(RichText::new(line).small().color(theme::TEXT));
                     }
@@ -320,14 +332,14 @@ impl RetoqueApp {
                     parts.push(self.tr(state.label()).into());
                 }
                 if let Some(hash) = &status.build_sha256 {
-                    parts.push(format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]));
+                    parts.push(self.build_text(hash));
                 }
                 if !status.optiscaler_proxies.is_empty() {
                     // The forwarder only gets a word when its version is known; the mismatch warning covers the rest.
                     let proxy = status.proxy_version.as_deref().unwrap_or(self.tr("ver.unknown"));
                     parts.push(format!("OptiScaler {proxy}"));
                     if let Some(forwarder) = &status.forwarder_version {
-                        parts.push(format!("NR forwarder {forwarder}"));
+                        parts.push(self.tr("ver.forwarder").replace("{v}", forwarder));
                     }
                 }
                 if status.version_mismatch() {
@@ -348,11 +360,38 @@ impl RetoqueApp {
                     );
                 }
                 let response = ui.label(RichText::new(parts.join(" · ")).color(theme::TEXT_STRONG));
-                if let Some(path) = inspection.as_ref().and_then(|info| info.path.as_ref()) {
-                    response.on_hover_text(short_path(path));
+                // The build's hash and the model's path are technical detail: hover only.
+                let hover: Vec<String> = status
+                    .build_sha256
+                    .iter()
+                    .map(|hash| self.build_hover(hash))
+                    .chain(
+                        inspection
+                            .as_ref()
+                            .and_then(|info| info.path.as_ref())
+                            .map(|p| short_path(p)),
+                    )
+                    .collect();
+                if !hover.is_empty() {
+                    response.on_hover_text(hover.join("\n"));
                 }
             }
         }
+    }
+
+    /// A Retoque build in words: its release version when a known release has this OptiScaler hash, otherwise
+    /// "Local build". The hash itself goes in a hover (`build_hover`), never in the main text.
+    pub(crate) fn build_text(&self, hash: &str) -> String {
+        match &self.payload_ui.record {
+            Some(rec) if rec.optiscaler_sha256.eq_ignore_ascii_case(hash) => {
+                self.tr("st.release").replace("{v}", &rec.release.version)
+            }
+            _ => self.tr("st.build").to_owned(),
+        }
+    }
+
+    pub(crate) fn build_hover(&self, hash: &str) -> String {
+        self.tr("st.build_hash").replace("{hash}", &hash[..hash.len().min(12)])
     }
 
     pub(crate) fn tab_install_prompt(&self, ui: &mut egui::Ui) {

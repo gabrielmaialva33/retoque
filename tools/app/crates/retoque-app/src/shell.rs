@@ -8,8 +8,13 @@ impl RetoqueApp {
         ui.horizontal(|ui| {
             if ui
                 .add(
-                    egui::Button::new(RichText::new(self.tr("brand")).size(22.0).strong().color(theme::ACCENT))
-                        .frame(false),
+                    egui::Button::new(
+                        RichText::new(self.tr("brand"))
+                            .size(theme::DISPLAY)
+                            .strong()
+                            .color(theme::ACCENT),
+                    )
+                    .frame(false),
                 )
                 .on_hover_text(self.tr("shell.home"))
                 .clicked()
@@ -164,14 +169,11 @@ impl RetoqueApp {
         }
         ui.add_space(8.0);
         let header = format!("{} ({})", self.tr("lib.skipped"), self.skipped.len());
-        egui::CollapsingHeader::new(RichText::new(header).small().color(theme::MUTED))
-            .id_salt("skipped_entries")
-            .default_open(false)
-            .show(ui, |ui| {
-                for entry in &self.skipped {
-                    ui.label(RichText::new(entry).small().color(theme::MUTED));
-                }
-            });
+        widgets::collapsible(ui, "skipped_entries", &header, widgets::Fold::Details, |ui| {
+            for entry in &self.skipped {
+                ui.label(RichText::new(entry).small().color(theme::MUTED));
+            }
+        });
     }
 
     pub(crate) fn game(&mut self, ui: &mut egui::Ui) {
@@ -240,12 +242,18 @@ impl RetoqueApp {
             return false;
         }
         if self.tab != Tab::Compare {
-            ui.collapsing(self.tr("shell.details"), |ui| {
-                self.target_picker(ui, game);
-                if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
-                    ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
-                }
-            });
+            widgets::collapsible(
+                ui,
+                "game_details",
+                self.tr("shell.details"),
+                widgets::Fold::Details,
+                |ui| {
+                    self.target_picker(ui, game);
+                    if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
+                        ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
+                    }
+                },
+            );
             ui.add_space(8.0);
         }
         let tabs = [Tab::Install, Tab::Settings, Tab::Model, Tab::Compare, Tab::Logs];
@@ -510,7 +518,7 @@ impl RetoqueApp {
                         }
                     }
                 });
-                ui.add_space(20.0);
+                ui.add_space(theme::CARD_GAP);
             }
             self.leftovers_card(ui);
             self.skipped_note(ui);
@@ -568,7 +576,7 @@ impl RetoqueApp {
                 .layout(egui::Layout::top_down(egui::Align::Min)),
         );
         if compact {
-            child.label(RichText::new(&game.name).size(22.0).strong());
+            child.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
         } else if let Some(logo) = art.logo.as_deref() {
             child.add(
                 egui::Image::new(widgets::file_uri(logo))
@@ -576,7 +584,7 @@ impl RetoqueApp {
                     .maintain_aspect_ratio(true),
             );
         } else {
-            child.label(RichText::new(&game.name).size(28.0).strong());
+            child.label(RichText::new(&game.name).heading().strong());
             child.add_space(22.0);
         }
         self.status_chips(&mut child, !compact);

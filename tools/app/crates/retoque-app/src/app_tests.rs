@@ -290,14 +290,14 @@ pub(crate) mod shell_tests {
         );
         assert!(
             harness
-                .get_by_role_and_label(egui::Role::Button, "x2")
+                .get_by_role_and_label(egui::Role::Button, "x2…")
                 .accesskit_node()
                 .is_disabled()
         );
         harness.state_mut().tuning.readiness = Some(LsfgReadiness::Ready);
         harness.run_steps(3);
         harness
-            .get_by_role_and_label(egui::Role::Button, "x2")
+            .get_by_role_and_label(egui::Role::Button, "x2…")
             .click_accesskit();
         for _ in 0..100 {
             harness.step();
@@ -317,7 +317,7 @@ pub(crate) mod shell_tests {
         harness.run_steps(3);
         assert!(
             harness
-                .get_by_role_and_label(egui::Role::Button, "x2")
+                .get_by_role_and_label(egui::Role::Button, "x2…")
                 .accesskit_node()
                 .is_disabled()
         );

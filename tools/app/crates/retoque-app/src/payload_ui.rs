@@ -367,14 +367,18 @@ impl RetoqueApp {
             Some(p) => {
                 // A release says its own version; files from anywhere else are named by their build, the id the
                 // game page's tiles show. OptiScaler's DLL version is not Retoque's.
+                let build = self.payload_build.as_ref().and_then(|r| r.as_ref().ok());
                 let text = match &self.payload_ui.record {
                     Some(rec) if &rec.payload_dir == p => format!("Retoque {}", rec.release.version),
-                    _ => match self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
-                        Some(hash) => format!("Retoque · {} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
+                    _ => match build {
+                        Some(hash) => format!("Retoque · {}", self.build_text(hash)),
                         None => self.tr("app.payload").to_owned(),
                     },
                 };
-                let response = ui.label(RichText::new(text).small().color(theme::MUTED));
+                let mut response = ui.label(RichText::new(text).small().color(theme::MUTED));
+                if let Some(hash) = build {
+                    response = response.on_hover_text(self.build_hover(hash));
+                }
                 if advanced {
                     ui.label(RichText::new(short_path(p)).small().monospace().color(theme::MUTED))
                         .on_hover_text(crate::format::display_path(p));

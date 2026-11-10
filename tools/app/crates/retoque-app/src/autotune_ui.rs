@@ -262,6 +262,7 @@ impl RetoqueApp {
                 });
             }
         });
+        ui.add_space(theme::CARD_GAP);
     }
     pub(crate) fn autotune_lsfg(&mut self, ui: &mut egui::Ui) {
         self.lsfg_card(ui);
@@ -394,7 +395,7 @@ impl RetoqueApp {
                 }
             }
         });
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
     }
     pub(crate) fn autotune_request(&mut self, title: String, request: Request) {
         let Some(target) = self.view.target.clone() else { return };
@@ -405,7 +406,8 @@ impl RetoqueApp {
         let serial = self.next_request;
         self.tuning.request = serial;
         self.review = None;
-        self.tuning.review_title = title;
+        // A review is titled after the action without the "…" that announced it.
+        self.tuning.review_title = title.trim_end_matches('…').trim_end().to_owned();
         self.review_open = true;
         self.origin_focus = self.context.memory(|m| m.focused());
         self.jobs.spawn("autotune-plan", None, move |_| {
@@ -487,9 +489,17 @@ impl RetoqueApp {
 
 pub(crate) fn recommendation_evidence(ui: &mut egui::Ui, lang: Lang, rec: &recommend::Recommendation) {
     use crate::tabs::doctor::{evidence, text};
-    ui.label(text(lang, rec.confidence.key()));
+    // How sure the advice is: one short muted line; the facts behind it stay folded.
+    ui.label(
+        RichText::new(text(lang, rec.confidence.key()))
+            .small()
+            .color(theme::MUTED),
+    );
     if let Some(key) = rec.caveat_key {
-        ui.label(text(lang, key));
+        ui.add(egui::Label::new(RichText::new(text(lang, key)).small().color(theme::MUTED)).wrap());
     }
-    ui.collapsing(t(lang, "doctor.evidence"), |ui| evidence(ui, lang, &rec.evidence));
+    let title = t(lang, "doctor.evidence");
+    widgets::collapsible(ui, ("evidence", rec.id), title, widgets::Fold::Details, |ui| {
+        evidence(ui, lang, &rec.evidence)
+    });
 }
