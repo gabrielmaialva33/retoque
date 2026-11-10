@@ -35,8 +35,20 @@ impl RetoqueApp {
             .map(|g| g.install_dir.clone())
             .or_else(|| self.view.target.clone())
     }
+    /// Some game DLL is older than the pinned catalog, or its version is unreadable: the same files the plan takes.
+    fn dlss_outdated(&self) -> bool {
+        self.tuning
+            .dlss
+            .files
+            .iter()
+            .any(|f| f.version.as_deref().is_none_or(dlss::older))
+    }
+    /// The game's DLSS files were read and none would change: nothing to offer.
+    pub(crate) fn dlss_all_current(&self) -> bool {
+        !self.tuning.dlss.files.is_empty() && !self.dlss_outdated()
+    }
     pub(crate) fn dlss_update_request(&self) -> Option<Change> {
-        self.tuning.dlss.ready.then(|| {
+        (self.tuning.dlss.ready && self.dlss_outdated()).then(|| {
             Some(Change::Update(dlss::Update {
                 install_dir: self.dlss_install_dir()?,
                 data_dir: retoque_data::lsfg_prepare::data_dir().ok()?,
@@ -44,6 +56,9 @@ impl RetoqueApp {
         })?
     }
     pub(crate) fn dlss_request_update(&mut self) {
+        if self.tuning.dlss.ready && !self.dlss_outdated() {
+            return;
+        }
         if let Some(change) = self.dlss_update_request() {
             self.autotune_request(
                 self.tr("dlss.update").into(),
@@ -162,6 +177,9 @@ impl RetoqueApp {
         // "Optimize automatically" needs the game's DLSS files and the catalog state; inspect them here too, not
         // only when the DLSS card on the Model tab has been shown (cached per game and facts generation).
         self.dlss_inspect();
+        if self.dlss_all_current() {
+            return;
+        }
         let target = self.view.target.as_ref();
         let mut selected = target.is_some() && self.tuning.dlss.selected_for.as_ref() == target;
         if ui.checkbox(&mut selected, self.tr("dlss.optimize")).changed() {
@@ -209,15 +227,14 @@ impl RetoqueApp {
                         dlss::download_size() as f64 / 1048576.
                     ));
                 });
+            } else if self.dlss_all_current() {
+                ui.colored_label(theme::GOOD, self.tr("dlss.all_current"));
             } else if !self.tuning.dlss.ready {
                 if ui.button(self.tr("dlss.download")).clicked() {
                     self.tuning.dlss.consent = true;
                 }
             } else if ui
-                .add_enabled(
-                    !self.busy() && !self.tuning.dlss.files.is_empty(),
-                    egui::Button::new(self.tr("dlss.update")),
-                )
+                .add_enabled(!self.busy(), egui::Button::new(self.tr("dlss.update")))
                 .clicked()
             {
                 self.dlss_request_update();

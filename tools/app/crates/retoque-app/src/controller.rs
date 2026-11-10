@@ -792,6 +792,7 @@ impl RetoqueApp {
                     }
                     other => {
                         if let Some(Err(error)) = other {
+                            crate::applog::shown_error(&error.to_string());
                             ui.colored_label(theme::BAD, error);
                             crate::error::buttons(ui, error, self.lang, &self.cmd_tx);
                         } else {

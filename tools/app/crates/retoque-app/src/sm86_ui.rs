@@ -362,6 +362,7 @@ impl RetoqueApp {
             c.request.set_install(options);
         }
         if self.tuning.dlss.selected_for.as_ref() == Some(&target)
+            && !self.dlss_all_current()
             && let Ok(c) = &mut composed
         {
             c.request.dlss = self.dlss_update_request();

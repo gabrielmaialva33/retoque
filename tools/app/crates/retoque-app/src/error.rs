@@ -156,7 +156,7 @@ pub(crate) fn button(
         Remedy::ReplanStale => "remedy.replan",
         Remedy::KeepOrReplaceForeign => "remedy.foreign",
     };
-    if ui.small_button(crate::i18n::t(lang, key)).clicked() {
+    if ui.button(crate::i18n::t(lang, key)).clicked() {
         commands.send(crate::commands::AppCommand::Remedy(remedy, target));
     }
 }
@@ -168,6 +168,7 @@ pub(crate) fn card(
     commands: &crate::commands::CommandSender,
 ) {
     let error = error.borrow();
+    crate::applog::shown_error(&error.to_string());
     ui.colored_label(crate::theme::BAD, error);
     buttons(ui, error, lang, commands);
 }

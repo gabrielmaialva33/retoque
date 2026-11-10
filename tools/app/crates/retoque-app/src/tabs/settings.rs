@@ -59,12 +59,18 @@ impl RetoqueApp {
                 .color(theme::MUTED),
         );
         self.intuitive.settings.refresh(self.lang);
+        let mut any = false;
         for (section, title) in [
             ("DlssNr", "set.nr"),
             ("Upscalers", "set.upscalers"),
             ("FrameGen", "set.framegen"),
             ("LSFG", "set.lsfg"),
         ] {
+            // While filtering, a section with nothing to show is left out instead of drawn as an empty card.
+            if self.intuitive.settings.active() && !self.settings_section_matches(section, edits) {
+                continue;
+            }
+            any = true;
             widgets::card(ui, |ui| {
                 if section == "LSFG" && !self.intuitive.settings.active() {
                     egui::CollapsingHeader::new(RichText::new(self.tr(title)).size(16.0).strong())
@@ -79,8 +85,25 @@ impl RetoqueApp {
             });
             ui.add_space(12.0);
         }
+        if !any {
+            ui.label(RichText::new(self.tr("set.no_match")).color(theme::MUTED));
+        }
         // Review and Discard live in the pending-changes footer (pending_footer), outside the scroll area.
         self.settings_plan(ui);
+    }
+
+    fn settings_section_matches(&self, section: &str, edits: &BTreeMap<(String, String), String>) -> bool {
+        settings::all()
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.section == section)
+            .any(|(index, s)| {
+                let key = (s.section.to_owned(), s.key.to_owned());
+                let on_disk = self.view.ini_values.get(s.section, s.key).unwrap_or("auto");
+                self.intuitive
+                    .settings
+                    .includes(index, on_disk, edits.get(&key).map(String::as_str))
+            })
     }
 
     pub(crate) fn settings_section(
@@ -112,6 +135,7 @@ impl RetoqueApp {
         commands: &CommandSender,
     ) {
         let lang = self.lang;
+        let mut shown = 0;
         for (index, s) in settings::all().iter().enumerate().filter(|(_, s)| s.section == section) {
             let key = (s.section.to_owned(), s.key.to_owned());
             let on_disk = self.view.ini_values.get(s.section, s.key).unwrap_or("auto");
@@ -128,12 +152,6 @@ impl RetoqueApp {
                     continue;
                 }
             }
-            if s.key == "ModelFile" {
-                ui.add_space(8.0);
-                if ui.link(t(lang, "set.model_link")).clicked() {
-                    commands.send(AppCommand::SwitchTab(Tab::Model));
-                }
-            }
             let compare = edits
                 .get(&("DlssNr".into(), "Compare".into()))
                 .map(String::as_str)
@@ -144,6 +162,17 @@ impl RetoqueApp {
                     || (s.key == "CompareSwap" && !matches!(compare, "1" | "2")))
             {
                 continue;
+            }
+            // A rule between rows, never under the last one.
+            if shown > 0 {
+                ui.separator();
+            }
+            shown += 1;
+            if s.key == "ModelFile" {
+                ui.add_space(8.0);
+                if ui.link(t(lang, "set.model_link")).clicked() {
+                    commands.send(AppCommand::SwitchTab(Tab::Model));
+                }
             }
             let (label, help) = match lang {
                 Lang::En => (s.label_en, s.help_en),
@@ -222,7 +251,6 @@ impl RetoqueApp {
                 }
             }
             ui.add_space(6.0);
-            ui.separator();
         }
     }
 

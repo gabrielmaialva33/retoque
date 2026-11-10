@@ -4,6 +4,15 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 fn main() -> eframe::Result {
+    if let Ok(dir) = retoque_data::lsfg_prepare::data_dir()
+        && retoque_app::applog::init(&dir).is_some()
+    {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            retoque_app::applog::line(format_args!("panic: {info}"));
+            default_hook(info);
+        }));
+    }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Retoque")
