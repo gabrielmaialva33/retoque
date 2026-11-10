@@ -8,8 +8,13 @@ impl RetoqueApp {
         ui.horizontal(|ui| {
             if ui
                 .add(
-                    egui::Button::new(RichText::new(self.tr("brand")).size(22.0).strong().color(theme::ACCENT))
-                        .frame(false),
+                    egui::Button::new(
+                        RichText::new(self.tr("brand"))
+                            .size(theme::DISPLAY)
+                            .strong()
+                            .color(theme::ACCENT),
+                    )
+                    .frame(false),
                 )
                 .on_hover_text(self.tr("shell.home"))
                 .clicked()
@@ -17,8 +22,25 @@ impl RetoqueApp {
                 self.selected = None;
                 self.open_target(None);
             }
-            if self.selected.is_some() && ui.button(self.tr("shell.library")).clicked() {
-                self.sidebar_visible = !self.sidebar_visible;
+            if self.selected.is_some() {
+                // A visible way back to the library grid, beside the brand that also leads there.
+                if ui
+                    .button(self.tr("shell.back_library"))
+                    .on_hover_text(self.tr("shell.home"))
+                    .clicked()
+                {
+                    self.selected = None;
+                    self.open_target(None);
+                } else if ui
+                    .button(self.tr(if self.sidebar_visible {
+                        "shell.library_hide"
+                    } else {
+                        "shell.library_show"
+                    }))
+                    .clicked()
+                {
+                    self.sidebar_visible = !self.sidebar_visible;
+                }
             }
             if ui.available_width() > 1000.0 {
                 ui.label(RichText::new(self.tr("app.tagline")).color(theme::MUTED));
@@ -60,23 +82,55 @@ impl RetoqueApp {
                     self.intuitive.palette.open(ui.ctx());
                 }
                 if self.jobs.busy() || self.library_pending {
-                    ui.spinner();
+                    ui.spinner().on_hover_text(self.running_work());
                 }
             });
         });
         self.autotune_gpu(ui);
     }
 
+    /// What the background work is, in the user's words, for the top bar's spinner.
+    pub(crate) fn running_work(&self) -> String {
+        let mut work: Vec<&str> = Vec::new();
+        if self.scanning || self.library_pending {
+            work.push(self.tr("lib.scanning"));
+        }
+        if !self.writing.is_empty() {
+            work.push(self.tr("busy.writing"));
+        }
+        if self.payload_ui.busy {
+            work.push(self.tr("payload.progress"));
+        }
+        if self.nr_fetch.busy {
+            work.push(self.tr("nr_fetch.downloading"));
+        }
+        if self.tuning.sm86.busy {
+            work.push(self.tr("sm86.progress"));
+        }
+        if self.tuning.dlss.download_progress().is_some() {
+            work.push(self.tr("dlss.downloading"));
+        }
+        if self.tuning.reshade.busy() {
+            work.push(self.tr("rs.preparing"));
+        }
+        if self.lsfg.running() {
+            work.push(self.tr("lsfg.preparing"));
+        }
+        if work.is_empty() {
+            work.push(self.tr("busy.reading"));
+        }
+        work.join("\n")
+    }
+
     pub(crate) fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            // One line for the error; the bar's own controls stay visible beside it.
             if let Some(message) = self.error.clone() {
-                crate::applog::shown_error(&message.to_string());
-                ui.colored_label(theme::BAD, format!("{}: {message}", self.tr("error")));
-                crate::error::buttons(ui, &message, self.lang, &self.cmd_tx);
+                crate::error::summary(ui, &message, self.lang, &self.cmd_tx);
                 if widgets::close_button(ui, self.tr("dismiss.help")).clicked() {
                     self.error = None;
                 }
-                return;
+                ui.separator();
             }
             self.payload_bar(ui);
         });
@@ -128,12 +182,10 @@ impl RetoqueApp {
                 for &index in games.iter() {
                     let game = &self.library_state.games[index];
                     let selected = self.selected.as_ref() == Some(&game.id);
-                    let state = (self.library_state.derived.states[index] != InstallState::Missing)
-                        .then(|| self.tr("lib.state_installed"));
+                    let state = self.library_state.derived.states[index];
                     let detail = &self.library_state.derived.details[index];
                     let capsule = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
                     let hint = (!game.registered).then(|| self.tr("folders.unregistered"));
-                    let response = widgets::game_row(ui, &game.name, detail, state, capsule, selected, hint);
                     // Cached Doctor findings for any of the game's folders; looked up by reference, no per-frame work.
                     let findings = game
                         .targets
@@ -142,6 +194,17 @@ impl RetoqueApp {
                         .copied()
                         .max()
                         .unwrap_or(0);
+                    let spoken = crate::tabs::doctor::spoken_findings(findings, self.lang);
+                    let response = widgets::game_row(
+                        ui,
+                        &game.name,
+                        detail,
+                        (self.tr(state.short_label()), state.color()),
+                        capsule,
+                        selected,
+                        hint,
+                        spoken.as_deref(),
+                    );
                     let response = crate::tabs::doctor::row_badge(ui, response, findings, self.lang);
                     list_focus |= response.has_focus();
                     if response.clicked() {
@@ -164,14 +227,11 @@ impl RetoqueApp {
         }
         ui.add_space(8.0);
         let header = format!("{} ({})", self.tr("lib.skipped"), self.skipped.len());
-        egui::CollapsingHeader::new(RichText::new(header).small().color(theme::MUTED))
-            .id_salt("skipped_entries")
-            .default_open(false)
-            .show(ui, |ui| {
-                for entry in &self.skipped {
-                    ui.label(RichText::new(entry).small().color(theme::MUTED));
-                }
-            });
+        widgets::collapsible(ui, "skipped_entries", &header, widgets::Fold::Details, |ui| {
+            for entry in &self.skipped {
+                ui.label(RichText::new(entry).small().color(theme::MUTED));
+            }
+        });
     }
 
     pub(crate) fn game(&mut self, ui: &mut egui::Ui) {
@@ -240,12 +300,18 @@ impl RetoqueApp {
             return false;
         }
         if self.tab != Tab::Compare {
-            ui.collapsing(self.tr("shell.details"), |ui| {
-                self.target_picker(ui, game);
-                if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
-                    ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
-                }
-            });
+            widgets::collapsible(
+                ui,
+                "game_details",
+                self.tr("shell.details"),
+                widgets::Fold::Details,
+                |ui| {
+                    self.target_picker(ui, game);
+                    if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
+                        ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
+                    }
+                },
+            );
             ui.add_space(8.0);
         }
         let tabs = [Tab::Install, Tab::Settings, Tab::Model, Tab::Compare, Tab::Logs];
@@ -279,9 +345,16 @@ impl RetoqueApp {
                 self.settings_tab(ui, &mut edits, &commands);
                 self.view.edits = edits;
             }
+            // Components, in the order a game uses them: the NR model, DLSS, then frame generation (sm86 and LSFG
+            // side by side, so their conflict is explained in one place).
             Tab::Model => {
-                self.autotune_components(ui);
+                widgets::section_header(ui, self.tr("comp.nr"));
                 self.model_tab(ui, &self.cmd_tx);
+                widgets::section_header(ui, self.tr("comp.dlss"));
+                self.dlss_card(ui);
+                widgets::section_header(ui, self.tr("comp.fg"));
+                self.autotune_components(ui);
+                self.autotune_lsfg(ui);
             }
             Tab::Compare => {}
             Tab::Logs => self.logs_tab(ui, &self.cmd_tx),
@@ -405,24 +478,32 @@ impl RetoqueApp {
         self.library_state.refresh(&self.saved.targets, payload, self.lang);
     }
 
+    /// "12 jogos · 3 com Retoque · 1 atualização disponível": singular for one, and no update part when there are
+    /// none.
+    pub(crate) fn home_count_line(&self, installed: usize, updates: usize) -> String {
+        let games = self.library_state.games.len();
+        let plural = |n: usize, one: &'static str, other: &'static str| {
+            format!("{n} {}", self.tr(if n == 1 { one } else { other }))
+        };
+        let mut line = format!(
+            "{} · {installed} {}",
+            plural(games, "shell.games_one", "shell.games_other"),
+            self.tr("welcome.installed")
+        );
+        if updates > 0 {
+            line.push_str(" · ");
+            line.push_str(&plural(updates, "shell.updates_one", "shell.updates_other"));
+        }
+        line
+    }
+
     pub(crate) fn home_grid(&mut self, ui: &mut egui::Ui) {
         self.migrate_saved_folders();
         ui.heading(self.tr("welcome.title"));
         self.refresh_library_cache();
         let installed = self.library_state.derived.installed_count;
         let updates = self.library_state.derived.updates;
-        ui.label(
-            RichText::new(format!(
-                "{} {} · {} {} · {} {}",
-                self.library_state.games.len(),
-                self.tr("shell.games"),
-                installed,
-                self.tr("welcome.installed"),
-                updates,
-                self.tr("shell.updates")
-            ))
-            .color(theme::MUTED),
-        );
+        ui.label(RichText::new(self.home_count_line(installed, updates)).color(theme::MUTED));
         if self.library_pending {
             ui.label(
                 RichText::new(self.tr("shell.library_checking"))
@@ -431,7 +512,6 @@ impl RetoqueApp {
             );
         }
         ui.add_space(12.0);
-        self.first_run_nr_card(ui);
         // Search and its filters on one line: the field takes what the controls on its right leave.
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -510,7 +590,7 @@ impl RetoqueApp {
                         }
                     }
                 });
-                ui.add_space(20.0);
+                ui.add_space(theme::CARD_GAP);
             }
             self.leftovers_card(ui);
             self.skipped_note(ui);
@@ -568,7 +648,7 @@ impl RetoqueApp {
                 .layout(egui::Layout::top_down(egui::Align::Min)),
         );
         if compact {
-            child.label(RichText::new(&game.name).size(22.0).strong());
+            child.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
         } else if let Some(logo) = art.logo.as_deref() {
             child.add(
                 egui::Image::new(widgets::file_uri(logo))
@@ -576,7 +656,7 @@ impl RetoqueApp {
                     .maintain_aspect_ratio(true),
             );
         } else {
-            child.label(RichText::new(&game.name).size(28.0).strong());
+            child.label(RichText::new(&game.name).heading().strong());
             child.add_space(22.0);
         }
         self.status_chips(&mut child, !compact);
@@ -612,108 +692,56 @@ impl RetoqueApp {
             });
             let ready = self.optimize_ready();
             child.horizontal_wrapped(|ui| {
-                // One big action, like a GPU panel: a game without Retoque (or with an old script's install) gets
-                // "Install and optimize", which opens one review for Retoque plus everything this card and GPU need.
-                match state {
-                    Some(InstallState::Partial) => {
-                        if ui
-                            .add(theme::primary(self.tr("shell.resume")))
-                            .on_hover_text(self.tr("shell.review_shortcut"))
-                            .clicked()
-                        {
-                            self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
-                        }
+                // The page's one primary, named for what it does here: "Install and optimize" opens one review for
+                // Retoque plus everything this card and GPU need; an update or an old script's install goes into
+                // the same review. Every other action sits in "More actions" beside it.
+                if state == Some(InstallState::Partial) {
+                    if ui
+                        .add(theme::primary(self.tr("shell.resume")))
+                        .on_hover_text(self.tr("shell.review_shortcut"))
+                        .clicked()
+                    {
+                        self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
                     }
-                    Some(InstallState::Missing | InstallState::Untracked) | None => {
-                        let label = if state == Some(InstallState::Untracked) {
-                            "shell.register_optimize"
+                } else {
+                    let key = self.optimize_action_key();
+                    let only_optimize = key == "shell.optimize";
+                    let response = ui
+                        .add_enabled(
+                            state.is_some() && ready && (only_optimize || self.payload.is_some()),
+                            theme::primary(self.tr(key)),
+                        )
+                        .on_hover_text(self.tr(if only_optimize {
+                            "shell.optimize_hint"
                         } else {
-                            "shell.install_optimize"
-                        };
-                        let response = ui
-                            .add_enabled(
-                                state.is_some() && self.payload.is_some() && ready,
-                                theme::primary(self.tr(label)).min_size(egui::vec2(190.0, 38.0)),
-                            )
-                            .on_hover_text(self.tr("shell.install_optimize_hint"))
-                            .on_disabled_hover_text(self.tr(if self.payload.is_none() {
-                                "shell.no_payload"
-                            } else {
-                                "shell.checking"
-                            }));
-                        if response.clicked() {
-                            self.optimize_automatically();
-                        }
-                        if ui
-                            .add_enabled(
-                                state.is_some() && self.payload.is_some() && !self.busy(),
-                                egui::Button::new(self.tr("shell.install_only")),
-                            )
-                            .clicked()
-                            && let Some(options) = self.install_inputs()
-                        {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                        }
-                    }
-                    Some(InstallState::Update) => {
-                        if ui
-                            .add_enabled(self.payload.is_some(), theme::primary(self.tr("shell.update")))
-                            .on_hover_text(self.tr("shell.review_shortcut"))
-                            .clicked()
-                            && let Some(options) = self.install_inputs()
-                        {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                        }
-                        if ui
-                            .add_enabled(ready, egui::Button::new(self.tr("shell.optimize")))
-                            .clicked()
-                        {
-                            self.optimize_automatically();
-                        }
-                    }
-                    Some(InstallState::Current | InstallState::Installed) => {
-                        if ui
-                            .add_enabled(ready, theme::primary(self.tr("shell.optimize")))
-                            .on_hover_text(self.tr("shell.optimize_hint"))
-                            .clicked()
-                        {
-                            self.optimize_automatically();
-                        }
-                        if ui.button(self.tr("shell.reinstall")).clicked()
-                            && let Some(options) = self.install_inputs()
-                        {
-                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                        }
+                            "shell.install_optimize_hint"
+                        }))
+                        .on_disabled_hover_text(self.tr(if self.payload.is_none() && !only_optimize {
+                            "shell.no_payload"
+                        } else {
+                            "shell.checking"
+                        }));
+                    if response.clicked() {
+                        self.optimize_automatically();
                     }
                 }
+                self.banner_more_actions(ui, state, game);
                 let download = if self.nr_fetch.busy {
-                    Some(("nr_fetch.downloading", self.nr_fetch.downloaded))
+                    Some((
+                        "nr_fetch.downloading",
+                        self.nr_fetch.downloaded,
+                        Some(self.nr_fetch.total),
+                    ))
                 } else if self.tuning.sm86.busy {
-                    Some(("sm86.progress", self.tuning.sm86.downloaded))
+                    Some(("sm86.progress", self.tuning.sm86.downloaded, self.sm86_download_total()))
                 } else {
                     self.tuning
                         .dlss
                         .download_progress()
-                        .map(|bytes| ("dlss.downloading", bytes))
+                        .map(|bytes| ("dlss.downloading", bytes, Some(retoque_data::dlss::download_size())))
                 };
-                if let Some((label, bytes)) = download {
-                    ui.spinner();
-                    let text = if bytes > 0 {
-                        format!("{} · {:.0} MiB", self.tr(label), bytes as f64 / 1048576.)
-                    } else {
-                        self.tr(label).to_string()
-                    };
-                    ui.label(RichText::new(text).small());
-                }
-                if matches!(
-                    state,
-                    Some(InstallState::Current | InstallState::Update | InstallState::Installed)
-                ) && ui.button(self.tr("shell.uninstall_open")).clicked()
-                {
-                    self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
-                }
-                if ui.button(self.tr("shell.open_folder")).clicked() {
-                    model::open_folder(&game.install_dir);
+                if let Some((label, bytes, total)) = download {
+                    widgets::busy(ui, self.lang, self.tr(label), (bytes > 0).then_some(bytes), total);
                 }
             });
         }
@@ -727,6 +755,56 @@ impl RetoqueApp {
             .color(theme::MUTED),
         );
         ui.add_space(12.0);
+    }
+
+    /// The banner's secondary actions in one menu beside its primary: install or update without optimizing,
+    /// reinstall, uninstall, undo and the game folder. Each still opens its own review.
+    fn banner_more_actions(&mut self, ui: &mut egui::Ui, state: Option<InstallState>, game: &Game) {
+        let installed = matches!(
+            state,
+            Some(InstallState::Current | InstallState::Update | InstallState::Installed)
+        );
+        let can_write = self.payload.is_some() && !self.busy();
+        ui.menu_button(self.tr("shell.more"), |ui| {
+            let install = match state {
+                Some(InstallState::Missing | InstallState::Untracked) => Some("shell.install_only"),
+                Some(InstallState::Update) => Some("shell.update"),
+                Some(InstallState::Current | InstallState::Installed) => Some("shell.reinstall"),
+                Some(InstallState::Partial) | None => None,
+            };
+            if let Some(key) = install
+                && ui
+                    .add_enabled(can_write, egui::Button::new(self.tr(key)))
+                    .on_disabled_hover_text(self.tr(if self.payload.is_none() {
+                        "shell.no_payload"
+                    } else {
+                        "shell.checking"
+                    }))
+                    .clicked()
+                && let Some(options) = self.install_inputs()
+            {
+                self.request_plan(PlanKind::Install, PlanInputs::Install(options));
+            }
+            if installed
+                && ui
+                    .add_enabled(!self.busy(), egui::Button::new(self.tr("shell.uninstall_open")))
+                    .clicked()
+            {
+                self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
+            }
+            // Undo also covers what an optimization wrote, not only the Settings tab's edits.
+            if installed
+                && ui
+                    .add_enabled(!self.busy(), egui::Button::new(self.tr("undo.title")))
+                    .clicked()
+                && let Some(target) = self.view.target.clone()
+            {
+                self.cmd_tx.send(AppCommand::UndoSettings(target));
+            }
+            if ui.button(self.tr("shell.open_folder")).clicked() {
+                model::open_folder(&game.install_dir);
+            }
+        });
     }
 
     pub(crate) fn pending_footer(&mut self, ui: &mut egui::Ui) {
@@ -812,7 +890,8 @@ impl RetoqueApp {
                         if toast.details_open
                             && let Some(detail) = &toast.detail
                         {
-                            ui.label(detail);
+                            ui.add(egui::Label::new(detail.user_text(lang)).wrap());
+                            crate::error::details(ui, detail, lang);
                         }
                     });
                 }

@@ -107,6 +107,11 @@ pub enum Outcome {
     Catalog {
         result: Result<Vec<Model>, AppError>,
     },
+    /// Worker snapshot order; the hub discards stale lists without discarding mutation completion events.
+    CatalogSnapshot {
+        revision: u64,
+        result: Result<Vec<Model>, AppError>,
+    },
     /// A job panicked. `target` lets the app release the folder's write lock and reload it.
     Failed {
         job: &'static str,

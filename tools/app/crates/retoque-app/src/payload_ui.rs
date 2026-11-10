@@ -1,5 +1,6 @@
-//! Payload source selection (beside the app, chosen folder, or official GitHub release),
-//! consent modal, background download/verification, and update check with reviewed game update offer.
+//! Payload source selection (beside the app, chosen folder, or official GitHub release) in the "Retoque files"
+//! dialog, consent modal, background download/verification, and the update check. Updating a game is the game
+//! page's own reviewed action.
 
 use crate::app::*;
 use retoque_data::payload_fetch;
@@ -58,9 +59,9 @@ pub struct State {
     pub fetcher: Option<Arc<dyn payload_fetch::Fetcher + Send + Sync>>,
     pub cache_dir: Option<PathBuf>,
     pub beside_dir: Option<PathBuf>,
-    /// The footer's source controls (path, choose, switch source, get a release) are for people who manage
-    /// Retoque's files; everyone else sees one line. Opened automatically while no files are found.
-    pub advanced: bool,
+    /// The "Retoque files" dialog (where the files come from and official releases), opened from the status bar's
+    /// one button.
+    pub files_open: bool,
 }
 
 impl RetoqueApp {
@@ -287,158 +288,158 @@ impl RetoqueApp {
         });
     }
 
-    fn active_payload_version(&self) -> Option<&str> {
-        if let Some(rec) = &self.payload_ui.record
-            && self.payload.as_ref() == Some(&rec.payload_dir)
-        {
-            return rec.file_version.as_deref().or(Some(rec.release.version.as_str()));
-        }
-        self.payload_ui.active_version.as_deref()
+    /// Which Retoque the app installs: a release says its own version; files from anywhere else are named by their
+    /// build, the id the game page's tiles show. OptiScaler's DLL version is not Retoque's.
+    fn payload_name(&self) -> Option<String> {
+        let p = self.payload.as_ref()?;
+        Some(match &self.payload_ui.record {
+            Some(rec) if &rec.payload_dir == p => format!("Retoque {}", rec.release.version),
+            _ => match self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
+                Some(hash) => format!("Retoque · {}", self.build_text(hash)),
+                None => self.tr("app.payload").to_owned(),
+            },
+        })
     }
 
-    pub(crate) fn outdated_installed_game(&self) -> Option<(Option<String>, PathBuf)> {
-        self.payload.as_ref()?;
-        let payload_sha = self
-            .payload_build
-            .as_ref()
-            .and_then(|r| r.as_ref().ok())
-            .map(String::as_str);
-        let avail_ver = self.active_payload_version();
-
-        let needs_update = |status: &Status| -> bool {
-            if status.receipt.as_ref().map(|r| r.status) != Some(ReceiptStatus::Complete) {
-                return false;
-            }
-            if install_state(status, payload_sha) == InstallState::Update {
-                return true;
-            }
-            if let (Some(inst), Some(avail)) = (status.proxy_version.as_deref(), avail_ver)
-                && payload_fetch::compare_versions(avail, inst) == Some(Ordering::Greater)
-            {
-                return true;
-            }
-            false
-        };
-
-        if let (Some(target), Some(Ok(status))) = (&self.view.target, &self.view.status)
-            && needs_update(status)
-        {
-            return Some((self.selected.clone(), target.clone()));
-        }
-        for game in &self.library_state.games {
-            if let Some(target) = self.target_for(game)
-                && let Some(status) = self.library_state.status.get(&target)
-                && needs_update(status)
-            {
-                return Some((Some(game.id.clone()), target));
-            }
-        }
-        None
-    }
-
-    pub(crate) fn review_outdated_game_update(&mut self) {
-        let Some((game_id, target)) = self.outdated_installed_game() else {
-            return;
-        };
-        if self.view.target.as_ref() != Some(&target) {
-            let prior_status = self.library_state.status.get(&target).cloned();
-            self.selected = game_id;
-            self.open_target(Some(target.clone()));
-            if let Some(s) = prior_status {
-                if let Some(proxy) = crate::controller::installed_proxy(&s) {
-                    self.view.options.proxy = proxy;
-                }
-                if let Some(nr) = s.nr_enabled {
-                    self.view.options.enable_nr = nr;
-                }
-                self.view.status = Some(Ok(s));
-            }
-        }
-        if let Some(options) = self.install_inputs() {
-            self.start_plan(PlanKind::Install, PlanInputs::Install(options));
+    /// The status bar's button: the screen-reader label names the dialog it opens and what it shows.
+    pub(crate) fn payload_button_label(&self) -> String {
+        match self.payload_name() {
+            Some(name) => format!("{}: {name}", self.tr("app.payload")),
+            None => self.tr("app.payload").to_owned(),
         }
     }
 
     pub(crate) fn payload_bar(&mut self, ui: &mut egui::Ui) {
-        // One line by default: which Retoque the app installs and whether a newer one exists. The source
-        // controls open with "Advanced", or by themselves when no Retoque files are found.
-        let advanced = self.payload_ui.advanced || self.payload.is_none();
-        match &self.payload {
+        // One button, which Retoque the app installs; where its files come from and official releases are in the
+        // "Retoque files" dialog it opens. Updating a game is the game page's own action.
+        let text = self.payload_name().unwrap_or_else(|| self.tr("app.payload").to_owned());
+        let response = ui.button(text);
+        let label = self.payload_button_label();
+        response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+        // The path, and the build's hash when the files are a local build (the button names it in plain words).
+        let response = match &self.payload {
             Some(p) => {
-                // A release says its own version; files from anywhere else are named by their build, the id the
-                // game page's tiles show. OptiScaler's DLL version is not Retoque's.
-                let text = match &self.payload_ui.record {
-                    Some(rec) if &rec.payload_dir == p => format!("Retoque {}", rec.release.version),
-                    _ => match self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
-                        Some(hash) => format!("Retoque · {} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
-                        None => self.tr("app.payload").to_owned(),
-                    },
-                };
-                let response = ui.label(RichText::new(text).small().color(theme::MUTED));
-                if advanced {
-                    ui.label(RichText::new(short_path(p)).small().monospace().color(theme::MUTED))
-                        .on_hover_text(crate::format::display_path(p));
-                } else {
-                    response.on_hover_text(crate::format::display_path(p));
+                let mut hover = crate::format::display_path(p);
+                if let Some(hash) = self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
+                    hover = format!("{hover}\n{}", self.build_hover(hash));
                 }
+                response.on_hover_text(hover)
             }
-            None => {
-                ui.label(RichText::new(self.tr("app.payload")).small().color(theme::MUTED));
-                ui.colored_label(theme::WARN, RichText::new(self.tr("app.payload.none")).small());
-            }
+            None => response,
+        };
+        if response.clicked() {
+            self.payload_ui.files_open = true;
+        }
+        if self.payload.is_none() {
+            ui.colored_label(theme::WARN, RichText::new(self.tr("payload.missing")).small());
+        }
+        if self.payload_ui.busy {
+            ui.spinner();
+        } else if self.payload_ui.update_available {
+            // The accent dot never stands alone: the words say what it means.
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+            ui.painter().circle_filled(rect.center(), 4.0, theme::ACCENT);
+            ui.colored_label(theme::ACCENT, RichText::new(self.tr("payload.new_release")).small());
+        }
+        if let Some(error) = &self.payload_ui.error {
+            crate::error::summary(ui, error, self.lang, &self.cmd_tx);
+        }
+    }
+
+    /// "Retoque files": the current files, where they come from, and official releases. Downloads still ask first
+    /// (`payload_dialog`), and no game changes from here.
+    fn payload_files_modal(&mut self, ctx: &egui::Context) {
+        if !self.payload_ui.files_open {
+            return;
+        }
+        let mut close = false;
+        let modal = egui::Modal::new(egui::Id::unique("payload-files"))
+            .frame(widgets::modal_frame())
+            .show(ctx, |ui| {
+                ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
+                ui.heading(self.tr("app.payload"));
+                ui.add(egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::MUTED)).wrap());
+                ui.add_space(8.0);
+                match self.payload.clone() {
+                    Some(p) => {
+                        if let Some(name) = self.payload_name() {
+                            ui.label(RichText::new(name).strong());
+                        }
+                        ui.label(RichText::new(short_path(&p)).small().monospace().color(theme::MUTED))
+                            .on_hover_text(crate::format::display_path(&p));
+                    }
+                    None => {
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(format!("{} {}", self.tr("app.payload"), self.tr("app.payload.none")))
+                                    .color(theme::WARN),
+                            )
+                            .wrap(),
+                        );
+                    }
+                }
+
+                widgets::section_header(ui, self.tr("payload.files_source"));
+                ui.horizontal_wrapped(|ui| self.payload_source_buttons(ui));
+
+                widgets::section_header(ui, self.tr("payload.files_updates"));
+                ui.horizontal_wrapped(|ui| self.payload_release_controls(ui));
+                if let Some(error) = &self.payload_ui.error {
+                    crate::error::body(ui, error, self.lang, &self.cmd_tx);
+                }
+                ui.add_space(12.0);
+                close = ui.button(self.tr("close")).clicked();
+            });
+        if close || modal.should_close() {
+            self.payload_ui.files_open = false;
+        }
+    }
+
+    fn payload_source_buttons(&mut self, ui: &mut egui::Ui) {
+        if let Some(beside) = self.beside_payload_dir()
+            && self.payload.as_ref() != Some(&beside)
+            && ui.button(self.tr("payload.source.beside")).clicked()
+        {
+            self.saved.payload_source = Some(PayloadSource::BesideApp);
+            self.payload = Some(beside);
+            self.payload_ui.active_version = self
+                .payload
+                .as_ref()
+                .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
+            self.hash_payload();
         }
 
-        if advanced {
-            if let Some(beside) = self.beside_payload_dir()
-                && self.payload.as_ref() != Some(&beside)
-                && ui.button(self.tr("payload.source.beside")).clicked()
-            {
-                self.saved.payload_source = Some(PayloadSource::BesideApp);
-                self.payload = Some(beside);
-                self.payload_ui.active_version = self
-                    .payload
-                    .as_ref()
-                    .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
-                self.hash_payload();
-            }
-
-            if ui.button(self.tr("app.payload.choose")).clicked() {
-                self.cmd_tx.send(AppCommand::Remedy(Remedy::ChoosePayloadDir, None));
-            }
-
-            if let Some(folder) = self.saved.payload.clone().filter(|p| model::is_payload(p))
-                && self.payload.as_ref() != Some(&folder)
-                && ui.button(self.tr("payload.source.folder")).clicked()
-            {
-                self.saved.payload_source = Some(PayloadSource::Folder);
-                self.payload = Some(folder);
-                self.payload_ui.active_version = self
-                    .payload
-                    .as_ref()
-                    .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
-                self.hash_payload();
-            }
-
-            if let Some(rec) = self.payload_ui.record.clone()
-                && self.payload.as_ref() != Some(&rec.payload_dir)
-                && model::is_payload(&rec.payload_dir)
-                && ui.button(self.tr("payload.source.release")).clicked()
-            {
-                self.saved.payload_source = Some(PayloadSource::Release);
-                self.payload = Some(rec.payload_dir.clone());
-                self.payload_build = Some(Ok(rec.optiscaler_sha256.clone()));
-                self.payload_ui.active_version = rec.file_version.clone().or_else(|| Some(rec.release.version.clone()));
-                self.hash_payload();
-            }
-
-            if ui
-                .add_enabled(!self.payload_ui.busy, egui::Button::new(self.tr("payload.download")))
-                .clicked()
-            {
-                self.payload_ui.consent = Some(Consent::Download);
-            }
+        if ui.button(self.tr("app.payload.choose")).clicked() {
+            self.cmd_tx.send(AppCommand::Remedy(Remedy::ChoosePayloadDir, None));
         }
 
+        if let Some(folder) = self.saved.payload.clone().filter(|p| model::is_payload(p))
+            && self.payload.as_ref() != Some(&folder)
+            && ui.button(self.tr("payload.source.folder")).clicked()
+        {
+            self.saved.payload_source = Some(PayloadSource::Folder);
+            self.payload = Some(folder);
+            self.payload_ui.active_version = self
+                .payload
+                .as_ref()
+                .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
+            self.hash_payload();
+        }
+
+        if let Some(rec) = self.payload_ui.record.clone()
+            && self.payload.as_ref() != Some(&rec.payload_dir)
+            && model::is_payload(&rec.payload_dir)
+            && ui.button(self.tr("payload.source.release")).clicked()
+        {
+            self.saved.payload_source = Some(PayloadSource::Release);
+            self.payload = Some(rec.payload_dir.clone());
+            self.payload_build = Some(Ok(rec.optiscaler_sha256.clone()));
+            self.payload_ui.active_version = rec.file_version.clone().or_else(|| Some(rec.release.version.clone()));
+            self.hash_payload();
+        }
+    }
+
+    fn payload_release_controls(&mut self, ui: &mut egui::Ui) {
         if ui
             .add_enabled(!self.payload_ui.busy, egui::Button::new(self.tr("payload.check")))
             .clicked()
@@ -447,84 +448,77 @@ impl RetoqueApp {
         }
 
         if self.payload_ui.busy {
-            ui.spinner();
-            ui.label(
-                RichText::new(format!(
-                    "{} ({:.1} MiB)",
-                    self.tr("payload.progress"),
-                    self.payload_ui.downloaded as f64 / 1_048_576.0
-                ))
-                .small(),
+            // A download fetches the release a check found; its size is known then.
+            let done = self.payload_ui.downloaded;
+            let total = self.payload_ui.release.as_ref().map(|r| r.size);
+            widgets::busy(
+                ui,
+                self.lang,
+                self.tr("payload.progress"),
+                (done > 0).then_some(done),
+                total,
             );
         } else if self.payload_ui.no_release {
-            ui.colored_label(theme::WARN, RichText::new(self.tr("payload.no_release")).small());
+            ui.colored_label(theme::WARN, self.tr("payload.no_release"));
         } else if let Some(rel) = self.payload_ui.release.clone() {
             if self.payload_ui.update_available {
                 ui.colored_label(
                     theme::ACCENT,
-                    RichText::new(format!("{}: v{}", self.tr("payload.new_release"), rel.version)).small(),
+                    format!("{}: v{}", self.tr("payload.new_release"), rel.version),
                 );
                 if ui.button(self.tr("payload.download_now")).clicked() {
                     self.payload_ui.consent = Some(Consent::Download);
                 }
             } else {
-                ui.label(
-                    RichText::new(format!("{}: v{}", self.tr("payload.up_to_date"), rel.version))
-                        .small()
-                        .color(theme::GOOD),
+                ui.colored_label(
+                    theme::GOOD,
+                    format!("{}: v{}", self.tr("payload.up_to_date"), rel.version),
                 );
             }
         }
-
-        if self.outdated_installed_game().is_some()
+        if !self.payload_ui.update_available
             && ui
-                .add_enabled(!self.busy(), egui::Button::new(self.tr("payload.update_game")))
+                .add_enabled(!self.payload_ui.busy, egui::Button::new(self.tr("payload.download")))
                 .clicked()
         {
-            self.review_outdated_game_update();
-        }
-
-        if let Some(error) = &self.payload_ui.error {
-            ui.colored_label(theme::BAD, RichText::new(diagnostic(self.lang, error)).small());
-        }
-
-        if self.payload.is_some() {
-            let label = if self.payload_ui.advanced {
-                self.tr("payload.advanced_hide")
-            } else {
-                self.tr("payload.advanced_show")
-            };
-            if ui.add(egui::Button::new(label)).clicked() {
-                self.payload_ui.advanced = !self.payload_ui.advanced;
-            }
+            self.payload_ui.consent = Some(Consent::Download);
         }
     }
 
     pub(crate) fn payload_dialog(&mut self, ctx: &egui::Context) {
+        self.payload_files_modal(ctx);
         let Some(consent) = self.payload_ui.consent else {
             return;
         };
-        let mut confirm = false;
-        let mut cancel = false;
-        egui::Modal::new(egui::Id::unique("payload-consent")).show(ctx, |ui| {
-            ui.set_max_width(520.0);
-            ui.heading(self.tr("payload.consent_title"));
-            ui.label(self.tr(match consent {
-                Consent::Check => "payload.check_consent",
-                Consent::Download => "payload.download_consent",
-            }));
-            ui.label(RichText::new(self.tr("payload.hosts_note")).small().color(theme::MUTED));
-            ui.horizontal(|ui| {
-                confirm = ui.button(self.tr("payload.confirm")).clicked();
-                cancel = ui.button(self.tr("payload.later")).clicked();
-            });
-        });
-        if cancel {
-            self.payload_ui.consent = None;
-        }
-        if confirm {
-            self.payload_ui.consent = None;
-            self.payload_start(consent);
+        let lang = self.lang;
+        let (body, confirm) = match consent {
+            Consent::Check => ("payload.check_consent", t(lang, "check_now").to_owned()),
+            // A download fetches the release the last check found (its size is known) or the latest one.
+            Consent::Download => (
+                "payload.download_consent",
+                download_label(lang, self.payload_ui.release.as_ref().map(|r| r.size)),
+            ),
+        };
+        let details = |ui: &mut egui::Ui| {
+            ui.add(egui::Label::new(RichText::new(t(lang, "payload.hosts_note")).small()).wrap());
+        };
+        // Both are started by the user (a button), so they are dismissed with "Cancel".
+        match widgets::consent_modal(
+            ctx,
+            lang,
+            "payload-consent",
+            t(lang, "payload.consent_title"),
+            &[t(lang, body)],
+            &confirm,
+            t(lang, "cancel"),
+            Some(&details),
+        ) {
+            Some(widgets::Answer::Cancel) => self.payload_ui.consent = None,
+            Some(widgets::Answer::Confirm) => {
+                self.payload_ui.consent = None;
+                self.payload_start(consent);
+            }
+            None => {}
         }
     }
 }
@@ -636,13 +630,20 @@ mod tests {
             );
             h.run_steps(2);
 
+            // The status bar is one button; the source and release controls are in the dialog it opens.
+            assert!(h.query_by_label(t(lang, "payload.check")).is_none());
+            assert!(h.query_by_label(t(lang, "payload.source.folder")).is_none());
+            let files = h.state().payload_button_label();
+            h.get_by_role_and_label(egui::Role::Button, &files).click();
+            h.run_steps(2);
+            h.get_by_label(t(lang, "payload.files_note"));
+
             // Click Check for updates -> opens confirmation modal; cancelling does not start network work.
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.check"))
                 .click();
             h.run_steps(2);
             h.get_by_label(t(lang, "payload.consent_title"));
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.later"))
-                .click();
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
             h.run_steps(2);
             assert!(!h.state().payload_ui.no_release);
 
@@ -650,7 +651,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.check"))
                 .click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "check_now"))
                 .click();
             wait_idle(&mut h);
 
@@ -658,11 +659,7 @@ mod tests {
             h.get_by_label(t(lang, "payload.no_release"));
             assert_eq!(h.state().payload.as_ref(), Some(&beside));
 
-            // Source (b) chosen folder and (a) beside app remain usable, under "Advanced": closed by default.
-            assert!(h.query_by_label(t(lang, "payload.source.folder")).is_none());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.advanced_show"))
-                .click();
-            h.run_steps(2);
+            // Source (b) chosen folder and (a) beside app remain usable in the same dialog.
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.source.folder"))
                 .click();
             wait_idle(&mut h);
@@ -674,6 +671,12 @@ mod tests {
             wait_idle(&mut h);
             assert_eq!(h.state().payload.as_ref(), Some(&beside));
             assert_eq!(h.state().saved.payload_source, Some(PayloadSource::BesideApp));
+
+            // "Close" closes the dialog.
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "close")).click();
+            h.run_steps(2);
+            assert!(!h.state().payload_ui.files_open);
+            assert!(h.query_by_label(t(lang, "payload.files_note")).is_none());
         }
     }
 
@@ -725,24 +728,29 @@ mod tests {
                 app,
             );
             wait_idle(&mut h);
+            let files = h.state().payload_button_label();
+            h.get_by_role_and_label(egui::Role::Button, &files).click();
+            h.run_steps(2);
 
             // 1. Check for updates -> finds v0.3.1 (newer than local).
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.check"))
                 .click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "check_now"))
                 .click();
             wait_idle(&mut h);
 
             assert!(h.state().payload_ui.update_available);
             assert_eq!(h.state().payload_ui.release.as_ref().unwrap().version, "0.3.1");
+            // The status bar says so in words beside its accent dot.
+            assert!(h.query_all_by_label(t(lang, "payload.new_release")).count() >= 1);
 
             // 2. Click Download update -> confirm -> unpacks into app data and becomes active payload.
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.download_now"))
                 .click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.confirm"))
-                .click();
+            let download = download_label(lang, h.state().payload_ui.release.as_ref().map(|r| r.size));
+            h.get_by_role_and_label(egui::Role::Button, &download).click();
             wait_idle(&mut h);
 
             assert_eq!(h.state().saved.payload_source, Some(PayloadSource::Release));
@@ -750,9 +758,13 @@ mod tests {
             assert_eq!(h.state().payload.as_ref(), Some(&rec.payload_dir));
             assert_eq!(rec.file_version.as_deref(), Some("10.0.0.2"));
 
-            // 3. Installed game (10.0.0.1) is now offered an update via the normal reviewed install plan.
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.update_game"))
-                .click();
+            // 3. The game page now offers "Update and optimize"; the status bar has no game action of its own.
+            assert!(h.query_by_label_contains(t(lang, "shell.update_optimize")).is_none());
+            assert_eq!(h.state().optimize_action_key(), "shell.update_optimize");
+            // Its update goes through the normal reviewed install plan.
+            let options = h.state().install_inputs().unwrap();
+            h.state_mut()
+                .start_plan(PlanKind::Install, PlanInputs::Install(options));
             wait_idle(&mut h);
 
             assert!(h.state().review_open);

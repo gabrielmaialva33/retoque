@@ -40,9 +40,10 @@ pub fn tinted_card<R>(ui: &mut egui::Ui, fill: Color32, add: impl FnOnce(&mut eg
         .inner
 }
 
-/// A frameless close control for notices: a drawn X, a soft circle on hover, and a screen-reader label.
+/// A frameless close control for notices: a drawn X, a soft circle on hover, and a screen-reader label. The X is
+/// drawn at 24 px, but the hit area is the theme's 32 px like every other button.
 pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(vec2(24.0, 24.0), egui::Sense::click());
+    let (rect, response) = ui.allocate_exact_size(vec2(32.0, 32.0), egui::Sense::click());
     let label = label.to_owned();
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label.clone()));
     if ui.is_rect_visible(rect) {
@@ -61,6 +62,59 @@ pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
     response
         .on_hover_text(label)
         .on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// The side of `reset_button`'s target, so a row without one can keep its room.
+pub const RESET_SIZE: f32 = 32.0;
+
+/// A frameless "back to automatic" control: a drawn anticlockwise arrow (↺, no font glyph needed), a soft circle on
+/// hover, and a screen-reader label that names what it resets.
+pub fn reset_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(RESET_SIZE, RESET_SIZE), egui::Sense::click());
+    let label = label.to_owned();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label.clone()));
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let active = response.hovered() || response.has_focus();
+        if active {
+            painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
+        }
+        let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
+        let stroke = Stroke::new(1.6, color);
+        let (c, r) = (rect.center(), 6.0);
+        let at = |angle: f32| c + r * vec2(angle.cos(), angle.sin());
+        // An open circle with its gap at the top; the arrow heads anticlockwise from the gap's right end.
+        let start = -std::f32::consts::FRAC_PI_2 + 0.7;
+        let points: Vec<_> = (0..=20)
+            .map(|i| at(start + i as f32 / 20.0 * (std::f32::consts::TAU - 1.4)))
+            .collect();
+        painter.add(egui::Shape::line(points, stroke));
+        let tip = at(start);
+        let back = -vec2(start.sin(), -start.cos());
+        let wing = |turn: f32| {
+            tip + 3.5
+                * vec2(
+                    back.x * turn.cos() - back.y * turn.sin(),
+                    back.x * turn.sin() + back.y * turn.cos(),
+                )
+        };
+        painter.line_segment([tip, wing(0.7)], stroke);
+        painter.line_segment([tip, wing(-0.7)], stroke);
+    }
+    response
+        .on_hover_text(label)
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// The 3 px accent bar that marks a changed row, drawn in the card's margin left of `row`, with `note` on hover
+/// and for screen readers (the bar is never the only cue).
+pub fn change_bar(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + std::fmt::Debug, row: Rect, note: &str) {
+    let bar = Rect::from_min_max(pos2(row.left() - 10.0, row.top()), pos2(row.left() - 7.0, row.bottom()));
+    ui.painter().rect_filled(bar, 2.0, theme::ACCENT);
+    let id = ui.scope_id().with(("change_bar", id_salt));
+    let response = ui.interact(bar.expand2(vec2(3.0, 0.0)), id, Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, note));
+    response.on_hover_text(note);
 }
 
 /// The frame every modal uses: the review's card look, so dialogs read as one family.
@@ -108,19 +162,22 @@ pub fn collapsible<R>(
 }
 
 /// Work in progress, always with a sentence: a bar with "done of total" when the total is known, else a spinner
-/// with the text (and the size received so far, when there is one).
+/// with the text (and the size received so far, when there is one). In a row (a bar, a line of buttons) the bar
+/// keeps a fixed width so the controls after it stay in place.
 pub fn busy(ui: &mut egui::Ui, lang: crate::i18n::Lang, text: &str, done: Option<u64>, total: Option<u64>) {
     use crate::format::size_text;
     match (done, total) {
         (Some(done), Some(total)) if total > 0 => {
             let of = crate::i18n::t(lang, "progress.of");
-            ui.add(
-                egui::ProgressBar::new((done as f32 / total as f32).clamp(0.0, 1.0)).text(format!(
-                    "{text} · {} {of} {}",
-                    size_text(lang, done),
-                    size_text(lang, total)
-                )),
-            );
+            let mut bar = egui::ProgressBar::new((done as f32 / total as f32).clamp(0.0, 1.0)).text(format!(
+                "{text} · {} {of} {}",
+                size_text(lang, done),
+                size_text(lang, total)
+            ));
+            if ui.layout().is_horizontal() {
+                bar = bar.desired_width(320.0_f32.min(ui.available_width()));
+            }
+            ui.add(bar);
         }
         (done, _) => {
             ui.horizontal(|ui| {
@@ -155,6 +212,23 @@ pub fn consent_modal(
     cancel: &str,
     details: Option<&dyn Fn(&mut egui::Ui)>,
 ) -> Option<Answer> {
+    consent_modal_when(ctx, lang, id, title, body, confirm, cancel, details, true)
+}
+
+/// `consent_modal` whose confirm is disabled while `can_confirm` is false (another write is running); cancel
+/// always works.
+#[allow(clippy::too_many_arguments)]
+pub fn consent_modal_when(
+    ctx: &egui::Context,
+    lang: crate::i18n::Lang,
+    id: &str,
+    title: &str,
+    body: &[&str],
+    confirm: &str,
+    cancel: &str,
+    details: Option<&dyn Fn(&mut egui::Ui)>,
+    can_confirm: bool,
+) -> Option<Answer> {
     let mut answer = None;
     let modal = egui::Modal::new(egui::Id::unique(("consent", id)))
         .frame(modal_frame())
@@ -163,7 +237,7 @@ pub fn consent_modal(
             ui.label(RichText::new(title).size(theme::TITLE).strong());
             ui.add_space(6.0);
             for line in body {
-                ui.label(*line);
+                ui.add(egui::Label::new(*line).wrap());
             }
             if let Some(details) = details {
                 ui.add_space(4.0);
@@ -175,7 +249,7 @@ pub fn consent_modal(
                 if ui.button(cancel).clicked() {
                     answer = Some(Answer::Cancel);
                 }
-                if ui.add(theme::primary(confirm)).clicked() {
+                if ui.add_enabled(can_confirm, theme::primary(confirm)).clicked() {
                     answer = Some(Answer::Confirm);
                 }
             });
@@ -186,9 +260,53 @@ pub fn consent_modal(
     answer
 }
 
+/// The confirm before deleting something the app keeps (a model, a component): the shared modal frame, a question,
+/// the item's name, what deleting it means, and `[Cancelar] [Apagar]` with a `danger` confirm. Escape or a click
+/// outside counts as cancel. The caller keeps which item is pending and shows this while it is.
+pub fn delete_modal(
+    ctx: &egui::Context,
+    lang: crate::i18n::Lang,
+    id: &str,
+    title: &str,
+    item: &str,
+    body: &str,
+) -> Option<Answer> {
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::unique(("delete", id)))
+        .frame(modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 480.0));
+            ui.label(RichText::new(title).size(theme::TITLE).strong());
+            ui.add_space(6.0);
+            ui.label(RichText::new(item).strong());
+            ui.add(egui::Label::new(RichText::new(body).color(theme::MUTED)).wrap());
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui.button(crate::i18n::t(lang, "cancel")).clicked() {
+                    answer = Some(Answer::Cancel);
+                }
+                if ui.add(theme::danger(crate::i18n::t(lang, "delete"))).clicked() {
+                    answer = Some(Answer::Confirm);
+                }
+            });
+        });
+    if answer.is_none() && modal.should_close() {
+        answer = Some(Answer::Cancel);
+    }
+    answer
+}
+
+/// Names a button that repeats on every card after what it acts on, "{action}: {item}", so a screen reader can tell
+/// them apart; the visible text stays the short action.
+pub fn name_after(response: &egui::Response, action: &str, item: &str) {
+    let name = format!("{}: {item}", action.trim_end_matches('…'));
+    let enabled = response.enabled();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, name.clone()));
+}
+
 /// A card's title line.
 pub fn card_title(ui: &mut egui::Ui, text: &str) {
-    ui.label(RichText::new(text).size(17.0).strong());
+    ui.label(RichText::new(text).size(theme::TITLE).strong());
     ui.add_space(4.0);
 }
 
@@ -276,15 +394,19 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
     clicked
 }
 
-/// One library row: cover art (or a lettered placeholder), the name, and a second line with the store and state.
+/// One library row: cover art (or a lettered placeholder), the name, and a second line with the install state (a
+/// dot and a word, in the state's colour) and the store. Screen readers hear "{name}, {state}", then `spoken_extra`
+/// (the Doctor's findings) when given.
+#[allow(clippy::too_many_arguments)]
 pub fn game_row(
     ui: &mut egui::Ui,
     name: &str,
     detail: &str,
-    installed: Option<&str>,
+    state: (&str, Color32),
     capsule: Option<&Path>,
     selected: bool,
     hint: Option<&str>,
+    spoken_extra: Option<&str>,
 ) -> egui::Response {
     let height = if hint.is_some() { 82.0 } else { 64.0 };
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
@@ -334,16 +456,15 @@ pub fn game_row(
     painter.galley(pos2(left, rect.top() + 13.0), name_galley, name_color);
     let mut x = left;
     let y = rect.top() + 37.0;
-    if let Some(state) = installed {
-        painter.circle_filled(pos2(x + 4.0, y + 7.0), 3.5, theme::GOOD);
-        x += 13.0;
-        let g = ui
-            .painter()
-            .layout_no_wrap(state.to_string(), FontId::proportional(12.5), theme::GOOD);
-        let w = g.size().x;
-        painter.galley(pos2(x, y), g, theme::GOOD);
-        x += w + 8.0;
-    }
+    let (state, state_color) = state;
+    painter.circle_filled(pos2(x + 4.0, y + 7.0), 3.5, state_color);
+    x += 13.0;
+    let g = ui
+        .painter()
+        .layout_no_wrap(state.to_string(), FontId::proportional(12.5), state_color);
+    let w = g.size().x;
+    painter.galley(pos2(x, y), g, state_color);
+    x += w + 8.0;
     let mut job =
         egui::text::LayoutJob::simple_singleline(detail.to_string(), FontId::proportional(12.5), theme::MUTED);
     job.wrap = egui::text::TextWrapping::truncate_at_width((rect.right() - 8.0 - x).max(10.0));
@@ -363,8 +484,13 @@ pub fn game_row(
             egui::Label::new(RichText::new(hint).size(12.0).color(theme::MUTED)).truncate(),
         );
     }
-    // Painted by hand, so tell accessibility (and the UI tests) what this row is.
-    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, name));
+    // Painted by hand, so tell accessibility (and the UI tests) what this row is and its state: the dot's colour
+    // means nothing to a screen reader.
+    let spoken = match spoken_extra {
+        Some(extra) => format!("{name}, {state}, {extra}"),
+        None => format!("{name}, {state}"),
+    };
+    response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &spoken));
     response.on_hover_text(
         hint.map(|hint| format!("{name}\n{hint}"))
             .unwrap_or_else(|| name.into()),
@@ -375,7 +501,12 @@ pub fn game_row(
 pub fn group_label(ui: &mut egui::Ui, text: &str, count: usize) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        ui.label(RichText::new(text).size(17.0).strong().color(theme::TEXT_STRONG));
+        ui.label(
+            RichText::new(text)
+                .size(theme::TITLE)
+                .strong()
+                .color(theme::TEXT_STRONG),
+        );
         ui.label(RichText::new(count.to_string()).size(15.0).color(theme::MUTED));
     });
     ui.add_space(2.0);
@@ -389,7 +520,7 @@ const HERO_ASPECT: f32 = 3840.0 / 1240.0;
 pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>, logo: Option<&Path>) {
     let Some(hero) = hero else {
         ui.add_space(4.0);
-        ui.label(RichText::new(name).size(28.0).strong().color(theme::TEXT_STRONG));
+        ui.label(RichText::new(name).heading().strong().color(theme::TEXT_STRONG));
         ui.label(RichText::new(subtitle).color(theme::MUTED));
         ui.add_space(6.0);
         return;
@@ -418,11 +549,9 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
     mesh.add_triangle(0, 2, 3);
     ui.painter().add(mesh);
     let pad = 20.0;
-    let sub = ui.painter().layout_no_wrap(
-        subtitle.to_string(),
-        FontId::proportional(13.0),
-        Color32::from_gray(220),
-    );
+    let sub = ui
+        .painter()
+        .layout_no_wrap(subtitle.to_string(), FontId::proportional(13.0), theme::ON_IMAGE);
     let sub_pos = pos2(rect.left() + pad, rect.bottom() - pad - sub.size().y);
     match logo {
         Some(logo) => {
@@ -449,7 +578,7 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
             ui.painter().galley(pos, title, Color32::WHITE);
         }
     }
-    ui.painter().galley(sub_pos, sub, Color32::from_gray(220));
+    ui.painter().galley(sub_pos, sub, theme::ON_IMAGE);
     ui.add_space(10.0);
 }
 
@@ -541,8 +670,16 @@ pub fn row_width(count: usize, available: f32, min: f32, gap: f32) -> f32 {
 }
 
 /// A feature tile in the style of a GPU control panel: a status bar on the left, a caption, the value in large
-/// type and one detail line. Read by screen readers as "caption: value, detail".
-pub fn feature_tile(ui: &mut egui::Ui, width: f32, caption: &str, value: &str, detail: &str, color: Color32) {
+/// type and one detail line. Read by screen readers as "caption: value, detail". Returns the tile's response, for
+/// a hover with technical detail.
+pub fn feature_tile(
+    ui: &mut egui::Ui,
+    width: f32,
+    caption: &str,
+    value: &str,
+    detail: &str,
+    color: Color32,
+) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(width, 80.0), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, 10.0, theme::CARD);
@@ -572,6 +709,7 @@ pub fn feature_tile(ui: &mut egui::Ui, width: f32, caption: &str, value: &str, d
         format!("{caption}: {value}, {detail}")
     };
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &spoken));
+    response
 }
 
 /// One cover is one focusable button; wrapping moves the whole card, including its title and state.
@@ -639,7 +777,7 @@ pub fn cover_card(
             egui::Label::new(RichText::new(hint).size(12.).color(theme::MUTED)).truncate(),
         );
     }
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name));
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name}, {state}")));
     response.on_hover_text(format!(
         "{name}\n{state}{}",
         hint.map(|h| format!("\n{h}")).unwrap_or_default()

@@ -151,10 +151,15 @@ fn settings_filter_only_changed_reset_and_composite_accessibility_both_languages
         h.get_by_role_and_label(egui::Role::CheckBox, t(lang, "set.only_changed"))
             .click();
         h.run_steps(2);
-        h.get_by_label(t(lang, "set.source_ini"));
-        h.get_by_role_and_label(egui::Role::Button, t(lang, "set.reset"))
-            .click();
+        // A value that is not automatic has a reset named after its setting; there is no per-row origin caption.
+        let reset = t(lang, "set.reset").replace("{label}", actual_label);
+        assert!(h.query_by_label_contains("INI").is_none());
+        assert!(h.query_by_label(t(lang, "set.source_draft")).is_none());
+        h.get_by_role_and_label(egui::Role::Button, &reset).click();
         h.run_steps(3);
+        // Back on automatic: the reset is gone and the row carries the draft mark until it is reviewed.
+        assert!(h.query_by_role_and_label(egui::Role::Button, &reset).is_none());
+        h.get_by_label(t(lang, "set.source_draft"));
         assert_eq!(
             h.state()
                 .view
@@ -231,7 +236,9 @@ fn drop_routes_and_cancel_never_imports_or_registers_both_languages() {
             h.get_by_label(t(lang, "drop.title"));
             assert!(h.state().saved.manual.is_empty());
             assert!(h.state().catalog.is_none());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
+            // Nothing to import is information, closed with "Close"; the rest are choices, cancelled.
+            let dismiss = if route == Route::Unsupported { "close" } else { "cancel" };
+            h.get_by_role_and_label(egui::Role::Button, t(lang, dismiss)).click();
             h.run_steps(3);
             assert!(!h.state().intuitive.drop.open());
             assert!(h.state().saved.manual.is_empty());
@@ -278,6 +285,7 @@ fn matching_cost_500_games() {
         .iter()
         .map(|g| crate::modals::palette::Entry {
             label: g.name.clone(),
+            search: String::new(),
             destination: crate::modals::palette::Destination::Game(g.id.clone()),
         })
         .collect();
@@ -337,6 +345,8 @@ fn undo_opens_inverse_review_without_writing_and_conflicts_are_shown_in_review()
         let review = h.state().review.as_ref().unwrap().as_ref().unwrap();
         assert!(review.title.starts_with(t(lang, "undo.title")));
         assert!(review.allowed());
+        // Each step says its verb, so steps of one group differ by more than colour.
+        h.get_by_label_contains(&format!("{}: OptiScaler.ini", t(lang, "step.ini")));
         assert_eq!(std::fs::read(&ini).unwrap(), before);
         h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
         h.run_steps(3);
@@ -428,7 +438,7 @@ fn raw_drop_is_consumed_before_tabs_and_game_registration_requires_confirmation(
         }
         h.run_steps(3);
         assert!(h.state().saved.manual.is_empty());
-        h.get_by_role_and_label(egui::Role::Button, t(lang, "drop.confirm"))
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "drop.add_game"))
             .click();
         h.run_steps(3);
         assert_eq!(h.state().saved.manual.as_slice(), std::slice::from_ref(&target));

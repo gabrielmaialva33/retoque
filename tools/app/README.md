@@ -152,21 +152,34 @@ review. Changing the selected game or opening another review invalidates the pen
 The core's reviewed legacy transition backs up/removes a monolithic proxy and INI before new payload copies;
 a second sm86 proxy is refused for manual reconciliation. Receipt v1 and running-game refusals still apply.
 
-The game page's main button is this optimization: “Install and optimize” for a game without Retoque, “Update and
-optimize” for an install an old script made (registered under the proxy name it already uses, such as
-`winmm.dll`), “Optimize” once installed. It always installs when Retoque is missing, even if every other item is
-left out. Tiles under the banner show the graphics card, Retoque, Neural Rendering, frame generation and the
-game's DLSS files from facts already inspected.
+The game page's one primary button is this optimization, named for what it does there: “Install and optimize…”
+for a game without Retoque, “Register and optimize…” for an install an old script made (registered under the proxy
+name it already uses, such as `winmm.dll`), “Update and optimize…” when newer Retoque files are active (the update
+goes into the same review), “Optimize…” once installed, and “Finish cleanup…” for an incomplete install. It always
+installs when Retoque is missing, even if every other item is left out. The review is titled with the clicked label
+without “…”, its confirm repeats that verb, and the toast says what was done (“Retoque installed and optimized ·
+{game}”). Install or update alone, reinstall, uninstall, undo and the game folder sit in “More actions” beside it.
+Tiles under the banner show the graphics card, Retoque, Neural Rendering, frame generation and the game's DLSS
+files from facts already inspected.
 
-“Last session” on the Retoque tab reads the newest log the page already summarized (`retoque_data::session`,
+The page has five tabs: Overview, Settings, Components, Before / after and Logs. Before install, Overview shows only
+“What Retoque will do in this game” (the items that one-click review would include, read-only, with the install
+options closed inside), plus the health check when it found something and ReShade when the game has it. After an
+install under Proton or Wine, the launch option comes first in an accent card whose words follow the store (Steam
+launch options; a `WINEDLLOVERRIDES` variable in Heroic or Lutris; any other launcher) until the newest log shows
+Retoque loaded; it then stays under “Reinstall options”. ReShade stays folded unless the game has it. Components
+groups the NR model, DLSS and frame generation (sm86 and LSFG side by side). The sm86 download is offered only
+inside “Install and optimize” or on its card, never at startup, and the home screen has no model offer of its own.
+
+“Last session” on the Overview tab reads the newest log the page already summarized (`retoque_data::session`,
 bounded memory): real and on-screen frame rates from the runtime's periodic status lines, measured from the
 time between them; the worst 5% of windows; how much of the session frame generation ran and what it multiplied;
 the share of drops below 80% of the median; and the real rate over time. Its advice covers a base too low for
 frame generation (under about 40 real fps), frequent drops (game streaming or too little free RAM), the
 fakenvapi stand-in that hides DLSS frame generation, and NR switched off mid-session. Without status lines in the
 log there is no card. Install options (proxy name, NR on, previews) sit closed at the end of the tab; the footer
-shows one line (Retoque's build, updates) and opens the payload source controls under “Advanced”, or by itself
-when no Retoque files are found.
+holds one button naming the Retoque files in use (with “New release available” beside it when there is one), which
+opens the “Retoque files” dialog with the payload sources and official releases.
 
 A store's uninstall removes only the files it installed, so a game folder can outlive its game with Retoque's
 files in it. Discovery reports unregistered Steam folders with no executable and a Retoque marker
@@ -221,7 +234,7 @@ never real games or network requests, and do not qualify native Windows, Proton,
 
 ## Official Retoque payload releases (`gabrielmaialva33/retoque`)
 
-The bottom status bar (`Retoque files`) supports three payload sources:
+The “Retoque files” dialog, opened from the bottom status bar, supports three payload sources:
 
 1. **Beside the app** (`OptiScaler.dll` and `nvngx.dll_dlssnr.dll` next to the executable, in `RETOQUE_SOURCE_DIR`, or in `x64/out` from a checkout)
 2. **A chosen folder** picked by the user
@@ -248,8 +261,8 @@ repository's release download URLs, and GitHub's release asset CDNs (`release-as
 `objects.githubusercontent.com`). The archive is verified against both `SHA256SUMS` and the GitHub asset SHA-256
 digest, and only allowlisted paths are unpacked into app data (`payload-releases/<version>/payload`). When no
 release has been published on GitHub yet, the app states so plainly and keeps the beside-app and chosen-folder
-sources. When a newer payload is active, “Check for updates” compares versions and offers updating installed
-games through the normal reviewed install `Plan`.
+sources. When a newer payload is active, an installed game's page offers “Update and optimize…” (or “Update Retoque…”
+under “More actions”), both through the normal reviewed install `Plan`.
 
 ## ReShade and add-ons
 

@@ -237,7 +237,9 @@ pub(crate) mod shell_tests {
             registered: false,
         });
         let h = Harness::new_ui_state(|ui, app: &mut RetoqueApp| app.library(ui), app);
-        h.get_by_role_and_label(egui::Role::Button, "Unlisted game");
+        // The row is announced with its install state, not only its name.
+        let spoken = format!("Unlisted game, {}", t(Lang::En, "st.not_installed"));
+        h.get_by_role_and_label(egui::Role::Button, &spoken);
         h.get_by_label(t(Lang::En, "folders.unregistered"));
     }
 
@@ -290,14 +292,14 @@ pub(crate) mod shell_tests {
         );
         assert!(
             harness
-                .get_by_role_and_label(egui::Role::Button, "x2")
+                .get_by_role_and_label(egui::Role::Button, "x2…")
                 .accesskit_node()
                 .is_disabled()
         );
         harness.state_mut().tuning.readiness = Some(LsfgReadiness::Ready);
         harness.run_steps(3);
         harness
-            .get_by_role_and_label(egui::Role::Button, "x2")
+            .get_by_role_and_label(egui::Role::Button, "x2…")
             .click_accesskit();
         for _ in 0..100 {
             harness.step();
@@ -317,7 +319,7 @@ pub(crate) mod shell_tests {
         harness.run_steps(3);
         assert!(
             harness
-                .get_by_role_and_label(egui::Role::Button, "x2")
+                .get_by_role_and_label(egui::Role::Button, "x2…")
                 .accesskit_node()
                 .is_disabled()
         );
@@ -339,6 +341,65 @@ pub(crate) mod shell_tests {
         assert_eq!(install_state(&status, Some("old")), InstallState::Current);
         status.receipt.as_mut().unwrap().status = ReceiptStatus::Partial;
         assert_eq!(install_state(&status, Some("old")), InstallState::Partial);
+    }
+
+    #[test]
+    pub(crate) fn every_install_state_has_one_wording_and_colour() {
+        use InstallState::*;
+        let expected = [
+            (Missing, "Sem Retoque", "Sem Retoque", theme::MUTED),
+            (Current, "Retoque atualizado", "Atualizado", theme::GOOD),
+            (Installed, "Retoque instalado", "Instalado", theme::GOOD),
+            (Update, "Atualização disponível", "Atualizar", theme::ACCENT),
+            (Partial, "Instalação incompleta", "Incompleta", theme::BAD),
+            (Untracked, "Instalação antiga", "Antiga", theme::WARN),
+        ];
+        for (state, long, short, color) in expected {
+            assert_eq!(t(Lang::Pt, state.label()), long);
+            assert_eq!(t(Lang::Pt, state.short_label()), short);
+            assert_eq!(state.color(), color);
+            assert_ne!(
+                t(Lang::En, state.label()),
+                state.label(),
+                "{state:?} has no English text"
+            );
+            assert_ne!(t(Lang::En, state.short_label()), state.short_label());
+        }
+    }
+
+    #[test]
+    pub(crate) fn library_row_announces_state_and_doctor_findings() {
+        let harness = Harness::new_ui(|ui| {
+            let spoken = crate::tabs::doctor::spoken_findings(2, Lang::Pt);
+            let row = widgets::game_row(
+                ui,
+                "Synthetic game",
+                "Steam",
+                ("Instalação antiga", theme::WARN),
+                None,
+                false,
+                None,
+                spoken.as_deref(),
+            );
+            crate::tabs::doctor::row_badge(ui, row, 2, Lang::Pt);
+            widgets::game_row(
+                ui,
+                "Healthy game",
+                "Steam",
+                ("Atualizado", theme::GOOD),
+                None,
+                false,
+                None,
+                None,
+            );
+        });
+        harness.get_by_role_and_label(egui::Role::Button, "Synthetic game, Instalação antiga, 2 problemas");
+        harness.get_by_role_and_label(egui::Role::Button, "Healthy game, Atualizado");
+        assert_eq!(crate::tabs::doctor::spoken_findings(0, Lang::En), None);
+        assert_eq!(
+            crate::tabs::doctor::spoken_findings(1, Lang::En).as_deref(),
+            Some("1 issue")
+        );
     }
 
     #[test]
@@ -643,13 +704,13 @@ pub(crate) mod measurements {
 }
 
 #[test]
-fn remedies_show_pids_in_both_languages_without_starting_a_write() {
+fn remedies_show_program_names_in_both_languages_without_starting_a_write() {
     use egui_kittest::kittest::Queryable;
     for lang in [Lang::En, Lang::Pt] {
         let mut app = shell_tests::app();
         app.lang = lang;
         let error = AppError::from(retoque_core::Error::Refused(vec![Refusal::GameRunning {
-            processes: vec![(42, "synthetic-game".into())],
+            processes: vec![(42, "synthetic-game".into()), (43, "synthetic-game".into())],
         }]));
         let mut h = egui_kittest::Harness::new_ui_state(
             move |ui, app: &mut RetoqueApp| {
@@ -662,9 +723,69 @@ fn remedies_show_pids_in_both_languages_without_starting_a_write() {
         h.get_by_role_and_label(egui::Role::Button, t(lang, "remedy.processes"))
             .click_accesskit();
         h.run_steps(3);
-        h.get_by_label("synthetic-game · PID 42");
+        // One line per program, no PIDs; an information dialog closes with "Close" and offers "Try again".
+        assert_eq!(h.query_all_by_label("synthetic-game").count(), 1);
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "remedy.retry"));
+        assert!(
+            h.query_by_role_and_label(egui::Role::Button, t(lang, "cancel"))
+                .is_none()
+        );
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "close"))
+            .click_accesskit();
+        h.run_steps(3);
+        assert!(h.state().process_notice.is_none());
         assert!(h.state().writing.is_empty());
         assert!(h.state().review.is_none());
+    }
+}
+
+#[test]
+fn status_bar_error_is_one_plain_line_beside_the_bar_controls() {
+    use egui_kittest::kittest::Queryable;
+    for lang in [Lang::En, Lang::Pt] {
+        let mut app = shell_tests::app();
+        app.lang = lang;
+        app.error = Some(AppError::from(retoque_core::Error::Refused(vec![
+            Refusal::SecondProxy {
+                name: "winmm.dll".into(),
+            },
+        ])));
+        let mut h = egui_kittest::Harness::builder()
+            .with_size([1400., 200.])
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.status_bar(ui), app);
+        h.run_steps(2);
+        h.get_by_label(&format!("{} winmm.dll", t(lang, "ref.second")));
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "shell.details"));
+        assert!(h.query_by_label_contains("SecondProxy").is_none());
+        assert!(h.query_by_label_contains("refused").is_none());
+        // The bar's own line is still drawn while the error shows.
+        h.get_by_label(t(lang, "app.payload"));
+    }
+}
+
+#[test]
+fn consents_name_the_download_and_its_size() {
+    use egui_kittest::kittest::Queryable;
+    for lang in [Lang::En, Lang::Pt] {
+        let mut app = shell_tests::app();
+        app.lang = lang;
+        app.nr_fetch.consent = Some(crate::tabs::model::NrConsent::Download(app.nr_fetch.entries[0].clone()));
+        let size = app.nr_fetch.entries[0].size;
+        let mut h = egui_kittest::Harness::builder()
+            .with_size([900., 700.])
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.nr_fetch_dialog(ui.ctx()), app);
+        h.run_steps(2);
+        let confirm = format!("{} ({})", t(lang, "download"), size_text(lang, size));
+        h.get_by_role_and_label(egui::Role::Button, &confirm);
+        // The user asked for it, so the dialog is dismissed with "Cancel"; hashes stay folded.
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel"));
+        h.get_by_label(t(lang, "technical.details"));
+        assert!(h.query_by_label_contains("SHA-256").is_none());
+        assert!(h.query_by_label_contains("MiB").is_none());
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
+        h.run_steps(2);
+        assert!(h.state().nr_fetch.consent.is_none());
+        assert!(!h.state().jobs.busy());
     }
 }
 
@@ -714,6 +835,9 @@ mod failed_job_tests {
             std::thread::yield_now();
         }
         app.receive();
+        // One report per failure, as a toast; the status bar does not repeat it with the job's name.
+        assert!(app.error.is_none());
+        assert!(!app.toasts.is_empty() && app.toasts.iter().all(|toast| toast.failed));
         assert!(!app.payload_ui.busy);
         assert!(!app.nr_fetch.busy);
         assert!(!app.tuning.sm86.busy);

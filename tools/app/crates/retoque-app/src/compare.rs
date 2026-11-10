@@ -473,12 +473,11 @@ impl CompareView {
     }
     fn content(&mut self, ui: &mut egui::Ui, lang: Lang, target: &Path) {
         if let Some(error) = self.error {
-            ui.colored_label(Color32::from_rgb(238, 112, 112), t(lang, error));
+            ui.colored_label(crate::theme::BAD, t(lang, error));
         }
         if self.pairs.is_empty() {
             if self.scanning {
-                ui.spinner();
-                ui.label(t(lang, "scanning"));
+                crate::widgets::busy(ui, lang, t(lang, "scanning"), None, None);
             } else {
                 self.empty(ui, lang, target);
             }
@@ -497,7 +496,7 @@ impl CompareView {
             self.canvas(ui, lang, Vec2::new(ui.available_width(), canvas_height), held);
         } else {
             egui::Frame::new()
-                .fill(Color32::from_rgb(9, 11, 14))
+                .fill(crate::theme::CANVAS)
                 .corner_radius(8.0)
                 .show(ui, |ui| {
                     ui.set_min_size(Vec2::new(ui.available_width(), canvas_height));
@@ -557,7 +556,7 @@ impl CompareView {
                 ui.label(
                     egui::RichText::new(format!("{}", index + 1))
                         .strong()
-                        .color(Color32::from_rgb(240, 168, 69)),
+                        .color(crate::theme::ACCENT),
                 );
                 ui.label(text);
             });
@@ -573,7 +572,8 @@ impl CompareView {
         let mut held = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
-            ui.spacing_mut().button_padding = Vec2::new(7.0, 4.0);
+            // Tighter sides only: buttons keep the theme's 32 px height.
+            ui.spacing_mut().button_padding.x = 7.0;
             for mode in [
                 CompareMode::Wipe,
                 CompareMode::SideBySide,
@@ -702,7 +702,7 @@ impl CompareView {
                 self.restore_expand_focus = !self.expanded;
             }
             if self.loading {
-                ui.spinner().on_hover_text(t(lang, "exposure_updating"));
+                crate::widgets::busy(ui, lang, t(lang, "exposure_updating"), None, None);
             }
         });
         held
@@ -767,7 +767,7 @@ impl CompareView {
                                     if response.has_focus() {
                                         Color32::WHITE
                                     } else {
-                                        Color32::from_rgb(240, 168, 69)
+                                        crate::theme::ACCENT
                                     },
                                 ),
                                 egui::StrokeKind::Inside,
@@ -893,7 +893,7 @@ impl CompareView {
                 });
         }
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 4.0, Color32::from_rgb(9, 11, 14));
+        painter.rect_filled(rect, 4.0, crate::theme::CANVAS);
         let draw = |texture: &TextureHandle, pane: Rect, clip: Rect| {
             let destination =
                 Rect::from_center_size(pane.center() + self.transform.pan, loaded.size * self.transform.scale);
@@ -922,7 +922,7 @@ impl CompareView {
                     [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
                     (2.0, Color32::WHITE),
                 );
-                painter.circle_filled(Pos2::new(x, rect.center().y), 13.0, Color32::from_rgb(240, 168, 69));
+                painter.circle_filled(Pos2::new(x, rect.center().y), 13.0, crate::theme::ACCENT);
                 // Geometry keeps the handle legible with both the system and egui fallback fonts.
                 let center = Pos2::new(x, rect.center().y);
                 for sign in [-1.0, 1.0] {
@@ -1028,7 +1028,8 @@ impl CompareView {
     }
 }
 fn icon_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
-    let response = ui.add(egui::Button::new("").min_size(Vec2::splat(30.0)).selected(selected));
+    let size = Vec2::splat(ui.spacing().interact_size.y);
+    let response = ui.add(egui::Button::new("").min_size(size).selected(selected));
     response
         .widget_info(|| egui::WidgetInfo::selected(egui::accesskit::Role::Button, ui.is_enabled(), selected, label));
     if response.has_focus() {
@@ -1070,7 +1071,7 @@ fn mode_button(ui: &mut egui::Ui, lang: Lang, mode: CompareMode, selected: bool,
             );
         }
         CompareMode::Difference => {
-            p.circle_filled(rect.center(), 4.0, Color32::from_rgb(240, 168, 69));
+            p.circle_filled(rect.center(), 4.0, crate::theme::ACCENT);
         }
     }
     response

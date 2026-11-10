@@ -10,6 +10,11 @@ use crate::autotune::{
 #[path = "sm86_ui.rs"]
 mod sm86_ui;
 
+/// Where the component waiting for "Apagar" in the delete confirm is kept: (id, label), in egui's temporary data.
+fn component_delete_id() -> egui::Id {
+    egui::Id::unique("component-delete-pending")
+}
+
 impl RetoqueApp {
     pub(crate) fn autotune_start(&mut self) {
         self.jobs.spawn("autotune-environment", None, |_| {
@@ -73,8 +78,14 @@ impl RetoqueApp {
                 request,
                 result,
             } if self.view.target.as_ref() == Some(&target) && request == self.tuning.request => {
+                // Like the install reviews, the title names the game it is about.
+                let game = self.selected_game().map(|g| g.name.as_str()).unwrap_or("");
+                let title = match game {
+                    "" => self.tuning.review_title.clone(),
+                    game => format!("{} · {game}", self.tuning.review_title),
+                };
                 self.review = Some(result.map(|p| ReviewSession {
-                    title: self.tuning.review_title.clone(),
+                    title,
                     kind: ReviewKind::Autotune(Box::new(p.request)),
                     plans: p.plans,
                     groups: p.groups,
@@ -181,7 +192,7 @@ impl RetoqueApp {
             if !facts.installed || facts.untracked {
                 ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::MUTED)).wrap());
                 if let Some(error) = &self.tuning.sm86.error {
-                    ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+                    crate::error::card(ui, error, self.lang, &self.cmd_tx);
                 }
                 return;
             }
@@ -197,20 +208,8 @@ impl RetoqueApp {
                     recommendation_evidence(ui, self.lang, rec);
                     let mut ready = !self.busy();
                     match &rec.needs {
-                        Some(Need::RetoqueInstalled) => {
-                            ui.add(egui::Label::new(self.tr("auto.need_install")).wrap());
-                            if ui
-                                .add_enabled(
-                                    self.install_inputs().is_some() && !self.busy(),
-                                    theme::primary(self.tr("auto.prepare_install")),
-                                )
-                                .clicked()
-                                && let Some(options) = self.install_inputs()
-                            {
-                                self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                            }
-                            return;
-                        }
+                        // Games without (tracked) Retoque returned above: the banner's action installs it.
+                        Some(Need::RetoqueInstalled) => return,
                         Some(Need::Component(ComponentKind::ReShade)) => {
                             if ui.button(self.tr("rs.install")).clicked() {
                                 self.reshade_offer();
@@ -226,7 +225,16 @@ impl RetoqueApp {
                         }
                         None => {}
                     }
-                    if ui.add_enabled(ready, theme::primary(self.tr("auto.apply"))).clicked() {
+                    // One recommendation alone: a plain button, the banner keeps the page's primary.
+                    let apply = ui.add_enabled(ready, egui::Button::new(self.tr("auto.apply")));
+                    apply.widget_info(|| {
+                        egui::WidgetInfo::labeled(
+                            egui::Role::Button,
+                            ready,
+                            format!("{}: {}", self.tr("auto.apply"), t(self.lang, rec.title_key)),
+                        )
+                    });
+                    if apply.clicked() {
                         let mut request = Request::default();
                         for action in &rec.actions {
                             match action {
@@ -262,6 +270,7 @@ impl RetoqueApp {
                 });
             }
         });
+        ui.add_space(theme::CARD_GAP);
     }
     pub(crate) fn autotune_lsfg(&mut self, ui: &mut egui::Ui) {
         self.lsfg_card(ui);
@@ -296,13 +305,12 @@ impl RetoqueApp {
         selected.is_some()
     }
     pub(crate) fn autotune_components(&mut self, ui: &mut egui::Ui) {
-        self.dlss_card(ui);
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("auto.components"));
             self.sm86_download_controls(ui);
             match self.tuning.catalog.clone() {
                 None => {
-                    ui.spinner();
+                    widgets::busy(ui, self.lang, self.tr("auto.reading_components"), None, None);
                 }
                 Some(Err(e)) => {
                     crate::error::card(ui, e, self.lang, &self.cmd_tx);
@@ -334,24 +342,28 @@ impl RetoqueApp {
                             ui.horizontal_wrapped(|ui| {
                                 if installed {
                                     ui.colored_label(theme::GOOD, self.tr("auto.component_installed"));
-                                } else if ui
-                                    .add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")))
-                                    .clicked()
-                                {
-                                    self.autotune_request(
-                                        self.tr("auto.component_install").into(),
-                                        Request {
-                                            dlss: None,
-                                            component: Some(ComponentChange::Install(c.clone())),
-                                            edits: recommend::lsfg_off_edits(),
-                                        },
-                                    );
+                                } else {
+                                    let install =
+                                        ui.add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")));
+                                    widgets::name_after(&install, self.tr("auto.component_install"), &c.label);
+                                    if install.clicked() {
+                                        self.autotune_request(
+                                            self.tr("auto.component_install").into(),
+                                            Request {
+                                                dlss: None,
+                                                component: Some(ComponentChange::Install(c.clone())),
+                                                edits: recommend::lsfg_off_edits(),
+                                            },
+                                        );
+                                    }
                                 }
-                                if ui
+                                let delete = ui
                                     .add_enabled(!self.jobs.busy(), egui::Button::new(self.tr("auto.catalog_remove")))
-                                    .clicked()
-                                {
-                                    self.autotune_catalog(None, Some(c.id.clone()));
+                                    .on_hover_text(self.tr("auto.catalog_remove_help"));
+                                widgets::name_after(&delete, self.tr("auto.catalog_remove"), &c.label);
+                                if delete.clicked() {
+                                    let pending = (c.id.clone(), c.label.clone());
+                                    ui.ctx().data_mut(|d| d.insert_temp(component_delete_id(), pending));
                                 }
                             });
                         });
@@ -370,10 +382,10 @@ impl RetoqueApp {
                                 self.tr("auto.component_installed"),
                                 &id[..id.len().min(12)]
                             ));
-                            if ui
-                                .add_enabled(!self.busy(), egui::Button::new(self.tr("auto.component_remove")))
-                                .clicked()
-                            {
+                            let remove =
+                                ui.add_enabled(!self.busy(), egui::Button::new(self.tr("auto.component_remove")));
+                            widgets::name_after(&remove, self.tr("auto.component_remove"), &id[..id.len().min(12)]);
+                            if remove.clicked() {
                                 self.autotune_request(
                                     self.tr("auto.component_remove").into(),
                                     Request {
@@ -394,7 +406,27 @@ impl RetoqueApp {
                 }
             }
         });
-        ui.add_space(12.0);
+        self.component_delete_confirm(ui.ctx());
+    }
+    /// Deleting a component the app keeps cannot be undone, so it asks first; the catalog job runs on "Apagar".
+    fn component_delete_confirm(&mut self, ctx: &egui::Context) {
+        let Some((id, label)) = ctx.data(|d| d.get_temp::<(String, String)>(component_delete_id())) else {
+            return;
+        };
+        let answer = widgets::delete_modal(
+            ctx,
+            self.lang,
+            "component",
+            self.tr("auto.catalog_remove_title"),
+            &label,
+            self.tr("auto.catalog_remove_help"),
+        );
+        if answer.is_some() {
+            ctx.data_mut(|d| d.remove::<(String, String)>(component_delete_id()));
+        }
+        if answer == Some(widgets::Answer::Confirm) {
+            self.autotune_catalog(None, Some(id));
+        }
     }
     pub(crate) fn autotune_request(&mut self, title: String, request: Request) {
         let Some(target) = self.view.target.clone() else { return };
@@ -405,7 +437,8 @@ impl RetoqueApp {
         let serial = self.next_request;
         self.tuning.request = serial;
         self.review = None;
-        self.tuning.review_title = title;
+        // A review is titled after the action without the "…" that announced it.
+        self.tuning.review_title = title.trim_end_matches('…').trim_end().to_owned();
         self.review_open = true;
         self.origin_focus = self.context.memory(|m| m.focused());
         self.jobs.spawn("autotune-plan", None, move |_| {
@@ -415,6 +448,22 @@ impl RetoqueApp {
                 request: serial,
             }))
         });
+    }
+    /// What the success toast says, repeating the action: Retoque installed, registered or updated with the
+    /// optimization, the optimization alone, or other reviewed changes.
+    pub(crate) fn tuning_done_key(&self, request: &Request) -> &'static str {
+        let status = self.view.status.as_ref().and_then(|r| r.as_ref().ok());
+        if request.retoque_install().is_some() {
+            match status {
+                Some(s) if s.receipt.is_some() => "auto.done_update",
+                Some(s) if !s.optiscaler_proxies.is_empty() => "auto.done_register",
+                _ => "auto.done_install",
+            }
+        } else if matches!(&self.review, Some(Ok(r)) if self.optimize_verb(&r.title).is_some()) {
+            "auto.done_optimize"
+        } else {
+            "auto.done"
+        }
     }
     pub(crate) fn autotune_apply(&mut self, p: autotune::Prepared) {
         let target = p.target.clone();
@@ -450,7 +499,8 @@ impl RetoqueApp {
         self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, total));
         self.write_kinds.insert(target.clone(), kind);
-        self.tuning.writes.insert(target.clone());
+        let done = self.tuning_done_key(&p.request);
+        self.tuning.writes.insert(target.clone(), done);
         for root in &roots {
             self.writing.insert(root.clone(), (0, total));
         }
@@ -487,9 +537,17 @@ impl RetoqueApp {
 
 pub(crate) fn recommendation_evidence(ui: &mut egui::Ui, lang: Lang, rec: &recommend::Recommendation) {
     use crate::tabs::doctor::{evidence, text};
-    ui.label(text(lang, rec.confidence.key()));
+    // How sure the advice is: one short muted line; the facts behind it stay folded.
+    ui.label(
+        RichText::new(text(lang, rec.confidence.key()))
+            .small()
+            .color(theme::MUTED),
+    );
     if let Some(key) = rec.caveat_key {
-        ui.label(text(lang, key));
+        ui.add(egui::Label::new(RichText::new(text(lang, key)).small().color(theme::MUTED)).wrap());
     }
-    ui.collapsing(t(lang, "doctor.evidence"), |ui| evidence(ui, lang, &rec.evidence));
+    let title = t(lang, "doctor.evidence");
+    widgets::collapsible(ui, ("evidence", rec.id), title, widgets::Fold::Details, |ui| {
+        evidence(ui, lang, &rec.evidence)
+    });
 }

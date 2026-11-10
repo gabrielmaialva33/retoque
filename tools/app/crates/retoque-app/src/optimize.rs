@@ -183,6 +183,8 @@ pub struct CachedRecs {
 #[derive(Default)]
 pub struct UiState {
     pub consent: Option<Consent>,
+    /// The consent was offered by the app on its own (first run), so it is dismissed with "Not now".
+    pub offered: bool,
     pub busy: bool,
     pub downloaded: u64,
     pub release: Option<sm86::Release>,
@@ -201,7 +203,10 @@ mod tests {
     use super::*;
     use crate::app::*;
     use crate::autotune::{apply, prepare};
-    use egui_kittest::{Harness, kittest::Queryable};
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT as _, Queryable},
+    };
     use std::{
         fs,
         sync::Arc,
@@ -406,7 +411,7 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);
@@ -418,7 +423,7 @@ mod tests {
             let r = h.state().review.as_ref().unwrap().as_ref().unwrap();
             assert_eq!(r.plans.len(), 2);
             assert!(r.allowed());
-            assert_eq!(r.title, t(lang, "optimize.title"));
+            assert_eq!(r.title, t(lang, "shell.optimize").trim_end_matches('…'));
             assert!(
                 r.plans
                     .iter()
@@ -431,10 +436,11 @@ mod tests {
         }
     }
     #[test]
-    fn first_run_offer_and_cancel_never_contact_network_or_write_games() {
+    fn startup_never_opens_the_sm86_offer_or_contacts_the_network() {
         for lang in [Lang::En, Lang::Pt] {
             let mut app = crate::app_tests::shell_tests::app();
             app.lang = lang;
+            // An eligible card with nothing downloaded yet used to get the sm86 modal before choosing a game.
             app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
             app.tuning.catalog = Some(Ok(vec![]));
             let mut h = Harness::builder().with_size([1000., 800.]).build_ui_state(
@@ -443,12 +449,8 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_label(t(lang, "sm86.consent_title"));
-            assert!(!h.state().jobs.busy());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "sm86.later"))
-                .click();
             h.run_steps(3);
-            assert!(h.state().saved.sm86_offer_seen);
+            assert!(h.query_by_label(t(lang, "sm86.consent_title")).is_none());
             assert!(h.state().tuning.sm86.consent.is_none());
             assert!(!h.state().jobs.busy());
         }
@@ -498,13 +500,13 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
             assert!(matches!(h.state().nr_fetch.consent, Some(NrConsent::Download(_))));
             assert!(h.state().review.is_none());
             h.get_by_label(t(lang, "nr_fetch.consent_title"));
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, &h.state().nr_fetch.download_label(lang))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);
@@ -516,7 +518,7 @@ mod tests {
             let r = h.state().review.as_ref().unwrap().as_ref().unwrap();
             assert_eq!(r.plans.len(), 2);
             assert!(r.allowed());
-            assert_eq!(r.title, t(lang, "optimize.title"));
+            assert_eq!(r.title, t(lang, "shell.optimize").trim_end_matches('…'));
             assert!(
                 r.plans
                     .iter()
@@ -618,7 +620,7 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);
@@ -630,7 +632,7 @@ mod tests {
             let r = h.state().review.as_ref().unwrap().as_ref().unwrap();
             assert_eq!(r.plans.len(), 3, "expected install first, then sm86, then settings");
             assert!(r.allowed());
-            assert_eq!(r.title, t(lang, "optimize.title"));
+            assert_eq!(r.title, t(lang, "shell.register_optimize").trim_end_matches('…'));
             // Plan 0: Retoque registration/install plan with backups of the legacy proxy and forwarder.
             assert!(
                 r.plans[0]
@@ -874,7 +876,7 @@ mod tests {
                 },
                 app,
             );
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);
@@ -892,10 +894,11 @@ mod tests {
                 )
             );
             assert!(h.query_by_label_contains(t(lang, "ref.foreign")).is_some());
-            assert!(
-                h.query_by_role_and_label(egui::Role::Button, t(lang, "auto.confirm"))
-                    .is_none()
-            );
+            // The review is titled and confirmed with the clicked action's verb; a refusal keeps that confirm in
+            // place, disabled, so the review does not change shape under it.
+            assert_eq!(r.title, t(lang, "shell.install_optimize").trim_end_matches('…'));
+            let confirm = h.get_by_role_and_label(egui::Role::Button, &r.title);
+            assert!(confirm.accesskit_node().is_disabled());
             assert_eq!(fs::read(game.join("dxgi.dll")).unwrap(), foreign_bytes);
             assert!(!game.join(".retoque").exists());
         }
@@ -956,7 +959,7 @@ mod tests {
             );
             // Without opting in, experimental Proton sm86 is omitted on an uninstalled game: the review installs
             // Retoque alone ("Install and optimize" always installs) and says what was left out.
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);
@@ -990,7 +993,7 @@ mod tests {
             // Opting in via the checkbox includes install + sm86 + settings in one review.
             h.get_by_label(t(lang, "optimize.experimental")).click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);

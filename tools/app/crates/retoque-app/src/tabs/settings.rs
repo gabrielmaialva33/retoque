@@ -53,11 +53,6 @@ impl RetoqueApp {
                 commands.send(AppCommand::UndoSettings(target.clone()));
             }
         });
-        ui.label(
-            RichText::new(t(self.lang, "undo.auto_note"))
-                .small()
-                .color(theme::MUTED),
-        );
         self.intuitive.settings.refresh(self.lang);
         let mut any = false;
         for (section, title) in [
@@ -73,17 +68,16 @@ impl RetoqueApp {
             any = true;
             widgets::card(ui, |ui| {
                 if section == "LSFG" && !self.intuitive.settings.active() {
-                    egui::CollapsingHeader::new(RichText::new(self.tr(title)).size(16.0).strong())
-                        .id_salt("lsfg_settings")
-                        .default_open(false)
-                        .show(ui, |ui| self.settings_section(ui, section, edits, commands));
+                    widgets::collapsible(ui, "lsfg_settings", self.tr(title), widgets::Fold::Section, |ui| {
+                        self.settings_section(ui, section, edits, commands)
+                    });
                     ui.label(RichText::new(self.tr("set.lsfg_note")).small().color(theme::MUTED));
                 } else {
                     widgets::card_title(ui, self.tr(title));
                     self.settings_section(ui, section, edits, commands);
                 }
             });
-            ui.add_space(12.0);
+            ui.add_space(theme::CARD_GAP);
         }
         if !any {
             ui.label(RichText::new(self.tr("set.no_match")).color(theme::MUTED));
@@ -119,9 +113,13 @@ impl RetoqueApp {
             if self.intuitive.settings.active() {
                 self.settings_rows(ui, section, true, edits, commands);
             } else {
-                egui::CollapsingHeader::new(self.tr("set.advanced"))
-                    .id_salt("nr_advanced")
-                    .show(ui, |ui| self.settings_rows(ui, section, true, edits, commands));
+                widgets::collapsible(
+                    ui,
+                    "nr_advanced",
+                    self.tr("set.advanced"),
+                    widgets::Fold::Section,
+                    |ui| self.settings_rows(ui, section, true, edits, commands),
+                );
             }
         }
     }
@@ -170,7 +168,7 @@ impl RetoqueApp {
             shown += 1;
             if s.key == "ModelFile" {
                 ui.add_space(8.0);
-                if ui.link(t(lang, "set.model_link")).clicked() {
+                if ui.button(t(lang, "set.model_link")).clicked() {
                     commands.send(AppCommand::SwitchTab(Tab::Model));
                 }
             }
@@ -187,7 +185,7 @@ impl RetoqueApp {
             let width = ui.available_width();
             let control_width = (width * 0.50).clamp(220.0, 300.0).min(width);
             let label_width = (width - control_width - 20.0).max(40.0);
-            ui.horizontal_top(|ui| {
+            let row = ui.horizontal_top(|ui| {
                 let label_id = ui
                     .allocate_ui_with_layout(
                         egui::vec2(label_width, 0.0),
@@ -195,22 +193,7 @@ impl RetoqueApp {
                         |ui| {
                             ui.set_width(label_width);
                             let response = ui.add(egui::Label::new(RichText::new(label).strong()).wrap());
-                            ui.label(RichText::new(help).size(13.0).color(theme::MUTED));
-                            ui.label(
-                                RichText::new(t(
-                                    lang,
-                                    if on_disk.eq_ignore_ascii_case("auto") {
-                                        "set.source_auto"
-                                    } else {
-                                        "set.source_ini"
-                                    },
-                                ))
-                                .small()
-                                .color(theme::MUTED),
-                            );
-                            if edits.contains_key(&key) {
-                                ui.label(RichText::new(t(lang, "set.source_draft")).small().color(theme::WARN));
-                            }
+                            ui.label(RichText::new(help).small().color(theme::MUTED));
                             response.id
                         },
                     )
@@ -220,6 +203,18 @@ impl RetoqueApp {
                     egui::Layout::right_to_left(egui::Align::Min),
                     |ui| {
                         ui.set_width(control_width);
+                        // The reset sits at the far right and keeps its room when hidden, so the controls line up.
+                        if value.eq_ignore_ascii_case("auto") {
+                            ui.add_space(widgets::RESET_SIZE + ui.spacing().item_spacing.x);
+                        } else if ui
+                            .push_id((s.section, s.key, "reset"), |ui| {
+                                widgets::reset_button(ui, &t(lang, "set.reset").replace("{label}", label))
+                            })
+                            .inner
+                            .clicked()
+                        {
+                            value = "auto".into();
+                        }
                         ui.label_inputs_by(label_id, |ui| {
                             value_widget(ui, s, &mut value, &format!("{}.{}", s.section, s.key), lang)
                                 .labelled_by(label_id);
@@ -227,18 +222,10 @@ impl RetoqueApp {
                     },
                 );
             });
-            ui.push_id((s.section, s.key, "reset"), |ui| {
-                if ui
-                    .add_enabled(
-                        !value.eq_ignore_ascii_case("auto"),
-                        egui::Button::new(t(lang, "set.reset")),
-                    )
-                    .on_hover_text(format!("[{}] {}", s.section, s.key))
-                    .clicked()
-                {
-                    value = "auto".into();
-                }
-            });
+            // A draft not yet reviewed: an accent bar in the card's margin, with the explanation on hover.
+            if edits.contains_key(&key) {
+                widgets::change_bar(ui, (s.section, s.key), row.response.rect, t(lang, "set.source_draft"));
+            }
             // A value OptiScaler would not accept is kept as typed (so the user can fix it) but blocks the review.
             if edits.get(&key).is_some_and(|v| !s.accepts(v)) {
                 ui.colored_label(theme::BAD, RichText::new(t(lang, "set.invalid")).small());
@@ -255,14 +242,9 @@ impl RetoqueApp {
     }
 
     pub(crate) fn settings_plan(&self, ui: &mut egui::Ui) {
-        match &self.view.applied {
-            Some((PlanKind::Settings, Ok(()))) => {
-                ui.colored_label(theme::GOOD, self.tr("set.saved"));
-            }
-            Some((PlanKind::Settings, Err(e))) => {
-                crate::error::card(ui, e, self.lang, &self.cmd_tx);
-            }
-            _ => {}
+        // A success is told by the toast alone; only a failure stays on the page.
+        if let Some((PlanKind::Settings, Err(e))) = &self.view.applied {
+            crate::error::card(ui, e, self.lang, &self.cmd_tx);
         }
     }
 }
@@ -282,22 +264,18 @@ pub(crate) fn value_widget(
                     let mut responses = ["auto", "true", "false"].into_iter().map(|option| {
                         let label = choice_label(setting, option, lang);
                         let response = ui.add(
-                            egui::Button::selectable(
-                                value.eq_ignore_ascii_case(option),
-                                RichText::new(label).size(13.0),
-                            )
-                            .wrap_mode(egui::TextWrapMode::Extend),
+                            egui::Button::selectable(value.eq_ignore_ascii_case(option), RichText::new(label).small())
+                                .wrap_mode(egui::TextWrapMode::Extend),
                         );
                         if response.clicked() {
                             *value = option.into();
                         }
                         response.on_hover_text(format!(
-                            "{}: {}",
+                            "{}: {label}",
                             match lang {
                                 Lang::En => setting.label_en,
                                 Lang::Pt => setting.label_pt,
-                            },
-                            option
+                            }
                         ))
                     });
                     let first = responses.next().unwrap();

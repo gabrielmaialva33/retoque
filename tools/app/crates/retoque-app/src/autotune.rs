@@ -401,7 +401,8 @@ pub struct UiState {
     pub facts_generation: u64,
     pub request: u64,
     pub review_title: String,
-    pub writes: std::collections::HashSet<PathBuf>,
+    /// Folders a reviewed tuning is writing to, with the toast that names what it did.
+    pub writes: std::collections::HashMap<PathBuf, &'static str>,
     pub write_roots: std::collections::HashMap<PathBuf, Vec<PathBuf>>,
 }
 pub enum Event {

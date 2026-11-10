@@ -75,7 +75,7 @@ fn doctor_card_evidence_and_repair_open_review_without_writing_in_both_languages
     }
 }
 #[test]
-fn healthy_is_a_quiet_line_and_badge_is_only_for_nonzero_cached_count() {
+fn healthy_shows_nothing_and_badge_is_only_for_nonzero_cached_count() {
     for lang in [Lang::En, Lang::Pt] {
         let (commands, _) = CommandSender::channel();
         let mut harness = Harness::new_ui(move |ui| {
@@ -90,7 +90,11 @@ fn healthy_is_a_quiet_line_and_badge_is_only_for_nonzero_cached_count() {
             ui_doctor::badge(ui, 0, lang);
         });
         harness.run();
-        harness.get_by_label(ui_doctor::text(lang, "doctor.healthy"));
+        assert!(
+            harness
+                .query_by_label(ui_doctor::text(lang, "doctor.healthy"))
+                .is_none()
+        );
         assert!(harness.query_by_label(t(lang, "doctor.title")).is_none());
         assert!(harness.query_by_label("!").is_none());
         let harness = Harness::new_ui(move |ui| ui_doctor::badge(ui, 3, lang));
@@ -276,7 +280,9 @@ fn a_failed_read_cannot_release_an_in_flight_writer() {
     let target = temp.path().to_owned();
     app.jobs
         .spawn("doctor", Some(target), |_| panic!("synthetic diagnostic failure"));
-    settle(&mut app, |app| app.error.is_some());
+    // The failure is reported once, as a toast.
+    settle(&mut app, |app| app.toasts.iter().any(|toast| toast.failed));
+    assert!(app.error.is_none());
     assert!(app.writing.contains_key(temp.path()));
 }
 #[test]
@@ -371,4 +377,12 @@ fn new_selection_and_write_cooldown_do_not_poison_read_state() {
         "a log-only change must not reload status"
     );
     assert!(app.view.ini.is_some());
+}
+#[test]
+fn review_title_drops_the_ellipsis_of_the_label_that_opened_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut app = app_at(temp.path());
+    app.autotune_request(t(Lang::Pt, "auto.component_install").into(), Default::default());
+    assert_eq!(app.tuning.review_title, "Revisar instalação do componente");
+    assert!(app.review_open);
 }

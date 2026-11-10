@@ -11,7 +11,7 @@ pub enum NrConsent {
 pub enum NrFetchEvent {
     Progress(u64),
     CatalogRefreshed(Result<Vec<RemoteModel>, AppError>),
-    Downloaded(Result<(Vec<Model>, Model), AppError>),
+    Downloaded(Result<Model, AppError>),
 }
 
 pub type SharedModelFetcher = Arc<dyn model_fetch::Fetcher + Send + Sync>;
@@ -21,11 +21,24 @@ pub struct NrFetchState {
     pub consent: Option<NrConsent>,
     pub busy: bool,
     pub downloaded: u64,
+    /// The size of the model being downloaded (0 while refreshing the catalog).
+    pub total: u64,
     pub error: Option<AppError>,
     pub select_for_target: Option<PathBuf>,
     pub then_optimize: Option<(PathBuf, u64, u64)>,
     pub catalog_root: Option<PathBuf>,
     pub fetcher: Option<SharedModelFetcher>,
+}
+
+#[cfg(test)]
+impl NrFetchState {
+    /// The confirm label of the open download consent ("Download (12 MB)").
+    pub(crate) fn download_label(&self, lang: Lang) -> String {
+        match &self.consent {
+            Some(NrConsent::Download(entry)) => download_label(lang, Some(entry.size)),
+            _ => panic!("no model download is being asked for"),
+        }
+    }
 }
 
 impl Default for NrFetchState {
@@ -35,12 +48,23 @@ impl Default for NrFetchState {
             consent: None,
             busy: false,
             downloaded: 0,
+            total: 0,
             error: None,
             select_for_target: None,
             then_optimize: None,
             catalog_root: None,
             fetcher: None,
         }
+    }
+}
+
+/// The sentence for how a model fits the user's card.
+fn compatibility_key(compatibility: retoque_data::model_compat::Compatibility) -> &'static str {
+    use retoque_data::model_compat::Compatibility;
+    match compatibility {
+        Compatibility::Incompatible => "mdl.incompatible",
+        Compatibility::Compatible => "mdl.arch_match",
+        Compatibility::Unknown => "mdl.compat_unknown",
     }
 }
 
@@ -62,19 +86,17 @@ impl RetoqueApp {
             .as_deref()
             .is_none_or(|v| v.trim().is_empty() || v.trim().eq_ignore_ascii_case("auto"));
         let mut action: Option<String> = None;
-        let mut remove: Option<String> = None;
+        // The model waiting for "Apagar" in the delete confirm: (sha256, label).
+        let pending_delete = egui::Id::unique("model-delete-pending");
         if ini.is_none() {
             match &self.view.ini {
-                None => {
-                    ui.spinner();
-                    ui.label(self.tr("tab.loading"));
-                }
+                None => widgets::busy(ui, self.lang, self.tr("tab.loading"), None, None),
                 Some(Err(e)) => {
                     crate::error::card(ui, e, self.lang, &self.cmd_tx);
                 }
                 _ => self.tab_install_prompt(ui),
             }
-            ui.add_space(12.0);
+            ui.add_space(theme::CARD_GAP);
             self.nr_fetch_card(ui);
             return;
         }
@@ -82,10 +104,7 @@ impl RetoqueApp {
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("mdl.current"));
             match &inspection {
-                None => {
-                    ui.spinner();
-                    ui.label(self.tr("mdl.loading"));
-                }
+                None => widgets::busy(ui, self.lang, self.tr("mdl.loading"), None, None),
                 Some(ModelInspection {
                     path: Some(path),
                     present: true,
@@ -94,7 +113,7 @@ impl RetoqueApp {
                 }) => {
                     ui.label(
                         RichText::new(version.as_deref().unwrap_or(self.tr("mdl.version_unknown")))
-                            .size(22.0)
+                            .size(theme::DISPLAY)
                             .strong(),
                     );
                     let in_catalog = self
@@ -155,13 +174,13 @@ impl RetoqueApp {
                 }
             });
         });
-        ui.add_space(16.0);
-        ui.label(RichText::new(self.tr("mdl.catalog")).size(18.0).strong());
+        ui.add_space(theme::CARD_GAP);
+        widgets::section_header(ui, self.tr("mdl.catalog"));
         self.nr_fetch_card(ui);
         self.model_import_area(ui);
         let models = match &self.catalog {
             None => {
-                ui.spinner();
+                widgets::busy(ui, self.lang, self.tr("mdl.reading_catalog"), None, None);
                 return;
             }
             Some(Err(e)) => {
@@ -193,7 +212,7 @@ impl RetoqueApp {
             let used = self.model_usage.get(&m.path).copied();
             widgets::card(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(&m.label).size(16.0).strong());
+                    ui.label(RichText::new(&m.label).size(theme::TITLE).strong());
                     if in_use {
                         widgets::chip(ui, self.tr("mdl.in_use"), theme::GOOD);
                     }
@@ -208,11 +227,7 @@ impl RetoqueApp {
                             .color(theme::MUTED),
                     )
                     .on_hover_text(&m.sha256);
-                    ui.label(
-                        RichText::new(format!("{:.1} {}", m.size as f64 / 1_048_576.0, self.tr("unit.mib")))
-                            .small()
-                            .color(theme::MUTED),
-                    );
+                    ui.label(RichText::new(size_text(self.lang, m.size)).small().color(theme::MUTED));
                 });
                 self.model_compatibility_label(ui, &m.compatibility);
                 if let Some(count) = used {
@@ -224,42 +239,52 @@ impl RetoqueApp {
                 }
                 ui.add_space(6.0);
                 ui.horizontal_wrapped(|ui| {
-                    if !in_use
-                        && ui
-                            .add_enabled(ini.is_some() && !busy, egui::Button::new(self.tr("mdl.use")))
-                            .clicked()
-                    {
-                        action = Some(value.clone());
+                    if !in_use {
+                        let use_here = ui.add_enabled(ini.is_some() && !busy, egui::Button::new(self.tr("mdl.use")));
+                        widgets::name_after(&use_here, self.tr("mdl.use"), &m.label);
+                        if use_here.clicked() {
+                            action = Some(value.clone());
+                        }
                     }
-                    if ui
+                    let delete = ui
                         .add_enabled(!in_use, egui::Button::new(self.tr("mdl.remove")))
-                        .on_hover_text(self.tr("mdl.remove_help"))
-                        .clicked()
-                    {
-                        remove = Some(m.sha256.clone());
+                        .on_hover_text(self.tr("mdl.remove_help"));
+                    widgets::name_after(&delete, self.tr("mdl.remove"), &m.label);
+                    if delete.clicked() {
+                        let pending = (m.sha256.clone(), m.label.clone());
+                        ui.ctx().data_mut(|d| d.insert_temp(pending_delete, pending));
                     }
                 });
             });
-            ui.add_space(10.0);
+            ui.add_space(theme::CARD_GAP);
         }
         if let Some(v) = action {
             let edit = ("DlssNr".to_string(), "ModelFile".to_string(), v);
             self.request_plan(PlanKind::Settings, PlanInputs::Settings(vec![edit]));
         }
-        if let Some(sha) = remove {
-            commands.send(AppCommand::RemoveModel(sha));
+        // Deleting the app's copy cannot be undone, so it asks first.
+        if let Some((sha, label)) = ui.ctx().data(|d| d.get_temp::<(String, String)>(pending_delete)) {
+            let answer = widgets::delete_modal(
+                ui.ctx(),
+                self.lang,
+                "model",
+                self.tr("mdl.remove_title"),
+                &label,
+                self.tr("mdl.remove_help"),
+            );
+            if answer.is_some() {
+                ui.ctx().data_mut(|d| d.remove::<(String, String)>(pending_delete));
+            }
+            if answer == Some(widgets::Answer::Confirm) {
+                commands.send(AppCommand::RemoveModel(sha));
+            }
         }
         self.settings_plan(ui);
     }
 
     pub(crate) fn model_import_area(&self, ui: &mut egui::Ui) {
         let pending_id = egui::Id::unique("model-import-pending");
-        let frame = egui::Frame::new()
-            .inner_margin(16.0)
-            .corner_radius(12)
-            .fill(theme::CARD);
-        let area = frame.show(ui, |ui| {
-            ui.set_width(ui.available_width());
+        let area = widgets::card(ui, |ui| {
             ui.label(RichText::new(self.tr("mdl.drop")).color(theme::MUTED));
             if ui.button(self.tr("mdl.import")).clicked()
                 && let Some(path) = rfd::FileDialog::new()
@@ -268,36 +293,11 @@ impl RetoqueApp {
             {
                 ui.ctx().data_mut(|data| data.insert_temp(pending_id, path));
             }
+            // The whole card, margins included, is the drop target.
+            ui.min_rect().expand(16.0)
         });
-        let border = area.response.rect.shrink(1.0);
-        let stroke = egui::Stroke::new(1.0, theme::MUTED);
-        for (from, to) in [
-            (border.left_top(), border.right_top()),
-            (border.right_top(), border.right_bottom()),
-            (border.right_bottom(), border.left_bottom()),
-            (border.left_bottom(), border.left_top()),
-        ] {
-            let delta = to - from;
-            let length = delta.length();
-            let direction = delta / length.max(1.0);
-            let mut offset = 8.0;
-            while offset < length - 8.0 {
-                ui.painter().line_segment(
-                    [
-                        from + direction * offset,
-                        from + direction * (offset + 5.0).min(length - 8.0),
-                    ],
-                    stroke,
-                );
-                offset += 10.0;
-            }
-        }
         // Dropping previews an import, just like selecting a file; it does not silently copy anything.
-        if ui
-            .ctx()
-            .pointer_latest_pos()
-            .is_some_and(|p| area.response.rect.contains(p))
-        {
+        if ui.ctx().pointer_latest_pos().is_some_and(|p| area.contains(p)) {
             let dropped = ui
                 .ctx()
                 .input(|i| i.raw.dropped_files.first().map(|file| file.path().to_path_buf()));
@@ -321,7 +321,7 @@ impl RetoqueApp {
                 }
             });
         }
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
     }
 
     pub(crate) fn model_compatibility_label(
@@ -332,11 +332,12 @@ impl RetoqueApp {
         use retoque_data::model_compat::Compatibility;
         let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
         let (key, color) = match info.for_gpu(gpu) {
-            Compatibility::Incompatible => ("mdl.incompatible", theme::WARN),
-            Compatibility::Compatible => ("mdl.arch_match", theme::MUTED),
+            Compatibility::Incompatible => ("mdl.incompatible", theme::BAD),
+            Compatibility::Compatible => ("mdl.arch_match", theme::GOOD),
             Compatibility::Unknown => ("mdl.compat_unknown", theme::WARN),
         };
-        ui.add(egui::Label::new(RichText::new(self.tr(key)).color(color)).wrap());
+        // A chip in words; the CUDA targets the file was built for are technical detail, kept in the hover.
+        let chip = ui.horizontal(|ui| widgets::chip(ui, self.tr(key), color)).response;
         if !info.archs.is_empty() {
             let archs = info
                 .archs
@@ -344,7 +345,7 @@ impl RetoqueApp {
                 .map(|sm| format!("sm_{sm}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            ui.label(format!("{} {archs}", self.tr("mdl.archs")));
+            chip.on_hover_text(format!("{} {archs}", self.tr("mdl.archs")));
         }
     }
 
@@ -382,11 +383,10 @@ impl RetoqueApp {
                 || info.compatibility.for_gpu(gpu) == retoque_data::model_compat::Compatibility::Incompatible;
             if missing_or_incompatible && let Some(remote) = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu) {
                 ui.label(format!(
-                    "{}: {} ({:.1} {})",
+                    "{}: {} ({})",
                     self.tr("nr_fetch.title"),
                     remote.label,
-                    remote.size as f64 / 1_048_576.0,
-                    self.tr("unit.mib")
+                    size_text(self.lang, remote.size)
                 ));
                 if ui
                     .add_enabled(
@@ -417,57 +417,6 @@ impl RetoqueApp {
         self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary)
     }
 
-    pub(crate) fn nr_fetch_first_run_eligible(&self) -> Option<RemoteModel> {
-        if self.saved.nr_model_offer_seen {
-            return None;
-        }
-        let gpu = self.nr_fetch_single_gpu()?;
-        let models = self.catalog.as_ref()?.as_ref().ok()?;
-        if models
-            .iter()
-            .any(|m| m.compatibility.for_gpu(Some(gpu)) == retoque_data::model_compat::Compatibility::Compatible)
-        {
-            return None;
-        }
-        model_fetch::pick_for_gpu(&self.nr_fetch.entries, Some(gpu)).cloned()
-    }
-
-    pub(crate) fn first_run_nr_card(&self, ui: &mut egui::Ui) {
-        let Some(entry) = self.nr_fetch_first_run_eligible() else {
-            return;
-        };
-        widgets::card(ui, |ui| {
-            widgets::card_title(ui, self.tr("nr_fetch.consent_title"));
-            ui.add(egui::Label::new(self.tr("nr_fetch.source_note")).wrap());
-            ui.label(
-                RichText::new(format!(
-                    "{} · {:.1} {} · SHA-256 {}",
-                    entry.label,
-                    entry.size as f64 / 1_048_576.0,
-                    self.tr("unit.mib"),
-                    &entry.sha256[..entry.sha256.len().min(12)]
-                ))
-                .color(theme::MUTED),
-            );
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(
-                        !self.busy() && !self.nr_fetch.busy,
-                        theme::primary(self.tr("nr_fetch.get_compatible")),
-                    )
-                    .clicked()
-                {
-                    self.cmd_tx
-                        .send(AppCommand::PromptFetchCompatibleModel(self.view.target.clone()));
-                }
-                if ui.button(self.tr("nr_fetch.later")).clicked() {
-                    self.cmd_tx.send(AppCommand::DismissNrModelOffer);
-                }
-            });
-        });
-        ui.add_space(12.0);
-    }
-
     pub(crate) fn nr_fetch_card(&self, ui: &mut egui::Ui) {
         let gpu = self.nr_fetch_single_gpu();
         let compatible = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu);
@@ -478,10 +427,9 @@ impl RetoqueApp {
             if let Some(entry) = compatible {
                 ui.label(
                     RichText::new(format!(
-                        "{} · {:.1} {} · SHA-256 {}",
+                        "{} · {} · SHA-256 {}",
                         entry.label,
-                        entry.size as f64 / 1_048_576.0,
-                        self.tr("unit.mib"),
+                        size_text(self.lang, entry.size),
                         &entry.sha256[..entry.sha256.len().min(12)]
                     ))
                     .strong(),
@@ -495,7 +443,8 @@ impl RetoqueApp {
                 if ui
                     .add_enabled(
                         compatible.is_some() && !self.busy() && !self.nr_fetch.busy,
-                        theme::primary(self.tr("nr_fetch.get_compatible")),
+                        // The banner holds the page's one primary; this is one of several actions here.
+                        egui::Button::new(self.tr("nr_fetch.get_compatible")),
                     )
                     .clicked()
                 {
@@ -513,28 +462,27 @@ impl RetoqueApp {
                 }
             });
             if self.nr_fetch.busy {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(format!(
-                        "{} · {:.1} {}",
-                        self.tr("nr_fetch.downloading"),
-                        self.nr_fetch.downloaded as f64 / 1_048_576.0,
-                        self.tr("unit.mib")
-                    ));
+                let done = self.nr_fetch.downloaded;
+                let text = self.tr(if self.nr_fetch.total > 0 {
+                    "nr_fetch.downloading"
+                } else {
+                    "nr_fetch.refreshing"
                 });
+                let total = (self.nr_fetch.total > 0).then_some(self.nr_fetch.total);
+                widgets::busy(ui, self.lang, text, (done > 0).then_some(done), total);
             }
             if let Some(error) = &self.nr_fetch.error {
-                ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+                crate::error::card(ui, error, self.lang, &self.cmd_tx);
             }
-            ui.collapsing(self.tr("nr_fetch.available_variants"), |ui| {
+            let variants = self.tr("nr_fetch.available_variants");
+            widgets::collapsible(ui, "nr_variants", variants, widgets::Fold::Section, |ui| {
                 for entry in &self.nr_fetch.entries {
                     ui.push_id(&entry.sha256, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.strong(&entry.label);
                             ui.label(format!(
-                                "{:.1} {} · {}",
-                                entry.size as f64 / 1_048_576.0,
-                                self.tr("unit.mib"),
+                                "{} · {}",
+                                size_text(self.lang, entry.size),
                                 &entry.sha256[..entry.sha256.len().min(12)]
                             ));
                             if ui
@@ -554,7 +502,7 @@ impl RetoqueApp {
                 }
             });
         });
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
     }
 
     pub(crate) fn nr_fetch_prompt_compatible(&mut self, select_for_target: Option<PathBuf>) {
@@ -621,51 +569,72 @@ impl RetoqueApp {
         let Some(consent) = self.nr_fetch.consent.clone() else {
             return;
         };
-        let mut confirm = false;
-        let mut cancel = false;
-        egui::Modal::new(egui::Id::unique("nr-fetch-consent")).show(ctx, |ui| {
-            ui.set_max_width(540.0);
-            match &consent {
-                NrConsent::Download(entry) => {
-                    ui.heading(self.tr("nr_fetch.consent_title"));
-                    ui.label(self.tr("nr_fetch.source_note"));
-                    ui.label(
-                        RichText::new(format!(
-                            "{}: {} · {:.1} {} ({} B) · SHA-256 {}",
-                            self.tr("model"),
-                            entry.label,
-                            entry.size as f64 / 1_048_576.0,
-                            self.tr("unit.mib"),
-                            entry.size,
-                            &entry.sha256[..entry.sha256.len().min(12)]
-                        ))
-                        .strong(),
-                    );
-                    self.model_compatibility_label(ui, &entry.compatibility);
-                    ui.label(self.tr("nr_fetch.consent_body"));
-                    ui.horizontal(|ui| {
-                        confirm = ui.button(self.tr("nr_fetch.confirm")).clicked();
-                        cancel = ui.button(self.tr("cancel")).clicked();
-                    });
-                }
-                NrConsent::RefreshCatalog => {
-                    ui.heading(self.tr("nr_fetch.refresh_title"));
-                    ui.label(self.tr("nr_fetch.refresh_body"));
-                    ui.horizontal(|ui| {
-                        confirm = ui.button(self.tr("nr_fetch.confirm_refresh")).clicked();
-                        cancel = ui.button(self.tr("cancel")).clicked();
-                    });
-                }
+        let lang = self.lang;
+        // Both are started by the user (a button, or "Optimize" that needs a model), so they are dismissed with
+        // "Cancel". Sources, hashes and sizes in bytes are technical details.
+        let answer = match &consent {
+            NrConsent::Download(entry) => {
+                let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
+                let model = format!(
+                    "{}: {} ({})",
+                    t(lang, "model"),
+                    entry.label,
+                    size_text(lang, entry.size)
+                );
+                let compatibility = t(lang, compatibility_key(entry.compatibility.for_gpu(gpu)));
+                let details = |ui: &mut egui::Ui| {
+                    let small = |ui: &mut egui::Ui, text: String| {
+                        ui.add(egui::Label::new(RichText::new(text).small()).wrap());
+                    };
+                    small(ui, t(lang, "nr_fetch.source_note").to_owned());
+                    small(ui, format!("SHA-256 {}", entry.sha256));
+                    small(ui, format!("{} B", entry.size));
+                    if !entry.compatibility.archs.is_empty() {
+                        let archs = entry.compatibility.archs.iter().map(|sm| format!("sm_{sm}"));
+                        small(
+                            ui,
+                            format!("{} {}", t(lang, "mdl.archs"), archs.collect::<Vec<_>>().join(", ")),
+                        );
+                    }
+                };
+                widgets::consent_modal(
+                    ctx,
+                    lang,
+                    "nr-fetch-consent",
+                    t(lang, "nr_fetch.consent_title"),
+                    &[&model, compatibility, t(lang, "nr_fetch.consent_body")],
+                    &download_label(lang, Some(entry.size)),
+                    t(lang, "cancel"),
+                    Some(&details),
+                )
             }
-        });
-        if cancel {
-            self.nr_fetch.consent = None;
-            self.nr_fetch.select_for_target = None;
-            self.nr_fetch.then_optimize = None;
-        }
-        if confirm {
-            self.nr_fetch.consent = None;
-            self.nr_fetch_start(consent);
+            NrConsent::RefreshCatalog => {
+                let details = |ui: &mut egui::Ui| {
+                    ui.add(egui::Label::new(RichText::new(t(lang, "nr_fetch.refresh_details")).small()).wrap());
+                };
+                widgets::consent_modal(
+                    ctx,
+                    lang,
+                    "nr-fetch-refresh",
+                    t(lang, "nr_fetch.refresh_title"),
+                    &[t(lang, "nr_fetch.refresh_body")],
+                    t(lang, "nr_fetch.confirm_refresh"),
+                    t(lang, "cancel"),
+                    Some(&details),
+                )
+            }
+        };
+        match answer {
+            Some(widgets::Answer::Cancel) => {
+                self.nr_fetch.consent = None;
+                self.nr_fetch.select_for_target = None;
+                self.nr_fetch.then_optimize = None;
+            }
+            Some(widgets::Answer::Confirm) => {
+                self.nr_fetch.consent = None;
+                self.nr_fetch_start(consent);
+            }
+            None => {}
         }
     }
 
@@ -676,8 +645,13 @@ impl RetoqueApp {
         self.nr_fetch.busy = true;
         self.nr_fetch.error = None;
         self.nr_fetch.downloaded = 0;
+        self.nr_fetch.total = match &consent {
+            NrConsent::Download(entry) => entry.size,
+            NrConsent::RefreshCatalog => 0,
+        };
         let custom_fetcher = self.nr_fetch.fetcher.clone();
         let catalog_root = self.nr_fetch.catalog_root.clone();
+        let publications = self.jobs.catalog_publications.clone();
         let ctx = self.context.clone();
         self.jobs.spawn("nr-model-fetch", None, move |tx| {
             let active_fetcher: &dyn model_fetch::Fetcher = match custom_fetcher.as_deref() {
@@ -690,7 +664,7 @@ impl RetoqueApp {
                     Outcome::NrFetch(NrFetchEvent::CatalogRefreshed(result))
                 }
                 NrConsent::Download(entry) => {
-                    let result = (|| -> Result<(Vec<Model>, Model), AppError> {
+                    let result = (|| -> Result<Model, AppError> {
                         let catalog = Catalog::open(catalog_root.as_deref())?;
                         let mut previous = 0u64;
                         let mut imported =
@@ -701,16 +675,31 @@ impl RetoqueApp {
                                     ctx.request_repaint();
                                 }
                             })?;
-                        let mut items = catalog.list()?;
                         if entry.compatibility.known {
                             imported.compatibility = entry.compatibility.clone();
-                            for item in &mut items {
-                                if item.sha256 == imported.sha256 {
-                                    item.compatibility = entry.compatibility.clone();
-                                }
-                            }
                         }
-                        Ok((items, imported))
+                        let snapshot = publications.snapshot(|| {
+                            let result = catalog
+                                .list()
+                                .map(|mut items| {
+                                    if entry.compatibility.known {
+                                        for item in &mut items {
+                                            if item.sha256 == imported.sha256 {
+                                                item.compatibility = entry.compatibility.clone();
+                                            }
+                                        }
+                                    }
+                                    items
+                                })
+                                .map_err(AppError::from);
+                            Outcome::Catalog { result }
+                        });
+                        if let Outcome::CatalogSnapshot { result: Err(error), .. } = snapshot {
+                            return Err(error);
+                        }
+                        // Completion stays unscoped: even if a newer list wins, release busy and resume the caller.
+                        let _ = tx.send(snapshot);
+                        Ok(imported)
                     })();
                     Outcome::NrFetch(NrFetchEvent::Downloaded(result))
                 }
@@ -731,9 +720,7 @@ impl RetoqueApp {
             NrFetchEvent::Downloaded(result) => {
                 self.nr_fetch.busy = false;
                 match result {
-                    Ok((items, imported)) => {
-                        self.catalog = Some(Ok(items));
-                        self.usage_refreshed = None;
+                    Ok(imported) => {
                         if let Some((target, generation, review_request)) = self.nr_fetch.then_optimize.take() {
                             self.nr_fetch.select_for_target = None;
                             if self.view.target.as_ref() == Some(&target)
@@ -840,6 +827,40 @@ mod tests {
     }
 
     #[test]
+    fn delayed_catalog_snapshot_cannot_hide_a_downloaded_model() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut app = crate::app_tests::shell_tests::app();
+        let (entry, archive) = synthetic_model_fixture();
+        app.nr_fetch.catalog_root = Some(temp.path().join("catalog"));
+        app.nr_fetch.fetcher = Some(Arc::new(SyntheticNrFetcher {
+            archive,
+            catalog_json: Vec::new(),
+        }));
+        // Pause after the old snapshot was taken, but before its worker delivers it.
+        let old = app
+            .jobs
+            .catalog_publications
+            .snapshot(|| Outcome::Catalog { result: Ok(vec![]) });
+        let (started, ready) = std::sync::mpsc::channel();
+        let (release, blocked) = std::sync::mpsc::channel();
+        app.jobs.spawn("hash", None, move |_| {
+            started.send(()).unwrap();
+            blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+            old
+        });
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        app.nr_fetch_start(NrConsent::Download(entry.clone()));
+        settle(&mut app, |app| !app.nr_fetch.busy);
+        assert!(app.nr_fetch.error.is_none());
+        release.send(()).unwrap();
+        settle(&mut app, |app| !app.jobs.busy());
+        let models = app.catalog.as_ref().unwrap().as_ref().unwrap();
+        assert_eq!(models.len(), 1, "a late Heavy snapshot must not erase the Net import");
+        assert_eq!(models[0].sha256, entry.sha256);
+        assert!(models[0].compatibility.known);
+    }
+
+    #[test]
     fn model_tab_get_compatible_shows_community_source_downloads_imports_and_reviews_in_both_languages() {
         for lang in [Lang::En, Lang::Pt] {
             let temp = tempfile::tempdir().unwrap();
@@ -881,7 +902,7 @@ mod tests {
             assert!(h.state().nr_fetch.consent.is_some());
             assert!(!h.state().jobs.busy());
             h.get_by_label(t(lang, "nr_fetch.consent_title"));
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, &h.state().nr_fetch.download_label(lang))
                 .click();
             h.run_steps(3);
             settle(h.state_mut(), |app| app.review.is_some());
@@ -898,33 +919,6 @@ mod tests {
                     .any(|s| matches!(s, Step::SetIni { key, .. } if key == "ModelFile"))
             );
             assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
-        }
-    }
-
-    #[test]
-    fn first_run_offer_and_later_never_contact_network_in_both_languages() {
-        for lang in [Lang::En, Lang::Pt] {
-            let mut app = crate::app_tests::shell_tests::app();
-            app.lang = lang;
-            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 4090,8.9,1,24576"));
-            app.catalog = Some(Ok(vec![]));
-            let mut h = Harness::builder().with_size([1000., 800.]).build_ui_state(
-                |ui, app: &mut RetoqueApp| {
-                    app.first_run_nr_card(ui);
-                    app.nr_fetch_dialog(ui.ctx());
-                    app.handle_commands();
-                },
-                app,
-            );
-            h.get_by_label(t(lang, "nr_fetch.consent_title"));
-            h.get_by_label(t(lang, "nr_fetch.source_note"));
-            assert!(!h.state().jobs.busy());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.later"))
-                .click();
-            h.run_steps(3);
-            assert!(h.state().saved.nr_model_offer_seen);
-            assert!(h.state().nr_fetch.consent.is_none());
-            assert!(!h.state().jobs.busy());
         }
     }
 
@@ -980,12 +974,59 @@ mod tests {
                 .click();
             h.run_steps(3);
             assert!(h.state().nr_fetch.consent.is_some());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, &h.state().nr_fetch.download_label(lang))
                 .click();
             h.run_steps(3);
             settle(h.state_mut(), |app| app.review.is_some());
             assert!(h.state().review_open);
             assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn deleting_a_stored_model_asks_first_and_names_the_model_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.view.target = Some("/synthetic/nr-game".into());
+            app.view.ini = Some(Ok(Some(Ini::parse(b"[DlssNr]\nModelFile=auto\n"))));
+            app.catalog = Some(Ok(vec![Model {
+                sha256: "synthetic".into(),
+                version: None,
+                size: 64,
+                label: "Stored fixture".into(),
+                path: "/synthetic/model.dll".into(),
+                compatibility: Default::default(),
+            }]));
+            let mut h = Harness::builder().with_size([1000., 900.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    let tx = app.cmd_tx.clone();
+                    app.model_tab(ui, &tx);
+                },
+                app,
+            );
+            h.run_steps(2);
+            let delete = format!("{}: Stored fixture", t(lang, "mdl.remove").trim_end_matches('…'));
+            let use_here = format!("{}: Stored fixture", t(lang, "mdl.use").trim_end_matches('…'));
+            h.get_by_role_and_label(egui::Role::Button, &use_here);
+            // Cancel closes the confirm and deletes nothing.
+            h.get_by_role_and_label(egui::Role::Button, &delete).click();
+            h.run_steps(3);
+            h.get_by_label(t(lang, "mdl.remove_title"));
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
+            h.run_steps(3);
+            assert!(h.query_by_label(t(lang, "mdl.remove_title")).is_none());
+            assert!(h.state().cmd_rx.try_recv().is_err());
+            // "Apagar" sends the removal for that model only.
+            h.get_by_role_and_label(egui::Role::Button, &delete).click();
+            h.run_steps(3);
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "delete")).click();
+            h.run_steps(3);
+            assert!(matches!(
+                h.state().cmd_rx.try_recv(),
+                Ok(AppCommand::RemoveModel(sha)) if sha == "synthetic"
+            ));
+            assert!(h.query_by_label(t(lang, "mdl.remove_title")).is_none());
         }
     }
 }

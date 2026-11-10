@@ -144,7 +144,7 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     (
         "rs.error.26",
         "ReShade state is not unchanged receipt-owned data",
-        "O estado do ReShade foi alterado ou não pertence ao recibo",
+        "O estado do ReShade foi alterado ou não pertence ao registro de instalação",
     ),
     ("rs.error.27", "invalid ReShade state", "Estado do ReShade inválido"),
     (
@@ -175,7 +175,7 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     (
         "rs.error.33",
         "ReShade requires the proxy and executable in the same directory",
-        "ReShade exige o proxy e o executável no mesmo diretório",
+        "O ReShade exige o arquivo de carregamento e o executável na mesma pasta",
     ),
     (
         "rs.error.34",
@@ -220,7 +220,7 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     (
         "rs.error.42",
         "ReShade backup changed; preserve the receipt",
-        "O backup do ReShade mudou; preserve o recibo",
+        "O backup do ReShade mudou; preserve o registro de instalação",
     ),
     (
         "rs.error.43",
@@ -245,7 +245,7 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     (
         "rs.error.47",
         "ReShade build is limited or unknown; full add-on support is not established",
-        "O build do ReShade é limitado ou desconhecido; o suporte completo a add-ons não está confirmado",
+        "A versão do ReShade é limitada ou desconhecida; o suporte completo a add-ons não está confirmado",
     ),
     (
         "rs.error.48",
@@ -282,18 +282,22 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ("rs.title", "ReShade and add-ons", "ReShade e add-ons"),
     (
         "rs.description",
-        "Retoque keeps the game proxy and loads ReShade64.dll.",
-        "O Retoque mantém o proxy do jogo e carrega ReShade64.dll.",
+        "Retoque keeps the game's loader file and loads ReShade64.dll.",
+        "O Retoque mantém o arquivo de carregamento do jogo e carrega o ReShade64.dll.",
     ),
     ("rs.enabled", "Enabled", "Ativado"),
     ("rs.disabled", "Disabled", "Desativado"),
     ("rs.full", "Full add-on support", "Suporte completo a add-ons"),
     (
         "rs.limited",
-        "Limited build: external add-ons cannot load",
-        "Build limitado: add-ons externos não carregam",
+        "Limited ReShade version: external add-ons cannot load",
+        "Versão limitada do ReShade: add-ons externos não carregam",
     ),
-    ("rs.unknown", "Unknown ReShade build", "Build do ReShade desconhecido"),
+    (
+        "rs.unknown",
+        "Unknown ReShade version",
+        "Versão do ReShade desconhecida",
+    ),
     ("rs.missing", "ReShade is missing", "ReShade ausente"),
     (
         "rs.recommend",
@@ -307,23 +311,23 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "rs.static",
-        "Static evidence, medium confidence. Restart the game after changes; loading and compatibility remain untested.",
-        "Evidência estática, confiança média. Reinicie o jogo após alterações; carregamento e compatibilidade ainda não foram testados.",
+        "Not yet tested in this game. Restart the game after changes.",
+        "Ainda não testado neste jogo. Reinicie o jogo após alterações.",
     ),
     ("rs.addons", "Add-ons", "Add-ons"),
-    ("rs.build", "ReShade build", "Build do ReShade"),
+    ("rs.build", "ReShade version", "Versão do ReShade"),
     (
         "rs.install",
-        "Review ReShade installation",
-        "Revisar instalação do ReShade",
+        "Review ReShade installation…",
+        "Revisar instalação do ReShade…",
     ),
     ("rs.uninstall", "Remove ReShade component", "Remover componente ReShade"),
     (
         "rs.import",
-        "Import local ReShade DLL or setup",
-        "Importar DLL ou instalador local do ReShade",
+        "Import local ReShade DLL or setup…",
+        "Importar DLL ou instalador local do ReShade…",
     ),
-    ("rs.add", "Import add-on", "Importar add-on"),
+    ("rs.add", "Import add-on…", "Importar add-on…"),
     ("rs.remove_addon", "Remove imported add-on", "Remover add-on importado"),
     (
         "rs.review",
@@ -336,20 +340,29 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Copiar este add-on para o jogo selecionado mediante revisão do plano.",
     ),
     (
+        "rs.drop_reshade",
+        "Import this ReShade DLL or setup into the app? Installing it in a game has its own review.",
+        "Importar esta DLL ou instalador do ReShade para o app? A instalação num jogo tem revisão própria.",
+    ),
+    (
         "rs.select_game",
         "Select a game before importing an add-on.",
         "Selecione um jogo antes de importar um add-on.",
     ),
-    ("rs.nr_off", "Neural Rendering: off", "Neural Rendering: desligado"),
+    (
+        "rs.nr_off",
+        "Neural Rendering (NR): off",
+        "Renderização neural (NR): desligada",
+    ),
     (
         "rs.nr_addon",
-        "Neural Rendering: by the add-on RenoDX DLSS5",
-        "Neural Rendering: pelo add-on RenoDX DLSS5",
+        "Neural Rendering (NR): by the add-on RenoDX DLSS5",
+        "Renderização neural (NR): pelo add-on RenoDX DLSS5",
     ),
     (
         "rs.nr_retoque",
-        "Neural Rendering: by Retoque",
-        "Neural Rendering: pelo Retoque",
+        "Neural Rendering (NR): by Retoque",
+        "Renderização neural (NR): pelo Retoque",
     ),
     (
         "rs.input_title",
@@ -364,8 +377,8 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ("rs.input_mode", "ReShade.ini [INPUT]", "ReShade.ini [INPUT]"),
     (
         "rs.input_fix",
-        "Let both menus use the mouse",
-        "Deixar os dois menus usarem o mouse",
+        "Let both menus use the mouse…",
+        "Deixar os dois menus usarem o mouse…",
     ),
     (
         "rs.yield",
@@ -381,11 +394,6 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "rs.consent",
         "Download ReShade 6.8.0 with full add-on support from reshade.me? The 4.3 MB official installer and extracted DLL have pinned SHA-256 hashes. BSD-3-Clause applies. Game changes require a separate review.",
         "Baixar ReShade 6.8.0 com suporte completo a add-ons de reshade.me? O instalador oficial de 4,3 MB e a DLL extraída têm hashes SHA-256 fixados. Aplica-se a licença BSD-3-Clause. Alterações no jogo exigem revisão separada.",
-    ),
-    (
-        "rs.confirm_download",
-        "Confirm official download",
-        "Confirmar download oficial",
     ),
     ("rs.preparing", "Preparing ReShade…", "Preparando ReShade…"),
     (
@@ -412,8 +420,8 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ("severity.error", "Error", "Erro"),
     (
         "doctor.journal_unreadable.why",
-        "A pending journal exists but core refused to inspect this installation. Preserve it and review reconciliation; other checks are unavailable.",
-        "Há um journal pendente, mas o núcleo recusou inspecionar a instalação. Preserve-o e revise a reconciliação; as demais verificações estão indisponíveis.",
+        "An unfinished install record exists, but Retoque could not inspect this installation. Keep it and review the repair; other checks are unavailable.",
+        "Há um registro de instalação inacabado, mas o Retoque não conseguiu inspecionar a instalação. Preserve-o e revise o reparo; as demais verificações estão indisponíveis.",
     ),
     ("log.load.title", "NR model did not load", "Modelo NR não carregou"),
     (
@@ -438,13 +446,13 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "doctor.unfinished.why",
-        "The receipt or pending journal records unfinished work. Reconcile through the installer.",
-        "O recibo ou journal pendente registra trabalho incompleto. Reconcilie pelo instalador.",
+        "The last install or uninstall stopped part-way. Review the repair to finish it.",
+        "A última instalação ou desinstalação parou no meio. Revise o reparo para concluí-la.",
     ),
     (
         "doctor.version.title",
-        "Proxy and forwarder versions differ",
-        "Versões do proxy e forwarder diferentes",
+        "Retoque's files have different versions",
+        "Os arquivos do Retoque têm versões diferentes",
     ),
     (
         "doctor.version.why",
@@ -459,13 +467,13 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "doctor.model_incompatible.title",
-        "NR model incompatible with GPU",
-        "Modelo NR incompatível com a GPU",
+        "NR model does not work on this graphics card",
+        "O modelo NR não funciona nesta placa de vídeo",
     ),
     (
         "doctor.model_incompatible.why",
-        "Static CUDA targets do not match. A catalog alternative, when offered, is still untested in this game.",
-        "Os alvos CUDA estáticos não correspondem. A alternativa do catálogo, quando oferecida, ainda não foi testada neste jogo.",
+        "The model was not built for this graphics card. A suggested model from your models is still untested in this game.",
+        "O modelo não foi feito para esta placa de vídeo. Um modelo sugerido dentre os seus ainda não foi testado neste jogo.",
     ),
     (
         "doctor.lsfg_ready.title",
@@ -484,8 +492,8 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "doctor.lsfg_output.why",
-        "LSFG requires FrameGen FGOutput=fsrfg. This setting alone does not prove readiness.",
-        "LSFG exige FrameGen FGOutput=fsrfg. Esse ajuste sozinho não comprova que esteja pronto.",
+        "LSFG needs FSR frame generation output (Settings › Frame generation › FG output). This setting alone does not prove it is ready.",
+        "O LSFG precisa da saída de geração de quadros FSR (Ajustes › Geração de quadros › Saída da geração). Esse ajuste sozinho não comprova que esteja pronto.",
     ),
     (
         "doctor.fg_conflict.title",
@@ -499,13 +507,13 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "doctor.launch.title",
-        "Wine proxy override missing",
-        "Override do proxy Wine ausente",
+        "Launch option missing",
+        "Falta a opção de inicialização",
     ),
     (
         "doctor.launch.why",
-        "The inspected launch configuration lacks the required override. Copy the shown option to the launcher.",
-        "A configuração de execução inspecionada não tem o override necessário. Copie a opção mostrada para o launcher.",
+        "The game is not told to load Retoque yet. Copy the launch option shown in this tab into your launcher.",
+        "O jogo ainda não foi avisado para carregar o Retoque. Copie a opção de inicialização mostrada nesta aba para o seu launcher.",
     ),
     ("log.vulkan.title", "Vulkan device lost", "Dispositivo Vulkan perdido"),
     (
@@ -536,13 +544,13 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "log.pre.title",
-        "NR pre-upscale fallback observed",
-        "Fallback de NR antes do upscale observado",
+        "NR before upscaling fell back to the safe path",
+        "O NR antes da ampliação voltou ao modo seguro",
     ),
     (
         "log.pre.why",
-        "Pre-upscale coverage recorded fallback. Review Stage=0 to use the post-upscale route.",
-        "A cobertura antes do upscale registrou fallback. Revise Stage=0 para usar a rota após o upscale.",
+        "Set NR stage to After the upscaler in Settings to use the post-upscale route.",
+        "Escolha Etapa do NR › Depois da ampliação em Ajustes para usar a rota após a ampliação.",
     ),
     (
         "log.nvngx.title",
@@ -561,8 +569,8 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "confidence.static",
-        "Static match, untested",
-        "Correspondência estática, não testada",
+        "Not yet tested in this game",
+        "Ainda não testado neste jogo",
     ),
     (
         "confidence.proton",
@@ -579,7 +587,7 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Recognized installation",
         "Instalação reconhecida",
     ),
-    ("evidence.tracked", "Tracked receipt", "Recibo rastreado"),
+    ("evidence.tracked", "Install record", "Registro de instalação"),
     ("evidence.runtime", "Runtime", "Ambiente de execução"),
     ("evidence.dlss", "DLSS DLL present", "DLL DLSS presente"),
     ("evidence.dlssg", "DLSSG DLL present", "DLL DLSSG presente"),
@@ -590,10 +598,22 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ("evidence.lsfg", "LSFG enabled", "LSFG ligado"),
     ("evidence.gpu", "GPU identity", "Identidade da GPU"),
     ("evidence.api", "Last session API", "API da última sessão"),
-    ("evidence.receipt", "Receipt status", "Estado do recibo"),
-    ("evidence.pending", "Pending journal", "Journal pendente"),
-    ("evidence.proxy_version", "Proxy version", "Versão do proxy"),
-    ("evidence.forwarder_version", "Forwarder version", "Versão do forwarder"),
+    (
+        "evidence.receipt",
+        "Install record status",
+        "Estado do registro de instalação",
+    ),
+    ("evidence.pending", "Unfinished operation", "Operação inacabada"),
+    (
+        "evidence.proxy_version",
+        "Loader file version",
+        "Versão do arquivo de carregamento",
+    ),
+    (
+        "evidence.forwarder_version",
+        "NR component version",
+        "Versão do componente NR",
+    ),
     ("evidence.nr_enabled", "NR enabled", "NR ligado"),
     (
         "evidence.model_present",
@@ -615,12 +635,12 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     (
         "evidence.launch_option",
         "Required launch option",
-        "Opção de execução necessária",
+        "Opção de inicialização necessária",
     ),
     (
         "evidence.override",
-        "Launch override present",
-        "Override de execução presente",
+        "Launch option present",
+        "Opção de inicialização presente",
     ),
     ("evidence.log", "Redacted log line", "Linha de log anonimizada"),
     ("severity.info", "Information", "Informação"),
@@ -636,13 +656,13 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "doctor.dlss_root.title",
-        "DLSS root receipt needs recovery",
-        "O recibo DLSS na raiz precisa de recuperação",
+        "DLSS install record needs recovery",
+        "O registro de instalação do DLSS precisa de recuperação",
     ),
     (
         "doctor.dlss_root.why",
-        "A pending or incomplete DLSS operation remains at the game installation root. Review restoration of both receipts.",
-        "Há uma operação DLSS pendente ou incompleta na raiz do jogo. Revise a restauração dos dois recibos.",
+        "A pending or incomplete DLSS operation remains at the game installation root. Review restoring both install records.",
+        "Há uma operação DLSS pendente ou incompleta na raiz do jogo. Revise a restauração dos dois registros de instalação.",
     ),
     ("evidence.dlss_file_version", "Game DLSS version", "Versão DLSS do jogo"),
     (

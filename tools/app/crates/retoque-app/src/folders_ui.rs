@@ -261,20 +261,20 @@ impl RetoqueApp {
                                     for path in paths {
                                         ui.push_id((kind as u8, path), |ui| {
                                             ui.horizontal(|ui| {
-                                                let width = (ui.available_width() - 100.).max(60.);
+                                                let width = (ui.available_width() - 160.).max(60.);
                                                 ui.add_sized(
                                                     [width, 20.],
                                                     egui::Label::new(short_path(path)).truncate(),
                                                 )
                                                 .on_hover_text(crate::format::display_path(path));
-                                                let name =
-                                                    format!("{} · {}", self.tr("folders.remove"), short_path(path));
                                                 let response = ui
                                                     .button(self.tr("folders.remove"))
                                                     .on_hover_text(self.tr("folders.remove_help"));
-                                                response.widget_info(|| {
-                                                    egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())
-                                                });
+                                                widgets::name_after(
+                                                    &response,
+                                                    self.tr("folders.remove"),
+                                                    &short_path(path),
+                                                );
                                                 if response.clicked() {
                                                     remove = Some((kind, path.clone()));
                                                 }

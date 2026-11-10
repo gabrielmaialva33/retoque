@@ -11,13 +11,17 @@ use std::{
 };
 
 use egui::accesskit::Role;
-use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{
+    Harness,
+    kittest::{self, NodeT as _, Queryable},
+};
 use retoque_app::RetoqueApp;
 use retoque_core::{ini::Ini, receipt::ReceiptStatus};
 use retoque_data::models::Catalog;
 
 type Window = Harness<'static, RetoqueApp>;
-const SAVED: &str = "Written. The game reads it at its next start.";
+// A settings write is told by its toast ("Settings applied · {game}"), not by a line on the page.
+const SAVED: &str = "Settings applied";
 
 fn window() -> Window {
     // Include the naming audit: composite settings inputs are labelled by their row.
@@ -36,7 +40,8 @@ fn wait(ui: &mut Window, description: &str, ready: impl Fn(&Window) -> bool) {
             return;
         }
         assert!(
-            start.elapsed() < Duration::from_secs(10),
+            // Generous: the whole workspace's suites run beside this window and can starve it of CPU.
+            start.elapsed() < Duration::from_secs(30),
             "timed out: {description}\n{:#?}",
             ui.root()
         );
@@ -57,21 +62,32 @@ fn click(ui: &mut Window, role: Role, text: &str) {
     ui.run_steps(3);
 }
 
-/// The install previews sit in the closed "Install options" section at the end of the Retoque tab.
+/// The install previews sit in a closed section on the Overview: "Install options" in the card that says what
+/// Retoque will do before install, "Reinstall options" at the end once installed.
 fn open_install_options(ui: &mut Window) {
     if ui.query_by_label("Preview install").is_none() {
-        wait_label(ui, "Install options");
-        ui.get_by_label("Install options").click_accesskit();
+        wait(ui, "install options section", |ui| {
+            label(ui, "Install options") || label(ui, "Reinstall options")
+        });
+        let section = if label(ui, "Reinstall options") {
+            "Reinstall options"
+        } else {
+            "Install options"
+        };
+        ui.get_by_label(section).click_accesskit();
         ui.run_steps(3);
     }
     wait_label(ui, "Preview install");
 }
 
 fn select_game(ui: &mut Window) {
-    wait(ui, "FakeGame library row", |ui| {
-        ui.query_by_role_and_label(Role::Button, "FakeGame").is_some()
-    });
-    click(ui, Role::Button, "FakeGame");
+    // A library entry is announced as "{name}, {install state}".
+    let row = |n: &kittest::AccessKitNode<'_>| {
+        n.role() == Role::Button && n.label().is_some_and(|l| l.starts_with("FakeGame, "))
+    };
+    wait(ui, "FakeGame library row", |ui| ui.query_by(row).is_some());
+    ui.get_by(row).click_accesskit();
+    ui.run_steps(3);
     open_install_options(ui);
 }
 
@@ -96,10 +112,10 @@ fn choose_stage(ui: &mut Window, value: &str) {
 fn review_stage(ui: &mut Window, game: &Path, before: &str, after: &str) {
     let unchanged = snapshot(game);
     choose_stage(ui, after);
-    click(ui, Role::Button, "Review changes");
+    click(ui, Role::Button, "Review changes…");
     wait_label(ui, &format!("[DlssNr] Stage: {before} -> {after}"));
     assert_eq!(snapshot(game), unchanged, "preview must not write");
-    click(ui, Role::Button, "Write these changes");
+    click(ui, Role::Button, "Apply");
     wait(ui, "settings write and UI result", |ui| {
         label(ui, SAVED) && ini_value(game, "Stage") == after
     });
@@ -207,7 +223,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     assert!(label(&ui, "What will be done"));
     assert_eq!(snapshot(&game), original);
     click(&mut ui, Role::Button, "Install");
-    // The Retoque tile says it now: "Retoque: Up to date, build …".
+    // The Retoque tile says it now: "Retoque: Up to date, Local build" (the hash is in its hover).
     wait_label(&mut ui, "Retoque: Up to date");
     for file in [
         "dxgi.dll",
@@ -253,13 +269,15 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     drop(ui);
     let mut ui = window();
     select_game(&mut ui);
-    click(&mut ui, Role::Tab, "NR model");
-    wait_label(&mut ui, "Use in this game");
+    click(&mut ui, Role::Tab, "Components");
+    // The button is named after its model for screen readers ("Use in this game: Synthetic model").
+    wait_label(&mut ui, "Use in this game: Synthetic model");
     let before_model = snapshot(&game);
-    click(&mut ui, Role::Button, "Use in this game");
+    // Every model card has this button, so it is named after its model for screen readers.
+    click(&mut ui, Role::Button, "Use in this game: Synthetic model");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: auto -> {model_value}"));
     assert_eq!(snapshot(&game), before_model);
-    click(&mut ui, Role::Button, "Write these changes");
+    click(&mut ui, Role::Button, "Apply");
     wait(&mut ui, "model write", |ui| {
         label(ui, SAVED) && ini_value(&game, "ModelFile") == model_value
     });
@@ -291,11 +309,16 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
             .any(|(pid, _)| *pid == child.0.id())
     );
     let before_refusal = snapshot(&game);
-    click(&mut ui, Role::Tab, "Install");
+    click(&mut ui, Role::Tab, "Overview");
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview install");
     wait_label(&mut ui, "The game is running");
-    assert!(ui.query_by_role_and_label(Role::Button, "Update").is_none());
+    // A refused plan keeps its confirm in place, disabled.
+    assert!(
+        ui.get_by_role_and_label(Role::Button, "Update")
+            .accesskit_node()
+            .is_disabled()
+    );
     assert_eq!(snapshot(&game), before_refusal);
     drop(child);
 
@@ -305,17 +328,17 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     wait_label(&mut ui, "left in place, it changed since this script wrote it");
     assert_eq!(snapshot(&game), before_refusal);
     click(&mut ui, Role::Button, "Cancel");
-    click(&mut ui, Role::Tab, "NR model");
-    click(&mut ui, Role::Button, "Use the default search");
+    click(&mut ui, Role::Tab, "Components");
+    click(&mut ui, Role::Button, "Use the default search…");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: {model_value} -> auto"));
-    click(&mut ui, Role::Button, "Write these changes");
+    click(&mut ui, Role::Button, "Apply");
     wait(&mut ui, "restore default model", |ui| {
         label(ui, SAVED) && ini_value(&game, "ModelFile") == "auto"
     });
     review_stage(&mut ui, &game, "1", "auto");
     assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), installed_ini);
     assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
-    click(&mut ui, Role::Tab, "Install");
+    click(&mut ui, Role::Tab, "Overview");
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview uninstall");
     wait(&mut ui, "uninstall plan", |ui| {
@@ -339,7 +362,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
         ui.query_by_role_and_label(Role::Button, "Install").is_some()
     });
     let before_stale = snapshot(&game);
-    click(&mut ui, Role::CheckBox, "Turn Neural Rendering on");
+    click(&mut ui, Role::CheckBox, "Turn Neural Rendering (NR) on");
     wait_label(&mut ui, "changed after this preview: preview again.");
     assert!(ui.query_by_role_and_label(Role::Button, "Install").is_none());
     assert_eq!(snapshot(&game), before_stale);

@@ -44,6 +44,8 @@ pub(crate) mod watcher;
 pub(crate) mod lsfg_ui;
 
 mod dlss_ui;
+#[cfg(test)]
+mod main_action_tests;
 pub(crate) mod payload_ui;
 
 pub(crate) mod reshade_ui;

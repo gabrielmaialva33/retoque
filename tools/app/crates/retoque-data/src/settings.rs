@@ -125,10 +125,10 @@ pub fn all() -> &'static [Setting] {
             "DlssNr",
             "Enabled",
             AUTO_BOOL,
-            "Neural Rendering",
-            "Renderização neural",
-            "Needs a user-supplied NR model. Auto is off.",
-            "Requer um modelo NR fornecido pelo usuário. Automático deixa desligado."
+            "Neural Rendering (NR)",
+            "Renderização neural (NR)",
+            "Needs an NR model (nvngx_dlssnr.dll) that you supply. Automatic: off.",
+            "Precisa de um modelo NR (nvngx_dlssnr.dll) fornecido por você. No automático: desligado."
         ),
         setting!(
             "DlssNr",
@@ -136,8 +136,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "0", "1"]),
             "NR stage",
             "Etapa do NR",
-            "Before upscaling is experimental. Vulkan needs a restart; an unavailable stage does not switch automatically.",
-            "Antes da ampliação é experimental. Vulkan exige reinício; uma etapa indisponível não muda automaticamente."
+            "Before the upscaler is experimental. On Vulkan a change needs a game restart. If the chosen stage is not available, NR does not switch by itself.",
+            "Antes da ampliação é experimental. No Vulkan a mudança exige reiniciar o jogo. Se a etapa escolhida não estiver disponível, o NR não troca sozinho."
         ),
         setting!(
             "DlssNr",
@@ -145,8 +145,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Float { min: 0.25, max: 2.0 },
             "Model scale",
             "Escala do modelo",
-            "Auto selects by GPU; 0.25–2.0 is accepted. Above 1 supersamples; routes without real motion clamp to 1.",
-            "Auto escolhe pela GPU; aceita de 0,25 a 2,0. Acima de 1 amplia a resolução; rotas sem movimento real limitam a 1."
+            "Automatic: chosen for your graphics card. From 0.25 to 2.0; above 1 the model works at a higher resolution. Routes without real motion stay at 1 or below.",
+            "No automático: escolhida pela sua placa de vídeo. De 0,25 a 2,0; acima de 1 o modelo trabalha numa resolução maior. Rotas sem movimento real ficam em 1 ou menos."
         ),
         setting!(
             "DlssNr",
@@ -154,8 +154,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Text,
             "Model file",
             "Arquivo do modelo",
-            "Auto searches for nvngx_dlssnr.dll. A missing named file disables NR. Restart required; incompatible with UseProxy.",
-            "Auto procura nvngx_dlssnr.dll. Arquivo indicado ausente desativa NR. Exige reinício; incompatível com UseProxy."
+            "Automatic: looks for nvngx_dlssnr.dll beside the game. If the chosen file is missing, NR turns off. Restart the game after changing it.",
+            "No automático: procura o nvngx_dlssnr.dll junto do jogo. Se o arquivo escolhido não existir, o NR desliga. Reinicie o jogo depois de mudar."
         ),
         setting!(
             "DlssNr",
@@ -163,8 +163,8 @@ pub fn all() -> &'static [Setting] {
             AUTO_BOOL,
             "Game profiles",
             "Perfis de jogos",
-            "Apply known game settings at startup only where the INI says auto.",
-            "Aplica ajustes conhecidos ao iniciar, apenas onde o INI contém auto."
+            "Applies settings known to work for this game when it starts, only where a setting is left on Automatic.",
+            "Aplica, ao abrir o jogo, ajustes que funcionam nele, só onde o ajuste está no automático."
         ),
         setting!(
             "DlssNr",
@@ -172,8 +172,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "0", "1", "2"]),
             "NR placement",
             "Posição do NR",
-            "Choose where NR receives the picture. Native Vulkan ignores this. Some routes need a restart.",
-            "Escolha onde NR recebe a imagem. Vulkan nativo ignora este ajuste. Algumas rotas exigem reinício."
+            "Where NR receives the picture. Native Vulkan games ignore this. Some choices need a game restart.",
+            "Onde o NR recebe a imagem. Jogos em Vulkan nativo ignoram este ajuste. Algumas opções exigem reiniciar o jogo."
         ),
         setting!(
             "DlssNr",
@@ -181,8 +181,8 @@ pub fn all() -> &'static [Setting] {
             AUTO_BOOL,
             "Apply model",
             "Aplicar modelo",
-            "Off shows the clean picture while NR keeps running.",
-            "Desativado mostra a imagem original enquanto NR continua executando."
+            "Off shows the original picture while NR keeps running, to compare.",
+            "Desligado mostra a imagem original enquanto o NR continua rodando, para comparar."
         ),
         setting!(
             "DlssNr",
@@ -190,8 +190,8 @@ pub fn all() -> &'static [Setting] {
             AUTO_BOOL,
             "Highlight recovery",
             "Recuperar altas luzes",
-            "Preserve bright colors at some cost to model detail. Linear HDR only.",
-            "Preserva cores brilhantes com alguma perda de detalhe do modelo. Apenas HDR linear."
+            "Keeps bright colors, at some cost to the model's detail. Only for games with HDR output.",
+            "Preserva cores brilhantes, com alguma perda de detalhe do modelo. Só em jogos com saída HDR."
         ),
         setting!(
             "DlssNr",
@@ -199,8 +199,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "0", "1", "2", "3"]),
             "Model enlargement",
             "Ampliação do modelo",
-            "Enlarges the model image below full resolution. Residual + DLSS is available only on supported routes.",
-            "Amplia a imagem do modelo abaixo da resolução total. Residual + DLSS depende de uma rota compatível."
+            "How the model's picture is enlarged when it works below full resolution. Residual + DLSS works only on some routes.",
+            "Como a imagem do modelo é ampliada quando ele trabalha abaixo da resolução total. Residual + DLSS só funciona em algumas rotas."
         ),
         setting!(
             "DlssNr",
@@ -208,8 +208,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "0", "1", "2"]),
             "Compare pictures",
             "Comparar imagens",
-            "Compare the original and edited pictures in the game.",
-            "Compare a imagem original e a editada dentro do jogo."
+            "Shows the original and the edited picture together in the game.",
+            "Mostra a imagem original e a editada juntas, dentro do jogo."
         ),
         setting!(
             "DlssNr",
@@ -217,8 +217,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Float { min: 0.0, max: 1.0 },
             "Wipe position",
             "Posição da divisão",
-            "Fraction of picture width; only acts with Compare=2. Auto is 0.5.",
-            "Fração da largura da imagem; só atua com Compare=2. Auto é 0.5."
+            "Where the divider sits (0.5 = middle). Applies to the Wipe mode. Automatic: middle.",
+            "Onde fica a divisória na tela (0,5 = meio). Vale para o modo Divisão móvel. No automático: no meio."
         ),
         setting!(
             "DlssNr",
@@ -226,8 +226,8 @@ pub fn all() -> &'static [Setting] {
             AUTO_BOOL,
             "Swap comparison sides",
             "Trocar lados da comparação",
-            "Swap clean and edited pictures while comparing.",
-            "Troca a imagem original e a editada durante a comparação."
+            "Swaps the sides of the original and the edited picture while comparing.",
+            "Troca de lado a imagem original e a editada durante a comparação."
         ),
         setting!(
             "Upscalers",
@@ -237,8 +237,8 @@ pub fn all() -> &'static [Setting] {
             ]),
             "D3D11 upscaler",
             "Ampliador D3D11",
-            "The _12 options use the D3D12 bridge; dlss_12 can carry NR. Native XeSS requires Arc.",
-            "Opções _12 usam a ponte D3D12; dlss_12 pode executar NR. XeSS nativo requer Arc."
+            "Options marked \"D3D12 bridge\" run through D3D12; NVIDIA DLSS (D3D12 bridge) can also run NR. Intel XeSS without the bridge needs an Intel Arc card.",
+            "Opções com \"ponte D3D12\" rodam pelo D3D12; NVIDIA DLSS (ponte D3D12) também pode rodar o NR. Intel XeSS sem a ponte precisa de uma placa Intel Arc."
         ),
         setting!(
             "Upscalers",
@@ -246,8 +246,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "xess", "fsr21", "fsr22", "ffx", "dlss"]),
             "D3D12 upscaler",
             "Ampliador D3D12",
-            "Auto selects a backend for the GPU. Custom folder names remain editable in the INI.",
-            "Auto escolhe um backend para a GPU. Nomes de pastas personalizadas podem ser editados no INI."
+            "Automatic: chosen for your graphics card.",
+            "No automático: escolhido pela sua placa de vídeo."
         ),
         setting!(
             "Upscalers",
@@ -255,8 +255,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "fsr21", "fsr22", "ffx", "xess", "fsr21_12", "ffx_12", "dlss"]),
             "Vulkan upscaler",
             "Ampliador Vulkan",
-            "The _12 options use the D3D12 bridge. Custom folder names remain editable in the INI.",
-            "Opções _12 usam a ponte D3D12. Nomes de pastas personalizadas podem ser editados no INI."
+            "Options marked \"D3D12 bridge\" run through D3D12. Automatic: chosen for your graphics card.",
+            "Opções com \"ponte D3D12\" rodam pelo D3D12. No automático: escolhido pela sua placa de vídeo."
         ),
         setting!(
             "FrameGen",
@@ -264,8 +264,8 @@ pub fn all() -> &'static [Setting] {
             AUTO_BOOL,
             "Frame generation",
             "Geração de quadros",
-            "Auto is off, except DLSSG input follows the game's setting.",
-            "Auto desativa, exceto quando a entrada DLSSG acompanha o ajuste do jogo."
+            "Automatic: off, except when the game's own DLSS frame generation is the source; then it follows the game's setting.",
+            "No automático: desligada, exceto quando a fonte é a geração de quadros DLSS do próprio jogo; aí segue o ajuste do jogo."
         ),
         setting!(
             "FrameGen",
@@ -283,8 +283,8 @@ pub fn all() -> &'static [Setting] {
             ]),
             "FG input",
             "Entrada da geração",
-            "Choose the game's available source. Synthesized input is experimental D3D11/D3D12.",
-            "Escolha a fonte disponível no jogo. Entrada synthesized é experimental em D3D11/D3D12."
+            "Which of the game's frame generation sources to use. Synthesized is experimental, D3D11 and D3D12 only.",
+            "Qual fonte de geração de quadros do jogo usar. Sintetizada é experimental, só em D3D11 e D3D12."
         ),
         setting!(
             "FrameGen",
@@ -292,8 +292,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "nofg", "fsrfg", "xefg", "dlssg"]),
             "FG output",
             "Saída da geração",
-            "Requires the chosen provider's libraries and supported hardware.",
-            "Requer as bibliotecas do provedor escolhido e hardware compatível."
+            "Needs the chosen provider's files and a graphics card that supports it.",
+            "Precisa dos arquivos do provedor escolhido e de uma placa de vídeo compatível."
         ),
         setting!(
             "FrameGen",
@@ -301,17 +301,17 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "None", "Nukems", "Arturs", "FFX", "Combo"]),
             "DLSSG replacement",
             "Substituto DLSSG",
-            "Only acts with nvngxfg input or dlssg output. Requires the replacement libraries.",
-            "Só atua com entrada nvngxfg ou saída dlssg. Requer bibliotecas do substituto."
+            "Only used with the NVIDIA NGX source or DLSS frame generation output. Needs the replacement's files.",
+            "Só é usado com a fonte NVIDIA NGX ou a saída de geração de quadros DLSS. Precisa dos arquivos do substituto."
         ),
         setting!(
             "LSFG",
             "Enabled",
             AUTO_BOOL,
-            "LSFG (study build)",
-            "LSFG (build de estudo)",
-            "Requires fsrfg output and user-owned shaders. Unsupported frames fall back to FFX.",
-            "Requer saída fsrfg e shaders do usuário. Quadros não suportados usam FFX."
+            "LSFG (experimental)",
+            "LSFG (experimental)",
+            "Needs FSR frame generation output and your own Lossless Scaling shaders. Frames LSFG cannot handle fall back to FidelityFX.",
+            "Precisa da saída de geração de quadros FSR e dos shaders do seu Lossless Scaling. Quadros que o LSFG não suporta usam o FidelityFX."
         ),
         setting!(
             "LSFG",
@@ -319,8 +319,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Float { min: 0.25, max: 1.0 },
             "LSFG flow scale",
             "Escala do fluxo LSFG",
-            "Lower motion-pyramid resolution costs less. Auto is 1.",
-            "Menor resolução do fluxo custa menos. Auto é 1."
+            "Lower values cost less and track motion less finely. Automatic: 1.",
+            "Valores menores custam menos e acompanham o movimento com menos detalhe. No automático: 1."
         ),
         setting!(
             "LSFG",
@@ -328,8 +328,8 @@ pub fn all() -> &'static [Setting] {
             AUTO_BOOL,
             "LSFG performance mode",
             "Modo de desempenho LSFG",
-            "Fewer feature channels: cheaper, softer motion.",
-            "Menos canais: menor custo, movimento menos definido."
+            "Cheaper, with softer motion.",
+            "Custa menos, com movimento menos definido."
         ),
         setting!(
             "LSFG",
@@ -337,8 +337,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Text,
             "LSFG shader folder",
             "Pasta de shaders LSFG",
-            "Precompiled shaders from your own copy; none are shipped. Auto leaves this unset.",
-            "Shaders compilados da sua própria cópia; nenhum é distribuído. Auto deixa sem pasta."
+            "Shaders prepared from your own copy of Lossless Scaling; none are shipped. Automatic: none set.",
+            "Shaders preparados a partir da sua cópia do Lossless Scaling; nenhum é distribuído. No automático: nenhuma pasta."
         ),
         setting!(
             "LSFG",
@@ -346,8 +346,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Text,
             "Lossless Scaling location",
             "Local do Lossless Scaling",
-            "lsfg-vk.dll, Lossless.dll or its folder. Auto searches Steam and Wine paths.",
-            "lsfg-vk.dll, Lossless.dll ou sua pasta. Auto procura nas pastas Steam e Wine."
+            "lsfg-vk.dll, Lossless.dll or its folder. Automatic: searched in your Steam and Wine folders.",
+            "lsfg-vk.dll, Lossless.dll ou a pasta dele. No automático: procurado nas pastas da Steam e do Wine."
         ),
         setting!(
             "LSFG",
@@ -355,8 +355,8 @@ pub fn all() -> &'static [Setting] {
             Kind::Choice(&["auto", "2", "3", "4"]),
             "LSFG multiplier",
             "Multiplicador LSFG",
-            "Frames shown per real frame. Switching from 2 to 3/4 needs a restart.",
-            "Quadros exibidos por quadro real. Mudar de 2 para 3/4 exige reinício."
+            "Frames shown for each real frame. Going from 2 to 3 or 4 needs a game restart.",
+            "Quadros exibidos para cada quadro real. Passar de 2 para 3 ou 4 exige reiniciar o jogo."
         ),
     ]
 }

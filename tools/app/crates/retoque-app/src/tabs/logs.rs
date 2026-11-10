@@ -5,7 +5,7 @@ impl RetoqueApp {
         let Some(target) = self.view.target.clone() else { return };
         ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(!self.busy(), theme::primary(self.tr("log.bundle")))
+                .add_enabled(!self.busy(), egui::Button::new(self.tr("log.bundle")))
                 .clicked()
             {
                 commands.send(AppCommand::Bundle);
@@ -43,13 +43,11 @@ impl RetoqueApp {
                     });
                 }
             });
+            ui.add_space(theme::CARD_GAP);
         }
         let (files, result) = match &self.view.logs {
             None => {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(self.tr("log.loading"));
-                });
+                widgets::busy(ui, self.lang, self.tr("log.loading"), None, None);
                 return;
             }
             Some((files, result)) => (files, result),
@@ -93,15 +91,11 @@ impl RetoqueApp {
                         commands.send(AppCommand::ReadLogs(Some(selected)));
                     }
                 });
-                ui.add_space(12.0);
+                ui.add_space(theme::CARD_GAP);
                 let errors = s.error_count.max(s.errors.len());
                 widgets::card(ui, |ui| {
                     widgets::card_title(ui, &log_verdict(self.lang, s));
-                    ui.label(
-                        RichText::new(self.tr("log.evidence_note"))
-                            .size(13.0)
-                            .color(theme::MUTED),
-                    );
+                    ui.label(RichText::new(self.tr("log.evidence_note")).small().color(theme::MUTED));
                     if errors > 0 {
                         ui.add_space(8.0);
                         ui.colored_label(theme::WARN, self.tr("log.hint_errors"));
@@ -110,7 +104,7 @@ impl RetoqueApp {
                         ui.label(self.tr("log.hint_inactive"));
                     }
                 });
-                ui.add_space(12.0);
+                ui.add_space(theme::CARD_GAP);
                 ui.horizontal_wrapped(|ui| {
                     widgets::stat_tile(
                         ui,
@@ -148,53 +142,50 @@ impl RetoqueApp {
                 if s.nr_gpu_ms.is_none() {
                     ui.add_space(12.0);
                     ui.label(RichText::new(format!("{} · {}", self.tr("log.gpu"), self.tr("log.no_sample"))).strong());
-                    ui.label(RichText::new(self.tr("log.hint_timing")).size(13.0).color(theme::MUTED));
+                    ui.label(RichText::new(self.tr("log.hint_timing")).small().color(theme::MUTED));
                 }
-                ui.add_space(16.0);
+                ui.add_space(theme::CARD_GAP);
                 if !s.errors.is_empty() {
                     widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
-                        egui::CollapsingHeader::new(format!("{} ({errors})", self.tr("log.errors")))
-                            .id_salt("session_errors")
-                            .show(ui, |ui| {
-                                let mut groups = BTreeMap::<&str, usize>::new();
-                                for line in &s.errors {
-                                    *groups.entry(log_message(line)).or_default() += 1;
+                        let title = format!("{} ({errors})", self.tr("log.errors"));
+                        widgets::collapsible(ui, "session_errors", &title, widgets::Fold::Section, |ui| {
+                            let mut groups = BTreeMap::<&str, usize>::new();
+                            for line in &s.errors {
+                                *groups.entry(log_message(line)).or_default() += 1;
+                            }
+                            for (line, count) in groups {
+                                ui.add(
+                                    egui::Label::new(RichText::new(line).monospace().small().color(theme::BAD)).wrap(),
+                                );
+                                if count > 1 {
+                                    ui.label(format!("{count} {}", self.tr("log.repeat")));
                                 }
-                                for (line, count) in groups {
-                                    ui.add(
-                                        egui::Label::new(RichText::new(line).monospace().small().color(theme::BAD))
-                                            .wrap(),
-                                    );
-                                    if count > 1 {
-                                        ui.label(format!("{count} {}", self.tr("log.repeat")));
-                                    }
-                                }
-                                if errors > s.errors.len() {
-                                    ui.label(format!("{} {} / {errors}", self.tr("log.showing"), s.errors.len()));
-                                }
-                            });
-                    });
-                    ui.add_space(12.0);
-                }
-                widgets::card(ui, |ui| {
-                    egui::CollapsingHeader::new(self.tr("log.details"))
-                        .id_salt("session_details")
-                        .show(ui, |ui| {
-                            ui.label(s.nr_route.as_deref().unwrap_or(self.tr("log.route_unknown")));
-                            ui.add_space(8.0);
-                            ui.label(RichText::new(self.tr("log.lines")).strong());
-                            egui::ScrollArea::vertical()
-                                .id_salt("log_lines")
-                                .max_height(260.0)
-                                .show(ui, |ui| {
-                                    for line in &s.highlights {
-                                        ui.add(egui::Label::new(RichText::new(line).monospace().small()).wrap());
-                                    }
-                                });
-                            if s.highlights_omitted > 0 || s.truncated_lines > 0 {
-                                ui.label(RichText::new(self.tr("log.limited")).small().color(theme::MUTED));
+                            }
+                            if errors > s.errors.len() {
+                                ui.label(format!("{} {} / {errors}", self.tr("log.showing"), s.errors.len()));
                             }
                         });
+                    });
+                    ui.add_space(theme::CARD_GAP);
+                }
+                widgets::card(ui, |ui| {
+                    let title = self.tr("log.details");
+                    widgets::collapsible(ui, "session_details", title, widgets::Fold::Details, |ui| {
+                        ui.label(s.nr_route.as_deref().unwrap_or(self.tr("log.route_unknown")));
+                        ui.add_space(8.0);
+                        ui.label(RichText::new(self.tr("log.lines")).strong());
+                        egui::ScrollArea::vertical()
+                            .id_salt("log_lines")
+                            .max_height(260.0)
+                            .show(ui, |ui| {
+                                for line in &s.highlights {
+                                    ui.add(egui::Label::new(RichText::new(line).monospace().small()).wrap());
+                                }
+                            });
+                        if s.highlights_omitted > 0 || s.truncated_lines > 0 {
+                            ui.label(RichText::new(self.tr("log.limited")).small().color(theme::MUTED));
+                        }
+                    });
                 });
             }
         }

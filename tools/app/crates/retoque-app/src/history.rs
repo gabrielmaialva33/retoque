@@ -139,7 +139,7 @@ pub(crate) fn undo_plan(root: &Path, target: &Path, lang: Lang) -> Result<Plan, 
     let entry = history
         .entries
         .last()
-        .ok_or_else(|| AppError::from(t(lang, "undo.empty")))?;
+        .ok_or_else(|| AppError::info(t(lang, "undo.empty")))?;
     let edits = entry
         .changes
         .iter()

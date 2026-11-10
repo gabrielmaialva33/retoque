@@ -16,6 +16,8 @@ pub(crate) struct State {
     request: u64,
     running: bool,
     download_consent: bool,
+    /// The compiler download is being asked for (consent dialog open).
+    asking: bool,
     cancel: Arc<AtomicBool>,
     progress: Option<prepare::Progress>,
     result: Option<prepare::Result<prepare::PreparedCache>>,
@@ -23,7 +25,6 @@ pub(crate) struct State {
     pub(crate) then_optimize: Option<(PathBuf, u64)>,
 }
 impl State {
-    #[cfg(test)]
     pub(crate) fn running(&self) -> bool {
         self.running
     }
@@ -154,15 +155,21 @@ impl RetoqueApp {
     pub(crate) fn autotune_readiness(&mut self, ui: &mut egui::Ui) {
         self.lsfg_ensure_started();
         if self.lsfg.running {
-            ui.spinner();
             let key = if self.lsfg.progress == Some(prepare::Progress::Downloading) {
                 "lsfg.downloading"
             } else {
                 "lsfg.preparing"
             };
-            ui.label(self.tr(key));
-            if let Some(prepare::Progress::Compiling { done, total }) = self.lsfg.progress {
-                ui.add(egui::ProgressBar::new(done as f32 / total as f32).text(format!("{done} / {total}")));
+            match self.lsfg.progress {
+                // Shaders, not bytes: the same bar and wording as `widgets::busy`, counted.
+                Some(prepare::Progress::Compiling { done, total }) if total > 0 => {
+                    ui.add(egui::ProgressBar::new(done as f32 / total as f32).text(format!(
+                        "{} · {done} {} {total}",
+                        self.tr(key),
+                        self.tr("progress.of")
+                    )));
+                }
+                _ => widgets::busy(ui, self.lang, self.tr(key), None, None),
             }
             if ui.button(self.tr("lsfg.cancel")).clicked() {
                 self.lsfg.cancel.store(true, Ordering::Relaxed);
@@ -171,9 +178,13 @@ impl RetoqueApp {
             match error {
                 prepare::Error::MissingCompiler => {
                     ui.label(self.tr("lsfg.found"));
-                    ui.add(egui::Label::new(self.tr("lsfg.download_prompt")).wrap());
+                    ui.add(egui::Label::new(self.tr("lsfg.need_compiler")).wrap());
                     if ui.button(self.tr("lsfg.download_confirm")).clicked() {
-                        self.lsfg_start(true);
+                        self.lsfg.asking = true;
+                    }
+                    if self.lsfg.asking {
+                        let ctx = ui.ctx().clone();
+                        self.lsfg_consent(&ctx);
                     }
                 }
                 prepare::Error::Cancelled => {
@@ -183,9 +194,24 @@ impl RetoqueApp {
                     }
                 }
                 prepare::Error::Failed(reason) => {
-                    ui.colored_label(theme::WARN, self.tr("lsfg.failed"));
-                    ui.add(egui::Label::new(reason).wrap());
-                    if ui.button(self.tr("lsfg.retry")).clicked() {
+                    // The worker's reason is English and technical: kept under the details fold.
+                    let reason = reason.clone();
+                    crate::applog::shown_error(&reason);
+                    let mut retry = false;
+                    widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(self.tr("lsfg.failed")).color(theme::TEXT_STRONG)).wrap(),
+                        );
+                        retry = ui.button(self.tr("lsfg.retry")).clicked();
+                        widgets::collapsible(
+                            ui,
+                            "lsfg-failure-details",
+                            self.tr("technical.details"),
+                            widgets::Fold::Details,
+                            |ui| ui.add(egui::Label::new(RichText::new(&reason).small().monospace()).wrap()),
+                        );
+                    });
+                    if retry {
                         self.lsfg_start(false);
                     }
                 }
@@ -209,6 +235,40 @@ impl RetoqueApp {
                 self.autotune_refresh(target);
             }
             self.lsfg_ensure_started();
+        }
+    }
+    /// Asks before downloading the shader compiler; preparation starts only on "Download".
+    fn lsfg_consent(&mut self, ctx: &egui::Context) {
+        use retoque_data::lsfg_prepare::download;
+        let lang = self.lang;
+        let size = t(lang, "size.up_to").replace("{size}", &size_text(lang, download::MAX_DOWNLOAD));
+        let confirm = format!("{} ({size})", t(lang, "download"));
+        let details = |ui: &mut egui::Ui| {
+            ui.add(egui::Label::new(RichText::new(t(lang, "lsfg.download_details")).small()).wrap());
+            let (url, sha) = if cfg!(windows) {
+                (download::WINDOWS_URL, download::WINDOWS_SHA256)
+            } else {
+                (download::LINUX_URL, download::LINUX_SHA256)
+            };
+            ui.add(egui::Label::new(RichText::new(url).small().monospace()).wrap());
+            ui.add(egui::Label::new(RichText::new(format!("SHA-256 {sha}")).small().monospace()).wrap());
+        };
+        match widgets::consent_modal(
+            ctx,
+            lang,
+            "lsfg-compiler",
+            t(lang, "lsfg.consent_title"),
+            &[t(lang, "lsfg.download_prompt")],
+            &confirm,
+            t(lang, "cancel"),
+            Some(&details),
+        ) {
+            Some(widgets::Answer::Confirm) => {
+                self.lsfg.asking = false;
+                self.lsfg_start(true);
+            }
+            Some(widgets::Answer::Cancel) => self.lsfg.asking = false,
+            None => {}
         }
     }
     pub(crate) fn autotune_lsfg_edits(&self, multiplier: u8, facts: &GameFacts) -> Vec<Edit> {
@@ -236,7 +296,6 @@ impl RetoqueApp {
         edits
     }
     pub(crate) fn lsfg_card(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(12.0);
         widgets::card(ui, |ui| {
             self.lsfg_ensure_started();
             let facts = self.view.intelligence.facts.clone();
@@ -289,6 +348,7 @@ impl RetoqueApp {
             }
             self.autotune_readiness(ui);
         });
+        ui.add_space(theme::CARD_GAP);
     }
 }
 
@@ -306,8 +366,21 @@ mod tests {
             app.lsfg.result = Some(Err(prepare::Error::MissingCompiler));
             let mut harness = Harness::new_ui_state(|ui, app| app.autotune_readiness(ui), app);
             harness.run();
-            harness.get_by_label(t(lang, "lsfg.download_confirm"));
+            assert!(harness.query_by_label(t(lang, "lsfg.download_prompt")).is_none());
+            harness
+                .get_by_role_and_label(egui::Role::Button, t(lang, "lsfg.download_confirm"))
+                .click();
+            harness.run_steps(3);
             harness.get_by_label(t(lang, "lsfg.download_prompt"));
+            assert!(!harness.state().lsfg.running);
+            assert!(!harness.state().jobs.busy());
+            // "Cancel" starts nothing; the button stays to ask again.
+            harness
+                .get_by_role_and_label(egui::Role::Button, t(lang, "cancel"))
+                .click();
+            harness.run_steps(3);
+            assert!(harness.query_by_label(t(lang, "lsfg.download_prompt")).is_none());
+            harness.get_by_label(t(lang, "lsfg.download_confirm"));
             assert!(!harness.state().lsfg.running);
             assert!(!harness.state().jobs.busy());
         }

@@ -48,24 +48,39 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "lsfg.failed",
-        "Shader preparation failed:",
-        "Falha ao preparar shaders:",
+        "The LSFG shaders could not be prepared. Try again; if it keeps failing, make a diagnostic file.",
+        "Não foi possível preparar os shaders do LSFG. Tente de novo; se continuar falhando, gere um arquivo de diagnóstico.",
     ),
     ("lsfg.retry", "Retry preparation", "Tentar preparar novamente"),
     (
         "lsfg.download_prompt",
-        "Preparing shaders requires Microsoft DXC v1.8.2505.1 (up to 64 MiB). Download it from Microsoft’s official GitHub release into the app data folder? The download is checked with SHA-256.",
-        "Preparar shaders exige Microsoft DXC v1.8.2505.1 (até 64 MiB). Baixar da versão oficial da Microsoft no GitHub para a pasta de dados do app? O download é verificado com SHA-256.",
+        "Preparing the LSFG shaders needs Microsoft's shader compiler. Retoque downloads it from Microsoft's official release into the app's data, checks it and prepares the shaders. Your game does not change.",
+        "Preparar os shaders do LSFG exige o compilador de shaders da Microsoft. O Retoque o baixa da versão oficial da Microsoft para os dados do app, o verifica e prepara os shaders. Seu jogo não muda.",
+    ),
+    (
+        "lsfg.need_compiler",
+        "The shaders need Microsoft's shader compiler, which is not downloaded yet.",
+        "Os shaders precisam do compilador de shaders da Microsoft, que ainda não foi baixado.",
+    ),
+    (
+        "lsfg.consent_title",
+        "Download the shader compiler",
+        "Baixar o compilador de shaders",
+    ),
+    (
+        "lsfg.download_details",
+        "Microsoft DXC v1.8.2505.1 from github.com/microsoft/DirectXShaderCompiler (release-assets.githubusercontent.com), checked with a fixed SHA-256.",
+        "Microsoft DXC v1.8.2505.1 de github.com/microsoft/DirectXShaderCompiler (release-assets.githubusercontent.com), conferido com um SHA-256 fixo.",
     ),
     (
         "lsfg.download_confirm",
-        "Download compiler and prepare shaders",
-        "Baixar compilador e preparar shaders",
+        "Download the compiler…",
+        "Baixar o compilador…",
     ),
     (
         "sm86.error.0",
         "ambiguous sm86 release asset",
-        "Mais de um arquivo corresponde à release sm86.",
+        "Mais de um arquivo corresponde à versão sm86.",
     ),
     (
         "sm86.error.1",
@@ -90,22 +105,22 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.5",
         "documented sm86 release asset missing",
-        "O arquivo documentado da release sm86 não foi encontrado.",
+        "O arquivo documentado da versão sm86 não foi encontrado.",
     ),
     (
         "sm86.error.6",
         "incomplete sm86 release",
-        "Faltam arquivos obrigatórios da release sm86.",
+        "Faltam arquivos obrigatórios da versão sm86.",
     ),
     (
         "sm86.error.7",
         "invalid official sm86 release metadata",
-        "Os metadados da release oficial sm86 são inválidos.",
+        "Os metadados da versão oficial sm86 são inválidos.",
     ),
     (
         "sm86.error.8",
         "invalid release record",
-        "O registro local da release é inválido.",
+        "O registro local da versão é inválido.",
     ),
     (
         "sm86.error.9",
@@ -125,12 +140,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.12",
         "missing release redirect",
-        "O redirecionamento da release não informa o destino.",
+        "O redirecionamento da versão não informa o destino.",
     ),
     (
         "sm86.error.13",
         "non-official sm86 URL",
-        "O endereço não pertence à release oficial sm86.",
+        "O endereço não pertence à versão oficial sm86.",
     ),
     (
         "sm86.error.14",
@@ -140,12 +155,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.15",
         "refused sm86 release redirect",
-        "O destino do redirecionamento da release sm86 não é permitido.",
+        "O destino do redirecionamento da versão sm86 não é permitido.",
     ),
     (
         "sm86.error.16",
         "release API redirect refused",
-        "A API de releases tentou um redirecionamento não permitido.",
+        "A API de versões tentou um redirecionamento não permitido.",
     ),
     (
         "sm86.error.17",
@@ -160,12 +175,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.19",
         "release metadata exceeds size limit",
-        "Os metadados da release excedem o limite de tamanho.",
+        "Os metadados da versão excedem o limite de tamanho.",
     ),
     (
         "sm86.error.20",
         "release record exceeds limit",
-        "O registro local da release excede o limite de tamanho.",
+        "O registro local da versão excede o limite de tamanho.",
     ),
     (
         "sm86.error.21",
@@ -180,7 +195,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.23",
         "sm86 HTTPS request failed",
-        "Não foi possível consultar ou baixar a release sm86 por HTTPS.",
+        "Não foi possível consultar ou baixar a versão sm86 por HTTPS.",
     ),
     (
         "sm86.error.24",
@@ -200,7 +215,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.27",
         "unexpected release HTTP status",
-        "O servidor da release retornou um status HTTP inesperado.",
+        "O servidor da versão retornou um status HTTP inesperado.",
     ),
     (
         "sm86.error.28",
@@ -215,12 +230,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.error.30",
         "unsupported sm86 release",
-        "Esta release sm86 não é suportada.",
+        "Esta versão sm86 não é suportada.",
     ),
     (
         "note.sm86_upgrade",
         "Upgrade sm86 0.3.x: back up and remove the old proxy and INI before copying the complete 0.4.x runtime.",
-        "Atualizar sm86 0.3.x: guardar backup e remover o proxy e o INI antigos antes de copiar o runtime 0.4.x completo.",
+        "Atualizar sm86 0.3.x: guardar backup e remover o arquivo de carregamento e o INI antigos antes de copiar o runtime 0.4.x completo.",
     ),
     (
         "note.sm86_install",
@@ -229,18 +244,33 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "sm86.consent_title",
-        "Get official frame generation components",
-        "Obter componentes oficiais de geração de quadros",
+        "Download the official frame generation components",
+        "Baixar os componentes oficiais de geração de quadros",
+    ),
+    (
+        "sm86.check_title",
+        "Check for a newer version",
+        "Verificar se há versão mais nova",
     ),
     (
         "sm86.check_consent",
-        "Contact the official GitHub release API to compare the latest version with your local catalog?",
-        "Consultar a API oficial de releases do GitHub para comparar a versão mais recente com seu catálogo local?",
+        "Ask GitHub for the latest version of the frame generation components and compare it with the one you have?",
+        "Perguntar ao GitHub qual é a versão mais recente dos componentes de geração de quadros e comparar com a que você tem?",
+    ),
+    (
+        "sm86.check_details",
+        "Host: api.github.com (sdli1995/dlssg_for_sm86, latest release). Nothing is downloaded.",
+        "Host: api.github.com (sdli1995/dlssg_for_sm86, versão mais recente). Nada é baixado.",
     ),
     (
         "sm86.download_consent",
-        "Download dlssg_for_sm86 from its official GitHub release and verify its hash? Files stay in app data until you confirm a game review. Up to 256 MiB download and 1 GiB unpacked. No telemetry.",
-        "Baixar dlssg_for_sm86 da release oficial no GitHub e verificar seu hash? Os arquivos ficam nos dados do app até você confirmar a revisão do jogo. Até 256 MiB de download e 1 GiB descompactado. Sem telemetria.",
+        "Retoque downloads dlssg_for_sm86 from its official release and checks it. The files stay in the app until you confirm a game's review. No telemetry.",
+        "O Retoque baixa o dlssg_for_sm86 da versão oficial e o verifica. Os arquivos ficam no app até você confirmar a revisão de um jogo. Sem telemetria.",
+    ),
+    (
+        "sm86.download_details",
+        "Hosts: api.github.com and github.com (sdli1995/dlssg_for_sm86). Checked against the release's SHA-256. At most 256 MB to download and 1 GB unpacked.",
+        "Hosts: api.github.com e github.com (sdli1995/dlssg_for_sm86). Conferido com o SHA-256 da versão. No máximo 256 MB de download e 1 GB descompactado.",
     ),
     (
         "sm86.kit_available",
@@ -252,14 +282,13 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Third-party runtimes and kernels retain their own terms; the complete package is not MIT. License texts and notices are preserved in the app cache.",
         "Runtimes e kernels de terceiros mantêm seus próprios termos; o pacote completo não é MIT. Licenças e avisos são preservados no cache do app.",
     ),
-    ("sm86.confirm", "Confirm", "Confirmar"),
-    ("sm86.later", "Later", "Agora não"),
+    ("sm86.import", "Import", "Importar"),
     (
         "sm86.download_help",
-        "Get the official release once and reuse it across games. Game installation always has a separate review.",
-        "Obtenha a release oficial uma vez e reutilize-a nos jogos. A instalação no jogo sempre tem uma revisão separada.",
+        "Download the official release once and reuse it across games. Game installation always has a separate review.",
+        "Baixe a versão oficial uma vez e use-a em todos os jogos. A instalação no jogo sempre tem uma revisão separada.",
     ),
-    ("sm86.download", "Get official release…", "Obter release oficial…"),
+    ("sm86.download", "Download official release…", "Baixar versão oficial…"),
     ("sm86.check", "Check for update…", "Verificar atualização…"),
     (
         "sm86.progress",
@@ -269,19 +298,19 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sm86.current",
         "This release is available in your catalog.",
-        "Esta release está disponível no seu catálogo.",
+        "Esta versão está disponível no seu catálogo.",
     ),
     (
         "sm86.new",
         "This release is not yet available in your catalog.",
-        "Esta release ainda não está disponível no seu catálogo.",
+        "Esta versão ainda não está disponível no seu catálogo.",
     ),
     (
         "sm86.ignored",
         "Archive entries ignored (not extracted)",
         "Entradas do arquivo ignoradas (não extraídas)",
     ),
-    ("optimize.title", "Optimize automatically", "Otimizar automaticamente"),
+    ("optimize.review", "Review optimization…", "Revisar otimização…"),
     (
         "optimize.experimental",
         "Include experimental sm86 under Proton/Wine in this review",
@@ -294,8 +323,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "optimize.lsfg_unavailable",
-        "Lossless Scaling was not found, so LSFG shaders cannot be prepared. Choose its folder in the LSFG card. No changes were applied.",
-        "O Lossless Scaling não foi encontrado, então os shaders do LSFG não podem ser preparados. Escolha a pasta dele no cartão do LSFG. Nenhuma alteração foi aplicada.",
+        "Lossless Scaling was not found, so LSFG shaders cannot be prepared. Choose its folder in Components › Frame generation. No changes were applied.",
+        "O Lossless Scaling não foi encontrado, então os shaders do LSFG não podem ser preparados. Escolha a pasta dele em Componentes › Geração de quadros. Nenhuma alteração foi aplicada.",
     ),
     (
         "optimize.lsfg_preparing",
@@ -304,8 +333,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "optimize.lsfg_failed",
-        "LSFG shader preparation failed; see the LSFG card. No changes were applied.",
-        "A preparação dos shaders do LSFG falhou; veja o cartão do LSFG. Nenhuma alteração foi aplicada.",
+        "LSFG shader preparation failed; see Components › Frame generation. No changes were applied.",
+        "A preparação dos shaders do LSFG falhou; veja Componentes › Geração de quadros. Nenhuma alteração foi aplicada.",
     ),
     (
         "optimize.experimental_omitted",
@@ -332,7 +361,6 @@ const TEXT: &[(&str, &str, &str)] = &[
         "The proposed settings conflict. No changes were applied.",
         "As configurações propostas entram em conflito. Nenhuma alteração foi aplicada.",
     ),
-    ("doctor.review", "Review repair…", "Revisar reparo…"),
     (
         "remedy.processes",
         "Show running processes",
@@ -340,9 +368,10 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "remedy.close_processes",
-        "Close these processes, then review again",
-        "Feche estes processos e revise novamente",
+        "Close these programs, then try again",
+        "Feche estes programas e tente de novo",
     ),
+    ("remedy.retry", "Try again", "Tentar de novo"),
     ("remedy.replan", "Prepare a fresh review", "Preparar uma nova revisão"),
     (
         "remedy.foreign",
@@ -351,44 +380,39 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "mdl.incompatible",
-        "This NR model has no compatible kernels for the detected GPU. Choose another model.",
-        "Este modelo NR não tem kernels compatíveis com a GPU detectada. Escolha outro modelo.",
+        "Does not work on this graphics card",
+        "Não funciona nesta placa de vídeo",
     ),
     (
         "mdl.arch_match",
-        "CUDA target matches this GPU. Runtime operation is not verified.",
-        "O alvo CUDA corresponde à GPU. O funcionamento não foi verificado em execução.",
+        "Compatible with your graphics card",
+        "Compatível com sua placa de vídeo",
     ),
     (
         "mdl.compat_unknown",
-        "NR model compatibility is unknown. This file or GPU has not been identified reliably.",
-        "Compatibilidade do modelo NR desconhecida. Este arquivo ou GPU não foi identificado com segurança.",
+        "Compatibility not confirmed",
+        "Compatibilidade não confirmada",
     ),
     ("mdl.archs", "CUDA targets found:", "Alvos CUDA encontrados:"),
     (
         "mdl.suggest",
-        "Catalog model with matching CUDA targets:",
-        "Modelo do catálogo com alvos CUDA compatíveis:",
+        "One of your models works on this card:",
+        "Um dos seus modelos funciona nesta placa:",
     ),
-    ("mdl.use_suggested", "Review model change", "Revisar troca de modelo"),
+    ("mdl.use_suggested", "Review model change…", "Revisar troca de modelo…"),
     ("ver.unknown", "unknown", "desconhecida"),
     (
         "ver.mismatch",
-        "OptiScaler and the NR forwarder have different file versions. Update them together; installation is still allowed.",
-        "OptiScaler e o forwarder NR têm versões de arquivo diferentes. Atualize os dois juntos; a instalação continua permitida.",
+        "OptiScaler and the NR component have different file versions. Update them together; installation is still allowed.",
+        "OptiScaler e o componente NR têm versões de arquivo diferentes. Atualize os dois juntos; a instalação continua permitida.",
     ),
+    ("ver.forwarder", "NR component {v}", "Componente NR {v}"),
     ("welcome.title", "Your games, with Retoque", "Seus jogos, com Retoque"),
-    (
-        "welcome.body",
-        "Install Retoque, tune each game, choose your NR model and understand its logs.",
-        "Instale o Retoque, ajuste cada jogo, escolha seu modelo NR e consulte os logs.",
-    ),
-    ("welcome.found", "games found", "jogos encontrados"),
     ("welcome.installed", "with Retoque", "com Retoque"),
-    ("set.nr", "Neural Rendering", "Renderização neural"),
+    ("set.nr", "Neural Rendering (NR)", "Renderização neural (NR)"),
     ("set.upscalers", "Upscalers", "Ampliadores"),
     ("set.framegen", "Frame generation", "Geração de quadros"),
-    ("set.lsfg", "LSFG (study build)", "LSFG (versão de estudo)"),
+    ("set.lsfg", "LSFG (experimental)", "LSFG (experimental)"),
     (
         "set.no_match",
         "No setting matches this filter.",
@@ -396,15 +420,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "set.lsfg_note",
-        "Study build only. Requires FSR FG output and your own Lossless Scaling files; unavailable features cannot run.",
-        "Somente na versão de estudo. Requer saída FSR FG e seus próprios arquivos do Lossless Scaling; recursos indisponíveis não funcionam.",
+        "Experimental. Needs FSR frame generation and your own Lossless Scaling files; features that are not available cannot run.",
+        "Experimental. Precisa da geração de quadros FSR e dos seus próprios arquivos do Lossless Scaling; recursos indisponíveis não funcionam.",
     ),
-    ("mdl.default", "Default search", "Busca padrão"),
-    ("mdl.named", "Selected file", "Arquivo selecionado"),
-    ("mdl.empty_title", "Bring your own model", "Adicione seu modelo"),
     ("mdl.version", "Version", "Versão"),
-    ("mdl.dll_filter", "Model DLL", "DLL do modelo"),
-    ("unit.mib", "MiB", "MiB"),
+    ("mdl.dll_filter", "NR model (.dll)", "Modelo NR (.dll)"),
     ("unit.ms", "ms", "ms"),
     ("unknown", "—", "—"),
     (
@@ -424,9 +444,10 @@ const TEXT: &[(&str, &str, &str)] = &[
         "O resumo tem limites; consulte o arquivo de log para ver o registro completo.",
     ),
     ("inst.advanced", "Advanced", "Avançado"),
-    ("st.build", "build", "versão"),
+    ("st.build", "Local build", "Compilação local"),
+    ("st.release", "Version {v}", "Versão {v}"),
+    ("st.build_hash", "Build {hash}", "Compilação {hash}"),
     ("inst.notes()", "Notes", "Observações"),
-    ("dismiss", "×", "×"),
     ("dismiss.help", "Dismiss message", "Fechar mensagem"),
     ("brand", "Retoque", "Retoque"),
     ("lang.en", "English", "English"),
@@ -441,9 +462,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("value.unset", "unset", "não definido"),
     ("ref.unknown_file", "unknown file", "arquivo desconhecido"),
     ("ref.reshade", "ReShade", "ReShade"),
-    ("kind.install", "install", "instalação"),
-    ("kind.uninstall", "uninstall", "remoção"),
-    ("kind.settings", "settings", "ajustes"),
     ("store.steam", "Steam", "Steam"),
     ("store.heroic", "Heroic", "Heroic"),
     ("store.lutris", "Lutris", "Lutris"),
@@ -455,9 +473,14 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("runtime.wine", "Wine", "Wine"),
     ("runtime.linux", "Linux", "Linux"),
     (
-        "job.failed",
-        "The operation could not finish",
-        "Não foi possível concluir a operação",
+        "error.io",
+        "Could not read or write {file}.",
+        "Não foi possível ler ou gravar {file}.",
+    ),
+    (
+        "error.io_any",
+        "Could not read or write a file.",
+        "Não foi possível ler ou gravar um arquivo.",
     ),
     ("technical.details", "Technical details", "Detalhes técnicos"),
     (
@@ -564,7 +587,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "ref.proxy",
         "{path} is not a name OptiScaler answers to",
-        "O nome {path} não é aceito como proxy pelo OptiScaler",
+        "O OptiScaler não aceita {path} como nome do arquivo de carregamento",
     ),
     ("app.refresh", "Rescan library", "Buscar jogos novamente"),
     ("app.payload", "Retoque files", "Arquivos do Retoque"),
@@ -574,9 +597,14 @@ const TEXT: &[(&str, &str, &str)] = &[
         "não estão ao lado do app: escolha a pasta com o OptiScaler.dll para instalar ou atualizar",
     ),
     ("app.payload.choose", "Choose…", "Escolher…"),
-    ("payload.advanced_show", "Advanced…", "Avançado…"),
-    ("payload.advanced_hide", "Hide advanced", "Ocultar avançado"),
-    ("app.lang", "Language", "Idioma"),
+    ("payload.missing", "not found", "não encontrados"),
+    (
+        "payload.files_note",
+        "The app copies these files into a game when you install or update Retoque there.",
+        "O app copia estes arquivos para o jogo quando você instala ou atualiza o Retoque nele.",
+    ),
+    ("payload.files_source", "Where they come from", "De onde vêm"),
+    ("payload.files_updates", "Official releases", "Versões oficiais"),
     ("lib.search", "Search games", "Buscar jogos"),
     ("lib.installed_only", "Installed only", "Só instalados"),
     ("lib.add_folder", "Add folder…", "Adicionar pasta…"),
@@ -587,7 +615,6 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Nenhum jogo encontrado. Adicione a pasta de um jogo à mão.",
     ),
     ("lib.skipped", "Could not read", "Não foi possível ler"),
-    ("game.none", "Choose a game on the left.", "Escolha um jogo à esquerda."),
     ("game.root", "game folder", "pasta do jogo"),
     ("game.target", "Executable folder", "Pasta do executável"),
     (
@@ -600,44 +627,44 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Native Linux build: Retoque works only with the Windows version under Proton or Wine.",
         "Versão nativa de Linux: o Retoque só funciona com a versão de Windows no Proton ou no Wine.",
     ),
-    ("tab.install", "Install", "Retoque"),
+    ("tab.install", "Overview", "Visão geral"),
     ("tab.settings", "Settings", "Ajustes"),
-    ("tab.model", "NR model", "Modelo NR"),
+    ("tab.model", "Components", "Componentes"),
+    // The Components tab's sections, in the order a game uses them.
+    ("comp.nr", "NR model", "Modelo NR"),
+    ("comp.dlss", "DLSS", "DLSS"),
+    ("comp.fg", "Frame generation", "Geração de quadros"),
     ("tab.compare", "Before / after", "Antes e depois"),
     ("tab.logs", "Logs", "Logs"),
     (
         "set.invalid",
         "OptiScaler does not accept this value; fix it to review the changes.",
-        "O OptiScaler não aceita este valor; corrija para revisar as mudanças.",
+        "O OptiScaler não aceita este valor; corrija para revisar as alterações.",
     ),
     ("st.installed", "Retoque installed", "Retoque instalado"),
-    ("st.partial", "Install stopped part-way", "Instalação interrompida"),
-    (
-        "st.uninstall_incomplete",
-        "Uninstall stopped part-way",
-        "Remoção interrompida",
-    ),
-    ("st.not_installed", "Not installed", "Não instalado"),
-    (
-        "st.untracked",
-        "OptiScaler present without a receipt",
-        "OptiScaler presente sem recibo",
-    ),
+    ("st.installed_short", "Installed", "Instalado"),
+    ("st.current", "Retoque up to date", "Retoque atualizado"),
+    ("st.current_short", "Up to date", "Atualizado"),
+    ("st.update", "Update available", "Atualização disponível"),
+    ("st.update_short", "Update", "Atualizar"),
+    ("st.partial", "Incomplete install", "Instalação incompleta"),
+    ("st.partial_short", "Incomplete", "Incompleta"),
+    ("st.not_installed", "Not installed", "Sem Retoque"),
+    ("st.untracked", "Old install", "Instalação antiga"),
+    ("st.untracked_short", "Old", "Antiga"),
     ("st.nr_on", "NR on", "NR ligado"),
     ("st.nr_off", "NR off", "NR desligado"),
+    ("inst.proxy", "Loader file name", "Nome do arquivo de carregamento"),
     (
-        "st.model_missing",
-        "no nvngx_dlssnr.dll beside the game",
-        "sem nvngx_dlssnr.dll junto do jogo",
+        "inst.proxy_help",
+        "Change only if the game does not start with the default.",
+        "Mude só se o jogo não abrir com o padrão.",
     ),
-    ("st.model_present", "model beside the game", "modelo junto do jogo"),
     (
-        "st.running",
-        "The game is running. Close it first.",
-        "O jogo está aberto. Feche-o antes.",
+        "inst.enable_nr",
+        "Turn Neural Rendering (NR) on",
+        "Ligar a renderização neural (NR)",
     ),
-    ("inst.proxy", "Load as", "Carregar como"),
-    ("inst.enable_nr", "Turn Neural Rendering on", "Ligar o Neural Rendering"),
     (
         "inst.keep_reshade",
         "Keep ReShade (load it through OptiScaler)",
@@ -650,8 +677,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "inst.second_proxy",
-        "Allow a second OptiScaler proxy",
-        "Permitir um segundo proxy do OptiScaler",
+        "Allow a second OptiScaler loader file",
+        "Permitir um segundo arquivo de carregamento do OptiScaler",
     ),
     (
         "inst.copy_nvngx",
@@ -662,85 +689,101 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.preview_uninstall", "Preview uninstall", "Ver o que a remoção faz"),
     ("inst.install", "Install", "Instalar"),
     ("inst.update", "Update", "Atualizar"),
-    ("inst.uninstall", "Uninstall", "Remover"),
+    ("inst.uninstall", "Uninstall", "Desinstalar"),
     ("inst.plan", "What will be done", "O que será feito"),
+    (
+        "inst.plan_title",
+        "What Retoque will do in this game",
+        "O que o Retoque vai fazer neste jogo",
+    ),
+    (
+        "inst.plan_install",
+        "Install Retoque files in this game",
+        "Instalar os arquivos do Retoque neste jogo",
+    ),
     ("inst.nothing", "Nothing to change.", "Nada a mudar."),
-    ("inst.refused", "Nothing will be written:", "Nada será gravado:"),
     ("inst.working", "Working…", "Trabalhando…"),
-    ("inst.done", "Done.", "Pronto."),
-    ("inst.launch", "Steam launch option", "Opção de inicialização da Steam"),
+    (
+        "inst.failed_install",
+        "The install did not finish",
+        "A instalação não foi concluída",
+    ),
+    (
+        "inst.failed_uninstall",
+        "The uninstall did not finish",
+        "A desinstalação não foi concluída",
+    ),
+    (
+        "inst.failed_settings",
+        "The settings were not saved",
+        "Os ajustes não foram salvos",
+    ),
     (
         "inst.launch_help",
-        "Under Proton the game must be told to load this DLL: paste this into the game's launch options in Steam.",
-        "No Proton o jogo precisa ser avisado para carregar esta DLL: cole isto nas opções de inicialização do jogo na Steam.",
+        "Paste this in the game's Properties › Launch options.",
+        "Cole isto em Propriedades › Opções de inicialização do jogo.",
     ),
+    (
+        "inst.launch_help_heroic",
+        "In Heroic, open the game's settings › Advanced › Environment variables and add WINEDLLOVERRIDES with this value.",
+        "No Heroic, abra as configurações do jogo › Avançado › Variáveis de ambiente e adicione WINEDLLOVERRIDES com este valor.",
+    ),
+    (
+        "inst.launch_help_lutris",
+        "In Lutris, open the game's Configure › System options › Environment variables and add WINEDLLOVERRIDES with this value.",
+        "No Lutris, abra Configurar › Opções do sistema › Variáveis de ambiente do jogo e adicione WINEDLLOVERRIDES com este valor.",
+    ),
+    (
+        "inst.launch_help_other",
+        "The game must load Retoque when it starts: put this in your launcher's launch options, before the command that starts the game.",
+        "O jogo precisa carregar o Retoque ao abrir: coloque isto nas opções de inicialização do seu iniciador, antes do comando que abre o jogo.",
+    ),
+    ("inst.launch_label", "Launch option", "Opção de inicialização"),
     ("inst.copy", "Copy", "Copiar"),
     ("inst.copied", "Copied", "Copiado"),
     (
         "ref.running",
-        "The game is running (exit 3):",
-        "O jogo está aberto (saída 3):",
+        "The game is running. Close it and try again:",
+        "O jogo está aberto. Feche-o e tente de novo:",
     ),
     (
         "ref.foreign",
-        "A file at one of our names is not ours (exit 4):",
-        "Um arquivo com um dos nossos nomes não é nosso (saída 4):",
+        "A file with the same name was not placed by Retoque:",
+        "Um arquivo com o mesmo nome não foi colocado pelo Retoque:",
     ),
     (
         "ref.second",
-        "Another proxy already holds OptiScaler (exit 5):",
-        "Outro proxy já tem o OptiScaler (saída 5):",
+        "Another file already loads OptiScaler in this game:",
+        "Outro arquivo já carrega o OptiScaler neste jogo:",
     ),
     (
         "ref.receipt",
-        "The receipt cannot be used:",
-        "O recibo não pode ser usado:",
+        "The install record cannot be used:",
+        "O registro de instalação não pode ser usado:",
     ),
     ("ref.usage", "Cannot do this:", "Não dá para fazer isto:"),
-    (
-        "set.none",
-        "Install Retoque first: there is no OptiScaler.ini here.",
-        "Instale o Retoque antes: não há OptiScaler.ini aqui.",
-    ),
-    ("set.save", "Review changes", "Revisar mudanças"),
-    ("set.revert", "Undo changes", "Desfazer mudanças"),
-    (
-        "set.saved",
-        "Written. The game reads it at its next start.",
-        "Gravado. O jogo lê na próxima vez que abrir.",
-    ),
-    ("set.changed", "changed", "alterado(s)"),
-    (
-        "set.missing",
-        "not in this ini yet: saving adds it",
-        "ainda não está neste ini: salvar acrescenta",
-    ),
+    ("set.save", "Review changes…", "Revisar alterações…"),
     ("mdl.current", "This game uses", "Modelo deste jogo"),
-    (
-        "mdl.auto",
-        "the default search (nvngx_dlssnr.dll beside OptiScaler, then beside the game)",
-        "a busca padrão (nvngx_dlssnr.dll junto do OptiScaler, depois junto do jogo)",
-    ),
     (
         "mdl.missing_file",
         "This file does not exist: NR will be unavailable in this game.",
         "Este arquivo não existe: o NR ficará indisponível neste jogo.",
     ),
-    ("mdl.catalog", "Your models", "Catálogo do aplicativo"),
+    ("mdl.catalog", "Your models", "Seus modelos"),
     ("mdl.import", "Import a model…", "Importar um modelo…"),
-    ("mdl.use", "Use in this game", "Usar neste jogo"),
+    ("mdl.use", "Use in this game…", "Usar neste jogo…"),
     ("mdl.in_use", "In use", "Em uso"),
-    ("mdl.use_auto", "Use the default search", "Usar a busca padrão"),
-    ("mdl.remove", "Remove from the list", "Tirar da lista"),
+    ("mdl.use_auto", "Use the default search…", "Usar a busca padrão…"),
+    ("mdl.remove", "Delete from app…", "Apagar do app…"),
+    (
+        "mdl.remove_title",
+        "Delete this model from the app?",
+        "Apagar este modelo do app?",
+    ),
     (
         "mdl.empty",
         "No models yet. Import the nvngx_dlssnr.dll files you have; they are copied into the app's folder and never shared.",
         "Nenhum modelo ainda. Importe os nvngx_dlssnr.dll que você tem; eles são copiados para a pasta do app e nunca compartilhados.",
-    ),
-    (
-        "mdl.needs_ini",
-        "Install Retoque first: the choice is saved in OptiScaler.ini.",
-        "Instale o Retoque antes: a escolha fica no OptiScaler.ini.",
     ),
     (
         "log.none",
@@ -749,13 +792,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("log.dlss", "DLSS", "DLSS"),
     ("log.api", "API", "API"),
-    ("log.route", "NR route", "Rota do NR"),
-    ("log.nr_init", "NR started", "NR iniciou"),
     ("log.gpu", "NR GPU time", "Tempo de GPU do NR"),
     ("log.errors", "Errors", "Erros"),
     ("log.warnings", "Warnings", "Avisos"),
     ("log.lines", "Lines worth reading", "Linhas que importam"),
-    ("log.bundle", "Make a diagnostic file", "Gerar diagnóstico…"),
+    ("log.bundle", "Make a diagnostic file", "Gerar arquivo de diagnóstico"),
     (
         "log.bundle_done",
         "Written (home folder and user name removed):",
@@ -772,22 +813,21 @@ const TEXT: &[(&str, &str, &str)] = &[
         "The options or the Retoque files changed after this preview: preview again.",
         "As opções ou os arquivos do Retoque mudaram depois desta prévia: veja de novo.",
     ),
-    ("set.apply", "Write these changes", "Gravar estas mudanças"),
+    ("set.apply", "Apply", "Aplicar"),
     (
         "mdl.remove_help",
-        "Deletes the catalog's copy. A game that names this file loses NR until it gets another model.",
-        "Apaga a cópia do catálogo. Um jogo que aponta para este arquivo fica sem NR até receber outro modelo.",
+        "Deletes the copy the app keeps. A game that names this file loses NR until it gets another model.",
+        "Apaga a cópia guardada no app. Um jogo que aponta para este arquivo fica sem NR até receber outro modelo.",
     ),
     (
         "app.tagline",
         "Neural Rendering for your games",
-        "Neural Rendering nos seus jogos",
+        "Renderização neural nos seus jogos",
     ),
     ("lib.group_installed", "With Retoque", "Com Retoque"),
     ("lib.group_other", "Other games", "Outros jogos"),
-    ("lib.state_installed", "Retoque", "Retoque"),
-    ("card.install", "Install", "Instalação"),
     ("card.install_options", "Install options", "Opções de instalação"),
+    ("card.reinstall_options", "Reinstall options", "Opções de reinstalação"),
     (
         "left.title",
         "Left behind by uninstalled games",
@@ -809,7 +849,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "left.review_note",
         "Only files Retoque, OptiScaler, sm86, ReShade or their caches put there are removed. Anything else, such as a save, stays, and so does its folder. Nothing changes until you confirm.",
-        "Só saem arquivos que o Retoque, o OptiScaler, o sm86, o ReShade ou os caches deles colocaram ali. Qualquer outra coisa, como um save, fica, e a pasta dela também. Nada muda antes da sua confirmação.",
+        "Só saem arquivos que o Retoque, o OptiScaler, o sm86, o ReShade ou os caches deles colocaram ali. Qualquer outra coisa, como um jogo salvo, fica, e a pasta dela também. Nada muda antes da sua confirmação.",
     ),
     (
         "left.folder_line",
@@ -829,6 +869,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("left.failed", "Cleanup stopped", "Limpeza interrompida"),
     ("rs.ready", "Ready to install:", "Pronto para instalar:"),
+    ("rs.checking", "Checking ReShade…", "Verificando o ReShade…"),
+    ("rs.consent_title", "Download ReShade 6.8.0", "Baixar o ReShade 6.8.0"),
+    (
+        "rs.consent_body",
+        "Retoque downloads the official ReShade installer with add-on support from reshade.me and keeps only its DLL. Your game changes only after a separate review.",
+        "O Retoque baixa o instalador oficial do ReShade com suporte a add-ons de reshade.me e guarda só a DLL dele. Seu jogo só muda depois de outra revisão.",
+    ),
+    (
+        "rs.consent_details",
+        "Host: reshade.me. The installer and the DLL taken from it have fixed SHA-256 hashes. License: BSD-3-Clause.",
+        "Host: reshade.me. O instalador e a DLL tirada dele têm hashes SHA-256 fixos. Licença: BSD-3-Clause.",
+    ),
     ("sess.title", "Last session", "Última sessão"),
     ("sess.driver", "driver", "driver"),
     ("sess.base", "Real frames", "Quadros reais"),
@@ -876,31 +928,54 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "sess.nr_off",
         "Neural Rendering was switched off during the session (its key in the game).",
-        "O Neural Rendering foi desligado durante a sessão (pela tecla dele no jogo).",
+        "A renderização neural (NR) foi desligada durante a sessão (pela tecla dela no jogo).",
     ),
-    ("card.launch", "Steam launch option", "Opção de inicialização da Steam"),
-    ("yes", "yes", "sim"),
-    ("no", "no", "não"),
-    ("error", "Error", "Erro"),
+    (
+        "card.launch",
+        "Last step: Steam launch option",
+        "Último passo: opção de inicialização da Steam",
+    ),
+    (
+        "card.launch_heroic",
+        "Last step: environment variable in Heroic",
+        "Último passo: variável de ambiente no Heroic",
+    ),
+    (
+        "card.launch_lutris",
+        "Last step: Lutris option",
+        "Último passo: opção do Lutris",
+    ),
+    (
+        "card.launch_other",
+        "Last step: launch option",
+        "Último passo: opção de inicialização",
+    ),
     ("cancel", "Cancel", "Cancelar"),
     // Shared words of the design system (widgets::busy, consent_modal and info dialogs).
     ("progress.of", "of", "de"),
     ("not_now", "Not now", "Agora não"),
     ("close", "Close", "Fechar"),
+    ("delete", "Delete", "Apagar"),
     ("download", "Download", "Baixar"),
+    ("check_now", "Check", "Verificar"),
+    ("size.up_to", "up to {size}", "até {size}"),
+    // The top bar's spinner: what is running, in the user's words.
+    (
+        "busy.writing",
+        "Applying changes to a game…",
+        "Aplicando alterações em um jogo…",
+    ),
+    (
+        "busy.reading",
+        "Reading game information…",
+        "Lendo informações dos jogos…",
+    ),
     // Before / after viewer (compare.rs).
     ("canvas", "Comparison image", "Imagem de comparação"),
-    ("title", "Before / after", "Antes / depois"),
     ("captures", "Captures", "Capturas"),
     ("refresh", "Refresh", "Atualizar"),
     ("loading", "Loading capture…", "Carregando captura…"),
     ("scanning", "Looking for captures…", "Buscando capturas…"),
-    ("empty", "No complete captures yet", "Nenhuma captura completa ainda"),
-    (
-        "empty_help",
-        "Run the game with NR enabled. In Retoque's in-game menu, open Compare and press “Capture original and processed”. Return here and refresh. Both images must finish saving beside the game's proxy, in retoque-captures.",
-        "Abra o jogo com o NR ativado. No menu do Retoque dentro do jogo, abra Comparação e clique em “Capturar original e processado”. Volte aqui e atualize. As duas imagens precisam terminar de salvar na pasta retoque-captures, ao lado da DLL do Retoque.",
-    ),
     (
         "scan_error",
         "Could not read the capture folder. Check that it exists and is readable, then refresh.",
@@ -920,11 +995,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("original", "Original", "Original"),
     ("processed", "Retoque NR", "Retoque NR"),
     ("hold", "Hold to see original", "Segure para ver o original"),
-    (
-        "interaction",
-        "Wheel: zoom · Drag: pan · Drag divider: compare · Space: original in Flip",
-        "Roda: zoom · Arraste: mover · Arraste o divisor: comparar · Espaço: original em Alternar",
-    ),
     ("stats", "Display preview", "Prévia de exibição"),
     ("psnr", "PSNR", "PSNR"),
     ("changed", "Changed >5%", "Variação >5%"),
@@ -954,7 +1024,6 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Heatmap · fixed 8× gain · black = equal, blue, yellow, red = increasing difference",
         "Mapa de diferenças · ganho fixo de 8× · preto = igual, azul, amarelo, vermelho = diferença crescente",
     ),
-    ("provenance", "Capture provenance", "Dados da captura"),
     (
         "no_provenance",
         "No sidecar or embedded provenance found.",
@@ -966,7 +1035,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("settings", "Settings", "Ajustes"),
     ("cmp.unknown", "Not recorded", "Não registrado"),
     ("loaded", "Loaded in", "Carregado em"),
-    ("window", "Retoque comparison", "Comparação do Retoque"),
     ("exposure", "Exposure", "Exposição"),
     ("exposure_reset", "Reset exposure", "Redefinir exposição"),
     (
@@ -975,14 +1043,13 @@ const TEXT: &[(&str, &str, &str)] = &[
         "0 EV usa a exposição automática ou registrada. Cada ponto dobra ou reduz pela metade a luz nas duas imagens. A prévia atualiza ao soltar o controle.",
     ),
     ("exposure_updating", "Updating preview…", "Atualizando prévia…"),
-    ("thumbnail_loading", "Loading thumbnail…", "Carregando miniatura…"),
     ("thumbnail_error", "Thumbnail unavailable", "Miniatura indisponível"),
     ("shell.uninstall_open", "Uninstall…", "Desinstalar…"),
     ("shell.discard", "Discard", "Descartar"),
     (
-        "shell.done_details",
-        "Only the changes approved in the review were applied. Restart the game to use the updated files or settings.",
-        "Foram aplicadas apenas as mudanças aprovadas na revisão. Reinicie o jogo para usar os arquivos ou ajustes atualizados.",
+        "shell.restart_hint",
+        "Restart the game to use the changes.",
+        "Reinicie o jogo para usar as alterações.",
     ),
     (
         "shell.library_checking",
@@ -998,7 +1065,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "shell.review_shortcut",
         "Review changes (Ctrl+Enter); nothing is written until confirmation.",
-        "Revisar mudanças (Ctrl+Enter); nada será gravado antes da confirmação.",
+        "Revisar alterações (Ctrl+Enter); nada será gravado antes da confirmação.",
     ),
     ("shell.progress_install", "Installing…", "Instalando…"),
     ("shell.progress_update", "Updating…", "Atualizando…"),
@@ -1006,7 +1073,9 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("shell.progress_save", "Saving…", "Salvando…"),
     // UX shell / worker A
     ("shell.home", "Back to the library", "Voltar à biblioteca"),
-    ("shell.library", "Games", "Jogos"),
+    ("shell.library_show", "Show game list", "Mostrar lista de jogos"),
+    ("shell.library_hide", "Hide game list", "Ocultar lista de jogos"),
+    ("shell.back_library", "‹ Library", "‹ Biblioteca"),
     ("shell.details", "Details", "Detalhes"),
     ("shell.bundle_done", "Diagnostic file created", "Diagnóstico criado"),
     (
@@ -1016,17 +1085,10 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "shell.catalog_changed",
-        "Model catalogue updated",
+        "Model catalog updated",
         "Catálogo de modelos atualizado",
     ),
     ("shell.checking", "Checking installation…", "Verificando instalação…"),
-    ("shell.update_available", "Update available", "Atualização disponível"),
-    ("shell.up_to_date", "Up to date", "Atualizado"),
-    (
-        "shell.partial",
-        "Installation needs cleanup",
-        "Instalação precisa de limpeza",
-    ),
     (
         "shell.review_update",
         "Review Retoque update",
@@ -1037,11 +1099,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Review Retoque installation",
         "Revisar instalação do Retoque",
     ),
-    (
-        "shell.review_remove",
-        "Review Retoque removal",
-        "Revisar remoção do Retoque",
-    ),
+    ("shell.review_remove", "Review uninstall", "Revisar desinstalação"),
     (
         "shell.review_note",
         "Nothing changes until you confirm.",
@@ -1062,31 +1120,32 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("shell.keep", "Keep", "Manter"),
     ("shell.remove", "Remove", "Remover"),
     ("shell.settings", "Settings", "Ajustes"),
-    ("shell.games", "games", "jogos"),
-    ("shell.updates", "updates available", "atualizações disponíveis"),
+    ("shell.games_one", "game", "jogo"),
+    ("shell.games_other", "games", "jogos"),
+    ("shell.updates_one", "update available", "atualização disponível"),
+    ("shell.updates_other", "updates available", "atualizações disponíveis"),
     (
         "shell.home_help",
         "Add a game folder or scan your launchers to get started.",
         "Adicione a pasta de um jogo ou busque os jogos dos seus launchers para começar.",
     ),
     ("shell.reinstall", "Reinstall…", "Reinstalar…"),
-    ("shell.resume", "Resume cleanup…", "Retomar limpeza…"),
-    ("shell.update", "Update Retoque…", "Atualizar Retoque…"),
-    ("shell.install", "Install Retoque…", "Instalar Retoque…"),
+    ("shell.resume", "Finish cleanup…", "Concluir limpeza…"),
+    ("shell.update", "Update Retoque…", "Atualizar o Retoque…"),
     ("shell.open_folder", "Open game folder", "Abrir pasta do jogo"),
     ("shell.pending", "unsaved changes", "alterações não salvas"),
     ("shell.preparing", "Preparing your review…", "Preparando a revisão…"),
-    (
-        "shell.installed_done",
-        "Retoque installation updated",
-        "Instalação do Retoque atualizada",
-    ),
-    ("shell.removed_done", "Retoque removed", "Retoque removido"),
-    ("shell.settings_done", "Changes saved", "Ajustes salvos"),
+    ("shell.installed_done", "Retoque installed", "Retoque instalado"),
+    ("shell.updated_done", "Retoque updated", "Retoque atualizado"),
+    ("shell.removed_done", "Retoque uninstalled", "Retoque desinstalado"),
+    ("shell.settings_done", "Settings applied", "Ajustes aplicados"),
     // Worker B: settings, current model and session summary.
     ("set.advanced", "Advanced settings", "Ajustes avançados"),
-    ("set.game_default", "Game default", "Padrão do jogo"),
-    ("set.model_link", "Choose in NR model…", "Escolher em Modelo NR…"),
+    (
+        "set.model_link",
+        "Choose the NR model in Components",
+        "Escolher modelo NR em Componentes",
+    ),
     ("set.custom", "Custom value", "Valor personalizado"),
     ("set.automatic", "Automatic", "Automático"),
     (
@@ -1097,12 +1156,9 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("tab.review_install", "Review installation…", "Revisar instalação…"),
     ("tab.loading", "Reading game settings…", "Lendo os ajustes do jogo…"),
     ("mdl.loading", "Reading model version…", "Lendo a versão do modelo…"),
+    ("mdl.reading_catalog", "Reading your models…", "Lendo seus modelos…"),
     ("mdl.beside", "Found beside the game", "Encontrado na pasta do jogo"),
-    (
-        "mdl.from_catalog",
-        "From your app catalogue",
-        "Do catálogo do aplicativo",
-    ),
+    ("mdl.from_catalog", "From your models", "Dos seus modelos"),
     ("mdl.from_path", "From the configured file", "Do arquivo configurado"),
     (
         "mdl.version_unknown",
@@ -1126,8 +1182,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "mdl.catalog_empty",
-        "Your app catalogue is empty",
-        "O catálogo do aplicativo está vazio",
+        "You have no models yet",
+        "Você ainda não tem modelos",
     ),
     (
         "mdl.optional",
@@ -1136,19 +1192,15 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "mdl.drop",
-        "Drop a model DLL here, or choose a file",
-        "Solte a DLL do modelo aqui ou escolha um arquivo",
+        "Drop an NR model (nvngx_dlssnr.dll) here, or choose a file",
+        "Solte aqui um modelo NR (nvngx_dlssnr.dll) ou escolha um arquivo",
     ),
     (
         "mdl.import_review",
-        "Import this file into your catalogue? The game folder stays unchanged.",
-        "Importar este arquivo para o catálogo? A pasta do jogo permanece como está.",
+        "Import this file into your models? The game folder stays unchanged.",
+        "Importar este arquivo para seus modelos? A pasta do jogo continua como está.",
     ),
-    (
-        "mdl.confirm_import",
-        "Import into catalogue",
-        "Importar para o catálogo",
-    ),
+    ("mdl.confirm_import", "Import model", "Importar modelo"),
     ("mdl.used_games", "games using this model", "jogos usando este modelo"),
     ("mdl.refresh", "Check model again", "Verificar modelo novamente"),
     ("log.loading", "Reading log…", "Lendo registro…"),
@@ -1175,7 +1227,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "log.hint_errors",
         "Review the errors below. Make a diagnostic file if you need help.",
-        "Confira os erros abaixo. Gere um diagnóstico se precisar de ajuda.",
+        "Confira os erros abaixo. Gere um arquivo de diagnóstico se precisar de ajuda.",
     ),
     (
         "log.hint_inactive",
@@ -1249,19 +1301,28 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Em Comparar, escolha “Capturar original e processado”. Aguarde as duas imagens terminarem de salvar e atualize aqui.",
     ),
     ("cmp.empty.refresh", "Look for captures", "Buscar capturas"),
-    ("cmp.strip", "Capture filmstrip", "Faixa de capturas"),
     // Autotune / worker F
     ("auto.gpu_reading", "Detecting GPU…", "Detectando a placa de vídeo…"),
     ("auto.gpu_unknown", "GPU not detected", "Placa de vídeo não detectada"),
-    ("shell.install_optimize", "Install and optimize", "Instalar e otimizar"),
-    ("shell.register_optimize", "Update and optimize", "Atualizar e otimizar"),
+    (
+        "shell.install_optimize",
+        "Install and optimize…",
+        "Instalar e otimizar…",
+    ),
+    (
+        "shell.register_optimize",
+        "Register and optimize…",
+        "Registrar e otimizar…",
+    ),
+    ("shell.update_optimize", "Update and optimize…", "Atualizar e otimizar…"),
+    ("shell.more", "More actions", "Mais ações"),
     (
         "shell.install_optimize_hint",
         "One review: Retoque, then what this game and your graphics card need. Nothing changes until you confirm.",
         "Uma revisão só: o Retoque e o que este jogo e sua placa precisam. Nada muda antes da sua confirmação.",
     ),
     ("shell.install_only", "Install only…", "Só instalar…"),
-    ("shell.optimize", "Optimize", "Otimizar"),
+    ("shell.optimize", "Optimize…", "Otimizar…"),
     (
         "shell.optimize_hint",
         "Review what this game and your graphics card can use now.",
@@ -1269,26 +1330,21 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "shell.no_payload",
-        "Retoque's files were not found. Choose them at the bottom of the window.",
-        "Os arquivos do Retoque não foram encontrados. Escolha no rodapé da janela.",
+        "Retoque's files were not found. Click \"Retoque files\" at the bottom of the window.",
+        "Os arquivos do Retoque não foram encontrados. Clique em \"Arquivos do Retoque\" no rodapé da janela.",
     ),
     (
         "auto.use_banner",
-        "\"Install and optimize\" at the top does all of this in one review.",
-        "O botão \"Instalar e otimizar\" lá em cima faz tudo isso numa revisão só.",
+        "\"Install and optimize…\" at the top does all of this in one review.",
+        "O botão \"Instalar e otimizar…\" lá em cima faz tudo isso numa revisão só.",
     ),
     ("tile.gpu", "Graphics card", "Placa de vídeo"),
+    ("tile.nr", "Neural Rendering", "Renderização neural"),
+    ("tile.dlss", "DLSS", "DLSS"),
     ("tile.fg", "Frame generation", "Geração de quadros"),
     ("tile.on", "On", "Ligado"),
     ("tile.off", "Off", "Desligado"),
     ("tile.unknown", "Unknown", "Desconhecido"),
-    ("tile.old_install", "Old install", "Instalação antiga"),
-    ("tile.st_current", "Up to date", "Atualizado"),
-    ("tile.st_update", "New version", "Nova versão"),
-    ("tile.st_installed", "Installed", "Instalado"),
-    ("tile.st_partial", "Incomplete", "Incompleto"),
-    ("tile.st_untracked", "No receipt", "Sem recibo"),
-    ("tile.st_missing", "Not installed", "Não instalado"),
     ("tile.model_missing", "Model missing", "Modelo ausente"),
     ("tile.fg_sm86", "sm86 for RTX 20/30", "sm86 para RTX 20/30"),
     ("tile.fg_game", "The game's own", "Do próprio jogo"),
@@ -1311,28 +1367,44 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("auto.driver", "Driver", "Driver"),
     (
         "auto.title",
-        "Optimised for your GPU",
+        "Optimized for your GPU",
         "Ajustes para sua placa de vídeo",
     ),
     ("auto.checking", "Checking this game…", "Conferindo este jogo…"),
     (
+        "auto.reading_components",
+        "Reading your components…",
+        "Lendo seus componentes…",
+    ),
+    (
         "auto.none",
         "No automatic changes recommended for this GPU and game.",
-        "Nenhuma mudança automática recomendada para esta placa e este jogo.",
+        "Nenhuma alteração automática recomendada para esta placa e este jogo.",
     ),
     (
         "auto.need_install",
         "Install Retoque in this game first.",
         "Instale o Retoque neste jogo primeiro.",
     ),
+    ("auto.apply", "Apply only this…", "Aplicar só isto…"),
+    ("auto.confirm", "Apply", "Aplicar"),
+    ("auto.done", "Changes applied", "Alterações aplicadas"),
+    ("auto.done_optimize", "Optimization applied", "Otimização aplicada"),
     (
-        "auto.prepare_install",
-        "Review Retoque installation",
-        "Revisar instalação do Retoque",
+        "auto.done_install",
+        "Retoque installed and optimized",
+        "Retoque instalado e otimizado",
     ),
-    ("auto.apply", "Apply recommendation…", "Aplicar recomendação…"),
-    ("auto.confirm", "Confirm changes", "Confirmar mudanças"),
-    ("auto.done", "Optimisation applied", "Ajustes aplicados"),
+    (
+        "auto.done_update",
+        "Retoque updated and optimized",
+        "Retoque atualizado e otimizado",
+    ),
+    (
+        "auto.done_register",
+        "Retoque registered and optimized",
+        "Retoque registrado e otimizado",
+    ),
     (
         "auto.partial",
         "Not fully applied; completed operations",
@@ -1348,29 +1420,19 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Select a multiplier to review the changes. Your Lossless Scaling files are referenced, never copied. Restart the game after applying.",
         "Escolha o multiplicador para revisar os ajustes. Seus arquivos do Lossless Scaling são usados no local, sem cópia. Reinicie o jogo após aplicar.",
     ),
-    ("auto.off", "Off", "Desligado"),
-    ("auto.x2", "x2", "x2"),
-    ("auto.x3", "x3", "x3"),
-    ("auto.x4", "x4", "x4"),
+    ("auto.off", "Off…", "Desligado…"),
+    ("auto.x2", "x2…", "x2…"),
+    ("auto.x3", "x3…", "x3…"),
+    ("auto.x4", "x4…", "x4…"),
     (
         "auto.ls_ready",
         "Lossless Scaling shaders ready",
         "Shaders do Lossless Scaling prontos",
     ),
     (
-        "auto.ls_shaders",
-        "Lossless Scaling needs a shader cache",
-        "Falta preparar os shaders do Lossless Scaling",
-    ),
-    (
         "auto.ls_missing",
         "Lossless Scaling not found",
         "Lossless Scaling não encontrado",
-    ),
-    (
-        "auto.ls_checking",
-        "Checking Lossless Scaling…",
-        "Conferindo o Lossless Scaling…",
     ),
     (
         "auto.choose_lossless",
@@ -1379,8 +1441,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.ls_conflict",
-        "Remove the installed sm86 component in the NR model tab before enabling LSFG.",
-        "Remova o componente sm86 instalado na aba Modelo NR antes de ligar o LSFG.",
+        "Uninstall sm86 in Components › Frame generation before turning LSFG on.",
+        "Desinstale o sm86 em Componentes › Geração de quadros antes de ligar o LSFG.",
     ),
     (
         "auto.components",
@@ -1388,14 +1450,8 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Componentes de geração de quadros",
     ),
     (
-        "auto.import_help",
-        "Import your own dlssg_for_sm86 release folder (version.dll, dlssg_sm86.ini and dlssg_sm86/). No runtime is downloaded or included with Retoque.",
-        "Importe sua própria pasta do dlssg_for_sm86 (version.dll, dlssg_sm86.ini e dlssg_sm86/). O Retoque não baixa nem distribui esse runtime.",
-    ),
-    ("auto.import", "Import sm86 folder…", "Importar pasta sm86…"),
-    (
         "auto.no_component",
-        "No sm86 component in your catalogue",
+        "No sm86 component in your catalog",
         "Nenhum componente sm86 no catálogo",
     ),
     (
@@ -1405,8 +1461,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.component_install",
-        "Review component installation",
-        "Revisar instalação do componente",
+        "Review component installation…",
+        "Revisar instalação do componente…",
     ),
     (
         "auto.component_remove",
@@ -1415,8 +1471,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.catalog_remove",
-        "Remove from component catalogue",
-        "Remover do catálogo de componentes",
+        "Delete component from app…",
+        "Apagar componente do app…",
+    ),
+    (
+        "auto.catalog_remove_title",
+        "Delete this component from the app?",
+        "Apagar este componente do app?",
+    ),
+    (
+        "auto.catalog_remove_help",
+        "Deletes the copy the app keeps. Games that have it keep their files; to install it again, import or download it again.",
+        "Apaga a cópia guardada no app. Os jogos que já o têm continuam com os arquivos; para instalá-lo de novo, importe ou baixe outra vez.",
     ),
     (
         "auto.none_installed",
@@ -1445,12 +1511,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "rec.rtx30_nr.title",
-        "Neural Rendering tuned for RTX 30",
-        "Neural Rendering ajustado para RTX 30",
+        "Neural Rendering (NR) tuned for RTX 30",
+        "Renderização neural (NR) ajustada para RTX 30",
     ),
     (
         "rec.rtx30_nr.why",
-        "Full detail in the centre of the screen at the same cost (peripheral compression), and a stronger effect (1.5). Measured on an RTX 3060; you can change both in Settings.",
+        "Full detail in the center of the screen at the same cost (peripheral compression), and a stronger effect (1.5). Measured on an RTX 3060; you can change both in Settings.",
         "Detalhe total no centro da tela pelo mesmo custo (compressão periférica) e efeito mais forte (1,5). Medido numa RTX 3060; dá para mudar os dois em Ajustes.",
     ),
     ("rec.lsfg.title", "Lossless Scaling x2", "Lossless Scaling x2"),
@@ -1476,8 +1542,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "rec.adopt.why",
-        "Retoque is here without a receipt (installed by an older script). Reinstalling through the app records every file, so it can be updated and removed safely later.",
-        "O Retoque está aqui sem recibo (foi instalado por um script antigo). Reinstalar pelo app registra cada arquivo, para atualizar e remover com segurança depois.",
+        "Retoque is here but not registered (installed by an older script). Reinstalling through the app records every file, so it can be updated and removed safely later.",
+        "O Retoque está aqui sem registro (foi instalado por um script antigo). Reinstalar pelo app registra cada arquivo, para atualizar e remover com segurança depois.",
     ),
     (
         "rec.sm86_update.title",
@@ -1486,13 +1552,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "rec.sm86_update.why",
-        "This game has an older dlssg_for_sm86 (0.3.x). The version in your catalogue replaces it; the old files are kept as a backup.",
+        "This game has an older dlssg_for_sm86 (0.3.x). The version in your catalog replaces it; the old files are kept as a backup.",
         "Este jogo tem um dlssg_for_sm86 antigo (0.3.x). A versão do seu catálogo o substitui; os arquivos antigos ficam guardados como cópia.",
-    ),
-    (
-        "auto.shader_hint",
-        "The app prepares shaders automatically in its data folder. If the compiler is missing, confirm its official download.",
-        "O app prepara os shaders automaticamente na pasta de dados. Se o compilador estiver ausente, confirme o download oficial.",
     ),
     // Discovery folders / worker t117
     ("store.xbox", "Xbox", "Xbox"),
@@ -1538,7 +1599,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Folders with several games",
         "Pastas com vários jogos",
     ),
-    ("folders.remove", "Remove", "Remover"),
+    ("folders.remove", "Remove from list", "Remover da lista"),
     (
         "folders.remove_help",
         "Remove from this list only. Files stay where they are.",
@@ -1560,25 +1621,29 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "palette.keys",
-        "Up/Down Select · Enter Open · Esc Close",
-        "Cima/Baixo Selecionar · Enter Abrir · Esc Fechar",
+        "Arrow keys select · Enter opens · Esc closes",
+        "Setas selecionam · Enter abre · Esc fecha",
     ),
     ("palette.empty", "No matches", "Nenhum resultado"),
     ("palette.game", "Game", "Jogo"),
+    ("palette.uninstall", "Uninstall Retoque…", "Desinstalar o Retoque…"),
+    (
+        "palette.review_settings",
+        "Review settings changes…",
+        "Revisar alterações dos ajustes…",
+    ),
     ("palette.focus", "Focus current search", "Focar busca atual"),
     ("set.filter", "Filter settings", "Filtrar ajustes"),
     ("set.only_changed", "Only changed", "Somente alterados"),
-    ("set.reset", "Reset to auto", "Restaurar automático"),
     (
-        "set.source_auto",
-        "Source: auto (game default)",
-        "Origem: auto (padrão do jogo)",
+        "set.reset",
+        "Back to automatic: {label}",
+        "Voltar ao automático: {label}",
     ),
-    ("set.source_ini", "Source: INI", "Origem: INI"),
     (
         "set.source_draft",
-        "Pending draft; review to apply",
-        "Rascunho pendente; revise para aplicar",
+        "Changed, not applied yet. Review to apply.",
+        "Alterado, ainda não aplicado. Revise para aplicar.",
     ),
     (
         "undo.exact",
@@ -1618,8 +1683,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "undo.conflict",
-        "Undo refused: this INI value changed since the recorded edit. Review the current settings:",
-        "Desfazer recusado: este valor do INI mudou após a alteração registrada. Revise os ajustes atuais:",
+        "Undo refused: this setting changed after the recorded edit. Review the current settings:",
+        "Desfazer recusado: este ajuste mudou depois da alteração registrada. Revise os ajustes atuais:",
     ),
     (
         "undo.save_failed",
@@ -1628,8 +1693,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "undo.auto_note",
-        "Undo is reviewed before applying. Previously absent keys are removed.",
-        "O desfazer é revisado antes de aplicar. Chaves antes ausentes são removidas.",
+        "Undo is reviewed before applying. Settings that were not in the file before are removed again.",
+        "O desfazer é revisado antes de aplicar. Ajustes que não estavam no arquivo voltam a ser removidos.",
     ),
     (
         "drop.hover",
@@ -1639,8 +1704,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("drop.title", "Review dropped item", "Revisar item solto"),
     (
         "drop.model",
-        "Import this NR model into the app catalog?",
-        "Importar este modelo NR para o catálogo do aplicativo?",
+        "Import this NR model into your models?",
+        "Importar este modelo NR para seus modelos?",
     ),
     (
         "drop.component",
@@ -1657,11 +1722,15 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Unsupported item. Choose an nvngx_dlssnr*.dll file or a game/component folder.",
         "Item não suportado. Escolha nvngx_dlssnr*.dll ou uma pasta de jogo/componente.",
     ),
-    ("drop.confirm", "Confirm", "Confirmar"),
-    ("doctor.title", "Retoque Doctor", "Retoque Doctor"),
+    ("drop.import", "Import", "Importar"),
+    ("drop.add_game", "Add to library", "Adicionar à biblioteca"),
+    ("drop.checking", "Checking the file…", "Verificando o arquivo…"),
+    ("doctor.title", "Retoque health check", "Diagnóstico do Retoque"),
     ("doctor.prepare", "Prepare repair…", "Preparar reparo…"),
     ("doctor.evidence", "Evidence", "Evidências"),
     ("doctor.badge", "Health findings", "Problemas detectados"),
+    ("doctor.issues_one", "1 issue", "1 problema"),
+    ("doctor.issues", "{n} issues", "{n} problemas"),
     (
         "watch.manual",
         "Live updates unavailable. Refresh manually.",
@@ -1676,13 +1745,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("dlss.update", "Update DLSS…", "Atualizar DLSS…"),
     (
         "dlss.restore",
-        "Remove Retoque and restore original DLSS…",
-        "Remover Retoque e restaurar DLSS original…",
+        "Restore original DLSS and uninstall Retoque…",
+        "Restaurar DLSS original e desinstalar o Retoque…",
     ),
     (
         "dlss.restore_only",
         "Restore original DLSS…",
         "Restaurar DLSS original…",
+    ),
+    (
+        "dlss.restore_confirm",
+        "Restore original DLSS",
+        "Restaurar DLSS original",
     ),
     (
         "dlss.optimize",
@@ -1702,25 +1776,34 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "dlss.download_first",
-        "Get DLSS from the DLSS card first, then review the update.",
-        "Obtenha o DLSS no cartão DLSS primeiro; depois revise a atualização.",
+        "Download DLSS in Components › DLSS first, then review the update.",
+        "Baixe o DLSS em Componentes › DLSS primeiro; depois revise a atualização.",
     ),
     (
         "dlss.consent",
-        "Download SR, RR and FG directly from NVIDIA (115 MB)? Only the kinds already in the game will be replaced after a separate review. NVIDIA license applies.",
-        "Baixar SR, RR e FG diretamente da NVIDIA (115 MB)? Apenas os tipos já presentes no jogo serão substituídos após outra revisão. Aplica-se a licença NVIDIA.",
+        "Retoque downloads Super Resolution, Ray Reconstruction and Frame Generation directly from NVIDIA. Only the kinds the game already has are replaced, after a separate review.",
+        "O Retoque baixa Super Resolution, Ray Reconstruction e Frame Generation diretamente da NVIDIA. Só os tipos que o jogo já tem são trocados, depois de outra revisão.",
+    ),
+    (
+        "dlss.consent_title",
+        "Download NVIDIA DLSS 310.9.16",
+        "Baixar o NVIDIA DLSS 310.9.16",
+    ),
+    (
+        "dlss.consent_details",
+        "Hosts: raw.githubusercontent.com and media.githubusercontent.com (NVIDIA/DLSS, v310.9.16). Each file is checked against a fixed size and SHA-256. The NVIDIA DLSS license applies.",
+        "Hosts: raw.githubusercontent.com e media.githubusercontent.com (NVIDIA/DLSS, v310.9.16). Cada arquivo é conferido com tamanho e SHA-256 fixos. Vale a licença do NVIDIA DLSS.",
     ),
     (
         "dlss.caution",
         "DLL changes may be incompatible with a game or its anti-cheat. Check the game policy before updating. Originals are backed up for restoration.",
         "Trocas de DLL podem ser incompatíveis com o jogo ou seu anticheat. Confira a política do jogo antes de atualizar. Os originais terão backup para restauração.",
     ),
-    ("dlss.confirm_download", "Confirm download", "Confirmar download"),
     ("dlss.license", "Read NVIDIA license", "Ler licença NVIDIA"),
     (
         "dlss.error.0",
         "DLSS root receipt belongs to another installation",
-        "O recibo na raiz pertence a outra instalação",
+        "O registro de instalação na raiz pertence a outra instalação",
     ),
     (
         "dlss.error.1",
@@ -1740,12 +1823,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "dlss.error.4",
         "restore previous DLSS receipt before changing its root",
-        "Restaure o recibo DLSS anterior antes de mudar sua raiz",
+        "Restaure o registro de instalação DLSS anterior antes de mudar sua raiz",
     ),
     (
         "dlss.error.5",
         "DLSS root marker is not receipt-owned",
-        "O marcador DLSS da raiz não pertence ao recibo",
+        "O marcador DLSS da raiz não pertence ao registro de instalação",
     ),
     (
         "dlss.error.6",
@@ -1871,24 +1954,22 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "payload.check_consent",
-        "Query GitHub Releases (gabrielmaialva33/retoque) to check for a newer Retoque payload?",
-        "Consultar o GitHub Releases (gabrielmaialva33/retoque) para verificar se há uma versão mais nova do Retoque?",
+        "Ask GitHub whether there is a newer version of the Retoque files?",
+        "Perguntar ao GitHub se há uma versão mais nova dos arquivos do Retoque?",
     ),
     (
         "payload.download_consent",
-        "Download and verify the latest Retoque payload (OptiScaler.dll, forwarder and INI) from gabrielmaialva33/retoque into app data? Game folders are not modified until you review an installation.",
-        "Baixar e verificar o pacote mais recente do Retoque (OptiScaler.dll, forwarder e INI) de gabrielmaialva33/retoque na pasta de dados do app? Nenhum jogo será alterado antes da revisão da instalação.",
+        "Retoque downloads its latest files from the official release and checks them. Your games do not change until you review an install.",
+        "O Retoque baixa os arquivos mais recentes da versão oficial e os verifica. Seus jogos não mudam até você revisar uma instalação.",
     ),
     (
         "payload.hosts_note",
         "Allowed HTTPS hosts: api.github.com, github.com/gabrielmaialva33/retoque and release-assets.githubusercontent.com. Verified with SHA256SUMS and the GitHub SHA-256 digest.",
         "Hosts HTTPS permitidos: api.github.com, github.com/gabrielmaialva33/retoque e release-assets.githubusercontent.com. Verificado com SHA256SUMS e digest SHA-256 do GitHub.",
     ),
-    ("payload.confirm", "Continue", "Continuar"),
-    ("payload.later", "Not now", "Agora não"),
     (
         "payload.progress",
-        "Downloading Retoque payload…",
+        "Downloading Retoque files…",
         "Baixando arquivos do Retoque…",
     ),
     (
@@ -1899,19 +1980,14 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("payload.new_release", "New release available", "Nova versão disponível"),
     ("payload.up_to_date", "Release up to date", "Versão atualizada"),
     (
-        "payload.update_game",
-        "Review game update…",
-        "Revisar atualização do jogo…",
-    ),
-    (
         "payload.error.0",
         "payload SHA-256 does not match GitHub asset digest",
-        "O SHA-256 do pacote não corresponde ao digest publicado pelo GitHub.",
+        "O SHA-256 dos arquivos do Retoque não corresponde ao digest publicado pelo GitHub.",
     ),
     (
         "payload.error.1",
         "payload SHA-256 does not match SHA256SUMS",
-        "O SHA-256 do pacote não corresponde ao arquivo SHA256SUMS.",
+        "O SHA-256 dos arquivos do Retoque não corresponde ao arquivo SHA256SUMS.",
     ),
     (
         "payload.error.2",
@@ -1921,17 +1997,17 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "payload.error.3",
         "SHA256SUMS does not list payload archive",
-        "O arquivo SHA256SUMS não contém o pacote de payload.",
+        "O arquivo SHA256SUMS não lista os arquivos do Retoque.",
     ),
     (
         "payload.error.4",
         "forbidden file in payload archive",
-        "Arquivo proibido encontrado no pacote de payload.",
+        "Há um arquivo proibido entre os arquivos do Retoque.",
     ),
     (
         "payload.error.5",
         "unexpected extra file in payload archive",
-        "Arquivo extra não permitido encontrado no pacote de payload.",
+        "Há um arquivo extra não permitido entre os arquivos do Retoque.",
     ),
     (
         "payload.error.6",
@@ -1941,17 +2017,17 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "payload.error.7",
         "incomplete payload release archive",
-        "Faltam arquivos obrigatórios no pacote de payload.",
+        "Faltam arquivos obrigatórios do Retoque nesta versão.",
     ),
     (
         "payload.error.8",
         "invalid official payload release metadata",
-        "Os metadados da release oficial do Retoque são inválidos.",
+        "Os metadados da versão oficial do Retoque são inválidos.",
     ),
     (
         "payload.error.9",
         "payload HTTPS request failed",
-        "A requisição HTTPS da release do Retoque falhou.",
+        "Não foi possível consultar ou baixar a versão do Retoque por HTTPS.",
     ),
     (
         "payload.error.10",
@@ -1961,7 +2037,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "payload.error.11",
         "refused payload release redirect",
-        "Redirecionamento da release do Retoque recusado.",
+        "Redirecionamento da versão do Retoque recusado.",
     ),
     (
         "payload.error.12",
@@ -1986,16 +2062,14 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "nr_fetch.consent_title",
-        "Get a compatible NR model",
-        "Obter um modelo NR compatível",
+        "Download a compatible NR model",
+        "Baixar um modelo NR compatível",
     ),
     (
         "nr_fetch.consent_body",
-        "Download this archive over HTTPS into the app catalog, verify its size and SHA-256, and extract only nvngx_dlssnr.dll? Game settings are reviewed separately before any write.",
-        "Baixar este pacote por HTTPS para o catálogo do aplicativo, verificar o tamanho e o SHA-256 e extrair apenas nvngx_dlssnr.dll? Os ajustes do jogo são revisados separadamente antes de qualquer gravação.",
+        "This model comes from the community, not from NVIDIA. Retoque checks it and keeps only the model file. Your game's settings change only after a separate review.",
+        "Este modelo vem da comunidade, não da NVIDIA. O Retoque o verifica e guarda só o arquivo do modelo. Os ajustes do seu jogo só mudam depois de outra revisão.",
     ),
-    ("nr_fetch.confirm", "Confirm download", "Confirmar download"),
-    ("nr_fetch.later", "Later", "Agora não"),
     (
         "nr_fetch.refresh_catalog",
         "Refresh community catalog…",
@@ -2008,8 +2082,13 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "nr_fetch.refresh_body",
-        "Fetch catalog.json from ApolloF/DLSS5-Updater-catalog on GitHub (up to 8 MiB)? Only entries on RankFTW/rhi-repo releases with a SHA-256 are accepted; unprobed entries are never assumed compatible.",
-        "Baixar catalog.json de ApolloF/DLSS5-Updater-catalog no GitHub (até 8 MiB)? Apenas entradas em releases de RankFTW/rhi-repo com SHA-256 são aceitas; entradas não sondadas nunca são assumidas como compatíveis.",
+        "Download the latest list of community NR models from GitHub?",
+        "Baixar do GitHub a lista mais recente de modelos NR da comunidade?",
+    ),
+    (
+        "nr_fetch.refresh_details",
+        "catalog.json from ApolloF/DLSS5-Updater-catalog (raw.githubusercontent.com, at most 8 MB). Only entries on RankFTW/rhi-repo releases with a SHA-256 are accepted; untested entries are never assumed compatible.",
+        "catalog.json de ApolloF/DLSS5-Updater-catalog (raw.githubusercontent.com, no máximo 8 MB). Só entradas em versões de RankFTW/rhi-repo com SHA-256 são aceitas; entradas não testadas nunca são tidas como compatíveis.",
     ),
     ("nr_fetch.confirm_refresh", "Refresh catalog", "Atualizar catálogo"),
     (
@@ -2018,14 +2097,19 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Baixando modelo NR da comunidade",
     ),
     (
+        "nr_fetch.refreshing",
+        "Downloading the community model list…",
+        "Baixando a lista de modelos da comunidade…",
+    ),
+    (
         "nr_fetch.no_compatible_gpu",
-        "No compatible model can be picked automatically because the GPU or its CUDA architecture is unknown.",
-        "Nenhum modelo compatível pode ser escolhido automaticamente porque a GPU ou sua arquitetura CUDA é desconhecida.",
+        "No compatible model can be picked automatically because the graphics card was not identified.",
+        "Nenhum modelo compatível pode ser escolhido automaticamente porque a placa de vídeo não foi identificada.",
     ),
     (
         "nr_fetch.unavailable",
         "No compatible NR model entry is available for this GPU. No changes were applied.",
-        "Nenhum modelo NR compatível está disponível para esta GPU. Nenhuma alteração foi aplicada.",
+        "Nenhum modelo NR compatível está disponível para esta placa de vídeo. Nenhuma alteração foi aplicada.",
     ),
     (
         "nr_fetch.available_variants",
@@ -2056,7 +2140,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "nr_fetch.error.4",
         "non-rhi-repo model URL",
-        "O endereço não pertence às releases de RankFTW/rhi-repo.",
+        "O endereço não pertence às versões publicadas de RankFTW/rhi-repo.",
     ),
     (
         "nr_fetch.error.5",
@@ -2163,6 +2247,15 @@ mod tests {
         for (k, en, pt) in TEXT {
             assert!(seen.insert(*k), "duplicate key {k}");
             assert!(!en.is_empty() && !pt.is_empty(), "empty text for {k}");
+        }
+    }
+
+    #[test]
+    fn ellipsis_is_in_both_languages_or_in_neither() {
+        // A label ends in "…" when clicking it opens a review, dialog or file picker (DESIGN.md), so the promise
+        // cannot depend on the language.
+        for (key, en, pt) in TEXT.iter().chain(retoque_data::messages::TEXT) {
+            assert_eq!(en.ends_with('…'), pt.ends_with('…'), "{key}: \"{en}\" / \"{pt}\"");
         }
     }
 }
@@ -2363,6 +2456,42 @@ mod source_coverage {
             checked > 80,
             "translation-call scanner unexpectedly stopped finding calls"
         );
+    }
+
+    #[test]
+    fn every_key_is_used_somewhere_in_the_crate() {
+        // Text nothing shows goes stale and gets revived with old wording. A key counts as used when the crate
+        // quotes it, or quotes the prefix it is built from at run time ("sm86.error." in diagnostic()).
+        // Recommendation keys are named in retoque-data.
+        let mut all_sources = Vec::new();
+        sources(
+            std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/src")),
+            &mut all_sources,
+        );
+        let mut code = String::from(include_str!("../../retoque-data/src/recommend.rs"));
+        for (file, source) in &all_sources {
+            if file.ends_with("i18n.rs") {
+                // The table itself is not a use.
+                let start = source.find("const TEXT").unwrap();
+                let end = start + source[start..].find("\n];").unwrap();
+                code.push_str(&source[..start]);
+                code.push_str(&source[end..]);
+            } else {
+                code.push_str(source);
+            }
+        }
+        let quoted = |text: &str| code.contains(&format!("\"{text}\""));
+        let unused: Vec<_> = TEXT
+            .iter()
+            .map(|(key, _, _)| *key)
+            .filter(|key| {
+                !quoted(key)
+                    && !key
+                        .rsplit_once('.')
+                        .is_some_and(|(prefix, _)| quoted(&format!("{prefix}.")))
+            })
+            .collect();
+        assert!(unused.is_empty(), "translation keys nothing uses: {unused:?}");
     }
 
     #[test]
