@@ -32,6 +32,10 @@ int main()
     Expect(L"deep-fried-chicken.addon64", "Deep Fried Chicken");
     Expect(L"DLSS5-Feeder.dll", "DLSS5-Feeder");
     Expect(L"dlss5_feeder.asi", "DLSS5-Feeder");
+    Expect(L"nr_native_adapter.dll", "AMDLSS5");
+    Expect(L"NR_Native_Adapter.dll", "AMDLSS5");
+    Expect(L"amdlss5.dll", "AMDLSS5");
+    Expect(L"AMDLSS5_engine.dll", "AMDLSS5");
 
     // RenoDX's per-game HDR add-ons are not producers: combining one with our NR is the normal case.
     Expect(L"renodx-cyberpunk2077.addon64", nullptr);
@@ -51,6 +55,13 @@ int main()
     Expect(L"nvngx.dll_dlssnr.dll", nullptr);
     Expect(L"nvngx_dlssnr.dll", nullptr);
     Expect(L"sl.dlss_g.dll", nullptr);
+
+    // AMDLSS5's other files: a generic proxy name, a host name that could be a substring of someone else's, and
+    // the network it shares with us.
+    Expect(L"version.dll", nullptr);
+    Expect(L"nr_host.dll", nullptr);
+    Expect(L"nvngx_dlssnr_host.dll", nullptr);
+    Expect(L"amd_fidelityfx_upscaler_dx12.dll", nullptr);
     Expect(L"", nullptr);
 
     if (failures != 0)

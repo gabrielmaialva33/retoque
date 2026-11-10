@@ -413,9 +413,10 @@ ShowAllSettings=auto
 SessionGuard=auto
 
 ; When another DLSS 5 Neural Rendering producer runs in the same game (a ReShade add-on such as
-; renodx-dlss5, loaded through [Plugins] LoadReshade), hand Neural Rendering to it for the session: ours
-; stays off as if Enabled were false, so the frame never gets two neural passes. RenoDX's per-game HDR
-; add-ons are not producers and change nothing. false keeps ours running beside it (two passes).
+; renodx-dlss5 loaded through [Plugins] LoadReshade, or AMDLSS5), hand Neural Rendering to it for the
+; session: ours stays off as if Enabled were false, so the frame never gets two neural passes. RenoDX's
+; per-game HDR add-ons are not producers and change nothing. false keeps ours running beside it (two
+; passes).
 ; true or false - Default (auto) is true
 YieldToAddons=auto
 
