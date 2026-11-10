@@ -326,12 +326,20 @@ impl Catalog {
         }
     }
 
-    /// Catalog entries have absolute paths; Wine uses its standard root mapping on drive Z:.
+    /// Catalog entries have absolute paths; Wine uses its standard root mapping on drive Z:. On Windows the catalog
+    /// path can be verbatim (`\\?\C:\...`, from canonicalize): the INI gets the ordinary form, which a person can read
+    /// and edit and which OptiScaler's ModelFile resolution has been run with.
     pub fn model_file_value(model: &Model, wine: bool) -> String {
         if wine {
-            retoque_core::wine_path(&model.path)
-        } else {
-            model.path.to_string_lossy().into_owned()
+            return retoque_core::wine_path(&model.path);
+        }
+        let value = model.path.to_string_lossy();
+        match value.strip_prefix(r"\\?\") {
+            Some(rest) => match rest.strip_prefix(r"UNC\").or_else(|| rest.strip_prefix(r"unc\")) {
+                Some(unc) => format!(r"\\{unc}"),
+                None => rest.to_owned(),
+            },
+            None => value.into_owned(),
         }
     }
 }
@@ -447,6 +455,17 @@ mod tests {
         assert_eq!(meta.original_file_name, "user-model.dll");
         assert!(meta.imported_unix_seconds > 0);
         assert_eq!(Catalog::model_file_value(&model, false), model.path.to_string_lossy());
+        let mut verbatim = model.clone();
+        verbatim.path = PathBuf::from(r"\\?\C:\Users\Someone\AppData\Local\Retoque\models\ab\nvngx_dlssnr.dll");
+        assert_eq!(
+            Catalog::model_file_value(&verbatim, false),
+            r"C:\Users\Someone\AppData\Local\Retoque\models\ab\nvngx_dlssnr.dll"
+        );
+        verbatim.path = PathBuf::from(r"\\?\UNC\server\share\models\ab\nvngx_dlssnr.dll");
+        assert_eq!(
+            Catalog::model_file_value(&verbatim, false),
+            r"\\server\share\models\ab\nvngx_dlssnr.dll"
+        );
         assert_eq!(
             Catalog::model_file_value(&model, true),
             retoque_core::wine_path(&model.path)

@@ -323,6 +323,7 @@ impl RetoqueApp {
                         plans: vec![plan],
                         groups: vec![groups],
                         request_id: request,
+                        target: Some(target.clone()),
                     }));
                 }
                 Outcome::Progress { target, done } => {

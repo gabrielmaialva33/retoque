@@ -466,6 +466,7 @@ fn compound_settings_review_records_history_only_after_success() {
             plans: prepared.plans,
             groups: prepared.groups,
             request_id: 1,
+            target: None,
         }));
         if stale {
             std::fs::write(&ini, "[DlssNr]\nStage=0\n").unwrap();

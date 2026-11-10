@@ -150,18 +150,10 @@ fn plan_post_install_settings(target: &Path, install_plan: Option<&Plan>, edits:
     if current.is_none() && !has_install_ini_step {
         return retoque_core::plan_settings(target, edits).map_err(AppError::from);
     }
-    if current.is_none()
-        && !install_touches_edits
-        && let Some(from) = copied_ini
-        && let Some(parent) = from.parent()
-        && from
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.eq_ignore_ascii_case(retoque_core::INI_NAME))
-        && retoque_core::read_ini(parent).ok().flatten().is_some()
-    {
-        return retoque_core::plan_settings(parent, edits).map_err(AppError::from);
-    }
+    // The preview is always a staged copy, never the payload folder the INI comes from: on Windows the app runs from
+    // that folder, so the running-file check of a plan against it refuses the whole review (retoque-app.exe is "in use"),
+    // and a plan aimed there could only ever describe the payload's INI. The real plan is rebuilt against the game at
+    // apply time (replan_intermediate) and must match this preview step for step.
     let mut ini = if let Some((_, bytes)) = current {
         retoque_core::ini::Ini::parse(&bytes)
     } else if let Some(from) = copied_ini {
