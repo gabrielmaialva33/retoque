@@ -11,7 +11,7 @@ pub enum NrConsent {
 pub enum NrFetchEvent {
     Progress(u64),
     CatalogRefreshed(Result<Vec<RemoteModel>, AppError>),
-    Downloaded(Result<(Vec<Model>, Model), AppError>),
+    Downloaded(Result<Model, AppError>),
 }
 
 pub type SharedModelFetcher = Arc<dyn model_fetch::Fetcher + Send + Sync>;
@@ -678,6 +678,7 @@ impl RetoqueApp {
         self.nr_fetch.downloaded = 0;
         let custom_fetcher = self.nr_fetch.fetcher.clone();
         let catalog_root = self.nr_fetch.catalog_root.clone();
+        let publications = self.jobs.catalog_publications.clone();
         let ctx = self.context.clone();
         self.jobs.spawn("nr-model-fetch", None, move |tx| {
             let active_fetcher: &dyn model_fetch::Fetcher = match custom_fetcher.as_deref() {
@@ -690,7 +691,7 @@ impl RetoqueApp {
                     Outcome::NrFetch(NrFetchEvent::CatalogRefreshed(result))
                 }
                 NrConsent::Download(entry) => {
-                    let result = (|| -> Result<(Vec<Model>, Model), AppError> {
+                    let result = (|| -> Result<Model, AppError> {
                         let catalog = Catalog::open(catalog_root.as_deref())?;
                         let mut previous = 0u64;
                         let mut imported =
@@ -701,16 +702,31 @@ impl RetoqueApp {
                                     ctx.request_repaint();
                                 }
                             })?;
-                        let mut items = catalog.list()?;
                         if entry.compatibility.known {
                             imported.compatibility = entry.compatibility.clone();
-                            for item in &mut items {
-                                if item.sha256 == imported.sha256 {
-                                    item.compatibility = entry.compatibility.clone();
-                                }
-                            }
                         }
-                        Ok((items, imported))
+                        let snapshot = publications.snapshot(|| {
+                            let result = catalog
+                                .list()
+                                .map(|mut items| {
+                                    if entry.compatibility.known {
+                                        for item in &mut items {
+                                            if item.sha256 == imported.sha256 {
+                                                item.compatibility = entry.compatibility.clone();
+                                            }
+                                        }
+                                    }
+                                    items
+                                })
+                                .map_err(AppError::from);
+                            Outcome::Catalog { result }
+                        });
+                        if let Outcome::CatalogSnapshot { result: Err(error), .. } = snapshot {
+                            return Err(error);
+                        }
+                        // Completion stays unscoped: even if a newer list wins, release busy and resume the caller.
+                        let _ = tx.send(snapshot);
+                        Ok(imported)
                     })();
                     Outcome::NrFetch(NrFetchEvent::Downloaded(result))
                 }
@@ -731,9 +747,7 @@ impl RetoqueApp {
             NrFetchEvent::Downloaded(result) => {
                 self.nr_fetch.busy = false;
                 match result {
-                    Ok((items, imported)) => {
-                        self.catalog = Some(Ok(items));
-                        self.usage_refreshed = None;
+                    Ok(imported) => {
                         if let Some((target, generation, review_request)) = self.nr_fetch.then_optimize.take() {
                             self.nr_fetch.select_for_target = None;
                             if self.view.target.as_ref() == Some(&target)
@@ -837,6 +851,40 @@ mod tests {
             assert!(Instant::now() < deadline, "timed out waiting for worker");
             std::thread::yield_now();
         }
+    }
+
+    #[test]
+    fn delayed_catalog_snapshot_cannot_hide_a_downloaded_model() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut app = crate::app_tests::shell_tests::app();
+        let (entry, archive) = synthetic_model_fixture();
+        app.nr_fetch.catalog_root = Some(temp.path().join("catalog"));
+        app.nr_fetch.fetcher = Some(Arc::new(SyntheticNrFetcher {
+            archive,
+            catalog_json: Vec::new(),
+        }));
+        // Pause after the old snapshot was taken, but before its worker delivers it.
+        let old = app
+            .jobs
+            .catalog_publications
+            .snapshot(|| Outcome::Catalog { result: Ok(vec![]) });
+        let (started, ready) = std::sync::mpsc::channel();
+        let (release, blocked) = std::sync::mpsc::channel();
+        app.jobs.spawn("hash", None, move |_| {
+            started.send(()).unwrap();
+            blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+            old
+        });
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        app.nr_fetch_start(NrConsent::Download(entry.clone()));
+        settle(&mut app, |app| !app.nr_fetch.busy);
+        assert!(app.nr_fetch.error.is_none());
+        release.send(()).unwrap();
+        settle(&mut app, |app| !app.jobs.busy());
+        let models = app.catalog.as_ref().unwrap().as_ref().unwrap();
+        assert_eq!(models.len(), 1, "a late Heavy snapshot must not erase the Net import");
+        assert_eq!(models[0].sha256, entry.sha256);
+        assert!(models[0].compatibility.known);
     }
 
     #[test]
