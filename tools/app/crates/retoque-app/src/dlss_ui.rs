@@ -69,7 +69,7 @@ impl RetoqueApp {
             );
         } else {
             self.tab = Tab::Model;
-            self.tuning.dlss.error = Some(self.tr("dlss.download_first").into());
+            self.tuning.dlss.error = Some(AppError::warning(self.tr("dlss.download_first")));
         }
     }
     /// The game folder holds an app receipt for Retoque (as opposed to only a root DLSS receipt).
@@ -218,15 +218,14 @@ impl RetoqueApp {
             }
             ui.label(self.tr("dlss.caution"));
             if self.tuning.dlss.busy {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(format!(
-                        "{} · {:.0} / {:.0} MiB",
-                        self.tr("dlss.downloading"),
-                        self.tuning.dlss.downloaded as f64 / 1048576.,
-                        dlss::download_size() as f64 / 1048576.
-                    ));
-                });
+                let done = self.tuning.dlss.downloaded;
+                widgets::busy(
+                    ui,
+                    self.lang,
+                    self.tr("dlss.downloading"),
+                    (done > 0).then_some(done),
+                    Some(dlss::download_size()),
+                );
             } else if self.dlss_all_current() {
                 ui.colored_label(theme::GOOD, self.tr("dlss.all_current"));
             } else if !self.tuning.dlss.ready {
@@ -246,44 +245,63 @@ impl RetoqueApp {
             {
                 self.dlss_restore();
             }
-            if self.tuning.dlss.consent {
-                ui.label(self.tr("dlss.consent"));
-                ui.hyperlink_to(
-                    self.tr("dlss.license"),
-                    "https://github.com/NVIDIA/DLSS/blob/v310.9.16/LICENSE.txt",
-                );
-                if ui.button(self.tr("dlss.confirm_download")).clicked() {
-                    self.tuning.dlss.consent = false;
-                    self.tuning.dlss.busy = true;
-                    self.tuning.dlss.downloaded = 0;
-                    self.tuning.dlss.error = None;
-                    let ctx = self.context.clone();
-                    self.jobs.spawn("dlss-download", None, move |tx| {
-                        let result = (|| {
-                            let data = retoque_data::lsfg_prepare::data_dir()
-                                .map_err(|e| std::io::Error::other(e.to_string()))?;
-                            let mut previous = 0;
-                            dlss::download(&data, true, &dlss::NvidiaFetcher, &mut |bytes| {
-                                if bytes.saturating_sub(previous) >= 256 * 1024 || bytes == dlss::download_size() {
-                                    previous = bytes;
-                                    let _ = tx.send(Outcome::Dlss(Event::Progress(bytes)));
-                                    ctx.request_repaint();
-                                }
-                            })
-                            .map(|_| ())
-                        })()
-                        .map_err(AppError::from);
-                        Outcome::Dlss(Event::Downloaded(result))
-                    });
-                }
-                if ui.button(self.tr("cancel")).clicked() {
-                    self.tuning.dlss.consent = false;
-                }
-            }
             if let Some(error) = &self.tuning.dlss.error {
-                ui.colored_label(theme::BAD, diagnostic(self.lang, error));
+                crate::error::card(ui, error, self.lang, &self.cmd_tx);
             }
         });
+        if self.tuning.dlss.consent {
+            let ctx = ui.ctx().clone();
+            self.dlss_consent(&ctx);
+        }
+    }
+    /// Asks before downloading DLSS from NVIDIA; the game itself changes only through the later review.
+    fn dlss_consent(&mut self, ctx: &egui::Context) {
+        let lang = self.lang;
+        let details = |ui: &mut egui::Ui| {
+            ui.add(egui::Label::new(RichText::new(t(lang, "dlss.consent_details")).small()).wrap());
+            ui.hyperlink_to(
+                t(lang, "dlss.license"),
+                "https://github.com/NVIDIA/DLSS/blob/v310.9.16/LICENSE.txt",
+            );
+        };
+        let answer = widgets::consent_modal(
+            ctx,
+            lang,
+            "dlss-download",
+            t(lang, "dlss.consent_title"),
+            &[t(lang, "dlss.consent")],
+            &download_label(lang, Some(dlss::download_size())),
+            t(lang, "cancel"),
+            Some(&details),
+        );
+        match answer {
+            Some(widgets::Answer::Cancel) => self.tuning.dlss.consent = false,
+            Some(widgets::Answer::Confirm) => {
+                self.tuning.dlss.consent = false;
+                self.tuning.dlss.busy = true;
+                self.tuning.dlss.downloaded = 0;
+                self.tuning.dlss.error = None;
+                let ctx = self.context.clone();
+                self.jobs.spawn("dlss-download", None, move |tx| {
+                    let result = (|| {
+                        let data =
+                            retoque_data::lsfg_prepare::data_dir().map_err(|e| std::io::Error::other(e.to_string()))?;
+                        let mut previous = 0;
+                        dlss::download(&data, true, &dlss::NvidiaFetcher, &mut |bytes| {
+                            if bytes.saturating_sub(previous) >= 256 * 1024 || bytes == dlss::download_size() {
+                                previous = bytes;
+                                let _ = tx.send(Outcome::Dlss(Event::Progress(bytes)));
+                                ctx.request_repaint();
+                            }
+                        })
+                        .map(|_| ())
+                    })()
+                    .map_err(AppError::from);
+                    Outcome::Dlss(Event::Downloaded(result))
+                });
+            }
+            None => {}
+        }
     }
 }
 

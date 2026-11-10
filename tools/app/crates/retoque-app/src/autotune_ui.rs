@@ -181,7 +181,7 @@ impl RetoqueApp {
             if !facts.installed || facts.untracked {
                 ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::MUTED)).wrap());
                 if let Some(error) = &self.tuning.sm86.error {
-                    ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+                    crate::error::card(ui, error, self.lang, &self.cmd_tx);
                 }
                 return;
             }
@@ -302,7 +302,7 @@ impl RetoqueApp {
             self.sm86_download_controls(ui);
             match self.tuning.catalog.clone() {
                 None => {
-                    ui.spinner();
+                    widgets::busy(ui, self.lang, self.tr("auto.reading_components"), None, None);
                 }
                 Some(Err(e)) => {
                     crate::error::card(ui, e, self.lang, &self.cmd_tx);

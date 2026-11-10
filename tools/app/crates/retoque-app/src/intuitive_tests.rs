@@ -231,7 +231,9 @@ fn drop_routes_and_cancel_never_imports_or_registers_both_languages() {
             h.get_by_label(t(lang, "drop.title"));
             assert!(h.state().saved.manual.is_empty());
             assert!(h.state().catalog.is_none());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
+            // Nothing to import is information, closed with "Close"; the rest are choices, cancelled.
+            let dismiss = if route == Route::Unsupported { "close" } else { "cancel" };
+            h.get_by_role_and_label(egui::Role::Button, t(lang, dismiss)).click();
             h.run_steps(3);
             assert!(!h.state().intuitive.drop.open());
             assert!(h.state().saved.manual.is_empty());
@@ -428,7 +430,7 @@ fn raw_drop_is_consumed_before_tabs_and_game_registration_requires_confirmation(
         }
         h.run_steps(3);
         assert!(h.state().saved.manual.is_empty());
-        h.get_by_role_and_label(egui::Role::Button, t(lang, "drop.confirm"))
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "drop.add_game"))
             .click();
         h.run_steps(3);
         assert_eq!(h.state().saved.manual.as_slice(), std::slice::from_ref(&target));

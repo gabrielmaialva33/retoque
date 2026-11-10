@@ -46,10 +46,7 @@ impl RetoqueApp {
         }
         let (files, result) = match &self.view.logs {
             None => {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(self.tr("log.loading"));
-                });
+                widgets::busy(ui, self.lang, self.tr("log.loading"), None, None);
                 return;
             }
             Some((files, result)) => (files, result),

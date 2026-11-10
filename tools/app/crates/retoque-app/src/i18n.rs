@@ -48,19 +48,34 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "lsfg.failed",
-        "Shader preparation failed:",
-        "Falha ao preparar shaders:",
+        "The LSFG shaders could not be prepared. Try again; if it keeps failing, make a diagnostic file.",
+        "Não foi possível preparar os shaders do LSFG. Tente de novo; se continuar falhando, gere um arquivo de diagnóstico.",
     ),
     ("lsfg.retry", "Retry preparation", "Tentar preparar novamente"),
     (
         "lsfg.download_prompt",
-        "Preparing shaders requires Microsoft DXC v1.8.2505.1 (up to 64 MiB). Download it from Microsoft’s official GitHub release into the app data folder? The download is checked with SHA-256.",
-        "Preparar shaders exige Microsoft DXC v1.8.2505.1 (até 64 MiB). Baixar da versão oficial da Microsoft no GitHub para a pasta de dados do app? O download é verificado com SHA-256.",
+        "Preparing the LSFG shaders needs Microsoft's shader compiler. Retoque downloads it from Microsoft's official release into the app's data, checks it and prepares the shaders. Your game does not change.",
+        "Preparar os shaders do LSFG exige o compilador de shaders da Microsoft. O Retoque o baixa da versão oficial da Microsoft para os dados do app, o verifica e prepara os shaders. Seu jogo não muda.",
+    ),
+    (
+        "lsfg.need_compiler",
+        "The shaders need Microsoft's shader compiler, which is not downloaded yet.",
+        "Os shaders precisam do compilador de shaders da Microsoft, que ainda não foi baixado.",
+    ),
+    (
+        "lsfg.consent_title",
+        "Download the shader compiler",
+        "Baixar o compilador de shaders",
+    ),
+    (
+        "lsfg.download_details",
+        "Microsoft DXC v1.8.2505.1 from github.com/microsoft/DirectXShaderCompiler (release-assets.githubusercontent.com), checked with a fixed SHA-256.",
+        "Microsoft DXC v1.8.2505.1 de github.com/microsoft/DirectXShaderCompiler (release-assets.githubusercontent.com), conferido com um SHA-256 fixo.",
     ),
     (
         "lsfg.download_confirm",
-        "Download compiler and prepare shaders",
-        "Baixar compilador e preparar shaders",
+        "Download the compiler…",
+        "Baixar o compilador…",
     ),
     (
         "sm86.error.0",
@@ -229,18 +244,33 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "sm86.consent_title",
-        "Get official frame generation components",
-        "Obter componentes oficiais de geração de quadros",
+        "Download the official frame generation components",
+        "Baixar os componentes oficiais de geração de quadros",
+    ),
+    (
+        "sm86.check_title",
+        "Check for a newer version",
+        "Verificar se há versão mais nova",
     ),
     (
         "sm86.check_consent",
-        "Contact the official GitHub release API to compare the latest version with your local catalog?",
-        "Consultar a API oficial de releases do GitHub para comparar a versão mais recente com seu catálogo local?",
+        "Ask GitHub for the latest version of the frame generation components and compare it with the one you have?",
+        "Perguntar ao GitHub qual é a versão mais recente dos componentes de geração de quadros e comparar com a que você tem?",
+    ),
+    (
+        "sm86.check_details",
+        "Host: api.github.com (sdli1995/dlssg_for_sm86, latest release). Nothing is downloaded.",
+        "Host: api.github.com (sdli1995/dlssg_for_sm86, versão mais recente). Nada é baixado.",
     ),
     (
         "sm86.download_consent",
-        "Download dlssg_for_sm86 from its official GitHub release and verify its hash? Files stay in app data until you confirm a game review. Up to 256 MiB download and 1 GiB unpacked. No telemetry.",
-        "Baixar dlssg_for_sm86 da release oficial no GitHub e verificar seu hash? Os arquivos ficam nos dados do app até você confirmar a revisão do jogo. Até 256 MiB de download e 1 GiB descompactado. Sem telemetria.",
+        "Retoque downloads dlssg_for_sm86 from its official release and checks it. The files stay in the app until you confirm a game's review. No telemetry.",
+        "O Retoque baixa o dlssg_for_sm86 da versão oficial e o verifica. Os arquivos ficam no app até você confirmar a revisão de um jogo. Sem telemetria.",
+    ),
+    (
+        "sm86.download_details",
+        "Hosts: api.github.com and github.com (sdli1995/dlssg_for_sm86). Checked against the release's SHA-256. At most 256 MB to download and 1 GB unpacked.",
+        "Hosts: api.github.com e github.com (sdli1995/dlssg_for_sm86). Conferido com o SHA-256 da versão. No máximo 256 MB de download e 1 GB descompactado.",
     ),
     (
         "sm86.kit_available",
@@ -252,8 +282,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Third-party runtimes and kernels retain their own terms; the complete package is not MIT. License texts and notices are preserved in the app cache.",
         "Runtimes e kernels de terceiros mantêm seus próprios termos; o pacote completo não é MIT. Licenças e avisos são preservados no cache do app.",
     ),
-    ("sm86.confirm", "Confirm", "Confirmar"),
-    ("sm86.later", "Later", "Agora não"),
+    ("sm86.import", "Import", "Importar"),
     (
         "sm86.download_help",
         "Get the official release once and reuse it across games. Game installation always has a separate review.",
@@ -404,7 +433,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("mdl.empty_title", "Bring your own model", "Adicione seu modelo"),
     ("mdl.version", "Version", "Versão"),
     ("mdl.dll_filter", "Model DLL", "DLL do modelo"),
-    ("unit.mib", "MiB", "MiB"),
     ("unit.ms", "ms", "ms"),
     ("unknown", "—", "—"),
     (
@@ -441,9 +469,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("value.unset", "unset", "não definido"),
     ("ref.unknown_file", "unknown file", "arquivo desconhecido"),
     ("ref.reshade", "ReShade", "ReShade"),
-    ("kind.install", "install", "instalação"),
-    ("kind.uninstall", "uninstall", "remoção"),
-    ("kind.settings", "settings", "ajustes"),
     ("store.steam", "Steam", "Steam"),
     ("store.heroic", "Heroic", "Heroic"),
     ("store.lutris", "Lutris", "Lutris"),
@@ -455,9 +480,14 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("runtime.wine", "Wine", "Wine"),
     ("runtime.linux", "Linux", "Linux"),
     (
-        "job.failed",
-        "The operation could not finish",
-        "Não foi possível concluir a operação",
+        "error.io",
+        "Could not read or write {file}.",
+        "Não foi possível ler ou gravar {file}.",
+    ),
+    (
+        "error.io_any",
+        "Could not read or write a file.",
+        "Não foi possível ler ou gravar um arquivo.",
     ),
     ("technical.details", "Technical details", "Detalhes técnicos"),
     (
@@ -668,6 +698,21 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.refused", "Nothing will be written:", "Nada será gravado:"),
     ("inst.working", "Working…", "Trabalhando…"),
     ("inst.done", "Done.", "Pronto."),
+    (
+        "inst.failed_install",
+        "The install did not finish",
+        "A instalação não foi concluída",
+    ),
+    (
+        "inst.failed_uninstall",
+        "The uninstall did not finish",
+        "A desinstalação não foi concluída",
+    ),
+    (
+        "inst.failed_settings",
+        "The settings were not saved",
+        "Os ajustes não foram salvos",
+    ),
     ("inst.launch", "Steam launch option", "Opção de inicialização da Steam"),
     (
         "inst.launch_help",
@@ -678,18 +723,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.copied", "Copied", "Copiado"),
     (
         "ref.running",
-        "The game is running (exit 3):",
-        "O jogo está aberto (saída 3):",
+        "The game is running. Close it and try again:",
+        "O jogo está aberto. Feche-o e tente de novo:",
     ),
     (
         "ref.foreign",
-        "A file at one of our names is not ours (exit 4):",
-        "Um arquivo com um dos nossos nomes não é nosso (saída 4):",
+        "A file with the same name was not placed by Retoque:",
+        "Um arquivo com o mesmo nome não foi colocado pelo Retoque:",
     ),
     (
         "ref.second",
-        "Another proxy already holds OptiScaler (exit 5):",
-        "Outro proxy já tem o OptiScaler (saída 5):",
+        "Another file already loads OptiScaler in this game:",
+        "Outro arquivo já carrega o OptiScaler neste jogo:",
     ),
     (
         "ref.receipt",
@@ -829,6 +874,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("left.failed", "Cleanup stopped", "Limpeza interrompida"),
     ("rs.ready", "Ready to install:", "Pronto para instalar:"),
+    ("rs.checking", "Checking ReShade…", "Verificando o ReShade…"),
+    ("rs.consent_title", "Download ReShade 6.8.0", "Baixar o ReShade 6.8.0"),
+    (
+        "rs.consent_body",
+        "Retoque downloads the official ReShade installer with add-on support from reshade.me and keeps only its DLL. Your game changes only after a separate review.",
+        "O Retoque baixa o instalador oficial do ReShade com suporte a add-ons de reshade.me e guarda só a DLL dele. Seu jogo só muda depois de outra revisão.",
+    ),
+    (
+        "rs.consent_details",
+        "Host: reshade.me. The installer and the DLL taken from it have fixed SHA-256 hashes. License: BSD-3-Clause.",
+        "Host: reshade.me. O instalador e a DLL tirada dele têm hashes SHA-256 fixos. Licença: BSD-3-Clause.",
+    ),
     ("sess.title", "Last session", "Última sessão"),
     ("sess.driver", "driver", "driver"),
     ("sess.base", "Real frames", "Quadros reais"),
@@ -881,13 +938,25 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("card.launch", "Steam launch option", "Opção de inicialização da Steam"),
     ("yes", "yes", "sim"),
     ("no", "no", "não"),
-    ("error", "Error", "Erro"),
     ("cancel", "Cancel", "Cancelar"),
     // Shared words of the design system (widgets::busy, consent_modal and info dialogs).
     ("progress.of", "of", "de"),
     ("not_now", "Not now", "Agora não"),
     ("close", "Close", "Fechar"),
     ("download", "Download", "Baixar"),
+    ("check_now", "Check", "Verificar"),
+    ("size.up_to", "up to {size}", "até {size}"),
+    // The top bar's spinner: what is running, in the user's words.
+    (
+        "busy.writing",
+        "Applying changes to a game…",
+        "Aplicando alterações em um jogo…",
+    ),
+    (
+        "busy.reading",
+        "Reading game information…",
+        "Lendo informações dos jogos…",
+    ),
     // Before / after viewer (compare.rs).
     ("canvas", "Comparison image", "Imagem de comparação"),
     ("title", "Before / after", "Antes / depois"),
@@ -1097,6 +1166,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("tab.review_install", "Review installation…", "Revisar instalação…"),
     ("tab.loading", "Reading game settings…", "Lendo os ajustes do jogo…"),
     ("mdl.loading", "Reading model version…", "Lendo a versão do modelo…"),
+    ("mdl.reading_catalog", "Reading your models…", "Lendo seus modelos…"),
     ("mdl.beside", "Found beside the game", "Encontrado na pasta do jogo"),
     (
         "mdl.from_catalog",
@@ -1315,6 +1385,11 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Ajustes para sua placa de vídeo",
     ),
     ("auto.checking", "Checking this game…", "Conferindo este jogo…"),
+    (
+        "auto.reading_components",
+        "Reading your components…",
+        "Lendo seus componentes…",
+    ),
     (
         "auto.none",
         "No automatic changes recommended for this GPU and game.",
@@ -1657,7 +1732,9 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Unsupported item. Choose an nvngx_dlssnr*.dll file or a game/component folder.",
         "Item não suportado. Escolha nvngx_dlssnr*.dll ou uma pasta de jogo/componente.",
     ),
-    ("drop.confirm", "Confirm", "Confirmar"),
+    ("drop.import", "Import", "Importar"),
+    ("drop.add_game", "Add to library", "Adicionar à biblioteca"),
+    ("drop.checking", "Checking the file…", "Verificando o arquivo…"),
     ("doctor.title", "Retoque Doctor", "Retoque Doctor"),
     ("doctor.prepare", "Prepare repair…", "Preparar reparo…"),
     ("doctor.evidence", "Evidence", "Evidências"),
@@ -1707,15 +1784,24 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "dlss.consent",
-        "Download SR, RR and FG directly from NVIDIA (115 MB)? Only the kinds already in the game will be replaced after a separate review. NVIDIA license applies.",
-        "Baixar SR, RR e FG diretamente da NVIDIA (115 MB)? Apenas os tipos já presentes no jogo serão substituídos após outra revisão. Aplica-se a licença NVIDIA.",
+        "Retoque downloads Super Resolution, Ray Reconstruction and Frame Generation directly from NVIDIA. Only the kinds the game already has are replaced, after a separate review.",
+        "O Retoque baixa Super Resolution, Ray Reconstruction e Frame Generation diretamente da NVIDIA. Só os tipos que o jogo já tem são trocados, depois de outra revisão.",
+    ),
+    (
+        "dlss.consent_title",
+        "Download NVIDIA DLSS 310.9.16",
+        "Baixar o NVIDIA DLSS 310.9.16",
+    ),
+    (
+        "dlss.consent_details",
+        "Hosts: raw.githubusercontent.com and media.githubusercontent.com (NVIDIA/DLSS, v310.9.16). Each file is checked against a fixed size and SHA-256. The NVIDIA DLSS license applies.",
+        "Hosts: raw.githubusercontent.com e media.githubusercontent.com (NVIDIA/DLSS, v310.9.16). Cada arquivo é conferido com tamanho e SHA-256 fixos. Vale a licença do NVIDIA DLSS.",
     ),
     (
         "dlss.caution",
         "DLL changes may be incompatible with a game or its anti-cheat. Check the game policy before updating. Originals are backed up for restoration.",
         "Trocas de DLL podem ser incompatíveis com o jogo ou seu anticheat. Confira a política do jogo antes de atualizar. Os originais terão backup para restauração.",
     ),
-    ("dlss.confirm_download", "Confirm download", "Confirmar download"),
     ("dlss.license", "Read NVIDIA license", "Ler licença NVIDIA"),
     (
         "dlss.error.0",
@@ -1871,21 +1957,19 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "payload.check_consent",
-        "Query GitHub Releases (gabrielmaialva33/retoque) to check for a newer Retoque payload?",
-        "Consultar o GitHub Releases (gabrielmaialva33/retoque) para verificar se há uma versão mais nova do Retoque?",
+        "Ask GitHub whether there is a newer version of the Retoque files?",
+        "Perguntar ao GitHub se há uma versão mais nova dos arquivos do Retoque?",
     ),
     (
         "payload.download_consent",
-        "Download and verify the latest Retoque payload (OptiScaler.dll, forwarder and INI) from gabrielmaialva33/retoque into app data? Game folders are not modified until you review an installation.",
-        "Baixar e verificar o pacote mais recente do Retoque (OptiScaler.dll, forwarder e INI) de gabrielmaialva33/retoque na pasta de dados do app? Nenhum jogo será alterado antes da revisão da instalação.",
+        "Retoque downloads its latest files from the official release and checks them. Your games do not change until you review an install.",
+        "O Retoque baixa os arquivos mais recentes da versão oficial e os verifica. Seus jogos não mudam até você revisar uma instalação.",
     ),
     (
         "payload.hosts_note",
         "Allowed HTTPS hosts: api.github.com, github.com/gabrielmaialva33/retoque and release-assets.githubusercontent.com. Verified with SHA256SUMS and the GitHub SHA-256 digest.",
         "Hosts HTTPS permitidos: api.github.com, github.com/gabrielmaialva33/retoque e release-assets.githubusercontent.com. Verificado com SHA256SUMS e digest SHA-256 do GitHub.",
     ),
-    ("payload.confirm", "Continue", "Continuar"),
-    ("payload.later", "Not now", "Agora não"),
     (
         "payload.progress",
         "Downloading Retoque payload…",
@@ -1986,16 +2070,15 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "nr_fetch.consent_title",
-        "Get a compatible NR model",
-        "Obter um modelo NR compatível",
+        "Download a compatible NR model",
+        "Baixar um modelo NR compatível",
     ),
     (
         "nr_fetch.consent_body",
-        "Download this archive over HTTPS into the app catalog, verify its size and SHA-256, and extract only nvngx_dlssnr.dll? Game settings are reviewed separately before any write.",
-        "Baixar este pacote por HTTPS para o catálogo do aplicativo, verificar o tamanho e o SHA-256 e extrair apenas nvngx_dlssnr.dll? Os ajustes do jogo são revisados separadamente antes de qualquer gravação.",
+        "This model comes from the community, not from NVIDIA. Retoque checks it and keeps only the model file. Your game's settings change only after a separate review.",
+        "Este modelo vem da comunidade, não da NVIDIA. O Retoque o verifica e guarda só o arquivo do modelo. Os ajustes do seu jogo só mudam depois de outra revisão.",
     ),
-    ("nr_fetch.confirm", "Confirm download", "Confirmar download"),
-    ("nr_fetch.later", "Later", "Agora não"),
+    ("nr_fetch.later", "Not now", "Agora não"),
     (
         "nr_fetch.refresh_catalog",
         "Refresh community catalog…",
@@ -2008,14 +2091,24 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "nr_fetch.refresh_body",
-        "Fetch catalog.json from ApolloF/DLSS5-Updater-catalog on GitHub (up to 8 MiB)? Only entries on RankFTW/rhi-repo releases with a SHA-256 are accepted; unprobed entries are never assumed compatible.",
-        "Baixar catalog.json de ApolloF/DLSS5-Updater-catalog no GitHub (até 8 MiB)? Apenas entradas em releases de RankFTW/rhi-repo com SHA-256 são aceitas; entradas não sondadas nunca são assumidas como compatíveis.",
+        "Download the latest list of community NR models from GitHub?",
+        "Baixar do GitHub a lista mais recente de modelos NR da comunidade?",
+    ),
+    (
+        "nr_fetch.refresh_details",
+        "catalog.json from ApolloF/DLSS5-Updater-catalog (raw.githubusercontent.com, at most 8 MB). Only entries on RankFTW/rhi-repo releases with a SHA-256 are accepted; untested entries are never assumed compatible.",
+        "catalog.json de ApolloF/DLSS5-Updater-catalog (raw.githubusercontent.com, no máximo 8 MB). Só entradas em versões de RankFTW/rhi-repo com SHA-256 são aceitas; entradas não testadas nunca são tidas como compatíveis.",
     ),
     ("nr_fetch.confirm_refresh", "Refresh catalog", "Atualizar catálogo"),
     (
         "nr_fetch.downloading",
         "Downloading community NR model",
         "Baixando modelo NR da comunidade",
+    ),
+    (
+        "nr_fetch.refreshing",
+        "Downloading the community model list…",
+        "Baixando a lista de modelos da comunidade…",
     ),
     (
         "nr_fetch.no_compatible_gpu",

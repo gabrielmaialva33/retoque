@@ -13,6 +13,15 @@ fn gpu_arch_key(arch: Arch) -> &'static str {
     }
 }
 
+/// The title over a change that did not finish.
+fn failed_key(kind: PlanKind) -> &'static str {
+    match kind {
+        PlanKind::Install => "inst.failed_install",
+        PlanKind::Uninstall => "inst.failed_uninstall",
+        PlanKind::Settings => "inst.failed_settings",
+    }
+}
+
 impl RetoqueApp {
     pub(crate) fn install_tab(&mut self, ui: &mut egui::Ui) {
         let Some(target) = self.view.target.clone() else { return };
@@ -21,23 +30,30 @@ impl RetoqueApp {
         // The banner's button is the way to install; progress and the outcome of the last change still show here,
         // first, and only while there is one. The proxy name and the other options sit closed at the end.
         let writing = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied();
-        if writing.is_some() || self.view.applied.is_some() {
+        let failed = match &self.view.applied {
+            Some((kind, Err(e))) => Some((*kind, e)),
+            _ => None,
+        };
+        if writing.is_some() || matches!(self.view.applied, Some((_, Ok(())))) {
             widgets::card(ui, |ui| {
                 if let Some((done, total)) = writing {
-                    ui.add(
-                        egui::ProgressBar::new(done as f32 / total.max(1) as f32)
-                            .text(format!("{} {done}/{total}", t(self.lang, "inst.working"))),
-                    );
+                    ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).text(format!(
+                        "{} · {done} {} {total}",
+                        t(self.lang, "inst.working"),
+                        t(self.lang, "progress.of")
+                    )));
                 }
-                if let Some((kind, result)) = &self.view.applied {
-                    match result {
-                        Ok(()) => ui.colored_label(theme::GOOD, t(self.lang, "inst.done")),
-                        Err(e) => ui.colored_label(
-                            theme::BAD,
-                            format!("{} ({}): {e}", t(self.lang, "error"), plan_kind_name(self.lang, *kind)),
-                        ),
-                    };
+                if matches!(self.view.applied, Some((_, Ok(())))) {
+                    ui.colored_label(theme::GOOD, t(self.lang, "inst.done"));
                 }
+            });
+            ui.add_space(12.0);
+        }
+        // A failed change: what did not finish, why in plain words, what to do, and the details folded.
+        if let Some((kind, error)) = failed {
+            widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
+                widgets::card_title(ui, t(self.lang, failed_key(kind)));
+                crate::error::body(ui, error, self.lang, &self.cmd_tx);
             });
             ui.add_space(12.0);
         }

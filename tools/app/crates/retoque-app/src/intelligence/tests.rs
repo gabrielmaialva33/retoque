@@ -276,7 +276,9 @@ fn a_failed_read_cannot_release_an_in_flight_writer() {
     let target = temp.path().to_owned();
     app.jobs
         .spawn("doctor", Some(target), |_| panic!("synthetic diagnostic failure"));
-    settle(&mut app, |app| app.error.is_some());
+    // The failure is reported once, as a toast.
+    settle(&mut app, |app| app.toasts.iter().any(|toast| toast.failed));
+    assert!(app.error.is_none());
     assert!(app.writing.contains_key(temp.path()));
 }
 #[test]

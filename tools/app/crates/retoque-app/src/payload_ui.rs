@@ -447,14 +447,15 @@ impl RetoqueApp {
         }
 
         if self.payload_ui.busy {
-            ui.spinner();
-            ui.label(
-                RichText::new(format!(
-                    "{} ({:.1} MiB)",
-                    self.tr("payload.progress"),
-                    self.payload_ui.downloaded as f64 / 1_048_576.0
-                ))
-                .small(),
+            // A download fetches the release a check found; its size is known then.
+            let done = self.payload_ui.downloaded;
+            let total = self.payload_ui.release.as_ref().map(|r| r.size);
+            widgets::busy(
+                ui,
+                self.lang,
+                self.tr("payload.progress"),
+                (done > 0).then_some(done),
+                total,
             );
         } else if self.payload_ui.no_release {
             ui.colored_label(theme::WARN, RichText::new(self.tr("payload.no_release")).small());
@@ -485,7 +486,7 @@ impl RetoqueApp {
         }
 
         if let Some(error) = &self.payload_ui.error {
-            ui.colored_label(theme::BAD, RichText::new(diagnostic(self.lang, error)).small());
+            crate::error::summary(ui, error, self.lang, &self.cmd_tx);
         }
 
         if self.payload.is_some() {
@@ -504,27 +505,35 @@ impl RetoqueApp {
         let Some(consent) = self.payload_ui.consent else {
             return;
         };
-        let mut confirm = false;
-        let mut cancel = false;
-        egui::Modal::new(egui::Id::unique("payload-consent")).show(ctx, |ui| {
-            ui.set_max_width(520.0);
-            ui.heading(self.tr("payload.consent_title"));
-            ui.label(self.tr(match consent {
-                Consent::Check => "payload.check_consent",
-                Consent::Download => "payload.download_consent",
-            }));
-            ui.label(RichText::new(self.tr("payload.hosts_note")).small().color(theme::MUTED));
-            ui.horizontal(|ui| {
-                confirm = ui.button(self.tr("payload.confirm")).clicked();
-                cancel = ui.button(self.tr("payload.later")).clicked();
-            });
-        });
-        if cancel {
-            self.payload_ui.consent = None;
-        }
-        if confirm {
-            self.payload_ui.consent = None;
-            self.payload_start(consent);
+        let lang = self.lang;
+        let (body, confirm) = match consent {
+            Consent::Check => ("payload.check_consent", t(lang, "check_now").to_owned()),
+            // A download fetches the release the last check found (its size is known) or the latest one.
+            Consent::Download => (
+                "payload.download_consent",
+                download_label(lang, self.payload_ui.release.as_ref().map(|r| r.size)),
+            ),
+        };
+        let details = |ui: &mut egui::Ui| {
+            ui.add(egui::Label::new(RichText::new(t(lang, "payload.hosts_note")).small()).wrap());
+        };
+        // Both are started by the user (a button), so they are dismissed with "Cancel".
+        match widgets::consent_modal(
+            ctx,
+            lang,
+            "payload-consent",
+            t(lang, "payload.consent_title"),
+            &[t(lang, body)],
+            &confirm,
+            t(lang, "cancel"),
+            Some(&details),
+        ) {
+            Some(widgets::Answer::Cancel) => self.payload_ui.consent = None,
+            Some(widgets::Answer::Confirm) => {
+                self.payload_ui.consent = None;
+                self.payload_start(consent);
+            }
+            None => {}
         }
     }
 }
@@ -641,8 +650,7 @@ mod tests {
                 .click();
             h.run_steps(2);
             h.get_by_label(t(lang, "payload.consent_title"));
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.later"))
-                .click();
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
             h.run_steps(2);
             assert!(!h.state().payload_ui.no_release);
 
@@ -650,7 +658,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.check"))
                 .click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "check_now"))
                 .click();
             wait_idle(&mut h);
 
@@ -730,7 +738,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.check"))
                 .click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "check_now"))
                 .click();
             wait_idle(&mut h);
 
@@ -741,8 +749,8 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.download_now"))
                 .click();
             h.run_steps(2);
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.confirm"))
-                .click();
+            let download = download_label(lang, h.state().payload_ui.release.as_ref().map(|r| r.size));
+            h.get_by_role_and_label(egui::Role::Button, &download).click();
             wait_idle(&mut h);
 
             assert_eq!(h.state().saved.payload_source, Some(PayloadSource::Release));

@@ -39,6 +39,10 @@ impl State {
     pub(crate) fn failed(&mut self) {
         self.busy = false;
     }
+    /// An import or the official download is running.
+    pub(crate) fn busy(&self) -> bool {
+        self.busy
+    }
 }
 pub enum Event {
     Inspected {
@@ -220,9 +224,9 @@ impl RetoqueApp {
                         .iter()
                         .map(|a| {
                             format!(
-                                "{} · {} B · {} · {}",
+                                "{} · {} · {} · {}",
                                 a.file,
-                                a.size,
+                                size_text(self.lang, a.size),
                                 a.version.as_deref().unwrap_or(self.tr("mdl.version_unknown")),
                                 a.product.as_deref().unwrap_or(&a.name)
                             )
@@ -343,7 +347,7 @@ impl RetoqueApp {
                     change = Some(Change::Uninstall);
                 }
             } else if self.tuning.reshade.error.is_none() {
-                ui.spinner();
+                widgets::busy(ui, lang, t(lang, "rs.checking"), None, None);
             }
             // The downloaded copy is news only while the game has none: "ready to install", not a second status line.
             let absent = self.tuning.reshade.snapshot.as_ref().is_none_or(|s| s.build.is_none());
@@ -369,23 +373,39 @@ impl RetoqueApp {
                 }
             });
             if self.tuning.reshade.busy {
-                ui.spinner();
-                ui.label(t(lang, "rs.preparing"));
-            }
-            if self.tuning.reshade.consent {
-                ui.label(t(lang, "rs.consent"));
-                download = ui
-                    .add_enabled(enabled, egui::Button::new(t(lang, "rs.confirm_download")))
-                    .clicked();
-                if ui.button(t(lang, "cancel")).clicked() {
-                    self.tuning.reshade.consent = false;
-                }
+                widgets::busy(ui, lang, t(lang, "rs.preparing"), None, None);
             }
             if let Some(error) = &self.tuning.reshade.error {
-                ui.colored_label(theme::BAD, diagnostic(lang, error));
+                crate::error::card(ui, error, lang, &self.cmd_tx);
             }
             ui.label(t(lang, "rs.static"));
         });
+        if self.tuning.reshade.consent {
+            let details = |ui: &mut egui::Ui| {
+                ui.add(egui::Label::new(RichText::new(t(lang, "rs.consent_details")).small()).wrap());
+                ui.add(egui::Label::new(RichText::new(data::URL).small().monospace()).wrap());
+                for (what, sha) in [("setup", data::SETUP_SHA), ("DLL", data::DLL_SHA)] {
+                    ui.add(
+                        egui::Label::new(RichText::new(format!("SHA-256 ({what}) {sha}")).small().monospace()).wrap(),
+                    );
+                }
+            };
+            match widgets::consent_modal_when(
+                ui.ctx(),
+                lang,
+                "reshade-download",
+                t(lang, "rs.consent_title"),
+                &[t(lang, "rs.consent_body")],
+                &download_label(lang, Some(data::SETUP_SIZE)),
+                t(lang, "cancel"),
+                Some(&details),
+                enabled,
+            ) {
+                Some(widgets::Answer::Confirm) => download = true,
+                Some(widgets::Answer::Cancel) => self.tuning.reshade.consent = false,
+                None => {}
+            }
+        }
         if let Some(change) = change {
             self.reshade_request(change);
         }
@@ -492,8 +512,9 @@ mod tests {
                 .build_ui_state(|ui, app: &mut RetoqueApp| app.reshade_card(ui), app);
             h.get_by_role_and_label(egui::Role::Button, t(lang, "rs.install"))
                 .click();
-            h.run_steps(2);
-            h.get_by_label(t(lang, "rs.consent"));
+            // The dialog opens on the next frame and is measured once before it is drawn.
+            h.run_steps(3);
+            h.get_by_label(t(lang, "rs.consent_body"));
             assert!(!h.state().tuning.reshade.busy);
             h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
             h.run_steps(2);

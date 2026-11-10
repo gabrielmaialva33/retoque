@@ -244,7 +244,8 @@ impl eframe::App for RetoqueApp {
         self.shell_shortcuts(ui.ctx());
         if ui.ctx().input(|i| i.viewport().close_requested()) && !self.writing.is_empty() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.error = Some(self.tr("app.wait_write").into());
+            // Information, not a failure: the window stays open until the write ends.
+            self.toast(self.tr("app.wait_write").into(), None, false);
         }
         egui::Panel::top("top")
             .frame(
