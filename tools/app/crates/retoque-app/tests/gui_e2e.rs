@@ -57,12 +57,22 @@ fn click(ui: &mut Window, role: Role, text: &str) {
     ui.run_steps(3);
 }
 
+/// The install previews sit in the closed "Install options" section at the end of the Retoque tab.
+fn open_install_options(ui: &mut Window) {
+    if ui.query_by_label("Preview install").is_none() {
+        wait_label(ui, "Install options");
+        ui.get_by_label("Install options").click_accesskit();
+        ui.run_steps(3);
+    }
+    wait_label(ui, "Preview install");
+}
+
 fn select_game(ui: &mut Window) {
     wait(ui, "FakeGame library row", |ui| {
         ui.query_by_role_and_label(Role::Button, "FakeGame").is_some()
     });
     click(ui, Role::Button, "FakeGame");
-    wait_label(ui, "Preview install");
+    open_install_options(ui);
 }
 
 fn choose_stage(ui: &mut Window, value: &str) {
@@ -189,6 +199,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     let mut ui = window();
     select_game(&mut ui);
     wait_label(&mut ui, "Not installed");
+    open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview install");
     wait(&mut ui, "install plan", |ui| {
         ui.query_by_role_and_label(Role::Button, "Install").is_some()
@@ -196,7 +207,8 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     assert!(label(&ui, "What will be done"));
     assert_eq!(snapshot(&game), original);
     click(&mut ui, Role::Button, "Install");
-    wait_label(&mut ui, "Retoque installed");
+    // The Retoque tile says it now: "Retoque: Up to date, build …".
+    wait_label(&mut ui, "Retoque: Up to date");
     for file in [
         "dxgi.dll",
         "OptiScaler.dll",
@@ -280,6 +292,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     );
     let before_refusal = snapshot(&game);
     click(&mut ui, Role::Tab, "Install");
+    open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview install");
     wait_label(&mut ui, "The game is running");
     assert!(ui.query_by_role_and_label(Role::Button, "Update").is_none());
@@ -287,6 +300,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     drop(child);
 
     // Modified settings are user-owned: uninstall must show Keep, not silently remove this INI.
+    open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview uninstall");
     wait_label(&mut ui, "left in place, it changed since this script wrote it");
     assert_eq!(snapshot(&game), before_refusal);
@@ -302,6 +316,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), installed_ini);
     assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
     click(&mut ui, Role::Tab, "Install");
+    open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview uninstall");
     wait(&mut ui, "uninstall plan", |ui| {
         ui.query_by_role_and_label(Role::Button, "Uninstall").is_some()
@@ -316,6 +331,8 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     expected.insert(PathBuf::from("OptiScaler"), None);
     assert_eq!(remaining, expected);
     assert!(model.path.is_file(), "uninstall must leave the user catalog intact");
+
+    open_install_options(&mut ui);
 
     click(&mut ui, Role::Button, "Preview install");
     wait(&mut ui, "fresh reinstall plan", |ui| {

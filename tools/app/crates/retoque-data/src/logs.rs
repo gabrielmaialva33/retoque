@@ -49,6 +49,8 @@ pub struct Summary {
     pub highlights_omitted: usize,
     /// Lines longer than 16 KiB are drained without retaining the tail; their prefix is still parsed.
     pub truncated_lines: usize,
+    /// Frame rates and signals of the session this log covers (`session.rs`); None without status lines.
+    pub pacing: Option<crate::session::Pacing>,
 }
 
 fn log_name(name: &str, stem: &str) -> bool {
@@ -221,10 +223,12 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
     let mut reader = BufReader::new(File::open(log)?);
     let mut bytes = Vec::new();
     let mut mean = 0.0;
+    let mut pacing = crate::session::PacingBuilder::default();
     while let Some(truncated) = bounded_line(&mut reader, &mut bytes)? {
         result.truncated_lines += usize::from(truncated);
         let decoded = String::from_utf8_lossy(&bytes);
         let line = decoded.trim();
+        pacing.observe(line);
         for kind in signal_kinds(line) {
             if !result
                 .diagnostic_lines
@@ -348,6 +352,7 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
         }
     }
     result.nr_gpu_ms = (result.timing_samples > 0).then_some(mean);
+    result.pacing = pacing.finish();
     Ok(result)
 }
 

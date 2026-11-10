@@ -58,6 +58,9 @@ pub struct State {
     pub fetcher: Option<Arc<dyn payload_fetch::Fetcher + Send + Sync>>,
     pub cache_dir: Option<PathBuf>,
     pub beside_dir: Option<PathBuf>,
+    /// The footer's source controls (path, choose, switch source, get a release) are for people who manage
+    /// Retoque's files; everyone else sees one line. Opened automatically while no files are found.
+    pub advanced: bool,
 }
 
 impl RetoqueApp {
@@ -357,74 +360,86 @@ impl RetoqueApp {
     }
 
     pub(crate) fn payload_bar(&mut self, ui: &mut egui::Ui) {
-        ui.label(RichText::new(self.tr("app.payload")).small().color(theme::MUTED));
+        // One line by default: which Retoque the app installs and whether a newer one exists. The source
+        // controls open with "Advanced", or by themselves when no Retoque files are found.
+        let advanced = self.payload_ui.advanced || self.payload.is_none();
         match &self.payload {
             Some(p) => {
-                let text = if let Some(rec) = &self.payload_ui.record
-                    && &rec.payload_dir == p
-                {
-                    format!("v{} ({})", rec.release.version, short_path(p))
-                } else {
-                    short_path(p)
+                // A release says its own version; files from anywhere else are named by their build, the id the
+                // game page's tiles show. OptiScaler's DLL version is not Retoque's.
+                let text = match &self.payload_ui.record {
+                    Some(rec) if &rec.payload_dir == p => format!("Retoque {}", rec.release.version),
+                    _ => match self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
+                        Some(hash) => format!("Retoque · {} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
+                        None => self.tr("app.payload").to_owned(),
+                    },
                 };
-                ui.label(RichText::new(text).small().monospace().color(theme::MUTED))
-                    .on_hover_text(crate::format::display_path(p));
+                let response = ui.label(RichText::new(text).small().color(theme::MUTED));
+                if advanced {
+                    ui.label(RichText::new(short_path(p)).small().monospace().color(theme::MUTED))
+                        .on_hover_text(crate::format::display_path(p));
+                } else {
+                    response.on_hover_text(crate::format::display_path(p));
+                }
             }
             None => {
+                ui.label(RichText::new(self.tr("app.payload")).small().color(theme::MUTED));
                 ui.colored_label(theme::WARN, RichText::new(self.tr("app.payload.none")).small());
             }
         }
 
-        if let Some(beside) = self.beside_payload_dir()
-            && self.payload.as_ref() != Some(&beside)
-            && ui.small_button(self.tr("payload.source.beside")).clicked()
-        {
-            self.saved.payload_source = Some(PayloadSource::BesideApp);
-            self.payload = Some(beside);
-            self.payload_ui.active_version = self
-                .payload
-                .as_ref()
-                .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
-            self.hash_payload();
-        }
+        if advanced {
+            if let Some(beside) = self.beside_payload_dir()
+                && self.payload.as_ref() != Some(&beside)
+                && ui.small_button(self.tr("payload.source.beside")).clicked()
+            {
+                self.saved.payload_source = Some(PayloadSource::BesideApp);
+                self.payload = Some(beside);
+                self.payload_ui.active_version = self
+                    .payload
+                    .as_ref()
+                    .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
+                self.hash_payload();
+            }
 
-        if ui.small_button(self.tr("app.payload.choose")).clicked() {
-            self.cmd_tx.send(AppCommand::Remedy(Remedy::ChoosePayloadDir, None));
-        }
+            if ui.small_button(self.tr("app.payload.choose")).clicked() {
+                self.cmd_tx.send(AppCommand::Remedy(Remedy::ChoosePayloadDir, None));
+            }
 
-        if let Some(folder) = self.saved.payload.clone().filter(|p| model::is_payload(p))
-            && self.payload.as_ref() != Some(&folder)
-            && ui.small_button(self.tr("payload.source.folder")).clicked()
-        {
-            self.saved.payload_source = Some(PayloadSource::Folder);
-            self.payload = Some(folder);
-            self.payload_ui.active_version = self
-                .payload
-                .as_ref()
-                .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
-            self.hash_payload();
-        }
+            if let Some(folder) = self.saved.payload.clone().filter(|p| model::is_payload(p))
+                && self.payload.as_ref() != Some(&folder)
+                && ui.small_button(self.tr("payload.source.folder")).clicked()
+            {
+                self.saved.payload_source = Some(PayloadSource::Folder);
+                self.payload = Some(folder);
+                self.payload_ui.active_version = self
+                    .payload
+                    .as_ref()
+                    .and_then(|p| retoque_core::pe_version::file_version(&p.join("OptiScaler.dll")));
+                self.hash_payload();
+            }
 
-        if let Some(rec) = self.payload_ui.record.clone()
-            && self.payload.as_ref() != Some(&rec.payload_dir)
-            && model::is_payload(&rec.payload_dir)
-            && ui.small_button(self.tr("payload.source.release")).clicked()
-        {
-            self.saved.payload_source = Some(PayloadSource::Release);
-            self.payload = Some(rec.payload_dir.clone());
-            self.payload_build = Some(Ok(rec.optiscaler_sha256.clone()));
-            self.payload_ui.active_version = rec.file_version.clone().or_else(|| Some(rec.release.version.clone()));
-            self.hash_payload();
-        }
+            if let Some(rec) = self.payload_ui.record.clone()
+                && self.payload.as_ref() != Some(&rec.payload_dir)
+                && model::is_payload(&rec.payload_dir)
+                && ui.small_button(self.tr("payload.source.release")).clicked()
+            {
+                self.saved.payload_source = Some(PayloadSource::Release);
+                self.payload = Some(rec.payload_dir.clone());
+                self.payload_build = Some(Ok(rec.optiscaler_sha256.clone()));
+                self.payload_ui.active_version = rec.file_version.clone().or_else(|| Some(rec.release.version.clone()));
+                self.hash_payload();
+            }
 
-        if ui
-            .add_enabled(
-                !self.payload_ui.busy,
-                egui::Button::new(self.tr("payload.download")).small(),
-            )
-            .clicked()
-        {
-            self.payload_ui.consent = Some(Consent::Download);
+            if ui
+                .add_enabled(
+                    !self.payload_ui.busy,
+                    egui::Button::new(self.tr("payload.download")).small(),
+                )
+                .clicked()
+            {
+                self.payload_ui.consent = Some(Consent::Download);
+            }
         }
 
         if ui
@@ -477,6 +492,20 @@ impl RetoqueApp {
 
         if let Some(error) = &self.payload_ui.error {
             ui.colored_label(theme::BAD, RichText::new(diagnostic(self.lang, error)).small());
+        }
+
+        if self.payload.is_some() {
+            let label = if self.payload_ui.advanced {
+                self.tr("payload.advanced_hide")
+            } else {
+                self.tr("payload.advanced_show")
+            };
+            if ui
+                .add(egui::Button::new(RichText::new(label).small()).frame(false))
+                .clicked()
+            {
+                self.payload_ui.advanced = !self.payload_ui.advanced;
+            }
         }
     }
 
@@ -638,7 +667,11 @@ mod tests {
             h.get_by_label(t(lang, "payload.no_release"));
             assert_eq!(h.state().payload.as_ref(), Some(&beside));
 
-            // Source (b) chosen folder and (a) beside app remain usable.
+            // Source (b) chosen folder and (a) beside app remain usable, under "Advanced": closed by default.
+            assert!(h.query_by_label(t(lang, "payload.source.folder")).is_none());
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.advanced_show"))
+                .click();
+            h.run_steps(2);
             h.get_by_role_and_label(egui::Role::Button, t(lang, "payload.source.folder"))
                 .click();
             wait_idle(&mut h);

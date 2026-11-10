@@ -345,8 +345,14 @@ impl RetoqueApp {
             } else if self.tuning.reshade.error.is_none() {
                 ui.spinner();
             }
-            if !self.tuning.reshade.cached_label.is_empty() {
-                ui.label(&self.tuning.reshade.cached_label);
+            // The downloaded copy is news only while the game has none: "ready to install", not a second status line.
+            let absent = self.tuning.reshade.snapshot.as_ref().is_none_or(|s| s.build.is_none());
+            if absent && !self.tuning.reshade.cached_label.is_empty() {
+                ui.label(
+                    RichText::new(format!("{} {}", t(lang, "rs.ready"), self.tuning.reshade.cached_label))
+                        .small()
+                        .color(theme::MUTED),
+                );
             }
             ui.horizontal_wrapped(|ui| {
                 offer = ui

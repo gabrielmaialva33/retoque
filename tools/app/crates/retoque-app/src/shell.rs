@@ -506,7 +506,7 @@ impl RetoqueApp {
             ui.painter().rect_filled(rect, 12, theme::CARD);
         }
         ui.painter()
-            .rect_filled(rect, 12, Color32::from_black_alpha(if compact { 200 } else { 155 }));
+            .rect_filled(rect, 12, Color32::from_black_alpha(if compact { 200 } else { 175 }));
         let mut child = ui.new_child(
             egui::UiBuilder::new()
                 .max_rect(rect.shrink(16.0))
@@ -524,7 +524,7 @@ impl RetoqueApp {
             child.label(RichText::new(&game.name).size(28.0).strong());
             child.add_space(22.0);
         }
-        self.status_chips(&mut child);
+        self.status_chips(&mut child, !compact);
         if compact {
             return;
         }

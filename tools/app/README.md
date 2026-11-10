@@ -157,6 +157,16 @@ optimize” for an install an old script made (registered under the proxy name i
 left out. Tiles under the banner show the graphics card, Retoque, Neural Rendering, frame generation and the
 game's DLSS files from facts already inspected.
 
+“Last session” on the Retoque tab reads the newest log the page already summarized (`retoque_data::session`,
+bounded memory): real and on-screen frame rates from the runtime's periodic status lines, measured from the
+time between them; the worst 5% of windows; how much of the session frame generation ran and what it multiplied;
+the share of drops below 80% of the median; and the real rate over time. Its advice covers a base too low for
+frame generation (under about 40 real fps), frequent drops (game streaming or too little free RAM), the
+fakenvapi stand-in that hides DLSS frame generation, and NR switched off mid-session. Without status lines in the
+log there is no card. Install options (proxy name, NR on, previews) sit closed at the end of the tab; the footer
+shows one line (Retoque's build, updates) and opens the payload source controls under “Advanced”, or by itself
+when no Retoque files are found.
+
 On RTX 30 (Ampere) two tuning items come from one field session (Dying Light: The Beast, RTX 3060, Windows,
 2026-11-10, DLSS-G through sm86 at 4.0x on screen with NR on): with sm86 and a game that ships DLSS-G,
 `[FrameGen] FGNvngxReplacement=None` and `[DLSSG] OverrideInterpolationCount=3` (MFG x4); for a D3D12 game,

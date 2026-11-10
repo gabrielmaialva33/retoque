@@ -202,7 +202,9 @@ pub(crate) fn step_group(step: &Step, steps: &[Step], destination_exists: bool) 
 
 // A relative ModelFile belongs to the proxy/executable folder, never to the app working directory.
 pub(crate) fn model_host_path(target: &Path, configured: &str) -> Option<PathBuf> {
-    let value = configured.trim();
+    // Builds before 2026-11-10 wrote the catalog path in Windows' verbatim form (\\?\C:\...): the same file.
+    let plain = display_path(Path::new(configured.trim()));
+    let value = plain.as_str();
     if value.is_empty() || value.eq_ignore_ascii_case("auto") {
         Some(target.join("nvngx_dlssnr.dll"))
     } else if value.contains(':') || value.starts_with(['/', '\\']) {
@@ -261,6 +263,16 @@ pub(crate) fn inspect_model(target: &Path, configured: &str) -> ModelInspection 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_verbatim_model_file_is_the_same_path() {
+        let target = Path::new("/game");
+        assert_eq!(
+            model_host_path(target, r"\\?\D:\Retoque\models\nvngx_dlssnr.dll"),
+            model_host_path(target, r"D:\Retoque\models\nvngx_dlssnr.dll")
+        );
+        assert_eq!(model_host_path(target, "auto"), Some(target.join("nvngx_dlssnr.dll")));
+    }
 
     #[test]
     fn display_path_and_short_path_strip_windows_verbatim_prefixes() {

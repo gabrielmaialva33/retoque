@@ -105,9 +105,20 @@ pub(crate) fn show(
                     ui.add_space(10.0);
                     // Retoque's own undo records (.retoque/*.ini, components.txt) are bookkeeping, not something the
                     // user decides on: one muted line per file instead of their raw contents.
+                    // Removing a file the same plan then restores from its backup is one change for the person
+                    // reading this ("restore"), not two: the removal is that restore's first step.
+                    let restored: Vec<&str> = plan
+                        .steps()
+                        .iter()
+                        .filter_map(|s| match s {
+                            retoque_core::Step::Restore { to, .. } => Some(to.as_str()),
+                            _ => None,
+                        })
+                        .collect();
                     let internal = |s: &retoque_core::Step| {
                         matches!(s, retoque_core::Step::SetIni { file, .. } | retoque_core::Step::UnsetIni { file, .. }
                             if file.starts_with(".retoque/"))
+                            || matches!(s, retoque_core::Step::Remove { path } if restored.contains(&path.as_str()))
                     };
                     let visible = plan
                         .steps()
