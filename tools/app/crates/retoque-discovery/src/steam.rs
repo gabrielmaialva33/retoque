@@ -596,6 +596,17 @@ fn ends_with_editor_or_engine(lower: &str) -> bool {
 }
 
 pub fn discover_steam(home: Option<&Path>, extra_roots: &[PathBuf], windows_runtime: bool) -> (Vec<Game>, Vec<String>) {
+    let (games, skipped, _) = discover_steam_with_leftovers(home, extra_roots, windows_runtime);
+    (games, skipped)
+}
+
+/// `discover_steam`, plus unregistered `steamapps/common` folders that are only Retoque leftovers.
+pub fn discover_steam_with_leftovers(
+    home: Option<&Path>,
+    extra_roots: &[PathBuf],
+    windows_runtime: bool,
+) -> (Vec<Game>, Vec<String>, Vec<PathBuf>) {
+    let mut leftovers: Vec<PathBuf> = Vec::new();
     let mut candidate_roots: Vec<PathBuf> = Vec::new();
     if let Some(h) = home {
         candidate_roots.push(h.join(".local/share/Steam"));
@@ -783,6 +794,10 @@ pub fn discover_steam(home: Option<&Path>, extra_roots: &[PathBuf], windows_runt
             let install_dir = normalize_path_buf(&folder_path);
             let game_targets = find_targets(&install_dir);
             if game_targets.is_empty() {
+                // The store uninstalled the game but not the files Retoque added: offer them for cleanup.
+                if crate::leftover::looks_like_leftover(&install_dir) {
+                    leftovers.push(install_dir);
+                }
                 continue;
             }
 
@@ -809,7 +824,7 @@ pub fn discover_steam(home: Option<&Path>, extra_roots: &[PathBuf], windows_runt
 
     let mut out: Vec<Game> = games_by_appid.into_values().collect();
     out.extend(orphan_games);
-    (out, skipped)
+    (out, skipped, leftovers)
 }
 
 fn resolve_steam_linux_runtime(

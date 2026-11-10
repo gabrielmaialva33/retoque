@@ -241,13 +241,33 @@ impl RetoqueApp {
                 Outcome::Lsfg(event) => self.lsfg_event(event),
                 Outcome::PayloadFetch(event) => self.payload_event(*event),
                 Outcome::NrFetch(event) => self.nr_fetch_event(event),
-                Outcome::Discovered { games, skipped, art } => {
+                Outcome::LeftoversRemoved(result) => {
+                    self.library_state.leftovers_busy = false;
+                    match result {
+                        Ok(done) => {
+                            let message = self
+                                .tr("left.done")
+                                .replace("{size}", &crate::leftovers_ui::size_text(self.lang, done.bytes));
+                            self.toast(message, None, false);
+                        }
+                        Err(error) => self.toast(self.tr("left.failed").into(), Some(error), true),
+                    }
+                    self.rescan();
+                }
+                Outcome::Discovered {
+                    games,
+                    skipped,
+                    art,
+                    leftovers,
+                } => {
                     if self.rescan_pending {
                         self.scanning = false;
                         self.rescan();
                         continue;
                     }
                     self.library_state.games = games;
+                    self.library_state.leftovers = leftovers;
+                    self.library_state.scroll_to_top = true;
                     self.library_state.art = art;
                     self.skipped = skipped;
                     self.scanning = false;

@@ -61,7 +61,11 @@ pub enum Outcome {
         games: Vec<Game>,
         skipped: Vec<String>,
         art: HashMap<String, Artwork>,
+        /// Folders a store uninstalled but Retoque's files kept, already inspected (only those with something to remove).
+        leftovers: Vec<retoque_core::leftovers::Leftover>,
     },
+    /// The reviewed leftover cleanup finished (totals over every folder), or stopped at the first failure.
+    LeftoversRemoved(Result<retoque_core::leftovers::Removed, AppError>),
     Status {
         target: PathBuf,
         result: Result<Status, AppError>,
@@ -113,11 +117,16 @@ pub enum Outcome {
 }
 
 pub fn discover(manual: Vec<PathBuf>, libraries: Vec<PathBuf>) -> Outcome {
-    let (mut games, skipped) = retoque_discovery::discover(&retoque_discovery::Config {
+    let (mut games, skipped, leftover_dirs) = retoque_discovery::discover_with_leftovers(&retoque_discovery::Config {
         manual,
         libraries,
         home: None,
     });
+    let leftovers = leftover_dirs
+        .iter()
+        .filter_map(|dir| retoque_core::leftovers::inspect(dir).ok())
+        .filter(|l| !l.remove.is_empty())
+        .collect();
     // The engine refuses a folder reached through a link (a receipt must not follow one), so a legitimate alias
     // such as ~/.steam/root is resolved once, here, and every later call uses the real path.
     for game in &mut games {
@@ -138,7 +147,27 @@ pub fn discover(manual: Vec<PathBuf>, libraries: Vec<PathBuf>) -> Outcome {
             Some((g.id.clone(), retoque_discovery::steam_artwork(app_id, home.as_deref())))
         })
         .collect();
-    Outcome::Discovered { games, skipped, art }
+    Outcome::Discovered {
+        games,
+        skipped,
+        art,
+        leftovers,
+    }
+}
+
+/// Remove each reviewed leftover; `retoque_core::leftovers::remove` refuses one that changed since the review.
+pub fn remove_leftovers(reviewed: Vec<retoque_core::leftovers::Leftover>) -> Outcome {
+    let mut total = retoque_core::leftovers::Removed::default();
+    for leftover in &reviewed {
+        match retoque_core::leftovers::remove(leftover) {
+            Ok(done) => {
+                total.files += done.files;
+                total.bytes += done.bytes;
+            }
+            Err(error) => return Outcome::LeftoversRemoved(Err(AppError::from(error))),
+        }
+    }
+    Outcome::LeftoversRemoved(Ok(total))
 }
 
 pub fn status(target: PathBuf) -> Outcome {
