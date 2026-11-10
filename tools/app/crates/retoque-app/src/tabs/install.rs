@@ -34,6 +34,15 @@ fn launch_env_value(option: &str) -> Option<&str> {
     (!value.is_empty()).then_some(value)
 }
 
+/// The title over a change that did not finish.
+fn failed_key(kind: PlanKind) -> &'static str {
+    match kind {
+        PlanKind::Install => "inst.failed_install",
+        PlanKind::Uninstall => "inst.failed_uninstall",
+        PlanKind::Settings => "inst.failed_settings",
+    }
+}
+
 impl RetoqueApp {
     pub(crate) fn install_tab(&mut self, ui: &mut egui::Ui) {
         let Some(target) = self.view.target.clone() else { return };
@@ -43,21 +52,28 @@ impl RetoqueApp {
         // only while there is one (a success is the toast's). The loader file name and the other options sit closed at the
         // end.
         let writing = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied();
-        let failed = matches!(&self.view.applied, Some((_, Err(_))));
-        if writing.is_some() || failed {
+        let failed = match &self.view.applied {
+            Some((kind, Err(e))) => Some((*kind, e)),
+            _ => None,
+        };
+        if writing.is_some() {
             widgets::card(ui, |ui| {
                 if let Some((done, total)) = writing {
-                    ui.add(
-                        egui::ProgressBar::new(done as f32 / total.max(1) as f32)
-                            .text(format!("{} {done}/{total}", t(self.lang, "inst.working"))),
-                    );
+                    ui.add(egui::ProgressBar::new(done as f32 / total.max(1) as f32).text(format!(
+                        "{} · {done} {} {total}",
+                        t(self.lang, "inst.working"),
+                        t(self.lang, "progress.of")
+                    )));
                 }
-                if let Some((kind, Err(e))) = &self.view.applied {
-                    ui.colored_label(
-                        theme::BAD,
-                        format!("{} ({}): {e}", t(self.lang, "error"), plan_kind_name(self.lang, *kind)),
-                    );
-                }
+            });
+            ui.add_space(theme::CARD_GAP);
+        }
+        // A failed change: what did not finish, why in plain words, what to do, and the details folded. First, so a
+        // first install that failed shows it too.
+        if let Some((kind, error)) = failed {
+            widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
+                widgets::card_title(ui, t(self.lang, failed_key(kind)));
+                crate::error::body(ui, error, self.lang, &self.cmd_tx);
             });
             ui.add_space(theme::CARD_GAP);
         }

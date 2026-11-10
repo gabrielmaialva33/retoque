@@ -82,23 +82,55 @@ impl RetoqueApp {
                     self.intuitive.palette.open(ui.ctx());
                 }
                 if self.jobs.busy() || self.library_pending {
-                    ui.spinner();
+                    ui.spinner().on_hover_text(self.running_work());
                 }
             });
         });
         self.autotune_gpu(ui);
     }
 
+    /// What the background work is, in the user's words, for the top bar's spinner.
+    pub(crate) fn running_work(&self) -> String {
+        let mut work: Vec<&str> = Vec::new();
+        if self.scanning || self.library_pending {
+            work.push(self.tr("lib.scanning"));
+        }
+        if !self.writing.is_empty() {
+            work.push(self.tr("busy.writing"));
+        }
+        if self.payload_ui.busy {
+            work.push(self.tr("payload.progress"));
+        }
+        if self.nr_fetch.busy {
+            work.push(self.tr("nr_fetch.downloading"));
+        }
+        if self.tuning.sm86.busy {
+            work.push(self.tr("sm86.progress"));
+        }
+        if self.tuning.dlss.download_progress().is_some() {
+            work.push(self.tr("dlss.downloading"));
+        }
+        if self.tuning.reshade.busy() {
+            work.push(self.tr("rs.preparing"));
+        }
+        if self.lsfg.running() {
+            work.push(self.tr("lsfg.preparing"));
+        }
+        if work.is_empty() {
+            work.push(self.tr("busy.reading"));
+        }
+        work.join("\n")
+    }
+
     pub(crate) fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            // One line for the error; the bar's own controls stay visible beside it.
             if let Some(message) = self.error.clone() {
-                crate::applog::shown_error(&message.to_string());
-                ui.colored_label(theme::BAD, format!("{}: {message}", self.tr("error")));
-                crate::error::buttons(ui, &message, self.lang, &self.cmd_tx);
+                crate::error::summary(ui, &message, self.lang, &self.cmd_tx);
                 if widgets::close_button(ui, self.tr("dismiss.help")).clicked() {
                     self.error = None;
                 }
-                return;
+                ui.separator();
             }
             self.payload_bar(ui);
         });
@@ -695,23 +727,21 @@ impl RetoqueApp {
                 }
                 self.banner_more_actions(ui, state, game);
                 let download = if self.nr_fetch.busy {
-                    Some(("nr_fetch.downloading", self.nr_fetch.downloaded))
+                    Some((
+                        "nr_fetch.downloading",
+                        self.nr_fetch.downloaded,
+                        Some(self.nr_fetch.total),
+                    ))
                 } else if self.tuning.sm86.busy {
-                    Some(("sm86.progress", self.tuning.sm86.downloaded))
+                    Some(("sm86.progress", self.tuning.sm86.downloaded, self.sm86_download_total()))
                 } else {
                     self.tuning
                         .dlss
                         .download_progress()
-                        .map(|bytes| ("dlss.downloading", bytes))
+                        .map(|bytes| ("dlss.downloading", bytes, Some(retoque_data::dlss::download_size())))
                 };
-                if let Some((label, bytes)) = download {
-                    ui.spinner();
-                    let text = if bytes > 0 {
-                        format!("{} · {:.0} MiB", self.tr(label), bytes as f64 / 1048576.)
-                    } else {
-                        self.tr(label).to_string()
-                    };
-                    ui.label(RichText::new(text).small());
+                if let Some((label, bytes, total)) = download {
+                    widgets::busy(ui, self.lang, self.tr(label), (bytes > 0).then_some(bytes), total);
                 }
             });
         }
@@ -860,7 +890,8 @@ impl RetoqueApp {
                         if toast.details_open
                             && let Some(detail) = &toast.detail
                         {
-                            ui.label(detail);
+                            ui.add(egui::Label::new(detail.user_text(lang)).wrap());
+                            crate::error::details(ui, detail, lang);
                         }
                     });
                 }

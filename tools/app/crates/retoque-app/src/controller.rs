@@ -447,8 +447,9 @@ impl RetoqueApp {
                     self.usage_refreshed = None;
                 }
                 Outcome::Failed { job, target, message } => {
+                    // One report: the toast. Which job failed is for the app log, not the user.
+                    crate::applog::line(format_args!("job {job} failed: {message}"));
                     self.toast(self.tr("shell.failed").into(), Some(message.clone().into()), true);
-                    self.error = Some(format!("{} ({job}): {message}", self.tr("job.failed")).into());
                     if job == "reshade-download" || job == "reshade-import" {
                         self.tuning.reshade.failed();
                     }
@@ -811,15 +812,19 @@ impl RetoqueApp {
                         );
                     }
                     other => {
+                        // "Nothing to undo" is information, closed with "Close"; a failure keeps "Cancel".
+                        let notice = matches!(other, Some(Err(error)) if !error.is_failure());
                         if let Some(Err(error)) = other {
-                            crate::applog::shown_error(&error.to_string());
-                            ui.colored_label(theme::BAD, error);
-                            crate::error::buttons(ui, error, self.lang, &self.cmd_tx);
+                            if notice {
+                                crate::error::notice(ui, error);
+                            } else {
+                                crate::error::body(ui, error, self.lang, &self.cmd_tx);
+                            }
+                            ui.add_space(8.0);
                         } else {
-                            ui.spinner();
-                            ui.label(self.tr("shell.preparing"));
+                            widgets::busy(ui, self.lang, self.tr("shell.preparing"), None, None);
                         }
-                        if ui.button(self.tr("cancel")).clicked() {
+                        if ui.button(self.tr(if notice { "close" } else { "cancel" })).clicked() {
                             self.cmd_tx.send(AppCommand::CancelReview);
                         }
                     }

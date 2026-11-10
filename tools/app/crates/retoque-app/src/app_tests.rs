@@ -740,6 +740,56 @@ fn remedies_show_program_names_in_both_languages_without_starting_a_write() {
 }
 
 #[test]
+fn status_bar_error_is_one_plain_line_beside_the_bar_controls() {
+    use egui_kittest::kittest::Queryable;
+    for lang in [Lang::En, Lang::Pt] {
+        let mut app = shell_tests::app();
+        app.lang = lang;
+        app.error = Some(AppError::from(retoque_core::Error::Refused(vec![
+            Refusal::SecondProxy {
+                name: "winmm.dll".into(),
+            },
+        ])));
+        let mut h = egui_kittest::Harness::builder()
+            .with_size([1400., 200.])
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.status_bar(ui), app);
+        h.run_steps(2);
+        h.get_by_label(&format!("{} winmm.dll", t(lang, "ref.second")));
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "shell.details"));
+        assert!(h.query_by_label_contains("SecondProxy").is_none());
+        assert!(h.query_by_label_contains("refused").is_none());
+        // The bar's own line is still drawn while the error shows.
+        h.get_by_label(t(lang, "app.payload"));
+    }
+}
+
+#[test]
+fn consents_name_the_download_and_its_size() {
+    use egui_kittest::kittest::Queryable;
+    for lang in [Lang::En, Lang::Pt] {
+        let mut app = shell_tests::app();
+        app.lang = lang;
+        app.nr_fetch.consent = Some(crate::tabs::model::NrConsent::Download(app.nr_fetch.entries[0].clone()));
+        let size = app.nr_fetch.entries[0].size;
+        let mut h = egui_kittest::Harness::builder()
+            .with_size([900., 700.])
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.nr_fetch_dialog(ui.ctx()), app);
+        h.run_steps(2);
+        let confirm = format!("{} ({})", t(lang, "download"), size_text(lang, size));
+        h.get_by_role_and_label(egui::Role::Button, &confirm);
+        // The user asked for it, so the dialog is dismissed with "Cancel"; hashes stay folded.
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel"));
+        h.get_by_label(t(lang, "technical.details"));
+        assert!(h.query_by_label_contains("SHA-256").is_none());
+        assert!(h.query_by_label_contains("MiB").is_none());
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
+        h.run_steps(2);
+        assert!(h.state().nr_fetch.consent.is_none());
+        assert!(!h.state().jobs.busy());
+    }
+}
+
+#[test]
 fn command_for_previous_target_cannot_open_a_review_on_current_target() {
     let mut app = shell_tests::app();
     app.view.target = Some("/synthetic/second".into());
@@ -785,6 +835,9 @@ mod failed_job_tests {
             std::thread::yield_now();
         }
         app.receive();
+        // One report per failure, as a toast; the status bar does not repeat it with the job's name.
+        assert!(app.error.is_none());
+        assert!(!app.toasts.is_empty() && app.toasts.iter().all(|toast| toast.failed));
         assert!(!app.payload_ui.busy);
         assert!(!app.nr_fetch.busy);
         assert!(!app.tuning.sm86.busy);

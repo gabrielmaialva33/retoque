@@ -395,11 +395,6 @@ pub const TEXT: &[(&str, &str, &str)] = &[
         "Download ReShade 6.8.0 with full add-on support from reshade.me? The 4.3 MB official installer and extracted DLL have pinned SHA-256 hashes. BSD-3-Clause applies. Game changes require a separate review.",
         "Baixar ReShade 6.8.0 com suporte completo a add-ons de reshade.me? O instalador oficial de 4,3 MB e a DLL extraída têm hashes SHA-256 fixados. Aplica-se a licença BSD-3-Clause. Alterações no jogo exigem revisão separada.",
     ),
-    (
-        "rs.confirm_download",
-        "Confirm official download",
-        "Confirmar download oficial",
-    ),
     ("rs.preparing", "Preparing ReShade…", "Preparando ReShade…"),
     (
         "rs.cli_confirm",

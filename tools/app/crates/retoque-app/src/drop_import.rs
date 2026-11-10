@@ -88,32 +88,64 @@ impl RetoqueApp {
         {
             return;
         }
-        let mut confirm = false;
-        let mut cancel = false;
-        let modal = egui::Modal::new(egui::Id::unique("drop_review")).show(ctx, |ui| {
-            ui.set_max_width(600.);
-            ui.heading(self.tr("drop.title"));
-            if let Some((path, route)) = self.intuitive.drop.pending.first() {
-                ui.label(path.display().to_string());
-                ui.label(self.tr(match route {
-                    Route::Addon => "rs.drop_addon",
-                    Route::ReShade => "rs.drop_reshade",
-                    Route::Model => "drop.model",
-                    Route::Component => "drop.component",
-                    Route::Game => "drop.game",
-                    Route::Unsupported => "drop.unsupported",
-                }));
-                if *route != Route::Unsupported {
-                    confirm = ui
-                        .add_enabled(!self.busy(), theme::primary(self.tr("drop.confirm")))
-                        .clicked();
-                }
-            } else {
-                ui.spinner();
+        let lang = self.lang;
+        let first = self.intuitive.drop.pending.first().cloned();
+        let answer = match &first {
+            Some((path, route)) if *route != Route::Unsupported => {
+                let (body, confirm) = match route {
+                    Route::Addon => ("rs.drop_addon", "drop.import"),
+                    Route::ReShade => ("rs.drop_reshade", "drop.import"),
+                    Route::Model => ("drop.model", "drop.import"),
+                    Route::Component => ("drop.component", "drop.import"),
+                    _ => ("drop.game", "drop.add_game"),
+                };
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.display().to_string());
+                let details = |ui: &mut egui::Ui| {
+                    ui.add(egui::Label::new(RichText::new(path.display().to_string()).small().monospace()).wrap());
+                };
+                // The user dropped it, so the dialog is dismissed with "Cancel"; a write in flight waits.
+                widgets::consent_modal_when(
+                    ctx,
+                    lang,
+                    "drop-review",
+                    t(lang, "drop.title"),
+                    &[&name, t(lang, body)],
+                    t(lang, confirm),
+                    t(lang, "cancel"),
+                    Some(&details),
+                    !self.busy(),
+                )
             }
-            cancel = ui.button(self.tr("cancel")).clicked();
-        });
-        if cancel || modal.should_close() {
+            other => {
+                // Still checking, or nothing the app can import: information, not a choice.
+                let mut close = false;
+                let modal = egui::Modal::new(egui::Id::unique("drop_review"))
+                    .frame(widgets::modal_frame())
+                    .show(ctx, |ui| {
+                        ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
+                        ui.label(RichText::new(t(lang, "drop.title")).size(theme::TITLE).strong());
+                        ui.add_space(6.0);
+                        match other {
+                            Some((path, _)) => {
+                                ui.add(egui::Label::new(path.display().to_string()).wrap());
+                                ui.add(egui::Label::new(t(lang, "drop.unsupported")).wrap());
+                            }
+                            None => widgets::busy(ui, lang, t(lang, "drop.checking"), None, None),
+                        }
+                        ui.add_space(12.0);
+                        close = ui
+                            .button(t(lang, if other.is_some() { "close" } else { "cancel" }))
+                            .clicked();
+                    });
+                (close || modal.should_close()).then_some(widgets::Answer::Cancel)
+            }
+        };
+        let cancel = answer == Some(widgets::Answer::Cancel);
+        let confirm = answer == Some(widgets::Answer::Confirm);
+        if cancel {
             self.intuitive.drop.request += 1;
             self.intuitive.drop.pending.clear();
             self.intuitive.drop.loading = 0;

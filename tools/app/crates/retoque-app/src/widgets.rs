@@ -162,19 +162,22 @@ pub fn collapsible<R>(
 }
 
 /// Work in progress, always with a sentence: a bar with "done of total" when the total is known, else a spinner
-/// with the text (and the size received so far, when there is one).
+/// with the text (and the size received so far, when there is one). In a row (a bar, a line of buttons) the bar
+/// keeps a fixed width so the controls after it stay in place.
 pub fn busy(ui: &mut egui::Ui, lang: crate::i18n::Lang, text: &str, done: Option<u64>, total: Option<u64>) {
     use crate::format::size_text;
     match (done, total) {
         (Some(done), Some(total)) if total > 0 => {
             let of = crate::i18n::t(lang, "progress.of");
-            ui.add(
-                egui::ProgressBar::new((done as f32 / total as f32).clamp(0.0, 1.0)).text(format!(
-                    "{text} · {} {of} {}",
-                    size_text(lang, done),
-                    size_text(lang, total)
-                )),
-            );
+            let mut bar = egui::ProgressBar::new((done as f32 / total as f32).clamp(0.0, 1.0)).text(format!(
+                "{text} · {} {of} {}",
+                size_text(lang, done),
+                size_text(lang, total)
+            ));
+            if ui.layout().is_horizontal() {
+                bar = bar.desired_width(320.0_f32.min(ui.available_width()));
+            }
+            ui.add(bar);
         }
         (done, _) => {
             ui.horizontal(|ui| {
@@ -209,6 +212,23 @@ pub fn consent_modal(
     cancel: &str,
     details: Option<&dyn Fn(&mut egui::Ui)>,
 ) -> Option<Answer> {
+    consent_modal_when(ctx, lang, id, title, body, confirm, cancel, details, true)
+}
+
+/// `consent_modal` whose confirm is disabled while `can_confirm` is false (another write is running); cancel
+/// always works.
+#[allow(clippy::too_many_arguments)]
+pub fn consent_modal_when(
+    ctx: &egui::Context,
+    lang: crate::i18n::Lang,
+    id: &str,
+    title: &str,
+    body: &[&str],
+    confirm: &str,
+    cancel: &str,
+    details: Option<&dyn Fn(&mut egui::Ui)>,
+    can_confirm: bool,
+) -> Option<Answer> {
     let mut answer = None;
     let modal = egui::Modal::new(egui::Id::unique(("consent", id)))
         .frame(modal_frame())
@@ -217,7 +237,7 @@ pub fn consent_modal(
             ui.label(RichText::new(title).size(theme::TITLE).strong());
             ui.add_space(6.0);
             for line in body {
-                ui.label(*line);
+                ui.add(egui::Label::new(*line).wrap());
             }
             if let Some(details) = details {
                 ui.add_space(4.0);
@@ -229,7 +249,7 @@ pub fn consent_modal(
                 if ui.button(cancel).clicked() {
                     answer = Some(Answer::Cancel);
                 }
-                if ui.add(theme::primary(confirm)).clicked() {
+                if ui.add_enabled(can_confirm, theme::primary(confirm)).clicked() {
                     answer = Some(Answer::Confirm);
                 }
             });

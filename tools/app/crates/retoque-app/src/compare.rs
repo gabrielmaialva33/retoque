@@ -477,8 +477,7 @@ impl CompareView {
         }
         if self.pairs.is_empty() {
             if self.scanning {
-                ui.spinner();
-                ui.label(t(lang, "scanning"));
+                crate::widgets::busy(ui, lang, t(lang, "scanning"), None, None);
             } else {
                 self.empty(ui, lang, target);
             }
@@ -703,7 +702,7 @@ impl CompareView {
                 self.restore_expand_focus = !self.expanded;
             }
             if self.loading {
-                ui.spinner().on_hover_text(t(lang, "exposure_updating"));
+                crate::widgets::busy(ui, lang, t(lang, "exposure_updating"), None, None);
             }
         });
         held

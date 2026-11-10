@@ -214,7 +214,7 @@ impl RetoqueApp {
         self.jobs.spawn("plan", None, move |_| {
             let result = root
                 .as_deref()
-                .ok_or_else(|| AppError::from(t(lang, "undo.empty")))
+                .ok_or_else(|| AppError::info(t(lang, "undo.empty")))
                 .and_then(|root| crate::history::undo_plan(root, &target, lang));
             let groups = result
                 .as_ref()

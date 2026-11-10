@@ -183,6 +183,8 @@ pub struct CachedRecs {
 #[derive(Default)]
 pub struct UiState {
     pub consent: Option<Consent>,
+    /// The consent was offered by the app on its own (first run), so it is dismissed with "Not now".
+    pub offered: bool,
     pub busy: bool,
     pub downloaded: u64,
     pub release: Option<sm86::Release>,
@@ -504,7 +506,7 @@ mod tests {
             assert!(matches!(h.state().nr_fetch.consent, Some(NrConsent::Download(_))));
             assert!(h.state().review.is_none());
             h.get_by_label(t(lang, "nr_fetch.consent_title"));
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.confirm"))
+            h.get_by_role_and_label(egui::Role::Button, &h.state().nr_fetch.download_label(lang))
                 .click();
             h.run_steps(3);
             let deadline = Instant::now() + Duration::from_secs(5);

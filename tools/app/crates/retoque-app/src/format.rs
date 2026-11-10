@@ -71,14 +71,6 @@ pub(crate) fn step_text(lang: Lang, step: &Step) -> (&'static str, String, Color
     }
 }
 
-pub(crate) fn plan_kind_name(lang: Lang, kind: PlanKind) -> &'static str {
-    match kind {
-        PlanKind::Install => t(lang, "kind.install"),
-        PlanKind::Uninstall => t(lang, "kind.uninstall"),
-        PlanKind::Settings => t(lang, "kind.settings"),
-    }
-}
-
 pub(crate) fn store_name(lang: Lang, store: Store) -> &'static str {
     match store {
         Store::Steam => t(lang, "store.steam"),
@@ -257,6 +249,14 @@ pub(crate) fn inspect_model(target: &Path, configured: &str) -> ModelInspection 
         present,
         version,
         compatibility,
+    }
+}
+
+/// The confirm of a download: "Baixar (115 MB)" / "Download (115 MB)", or the bare verb when the size is unknown.
+pub(crate) fn download_label(lang: Lang, bytes: Option<u64>) -> String {
+    match bytes.filter(|b| *b > 0) {
+        Some(bytes) => format!("{} ({})", t(lang, "download"), size_text(lang, bytes)),
+        None => t(lang, "download").into(),
     }
 }
 

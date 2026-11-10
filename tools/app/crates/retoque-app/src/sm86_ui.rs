@@ -25,33 +25,67 @@ impl RetoqueApp {
         let Some(consent) = self.tuning.sm86.consent else {
             return;
         };
-        let mut confirm = false;
-        let mut cancel = false;
-        egui::Modal::new(egui::Id::unique("sm86-consent")).show(ctx, |ui| {
-            ui.set_max_width(520.);
-            ui.heading(self.tr("sm86.consent_title"));
-            ui.label(self.tr(if matches!(consent, Consent::Check) {
-                "sm86.check_consent"
+        let lang = self.lang;
+        let check = matches!(consent, Consent::Check);
+        // A first-run kit is imported from disk instead of downloaded (the same rule as `sm86_start`).
+        let import = !check && self.tuning.sm86.kit_cache.is_some() && self.tuning.sm86.release.is_none();
+        let (title, body, confirm) = if check {
+            (
+                "sm86.check_title",
+                "sm86.check_consent",
+                t(lang, "check_now").to_owned(),
+            )
+        } else if import {
+            (
+                "sm86.consent_title",
+                "sm86.kit_available",
+                t(lang, "sm86.import").to_owned(),
+            )
+        } else {
+            (
+                "sm86.consent_title",
+                "sm86.download_consent",
+                download_label(lang, self.sm86_download_total()),
+            )
+        };
+        let cancel = t(lang, if self.tuning.sm86.offered { "not_now" } else { "cancel" });
+        let details = |ui: &mut egui::Ui| {
+            let keys: &[&str] = if check {
+                &["sm86.check_details"]
             } else {
-                "sm86.download_consent"
-            }));
-            if self.tuning.sm86.kit_cache.is_some() && matches!(consent, Consent::Download) {
-                ui.label(self.tr("sm86.kit_available"));
+                &["sm86.download_details", "sm86.license"]
+            };
+            for key in keys {
+                ui.add(egui::Label::new(RichText::new(t(lang, key)).small()).wrap());
             }
-            ui.label(self.tr("sm86.license"));
-            ui.horizontal(|ui| {
-                confirm = ui.button(self.tr("sm86.confirm")).clicked();
-                cancel = ui.button(self.tr("sm86.later")).clicked();
-            });
-        });
-        if cancel {
-            self.tuning.sm86.consent = None;
-            self.tuning.sm86.pending = None;
+        };
+        let answer = widgets::consent_modal(
+            ctx,
+            lang,
+            "sm86-consent",
+            t(lang, title),
+            &[t(lang, body)],
+            &confirm,
+            cancel,
+            Some(&details),
+        );
+        match answer {
+            Some(widgets::Answer::Cancel) => {
+                self.tuning.sm86.consent = None;
+                self.tuning.sm86.offered = false;
+                self.tuning.sm86.pending = None;
+            }
+            Some(widgets::Answer::Confirm) => {
+                self.tuning.sm86.consent = None;
+                self.tuning.sm86.offered = false;
+                self.sm86_start(consent);
+            }
+            None => {}
         }
-        if confirm {
-            self.tuning.sm86.consent = None;
-            self.sm86_start(consent);
-        }
+    }
+    /// The size of the official release a download would fetch, once a check has read it.
+    pub(crate) fn sm86_download_total(&self) -> Option<u64> {
+        self.tuning.sm86.release.as_ref().map(|r| r.size)
     }
     fn sm86_start(&mut self, consent: Consent) {
         if self.tuning.sm86.busy {
@@ -139,23 +173,25 @@ impl RetoqueApp {
                 .clicked()
             {
                 self.tuning.sm86.consent = Some(Consent::Download);
+                self.tuning.sm86.offered = false;
             }
             if ui
                 .add_enabled(!self.tuning.sm86.busy, egui::Button::new(self.tr("sm86.check")))
                 .clicked()
             {
                 self.tuning.sm86.consent = Some(Consent::Check);
+                self.tuning.sm86.offered = false;
             }
         });
         if self.tuning.sm86.busy {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(format!(
-                    "{} · {:.1} MiB",
-                    self.tr("sm86.progress"),
-                    self.tuning.sm86.downloaded as f64 / 1048576.
-                ));
-            });
+            let done = self.tuning.sm86.downloaded;
+            widgets::busy(
+                ui,
+                self.lang,
+                self.tr("sm86.progress"),
+                (done > 0).then_some(done),
+                self.sm86_download_total(),
+            );
         }
         if let Some(release) = &self.tuning.sm86.release {
             ui.label(format!("{} · {}", release.version, release.published_at));
@@ -180,7 +216,7 @@ impl RetoqueApp {
             );
         }
         if let Some(error) = &self.tuning.sm86.error {
-            ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+            crate::error::card(ui, error, self.lang, &self.cmd_tx);
         }
     }
     pub(crate) fn optimize_recommendations(&mut self) -> Arc<Vec<autotune::recommend::Recommendation>> {
@@ -299,19 +335,27 @@ impl RetoqueApp {
             self.optimize_automatically();
         }
         if self.tuning.sm86.busy {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(self.tr("sm86.progress"));
-            });
+            let done = self.tuning.sm86.downloaded;
+            widgets::busy(
+                ui,
+                self.lang,
+                self.tr("sm86.progress"),
+                (done > 0).then_some(done),
+                self.sm86_download_total(),
+            );
         }
         if self.nr_fetch.busy {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(self.tr("nr_fetch.downloading"));
-            });
+            let done = self.nr_fetch.downloaded;
+            widgets::busy(
+                ui,
+                self.lang,
+                self.tr("nr_fetch.downloading"),
+                (done > 0).then_some(done),
+                Some(self.nr_fetch.total),
+            );
         }
         if let Some(error) = &self.tuning.sm86.error {
-            ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+            crate::error::card(ui, error, self.lang, &self.cmd_tx);
         }
     }
     pub(crate) fn optimize_automatically(&mut self) {
@@ -421,14 +465,14 @@ impl RetoqueApp {
         {
             c.request.dlss = self.dlss_update_request();
             if c.request.dlss.is_none() {
-                self.tuning.sm86.error = Some(self.tr("dlss.download_first").into());
+                self.tuning.sm86.error = Some(AppError::warning(self.tr("dlss.download_first")));
                 return;
             }
             if need_install && c.request.retoque_install().is_none() {
                 if let Some(options) = self.install_inputs() {
                     c.request.set_install(options);
                 } else {
-                    self.tuning.sm86.error = Some(self.tr("optimize.install_first").into());
+                    self.tuning.sm86.error = Some(AppError::warning(self.tr("optimize.install_first")));
                     return;
                 }
             }
@@ -459,7 +503,7 @@ impl RetoqueApp {
                     ));
                 }
                 if self.lsfg_prepare_for_optimize(target) {
-                    self.tuning.sm86.error = Some(self.tr("optimize.lsfg_preparing").into());
+                    self.tuning.sm86.error = Some(AppError::info(self.tr("optimize.lsfg_preparing")));
                 } else {
                     self.tuning.sm86.error = Some(self.tr(Prerequisite::LsfgShaders.unavailable_key()).into());
                 }
@@ -472,6 +516,7 @@ impl RetoqueApp {
                     request: c.request,
                 });
                 self.tuning.sm86.consent = Some(Consent::Download);
+                self.tuning.sm86.offered = false;
             }
             Ok(c)
                 if c.request.component.is_some()
@@ -483,18 +528,15 @@ impl RetoqueApp {
                 self.autotune_request(self.optimize_title(), c.request);
                 if omitted {
                     // The review still opens (Retoque is installed); say what was left out and how to include it.
-                    self.tuning.sm86.error = Some(self.tr("optimize.experimental_omitted").into());
+                    self.tuning.sm86.error = Some(AppError::warning(self.tr("optimize.experimental_omitted")));
                 }
             }
             Ok(c) => {
-                self.tuning.sm86.error = Some(
-                    self.tr(if c.experimental_omitted {
-                        "optimize.experimental_omitted"
-                    } else {
-                        "optimize.nothing"
-                    })
-                    .into(),
-                )
+                self.tuning.sm86.error = Some(if c.experimental_omitted {
+                    AppError::warning(self.tr("optimize.experimental_omitted"))
+                } else {
+                    AppError::info(self.tr("optimize.nothing"))
+                })
             }
         }
     }
