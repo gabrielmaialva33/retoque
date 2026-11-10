@@ -237,7 +237,9 @@ pub(crate) mod shell_tests {
             registered: false,
         });
         let h = Harness::new_ui_state(|ui, app: &mut RetoqueApp| app.library(ui), app);
-        h.get_by_role_and_label(egui::Role::Button, "Unlisted game");
+        // The row is announced with its install state, not only its name.
+        let spoken = format!("Unlisted game, {}", t(Lang::En, "st.not_installed"));
+        h.get_by_role_and_label(egui::Role::Button, &spoken);
         h.get_by_label(t(Lang::En, "folders.unregistered"));
     }
 
@@ -339,6 +341,65 @@ pub(crate) mod shell_tests {
         assert_eq!(install_state(&status, Some("old")), InstallState::Current);
         status.receipt.as_mut().unwrap().status = ReceiptStatus::Partial;
         assert_eq!(install_state(&status, Some("old")), InstallState::Partial);
+    }
+
+    #[test]
+    pub(crate) fn every_install_state_has_one_wording_and_colour() {
+        use InstallState::*;
+        let expected = [
+            (Missing, "Sem Retoque", "Sem Retoque", theme::MUTED),
+            (Current, "Retoque atualizado", "Atualizado", theme::GOOD),
+            (Installed, "Retoque instalado", "Instalado", theme::GOOD),
+            (Update, "Atualização disponível", "Atualizar", theme::ACCENT),
+            (Partial, "Instalação incompleta", "Incompleta", theme::BAD),
+            (Untracked, "Instalação antiga", "Antiga", theme::WARN),
+        ];
+        for (state, long, short, color) in expected {
+            assert_eq!(t(Lang::Pt, state.label()), long);
+            assert_eq!(t(Lang::Pt, state.short_label()), short);
+            assert_eq!(state.color(), color);
+            assert_ne!(
+                t(Lang::En, state.label()),
+                state.label(),
+                "{state:?} has no English text"
+            );
+            assert_ne!(t(Lang::En, state.short_label()), state.short_label());
+        }
+    }
+
+    #[test]
+    pub(crate) fn library_row_announces_state_and_doctor_findings() {
+        let harness = Harness::new_ui(|ui| {
+            let spoken = crate::tabs::doctor::spoken_findings(2, Lang::Pt);
+            let row = widgets::game_row(
+                ui,
+                "Synthetic game",
+                "Steam",
+                ("Instalação antiga", theme::WARN),
+                None,
+                false,
+                None,
+                spoken.as_deref(),
+            );
+            crate::tabs::doctor::row_badge(ui, row, 2, Lang::Pt);
+            widgets::game_row(
+                ui,
+                "Healthy game",
+                "Steam",
+                ("Atualizado", theme::GOOD),
+                None,
+                false,
+                None,
+                None,
+            );
+        });
+        harness.get_by_role_and_label(egui::Role::Button, "Synthetic game, Instalação antiga, 2 problemas");
+        harness.get_by_role_and_label(egui::Role::Button, "Healthy game, Atualizado");
+        assert_eq!(crate::tabs::doctor::spoken_findings(0, Lang::En), None);
+        assert_eq!(
+            crate::tabs::doctor::spoken_findings(1, Lang::En).as_deref(),
+            Some("1 issue")
+        );
     }
 
     #[test]

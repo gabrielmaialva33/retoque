@@ -11,7 +11,10 @@ use std::{
 };
 
 use egui::accesskit::Role;
-use egui_kittest::{Harness, kittest::Queryable};
+use egui_kittest::{
+    Harness,
+    kittest::{self, NodeT as _, Queryable},
+};
 use retoque_app::RetoqueApp;
 use retoque_core::{ini::Ini, receipt::ReceiptStatus};
 use retoque_data::models::Catalog;
@@ -68,10 +71,13 @@ fn open_install_options(ui: &mut Window) {
 }
 
 fn select_game(ui: &mut Window) {
-    wait(ui, "FakeGame library row", |ui| {
-        ui.query_by_role_and_label(Role::Button, "FakeGame").is_some()
-    });
-    click(ui, Role::Button, "FakeGame");
+    // A library entry is announced as "{name}, {install state}".
+    let row = |n: &kittest::AccessKitNode<'_>| {
+        n.role() == Role::Button && n.label().is_some_and(|l| l.starts_with("FakeGame, "))
+    };
+    wait(ui, "FakeGame library row", |ui| ui.query_by(row).is_some());
+    ui.get_by(row).click_accesskit();
+    ui.run_steps(3);
     open_install_options(ui);
 }
 
@@ -256,7 +262,8 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     click(&mut ui, Role::Tab, "NR model");
     wait_label(&mut ui, "Use in this game");
     let before_model = snapshot(&game);
-    click(&mut ui, Role::Button, "Use in this game");
+    // Every model card has this button, so it is named after its model for screen readers.
+    click(&mut ui, Role::Button, "Use in this game: Synthetic model");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: auto -> {model_value}"));
     assert_eq!(snapshot(&game), before_model);
     click(&mut ui, Role::Button, "Write these changes");
@@ -295,7 +302,12 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview install");
     wait_label(&mut ui, "The game is running");
-    assert!(ui.query_by_role_and_label(Role::Button, "Update").is_none());
+    // A refused plan keeps its confirm in place, disabled.
+    assert!(
+        ui.get_by_role_and_label(Role::Button, "Update")
+            .accesskit_node()
+            .is_disabled()
+    );
     assert_eq!(snapshot(&game), before_refusal);
     drop(child);
 

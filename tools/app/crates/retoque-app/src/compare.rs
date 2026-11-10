@@ -573,7 +573,8 @@ impl CompareView {
         let mut held = false;
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 5.0;
-            ui.spacing_mut().button_padding = Vec2::new(7.0, 4.0);
+            // Tighter sides only: buttons keep the theme's 32 px height.
+            ui.spacing_mut().button_padding.x = 7.0;
             for mode in [
                 CompareMode::Wipe,
                 CompareMode::SideBySide,
@@ -1028,7 +1029,8 @@ impl CompareView {
     }
 }
 fn icon_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response {
-    let response = ui.add(egui::Button::new("").min_size(Vec2::splat(30.0)).selected(selected));
+    let size = Vec2::splat(ui.spacing().interact_size.y);
+    let response = ui.add(egui::Button::new("").min_size(size).selected(selected));
     response
         .widget_info(|| egui::WidgetInfo::selected(egui::accesskit::Role::Button, ui.is_enabled(), selected, label));
     if response.has_focus() {

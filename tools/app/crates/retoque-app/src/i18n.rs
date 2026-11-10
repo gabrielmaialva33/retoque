@@ -442,7 +442,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("ref.unknown_file", "unknown file", "arquivo desconhecido"),
     ("ref.reshade", "ReShade", "ReShade"),
     ("kind.install", "install", "instalação"),
-    ("kind.uninstall", "uninstall", "remoção"),
+    ("kind.uninstall", "uninstall", "desinstalação"),
     ("kind.settings", "settings", "ajustes"),
     ("store.steam", "Steam", "Steam"),
     ("store.heroic", "Heroic", "Heroic"),
@@ -611,18 +611,21 @@ const TEXT: &[(&str, &str, &str)] = &[
         "O OptiScaler não aceita este valor; corrija para revisar as mudanças.",
     ),
     ("st.installed", "Retoque installed", "Retoque instalado"),
-    ("st.partial", "Install stopped part-way", "Instalação interrompida"),
+    ("st.installed_short", "Installed", "Instalado"),
+    ("st.current", "Retoque up to date", "Retoque atualizado"),
+    ("st.current_short", "Up to date", "Atualizado"),
+    ("st.update", "Update available", "Atualização disponível"),
+    ("st.update_short", "Update", "Atualizar"),
+    ("st.partial", "Incomplete install", "Instalação incompleta"),
+    ("st.partial_short", "Incomplete", "Incompleta"),
     (
         "st.uninstall_incomplete",
         "Uninstall stopped part-way",
         "Remoção interrompida",
     ),
-    ("st.not_installed", "Not installed", "Não instalado"),
-    (
-        "st.untracked",
-        "OptiScaler present without a receipt",
-        "OptiScaler presente sem recibo",
-    ),
+    ("st.not_installed", "Not installed", "Sem Retoque"),
+    ("st.untracked", "Old install", "Instalação antiga"),
+    ("st.untracked_short", "Old", "Antiga"),
     ("st.nr_on", "NR on", "NR ligado"),
     ("st.nr_off", "NR off", "NR desligado"),
     (
@@ -662,7 +665,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.preview_uninstall", "Preview uninstall", "Ver o que a remoção faz"),
     ("inst.install", "Install", "Instalar"),
     ("inst.update", "Update", "Atualizar"),
-    ("inst.uninstall", "Uninstall", "Remover"),
+    ("inst.uninstall", "Uninstall", "Desinstalar"),
     ("inst.plan", "What will be done", "O que será feito"),
     ("inst.nothing", "Nothing to change.", "Nada a mudar."),
     ("inst.refused", "Nothing will be written:", "Nada será gravado:"),
@@ -731,7 +734,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("mdl.use", "Use in this game", "Usar neste jogo"),
     ("mdl.in_use", "In use", "Em uso"),
     ("mdl.use_auto", "Use the default search", "Usar a busca padrão"),
-    ("mdl.remove", "Remove from the list", "Tirar da lista"),
+    ("mdl.remove", "Delete from app…", "Apagar do app…"),
+    (
+        "mdl.remove_title",
+        "Delete this model from the app?",
+        "Apagar este modelo do app?",
+    ),
     (
         "mdl.empty",
         "No models yet. Import the nvngx_dlssnr.dll files you have; they are copied into the app's folder and never shared.",
@@ -775,8 +783,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("set.apply", "Write these changes", "Gravar estas mudanças"),
     (
         "mdl.remove_help",
-        "Deletes the catalog's copy. A game that names this file loses NR until it gets another model.",
-        "Apaga a cópia do catálogo. Um jogo que aponta para este arquivo fica sem NR até receber outro modelo.",
+        "Deletes the copy the app keeps. A game that names this file loses NR until it gets another model.",
+        "Apaga a cópia guardada no app. Um jogo que aponta para este arquivo fica sem NR até receber outro modelo.",
     ),
     (
         "app.tagline",
@@ -785,7 +793,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("lib.group_installed", "With Retoque", "Com Retoque"),
     ("lib.group_other", "Other games", "Outros jogos"),
-    ("lib.state_installed", "Retoque", "Retoque"),
     ("card.install", "Install", "Instalação"),
     ("card.install_options", "Install options", "Opções de instalação"),
     (
@@ -887,6 +894,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("progress.of", "of", "de"),
     ("not_now", "Not now", "Agora não"),
     ("close", "Close", "Fechar"),
+    ("delete", "Delete", "Apagar"),
     ("download", "Download", "Baixar"),
     // Before / after viewer (compare.rs).
     ("canvas", "Comparison image", "Imagem de comparação"),
@@ -1020,13 +1028,6 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Catálogo de modelos atualizado",
     ),
     ("shell.checking", "Checking installation…", "Verificando instalação…"),
-    ("shell.update_available", "Update available", "Atualização disponível"),
-    ("shell.up_to_date", "Up to date", "Atualizado"),
-    (
-        "shell.partial",
-        "Installation needs cleanup",
-        "Instalação precisa de limpeza",
-    ),
     (
         "shell.review_update",
         "Review Retoque update",
@@ -1037,11 +1038,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Review Retoque installation",
         "Revisar instalação do Retoque",
     ),
-    (
-        "shell.review_remove",
-        "Review Retoque removal",
-        "Revisar remoção do Retoque",
-    ),
+    ("shell.review_remove", "Review uninstall", "Revisar desinstalação"),
     (
         "shell.review_note",
         "Nothing changes until you confirm.",
@@ -1282,13 +1279,6 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("tile.on", "On", "Ligado"),
     ("tile.off", "Off", "Desligado"),
     ("tile.unknown", "Unknown", "Desconhecido"),
-    ("tile.old_install", "Old install", "Instalação antiga"),
-    ("tile.st_current", "Up to date", "Atualizado"),
-    ("tile.st_update", "New version", "Nova versão"),
-    ("tile.st_installed", "Installed", "Instalado"),
-    ("tile.st_partial", "Incomplete", "Incompleto"),
-    ("tile.st_untracked", "No receipt", "Sem recibo"),
-    ("tile.st_missing", "Not installed", "Não instalado"),
     ("tile.model_missing", "Model missing", "Modelo ausente"),
     ("tile.fg_sm86", "sm86 for RTX 20/30", "sm86 para RTX 20/30"),
     ("tile.fg_game", "The game's own", "Do próprio jogo"),
@@ -1415,8 +1405,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.catalog_remove",
-        "Remove from component catalogue",
-        "Remover do catálogo de componentes",
+        "Delete component from app…",
+        "Apagar componente do app…",
+    ),
+    (
+        "auto.catalog_remove_title",
+        "Delete this component from the app?",
+        "Apagar este componente do app?",
+    ),
+    (
+        "auto.catalog_remove_help",
+        "Deletes the copy the app keeps. Games that have it keep their files; to install it again, import or download it again.",
+        "Apaga a cópia guardada no app. Os jogos que já o têm continuam com os arquivos; para instalá-lo de novo, importe ou baixe outra vez.",
     ),
     (
         "auto.none_installed",
@@ -1538,7 +1538,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Folders with several games",
         "Pastas com vários jogos",
     ),
-    ("folders.remove", "Remove", "Remover"),
+    ("folders.remove", "Remove from list", "Remover da lista"),
     (
         "folders.remove_help",
         "Remove from this list only. Files stay where they are.",
@@ -1662,6 +1662,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("doctor.prepare", "Prepare repair…", "Preparar reparo…"),
     ("doctor.evidence", "Evidence", "Evidências"),
     ("doctor.badge", "Health findings", "Problemas detectados"),
+    ("doctor.issues_one", "1 issue", "1 problema"),
+    ("doctor.issues", "{n} issues", "{n} problemas"),
     (
         "watch.manual",
         "Live updates unavailable. Refresh manually.",
@@ -1676,13 +1678,18 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("dlss.update", "Update DLSS…", "Atualizar DLSS…"),
     (
         "dlss.restore",
-        "Remove Retoque and restore original DLSS…",
-        "Remover Retoque e restaurar DLSS original…",
+        "Restore original DLSS and uninstall Retoque…",
+        "Restaurar DLSS original e desinstalar o Retoque…",
     ),
     (
         "dlss.restore_only",
         "Restore original DLSS…",
         "Restaurar DLSS original…",
+    ),
+    (
+        "dlss.restore_confirm",
+        "Restore original DLSS",
+        "Restaurar DLSS original",
     ),
     (
         "dlss.optimize",

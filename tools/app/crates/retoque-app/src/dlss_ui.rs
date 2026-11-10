@@ -88,8 +88,9 @@ impl RetoqueApp {
         let Some(install_dir) = self.dlss_install_dir() else {
             return;
         };
+        // The review's title is the button's label without its "…".
         self.autotune_request(
-            self.tr(self.dlss_restore_label()).into(),
+            self.tr(self.dlss_restore_label()).trim_end_matches('…').into(),
             crate::autotune::Request {
                 dlss: Some(Change::Restore { install_dir }),
                 ..Default::default()
@@ -239,11 +240,15 @@ impl RetoqueApp {
             {
                 self.dlss_request_update();
             }
-            if self.tuning.dlss.restorable
-                && ui
-                    .add_enabled(!self.busy(), egui::Button::new(self.tr(self.dlss_restore_label())))
-                    .clicked()
-            {
+            // Taking Retoque out of the game is said in red, as a plain button: it opens a review, not the deed.
+            let restore = self.dlss_restore_label();
+            let text = RichText::new(self.tr(restore));
+            let text = if restore == "dlss.restore" {
+                text.color(theme::BAD)
+            } else {
+                text
+            };
+            if self.tuning.dlss.restorable && ui.add_enabled(!self.busy(), egui::Button::new(text)).clicked() {
                 self.dlss_restore();
             }
             if self.tuning.dlss.consent {

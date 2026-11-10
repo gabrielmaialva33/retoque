@@ -335,23 +335,38 @@ pub(crate) enum InstallState {
     Partial,
     Untracked,
 }
+/// The one wording and colour for each install state: the home cover and the Retoque page say `label`, the library
+/// row, the Retoque tile and other tight places say `short_label`, and all of them use `color`.
 impl InstallState {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Self::Missing => "st.not_installed",
             Self::Installed => "st.installed",
-            Self::Update => "shell.update_available",
-            Self::Current => "shell.up_to_date",
-            Self::Partial => "shell.partial",
+            Self::Update => "st.update",
+            Self::Current => "st.current",
+            Self::Partial => "st.partial",
             Self::Untracked => "st.untracked",
+        }
+    }
+    pub(crate) fn short_label(self) -> &'static str {
+        match self {
+            // "Sem Retoque" is already short.
+            Self::Missing => "st.not_installed",
+            Self::Installed => "st.installed_short",
+            Self::Update => "st.update_short",
+            Self::Current => "st.current_short",
+            Self::Partial => "st.partial_short",
+            Self::Untracked => "st.untracked_short",
         }
     }
     pub(crate) fn color(self) -> Color32 {
         match self {
-            Self::Update => theme::ACCENT,
-            Self::Partial => theme::BAD,
             Self::Current | Self::Installed => theme::GOOD,
-            _ => theme::MUTED,
+            // An update is something to do, not a problem.
+            Self::Update => theme::ACCENT,
+            Self::Untracked => theme::WARN,
+            Self::Partial => theme::BAD,
+            Self::Missing => theme::MUTED,
         }
     }
 }

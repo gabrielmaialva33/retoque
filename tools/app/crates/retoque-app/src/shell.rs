@@ -128,12 +128,10 @@ impl RetoqueApp {
                 for &index in games.iter() {
                     let game = &self.library_state.games[index];
                     let selected = self.selected.as_ref() == Some(&game.id);
-                    let state = (self.library_state.derived.states[index] != InstallState::Missing)
-                        .then(|| self.tr("lib.state_installed"));
+                    let state = self.library_state.derived.states[index];
                     let detail = &self.library_state.derived.details[index];
                     let capsule = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
                     let hint = (!game.registered).then(|| self.tr("folders.unregistered"));
-                    let response = widgets::game_row(ui, &game.name, detail, state, capsule, selected, hint);
                     // Cached Doctor findings for any of the game's folders; looked up by reference, no per-frame work.
                     let findings = game
                         .targets
@@ -142,6 +140,17 @@ impl RetoqueApp {
                         .copied()
                         .max()
                         .unwrap_or(0);
+                    let spoken = crate::tabs::doctor::spoken_findings(findings, self.lang);
+                    let response = widgets::game_row(
+                        ui,
+                        &game.name,
+                        detail,
+                        (self.tr(state.short_label()), state.color()),
+                        capsule,
+                        selected,
+                        hint,
+                        spoken.as_deref(),
+                    );
                     let response = crate::tabs::doctor::row_badge(ui, response, findings, self.lang);
                     list_focus |= response.has_focus();
                     if response.clicked() {

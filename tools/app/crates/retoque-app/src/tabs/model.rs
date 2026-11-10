@@ -62,7 +62,8 @@ impl RetoqueApp {
             .as_deref()
             .is_none_or(|v| v.trim().is_empty() || v.trim().eq_ignore_ascii_case("auto"));
         let mut action: Option<String> = None;
-        let mut remove: Option<String> = None;
+        // The model waiting for "Apagar" in the delete confirm: (sha256, label).
+        let pending_delete = egui::Id::unique("model-delete-pending");
         if ini.is_none() {
             match &self.view.ini {
                 None => {
@@ -224,19 +225,20 @@ impl RetoqueApp {
                 }
                 ui.add_space(6.0);
                 ui.horizontal_wrapped(|ui| {
-                    if !in_use
-                        && ui
-                            .add_enabled(ini.is_some() && !busy, egui::Button::new(self.tr("mdl.use")))
-                            .clicked()
-                    {
-                        action = Some(value.clone());
+                    if !in_use {
+                        let use_here = ui.add_enabled(ini.is_some() && !busy, egui::Button::new(self.tr("mdl.use")));
+                        widgets::name_after(&use_here, self.tr("mdl.use"), &m.label);
+                        if use_here.clicked() {
+                            action = Some(value.clone());
+                        }
                     }
-                    if ui
+                    let delete = ui
                         .add_enabled(!in_use, egui::Button::new(self.tr("mdl.remove")))
-                        .on_hover_text(self.tr("mdl.remove_help"))
-                        .clicked()
-                    {
-                        remove = Some(m.sha256.clone());
+                        .on_hover_text(self.tr("mdl.remove_help"));
+                    widgets::name_after(&delete, self.tr("mdl.remove"), &m.label);
+                    if delete.clicked() {
+                        let pending = (m.sha256.clone(), m.label.clone());
+                        ui.ctx().data_mut(|d| d.insert_temp(pending_delete, pending));
                     }
                 });
             });
@@ -246,8 +248,22 @@ impl RetoqueApp {
             let edit = ("DlssNr".to_string(), "ModelFile".to_string(), v);
             self.request_plan(PlanKind::Settings, PlanInputs::Settings(vec![edit]));
         }
-        if let Some(sha) = remove {
-            commands.send(AppCommand::RemoveModel(sha));
+        // Deleting the app's copy cannot be undone, so it asks first.
+        if let Some((sha, label)) = ui.ctx().data(|d| d.get_temp::<(String, String)>(pending_delete)) {
+            let answer = widgets::delete_modal(
+                ui.ctx(),
+                self.lang,
+                "model",
+                self.tr("mdl.remove_title"),
+                &label,
+                self.tr("mdl.remove_help"),
+            );
+            if answer.is_some() {
+                ui.ctx().data_mut(|d| d.remove::<(String, String)>(pending_delete));
+            }
+            if answer == Some(widgets::Answer::Confirm) {
+                commands.send(AppCommand::RemoveModel(sha));
+            }
         }
         self.settings_plan(ui);
     }
@@ -986,6 +1002,53 @@ mod tests {
             settle(h.state_mut(), |app| app.review.is_some());
             assert!(h.state().review_open);
             assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
+        }
+    }
+
+    #[test]
+    fn deleting_a_stored_model_asks_first_and_names_the_model_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.view.target = Some("/synthetic/nr-game".into());
+            app.view.ini = Some(Ok(Some(Ini::parse(b"[DlssNr]\nModelFile=auto\n"))));
+            app.catalog = Some(Ok(vec![Model {
+                sha256: "synthetic".into(),
+                version: None,
+                size: 64,
+                label: "Stored fixture".into(),
+                path: "/synthetic/model.dll".into(),
+                compatibility: Default::default(),
+            }]));
+            let mut h = Harness::builder().with_size([1000., 900.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    let tx = app.cmd_tx.clone();
+                    app.model_tab(ui, &tx);
+                },
+                app,
+            );
+            h.run_steps(2);
+            let delete = format!("{}: Stored fixture", t(lang, "mdl.remove").trim_end_matches('…'));
+            let use_here = format!("{}: Stored fixture", t(lang, "mdl.use"));
+            h.get_by_role_and_label(egui::Role::Button, &use_here);
+            // Cancel closes the confirm and deletes nothing.
+            h.get_by_role_and_label(egui::Role::Button, &delete).click();
+            h.run_steps(3);
+            h.get_by_label(t(lang, "mdl.remove_title"));
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
+            h.run_steps(3);
+            assert!(h.query_by_label(t(lang, "mdl.remove_title")).is_none());
+            assert!(h.state().cmd_rx.try_recv().is_err());
+            // "Apagar" sends the removal for that model only.
+            h.get_by_role_and_label(egui::Role::Button, &delete).click();
+            h.run_steps(3);
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "delete")).click();
+            h.run_steps(3);
+            assert!(matches!(
+                h.state().cmd_rx.try_recv(),
+                Ok(AppCommand::RemoveModel(sha)) if sha == "synthetic"
+            ));
+            assert!(h.query_by_label(t(lang, "mdl.remove_title")).is_none());
         }
     }
 }
