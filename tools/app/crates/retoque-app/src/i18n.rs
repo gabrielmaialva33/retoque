@@ -390,6 +390,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("set.framegen", "Frame generation", "Geração de quadros"),
     ("set.lsfg", "LSFG (study build)", "LSFG (versão de estudo)"),
     (
+        "set.no_match",
+        "No setting matches this filter.",
+        "Nenhum ajuste corresponde a este filtro.",
+    ),
+    (
         "set.lsfg_note",
         "Study build only. Requires FSR FG output and your own Lossless Scaling files; unavailable features cannot run.",
         "Somente na versão de estudo. Requer saída FSR FG e seus próprios arquivos do Lossless Scaling; recursos indisponíveis não funcionam.",
@@ -1681,6 +1686,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("dlss.download", "Get DLSS 310.9.16…", "Obter DLSS 310.9.16…"),
     (
+        "dlss.all_current",
+        "Every DLSS file in this game is already this version or newer.",
+        "Todos os arquivos DLSS deste jogo já estão nesta versão ou mais nova.",
+    ),
+    (
         "dlss.downloading",
         "Downloading verified NVIDIA DLSS",
         "Baixando NVIDIA DLSS com verificação",
@@ -2155,6 +2165,7 @@ mod tests {
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
+    crate::applog::shown_error(message);
     let translated = retoque_data::messages::reshade_diagnostic(
         message,
         match lang {

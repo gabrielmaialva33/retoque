@@ -51,7 +51,7 @@ pub(crate) struct Saved {
     pub(crate) nr_model_offer_seen: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Tab {
     Install,
     Settings,

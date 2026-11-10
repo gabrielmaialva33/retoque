@@ -159,11 +159,7 @@ impl RetoqueApp {
         };
         ui.horizontal(|ui| {
             ui.label(RichText::new(notice).small().color(theme::MUTED));
-            if ui
-                .small_button(self.tr("dismiss"))
-                .on_hover_text(self.tr("dismiss.help"))
-                .clicked()
-            {
+            if widgets::close_button(ui, self.tr("dismiss.help")).clicked() {
                 self.library_state.migration = FolderMigration::default();
             }
         });

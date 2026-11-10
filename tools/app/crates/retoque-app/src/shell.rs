@@ -67,13 +67,10 @@ impl RetoqueApp {
     pub(crate) fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if let Some(message) = self.error.clone() {
+                crate::applog::shown_error(&message.to_string());
                 ui.colored_label(theme::BAD, format!("{}: {message}", self.tr("error")));
                 crate::error::buttons(ui, &message, self.lang, &self.cmd_tx);
-                if ui
-                    .small_button(self.tr("dismiss"))
-                    .on_hover_text(self.tr("dismiss.help"))
-                    .clicked()
-                {
+                if widgets::close_button(ui, self.tr("dismiss.help")).clicked() {
                     self.error = None;
                 }
                 return;
@@ -92,13 +89,11 @@ impl RetoqueApp {
                 &mut self.library_state.installed_only,
                 t(self.lang, "lib.installed_only"),
             );
+            // One row in the narrow sidebar; adding a folder is one step inside "Your folders".
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button(self.tr("lib.add_folder")).clicked() {
-                    self.folders_open(FolderDialog::Add);
-                }
+                self.folders_button(ui);
             });
         });
-        self.folders_button(ui);
         self.migration_notice_ui(ui);
         ui.separator();
         if self.scanning && self.library_state.games.is_empty() {
@@ -233,23 +228,34 @@ impl RetoqueApp {
         if self.tab == Tab::Settings {
             self.pending_footer(ui);
         }
+        // Each tab keeps its own scroll state, and its content never grows past the page column: one wide line on
+        // one tab used to widen the shared content and push every later card past the others' right edge.
+        let column = ui.available_width();
         egui::ScrollArea::vertical()
+            .id_salt(("tab_scroll", self.tab))
             .auto_shrink([false, false])
-            .show(ui, |ui| match self.tab {
-                Tab::Install => self.install_tab(ui),
-                Tab::Settings => {
-                    let mut edits = std::mem::take(&mut self.view.edits);
-                    let commands = self.cmd_tx.clone();
-                    self.settings_tab(ui, &mut edits, &commands);
-                    self.view.edits = edits;
-                }
-                Tab::Model => {
-                    self.autotune_components(ui);
-                    self.model_tab(ui, &self.cmd_tx);
-                }
-                Tab::Compare => {}
-                Tab::Logs => self.logs_tab(ui, &self.cmd_tx),
+            .show(ui, |ui| {
+                ui.set_max_width(column - ui.spacing().scroll.allocated_width());
+                self.tab_body(ui);
             });
+    }
+
+    fn tab_body(&mut self, ui: &mut egui::Ui) {
+        match self.tab {
+            Tab::Install => self.install_tab(ui),
+            Tab::Settings => {
+                let mut edits = std::mem::take(&mut self.view.edits);
+                let commands = self.cmd_tx.clone();
+                self.settings_tab(ui, &mut edits, &commands);
+                self.view.edits = edits;
+            }
+            Tab::Model => {
+                self.autotune_components(ui);
+                self.model_tab(ui, &self.cmd_tx);
+            }
+            Tab::Compare => {}
+            Tab::Logs => self.logs_tab(ui, &self.cmd_tx),
+        }
     }
 
     pub(crate) fn target_picker(&mut self, ui: &mut egui::Ui, game: &Game) {
@@ -746,19 +752,22 @@ impl RetoqueApp {
                 let mut remove = None;
                 for (i, toast) in self.toasts.iter_mut().enumerate() {
                     widgets::card(ui, |ui| {
-                        ui.label(RichText::new(&toast.message).color(if toast.failed {
-                            theme::BAD
-                        } else {
-                            theme::GOOD
-                        }));
+                        // The message and its close control share the first line; Details, when there are any,
+                        // is an ordinary button under it.
                         ui.horizontal(|ui| {
-                            if toast.detail.is_some() && ui.small_button(t(lang, "shell.details")).clicked() {
-                                toast.details_open = !toast.details_open;
-                            }
-                            if ui.small_button(t(lang, "dismiss")).clicked() {
-                                remove = Some(i);
-                            }
+                            let color = if toast.failed { theme::BAD } else { theme::GOOD };
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if widgets::close_button(ui, t(lang, "dismiss.help")).clicked() {
+                                    remove = Some(i);
+                                }
+                                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                                    ui.add(egui::Label::new(RichText::new(&toast.message).color(color)).wrap());
+                                });
+                            });
                         });
+                        if toast.detail.is_some() && ui.button(t(lang, "shell.details")).clicked() {
+                            toast.details_open = !toast.details_open;
+                        }
                         if let Some(detail) = &toast.detail {
                             crate::error::buttons(ui, detail, lang, &self.cmd_tx);
                         }

@@ -76,6 +76,7 @@ pub(crate) fn show(
                 }
                 for refusal in plan.refusals() {
                     let (key, detail) = refusal_text(lang, refusal);
+                    crate::applog::shown_error(&format!("refusal in {}: {refusal:?}", plan.game_dir().display()));
                     ui.colored_label(theme::BAD, format!("{} {detail}", t(lang, key)));
                     for remedy in crate::error::remedies_for_refusal(refusal) {
                         crate::error::button(ui, remedy, Some(plan.game_dir().to_owned()), lang, commands);

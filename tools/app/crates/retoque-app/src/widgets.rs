@@ -40,6 +40,29 @@ pub fn tinted_card<R>(ui: &mut egui::Ui, fill: Color32, add: impl FnOnce(&mut eg
         .inner
 }
 
+/// A frameless close control for notices: a drawn X, a soft circle on hover, and a screen-reader label.
+pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(24.0, 24.0), egui::Sense::click());
+    let label = label.to_owned();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label.clone()));
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let active = response.hovered() || response.has_focus();
+        if active {
+            painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
+        }
+        let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
+        let d = 4.5;
+        let c = rect.center();
+        let stroke = Stroke::new(1.6, color);
+        painter.line_segment([c + vec2(-d, -d), c + vec2(d, d)], stroke);
+        painter.line_segment([c + vec2(-d, d), c + vec2(d, -d)], stroke);
+    }
+    response
+        .on_hover_text(label)
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 /// A card's title line.
 pub fn card_title(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).size(17.0).strong());
@@ -333,27 +356,40 @@ pub fn stat_tile_width(ui: &mut egui::Ui, width: f32, label: &str, value: &str, 
 /// The shade over a game's hero art: dark on the left where the name, status and actions sit, opening to the art
 /// on the right, with a little weight at the bottom edge. Rounded ends match the art's corners.
 pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
-    let dark = Color32::from_black_alpha(232);
-    let mid = Color32::from_black_alpha(150);
-    let light = Color32::from_black_alpha(40);
-    let r = radius;
-    painter.rect_filled(
-        Rect::from_min_max(rect.min, pos2(rect.left() + r, rect.bottom())),
-        egui::CornerRadius {
-            nw: r as u8,
-            sw: r as u8,
-            ne: 0,
-            se: 0,
-        },
-        dark,
-    );
-    let stops = [(0.0, dark), (0.42, mid), (1.0, light)];
-    let inner = Rect::from_min_max(pos2(rect.left() + r, rect.top()), pos2(rect.right() - r, rect.bottom()));
+    // One mesh with shared vertices: separate pieces met at anti-aliased edges and left thin vertical seams.
+    // Columns follow the rounded corners, so the shade sits exactly on the art's own rounded edge.
+    const STOPS: [(f32, f32); 3] = [(0.0, 232.0), (0.42, 150.0), (1.0, 40.0)];
+    let alpha = |t: f32| {
+        let i = STOPS
+            .iter()
+            .position(|(at, _)| t <= *at)
+            .unwrap_or(STOPS.len() - 1)
+            .max(1);
+        let ((a0, v0), (a1, v1)) = (STOPS[i - 1], STOPS[i]);
+        let k = ((t - a0) / (a1 - a0)).clamp(0.0, 1.0);
+        Color32::from_black_alpha((v0 + (v1 - v0) * k).round() as u8)
+    };
+    let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0).max(0.0);
+    let steps = 12;
+    let mut xs: Vec<f32> = (0..=steps)
+        .flat_map(|i| {
+            let d = r * i as f32 / steps as f32;
+            [rect.left() + d, rect.right() - d]
+        })
+        .chain(STOPS.iter().map(|(at, _)| rect.left() + rect.width() * at))
+        .collect();
+    xs.sort_by(f32::total_cmp);
+    xs.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+    let inset = |x: f32| {
+        let dx = (rect.left() + r - x).max(x - (rect.right() - r)).max(0.0);
+        r - (r * r - dx * dx).max(0.0).sqrt()
+    };
     let mut mesh = egui::Mesh::default();
-    for (i, (at, color)) in stops.iter().enumerate() {
-        let x = inner.left() + inner.width() * at;
-        mesh.colored_vertex(pos2(x, inner.top()), *color);
-        mesh.colored_vertex(pos2(x, inner.bottom()), *color);
+    for (i, x) in xs.iter().enumerate() {
+        let color = alpha((x - rect.left()) / rect.width().max(1.0));
+        let d = inset(*x);
+        mesh.colored_vertex(pos2(*x, rect.top() + d), color);
+        mesh.colored_vertex(pos2(*x, rect.bottom() - d), color);
         if i > 0 {
             let b = (i as u32) * 2;
             mesh.add_triangle(b - 2, b - 1, b);
@@ -361,16 +397,6 @@ pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
         }
     }
     painter.add(egui::Shape::mesh(mesh));
-    painter.rect_filled(
-        Rect::from_min_max(pos2(rect.right() - r, rect.top()), rect.max),
-        egui::CornerRadius {
-            nw: 0,
-            sw: 0,
-            ne: r as u8,
-            se: r as u8,
-        },
-        light,
-    );
 }
 
 /// Width for `count` items of at least `min` points that share a row of `available` points with `gap` between

@@ -116,6 +116,7 @@ impl TaskHub {
         let current_requests = self.requests.clone();
         let failed_target = target.clone();
         let job = Box::new(move || {
+            let started = std::time::Instant::now();
             let newest =
                 !tracked || current_requests.lock().unwrap_or_else(|e| e.into_inner()).get(name) == Some(&request);
             if newest && (!scoped || current.load(Ordering::Relaxed) == epoch) {
@@ -127,6 +128,11 @@ impl TaskHub {
                             message: panic_text(panic.as_ref()),
                         }
                     });
+                let failed = match &outcome {
+                    Outcome::Failed { message, .. } => Some(message.as_str()),
+                    _ => None,
+                };
+                crate::applog::job(name, started.elapsed(), failed);
                 let outcome = if tracked {
                     Outcome::Scoped {
                         epoch: scoped.then_some(epoch),

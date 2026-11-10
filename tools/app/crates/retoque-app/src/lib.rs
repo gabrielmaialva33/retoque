@@ -2,6 +2,7 @@
 //! `main.rs` only opens the native window.
 
 pub mod app;
+pub mod applog;
 pub mod compare;
 pub mod i18n;
 pub mod jobs;

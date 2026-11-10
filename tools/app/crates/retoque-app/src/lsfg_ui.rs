@@ -223,8 +223,6 @@ impl RetoqueApp {
         edits
     }
     pub(crate) fn lsfg_card(&mut self, ui: &mut egui::Ui) {
-        // Scroll contents can inherit a wider minimum from another tab; constrain these cards to the viewport.
-        ui.set_width((ui.clip_rect().right() - ui.next_widget_position().x - 4.0).max(100.0));
         ui.add_space(12.0);
         widgets::card(ui, |ui| {
             self.lsfg_ensure_started();
