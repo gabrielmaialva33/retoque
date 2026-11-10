@@ -289,6 +289,7 @@ impl RetoqueApp {
                 ui.colored_label(theme::BAD, diagnostic(self.lang, error));
             }
         });
+        ui.add_space(theme::CARD_GAP);
     }
 }
 

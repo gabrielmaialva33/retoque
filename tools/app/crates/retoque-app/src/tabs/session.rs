@@ -107,7 +107,7 @@ impl RetoqueApp {
                 });
             }
         });
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
     }
 }
 

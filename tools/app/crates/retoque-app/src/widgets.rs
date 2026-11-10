@@ -64,6 +64,59 @@ pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// The side of `reset_button`'s target, so a row without one can keep its room.
+pub const RESET_SIZE: f32 = 32.0;
+
+/// A frameless "back to automatic" control: a drawn anticlockwise arrow (↺, no font glyph needed), a soft circle on
+/// hover, and a screen-reader label that names what it resets.
+pub fn reset_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(RESET_SIZE, RESET_SIZE), egui::Sense::click());
+    let label = label.to_owned();
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), label.clone()));
+    if ui.is_rect_visible(rect) {
+        let painter = ui.painter();
+        let active = response.hovered() || response.has_focus();
+        if active {
+            painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
+        }
+        let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
+        let stroke = Stroke::new(1.6, color);
+        let (c, r) = (rect.center(), 6.0);
+        let at = |angle: f32| c + r * vec2(angle.cos(), angle.sin());
+        // An open circle with its gap at the top; the arrow heads anticlockwise from the gap's right end.
+        let start = -std::f32::consts::FRAC_PI_2 + 0.7;
+        let points: Vec<_> = (0..=20)
+            .map(|i| at(start + i as f32 / 20.0 * (std::f32::consts::TAU - 1.4)))
+            .collect();
+        painter.add(egui::Shape::line(points, stroke));
+        let tip = at(start);
+        let back = -vec2(start.sin(), -start.cos());
+        let wing = |turn: f32| {
+            tip + 3.5
+                * vec2(
+                    back.x * turn.cos() - back.y * turn.sin(),
+                    back.x * turn.sin() + back.y * turn.cos(),
+                )
+        };
+        painter.line_segment([tip, wing(0.7)], stroke);
+        painter.line_segment([tip, wing(-0.7)], stroke);
+    }
+    response
+        .on_hover_text(label)
+        .on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
+/// The 3 px accent bar that marks a changed row, drawn in the card's margin left of `row`, with `note` on hover
+/// and for screen readers (the bar is never the only cue).
+pub fn change_bar(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + std::fmt::Debug, row: Rect, note: &str) {
+    let bar = Rect::from_min_max(pos2(row.left() - 10.0, row.top()), pos2(row.left() - 7.0, row.bottom()));
+    ui.painter().rect_filled(bar, 2.0, theme::ACCENT);
+    let id = ui.scope_id().with(("change_bar", id_salt));
+    let response = ui.interact(bar.expand2(vec2(3.0, 0.0)), id, Sense::hover());
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, note));
+    response.on_hover_text(note);
+}
+
 /// The frame every modal uses: the review's card look, so dialogs read as one family.
 pub fn modal_frame() -> egui::Frame {
     egui::Frame::new()
@@ -233,7 +286,7 @@ pub fn name_after(response: &egui::Response, action: &str, item: &str) {
 
 /// A card's title line.
 pub fn card_title(ui: &mut egui::Ui, text: &str) {
-    ui.label(RichText::new(text).size(17.0).strong());
+    ui.label(RichText::new(text).size(theme::TITLE).strong());
     ui.add_space(4.0);
 }
 
@@ -428,7 +481,12 @@ pub fn game_row(
 pub fn group_label(ui: &mut egui::Ui, text: &str, count: usize) {
     ui.add_space(8.0);
     ui.horizontal(|ui| {
-        ui.label(RichText::new(text).size(17.0).strong().color(theme::TEXT_STRONG));
+        ui.label(
+            RichText::new(text)
+                .size(theme::TITLE)
+                .strong()
+                .color(theme::TEXT_STRONG),
+        );
         ui.label(RichText::new(count.to_string()).size(15.0).color(theme::MUTED));
     });
     ui.add_space(2.0);
@@ -442,7 +500,7 @@ const HERO_ASPECT: f32 = 3840.0 / 1240.0;
 pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>, logo: Option<&Path>) {
     let Some(hero) = hero else {
         ui.add_space(4.0);
-        ui.label(RichText::new(name).size(28.0).strong().color(theme::TEXT_STRONG));
+        ui.label(RichText::new(name).heading().strong().color(theme::TEXT_STRONG));
         ui.label(RichText::new(subtitle).color(theme::MUTED));
         ui.add_space(6.0);
         return;
@@ -471,11 +529,9 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
     mesh.add_triangle(0, 2, 3);
     ui.painter().add(mesh);
     let pad = 20.0;
-    let sub = ui.painter().layout_no_wrap(
-        subtitle.to_string(),
-        FontId::proportional(13.0),
-        Color32::from_gray(220),
-    );
+    let sub = ui
+        .painter()
+        .layout_no_wrap(subtitle.to_string(), FontId::proportional(13.0), theme::ON_IMAGE);
     let sub_pos = pos2(rect.left() + pad, rect.bottom() - pad - sub.size().y);
     match logo {
         Some(logo) => {
@@ -502,7 +558,7 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
             ui.painter().galley(pos, title, Color32::WHITE);
         }
     }
-    ui.painter().galley(sub_pos, sub, Color32::from_gray(220));
+    ui.painter().galley(sub_pos, sub, theme::ON_IMAGE);
     ui.add_space(10.0);
 }
 
@@ -594,8 +650,16 @@ pub fn row_width(count: usize, available: f32, min: f32, gap: f32) -> f32 {
 }
 
 /// A feature tile in the style of a GPU control panel: a status bar on the left, a caption, the value in large
-/// type and one detail line. Read by screen readers as "caption: value, detail".
-pub fn feature_tile(ui: &mut egui::Ui, width: f32, caption: &str, value: &str, detail: &str, color: Color32) {
+/// type and one detail line. Read by screen readers as "caption: value, detail". Returns the tile's response, for
+/// a hover with technical detail.
+pub fn feature_tile(
+    ui: &mut egui::Ui,
+    width: f32,
+    caption: &str,
+    value: &str,
+    detail: &str,
+    color: Color32,
+) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(width, 80.0), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, 10.0, theme::CARD);
@@ -625,6 +689,7 @@ pub fn feature_tile(ui: &mut egui::Ui, width: f32, caption: &str, value: &str, d
         format!("{caption}: {value}, {detail}")
     };
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &spoken));
+    response
 }
 
 /// One cover is one focusable button; wrapping moves the whole card, including its title and state.

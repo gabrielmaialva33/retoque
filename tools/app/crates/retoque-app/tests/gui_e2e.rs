@@ -40,7 +40,8 @@ fn wait(ui: &mut Window, description: &str, ready: impl Fn(&Window) -> bool) {
             return;
         }
         assert!(
-            start.elapsed() < Duration::from_secs(10),
+            // Generous: the whole workspace's suites run beside this window and can starve it of CPU.
+            start.elapsed() < Duration::from_secs(30),
             "timed out: {description}\n{:#?}",
             ui.root()
         );
@@ -111,7 +112,7 @@ fn choose_stage(ui: &mut Window, value: &str) {
 fn review_stage(ui: &mut Window, game: &Path, before: &str, after: &str) {
     let unchanged = snapshot(game);
     choose_stage(ui, after);
-    click(ui, Role::Button, "Review changes");
+    click(ui, Role::Button, "Review changes…");
     wait_label(ui, &format!("[DlssNr] Stage: {before} -> {after}"));
     assert_eq!(snapshot(game), unchanged, "preview must not write");
     click(ui, Role::Button, "Apply");
@@ -222,7 +223,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     assert!(label(&ui, "What will be done"));
     assert_eq!(snapshot(&game), original);
     click(&mut ui, Role::Button, "Install");
-    // The Retoque tile says it now: "Retoque: Up to date, build …".
+    // The Retoque tile says it now: "Retoque: Up to date, Local build" (the hash is in its hover).
     wait_label(&mut ui, "Retoque: Up to date");
     for file in [
         "dxgi.dll",
@@ -269,7 +270,8 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     let mut ui = window();
     select_game(&mut ui);
     click(&mut ui, Role::Tab, "Components");
-    wait_label(&mut ui, "Use in this game");
+    // The button is named after its model for screen readers ("Use in this game: Synthetic model").
+    wait_label(&mut ui, "Use in this game: Synthetic model");
     let before_model = snapshot(&game);
     // Every model card has this button, so it is named after its model for screen readers.
     click(&mut ui, Role::Button, "Use in this game: Synthetic model");
@@ -327,7 +329,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     assert_eq!(snapshot(&game), before_refusal);
     click(&mut ui, Role::Button, "Cancel");
     click(&mut ui, Role::Tab, "Components");
-    click(&mut ui, Role::Button, "Use the default search");
+    click(&mut ui, Role::Button, "Use the default search…");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: {model_value} -> auto"));
     click(&mut ui, Role::Button, "Apply");
     wait(&mut ui, "restore default model", |ui| {
@@ -360,7 +362,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
         ui.query_by_role_and_label(Role::Button, "Install").is_some()
     });
     let before_stale = snapshot(&game);
-    click(&mut ui, Role::CheckBox, "Turn Neural Rendering on");
+    click(&mut ui, Role::CheckBox, "Turn Neural Rendering (NR) on");
     wait_label(&mut ui, "changed after this preview: preview again.");
     assert!(ui.query_by_role_and_label(Role::Button, "Install").is_none());
     assert_eq!(snapshot(&game), before_stale);

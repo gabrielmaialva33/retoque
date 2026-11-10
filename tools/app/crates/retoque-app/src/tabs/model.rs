@@ -75,7 +75,7 @@ impl RetoqueApp {
                 }
                 _ => self.tab_install_prompt(ui),
             }
-            ui.add_space(12.0);
+            ui.add_space(theme::CARD_GAP);
             self.nr_fetch_card(ui);
             return;
         }
@@ -95,7 +95,7 @@ impl RetoqueApp {
                 }) => {
                     ui.label(
                         RichText::new(version.as_deref().unwrap_or(self.tr("mdl.version_unknown")))
-                            .size(22.0)
+                            .size(theme::DISPLAY)
                             .strong(),
                     );
                     let in_catalog = self
@@ -156,8 +156,8 @@ impl RetoqueApp {
                 }
             });
         });
-        ui.add_space(16.0);
-        ui.label(RichText::new(self.tr("mdl.catalog")).size(18.0).strong());
+        ui.add_space(theme::CARD_GAP);
+        widgets::section_header(ui, self.tr("mdl.catalog"));
         self.nr_fetch_card(ui);
         self.model_import_area(ui);
         let models = match &self.catalog {
@@ -194,7 +194,7 @@ impl RetoqueApp {
             let used = self.model_usage.get(&m.path).copied();
             widgets::card(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(&m.label).size(16.0).strong());
+                    ui.label(RichText::new(&m.label).size(theme::TITLE).strong());
                     if in_use {
                         widgets::chip(ui, self.tr("mdl.in_use"), theme::GOOD);
                     }
@@ -242,7 +242,7 @@ impl RetoqueApp {
                     }
                 });
             });
-            ui.add_space(10.0);
+            ui.add_space(theme::CARD_GAP);
         }
         if let Some(v) = action {
             let edit = ("DlssNr".to_string(), "ModelFile".to_string(), v);
@@ -270,12 +270,7 @@ impl RetoqueApp {
 
     pub(crate) fn model_import_area(&self, ui: &mut egui::Ui) {
         let pending_id = egui::Id::unique("model-import-pending");
-        let frame = egui::Frame::new()
-            .inner_margin(16.0)
-            .corner_radius(12)
-            .fill(theme::CARD);
-        let area = frame.show(ui, |ui| {
-            ui.set_width(ui.available_width());
+        let area = widgets::card(ui, |ui| {
             ui.label(RichText::new(self.tr("mdl.drop")).color(theme::MUTED));
             if ui.button(self.tr("mdl.import")).clicked()
                 && let Some(path) = rfd::FileDialog::new()
@@ -284,36 +279,11 @@ impl RetoqueApp {
             {
                 ui.ctx().data_mut(|data| data.insert_temp(pending_id, path));
             }
+            // The whole card, margins included, is the drop target.
+            ui.min_rect().expand(16.0)
         });
-        let border = area.response.rect.shrink(1.0);
-        let stroke = egui::Stroke::new(1.0, theme::MUTED);
-        for (from, to) in [
-            (border.left_top(), border.right_top()),
-            (border.right_top(), border.right_bottom()),
-            (border.right_bottom(), border.left_bottom()),
-            (border.left_bottom(), border.left_top()),
-        ] {
-            let delta = to - from;
-            let length = delta.length();
-            let direction = delta / length.max(1.0);
-            let mut offset = 8.0;
-            while offset < length - 8.0 {
-                ui.painter().line_segment(
-                    [
-                        from + direction * offset,
-                        from + direction * (offset + 5.0).min(length - 8.0),
-                    ],
-                    stroke,
-                );
-                offset += 10.0;
-            }
-        }
         // Dropping previews an import, just like selecting a file; it does not silently copy anything.
-        if ui
-            .ctx()
-            .pointer_latest_pos()
-            .is_some_and(|p| area.response.rect.contains(p))
-        {
+        if ui.ctx().pointer_latest_pos().is_some_and(|p| area.contains(p)) {
             let dropped = ui
                 .ctx()
                 .input(|i| i.raw.dropped_files.first().map(|file| file.path().to_path_buf()));
@@ -337,7 +307,7 @@ impl RetoqueApp {
                 }
             });
         }
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
     }
 
     pub(crate) fn model_compatibility_label(
@@ -348,11 +318,12 @@ impl RetoqueApp {
         use retoque_data::model_compat::Compatibility;
         let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
         let (key, color) = match info.for_gpu(gpu) {
-            Compatibility::Incompatible => ("mdl.incompatible", theme::WARN),
-            Compatibility::Compatible => ("mdl.arch_match", theme::MUTED),
+            Compatibility::Incompatible => ("mdl.incompatible", theme::BAD),
+            Compatibility::Compatible => ("mdl.arch_match", theme::GOOD),
             Compatibility::Unknown => ("mdl.compat_unknown", theme::WARN),
         };
-        ui.add(egui::Label::new(RichText::new(self.tr(key)).color(color)).wrap());
+        // A chip in words; the CUDA targets the file was built for are technical detail, kept in the hover.
+        let chip = ui.horizontal(|ui| widgets::chip(ui, self.tr(key), color)).response;
         if !info.archs.is_empty() {
             let archs = info
                 .archs
@@ -360,7 +331,7 @@ impl RetoqueApp {
                 .map(|sm| format!("sm_{sm}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            ui.label(format!("{} {archs}", self.tr("mdl.archs")));
+            chip.on_hover_text(format!("{} {archs}", self.tr("mdl.archs")));
         }
     }
 
@@ -491,7 +462,8 @@ impl RetoqueApp {
             if let Some(error) = &self.nr_fetch.error {
                 ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
             }
-            ui.collapsing(self.tr("nr_fetch.available_variants"), |ui| {
+            let variants = self.tr("nr_fetch.available_variants");
+            widgets::collapsible(ui, "nr_variants", variants, widgets::Fold::Section, |ui| {
                 for entry in &self.nr_fetch.entries {
                     ui.push_id(&entry.sha256, |ui| {
                         ui.horizontal_wrapped(|ui| {
@@ -519,7 +491,7 @@ impl RetoqueApp {
                 }
             });
         });
-        ui.add_space(12.0);
+        ui.add_space(theme::CARD_GAP);
     }
 
     pub(crate) fn nr_fetch_prompt_compatible(&mut self, select_for_target: Option<PathBuf>) {
@@ -999,7 +971,7 @@ mod tests {
             );
             h.run_steps(2);
             let delete = format!("{}: Stored fixture", t(lang, "mdl.remove").trim_end_matches('…'));
-            let use_here = format!("{}: Stored fixture", t(lang, "mdl.use"));
+            let use_here = format!("{}: Stored fixture", t(lang, "mdl.use").trim_end_matches('…'));
             h.get_by_role_and_label(egui::Role::Button, &use_here);
             // Cancel closes the confirm and deletes nothing.
             h.get_by_role_and_label(egui::Role::Button, &delete).click();

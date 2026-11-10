@@ -167,11 +167,17 @@ impl RetoqueApp {
         }
         if let Some(record) = &self.tuning.sm86.record {
             ui.label(format!("SHA-256: {}", record.sha256));
-            ui.collapsing(self.tr("sm86.ignored"), |ui| {
-                for name in &record.ignored {
-                    ui.label(name);
-                }
-            });
+            widgets::collapsible(
+                ui,
+                "sm86_ignored",
+                self.tr("sm86.ignored"),
+                widgets::Fold::Details,
+                |ui| {
+                    for name in &record.ignored {
+                        ui.label(name);
+                    }
+                },
+            );
         }
         if let Some(error) = &self.tuning.sm86.error {
             ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));

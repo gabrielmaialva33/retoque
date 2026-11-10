@@ -295,7 +295,7 @@ impl RetoqueApp {
         Some(match &self.payload_ui.record {
             Some(rec) if &rec.payload_dir == p => format!("Retoque {}", rec.release.version),
             _ => match self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
-                Some(hash) => format!("Retoque · {} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
+                Some(hash) => format!("Retoque · {}", self.build_text(hash)),
                 None => self.tr("app.payload").to_owned(),
             },
         })
@@ -316,8 +316,15 @@ impl RetoqueApp {
         let response = ui.button(text);
         let label = self.payload_button_label();
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, &label));
+        // The path, and the build's hash when the files are a local build (the button names it in plain words).
         let response = match &self.payload {
-            Some(p) => response.on_hover_text(crate::format::display_path(p)),
+            Some(p) => {
+                let mut hover = crate::format::display_path(p);
+                if let Some(hash) = self.payload_build.as_ref().and_then(|r| r.as_ref().ok()) {
+                    hover = format!("{hover}\n{}", self.build_hover(hash));
+                }
+                response.on_hover_text(hover)
+            }
             None => response,
         };
         if response.clicked() {
