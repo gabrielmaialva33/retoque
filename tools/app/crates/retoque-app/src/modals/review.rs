@@ -5,7 +5,7 @@ use crate::{
     commands::{AppCommand, CommandSender},
     i18n::{Lang, diagnostic, t},
     model::PlanKind,
-    theme,
+    theme, widgets,
 };
 use egui::RichText;
 use retoque_core::Plan;
@@ -37,6 +37,17 @@ impl ReviewSession {
                 || matches!(&self.kind, ReviewKind::Autotune(r) if matches!(r.dlss,Some(crate::dlss_ui::Change::Restore { .. })))
                 || self.plans.iter().any(|p| !p.steps().is_empty()))
     }
+    /// The review takes something out of a game (Retoque, a component, the updated DLSS files), so its confirm is a
+    /// `danger` button.
+    pub fn removes(&self) -> bool {
+        match &self.kind {
+            ReviewKind::Standard(kind) => *kind == PlanKind::Uninstall,
+            ReviewKind::Autotune(r) => {
+                matches!(r.dlss, Some(crate::dlss_ui::Change::Restore { .. }))
+                    || matches!(r.component, Some(autotune::ComponentChange::Remove(_)))
+            }
+        }
+    }
 }
 pub(crate) fn show(
     ui: &mut egui::Ui,
@@ -48,7 +59,7 @@ pub(crate) fn show(
     commands: &CommandSender,
 ) {
     ui.heading(&session.title);
-    ui.label(t(lang, "inst.plan"));
+    widgets::card_title(ui, t(lang, "inst.plan"));
     ui.label(RichText::new(t(lang, "shell.review_note")).small().color(theme::MUTED));
     egui::ScrollArea::vertical()
         .id_salt("review_steps")
@@ -70,8 +81,13 @@ pub(crate) fn show(
                     }
                     _ => plan.game_dir().to_owned(),
                 };
+                // The title names the game; its folder is a detail.
                 if shown_dir.as_ref() != Some(&dir) {
-                    ui.label(crate::format::display_path(&dir));
+                    ui.label(
+                        RichText::new(crate::format::display_path(&dir))
+                            .small()
+                            .color(theme::MUTED),
+                    );
                     shown_dir = Some(dir);
                 }
                 for refusal in plan.refusals() {
@@ -146,8 +162,9 @@ pub(crate) fn show(
                         .zip(groups)
                         .filter(|(s, g)| **g == group && !internal(s))
                     {
-                        let (_, text, color) = step_text(lang, step);
-                        ui.add(egui::Label::new(RichText::new(text).color(color)).wrap());
+                        // The verb tells a backup, a rename and a restore apart without relying on their colour.
+                        let (verb, text, color) = step_text(lang, step);
+                        ui.add(egui::Label::new(RichText::new(format!("{verb}: {text}")).color(color)).wrap());
                     }
                     for file in records {
                         ui.label(
@@ -179,13 +196,27 @@ pub(crate) fn show(
         if ui.button(t(lang, "cancel")).clicked() {
             commands.send(AppCommand::CancelReview);
         }
-        if session.allowed() && !stale {
-            let button = if matches!(session.kind, ReviewKind::Standard(PlanKind::Uninstall)) {
-                egui::Button::new(confirm_label).fill(theme::BAD)
+        // A stale preview hides its confirm (the warning above says to preview again); a refused or empty plan
+        // keeps it in place, disabled, with the reason on hover.
+        if !stale {
+            let button = if session.removes() {
+                theme::danger(confirm_label)
             } else {
                 theme::primary(confirm_label)
             };
-            if ui.add_enabled(!busy, button).clicked() {
+            let allowed = session.allowed();
+            let refused = session.plans.iter().any(|p| !p.refusals().is_empty());
+            let response = ui.add_enabled(allowed && !busy, button).on_disabled_hover_text(t(
+                lang,
+                if refused {
+                    "shell.resolve"
+                } else if !allowed {
+                    "inst.nothing"
+                } else {
+                    "inst.working"
+                },
+            ));
+            if response.clicked() {
                 commands.send(AppCommand::ConfirmReview(session.request_id));
             }
         }

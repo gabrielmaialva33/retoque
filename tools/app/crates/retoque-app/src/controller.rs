@@ -771,23 +771,22 @@ impl RetoqueApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::unique("plan_review"))
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::CARD)
-                    .stroke(egui::Stroke::new(1.0, theme::CARD_EDGE))
-                    .corner_radius(12)
-                    .inner_margin(20),
-            )
+            .frame(widgets::modal_frame())
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 740.0));
                 match &self.review {
                     Some(Ok(review)) => {
                         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
                         let label = self.tr(match review.kind {
+                            // Restoring DLSS also uninstalls Retoque when the app installed it.
                             ReviewKind::Autotune(ref r)
                                 if matches!(r.dlss, Some(crate::dlss_ui::Change::Restore { .. })) =>
                             {
-                                "inst.uninstall"
+                                if installed {
+                                    "inst.uninstall"
+                                } else {
+                                    "dlss.restore_confirm"
+                                }
                             }
                             ReviewKind::Autotune(_) => "auto.confirm",
                             ReviewKind::Standard(PlanKind::Install) if installed => "inst.update",

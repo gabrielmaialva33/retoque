@@ -106,9 +106,7 @@ impl RetoqueApp {
             ui.horizontal(|ui| {
                 cancel = ui.button(t(lang, "cancel")).clicked();
                 let label = t(lang, "left.confirm").replace("{size}", &size_text(lang, bytes));
-                confirm = ui
-                    .add(egui::Button::new(RichText::new(label).strong()).fill(theme::BAD))
-                    .clicked();
+                confirm = ui.add(theme::danger(&label)).clicked();
             });
         });
         if response.should_close() {

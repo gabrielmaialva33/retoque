@@ -337,6 +337,8 @@ fn undo_opens_inverse_review_without_writing_and_conflicts_are_shown_in_review()
         let review = h.state().review.as_ref().unwrap().as_ref().unwrap();
         assert!(review.title.starts_with(t(lang, "undo.title")));
         assert!(review.allowed());
+        // Each step says its verb, so steps of one group differ by more than colour.
+        h.get_by_label_contains(&format!("{}: OptiScaler.ini", t(lang, "step.ini")));
         assert_eq!(std::fs::read(&ini).unwrap(), before);
         h.get_by_role_and_label(egui::Role::Button, t(lang, "cancel")).click();
         h.run_steps(3);

@@ -10,6 +10,11 @@ use crate::autotune::{
 #[path = "sm86_ui.rs"]
 mod sm86_ui;
 
+/// Where the component waiting for "Apagar" in the delete confirm is kept: (id, label), in egui's temporary data.
+fn component_delete_id() -> egui::Id {
+    egui::Id::unique("component-delete-pending")
+}
+
 impl RetoqueApp {
     pub(crate) fn autotune_start(&mut self) {
         self.jobs.spawn("autotune-environment", None, |_| {
@@ -73,8 +78,14 @@ impl RetoqueApp {
                 request,
                 result,
             } if self.view.target.as_ref() == Some(&target) && request == self.tuning.request => {
+                // Like the install reviews, the title names the game it is about.
+                let game = self.selected_game().map(|g| g.name.as_str()).unwrap_or("");
+                let title = match game {
+                    "" => self.tuning.review_title.clone(),
+                    game => format!("{} · {game}", self.tuning.review_title),
+                };
                 self.review = Some(result.map(|p| ReviewSession {
-                    title: self.tuning.review_title.clone(),
+                    title,
                     kind: ReviewKind::Autotune(Box::new(p.request)),
                     plans: p.plans,
                     groups: p.groups,
@@ -333,24 +344,28 @@ impl RetoqueApp {
                             ui.horizontal_wrapped(|ui| {
                                 if installed {
                                     ui.colored_label(theme::GOOD, self.tr("auto.component_installed"));
-                                } else if ui
-                                    .add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")))
-                                    .clicked()
-                                {
-                                    self.autotune_request(
-                                        self.tr("auto.component_install").into(),
-                                        Request {
-                                            dlss: None,
-                                            component: Some(ComponentChange::Install(c.clone())),
-                                            edits: recommend::lsfg_off_edits(),
-                                        },
-                                    );
+                                } else {
+                                    let install =
+                                        ui.add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")));
+                                    widgets::name_after(&install, self.tr("auto.component_install"), &c.label);
+                                    if install.clicked() {
+                                        self.autotune_request(
+                                            self.tr("auto.component_install").into(),
+                                            Request {
+                                                dlss: None,
+                                                component: Some(ComponentChange::Install(c.clone())),
+                                                edits: recommend::lsfg_off_edits(),
+                                            },
+                                        );
+                                    }
                                 }
-                                if ui
+                                let delete = ui
                                     .add_enabled(!self.jobs.busy(), egui::Button::new(self.tr("auto.catalog_remove")))
-                                    .clicked()
-                                {
-                                    self.autotune_catalog(None, Some(c.id.clone()));
+                                    .on_hover_text(self.tr("auto.catalog_remove_help"));
+                                widgets::name_after(&delete, self.tr("auto.catalog_remove"), &c.label);
+                                if delete.clicked() {
+                                    let pending = (c.id.clone(), c.label.clone());
+                                    ui.ctx().data_mut(|d| d.insert_temp(component_delete_id(), pending));
                                 }
                             });
                         });
@@ -369,10 +384,10 @@ impl RetoqueApp {
                                 self.tr("auto.component_installed"),
                                 &id[..id.len().min(12)]
                             ));
-                            if ui
-                                .add_enabled(!self.busy(), egui::Button::new(self.tr("auto.component_remove")))
-                                .clicked()
-                            {
+                            let remove =
+                                ui.add_enabled(!self.busy(), egui::Button::new(self.tr("auto.component_remove")));
+                            widgets::name_after(&remove, self.tr("auto.component_remove"), &id[..id.len().min(12)]);
+                            if remove.clicked() {
                                 self.autotune_request(
                                     self.tr("auto.component_remove").into(),
                                     Request {
@@ -393,6 +408,27 @@ impl RetoqueApp {
                 }
             }
         });
+        self.component_delete_confirm(ui.ctx());
+    }
+    /// Deleting a component the app keeps cannot be undone, so it asks first; the catalog job runs on "Apagar".
+    fn component_delete_confirm(&mut self, ctx: &egui::Context) {
+        let Some((id, label)) = ctx.data(|d| d.get_temp::<(String, String)>(component_delete_id())) else {
+            return;
+        };
+        let answer = widgets::delete_modal(
+            ctx,
+            self.lang,
+            "component",
+            self.tr("auto.catalog_remove_title"),
+            &label,
+            self.tr("auto.catalog_remove_help"),
+        );
+        if answer.is_some() {
+            ctx.data_mut(|d| d.remove::<(String, String)>(component_delete_id()));
+        }
+        if answer == Some(widgets::Answer::Confirm) {
+            self.autotune_catalog(None, Some(id));
+        }
     }
     pub(crate) fn autotune_request(&mut self, title: String, request: Request) {
         let Some(target) = self.view.target.clone() else { return };

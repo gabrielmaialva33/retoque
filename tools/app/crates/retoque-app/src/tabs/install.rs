@@ -333,26 +333,12 @@ impl RetoqueApp {
             };
             widgets::feature_tile(ui, tile_w, self.tr("tile.gpu"), &value, &detail, theme::ACCENT);
             // Retoque itself.
-            let color = match state {
-                InstallState::Current | InstallState::Installed => theme::GOOD,
-                InstallState::Update | InstallState::Untracked => theme::WARN,
-                InstallState::Partial => theme::BAD,
-                InstallState::Missing => theme::MUTED,
+            let detail = match &status.build_sha256 {
+                Some(hash) => format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
+                None => String::new(),
             };
-            let detail = match (&status.build_sha256, state) {
-                (_, InstallState::Untracked) => self.tr("tile.old_install").to_owned(),
-                (Some(hash), _) => format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
-                (None, _) => String::new(),
-            };
-            let value = self.tr(match state {
-                InstallState::Current => "tile.st_current",
-                InstallState::Update => "tile.st_update",
-                InstallState::Installed => "tile.st_installed",
-                InstallState::Partial => "tile.st_partial",
-                InstallState::Untracked => "tile.st_untracked",
-                InstallState::Missing => "tile.st_missing",
-            });
-            widgets::feature_tile(ui, tile_w, "Retoque", value, &detail, color);
+            let value = self.tr(state.short_label());
+            widgets::feature_tile(ui, tile_w, "Retoque", value, &detail, state.color());
             // Neural Rendering.
             let model = self.view.inspection.as_ref();
             let (value, detail, color) = match status.nr_enabled {
@@ -461,17 +447,7 @@ impl RetoqueApp {
                     }
                     return;
                 }
-                let mut parts = vec![
-                    self.tr(if matches!(state, InstallState::Current | InstallState::Update) {
-                        "st.installed"
-                    } else {
-                        state.label()
-                    })
-                    .to_owned(),
-                ];
-                if matches!(state, InstallState::Current | InstallState::Update) {
-                    parts.push(self.tr(state.label()).into());
-                }
+                let mut parts = vec![self.tr(state.label()).to_owned()];
                 if let Some(hash) = &status.build_sha256 {
                     parts.push(format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]));
                 }

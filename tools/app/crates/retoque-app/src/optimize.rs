@@ -201,7 +201,10 @@ mod tests {
     use super::*;
     use crate::app::*;
     use crate::autotune::{apply, prepare};
-    use egui_kittest::{Harness, kittest::Queryable};
+    use egui_kittest::{
+        Harness,
+        kittest::{NodeT as _, Queryable},
+    };
     use std::{
         fs,
         sync::Arc,
@@ -889,10 +892,9 @@ mod tests {
                 )
             );
             assert!(h.query_by_label_contains(t(lang, "ref.foreign")).is_some());
-            assert!(
-                h.query_by_role_and_label(egui::Role::Button, t(lang, "auto.confirm"))
-                    .is_none()
-            );
+            // The confirm stays where it was, disabled, so the review does not change shape under the refusal.
+            let confirm = h.get_by_role_and_label(egui::Role::Button, t(lang, "auto.confirm"));
+            assert!(confirm.accesskit_node().is_disabled());
             assert_eq!(fs::read(game.join("dxgi.dll")).unwrap(), foreign_bytes);
             assert!(!game.join(".retoque").exists());
         }
