@@ -5,22 +5,7 @@
 use crate::app::*;
 
 /// "1,9 GB", "330 MB", "12 KB", with the language's decimal separator.
-pub(crate) fn size_text(lang: Lang, bytes: u64) -> String {
-    let (value, unit) = match bytes {
-        b if b >= 1 << 30 => (b as f64 / (1u64 << 30) as f64, "GB"),
-        b if b >= 1 << 20 => (b as f64 / (1u64 << 20) as f64, "MB"),
-        b => ((b as f64 / 1024.0).max(1.0), "KB"),
-    };
-    let text = if unit == "GB" {
-        format!("{value:.1} {unit}")
-    } else {
-        format!("{value:.0} {unit}")
-    };
-    match lang {
-        Lang::Pt => text.replace('.', ","),
-        Lang::En => text,
-    }
-}
+pub(crate) use crate::format::size_text;
 
 fn folder_name(dir: &std::path::Path) -> String {
     dir.file_name()

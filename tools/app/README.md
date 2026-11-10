@@ -3,6 +3,7 @@
 One installer and manager for Linux and Windows: find games, install, update and remove Retoque, change its
 settings per game, choose the NR model per game and read the logs. Design and scope:
 [2026-11-05 spec](../../docs/superpowers/specs/2026-11-05-retoque-app.md).
+The window's building blocks, rules and glossary are in [crates/retoque-app/DESIGN.md](crates/retoque-app/DESIGN.md).
 
 | Crate | What it is |
 |---|---|

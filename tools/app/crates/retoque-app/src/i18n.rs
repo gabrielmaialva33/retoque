@@ -883,6 +883,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("no", "no", "não"),
     ("error", "Error", "Erro"),
     ("cancel", "Cancel", "Cancelar"),
+    // Shared words of the design system (widgets::busy, consent_modal and info dialogs).
+    ("progress.of", "of", "de"),
+    ("not_now", "Not now", "Agora não"),
+    ("close", "Close", "Fechar"),
+    ("download", "Download", "Baixar"),
     // Before / after viewer (compare.rs).
     ("canvas", "Comparison image", "Imagem de comparação"),
     ("title", "Before / after", "Antes / depois"),

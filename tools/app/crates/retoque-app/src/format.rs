@@ -260,6 +260,24 @@ pub(crate) fn inspect_model(target: &Path, configured: &str) -> ModelInspection 
     }
 }
 
+/// A size in user units (KB, MB, GB), with the decimal comma in Portuguese. The one way the app writes sizes.
+pub(crate) fn size_text(lang: crate::i18n::Lang, bytes: u64) -> String {
+    let (value, unit) = match bytes {
+        b if b >= 1 << 30 => (b as f64 / (1u64 << 30) as f64, "GB"),
+        b if b >= 1 << 20 => (b as f64 / (1u64 << 20) as f64, "MB"),
+        b => ((b as f64 / 1024.0).max(1.0), "KB"),
+    };
+    let text = if unit == "GB" {
+        format!("{value:.1} {unit}")
+    } else {
+        format!("{value:.0} {unit}")
+    };
+    match lang {
+        crate::i18n::Lang::Pt => text.replace('.', ","),
+        crate::i18n::Lang::En => text,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
