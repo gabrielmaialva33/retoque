@@ -18,6 +18,25 @@ pub enum Lane {
 }
 type Work = Box<dyn FnOnce() + Send>;
 
+/// Serialize catalog snapshots, not downloads. Publication order follows the reads, not thread delivery.
+#[derive(Clone, Default)]
+pub(crate) struct CatalogPublications(Arc<std::sync::Mutex<u64>>);
+impl CatalogPublications {
+    pub(crate) fn snapshot(&self, read: impl FnOnce() -> Outcome) -> Outcome {
+        let mut revision = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        match read() {
+            Outcome::Catalog { result } => {
+                *revision += 1;
+                Outcome::CatalogSnapshot {
+                    revision: *revision,
+                    result,
+                }
+            }
+            other => other,
+        }
+    }
+}
+
 pub struct TaskHub {
     tx: Sender<Outcome>,
     watcher: crate::watcher::WatcherLane,
@@ -30,6 +49,8 @@ pub struct TaskHub {
     next_request: u64,
     requests: Arc<std::sync::Mutex<std::collections::HashMap<&'static str, u64>>>,
     epoch: Arc<AtomicU64>,
+    pub(crate) catalog_publications: CatalogPublications,
+    catalog_received: u64,
 }
 
 impl TaskHub {
@@ -47,6 +68,8 @@ impl TaskHub {
             next_request: 0,
             requests: Default::default(),
             epoch: Arc::new(AtomicU64::new(0)),
+            catalog_publications: Default::default(),
+            catalog_received: 0,
         }
     }
     pub(crate) fn watch(&mut self, target: Option<PathBuf>) {
@@ -115,19 +138,27 @@ impl TaskHub {
         let current = self.epoch.clone();
         let current_requests = self.requests.clone();
         let failed_target = target.clone();
+        let catalog_publications = self.catalog_publications.clone();
         let job = Box::new(move || {
             let started = std::time::Instant::now();
             let newest =
                 !tracked || current_requests.lock().unwrap_or_else(|e| e.into_inner()).get(name) == Some(&request);
             if newest && (!scoped || current.load(Ordering::Relaxed) == epoch) {
-                let outcome =
+                let run = || {
                     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(&tx))).unwrap_or_else(|panic| {
                         Outcome::Failed {
                             job: name,
                             target: failed_target,
                             message: panic_text(panic.as_ref()),
                         }
-                    });
+                    })
+                };
+                // Mutations must execute even when another read was requested after them.
+                let outcome = if matches!(name, "catalog" | "import" | "remove") {
+                    catalog_publications.snapshot(run)
+                } else {
+                    run()
+                };
                 let failed = match &outcome {
                     Outcome::Failed { message, .. } => Some(message.as_str()),
                     _ => None,
@@ -181,14 +212,27 @@ impl TaskHub {
                     if epoch.is_none_or(|epoch| epoch == self.epoch.load(Ordering::Relaxed))
                         && self.requests.lock().unwrap_or_else(|e| e.into_inner()).get(name) == Some(&request)
                     {
-                        out.push(*outcome);
+                        out.extend(self.accept_catalog(*outcome));
                     }
                 }
                 Outcome::Watch { generation, .. } if generation != self.watch_generation => {}
-                other => out.push(other),
+                other => out.extend(self.accept_catalog(other)),
             }
         }
         out
+    }
+    fn accept_catalog(&mut self, outcome: Outcome) -> Option<Outcome> {
+        match outcome {
+            Outcome::CatalogSnapshot { revision, result } => {
+                // Compare with delivered lists: a newer snapshot still in transit must not hide a completion's list.
+                if revision <= self.catalog_received {
+                    return None;
+                }
+                self.catalog_received = revision;
+                Some(Outcome::Catalog { result })
+            }
+            other => Some(other),
+        }
     }
 }
 fn lane(name: &str) -> Sender<Work> {
@@ -242,6 +286,56 @@ mod tests {
         assert!(matches!(&events[0], Outcome::Failed { message, .. } if message == "synthetic fast failure"));
         release.send(()).unwrap();
         until(&mut hub, |e| e.iter().any(|e| matches!(e, Outcome::Catalog { .. })));
+    }
+    #[test]
+    fn catalog_snapshot_in_transit_does_not_suppress_an_earlier_delivery() {
+        let mut hub = TaskHub::new(egui::Context::default());
+        let first = hub
+            .catalog_publications
+            .snapshot(|| Outcome::Catalog { result: Ok(vec![]) });
+        let later = hub.catalog_publications.snapshot(|| Outcome::Catalog {
+            result: Err("later read failed".into()),
+        });
+        hub.tx.send(first).unwrap();
+        assert!(matches!(hub.drain().as_slice(), [Outcome::Catalog { result: Ok(_) }]));
+        hub.tx.send(later).unwrap();
+        assert!(matches!(hub.drain().as_slice(), [Outcome::Catalog { result: Err(_) }]));
+    }
+    #[test]
+    fn local_catalog_mutations_supersede_late_net_lists_but_keep_completion() {
+        for name in ["import", "remove", "catalog"] {
+            let mut hub = TaskHub::new(egui::Context::default());
+            let stale = hub.catalog_publications.snapshot(|| Outcome::Catalog {
+                result: Err("stale catalog".into()),
+            });
+            let (started, ready) = channel();
+            let (release, blocked) = channel();
+            hub.spawn("nr-model-fetch", None, move |tx| {
+                started.send(()).unwrap();
+                blocked.recv_timeout(Duration::from_secs(3)).unwrap();
+                tx.send(stale).unwrap();
+                Outcome::NrFetch(crate::tabs::model::NrFetchEvent::Downloaded(Err(
+                    "download completion".into()
+                )))
+            });
+            ready.recv_timeout(Duration::from_secs(3)).unwrap();
+            hub.spawn(name, None, |_| Outcome::Catalog { result: Ok(vec![]) });
+            until(&mut hub, |events| {
+                events.iter().any(|o| matches!(o, Outcome::Catalog { result: Ok(_) }))
+            });
+            release.send(()).unwrap();
+            let events = until(&mut hub, |events| {
+                events.iter().any(|o| matches!(o, Outcome::NrFetch(_)))
+            });
+            assert!(
+                events.iter().any(|o| matches!(o, Outcome::NrFetch(_))),
+                "completion must survive {name}"
+            );
+            assert!(
+                !events.iter().any(|o| matches!(o, Outcome::Catalog { .. })),
+                "late list survived {name}"
+            );
+        }
     }
     #[test]
     fn a_slow_download_holds_up_neither_heavy_work_nor_another_download() {
