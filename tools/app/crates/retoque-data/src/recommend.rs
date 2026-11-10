@@ -65,6 +65,9 @@ pub struct GameFacts {
     pub sm86_installed: bool,
     pub sm86_legacy: bool,
     pub lsfg_enabled: Option<bool>,
+    /// The current values of the keys the RTX 30 profile sets (section, key, value), from the INI the caller
+    /// already read. A key that is absent or "auto" is not listed.
+    pub profile_values: Vec<(String, String, String)>,
 }
 
 /// Combine already inspected facts without filesystem access. Only core's recognized proxies prove installation;
@@ -103,6 +106,7 @@ pub fn facts_for(
             _ => Runtime::Unknown,
         },
         last_session_api: None,
+        profile_values: Vec::new(),
     }
 }
 
@@ -115,6 +119,18 @@ pub fn facts_for_with_ini(
     ini: Option<&retoque_core::ini::Ini>,
 ) -> GameFacts {
     let mut facts = facts_for(game, target, status, components);
+    if let Some(ini) = ini {
+        facts.profile_values = SM86_MFG
+            .iter()
+            .chain(RTX30_NR.iter())
+            .filter_map(|(section, key, _)| {
+                ini.get(section, key)
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty() && !v.eq_ignore_ascii_case("auto"))
+                    .map(|v| ((*section).to_owned(), (*key).to_owned(), v.to_owned()))
+            })
+            .collect();
+    }
     facts.lsfg_enabled = ini.and_then(|ini| ini.get("LSFG", "Enabled")).and_then(|value| {
         match value.trim().to_ascii_lowercase().as_str() {
             "true" | "1" => Some(true),
@@ -160,6 +176,44 @@ impl Recommendation {
     }
 }
 
+/// DLSS-G through sm86 on RTX 30 (Ampere), as measured on an RTX 3060 in Dying Light: The Beast (2026-11-10): the game's
+/// own DLSS-G at 4.0x on screen with NR on. FGNvngxReplacement=None keeps OptiScaler from putting its own frame
+/// generation (auto = Nukems) in front of sm86's; OverrideInterpolationCount=3 asks for MFG x4 (three generated
+/// frames), which sm86 0.4.1 allows (MaxGeneratedFrames=3).
+pub const SM86_MFG: [(&str, &str, &str); 2] = [
+    ("FrameGen", "FGNvngxReplacement", "None"),
+    ("DLSSG", "OverrideInterpolationCount", "3"),
+];
+/// Neural Rendering on RTX 30 (Ampere) from the same session: peripheral compression keeps full detail in the centre at the
+/// same cost, and a stronger transfer is the look the user chose. WorkingScale 0.5 and Preset 2 are already the
+/// automatic values on these cards, and the white point belongs to one game's exposure, so neither is set here.
+/// RTX 20 (Turing) is left out until a game is measured there.
+pub const RTX30_NR: [(&str, &str, &str); 2] = [
+    ("DlssNr", "PeripheryCompression", "true"),
+    ("DlssNr", "TransferStrength", "1.5"),
+];
+/// Recommendations that tune what is already there; they never choose a frame-generation provider.
+pub const PROFILE_IDS: [&str; 2] = ["rtx30_nr", "sm86_mfg"];
+const FIELD_EVIDENCE: &str = "Dying Light: The Beast, RTX 3060, Windows, 2026-11-10";
+
+/// The profile edits whose value differs from the game's (numbers compare as numbers: the menu saves 1.500000).
+fn missing(edits: &[(&str, &str, &str)], game: &GameFacts) -> Vec<(String, String, String)> {
+    let same = |a: &str, b: &str| match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
+        (Ok(x), Ok(y)) => (x - y).abs() < 1e-6,
+        _ => a.trim().eq_ignore_ascii_case(b.trim()),
+    };
+    edits
+        .iter()
+        .filter(|(section, key, value)| {
+            !game
+                .profile_values
+                .iter()
+                .any(|(s, k, v)| s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key) && same(v, value))
+        })
+        .map(|(section, key, value)| edit(section, key, value))
+        .collect()
+}
+
 /// Needs remain unresolved here: in particular LosslessScaling includes a Ready shader-cache check by the UI.
 /// This function has no filesystem access and cannot claim assets or converted shaders are available.
 pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
@@ -193,14 +247,19 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
     if gpu.vendor != Vendor::Nvidia {
         return vec![];
     }
-    if matches!(gpu.arch, Arch::Ampere | Arch::Turing)
+    let older = matches!(gpu.arch, Arch::Ampere | Arch::Turing);
+    let mut out = Vec::new();
+    if older
         && game.has_dlssg
         && (!game.sm86_installed || game.sm86_legacy)
         && game.last_session_api.as_deref().is_none_or(|api| api == "D3D12")
     {
         let mut actions = vec![Action::InstallComponent(ComponentKind::DlssgSm86)];
         actions.extend(ini_actions(lsfg_off_edits()));
-        return vec![Recommendation {
+        if gpu.arch == Arch::Ampere {
+            actions.extend(ini_actions(missing(&SM86_MFG, game)));
+        }
+        out.push(Recommendation {
             id: if game.sm86_legacy { "sm86_update" } else { "sm86_dlssg" },
             title_key: if game.sm86_legacy {
                 "rec.sm86_update.title"
@@ -228,9 +287,30 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             } else {
                 Confidence::StaticMatchUntested
             },
-        }];
-    }
-    if matches!(gpu.arch, Arch::Turing | Arch::Ampere | Arch::Ada | Arch::Blackwell)
+        });
+    } else if gpu.arch == Arch::Ampere && game.has_dlssg && game.sm86_installed {
+        let edits = missing(&SM86_MFG, game);
+        if !edits.is_empty() {
+            out.push(Recommendation {
+                id: "sm86_mfg",
+                title_key: "rec.sm86_mfg.title",
+                why_key: "rec.sm86_mfg.why",
+                actions: ini_actions(edits),
+                needs: None,
+                evidence: {
+                    let mut facts = evidence(Some(gpu), game);
+                    facts.push(FactEvidence::new("evidence.field", FIELD_EVIDENCE));
+                    facts
+                },
+                caveat_key: game.runtime.is_wine().then_some("confidence.sm86_proton"),
+                confidence: if game.runtime.is_wine() {
+                    Confidence::ExperimentalUnderProton
+                } else {
+                    Confidence::StaticMatchUntested
+                },
+            });
+        }
+    } else if matches!(gpu.arch, Arch::Turing | Arch::Ampere | Arch::Ada | Arch::Blackwell)
         && !game.has_dlssg
         && !game.sm86_installed
         && !game.sm86_legacy
@@ -238,7 +318,7 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
     {
         let mut edits = lsfg_edits(2, None, false);
         edits.extend(lsfg_input_edits(game));
-        return vec![Recommendation {
+        out.push(Recommendation {
             id: "lsfg_x2",
             title_key: "rec.lsfg.title",
             why_key: "rec.lsfg.why",
@@ -251,9 +331,29 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             } else {
                 Confidence::StaticMatchUntested
             },
-        }];
+        });
     }
-    vec![]
+    // Peripheral compression is D3D12 only; an explicit other API from the last session gets no profile.
+    if gpu.arch == Arch::Ampere && game.last_session_api.as_deref().is_none_or(|api| api == "D3D12") {
+        let edits = missing(&RTX30_NR, game);
+        if !edits.is_empty() {
+            out.push(Recommendation {
+                id: "rtx30_nr",
+                title_key: "rec.rtx30_nr.title",
+                why_key: "rec.rtx30_nr.why",
+                actions: ini_actions(edits),
+                needs: None,
+                evidence: {
+                    let mut facts = evidence(Some(gpu), game);
+                    facts.push(FactEvidence::new("evidence.field", FIELD_EVIDENCE));
+                    facts
+                },
+                caveat_key: None,
+                confidence: Confidence::StaticMatchUntested,
+            });
+        }
+    }
+    out
 }
 
 fn ini_actions(edits: Vec<(String, String, String)>) -> Vec<Action> {
@@ -464,7 +564,12 @@ mod tests {
             if installed {
                 status.receipt = Some(receipt());
                 let tracked = facts_for_with_ini(&game, &target, Some(&status), &[], Some(&ini));
-                assert!(recommend(Some(&gpu(Arch::Ampere)), &tracked).is_empty(), "{name}");
+                assert!(
+                    recommend(Some(&gpu(Arch::Ampere)), &tracked)
+                        .iter()
+                        .all(|r| PROFILE_IDS.contains(&r.id)),
+                    "{name}"
+                );
             }
         }
     }
@@ -486,7 +591,11 @@ mod tests {
             let facts = facts_for(&game, &target, Some(&status), &components);
             assert!(facts.sm86_installed);
             assert_eq!(facts.sm86_legacy, legacy);
-            assert!(recommend(Some(&gpu(Arch::Ampere)), &facts).is_empty());
+            assert!(
+                recommend(Some(&gpu(Arch::Ampere)), &facts)
+                    .iter()
+                    .all(|r| r.id == "rtx30_nr")
+            );
             game.dlss_anywhere.push("nvngx_dlssg.dll".into());
             let facts = facts_for(&game, &target, Some(&status), &components);
             let result = recommend(Some(&gpu(Arch::Ampere)), &facts);
@@ -502,11 +611,82 @@ mod tests {
                 }));
                 assert!(recommend(Some(&gpu(Arch::Ada)), &facts).is_empty());
             } else {
-                assert!(result.is_empty());
+                // A foreign-owned current sm86: no provider is chosen; only the profile tunes what is there.
+                assert!(result.iter().all(|r| PROFILE_IDS.contains(&r.id)), "{result:?}");
             }
         }
         target.loaders = vec!["reshade".into(), "special_k".into()];
         assert!(!facts_for(&game, &target, Some(&status), &[]).sm86_installed);
+    }
+
+    #[test]
+    fn rtx20_30_profile_comes_from_the_field_ini_and_disappears_once_applied() {
+        let fresh = GameFacts {
+            installed: true,
+            has_dlss: true,
+            has_dlssg: true,
+            sm86_installed: true,
+            ..Default::default()
+        };
+        let ids = |facts: &GameFacts| -> Vec<&'static str> {
+            recommend(Some(&gpu(Arch::Ampere)), facts)
+                .iter()
+                .map(|r| r.id)
+                .collect()
+        };
+        assert_eq!(ids(&fresh), ["sm86_mfg", "rtx30_nr"]);
+        let all = recommend(Some(&gpu(Arch::Ampere)), &fresh);
+        let set = |id: &str| -> Vec<(String, String, String)> {
+            all.iter()
+                .find(|r| r.id == id)
+                .unwrap()
+                .actions
+                .iter()
+                .map(|a| match a {
+                    Action::SetIni { section, key, value } => (section.clone(), key.clone(), value.clone()),
+                    other => panic!("{other:?}"),
+                })
+                .collect()
+        };
+        assert_eq!(
+            set("sm86_mfg"),
+            [
+                edit("FrameGen", "FGNvngxReplacement", "None"),
+                edit("DLSSG", "OverrideInterpolationCount", "3")
+            ]
+        );
+        assert_eq!(
+            set("rtx30_nr"),
+            [
+                edit("DlssNr", "PeripheryCompression", "true"),
+                edit("DlssNr", "TransferStrength", "1.5")
+            ]
+        );
+        // The INI the menu saved on the RTX 3060 (2026-11-10) writes 1.500000 and "None"/"3"/"true": already applied.
+        let applied = GameFacts {
+            profile_values: vec![
+                edit("FrameGen", "FGNvngxReplacement", "None"),
+                edit("DLSSG", "OverrideInterpolationCount", "3"),
+                edit("DlssNr", "PeripheryCompression", "true"),
+                edit("DlssNr", "TransferStrength", "1.500000"),
+            ],
+            ..fresh.clone()
+        };
+        assert!(ids(&applied).is_empty());
+        // A user who chose x3 still gets x4 offered (a recommendation, reviewed, never forced); D3D11/Vulkan get no NR profile.
+        let x3 = GameFacts {
+            profile_values: vec![edit("DLSSG", "OverrideInterpolationCount", "2")],
+            ..fresh.clone()
+        };
+        assert!(ids(&x3).contains(&"sm86_mfg"));
+        let vulkan = GameFacts {
+            last_session_api: Some("Vulkan".into()),
+            ..fresh.clone()
+        };
+        assert!(!ids(&vulkan).contains(&"rtx30_nr"));
+        // RTX 20 (not measured yet), Ada and newer: neither.
+        assert!(recommend(Some(&gpu(Arch::Turing)), &fresh).is_empty());
+        assert!(recommend(Some(&gpu(Arch::Ada)), &fresh).is_empty());
     }
 
     #[test]
@@ -543,9 +723,22 @@ mod tests {
                             } else {
                                 None
                             };
-                            assert_eq!(r.first().map(|r| r.id), expected, "{arch:?} {facts:?}");
-                            assert!(r.len() <= 1);
-                            if let Some(r) = r.first() {
+                            // At most one provider; the RTX 30 profile rides along and never chooses one.
+                            let providers: Vec<_> = r.iter().filter(|r| !PROFILE_IDS.contains(&r.id)).collect();
+                            assert_eq!(providers.first().map(|r| r.id), expected, "{arch:?} {facts:?}");
+                            assert!(providers.len() <= 1);
+                            let ampere = arch == Arch::Ampere;
+                            assert_eq!(
+                                r.iter().any(|r| r.id == "rtx30_nr"),
+                                installed && ampere,
+                                "{arch:?} {facts:?}"
+                            );
+                            assert_eq!(
+                                r.iter().any(|r| r.id == "sm86_mfg"),
+                                installed && ampere && has_dlssg && sm86_installed,
+                                "{arch:?} {facts:?}"
+                            );
+                            if let Some(r) = providers.first() {
                                 assert!(
                                     r.needs.is_some(),
                                     "pure recommendation cannot resolve runtime prerequisites"
@@ -573,6 +766,7 @@ mod tests {
             )
             .is_empty()
         );
+        // LSFG already on: no second provider, only the Neural Rendering profile.
         assert!(
             recommend(
                 Some(&gpu(Arch::Ampere)),
@@ -582,7 +776,8 @@ mod tests {
                     ..Default::default()
                 }
             )
-            .is_empty()
+            .iter()
+            .all(|r| r.id == "rtx30_nr")
         );
     }
     #[test]

@@ -586,6 +586,7 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ("evidence.sm86", "sm86 installed", "sm86 instalado"),
     ("evidence.sm86_legacy", "Legacy sm86", "sm86 legado"),
     ("evidence.sm86_docs", "sm86 documentation", "Documentação sm86"),
+    ("evidence.field", "Field test", "Teste em jogo"),
     ("evidence.lsfg", "LSFG enabled", "LSFG ligado"),
     ("evidence.gpu", "GPU identity", "Identidade da GPU"),
     ("evidence.api", "Last session API", "API da última sessão"),

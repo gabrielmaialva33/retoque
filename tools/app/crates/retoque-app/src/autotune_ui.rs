@@ -176,6 +176,17 @@ impl RetoqueApp {
                 }
                 return;
             }
+            // Before Retoque is installed (or while an old script's install waits to be registered) the banner's
+            // "Install and optimize" is the one action; a second button and per-item "install first" here would
+            // repeat it under other names.
+            let facts = &self.view.intelligence.facts;
+            if !facts.installed || facts.untracked {
+                ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::MUTED)).wrap());
+                if let Some(error) = &self.tuning.sm86.error {
+                    ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+                }
+                return;
+            }
             self.optimize_controls(ui);
             let recs = self.view.intelligence.recommendations.clone();
             if recs.is_empty() {

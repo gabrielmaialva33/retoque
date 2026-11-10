@@ -207,6 +207,12 @@ mod tests {
         sync::Arc,
         time::{Duration, Instant},
     };
+    fn only_nr_profile(edits: &[(String, String, String)]) -> bool {
+        !edits.is_empty()
+            && edits
+                .iter()
+                .all(|(section, key, _)| recommend::RTX30_NR.iter().any(|(s, k, _)| s == section && k == key))
+    }
     fn recs(runtime: recommend::Runtime, dlssg: bool) -> Vec<recommend::Recommendation> {
         let gpu = retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288").remove(0);
         recommend::recommend(
@@ -269,9 +275,9 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        assert!(
-            result.request.component.is_none() && result.request.edits.is_empty() && result.prerequisites.is_empty()
-        );
+        // Experimental sm86 is left out under Proton; the RTX 30 Neural Rendering profile is not experimental.
+        assert!(result.request.component.is_none() && result.prerequisites.is_empty());
+        assert!(only_nr_profile(&result.request.edits), "{:?}", result.request.edits);
         assert!(result.experimental_omitted);
         assert_eq!(
             compose(Selection {
@@ -284,16 +290,15 @@ mod tests {
             [Prerequisite::Sm86]
         );
         let lsfg = recs(recommend::Runtime::Windows, false);
-        assert!(
-            compose(Selection {
+        assert!(only_nr_profile(
+            &compose(Selection {
                 recommendations: &lsfg,
                 ..Default::default()
             })
             .unwrap()
             .request
             .edits
-            .is_empty()
-        );
+        ));
         assert_eq!(
             compose(Selection {
                 recommendations: &lsfg,
@@ -314,7 +319,8 @@ mod tests {
         })
         .unwrap();
         assert!(c.prerequisites.is_empty());
-        assert_eq!(c.request.edits, edits);
+        assert_eq!(c.request.edits[..edits.len()], edits[..]);
+        assert!(only_nr_profile(&c.request.edits[edits.len()..]));
         assert_eq!(
             compose(Selection {
                 need_nr_model: true,
@@ -927,7 +933,7 @@ mod tests {
             app.view.intelligence.recommendations = Arc::new(recommend::recommend(Some(&gpu), &facts));
             app.tuning.catalog = Some(Ok(vec![component]));
             app.tuning.installed = Some(Ok(vec![]));
-            app.tuning.gpus = Some(vec![gpu]);
+            app.tuning.gpus = Some(vec![gpu.clone()]);
 
             // Warm cache once, then verify repeated calls allocate 0 times on the UI thread.
             let _ = app.optimize_recommendations();
@@ -948,15 +954,38 @@ mod tests {
                 },
                 app,
             );
-            // Without opting in, experimental Proton sm86 is omitted on an uninstalled game.
+            // Without opting in, experimental Proton sm86 is omitted on an uninstalled game: the review installs
+            // Retoque alone ("Install and optimize" always installs) and says what was left out.
             h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.title"))
                 .click();
             h.run_steps(3);
-            assert!(h.state().review.is_none());
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while h.state().review.is_none() {
+                h.state_mut().receive();
+                assert!(Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+            {
+                // Retoque, then the RTX 30 Neural Rendering profile; nothing of sm86 without opting in.
+                let r = h.state().review.as_ref().unwrap().as_ref().unwrap();
+                assert_eq!(r.plans.len(), 2);
+                for plan in &r.plans {
+                    for step in plan.steps() {
+                        assert!(!matches!(step, retoque_core::Step::Copy { to, .. } if to.starts_with("dlssg_sm86")));
+                        assert!(!matches!(step, retoque_core::Step::SetIni { section, .. }
+                            if section == "DLSSG" || section == "FrameGen"));
+                    }
+                }
+            }
             assert_eq!(
                 h.state().tuning.sm86.error.as_ref().map(|e| e.to_string()).as_deref(),
                 Some(t(lang, "optimize.experimental_omitted"))
             );
+            // Closing the review: the app reloads the game's facts; the harness restores the same ones.
+            h.state_mut().review = None;
+            h.state_mut().view.intelligence.facts = Arc::new(facts.clone());
+            h.state_mut().view.intelligence.recommendations = Arc::new(recommend::recommend(Some(&gpu), &facts));
+            h.run_steps(2);
 
             // Opting in via the checkbox includes install + sm86 + settings in one review.
             h.get_by_label(t(lang, "optimize.experimental")).click();
