@@ -174,7 +174,10 @@ impl Catalog {
             return Err(invalid("model metadata does not match the stored file"));
         }
         self.ensure_path_current()?;
-        let compatibility = crate::model_compat::inspect(&mut regular_file(&dir, MODEL)?).unwrap_or_default();
+        // Content-addressed and never rewritten in place: after the first start this is a lookup, not a 260 MB read.
+        let compatibility = crate::model_facts::read(&path, &mut regular_file(&dir, MODEL)?.into_std())
+            .map(|facts| facts.compatibility())
+            .unwrap_or_default();
         Ok(Model {
             compatibility,
             sha256: hash.to_owned(),

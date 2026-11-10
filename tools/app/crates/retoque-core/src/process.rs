@@ -175,9 +175,6 @@ fn platform(game: &Path) -> Vec<(u32, String)> {
     fn wide(s: &[u16]) -> String {
         String::from_utf16_lossy(&s[..s.iter().position(|v| *v == 0).unwrap_or(s.len())])
     }
-    fn comparable(s: &str) -> String {
-        s.trim_start_matches("\\\\?\\").replace('/', "\\").to_lowercase()
-    }
     let prefix = format!("{}\\", comparable(&game.to_string_lossy()).trim_end_matches('\\'));
     let mut hits = Vec::new();
     // Toolhelp structures require dwSize; snapshot handles are closed along every path.
@@ -191,7 +188,18 @@ fn platform(game: &Path) -> Vec<(u32, String)> {
         let mut more = Process32FirstW(snap, &mut proc);
         while more != 0 {
             if proc.th32ProcessID != std::process::id() {
-                let modules = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, proc.th32ProcessID);
+                // Windows asks callers to retry a module snapshot that fails with ERROR_BAD_LENGTH (the module
+                // list changed while it was taken); giving up at once would report a loading game as closed.
+                let mut modules = INVALID_HANDLE_VALUE;
+                for _ in 0..8 {
+                    modules = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, proc.th32ProcessID);
+                    if modules != INVALID_HANDLE_VALUE
+                        || windows_sys::Win32::Foundation::GetLastError()
+                            != windows_sys::Win32::Foundation::ERROR_BAD_LENGTH
+                    {
+                        break;
+                    }
+                }
                 if modules != INVALID_HANDLE_VALUE {
                     let mut module: MODULEENTRY32W = std::mem::zeroed();
                     module.dwSize = std::mem::size_of::<MODULEENTRY32W>() as u32;
@@ -215,6 +223,20 @@ fn platform(game: &Path) -> Vec<(u32, String)> {
         CloseHandle(snap);
     }
     hits
+}
+/// A Windows path in one comparable spelling: the extended-length forms `\\?\C:\x` and `\\?\UNC\server\share`
+/// (what canonicalize returns) become `C:\x` and `\\server\share`, the forms Toolhelp reports for loaded modules.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn comparable(s: &str) -> String {
+    let s = s.replace('/', "\\");
+    let plain = if let Some(rest) = s.strip_prefix("\\\\?\\UNC\\").or_else(|| s.strip_prefix("\\??\\UNC\\")) {
+        format!("\\\\{rest}")
+    } else if let Some(rest) = s.strip_prefix("\\\\?\\").or_else(|| s.strip_prefix("\\??\\")) {
+        rest.to_owned()
+    } else {
+        s
+    };
+    plain.to_lowercase()
 }
 #[cfg(not(any(target_os = "linux", windows)))]
 fn platform(_: &Path) -> Vec<(u32, String)> {
@@ -250,6 +272,16 @@ pub(crate) fn denied_writes(game: &Path, paths: &[&str]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn extended_length_and_unc_paths_compare_as_their_plain_forms() {
+        let game = comparable(r"\\?\UNC\Server\Share\Games\Game");
+        assert_eq!(game, r"\\server\share\games\game");
+        assert!(comparable(r"\\Server\Share\Games\Game\Game.exe").starts_with(&format!("{game}\\")));
+        assert_eq!(comparable(r"\\?\C:\Games\Game"), r"c:\games\game");
+        assert_eq!(comparable("C:/Games/Game"), r"c:\games\game");
+        assert_eq!(comparable(r"\??\D:\Retoque"), r"d:\retoque");
+    }
+
     use super::*;
     use std::{
         fs,

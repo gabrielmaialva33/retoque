@@ -682,3 +682,42 @@ fn command_for_previous_target_cannot_open_a_review_on_current_target() {
     assert!(app.review.is_none());
     assert!(!app.jobs.busy());
 }
+
+#[cfg(test)]
+mod failed_job_tests {
+    use super::shell_tests::app;
+    use crate::model::Outcome;
+
+    #[test]
+    fn a_job_that_dies_releases_its_busy_flag() {
+        let mut app = app();
+        app.payload_ui.busy = true;
+        app.nr_fetch.busy = true;
+        app.tuning.sm86.busy = true;
+        app.library_state.leftovers_busy = true;
+        app.lsfg.failed(String::new());
+        assert!(!app.lsfg.running());
+        for job in [
+            "payload-fetch",
+            "nr-model-fetch",
+            "sm86-download",
+            "leftovers",
+            "lsfg-prepare",
+        ] {
+            app.jobs
+                .spawn(job, None, |_| -> Outcome { panic!("synthetic worker failure") });
+        }
+        let start = std::time::Instant::now();
+        while app.jobs.busy() {
+            app.receive();
+            assert!(start.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::yield_now();
+        }
+        app.receive();
+        assert!(!app.payload_ui.busy);
+        assert!(!app.nr_fetch.busy);
+        assert!(!app.tuning.sm86.busy);
+        assert!(!app.library_state.leftovers_busy);
+        assert!(!app.lsfg.running());
+    }
+}

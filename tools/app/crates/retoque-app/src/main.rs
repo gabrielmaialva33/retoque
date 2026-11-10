@@ -4,6 +4,10 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 fn main() -> eframe::Result {
+    if let Ok(dir) = retoque_data::lsfg_prepare::data_dir() {
+        retoque_data::model_facts::persist_in(&dir);
+        retoque_core::memo::persist_in(&dir);
+    }
     if let Ok(dir) = retoque_data::lsfg_prepare::data_dir()
         && retoque_app::applog::init(&dir).is_some()
     {
