@@ -667,7 +667,6 @@ impl RetoqueApp {
                 AppCommand::PromptFetchCompatibleModel(target) => self.nr_fetch_prompt_compatible(target),
                 AppCommand::PromptFetchModel(entry, target) => self.nr_fetch_open_consent(entry, target),
                 AppCommand::PromptRefreshModelCatalog => self.nr_fetch_prompt_refresh(),
-                AppCommand::DismissNrModelOffer => self.saved.nr_model_offer_seen = true,
                 AppCommand::Bundle => {
                     if !self.busy()
                         && let Some(target) = self.view.target.clone()

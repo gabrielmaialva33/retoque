@@ -11,12 +11,9 @@ type PendingRecs = (PathBuf, u64, Arc<Vec<autotune::recommend::Recommendation>>)
 static PENDING_RECS: Mutex<Option<PendingRecs>> = Mutex::new(None);
 
 impl RetoqueApp {
+    /// The sm86 download consent, only once something asked for it: "Install and optimize" on an eligible card or
+    /// the component's own download button. The app never opens it by itself at startup.
     pub(crate) fn sm86_dialog(&mut self, ctx: &egui::Context) {
-        let eligible = self.tuning.gpus.as_deref().is_some_and(optimize::first_run_eligible);
-        if eligible && !self.saved.sm86_offer_seen && matches!(&self.tuning.catalog, Some(Ok(c)) if c.is_empty()) {
-            self.saved.sm86_offer_seen = true;
-            self.tuning.sm86.consent = Some(Consent::Download);
-        }
         let Some(consent) = self.tuning.sm86.consent else {
             return;
         };

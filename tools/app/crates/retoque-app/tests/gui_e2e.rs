@@ -57,11 +57,19 @@ fn click(ui: &mut Window, role: Role, text: &str) {
     ui.run_steps(3);
 }
 
-/// The install previews sit in the closed "Install options" section at the end of the Retoque tab.
+/// The install previews sit in a closed section on the Overview: "Install options" in the card that says what
+/// Retoque will do before install, "Reinstall options" at the end once installed.
 fn open_install_options(ui: &mut Window) {
     if ui.query_by_label("Preview install").is_none() {
-        wait_label(ui, "Install options");
-        ui.get_by_label("Install options").click_accesskit();
+        wait(ui, "install options section", |ui| {
+            label(ui, "Install options") || label(ui, "Reinstall options")
+        });
+        let section = if label(ui, "Reinstall options") {
+            "Reinstall options"
+        } else {
+            "Install options"
+        };
+        ui.get_by_label(section).click_accesskit();
         ui.run_steps(3);
     }
     wait_label(ui, "Preview install");
@@ -253,7 +261,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     drop(ui);
     let mut ui = window();
     select_game(&mut ui);
-    click(&mut ui, Role::Tab, "NR model");
+    click(&mut ui, Role::Tab, "Components");
     wait_label(&mut ui, "Use in this game");
     let before_model = snapshot(&game);
     click(&mut ui, Role::Button, "Use in this game");
@@ -291,7 +299,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
             .any(|(pid, _)| *pid == child.0.id())
     );
     let before_refusal = snapshot(&game);
-    click(&mut ui, Role::Tab, "Install");
+    click(&mut ui, Role::Tab, "Overview");
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview install");
     wait_label(&mut ui, "The game is running");
@@ -305,7 +313,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     wait_label(&mut ui, "left in place, it changed since this script wrote it");
     assert_eq!(snapshot(&game), before_refusal);
     click(&mut ui, Role::Button, "Cancel");
-    click(&mut ui, Role::Tab, "NR model");
+    click(&mut ui, Role::Tab, "Components");
     click(&mut ui, Role::Button, "Use the default search");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: {model_value} -> auto"));
     click(&mut ui, Role::Button, "Write these changes");
@@ -315,7 +323,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     review_stage(&mut ui, &game, "1", "auto");
     assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), installed_ini);
     assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
-    click(&mut ui, Role::Tab, "Install");
+    click(&mut ui, Role::Tab, "Overview");
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview uninstall");
     wait(&mut ui, "uninstall plan", |ui| {

@@ -417,57 +417,6 @@ impl RetoqueApp {
         self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary)
     }
 
-    pub(crate) fn nr_fetch_first_run_eligible(&self) -> Option<RemoteModel> {
-        if self.saved.nr_model_offer_seen {
-            return None;
-        }
-        let gpu = self.nr_fetch_single_gpu()?;
-        let models = self.catalog.as_ref()?.as_ref().ok()?;
-        if models
-            .iter()
-            .any(|m| m.compatibility.for_gpu(Some(gpu)) == retoque_data::model_compat::Compatibility::Compatible)
-        {
-            return None;
-        }
-        model_fetch::pick_for_gpu(&self.nr_fetch.entries, Some(gpu)).cloned()
-    }
-
-    pub(crate) fn first_run_nr_card(&self, ui: &mut egui::Ui) {
-        let Some(entry) = self.nr_fetch_first_run_eligible() else {
-            return;
-        };
-        widgets::card(ui, |ui| {
-            widgets::card_title(ui, self.tr("nr_fetch.consent_title"));
-            ui.add(egui::Label::new(self.tr("nr_fetch.source_note")).wrap());
-            ui.label(
-                RichText::new(format!(
-                    "{} · {:.1} {} · SHA-256 {}",
-                    entry.label,
-                    entry.size as f64 / 1_048_576.0,
-                    self.tr("unit.mib"),
-                    &entry.sha256[..entry.sha256.len().min(12)]
-                ))
-                .color(theme::MUTED),
-            );
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(
-                        !self.busy() && !self.nr_fetch.busy,
-                        theme::primary(self.tr("nr_fetch.get_compatible")),
-                    )
-                    .clicked()
-                {
-                    self.cmd_tx
-                        .send(AppCommand::PromptFetchCompatibleModel(self.view.target.clone()));
-                }
-                if ui.button(self.tr("nr_fetch.later")).clicked() {
-                    self.cmd_tx.send(AppCommand::DismissNrModelOffer);
-                }
-            });
-        });
-        ui.add_space(12.0);
-    }
-
     pub(crate) fn nr_fetch_card(&self, ui: &mut egui::Ui) {
         let gpu = self.nr_fetch_single_gpu();
         let compatible = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu);
@@ -898,33 +847,6 @@ mod tests {
                     .any(|s| matches!(s, Step::SetIni { key, .. } if key == "ModelFile"))
             );
             assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
-        }
-    }
-
-    #[test]
-    fn first_run_offer_and_later_never_contact_network_in_both_languages() {
-        for lang in [Lang::En, Lang::Pt] {
-            let mut app = crate::app_tests::shell_tests::app();
-            app.lang = lang;
-            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 4090,8.9,1,24576"));
-            app.catalog = Some(Ok(vec![]));
-            let mut h = Harness::builder().with_size([1000., 800.]).build_ui_state(
-                |ui, app: &mut RetoqueApp| {
-                    app.first_run_nr_card(ui);
-                    app.nr_fetch_dialog(ui.ctx());
-                    app.handle_commands();
-                },
-                app,
-            );
-            h.get_by_label(t(lang, "nr_fetch.consent_title"));
-            h.get_by_label(t(lang, "nr_fetch.source_note"));
-            assert!(!h.state().jobs.busy());
-            h.get_by_role_and_label(egui::Role::Button, t(lang, "nr_fetch.later"))
-                .click();
-            h.run_steps(3);
-            assert!(h.state().saved.nr_model_offer_seen);
-            assert!(h.state().nr_fetch.consent.is_none());
-            assert!(!h.state().jobs.busy());
         }
     }
 

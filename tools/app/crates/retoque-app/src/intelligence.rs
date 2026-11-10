@@ -43,6 +43,11 @@ struct Snapshot {
     facts: GameFacts,
     components_known: bool,
 }
+/// The Diagnóstico's evidence that the game loaded Retoque last time (so its launch option works): the newest log
+/// shows NR starting or a DLSS version.
+pub(crate) fn proxy_loaded(log: &Summary) -> bool {
+    log.nr_initialized || log.dlss_version.is_some()
+}
 // The UI's legacy `present` boolean cannot distinguish permission errors from absence.
 // Recheck metadata on the worker before turning that boolean into actionable diagnostic evidence.
 fn inspect_presence(path: &Path) -> Option<bool> {
@@ -75,11 +80,7 @@ impl Snapshot {
             inputs.runtime = self.facts.runtime;
             // Discovery has no actual launcher configuration evidence. A suggested launch_option in
             // Status is not proof of the user's launcher setting; leave override_present unknown.
-            inputs.proxy_loaded_last_session = self
-                .latest
-                .as_ref()
-                .filter(|log| log.nr_initialized || log.dlss_version.is_some())
-                .map(|_| true);
+            inputs.proxy_loaded_last_session = self.latest.as_ref().filter(|log| proxy_loaded(log)).map(|_| true);
             inputs.driver_nvngx_present = driver;
             inputs.allow_model_fetch = true;
             if inputs.runtime == recommend::Runtime::Unknown {

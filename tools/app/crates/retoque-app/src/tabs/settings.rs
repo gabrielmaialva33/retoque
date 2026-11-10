@@ -170,7 +170,7 @@ impl RetoqueApp {
             shown += 1;
             if s.key == "ModelFile" {
                 ui.add_space(8.0);
-                if ui.link(t(lang, "set.model_link")).clicked() {
+                if ui.button(t(lang, "set.model_link")).clicked() {
                     commands.send(AppCommand::SwitchTab(Tab::Model));
                 }
             }
