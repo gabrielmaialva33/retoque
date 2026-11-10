@@ -276,7 +276,7 @@ impl RetoqueApp {
                 Outcome::Status { target, result } if ours(&target) => {
                     if let Ok(s) = &result {
                         self.library_state.status.insert(target.clone(), s.clone());
-                        if let Some(proxy) = s.receipt.as_ref().and_then(first_proxy) {
+                        if let Some(proxy) = installed_proxy(s) {
                             self.view.options.proxy = proxy;
                         }
                         if let Some(nr) = s.nr_enabled {
@@ -820,6 +820,17 @@ impl RetoqueApp {
         }
     }
 }
+/// The proxy name Retoque is installed under: the receipt's, or for an install an old script made (no receipt) the
+/// OptiScaler proxy found in the folder. Registering such an install under the default name instead (dxgi.dll for a
+/// game whose Retoque is winmm.dll) is refused as a second proxy (Dying Light: The Beast, RTX 3060, 2026-11-10).
+pub(crate) fn installed_proxy(status: &retoque_core::Status) -> Option<String> {
+    status
+        .receipt
+        .as_ref()
+        .and_then(first_proxy)
+        .or_else(|| status.optiscaler_proxies.first().cloned())
+}
+
 pub(crate) fn first_proxy(r: &retoque_core::receipt::Receipt) -> Option<String> {
     r.records.iter().find_map(|rec| match rec {
         retoque_core::receipt::Record::Proxy { name } => Some(name.clone()),
@@ -886,5 +897,36 @@ impl RetoqueApp {
         if response.inner || response.should_close() {
             self.process_notice = None;
         }
+    }
+}
+
+#[cfg(test)]
+mod proxy_tests {
+    use super::installed_proxy;
+    use retoque_core::receipt::{Receipt, ReceiptStatus, Record};
+
+    #[test]
+    fn an_old_scripts_install_is_registered_under_its_own_proxy_name() {
+        // No receipt: the OptiScaler proxy found in the folder, not the default dxgi.dll.
+        let untracked = retoque_core::Status {
+            optiscaler_proxies: vec!["winmm.dll".into()],
+            ..Default::default()
+        };
+        assert_eq!(installed_proxy(&untracked).as_deref(), Some("winmm.dll"));
+        // A receipt wins over what is found in the folder.
+        let tracked = retoque_core::Status {
+            optiscaler_proxies: vec!["winmm.dll".into()],
+            receipt: Some(Receipt {
+                status: ReceiptStatus::Complete,
+                updated: String::new(),
+                records: vec![Record::Proxy {
+                    name: "version.dll".into(),
+                }],
+            }),
+            ..Default::default()
+        };
+        assert_eq!(installed_proxy(&tracked).as_deref(), Some("version.dll"));
+        // Nothing installed: no opinion, the default stays.
+        assert_eq!(installed_proxy(&retoque_core::Status::default()), None);
     }
 }

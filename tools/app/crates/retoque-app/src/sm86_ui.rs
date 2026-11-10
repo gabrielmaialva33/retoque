@@ -202,6 +202,22 @@ impl RetoqueApp {
         });
         combined
     }
+    /// Nothing else is writing or fetching for "optimize" right now.
+    pub(crate) fn optimize_idle(&self) -> bool {
+        self.view.target.is_some()
+            && !self.busy()
+            && !self.tuning.sm86.busy
+            && !self.nr_fetch.busy
+            && self.tuning.sm86.pending.is_none()
+    }
+    /// The banner's button also waits for the facts "optimize" decides from; the GPU card only draws its own
+    /// button once they are known.
+    pub(crate) fn optimize_ready(&self) -> bool {
+        self.optimize_idle()
+            && self.tuning.gpus.is_some()
+            && self.view.status.is_some()
+            && self.autotune_known_components()
+    }
     pub(crate) fn optimize_controls(&mut self, ui: &mut egui::Ui) {
         self.dlss_optimize_checkbox(ui);
         let recs = self.optimize_recommendations();
@@ -225,14 +241,7 @@ impl RetoqueApp {
             self.tuning.sm86.lsfg_for = if lsfg { target.cloned() } else { None };
         }
         if ui
-            .add_enabled(
-                target.is_some()
-                    && !self.busy()
-                    && !self.tuning.sm86.busy
-                    && !self.nr_fetch.busy
-                    && self.tuning.sm86.pending.is_none(),
-                theme::primary(self.tr("optimize.title")),
-            )
+            .add_enabled(self.optimize_idle(), theme::primary(self.tr("optimize.title")))
             .clicked()
         {
             self.optimize_automatically();
@@ -345,6 +354,13 @@ impl RetoqueApp {
             lsfg_ready: self.autotune_ready(),
             lsfg_edits: self.autotune_lsfg_edits(2, &self.view.intelligence.facts),
         });
+        if need_install
+            && let Ok(c) = &mut composed
+            && c.request.retoque_install().is_none()
+            && let Some(options) = self.install_inputs()
+        {
+            c.request.set_install(options);
+        }
         if self.tuning.dlss.selected_for.as_ref() == Some(&target)
             && let Ok(c) = &mut composed
         {
@@ -402,8 +418,18 @@ impl RetoqueApp {
                 });
                 self.tuning.sm86.consent = Some(Consent::Download);
             }
-            Ok(c) if c.request.component.is_some() || c.request.dlss.is_some() || !c.request.edits.is_empty() => {
-                self.autotune_request(self.tr("optimize.title").into(), c.request)
+            Ok(c)
+                if c.request.component.is_some()
+                    || c.request.dlss.is_some()
+                    || !c.request.edits.is_empty()
+                    || c.request.retoque_install().is_some() =>
+            {
+                let omitted = c.experimental_omitted;
+                self.autotune_request(self.tr("optimize.title").into(), c.request);
+                if omitted {
+                    // The review still opens (Retoque is installed); say what was left out and how to include it.
+                    self.tuning.sm86.error = Some(self.tr("optimize.experimental_omitted").into());
+                }
             }
             Ok(c) => {
                 self.tuning.sm86.error = Some(

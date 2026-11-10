@@ -342,7 +342,7 @@ impl RetoqueApp {
             self.selected = game_id;
             self.open_target(Some(target.clone()));
             if let Some(s) = prior_status {
-                if let Some(proxy) = s.receipt.as_ref().and_then(crate::controller::first_proxy) {
+                if let Some(proxy) = crate::controller::installed_proxy(&s) {
                     self.view.options.proxy = proxy;
                 }
                 if let Some(nr) = s.nr_enabled {

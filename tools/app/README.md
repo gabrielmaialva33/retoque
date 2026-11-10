@@ -151,6 +151,19 @@ review. Changing the selected game or opening another review invalidates the pen
 The core's reviewed legacy transition backs up/removes a monolithic proxy and INI before new payload copies;
 a second sm86 proxy is refused for manual reconciliation. Receipt v1 and running-game refusals still apply.
 
+The game page's main button is this optimization: “Install and optimize” for a game without Retoque, “Update and
+optimize” for an install an old script made (registered under the proxy name it already uses, such as
+`winmm.dll`), “Optimize” once installed. It always installs when Retoque is missing, even if every other item is
+left out. Tiles under the banner show the graphics card, Retoque, Neural Rendering, frame generation and the
+game's DLSS files from facts already inspected.
+
+On RTX 30 (Ampere) two tuning items come from one field session (Dying Light: The Beast, RTX 3060, Windows,
+2026-11-10, DLSS-G through sm86 at 4.0x on screen with NR on): with sm86 and a game that ships DLSS-G,
+`[FrameGen] FGNvngxReplacement=None` and `[DLSSG] OverrideInterpolationCount=3` (MFG x4); for a D3D12 game,
+`[DlssNr] PeripheryCompression=true` and `TransferStrength=1.5`. A value already set (numbers compare as
+numbers) is not proposed again. They never choose a frame-generation provider. RTX 20 and RTX 40+ get neither
+until a game is measured there; one session is a starting point, not a qualification.
+
 The kit builder can opt into `INCLUDE_OFFICIAL_SM86=1`. The `cache_sm86` example stores the exact archive plus
 GitHub metadata in `first-run-cache/sm86`, requiring a published SHA-256 digest. The GUI verifies that cache
 again and imports it after confirmation without downloading. `verify_sm86_cache` can exercise that import

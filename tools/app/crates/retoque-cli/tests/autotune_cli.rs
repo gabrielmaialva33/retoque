@@ -268,5 +268,16 @@ fn gpu_and_games_json_use_mock_gpu_and_synthetic_steam_home() {
     let json = inspect();
     let target = &json["games"][0]["targets"][0];
     assert_eq!(target["sm86_legacy"], false);
-    assert_eq!(target["recommendations"], serde_json::json!([]));
+    // With a current sm86 nothing chooses a provider any more; only the RTX 30 profile tunes what is there.
+    let ids: Vec<&str> = target["recommendations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    assert!(
+        ids.iter().all(|id| retoque_data::recommend::PROFILE_IDS.contains(id)),
+        "{ids:?}"
+    );
+    assert!(ids.contains(&"sm86_mfg"), "{ids:?}");
 }

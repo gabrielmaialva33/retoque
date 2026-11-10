@@ -327,6 +327,41 @@ pub fn stat_tile(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, format!("{label}: {value}")));
 }
 
+/// A feature tile in the style of a GPU control panel: a status bar on the left, a caption, the value in large
+/// type and one detail line. Read by screen readers as "caption: value, detail".
+pub fn feature_tile(ui: &mut egui::Ui, caption: &str, value: &str, detail: &str, color: Color32) {
+    let width = 196.0_f32.min(ui.max_rect().width());
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 80.0), Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, 10.0, theme::CARD);
+    painter.rect_stroke(rect, 10.0, Stroke::new(1.0, theme::CARD_EDGE), egui::StrokeKind::Inside);
+    let bar = egui::Rect::from_min_size(rect.min + vec2(0.0, 14.0), vec2(3.0, rect.height() - 28.0));
+    painter.rect_filled(bar, 2.0, color);
+    let inner = width - 30.0;
+    let line = |text: &str, size: f32, color: Color32| {
+        let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), FontId::proportional(size), color);
+        job.wrap = egui::text::TextWrapping::truncate_at_width(inner);
+        painter.layout_job(job)
+    };
+    painter.galley(
+        rect.min + vec2(16.0, 10.0),
+        line(&caption.to_uppercase(), 11.5, theme::MUTED),
+        theme::MUTED,
+    );
+    painter.galley(rect.min + vec2(16.0, 28.0), line(value, 18.5, color), color);
+    painter.galley(
+        rect.min + vec2(16.0, 54.0),
+        line(detail, 12.5, theme::MUTED),
+        theme::MUTED,
+    );
+    let spoken = if detail.is_empty() {
+        format!("{caption}: {value}")
+    } else {
+        format!("{caption}: {value}, {detail}")
+    };
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, &spoken));
+}
+
 /// One cover is one focusable button; wrapping moves the whole card, including its title and state.
 pub fn cover_card(
     ui: &mut egui::Ui,

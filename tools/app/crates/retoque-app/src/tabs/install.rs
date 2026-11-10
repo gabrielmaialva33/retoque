@@ -1,4 +1,17 @@
 use crate::app::*;
+use retoque_data::gpu::Arch;
+
+fn gpu_arch_key(arch: Arch) -> &'static str {
+    match arch {
+        Arch::Turing => "auto.turing",
+        Arch::Ampere => "auto.ampere",
+        Arch::Ada => "auto.ada",
+        Arch::Blackwell => "auto.blackwell",
+        Arch::OlderNvidia => "auto.older",
+        Arch::NotNvidia => "auto.other",
+        Arch::Unknown => "auto.unknown",
+    }
+}
 
 impl RetoqueApp {
     pub(crate) fn install_tab(&mut self, ui: &mut egui::Ui) {
@@ -114,6 +127,134 @@ impl RetoqueApp {
                 }
             });
         }
+    }
+
+    /// The game at a glance, as a GPU panel shows it: graphics card, Retoque, Neural Rendering, frame generation
+    /// and DLSS. Every value comes from facts already inspected; nothing here reads the disk or decides anything.
+    pub(crate) fn feature_tiles(&self, ui: &mut egui::Ui) {
+        let Some(Ok(status)) = &self.view.status else { return };
+        let facts = &self.view.intelligence.facts;
+        let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
+        let ini = self
+            .view
+            .ini
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .and_then(|i| i.as_ref());
+        let state = install_state(
+            status,
+            self.payload_build
+                .as_ref()
+                .and_then(|r| r.as_ref().ok())
+                .map(String::as_str),
+        );
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
+            // Graphics card.
+            let (value, detail) = match gpu {
+                Some(g) => (
+                    g.name
+                        .trim_start_matches("NVIDIA ")
+                        .trim_start_matches("GeForce ")
+                        .to_owned(),
+                    format!(
+                        "{}{}",
+                        self.tr(gpu_arch_key(g.arch)),
+                        g.vram_mib
+                            .map(|m| format!(" · {:.0} GB", m as f64 / 1024.0))
+                            .unwrap_or_default()
+                    ),
+                ),
+                None => (self.tr("tile.unknown").to_owned(), String::new()),
+            };
+            widgets::feature_tile(ui, self.tr("tile.gpu"), &value, &detail, theme::ACCENT);
+            // Retoque itself.
+            let color = match state {
+                InstallState::Current | InstallState::Installed => theme::GOOD,
+                InstallState::Update | InstallState::Untracked => theme::WARN,
+                InstallState::Partial => theme::BAD,
+                InstallState::Missing => theme::MUTED,
+            };
+            let detail = match (&status.build_sha256, state) {
+                (_, InstallState::Untracked) => self.tr("tile.no_receipt").to_owned(),
+                (Some(hash), _) => format!("{} {}", self.tr("st.build"), &hash[..hash.len().min(8)]),
+                (None, _) => String::new(),
+            };
+            widgets::feature_tile(ui, "Retoque", self.tr(state.label()), &detail, color);
+            // Neural Rendering.
+            let model = self.view.inspection.as_ref();
+            let (value, detail, color) = match status.nr_enabled {
+                _ if state == InstallState::Missing => (self.tr("tile.off"), String::new(), theme::MUTED),
+                Some(true) => match model {
+                    Some(m) if m.present => (
+                        self.tr("tile.on"),
+                        m.version
+                            .as_ref()
+                            .map(|v| format!("{} {v}", self.tr("shell.model_version")))
+                            .unwrap_or_else(|| self.tr("shell.model_unknown").into()),
+                        theme::GOOD,
+                    ),
+                    Some(_) => (
+                        self.tr("tile.on"),
+                        self.tr("tile.model_missing").to_owned(),
+                        theme::WARN,
+                    ),
+                    None => (self.tr("tile.on"), String::new(), theme::GOOD),
+                },
+                Some(false) => (self.tr("tile.off"), String::new(), theme::MUTED),
+                None => (self.tr("tile.unknown"), String::new(), theme::MUTED),
+            };
+            widgets::feature_tile(ui, "Neural Rendering", value, &detail, color);
+            // Frame generation: ours (LSFG, sm86) first, then the game's own DLSS-G where this card can run it.
+            let lsfg_multiplier = ini.and_then(|i| i.get("LSFG", "Multiplier")).map(str::trim);
+            let older = gpu.is_some_and(|g| matches!(g.arch, Arch::Turing | Arch::Ampere));
+            let (value, detail, color) = if facts.sm86_installed {
+                ("DLSS-G".to_owned(), self.tr("tile.fg_sm86").to_owned(), theme::GOOD)
+            } else if facts.lsfg_enabled == Some(true) {
+                (
+                    format!("LSFG x{}", lsfg_multiplier.unwrap_or("2")),
+                    "Lossless Scaling".to_owned(),
+                    theme::GOOD,
+                )
+            } else if facts.has_dlssg && older {
+                (
+                    self.tr("tile.fg_available").to_owned(),
+                    self.tr("tile.fg_needs_sm86").to_owned(),
+                    theme::WARN,
+                )
+            } else if facts.has_dlssg {
+                ("DLSS-G".to_owned(), self.tr("tile.fg_game").to_owned(), theme::GOOD)
+            } else {
+                (self.tr("tile.off").to_owned(), String::new(), theme::MUTED)
+            };
+            widgets::feature_tile(ui, self.tr("tile.fg"), &value, &detail, color);
+            // The game's DLSS files.
+            let names = self
+                .selected_game()
+                .and_then(|g| g.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()))
+                .map(|t| t.dlss.clone())
+                .unwrap_or_default();
+            let mut parts = Vec::new();
+            for (file, part) in [
+                ("nvngx_dlss.dll", "SR"),
+                ("nvngx_dlssd.dll", "RR"),
+                ("nvngx_dlssg.dll", "FG"),
+            ] {
+                if names.iter().any(|n| n.eq_ignore_ascii_case(file))
+                    || (part == "SR" && facts.has_dlss)
+                    || (part == "FG" && facts.has_dlssg)
+                {
+                    parts.push(part);
+                }
+            }
+            let (value, color) = if parts.is_empty() {
+                (self.tr("tile.dlss_none").to_owned(), theme::MUTED)
+            } else {
+                (parts.join(" · "), theme::GOOD)
+            };
+            widgets::feature_tile(ui, "DLSS", &value, self.tr("tile.dlss_detail"), color);
+        });
+        ui.add_space(12.0);
     }
 
     pub(crate) fn status_chips(&self, ui: &mut egui::Ui) {

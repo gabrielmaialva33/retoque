@@ -182,6 +182,9 @@ impl RetoqueApp {
             return;
         };
         self.game_banner(ui, &game);
+        if self.tab != Tab::Compare {
+            self.feature_tiles(ui);
+        }
         if game.runtime == Runtime::NativeLinux {
             ui.add_space(8.0);
             ui.colored_label(theme::WARN, self.tr("game.native"));
@@ -552,36 +555,92 @@ impl RetoqueApp {
                         .map(String::as_str),
                 )
             });
+            let ready = self.optimize_ready();
             child.horizontal_wrapped(|ui| {
-                if state == Some(InstallState::Current) {
-                    ui.add_enabled(false, theme::primary(self.tr("shell.up_to_date")));
-                    if ui.button(self.tr("shell.reinstall")).clicked()
-                        && let Some(options) = self.install_inputs()
-                    {
-                        self.request_plan(PlanKind::Install, PlanInputs::Install(options));
-                    }
-                } else {
-                    let label = match state {
-                        Some(InstallState::Partial) => "shell.resume",
-                        Some(InstallState::Update) => "shell.update",
-                        Some(InstallState::Installed) => "shell.reinstall",
-                        Some(InstallState::Untracked) => "shell.install",
-                        _ => "shell.install",
-                    };
-                    if ui
-                        .add_enabled(
-                            state.is_some() && (state == Some(InstallState::Partial) || self.payload.is_some()),
-                            theme::primary(self.tr(label)),
-                        )
-                        .on_hover_text(self.tr("shell.review_shortcut"))
-                        .clicked()
-                    {
-                        if state == Some(InstallState::Partial) {
+                // One big action, like a GPU panel: a game without Retoque (or with an old script's install) gets
+                // "Install and optimize", which opens one review for Retoque plus everything this card and GPU need.
+                match state {
+                    Some(InstallState::Partial) => {
+                        if ui
+                            .add(theme::primary(self.tr("shell.resume")))
+                            .on_hover_text(self.tr("shell.review_shortcut"))
+                            .clicked()
+                        {
                             self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
-                        } else if let Some(options) = self.install_inputs() {
+                        }
+                    }
+                    Some(InstallState::Missing | InstallState::Untracked) | None => {
+                        let label = if state == Some(InstallState::Untracked) {
+                            "shell.register_optimize"
+                        } else {
+                            "shell.install_optimize"
+                        };
+                        let response = ui
+                            .add_enabled(
+                                state.is_some() && self.payload.is_some() && ready,
+                                theme::primary(self.tr(label)).min_size(egui::vec2(190.0, 38.0)),
+                            )
+                            .on_hover_text(self.tr("shell.install_optimize_hint"))
+                            .on_disabled_hover_text(self.tr(if self.payload.is_none() {
+                                "shell.no_payload"
+                            } else {
+                                "shell.checking"
+                            }));
+                        if response.clicked() {
+                            self.optimize_automatically();
+                        }
+                        if ui
+                            .add_enabled(
+                                state.is_some() && self.payload.is_some() && !self.busy(),
+                                egui::Button::new(self.tr("shell.install_only")),
+                            )
+                            .clicked()
+                            && let Some(options) = self.install_inputs()
+                        {
                             self.request_plan(PlanKind::Install, PlanInputs::Install(options));
                         }
                     }
+                    Some(InstallState::Update) => {
+                        if ui
+                            .add_enabled(self.payload.is_some(), theme::primary(self.tr("shell.update")))
+                            .on_hover_text(self.tr("shell.review_shortcut"))
+                            .clicked()
+                            && let Some(options) = self.install_inputs()
+                        {
+                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
+                        }
+                        if ui
+                            .add_enabled(ready, egui::Button::new(self.tr("shell.optimize")))
+                            .clicked()
+                        {
+                            self.optimize_automatically();
+                        }
+                    }
+                    Some(InstallState::Current | InstallState::Installed) => {
+                        if ui
+                            .add_enabled(ready, theme::primary(self.tr("shell.optimize")))
+                            .on_hover_text(self.tr("shell.optimize_hint"))
+                            .clicked()
+                        {
+                            self.optimize_automatically();
+                        }
+                        if ui.button(self.tr("shell.reinstall")).clicked()
+                            && let Some(options) = self.install_inputs()
+                        {
+                            self.request_plan(PlanKind::Install, PlanInputs::Install(options));
+                        }
+                    }
+                }
+                if self.tuning.sm86.busy || self.nr_fetch.busy {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new(self.tr(if self.nr_fetch.busy {
+                            "nr_fetch.downloading"
+                        } else {
+                            "sm86.progress"
+                        }))
+                        .small(),
+                    );
                 }
                 if matches!(
                     state,
