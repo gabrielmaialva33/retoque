@@ -1286,13 +1286,21 @@ pub(crate) fn apply(plan: &Plan, progress: &mut dyn FnMut(StepDone)) -> Result<(
     }
     Ok(())
 }
+/// Status reads the same 30 MB proxies on every start for every game; its answers are remembered per file
+/// identity. Planning and applying never use these remembered answers and always hash the real bytes.
+fn status_marker(path: &Path) -> bool {
+    crate::memo::file("optiscaler-marker", path, || Some(marker(path, MARK_OPTI))).unwrap_or(false)
+}
+fn status_hash(path: &Path) -> Option<String> {
+    crate::memo::file("sha256", path, || hash(path).ok())
+}
 pub(crate) fn status(game: &Path) -> Result<Status, Error> {
     let game = canonical(game)?;
     let receipt = load_receipt(&game)?;
     let mut proxies = Vec::new();
     for name in PROXY_NAMES {
         for hit in variants(&game, name) {
-            if marker(&game.join(&hit), MARK_OPTI) {
+            if status_marker(&game.join(&hit)) {
                 proxies.push(hit);
             }
         }
@@ -1301,7 +1309,7 @@ pub(crate) fn status(game: &Path) -> Result<Status, Error> {
         for r in &receipt.records {
             if let Record::Proxy { name } = r
                 && !proxies.contains(name)
-                && marker(&game.join(name), MARK_OPTI)
+                && status_marker(&game.join(name))
             {
                 proxies.push(name.clone());
             }
@@ -1320,8 +1328,8 @@ pub(crate) fn status(game: &Path) -> Result<Status, Error> {
         })
         .or_else(|| proxies.first());
     let build_sha256 = proxy
-        .and_then(|p| hash(&game.join(p)).ok())
-        .or_else(|| hash(&game.join("OptiScaler.dll")).ok());
+        .and_then(|p| status_hash(&game.join(p)))
+        .or_else(|| status_hash(&game.join("OptiScaler.dll")));
     let launch_option = if cfg!(target_os = "linux") {
         proxy.map(|p| {
             format!(

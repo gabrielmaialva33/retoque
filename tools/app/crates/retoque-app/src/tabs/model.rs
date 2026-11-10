@@ -101,7 +101,10 @@ impl RetoqueApp {
                         .catalog
                         .as_ref()
                         .and_then(|r| r.as_ref().ok())
-                        .is_some_and(|models| models.iter().any(|m| m.path == *path));
+                        .is_some_and(|models| {
+                            let key = crate::format::path_key(path);
+                            models.iter().any(|m| crate::format::path_key(&m.path) == key)
+                        });
                     let origin = if is_auto {
                         "mdl.beside"
                     } else if in_catalog {
@@ -180,7 +183,13 @@ impl RetoqueApp {
         }
         for m in &models {
             let value = Catalog::model_file_value(m, wine);
-            let in_use = current.as_deref() == Some(value.as_str());
+            // The file this game will load, however its ModelFile is spelled (plain, extended-length or from an
+            // older build): a model in use can never be offered for removal.
+            let in_use = current.as_deref() == Some(value.as_str())
+                || inspection.as_ref().and_then(|i| i.path.as_ref()).is_some_and(|p| {
+                    !current.as_deref().unwrap_or("auto").eq_ignore_ascii_case("auto")
+                        && crate::format::path_key(p) == crate::format::path_key(&m.path)
+                });
             let used = self.model_usage.get(&m.path).copied();
             widgets::card(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {

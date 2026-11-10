@@ -13,6 +13,7 @@ pub mod lsfg;
 pub mod recommend;
 
 pub mod model_compat;
+pub mod model_facts;
 pub mod model_fetch;
 
 pub mod doctor;

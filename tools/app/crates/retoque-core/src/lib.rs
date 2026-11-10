@@ -11,6 +11,7 @@ mod engine;
 pub use engine::reshade;
 pub mod ini;
 pub mod leftovers;
+pub mod memo;
 pub mod pe_version;
 mod process;
 pub mod receipt;

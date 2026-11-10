@@ -1,5 +1,8 @@
 use crate::app::*;
 
+/// Below this page height the header scrolls with the tab (banner, tiles and tabs need ~480 points).
+const SHORT_PAGE: f32 = 900.0;
+
 impl RetoqueApp {
     pub(crate) fn top_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
@@ -176,23 +179,69 @@ impl RetoqueApp {
             self.home_grid(ui);
             return;
         };
-        self.game_banner(ui, &game);
+        // On a short window (a 768-line laptop or monitor) the banner, tiles and tab strip alone fill the height
+        // and leave the tab itself no room, so there the whole page scrolls as one. Taller windows keep the header
+        // in place and scroll only the tab.
+        if self.tab != Tab::Compare && ui.available_height() < SHORT_PAGE {
+            if self.tab == Tab::Settings {
+                self.pending_footer(ui);
+            }
+            let column = ui.available_width();
+            egui::ScrollArea::vertical()
+                .id_salt(("page_scroll", self.tab))
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.set_max_width(column - ui.spacing().scroll.allocated_width());
+                    if self.game_header(ui, &game) && self.tab != Tab::Compare {
+                        self.tab_body(ui);
+                    }
+                });
+            return;
+        }
+        if !self.game_header(ui, &game) {
+            return;
+        }
+        // The comparison lays out its own viewport (zoom, pan, wipe) and must not sit inside a scroll area.
+        if self.tab == Tab::Compare {
+            if let Some(target) = self.view.target.clone() {
+                self.compare.ui(ui, self.lang, &target);
+            }
+            return;
+        }
+        if self.tab == Tab::Settings {
+            self.pending_footer(ui);
+        }
+        // Each tab keeps its own scroll state, and its content never grows past the page column: one wide line on
+        // one tab used to widen the shared content and push every later card past the others' right edge.
+        let column = ui.available_width();
+        egui::ScrollArea::vertical()
+            .id_salt(("tab_scroll", self.tab))
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                ui.set_max_width(column - ui.spacing().scroll.allocated_width());
+                self.tab_body(ui);
+            });
+    }
+
+    /// Banner, status tiles, details and the tab strip. False when the game has nothing Retoque can act on.
+    fn game_header(&mut self, ui: &mut egui::Ui, game: &Game) -> bool {
+        self.game_banner(ui, game);
         if self.tab != Tab::Compare {
             self.feature_tiles(ui);
         }
         if game.runtime == Runtime::NativeLinux {
             ui.add_space(8.0);
             ui.colored_label(theme::WARN, self.tr("game.native"));
-            return;
+            return false;
         }
         if game.targets.is_empty() {
             ui.add_space(8.0);
             ui.colored_label(theme::WARN, self.tr("game.no_target"));
-            return;
+            return false;
         }
         if self.tab != Tab::Compare {
             ui.collapsing(self.tr("shell.details"), |ui| {
-                self.target_picker(ui, &game);
+                self.target_picker(ui, game);
                 if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
                     ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
                 }
@@ -218,26 +267,7 @@ impl RetoqueApp {
                 self.sidebar_visible = false;
             }
         }
-        // The comparison lays out its own viewport (zoom, pan, wipe) and must not sit inside a scroll area.
-        if self.tab == Tab::Compare {
-            if let Some(target) = self.view.target.clone() {
-                self.compare.ui(ui, self.lang, &target);
-            }
-            return;
-        }
-        if self.tab == Tab::Settings {
-            self.pending_footer(ui);
-        }
-        // Each tab keeps its own scroll state, and its content never grows past the page column: one wide line on
-        // one tab used to widen the shared content and push every later card past the others' right edge.
-        let column = ui.available_width();
-        egui::ScrollArea::vertical()
-            .id_salt(("tab_scroll", self.tab))
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.set_max_width(column - ui.spacing().scroll.allocated_width());
-                self.tab_body(ui);
-            });
+        true
     }
 
     fn tab_body(&mut self, ui: &mut egui::Ui) {
@@ -494,7 +524,15 @@ impl RetoqueApp {
     pub(crate) fn game_banner(&mut self, ui: &mut egui::Ui, game: &Game) {
         let art = self.library_state.art.get(&game.id).cloned().unwrap_or_default();
         let compact = self.tab == Tab::Compare;
-        let height = if compact { 100.0 } else { 240.0 };
+        // A short window gets a lower banner, so the tab's first card shows without scrolling.
+        let short = ui.ctx().content_rect().height() < SHORT_PAGE;
+        let height = if compact {
+            100.0
+        } else if short {
+            176.0
+        } else {
+            240.0
+        };
         let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
         if let Some(hero) = art.hero.as_deref() {
             let ratio = rect.width() / rect.height();

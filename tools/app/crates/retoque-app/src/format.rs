@@ -122,6 +122,18 @@ pub(crate) fn display_path(p: impl AsRef<Path>) -> String {
     s
 }
 
+/// One spelling per file, for deciding whether two paths name the same model. On Windows the extended-length
+/// prefix, the separator and letter case do not matter (`\\?\C:\M\x.dll` is `c:/m/X.DLL`); elsewhere paths
+/// compare exactly.
+pub(crate) fn path_key(p: &Path) -> String {
+    let s = display_path(p);
+    if cfg!(windows) {
+        s.replace('/', "\\").to_lowercase()
+    } else {
+        s
+    }
+}
+
 pub(crate) fn short_path(p: &Path) -> String {
     let clean = display_path(p);
     if let Some(home) = dirs::home_dir() {
@@ -221,35 +233,23 @@ pub(crate) fn inspect_model(target: &Path, configured: &str) -> ModelInspection 
     use std::io::Read;
     let path = model_host_path(target, configured);
     let present = path.as_ref().is_some_and(|p| p.is_file());
-    let version = path.as_ref().filter(|_| present).and_then(|path| {
-        let mut file = std::fs::File::open(path)
-            .ok()?
-            .take(retoque_data::model_compat::MAX_MODEL_BYTES);
-        // The model may be hundreds of MB. Keep only a chunk and enough overlap for version records.
-        let mut block = [0; 65536];
-        let mut tail = Vec::new();
-        let mut version = None;
-        loop {
-            let count = file.read(&mut block).ok()?;
-            if count == 0 {
-                break;
-            }
-            tail.extend_from_slice(&block[..count]);
-            if tail.windows(8).any(|s| s == [0xbd, 0x04, 0xef, 0xfe, 0, 0, 1, 0]) {
-                version = retoque_data::models::pe_file_version(&tail);
-            }
-            if tail.len() > 15 {
-                tail.drain(..tail.len() - 15);
-            }
-        }
-        version
-    });
-    let compatibility = path
+    // One read of the model for both answers, and none at all while the file keeps its identity.
+    let (version, compatibility) = path
         .as_ref()
         .filter(|_| present)
         .and_then(|p| {
             let mut file = std::fs::File::open(p).ok()?;
-            retoque_data::model_compat::inspect(&mut file).ok()
+            match retoque_data::model_facts::read(p, &mut file) {
+                Ok(facts) => Some((facts.version.clone(), facts.compatibility())),
+                // Too large or unreadable as a model: still report a version if the file carries one.
+                Err(_) => {
+                    let mut limited = std::fs::File::open(p)
+                        .ok()?
+                        .take(retoque_data::model_compat::MAX_MODEL_BYTES);
+                    let version = retoque_data::model_facts::scan_version(&mut limited).ok().flatten();
+                    Some((version, Default::default()))
+                }
+            }
         })
         .unwrap_or_default();
     ModelInspection {

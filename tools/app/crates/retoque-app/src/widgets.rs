@@ -406,7 +406,14 @@ pub fn row_width(count: usize, available: f32, min: f32, gap: f32) -> f32 {
     // Half a point of slack so rounding never pushes the last item of a full row onto the next one.
     let available = (available - 1.0).max(0.0);
     let fits = (((available + gap) / (min + gap)).floor() as usize).max(1);
-    let n = fits.min(count.max(1));
+    let count = count.max(1);
+    // A known count that wraps is spread evenly (five tiles as 3 + 2, not 4 + 1 with one stranded below).
+    let rows = count.div_ceil(fits);
+    let n = if count == usize::MAX {
+        fits
+    } else {
+        count.div_ceil(rows)
+    };
     ((available - gap * (n as f32 - 1.0)) / n as f32).max(min.min(available))
 }
 
@@ -560,5 +567,22 @@ mod tab_a11y_tests {
                 .data()
                 .supports_action(egui::accesskit::Action::Click)
         );
+    }
+}
+
+#[cfg(test)]
+mod row_tests {
+    use super::row_width;
+    #[test]
+    fn rows_end_flush_and_wrap_evenly() {
+        // Five tiles that fit in one row share it exactly.
+        let w = row_width(5, 760.0, 138.0, 10.0);
+        assert!((w * 5.0 + 40.0 - 759.0).abs() < 0.01);
+        // Four fit but five do not: three per row, so the second row holds two instead of one.
+        let w = row_width(5, 600.0, 138.0, 10.0);
+        assert!((w * 3.0 + 20.0 - 599.0).abs() < 0.01);
+        // An open-ended grid keeps as many per row as fit.
+        let w = row_width(usize::MAX, 600.0, 138.0, 10.0);
+        assert!((w * 4.0 + 30.0 - 599.0).abs() < 0.01);
     }
 }

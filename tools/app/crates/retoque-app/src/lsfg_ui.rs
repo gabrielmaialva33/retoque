@@ -22,6 +22,19 @@ pub(crate) struct State {
     /// "Optimize automatically" waiting for these shaders: the game and the facts generation it was asked for.
     pub(crate) then_optimize: Option<(PathBuf, u64)>,
 }
+impl State {
+    #[cfg(test)]
+    pub(crate) fn running(&self) -> bool {
+        self.running
+    }
+    /// The preparation job never reported (it could not start or stopped unexpectedly): stop waiting for it.
+    pub(crate) fn failed(&mut self, message: String) {
+        self.running = false;
+        self.progress = None;
+        self.then_optimize = None;
+        self.result = Some(Err(prepare::Error::Failed(message)));
+    }
+}
 impl Drop for State {
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Relaxed);

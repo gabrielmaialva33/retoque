@@ -455,8 +455,22 @@ impl RetoqueApp {
                     if job == "dlss-download" {
                         self.tuning.dlss.download_failed();
                     }
-                    if job == "autotune-plan" {
-                        self.review = Some(Err(message.clone().into()));
+                    // Every job that arms a busy flag must release it here too: a worker that could not start or
+                    // stopped unexpectedly never sends its own completion, and the spinner would stay for good.
+                    match job {
+                        "autotune-plan" | "plan" => self.review = Some(Err(message.clone().into())),
+                        "payload-fetch" => self.payload_ui.busy = false,
+                        "nr-model-fetch" => {
+                            self.nr_fetch.busy = false;
+                            self.nr_fetch.then_optimize = None;
+                        }
+                        "sm86-download" => {
+                            self.tuning.sm86.busy = false;
+                            self.tuning.sm86.pending = None;
+                        }
+                        "leftovers" => self.library_state.leftovers_busy = false,
+                        "lsfg-prepare" => self.lsfg.failed(message.clone()),
+                        _ => {}
                     }
                     if job == "library-status" {
                         self.library_pending = false;
@@ -599,12 +613,17 @@ impl RetoqueApp {
             .filter_map(|g| self.target_for(g))
             .collect();
         self.jobs.spawn("model-usage", None, move |_| {
+            // The catalog keeps Windows' extended-length paths while an INI holds the plain form (or, from older
+            // builds, the extended one): compare one spelling per file, then count against the catalog's path.
+            let by_key: HashMap<String, PathBuf> =
+                models.iter().map(|p| (crate::format::path_key(p), p.clone())).collect();
             let mut usage: HashMap<_, usize> = models.into_iter().map(|p| (p, 0)).collect();
             for target in targets {
                 if let Ok(Some((_, bytes))) = retoque_core::read_ini(&target) {
                     let ini = Ini::parse(&bytes);
                     if let Some(path) = model_host_path(&target, ini.get("DlssNr", "ModelFile").unwrap_or("auto"))
-                        && let Some(count) = usage.get_mut(&path)
+                        && let Some(model) = by_key.get(&crate::format::path_key(&path))
+                        && let Some(count) = usage.get_mut(model)
                     {
                         *count += 1;
                     }
