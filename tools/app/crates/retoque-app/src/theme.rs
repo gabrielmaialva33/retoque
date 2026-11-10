@@ -17,6 +17,23 @@ pub const SIDE: Color32 = Color32::from_rgb(0x17, 0x1A, 0x1F);
 pub const CARD: Color32 = Color32::from_rgb(0x1C, 0x20, 0x26);
 pub const ERROR_CARD: Color32 = Color32::from_rgb(0x2D, 0x1D, 0x23);
 pub const CARD_EDGE: Color32 = Color32::from_rgb(0x2A, 0x2F, 0x37);
+/// Text drawn on an accent- or danger-filled button.
+pub const ON_ACCENT: Color32 = Color32::from_rgb(0x1A, 0x14, 0x0A);
+/// Text drawn over cover or hero art.
+pub const ON_IMAGE: Color32 = Color32::from_gray(220);
+/// Behind images and previews (darker than a card).
+pub const CANVAS: Color32 = Color32::from_rgb(0x0E, 0x10, 0x13);
+
+// Type scale, in points. Body text is 14.5 and small text 13 (set in `apply`); nothing else uses ad-hoc sizes.
+/// A card's title.
+pub const TITLE: f32 = 17.0;
+/// A heading between cards that groups the ones below it.
+pub const SECTION: f32 = 20.0;
+/// A single large value (a model's version, a game's name without art).
+pub const DISPLAY: f32 = 22.0;
+
+/// The vertical gap between two cards, everywhere.
+pub const CARD_GAP: f32 = 12.0;
 
 /// A system UI font when there is one (Noto Sans on Linux, Segoe UI on Windows), else egui's own. Nothing is
 /// bundled, so the binary carries no font licence.
@@ -51,7 +68,7 @@ pub fn apply(ctx: &egui::Context) {
     let mut visuals = Visuals::dark();
     visuals.panel_fill = BG;
     visuals.window_fill = CARD;
-    visuals.extreme_bg_color = Color32::from_rgb(0x0E, 0x10, 0x13);
+    visuals.extreme_bg_color = CANVAS;
     visuals.faint_bg_color = Color32::from_rgb(0x19, 0x1C, 0x21);
     visuals.override_text_color = Some(TEXT);
     visuals.selection.bg_fill = ACCENT.gamma_multiply(0.35);
@@ -89,15 +106,18 @@ pub fn apply(ctx: &egui::Context) {
     });
 }
 
-/// The primary action button: accent fill, dark text.
+/// The primary action button: accent fill, dark text. At most one per view.
 pub fn primary(text: &str) -> egui::Button<'static> {
-    egui::Button::new(
-        egui::RichText::new(text.to_string())
-            .strong()
-            .color(Color32::from_rgb(0x1A, 0x14, 0x0A)),
-    )
-    .fill(ACCENT)
-    .min_size(egui::vec2(120.0, 32.0))
+    egui::Button::new(egui::RichText::new(text.to_string()).strong().color(ON_ACCENT))
+        .fill(ACCENT)
+        .min_size(egui::vec2(120.0, 32.0))
+}
+
+/// A confirm button for something that deletes or uninstalls: the primary's shape with a danger fill.
+pub fn danger(text: &str) -> egui::Button<'static> {
+    egui::Button::new(egui::RichText::new(text.to_string()).strong().color(ON_ACCENT))
+        .fill(BAD)
+        .min_size(egui::vec2(120.0, 32.0))
 }
 
 #[cfg(test)]

@@ -63,6 +63,129 @@ pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
 
+/// The frame every modal uses: the review's card look, so dialogs read as one family.
+pub fn modal_frame() -> egui::Frame {
+    egui::Frame::new()
+        .fill(theme::CARD)
+        .stroke(Stroke::new(1.0, theme::CARD_EDGE))
+        .corner_radius(12)
+        .inner_margin(20)
+}
+
+/// A heading between cards that groups the cards below it (a tab's sections).
+pub fn section_header(ui: &mut egui::Ui, text: &str) {
+    ui.add_space(8.0);
+    ui.label(RichText::new(text).size(theme::SECTION).strong());
+    ui.add_space(4.0);
+}
+
+/// The two looks a collapsible section may have.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Fold {
+    /// A part of a card the user opens on purpose ("Advanced", "Install options"): a card title.
+    Section,
+    /// Evidence, hashes and other technical details: small and muted.
+    Details,
+}
+
+/// A collapsible section, closed by default, in one of the two looks.
+pub fn collapsible<R>(
+    ui: &mut egui::Ui,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    title: &str,
+    fold: Fold,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> Option<R> {
+    let text = match fold {
+        Fold::Section => RichText::new(title).size(theme::TITLE).strong(),
+        Fold::Details => RichText::new(title).small().color(theme::MUTED),
+    };
+    egui::CollapsingHeader::new(text)
+        .id_salt(id_salt)
+        .default_open(false)
+        .show(ui, add)
+        .body_returned
+}
+
+/// Work in progress, always with a sentence: a bar with "done of total" when the total is known, else a spinner
+/// with the text (and the size received so far, when there is one).
+pub fn busy(ui: &mut egui::Ui, lang: crate::i18n::Lang, text: &str, done: Option<u64>, total: Option<u64>) {
+    use crate::format::size_text;
+    match (done, total) {
+        (Some(done), Some(total)) if total > 0 => {
+            let of = crate::i18n::t(lang, "progress.of");
+            ui.add(
+                egui::ProgressBar::new((done as f32 / total as f32).clamp(0.0, 1.0)).text(format!(
+                    "{text} · {} {of} {}",
+                    size_text(lang, done),
+                    size_text(lang, total)
+                )),
+            );
+        }
+        (done, _) => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                match done.filter(|d| *d > 0) {
+                    Some(done) => ui.label(format!("{text} · {}", size_text(lang, done))),
+                    None => ui.label(text),
+                };
+            });
+        }
+    }
+}
+
+/// What the user answered in a consent dialog.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Answer {
+    Confirm,
+    Cancel,
+}
+
+/// The one consent dialog for anything the app would download or change on the user's behalf: a title, plain
+/// sentences, technical details (hashes, hosts, licences) folded away, and `[cancel] [confirm]` in the review's
+/// order. Escape or a click outside counts as cancel.
+#[allow(clippy::too_many_arguments)]
+pub fn consent_modal(
+    ctx: &egui::Context,
+    lang: crate::i18n::Lang,
+    id: &str,
+    title: &str,
+    body: &[&str],
+    confirm: &str,
+    cancel: &str,
+    details: Option<&dyn Fn(&mut egui::Ui)>,
+) -> Option<Answer> {
+    let mut answer = None;
+    let modal = egui::Modal::new(egui::Id::unique(("consent", id)))
+        .frame(modal_frame())
+        .show(ctx, |ui| {
+            ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
+            ui.label(RichText::new(title).size(theme::TITLE).strong());
+            ui.add_space(6.0);
+            for line in body {
+                ui.label(*line);
+            }
+            if let Some(details) = details {
+                ui.add_space(4.0);
+                let label = crate::i18n::t(lang, "technical.details");
+                collapsible(ui, ("consent-details", id), label, Fold::Details, |ui| details(ui));
+            }
+            ui.add_space(12.0);
+            ui.horizontal(|ui| {
+                if ui.button(cancel).clicked() {
+                    answer = Some(Answer::Cancel);
+                }
+                if ui.add(theme::primary(confirm)).clicked() {
+                    answer = Some(Answer::Confirm);
+                }
+            });
+        });
+    if answer.is_none() && modal.should_close() {
+        answer = Some(Answer::Cancel);
+    }
+    answer
+}
+
 /// A card's title line.
 pub fn card_title(ui: &mut egui::Ui, text: &str) {
     ui.label(RichText::new(text).size(17.0).strong());
