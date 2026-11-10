@@ -174,7 +174,7 @@ impl RetoqueApp {
         self.folder_focus = self.context.memory(|m| m.focused());
     }
     pub(crate) fn folders_button(&mut self, ui: &mut egui::Ui) {
-        if ui.small_button(self.tr("folders.title")).clicked() {
+        if ui.button(self.tr("folders.title")).clicked() {
             self.folders_open(FolderDialog::Manage);
         }
     }
@@ -274,7 +274,7 @@ impl RetoqueApp {
                                                 let name =
                                                     format!("{} · {}", self.tr("folders.remove"), short_path(path));
                                                 let response = ui
-                                                    .small_button(self.tr("folders.remove"))
+                                                    .button(self.tr("folders.remove"))
                                                     .on_hover_text(self.tr("folders.remove_help"));
                                                 response.widget_info(|| {
                                                     egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone())

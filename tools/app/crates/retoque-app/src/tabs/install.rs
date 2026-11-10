@@ -159,6 +159,8 @@ impl RetoqueApp {
         );
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
+            // Five tiles share the column's width: one even row when they fit, equal columns when they wrap.
+            let tile_w = widgets::row_width(5, ui.available_width(), 138.0, 10.0);
             // Graphics card.
             let (value, detail) = match gpu {
                 Some(g) => (
@@ -176,7 +178,7 @@ impl RetoqueApp {
                 ),
                 None => (self.tr("tile.unknown").to_owned(), String::new()),
             };
-            widgets::feature_tile(ui, self.tr("tile.gpu"), &value, &detail, theme::ACCENT);
+            widgets::feature_tile(ui, tile_w, self.tr("tile.gpu"), &value, &detail, theme::ACCENT);
             // Retoque itself.
             let color = match state {
                 InstallState::Current | InstallState::Installed => theme::GOOD,
@@ -197,7 +199,7 @@ impl RetoqueApp {
                 InstallState::Untracked => "tile.st_untracked",
                 InstallState::Missing => "tile.st_missing",
             });
-            widgets::feature_tile(ui, "Retoque", value, &detail, color);
+            widgets::feature_tile(ui, tile_w, "Retoque", value, &detail, color);
             // Neural Rendering.
             let model = self.view.inspection.as_ref();
             let (value, detail, color) = match status.nr_enabled {
@@ -221,7 +223,7 @@ impl RetoqueApp {
                 Some(false) => (self.tr("tile.off"), String::new(), theme::MUTED),
                 None => (self.tr("tile.unknown"), String::new(), theme::MUTED),
             };
-            widgets::feature_tile(ui, "Neural Rendering", value, &detail, color);
+            widgets::feature_tile(ui, tile_w, "Neural Rendering", value, &detail, color);
             // Frame generation: ours (LSFG, sm86) first, then the game's own DLSS-G where this card can run it.
             let lsfg_multiplier = ini.and_then(|i| i.get("LSFG", "Multiplier")).map(str::trim);
             let older = gpu.is_some_and(|g| matches!(g.arch, Arch::Turing | Arch::Ampere));
@@ -244,7 +246,7 @@ impl RetoqueApp {
             } else {
                 (self.tr("tile.off").to_owned(), String::new(), theme::MUTED)
             };
-            widgets::feature_tile(ui, self.tr("tile.fg"), &value, &detail, color);
+            widgets::feature_tile(ui, tile_w, self.tr("tile.fg"), &value, &detail, color);
             // The game's DLSS files.
             let names = self
                 .selected_game()
@@ -269,7 +271,7 @@ impl RetoqueApp {
             } else {
                 (parts.join(" · "), theme::GOOD)
             };
-            widgets::feature_tile(ui, "DLSS", &value, self.tr("tile.dlss_detail"), color);
+            widgets::feature_tile(ui, tile_w, "DLSS", &value, self.tr("tile.dlss_detail"), color);
         });
         ui.add_space(12.0);
     }

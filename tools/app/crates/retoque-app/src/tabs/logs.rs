@@ -203,7 +203,7 @@ impl RetoqueApp {
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(theme::GOOD, self.tr("log.bundle_done"));
                     ui.add(egui::Label::new(RichText::new(short_path(p)).monospace()).wrap());
-                    if ui.small_button(self.tr("log.open_folder")).clicked()
+                    if ui.button(self.tr("log.open_folder")).clicked()
                         && let Some(dir) = p.parent()
                     {
                         commands.send(AppCommand::OpenFolder(dir.to_owned()));

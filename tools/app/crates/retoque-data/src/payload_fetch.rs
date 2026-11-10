@@ -14,7 +14,6 @@ use std::{
     collections::{BTreeMap, HashSet},
     io::{self, Cursor, Read, Write},
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 pub const REPO: &str = "gabrielmaialva33/retoque";
@@ -267,14 +266,7 @@ impl Fetcher for GithubFetcher {
             return Err(invalid("non-official payload URL"));
         }
         let asset = url.starts_with(ASSET_PREFIX);
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .https_only(true)
-            .max_redirects(0)
-            .proxy(None)
-            .timeout_global(Some(Duration::from_secs(180)))
-            .user_agent("Retoque-payload-release")
-            .build()
-            .into();
+        let agent = crate::fetch::agent(limit, "Retoque-payload-release");
         let mut current = url.to_owned();
         for hop in 0..5 {
             if !allowed_url(&current, asset && hop > 0) {

@@ -99,6 +99,10 @@ fn checked_dir(path: &Path) -> io::Result<()> {
     }
     Ok(())
 }
+/// Bytes a full catalog download receives, for progress.
+pub fn download_size() -> u64 {
+    ASSETS.iter().map(|a| a.size).sum()
+}
 pub fn catalog_path(data: &Path) -> PathBuf {
     data.join("dlss").join(VERSION)
 }
@@ -133,7 +137,7 @@ pub fn verified_catalog(data: &Path) -> io::Result<Option<PathBuf>> {
 pub fn download(
     data: &Path,
     consent: bool,
-    fetcher: &dyn Fetcher,
+    fetcher: &(dyn Fetcher + Sync),
     progress: &mut dyn FnMut(u64),
 ) -> io::Result<PathBuf> {
     if !consent {
@@ -175,16 +179,44 @@ fn write_new(directory: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
 fn fetch_artifacts(
     directory: &Dir,
     assets: &[Asset],
-    fetcher: &dyn Fetcher,
+    fetcher: &(dyn Fetcher + Sync),
     progress: &mut dyn FnMut(u64),
 ) -> io::Result<()> {
-    let mut completed = 0;
-    for a in assets {
-        let bytes = fetcher.get(&url(a), a.size, &mut |n| progress(completed + n))?;
-        verify_bytes(&bytes, a)?;
-        write_new(directory, a.name, &bytes)?;
-        completed += a.size;
-    }
+    // GitHub serves each connection at a few hundred KiB/s, so the files come down side by side. Each file is
+    // verified before it is written to the private stage, which is only published after all of them pass.
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let received: Vec<AtomicU64> = assets.iter().map(|_| AtomicU64::new(0)).collect();
+    let results = std::thread::scope(|scope| {
+        let handles: Vec<_> = assets
+            .iter()
+            .zip(&received)
+            .map(|(a, counter)| {
+                scope.spawn(move || {
+                    let bytes = fetcher.get(&url(a), a.size, &mut |n| counter.store(n, Ordering::Relaxed))?;
+                    verify_bytes(&bytes, a)?;
+                    write_new(directory, a.name, &bytes)
+                })
+            })
+            .collect();
+        let mut reported = u64::MAX;
+        while handles.iter().any(|h| !h.is_finished()) {
+            let total = received.iter().map(|c| c.load(Ordering::Relaxed)).sum();
+            if total != reported {
+                reported = total;
+                progress(total);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        handles
+            .into_iter()
+            .map(|h| {
+                h.join()
+                    .unwrap_or_else(|_| Err(error("DLSS download stopped unexpectedly")))
+            })
+            .collect::<Vec<_>>()
+    });
+    results.into_iter().collect::<io::Result<()>>()?;
+    progress(assets.iter().map(|a| a.size).sum());
     write_new(directory, "receipt-marker.txt", MARKER)?;
     let manifest = assets
         .iter()

@@ -57,15 +57,25 @@ impl RetoqueApp {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(10.0, 10.0);
                 let fps = |v: f64| format!("{} fps", v.round() as u32);
-                widgets::stat_tile(
+                let shown = 4 + usize::from(pacing.generation_share >= 0.05);
+                let w = widgets::row_width(shown, ui.available_width(), 130.0, 10.0);
+                widgets::stat_tile_width(
                     ui,
+                    w,
                     t(lang, "sess.base"),
                     &fps(pacing.base_fps_median),
                     theme::TEXT_STRONG,
                 );
-                widgets::stat_tile(ui, t(lang, "sess.low"), &fps(pacing.base_fps_low), theme::TEXT_STRONG);
-                widgets::stat_tile(
+                widgets::stat_tile_width(
                     ui,
+                    w,
+                    t(lang, "sess.low"),
+                    &fps(pacing.base_fps_low),
+                    theme::TEXT_STRONG,
+                );
+                widgets::stat_tile_width(
+                    ui,
+                    w,
                     t(lang, "sess.screen"),
                     &fps(pacing.screen_fps_median),
                     theme::TEXT_STRONG,
@@ -77,10 +87,10 @@ impl RetoqueApp {
                             "{percent}",
                             &((pacing.generation_share * 100.0).round() as u32).to_string(),
                         );
-                    widgets::stat_tile(ui, t(lang, "sess.generation"), &value, theme::TEXT_STRONG);
+                    widgets::stat_tile_width(ui, w, t(lang, "sess.generation"), &value, theme::TEXT_STRONG);
                 }
                 let drops = format!("{}%", (pacing.drop_share * 100.0).round() as u32);
-                widgets::stat_tile(ui, t(lang, "sess.drops"), &drops, theme::TEXT_STRONG);
+                widgets::stat_tile_width(ui, w, t(lang, "sess.drops"), &drops, theme::TEXT_STRONG);
             });
             ui.add_space(6.0);
             curve(ui, lang, pacing);

@@ -73,7 +73,10 @@ impl Fetcher for OfficialFetcher {
         }
         let config = ureq::Agent::config_builder()
             .max_redirects(0)
-            .timeout_global(Some(Duration::from_secs(120)))
+            .timeout_connect(Some(Duration::from_secs(20)))
+            .timeout_recv_response(Some(Duration::from_secs(60)))
+            // The transfer is cancellable from the UI, so a slow line gets time instead of a hard failure.
+            .timeout_global(Some(Duration::from_secs(900)))
             .build();
         let agent = ureq::Agent::new_with_config(config);
         let mut current = url.to_string();

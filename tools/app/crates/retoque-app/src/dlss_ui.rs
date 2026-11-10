@@ -16,6 +16,7 @@ pub struct State {
     ready: bool,
     restorable: bool,
     busy: bool,
+    downloaded: u64,
     consent: bool,
     error: Option<AppError>,
 }
@@ -25,6 +26,7 @@ pub enum Event {
         generation: u64,
         result: Result<(Vec<dlss::GameDll>, bool, bool), AppError>,
     },
+    Progress(u64),
     Downloaded(Result<(), AppError>),
 }
 impl RetoqueApp {
@@ -102,6 +104,7 @@ impl RetoqueApp {
                     Err(e) => self.tuning.dlss.error = Some(e),
                 }
             }
+            Event::Progress(bytes) => self.tuning.dlss.downloaded = bytes,
             Event::Downloaded(result) => {
                 self.tuning.dlss.busy = false;
                 self.tuning.dlss.key = None;
@@ -197,8 +200,15 @@ impl RetoqueApp {
             }
             ui.label(self.tr("dlss.caution"));
             if self.tuning.dlss.busy {
-                ui.spinner();
-                ui.label(self.tr("dlss.downloading"));
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(format!(
+                        "{} · {:.0} / {:.0} MiB",
+                        self.tr("dlss.downloading"),
+                        self.tuning.dlss.downloaded as f64 / 1048576.,
+                        dlss::download_size() as f64 / 1048576.
+                    ));
+                });
             } else if !self.tuning.dlss.ready {
                 if ui.button(self.tr("dlss.download")).clicked() {
                     self.tuning.dlss.consent = true;
@@ -228,11 +238,22 @@ impl RetoqueApp {
                 if ui.button(self.tr("dlss.confirm_download")).clicked() {
                     self.tuning.dlss.consent = false;
                     self.tuning.dlss.busy = true;
-                    self.jobs.spawn("dlss-download", None, move |_| {
+                    self.tuning.dlss.downloaded = 0;
+                    self.tuning.dlss.error = None;
+                    let ctx = self.context.clone();
+                    self.jobs.spawn("dlss-download", None, move |tx| {
                         let result = (|| {
                             let data = retoque_data::lsfg_prepare::data_dir()
                                 .map_err(|e| std::io::Error::other(e.to_string()))?;
-                            dlss::download(&data, true, &dlss::NvidiaFetcher, &mut |_| {}).map(|_| ())
+                            let mut previous = 0;
+                            dlss::download(&data, true, &dlss::NvidiaFetcher, &mut |bytes| {
+                                if bytes.saturating_sub(previous) >= 256 * 1024 || bytes == dlss::download_size() {
+                                    previous = bytes;
+                                    let _ = tx.send(Outcome::Dlss(Event::Progress(bytes)));
+                                    ctx.request_repaint();
+                                }
+                            })
+                            .map(|_| ())
                         })()
                         .map_err(AppError::from);
                         Outcome::Dlss(Event::Downloaded(result))
@@ -250,6 +271,10 @@ impl RetoqueApp {
 }
 
 impl State {
+    /// Bytes received so far while the catalog download runs.
+    pub(crate) fn download_progress(&self) -> Option<u64> {
+        self.busy.then_some(self.downloaded)
+    }
     pub(crate) fn download_failed(&mut self) {
         self.busy = false;
     }

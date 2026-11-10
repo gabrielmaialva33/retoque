@@ -3,6 +3,23 @@ use std::{
     io::{self, Read},
     time::Duration,
 };
+/// GitHub hands out each connection at a few hundred KiB/s, so a fixed deadline fails large files on an ordinary
+/// line. Connect and first response stay short; the whole transfer gets time for its size at a slow 48 KiB/s.
+pub(crate) fn agent(limit: u64, user_agent: &str) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .https_only(true)
+        .max_redirects(0)
+        .proxy(None)
+        .timeout_connect(Some(Duration::from_secs(20)))
+        .timeout_recv_response(Some(Duration::from_secs(60)))
+        .timeout_global(Some(transfer_deadline(limit)))
+        .user_agent(user_agent)
+        .build()
+        .into()
+}
+pub(crate) fn transfer_deadline(limit: u64) -> Duration {
+    Duration::from_secs(180).max(Duration::from_secs(limit / (48 * 1024)))
+}
 fn invalid(s: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, s)
 }
@@ -15,14 +32,7 @@ pub(crate) fn get(
     if !allowed(url, false) {
         return Err(invalid("unapproved download URL"));
     }
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .https_only(true)
-        .max_redirects(0)
-        .proxy(None)
-        .timeout_global(Some(Duration::from_secs(180)))
-        .user_agent("Retoque-sm86-release")
-        .build()
-        .into();
+    let agent = agent(limit, "Retoque-sm86-release");
     let mut current = url.to_owned();
     for _ in 0..5 {
         if !allowed(&current, current != url) {

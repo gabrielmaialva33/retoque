@@ -14,7 +14,6 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::HashSet,
     io::{self, Cursor, Read, Write},
-    time::Duration,
 };
 
 pub const CATALOG_URL: &str = "https://raw.githubusercontent.com/ApolloF/DLSS5-Updater-catalog/main/catalog.json";
@@ -326,14 +325,7 @@ impl Fetcher for CommunityFetcher {
             return Err(invalid("non-rhi-repo model URL"));
         }
         let asset = url.starts_with(ASSET_PREFIX);
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .https_only(true)
-            .max_redirects(0)
-            .proxy(None)
-            .timeout_global(Some(Duration::from_secs(180)))
-            .user_agent("Retoque-nr-model-fetch")
-            .build()
-            .into();
+        let agent = crate::fetch::agent(limit, "Retoque-nr-model-fetch");
         let mut current = url.to_owned();
         for _ in 0..5 {
             if !allowed_url(&current, asset) {

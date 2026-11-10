@@ -1682,8 +1682,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("dlss.download", "Get DLSS 310.9.16…", "Obter DLSS 310.9.16…"),
     (
         "dlss.downloading",
-        "Downloading verified NVIDIA DLSS…",
-        "Baixando NVIDIA DLSS com verificação…",
+        "Downloading verified NVIDIA DLSS",
+        "Baixando NVIDIA DLSS com verificação",
     ),
     (
         "dlss.download_first",
