@@ -335,8 +335,12 @@ impl RetoqueApp {
                         PlanKind::Uninstall => "shell.review_remove",
                         PlanKind::Settings => "set.save",
                     });
+                    let measure = crate::tabs::measure::measure_request(self.view.inputs.as_ref())
+                        .filter(|_| kind == PlanKind::Settings);
                     let title = if self.intuitive.undo_request == Some(request) {
                         self.tr("undo.title")
+                    } else if let Some(on) = measure {
+                        crate::tabs::measure::measure_verb(self.lang, on)
                     } else {
                         title
                     };
@@ -749,6 +753,16 @@ impl RetoqueApp {
         let review = review.clone();
         match review.kind {
             ReviewKind::Standard(kind) => {
+                // Measurement's own toast ("Measurement turned on"), not the generic "Settings saved".
+                if kind == PlanKind::Settings
+                    && self.intuitive.undo_request != Some(request)
+                    && let Some(on) = crate::tabs::measure::measure_request(self.view.inputs.as_ref())
+                    && let Some(target) = self.view.target.clone()
+                {
+                    self.tuning
+                        .writes
+                        .insert(target, crate::tabs::measure::measure_keys(on).1);
+                }
                 self.apply_plan(kind, review.plans.into_iter().next().unwrap(), self.context.clone())
             }
             ReviewKind::Autotune(request) => {
@@ -800,7 +814,14 @@ impl RetoqueApp {
                             ReviewKind::Standard(PlanKind::Install) if installed => self.tr("inst.update"),
                             ReviewKind::Standard(PlanKind::Install) => self.tr("inst.install"),
                             ReviewKind::Standard(PlanKind::Uninstall) => self.tr("inst.uninstall"),
-                            ReviewKind::Standard(PlanKind::Settings) => self.tr("set.apply"),
+                            ReviewKind::Standard(PlanKind::Settings) => {
+                                match crate::tabs::measure::measure_request(self.view.inputs.as_ref()) {
+                                    Some(on) if self.intuitive.undo_request != Some(review.request_id) => {
+                                        crate::tabs::measure::measure_verb(self.lang, on)
+                                    }
+                                    _ => self.tr("set.apply"),
+                                }
+                            }
                         };
                         if self.intuitive.undo_request == Some(review.request_id) {
                             ui.label(self.tr("undo.auto_note"));

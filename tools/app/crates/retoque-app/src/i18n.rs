@@ -1195,6 +1195,38 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Neural Rendering was switched off during the session (its key in the game).",
         "A renderização neural (NR) foi desligada durante a sessão (pela tecla dela no jogo).",
     ),
+    ("measure.title", "Measurement", "Medição"),
+    (
+        "measure.intro",
+        "How much of each frame NR takes on your graphics card. Measuring costs a little while it is on.",
+        "Quanto de cada quadro o NR ocupa na sua placa de vídeo. Medir custa um pouco enquanto estiver ligado.",
+    ),
+    ("measure.start", "Measure this game…", "Medir este jogo…"),
+    ("measure.started", "Measurement turned on", "Medição ligada"),
+    (
+        "measure.waiting",
+        "Measurement is on. Start the game, play for a minute and close it: the result shows here.",
+        "A medição está ligada. Abra o jogo, jogue por um minuto e feche: o resultado aparece aqui.",
+    ),
+    (
+        "measure.still_on",
+        "Measurement is still on and costs a little. Turn it off when you are done.",
+        "A medição continua ligada e custa um pouco. Desligue quando terminar.",
+    ),
+    ("measure.stop", "Turn measurement off…", "Desligar a medição…"),
+    ("measure.stopped", "Measurement turned off", "Medição desligada"),
+    ("measure.per_frame", "NR per frame (median)", "NR por quadro (mediana)"),
+    ("measure.share", "Share of the frame", "Parte do quadro"),
+    (
+        "measure.detail",
+        "The model alone: {model} · NR passes: {passes} · Samples: {samples}",
+        "Só o modelo: {model} · Passadas do NR: {passes} · Amostras: {samples}",
+    ),
+    (
+        "measure.cadence",
+        "The model runs on one frame in {n}: these times are from the frames where it runs, so there is no share of the frame.",
+        "O modelo roda em um quadro a cada {n}: estes tempos são dos quadros em que ele roda, por isso não há parte do quadro.",
+    ),
     (
         "card.launch",
         "Last step: Steam launch option",

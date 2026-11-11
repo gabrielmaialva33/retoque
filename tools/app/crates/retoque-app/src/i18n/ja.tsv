@@ -309,6 +309,18 @@ sess.low_base	フレーム生成が倍増させた実フレームは、1 秒あ�
 sess.low_base_x4	ベースが低い場合は、x4 より x3 のほうが安定します。
 sess.drops_advice	セッションの {percent}% で、実フレームレートが 20% 以上落ち込みました。多くの場合、ゲームが新しいエリアを読み込んでいるか、空きメモリが不足しています。ほかのプログラムを閉じ、テクスチャ品質を下げてください。
 sess.nr_off	セッション中にニューラルレンダリング (NR) がオフにされました（ゲーム内のキー操作による）。
+measure.title	計測
+measure.intro	NR が GPU 上で各フレームのどれだけを使っているか。計測はオンの間、少し負荷がかかります。
+measure.start	このゲームを計測…
+measure.started	計測をオンにしました
+measure.waiting	計測はオンです。ゲームを起動して 1 分ほどプレイし、終了してください。結果はここに表示されます。
+measure.still_on	計測はまだオンで、少し負荷がかかります。終わったらオフにしてください。
+measure.stop	計測をオフにする…
+measure.stopped	計測をオフにしました
+measure.per_frame	フレームあたりの NR（中央値）
+measure.share	フレームに占める割合
+measure.detail	モデルのみ: {model} · NR パス数: {passes} · サンプル数: {samples}
+measure.cadence	モデルは {n} フレームに 1 回実行されます。これらの時間は実行されたフレームのものなので、フレームに占める割合は表示しません。
 card.launch	最後のステップ：Steam の起動オプション
 card.launch_heroic	最後のステップ：Heroic の環境変数
 card.launch_lutris	最後のステップ：Lutris のオプション

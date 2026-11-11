@@ -204,25 +204,22 @@ impl RetoqueApp {
         let mut picked = None;
         let response = egui::ComboBox::from_id_salt(id_salt)
             .selected_text(lang.native_name())
-            .show_ui(ui, |ui| {
-                for option in Lang::ALL {
-                    if crate::fonts::can_show(option) {
-                        if ui.selectable_label(option == lang, option.native_name()).clicked() {
-                            picked = Some(option);
-                        }
-                    } else {
-                        ui.add_enabled(false, egui::Button::selectable(false, language_name(lang, option)))
-                            .on_disabled_hover_text(
-                                t(lang, "prefs.language_no_font").replace("{languages}", language_name(lang, option)),
-                            );
-                    }
-                }
-            })
+            .show_ui(ui, |ui| picked = language_options(ui, lang))
             .response;
         if let Some(option) = picked {
             self.set_lang(option);
         }
         response
+    }
+
+    /// The same list as a submenu, for the top bar's "More actions" when the window is too narrow for the drop-down.
+    pub(crate) fn language_menu(&mut self, ui: &mut egui::Ui) {
+        let lang = self.lang;
+        let mut picked = None;
+        ui.menu_button(t(lang, "prefs.language"), |ui| picked = language_options(ui, lang));
+        if let Some(option) = picked {
+            self.set_lang(option);
+        }
     }
 
     /// A game that has no Retoque yet follows the defaults as soon as they change.
@@ -236,6 +233,24 @@ impl RetoqueApp {
             self.view.options.game_dir = game_dir;
         }
     }
+}
+
+/// Every language by its own name, the current one selected; returns the one clicked.
+fn language_options(ui: &mut egui::Ui, lang: Lang) -> Option<Lang> {
+    let mut picked = None;
+    for option in Lang::ALL {
+        if crate::fonts::can_show(option) {
+            if ui.selectable_label(option == lang, option.native_name()).clicked() {
+                picked = Some(option);
+            }
+        } else {
+            ui.add_enabled(false, egui::Button::selectable(false, language_name(lang, option)))
+                .on_disabled_hover_text(
+                    t(lang, "prefs.language_no_font").replace("{languages}", language_name(lang, option)),
+                );
+        }
+    }
+    picked
 }
 
 /// A language's name in the reader's language, for a language whose own script cannot be drawn here.

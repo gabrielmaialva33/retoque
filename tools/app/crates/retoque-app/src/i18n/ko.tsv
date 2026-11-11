@@ -309,6 +309,18 @@ sess.low_base	프레임 생성이 초당 실제 프레임 {base}개만 늘렸습
 sess.low_base_x4	기본 프레임이 낮을 때는 x4 대신 x3이 더 안정적으로 느껴집니다.
 sess.drops_advice	세션의 {percent}% 동안 실제 프레임 속도가 20% 넘게 떨어졌습니다. 보통 게임이 새 지역을 불러오거나 여유 RAM이 부족해서입니다. 다른 프로그램을 닫고 텍스처 품질을 낮추세요.
 sess.nr_off	세션 중에 뉴럴 렌더링이 꺼졌습니다(게임 안에서 해당 키를 눌러).
+measure.title	측정
+measure.intro	NR이 그래픽 카드에서 각 프레임의 얼마를 차지하는지. 측정은 켜져 있는 동안 약간의 부하가 있습니다.
+measure.start	이 게임 측정…
+measure.started	측정 켜짐
+measure.waiting	측정이 켜져 있습니다. 게임을 시작해 1분 정도 플레이한 뒤 종료하세요. 결과가 여기에 표시됩니다.
+measure.still_on	측정이 아직 켜져 있어 약간의 부하가 있습니다. 끝나면 끄세요.
+measure.stop	측정 끄기…
+measure.stopped	측정 꺼짐
+measure.per_frame	프레임당 NR(중앙값)
+measure.share	프레임에서 차지하는 비율
+measure.detail	모델만: {model} · NR 패스: {passes} · 샘플: {samples}
+measure.cadence	모델은 {n}프레임마다 한 번 실행됩니다. 이 시간은 실행된 프레임의 것이므로 프레임에서 차지하는 비율은 없습니다.
 card.launch	마지막 단계: Steam 실행 옵션
 card.launch_heroic	마지막 단계: Heroic 환경 변수
 card.launch_lutris	마지막 단계: Lutris 옵션

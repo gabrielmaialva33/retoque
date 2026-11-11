@@ -309,6 +309,18 @@ sess.low_base	La génération d'images n'a multiplié que {base} images réelles
 sess.low_base_x4	x3 au lieu de x4 est aussi plus stable avec une base faible.
 sess.drops_advice	Les images réelles ont chuté de plus de 20 % pendant {percent} % de la session. C'est généralement le jeu qui charge de nouvelles zones ou un manque de RAM libre : fermez d'autres programmes et baissez la qualité des textures.
 sess.nr_off	Le rendu neuronal (NR) a été désactivé pendant la session (avec sa touche dans le jeu).
+measure.title	Mesure
+measure.intro	Quelle part de chaque image le NR prend sur votre carte graphique. Mesurer coûte un peu tant que c’est activé.
+measure.start	Mesurer ce jeu…
+measure.started	Mesure activée
+measure.waiting	La mesure est activée. Lancez le jeu, jouez une minute et fermez-le : le résultat s’affiche ici.
+measure.still_on	La mesure est toujours activée et coûte un peu. Désactivez-la quand vous avez terminé.
+measure.stop	Désactiver la mesure…
+measure.stopped	Mesure désactivée
+measure.per_frame	NR par image (médiane)
+measure.share	Part de l’image
+measure.detail	Le modèle seul : {model} · Passes du NR : {passes} · Échantillons : {samples}
+measure.cadence	Le modèle s’exécute sur une image sur {n} : ces temps viennent des images où il s’exécute, il n’y a donc pas de part de l’image.
 card.launch	Dernière étape : option de lancement Steam
 card.launch_heroic	Dernière étape : variable d'environnement dans Heroic
 card.launch_lutris	Dernière étape : option Lutris

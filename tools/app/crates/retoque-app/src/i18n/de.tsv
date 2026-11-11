@@ -309,6 +309,18 @@ sess.low_base	Die Frame-Generierung hat nur {base} echte Frames pro Sekunde verv
 sess.low_base_x4	x3 statt x4 fühlt sich bei niedriger Basis ebenfalls ruhiger an.
 sess.drops_advice	Die echte Framerate fiel in {percent} % der Sitzung um mehr als 20 %. Meist lädt das Spiel neue Bereiche oder es ist zu wenig RAM frei: Schließe andere Programme und senke die Texturqualität.
 sess.nr_off	Neuronales Rendering (NR) wurde während der Sitzung ausgeschaltet (über seine Taste im Spiel).
+measure.title	Messung
+measure.intro	Wie viel jedes Frames NR auf deiner Grafikkarte beansprucht. Das Messen kostet ein wenig, solange es an ist.
+measure.start	Dieses Spiel messen…
+measure.started	Messung eingeschaltet
+measure.waiting	Die Messung ist an. Starte das Spiel, spiele eine Minute und schließe es: Das Ergebnis erscheint hier.
+measure.still_on	Die Messung ist noch an und kostet ein wenig. Schalte sie aus, wenn du fertig bist.
+measure.stop	Messung ausschalten…
+measure.stopped	Messung ausgeschaltet
+measure.per_frame	NR pro Frame (Median)
+measure.share	Anteil am Frame
+measure.detail	Nur das Modell: {model} · NR-Durchgänge: {passes} · Stichproben: {samples}
+measure.cadence	Das Modell läuft in einem von {n} Frames: Diese Zeiten stammen aus den Frames, in denen es läuft, daher gibt es keinen Anteil am Frame.
 card.launch	Letzter Schritt: Steam-Startoption
 card.launch_heroic	Letzter Schritt: Umgebungsvariable in Heroic
 card.launch_lutris	Letzter Schritt: Lutris-Option

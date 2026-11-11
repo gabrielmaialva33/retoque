@@ -51,6 +51,8 @@ pub struct Summary {
     pub truncated_lines: usize,
     /// Frame rates and signals of the session this log covers (`session.rs`); None without status lines.
     pub pacing: Option<crate::session::Pacing>,
+    /// NR GPU time per frame from the confirmed timing samples (`measure.rs`); None without any.
+    pub nr_timing: Option<crate::measure::NrTiming>,
 }
 
 fn log_name(name: &str, stem: &str) -> bool {
@@ -224,11 +226,13 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
     let mut bytes = Vec::new();
     let mut mean = 0.0;
     let mut pacing = crate::session::PacingBuilder::default();
+    let mut timing = crate::measure::TimingBuilder::default();
     while let Some(truncated) = bounded_line(&mut reader, &mut bytes)? {
         result.truncated_lines += usize::from(truncated);
         let decoded = String::from_utf8_lossy(&bytes);
         let line = decoded.trim();
         pacing.observe(line);
+        timing.observe(line);
         for kind in signal_kinds(line) {
             if !result
                 .diagnostic_lines
@@ -353,6 +357,7 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
     }
     result.nr_gpu_ms = (result.timing_samples > 0).then_some(mean);
     result.pacing = pacing.finish();
+    result.nr_timing = timing.finish();
     Ok(result)
 }
 
@@ -666,6 +671,8 @@ mod tests {
         assert_eq!(s.warnings, 2);
         assert_eq!(s.nr_gpu_ms, Some(3.0));
         assert_eq!(s.timing_samples, 2);
+        // The measurement keeps the carried frame apart and the NaN out.
+        assert_eq!(s.nr_timing.as_ref().map(|t| (t.samples, t.carried)), Some((1, 1)));
         assert_eq!(s.coverage.as_ref().unwrap().calls, 9);
         assert_eq!(s.coverage.as_ref().unwrap().stage, "pre");
         assert!(s.nr_route.unwrap().contains("stage=pre"));
