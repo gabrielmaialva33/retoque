@@ -395,6 +395,23 @@ shell.games_one	Spiel
 shell.games_other	Spiele
 shell.updates_one	Update verfügbar
 shell.updates_other	Updates verfügbar
+update_all.open	Alle aktualisieren…
+update_all.title	Alle aktualisieren
+update_all.note	Prüfe jedes Spiel. Deine Einstellungen bleiben erhalten. Spiele werden nacheinander aktualisiert.
+update_all.confirm_one	{count} Spiel aktualisieren
+update_all.confirm	{count} Spiele aktualisieren
+update_all.ready	Retoque wird aktualisiert
+update_all.skipped	Übersprungen
+update_all.running	Spiel läuft. Schließe es und prüfe erneut.
+update_all.partial	Unvollständige Installation. Öffne das Spiel und schließe zuerst die Bereinigung ab.
+update_all.foreign	Nicht registrierte oder fremde Installation. Prüfe sie zuerst auf der Spielseite.
+update_all.unknown	Status unbekannt. Aktualisiere den Spielstatus und prüfe erneut.
+update_all.current	Bereits aktuell.
+update_all.refused	Aktualisierung abgelehnt. Öffne die Details und prüfe dieses Spiel einzeln.
+update_all.overlap	Ein anderer Eintrag aktualisiert diesen Ordner. Prüfe doppelte oder überlappende Ordner einzeln.
+update_all.busy	Eine andere Änderung läuft. Warte und prüfe erneut.
+update_all.progress	Spiele werden aktualisiert · {done} von {total} abgeschlossen
+update_all.done	Aktualisierung beendet: {updated} aktualisiert · {skipped} übersprungen · {failed} fehlgeschlagen
 shell.home_help	Füge einen Spielordner hinzu oder durchsuche deine Launcher, um zu beginnen.
 shell.reinstall	Neu installieren…
 shell.resume	Aufräumen abschließen…

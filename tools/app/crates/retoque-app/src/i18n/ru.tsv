@@ -397,6 +397,23 @@ shell.games_few	игры
 shell.games_many	игр
 shell.updates_one	обновление доступно
 shell.updates_other	обновлений доступно
+update_all.open	Обновить все…
+update_all.title	Обновить все
+update_all.note	Проверьте каждую игру. Текущие настройки сохраняются. Игры обновляются по очереди.
+update_all.confirm_one	Обновить {count} игру
+update_all.confirm	Обновить игры: {count}
+update_all.ready	Retoque будет обновлён
+update_all.skipped	Пропущено
+update_all.running	Игра запущена. Закройте её и проверьте снова.
+update_all.partial	Неполная установка. Откройте игру и сначала завершите очистку.
+update_all.foreign	Незарегистрированная или сторонняя установка. Сначала проверьте её на странице игры.
+update_all.unknown	Состояние неизвестно. Обновите состояние игры и проверьте снова.
+update_all.current	Уже обновлено.
+update_all.refused	Обновление отклонено. Откройте подробности и проверьте эту игру отдельно.
+update_all.overlap	Другая запись обновляет эту папку. Проверьте дублирующиеся или вложенные папки отдельно.
+update_all.busy	Выполняется другое изменение. Подождите и проверьте снова.
+update_all.progress	Обновление игр · завершено {done} из {total}
+update_all.done	Обновление завершено: обновлено {updated} · пропущено {skipped} · ошибок {failed}
 shell.updates_few	обновления доступны
 shell.updates_many	обновлений доступно
 shell.home_help	Чтобы начать, добавьте папку игры или найдите игры в своих лаунчерах.

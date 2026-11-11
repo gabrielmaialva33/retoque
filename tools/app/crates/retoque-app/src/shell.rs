@@ -492,6 +492,7 @@ impl RetoqueApp {
         let installed = self.library_state.derived.installed_count;
         let updates = self.library_state.derived.updates;
         ui.label(RichText::new(self.home_count_line(installed, updates)).color(theme::MUTED));
+        self.update_all_button(ui);
         if self.library_pending {
             ui.label(
                 RichText::new(self.tr("shell.library_checking"))

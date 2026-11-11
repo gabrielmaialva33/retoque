@@ -395,6 +395,23 @@ shell.games_one	jeu
 shell.games_other	jeux
 shell.updates_one	mise à jour disponible
 shell.updates_other	mises à jour disponibles
+update_all.open	Tout mettre à jour…
+update_all.title	Tout mettre à jour
+update_all.note	Vérifiez chaque jeu. Vos réglages actuels sont conservés. Les jeux sont mis à jour un par un.
+update_all.confirm_one	Mettre à jour {count} jeu
+update_all.confirm	Mettre à jour {count} jeux
+update_all.ready	Retoque sera mis à jour
+update_all.skipped	Ignoré
+update_all.running	Jeu en cours. Fermez-le et vérifiez à nouveau.
+update_all.partial	Installation incomplète. Ouvrez ce jeu pour terminer le nettoyage.
+update_all.foreign	Installation non enregistrée ou tierce. Vérifiez-la sur la page du jeu.
+update_all.unknown	État inconnu. Actualisez le jeu et vérifiez à nouveau.
+update_all.current	Déjà à jour.
+update_all.refused	Mise à jour refusée. Ouvrez les détails et vérifiez ce jeu séparément.
+update_all.overlap	Une autre entrée met à jour ce dossier. Vérifiez séparément les dossiers identiques ou imbriqués.
+update_all.busy	Une autre modification est en cours. Patientez et vérifiez à nouveau.
+update_all.progress	Mise à jour des jeux · {done} sur {total} terminés
+update_all.done	Mise à jour terminée : {updated} mis à jour · {skipped} ignorés · {failed} en échec
 shell.home_help	Ajoutez le dossier d'un jeu ou analysez vos lanceurs pour commencer.
 shell.reinstall	Réinstaller…
 shell.resume	Terminer le nettoyage…

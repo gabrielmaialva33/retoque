@@ -53,3 +53,7 @@ mod main_action_tests;
 pub(crate) mod payload_ui;
 
 pub(crate) mod reshade_ui;
+
+pub mod update_all;
+#[cfg(test)]
+mod update_all_tests;

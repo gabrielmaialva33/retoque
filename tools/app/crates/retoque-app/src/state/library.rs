@@ -10,6 +10,7 @@ use std::{
 #[derive(Default)]
 pub(crate) struct LibraryState {
     pub games: Vec<Game>,
+    pub update_all: crate::update_all::State,
     pub art: HashMap<String, Artwork>,
     pub status: HashMap<PathBuf, Status>,
     pub search: String,

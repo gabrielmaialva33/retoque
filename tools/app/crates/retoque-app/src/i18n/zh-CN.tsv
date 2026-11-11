@@ -395,6 +395,23 @@ shell.games_one	个游戏
 shell.games_other	个游戏
 shell.updates_one	个可用更新
 shell.updates_other	个可用更新
+update_all.open	全部更新…
+update_all.title	全部更新
+update_all.note	请检查每个游戏。保留当前设置，并逐个更新游戏。
+update_all.confirm_one	更新 {count} 个游戏
+update_all.confirm	更新 {count} 个游戏
+update_all.ready	将更新 Retoque
+update_all.skipped	已跳过
+update_all.running	游戏正在运行。请关闭游戏后重新检查。
+update_all.partial	安装不完整。请先打开游戏页面完成清理。
+update_all.foreign	未注册或第三方安装。请先在游戏页面检查。
+update_all.unknown	状态未知。请刷新游戏状态后重新检查。
+update_all.current	已是最新版本。
+update_all.refused	更新被拒绝。请打开详情并单独检查此游戏。
+update_all.overlap	其他条目将更新此文件夹。请单独检查重复或重叠的文件夹。
+update_all.busy	其他更改正在进行。请等待后重新检查。
+update_all.progress	正在更新游戏 · 已完成 {done}/{total}
+update_all.done	更新完成：已更新 {updated} · 已跳过 {skipped} · 失败 {failed}
 shell.home_help	添加游戏文件夹或扫描你的启动器即可开始。
 shell.reinstall	重新安装…
 shell.resume	完成清理…

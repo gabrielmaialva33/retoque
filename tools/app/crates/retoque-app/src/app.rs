@@ -313,6 +313,7 @@ impl RetoqueApp {
                 ui.advance_cursor_after_rect(rect);
             });
         self.review_sheet(ui.ctx());
+        self.update_all_modal(ui.ctx());
         self.folders_dialog(ui.ctx());
         self.show_toasts(ui.ctx());
         self.show_process_notice(ui.ctx());
