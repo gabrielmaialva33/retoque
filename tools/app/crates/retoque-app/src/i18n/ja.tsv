@@ -264,6 +264,33 @@ prefs.language	言語
 prefs.language_help	選択するとすぐにアプリの表示言語が変わります。
 prefs.language_draft	この翻訳は機械翻訳の下書きで、ネイティブスピーカーによる確認はまだ済んでいません。不自然な表現が含まれる場合があります。
 prefs.language_no_font	{languages}：このコンピューターには中国語・日本語・韓国語の文字を含むフォント（Noto Sans CJK など）がありません。フォントをインストールしてから Retoque を開き直してください。
+app_install.heading	Retoque アプリ
+app_install.install	このコンピューターに Retoque をインストール…
+app_install.install_title	このコンピューターに Retoque をインストール
+app_install.install_confirm	Retoque をインストール
+app_install.install_body	このプログラムフォルダーを作成し、以下のファイルをコピーします：
+app_install.files	ファイル（フォルダーを含む）
+app_install.shortcuts	スタートメニューとデスクトップにショートカットを作成：
+app_install.registration	このユーザーの Windows「アプリと機能」に Retoque を登録します。
+app_install.preserve	アプリのデータとゲーム内の Retoque は保持されます。
+app_install.installed	Retoque をインストールしました。再起動するとインストール済みのコピーを使用します。
+app_install.check	アプリの更新を確認…
+app_install.check_title	アプリの更新を確認
+app_install.check_body	GitHub の公式リリースで新しい Windows アプリを確認しますか？起動時にはダウンロードしません。
+app_install.available	アプリのバージョン {version} が利用可能です。
+app_install.update	アプリを更新…
+app_install.update_title	アプリを更新
+app_install.download_body	GitHub から新しいアプリと Retoque ファイルをダウンロードして検証します。インストール済みファイルの置換前に再起動を確認します。
+app_install.current	アプリは最新です。
+app_install.no_release	Windows アプリのリリースはまだ公開されていません。
+app_install.ready	アプリの更新をダウンロードして検証しました。準備ができたら再起動してください。
+app_install.restart_offer	アプリを再起動…
+app_install.restart_title	アプリを再起動
+app_install.restart_confirm	アプリを再起動
+app_install.restart_body	アプリを再起動し、インストール済みファイルを検証済みの更新に置き換えます。新しいコピーが起動するまで以前のアプリを保持します。
+app_install.busy	アプリのインストールを準備中
+app_install.uninstall_body	Retoque アプリ、プログラムフォルダー、ショートカット、「アプリと機能」の登録をアンインストールしますか？アプリのデータとゲーム内の Retoque は保持されます。
+app_install.failed	アプリをインストール、更新、またはアンインストールできませんでした。他の Retoque ウィンドウを閉じて再試行してください。詳細：
 prefs.data	アプリのデータ
 prefs.data_usage	このフォルダーで {size} 使用中
 prefs.data_measuring	フォルダーのサイズを計測しています…

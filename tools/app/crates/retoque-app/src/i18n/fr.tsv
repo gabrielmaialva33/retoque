@@ -264,6 +264,33 @@ prefs.language	Langue
 prefs.language_help	Le texte de l'app change dès que vous choisissez.
 prefs.language_draft	Cette traduction est un brouillon automatique qui n'a pas encore été relu par un locuteur natif. Certaines formulations peuvent sembler maladroites.
 prefs.language_no_font	{languages} : cet ordinateur n'a aucune police avec les caractères chinois, japonais et coréens (comme Noto Sans CJK). Installez-en une et rouvrez Retoque.
+app_install.heading	Application Retoque
+app_install.install	Installer Retoque sur cet ordinateur…
+app_install.install_title	Installer Retoque sur cet ordinateur
+app_install.install_confirm	Installer Retoque
+app_install.install_body	Créer ce dossier du programme et y copier les fichiers suivants :
+app_install.files	Fichiers (avec leurs dossiers)
+app_install.shortcuts	Créer des raccourcis dans le menu Démarrer et sur le bureau :
+app_install.registration	Inscrire Retoque dans Applications et fonctionnalités de Windows pour cet utilisateur.
+app_install.preserve	Les données de l’application et Retoque dans vos jeux sont conservés.
+app_install.installed	Retoque installé. Redémarrez pour utiliser la copie installée.
+app_install.check	Rechercher des mises à jour de l’application…
+app_install.check_title	Rechercher des mises à jour de l’application
+app_install.check_body	Consulter nos versions officielles sur GitHub pour rechercher une application Windows plus récente ? Rien n’est téléchargé au démarrage.
+app_install.available	La version {version} de l’application est disponible.
+app_install.update	Mettre à jour l’application…
+app_install.update_title	Mettre à jour l’application
+app_install.download_body	Télécharger et vérifier la nouvelle application et ses fichiers Retoque depuis GitHub. Vous validerez le redémarrage avant de remplacer les fichiers installés.
+app_install.current	L’application est à jour.
+app_install.no_release	Aucune version de l’application Windows n’a encore été publiée.
+app_install.ready	Mise à jour téléchargée et vérifiée. Redémarrez quand vous le souhaitez.
+app_install.restart_offer	Redémarrer l’application…
+app_install.restart_title	Redémarrer l’application
+app_install.restart_confirm	Redémarrer l’application
+app_install.restart_body	Redémarrer l’application pour remplacer ses fichiers installés par la mise à jour vérifiée. L’ancienne application est conservée jusqu’au démarrage de la nouvelle copie.
+app_install.busy	Préparation de l’installation de l’application
+app_install.uninstall_body	Désinstaller l’application Retoque, son dossier, ses raccourcis et son entrée dans Applications et fonctionnalités ? Les données de l’application et Retoque dans vos jeux seront conservés.
+app_install.failed	Impossible d’installer, de mettre à jour ou de désinstaller l’application. Fermez les autres fenêtres Retoque et réessayez. Détails :
 prefs.data	Données de l'app
 prefs.data_usage	{size} dans ce dossier
 prefs.data_measuring	Mesure du dossier…

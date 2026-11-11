@@ -264,6 +264,33 @@ prefs.language	Язык
 prefs.language_help	Текст приложения меняется сразу после выбора.
 prefs.language_draft	Этот перевод — машинный черновик, который ещё не проверил носитель языка. Некоторые формулировки могут быть неточными.
 prefs.language_no_font	{languages}: на этом компьютере нет шрифта с китайскими, японскими и корейскими символами (например, Noto Sans CJK). Установите такой шрифт и снова откройте Retoque.
+app_install.heading	Приложение Retoque
+app_install.install	Установить Retoque на этот компьютер…
+app_install.install_title	Установить Retoque на этот компьютер
+app_install.install_confirm	Установить Retoque
+app_install.install_body	Создать папку программы и скопировать в неё следующие файлы:
+app_install.files	Файлы (включая их папки)
+app_install.shortcuts	Создать ярлыки в меню «Пуск» и на рабочем столе:
+app_install.registration	Зарегистрировать Retoque в разделе приложений Windows для этого пользователя.
+app_install.preserve	Данные приложения и Retoque в играх сохранятся.
+app_install.installed	Retoque установлен. Перезапустите, чтобы использовать установленную копию.
+app_install.check	Проверить обновления приложения…
+app_install.check_title	Проверить обновления приложения
+app_install.check_body	Проверить наличие новой версии приложения Windows в официальных выпусках на GitHub? При запуске ничего не загружается.
+app_install.available	Доступна версия приложения {version}.
+app_install.update	Обновить приложение…
+app_install.update_title	Обновить приложение
+app_install.download_body	Загрузить и проверить новое приложение и файлы Retoque с GitHub. Перед заменой установленных файлов вы подтвердите перезапуск.
+app_install.current	Приложение обновлено.
+app_install.no_release	Выпуск приложения для Windows ещё не опубликован.
+app_install.ready	Обновление загружено и проверено. Перезапустите, когда будете готовы.
+app_install.restart_offer	Перезапустить приложение…
+app_install.restart_title	Перезапустить приложение
+app_install.restart_confirm	Перезапустить приложение
+app_install.restart_body	Перезапустить приложение, заменив его файлы проверенным обновлением. Предыдущая версия сохраняется до запуска новой копии.
+app_install.busy	Подготовка установки приложения
+app_install.uninstall_body	Удалить приложение Retoque, папку программы, ярлыки и запись в списке приложений? Данные приложения и Retoque в играх сохранятся.
+app_install.failed	Не удалось установить, обновить или удалить приложение. Закройте другие окна Retoque и повторите попытку. Подробности:
 prefs.data	Данные приложения
 prefs.data_usage	В этой папке: {size}
 prefs.data_measuring	Измеряем папку…

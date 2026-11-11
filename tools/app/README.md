@@ -32,6 +32,15 @@ The payload, the files that go into a game folder, is found beside the executabl
 the app runs from a checkout, in `RETOQUE_SOURCE_DIR`, in the folder chosen in the window, or downloaded after
 confirmation from our official GitHub releases (`gabrielmaialva33/retoque`).
 
+## Install or update the Windows app
+
+Windows Preferences offers **Install Retoque on this computer…** for a portable copy with its complete payload
+beside the executable. Review the files, per-user program folder, Start Menu/Desktop shortcuts and Apps & features
+entry before installing. The installed app offers an explicitly confirmed update check, verified download and
+restart to apply a newer official app release. Uninstall through Apps & features preserves app data and all games.
+Linux has no app installation/update controls. Packaging, recovery limits and Windows validation requirements:
+[Windows app installation and updates](../../docs/releases/APP-UPDATE.md).
+
 ## Rules the app keeps
 
 - Every write is a plan first: the window shows it, and nothing is written while the plan has a refusal.

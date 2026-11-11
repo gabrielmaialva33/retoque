@@ -57,3 +57,7 @@ pub(crate) mod reshade_ui;
 pub mod update_all;
 #[cfg(test)]
 mod update_all_tests;
+
+pub mod app_install;
+#[cfg(windows)]
+mod app_install_ui;

@@ -3350,6 +3350,8 @@ dependencies = [
  "sys-locale",
  "tempfile",
  "thiserror 2.0.21",
+ "windows",
+ "winreg",
 ]
 
 [[package]]

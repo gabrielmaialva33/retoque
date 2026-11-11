@@ -264,6 +264,33 @@ prefs.language	Idioma
 prefs.language_help	El texto de la app cambia en cuanto eliges.
 prefs.language_draft	Esta traducción es un borrador automático que todavía no ha revisado un hablante nativo. Algunas frases pueden sonar raras.
 prefs.language_no_font	{languages}: este equipo no tiene una fuente con caracteres chinos, japoneses y coreanos (como Noto Sans CJK). Instala una y vuelve a abrir Retoque.
+app_install.heading	Aplicación Retoque
+app_install.install	Instalar Retoque en este equipo…
+app_install.install_title	Instalar Retoque en este equipo
+app_install.install_confirm	Instalar Retoque
+app_install.install_body	Crear esta carpeta del programa y copiar en ella estos archivos:
+app_install.files	Archivos (incluidas sus carpetas)
+app_install.shortcuts	Crear accesos directos en Inicio y en el escritorio:
+app_install.registration	Registrar Retoque en Aplicaciones y características de Windows para este usuario.
+app_install.preserve	Se conservan los datos de la aplicación y Retoque en tus juegos.
+app_install.installed	Retoque instalado. Reinicia para usar la copia instalada.
+app_install.check	Buscar actualizaciones de la aplicación…
+app_install.check_title	Buscar actualizaciones de la aplicación
+app_install.check_body	¿Consultar nuestras versiones oficiales de GitHub para buscar una aplicación de Windows más reciente? No se descarga nada al iniciar.
+app_install.available	La versión {version} de la aplicación está disponible.
+app_install.update	Actualizar la aplicación…
+app_install.update_title	Actualizar la aplicación
+app_install.download_body	Descargar y verificar la nueva aplicación y sus archivos de Retoque desde GitHub. Revisarás el reinicio antes de reemplazar los archivos instalados.
+app_install.current	La aplicación está actualizada.
+app_install.no_release	Aún no se ha publicado una versión de la aplicación para Windows.
+app_install.ready	Actualización descargada y verificada. Reinicia cuando quieras.
+app_install.restart_offer	Reiniciar la aplicación…
+app_install.restart_title	Reiniciar la aplicación
+app_install.restart_confirm	Reiniciar la aplicación
+app_install.restart_body	Reiniciar la aplicación para reemplazar sus archivos instalados por la actualización verificada. La aplicación anterior se conserva hasta que se inicie la nueva copia.
+app_install.busy	Preparando la instalación de la aplicación
+app_install.uninstall_body	¿Desinstalar la aplicación Retoque, su carpeta, accesos directos y entrada en Aplicaciones y características? Se conservarán los datos de la aplicación y Retoque en tus juegos.
+app_install.failed	No se pudo instalar, actualizar o desinstalar la aplicación. Cierra otras ventanas de Retoque e inténtalo de nuevo. Detalles:
 prefs.data	Datos de la app
 prefs.data_usage	{size} en esta carpeta
 prefs.data_measuring	Midiendo la carpeta…

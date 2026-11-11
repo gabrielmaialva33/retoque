@@ -61,6 +61,8 @@ pub(crate) mod shell_tests {
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
             prefs: crate::prefs_ui::State::default(),
+            #[cfg(windows)]
+            app_installer: crate::app_install_ui::State::default(),
             payload_ui: crate::payload_ui::State::default(),
             nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,

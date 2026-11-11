@@ -27,3 +27,5 @@ pub mod sm86;
 pub mod dlss;
 mod fetch;
 pub mod reshade;
+
+pub mod app_release;
