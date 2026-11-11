@@ -3,6 +3,7 @@
 
 pub mod captures;
 pub mod logs;
+pub mod measure;
 pub mod models;
 pub mod session;
 pub mod settings;

@@ -341,6 +341,18 @@ sess.use_x3	Użyj x3…
 sess.use_x3_done	Teraz x3
 sess.drops_advice	Prawdziwa liczba klatek spadła o ponad 20% przez {percent}% sesji. Zwykle to gra wczytuje nowe obszary albo brakuje wolnej pamięci RAM: zamknij inne programy i obniż jakość tekstur.
 sess.nr_off	Renderowanie neuronowe zostało wyłączone w trakcie sesji (jego klawiszem w grze).
+measure.title	Pomiar
+measure.intro	Ile każdej klatki zajmuje NR na twojej karcie graficznej. Pomiar trochę kosztuje, dopóki jest włączony.
+measure.start	Zmierz tę grę…
+measure.started	Pomiar włączony
+measure.waiting	Pomiar jest włączony. Uruchom grę, graj przez minutę i zamknij ją: wynik pojawi się tutaj.
+measure.still_on	Pomiar jest nadal włączony i trochę kosztuje. Wyłącz go, gdy skończysz.
+measure.stop	Wyłącz pomiar…
+measure.stopped	Pomiar wyłączony
+measure.per_frame	NR na klatkę (mediana)
+measure.share	Udział w klatce
+measure.detail	Sam model: {model} · Przebiegi NR: {passes} · Próbki: {samples}
+measure.cadence	Model działa w jednej klatce na {n}: te czasy pochodzą z klatek, w których działa, więc nie ma udziału w klatce.
 card.launch	Ostatni krok: opcja uruchamiania w Steam
 card.launch_heroic	Ostatni krok: zmienna środowiskowa w Heroic
 card.launch_lutris	Ostatni krok: opcja w Lutris

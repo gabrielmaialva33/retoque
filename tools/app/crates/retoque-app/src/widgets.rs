@@ -331,10 +331,11 @@ pub fn chip(ui: &mut egui::Ui, text: &str, color: Color32) {
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text));
 }
 
-/// Tabs drawn as text with an accent underline under the current one. Returns the index clicked, if any.
+/// Tabs drawn as text with an accent underline under the current one. Returns the index clicked, if any. A strip
+/// wider than the page (German beside the game list at the window's minimum width) wraps onto a second line.
 pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize> {
     let mut clicked = None;
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 22.0;
         for (i, label) in labels.iter().enumerate() {
             let selected = i == current;

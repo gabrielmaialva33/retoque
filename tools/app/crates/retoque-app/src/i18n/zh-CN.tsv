@@ -341,6 +341,18 @@ sess.use_x3	使用 x3…
 sess.use_x3_done	已改用 x3
 sess.drops_advice	在 {percent}% 的会话时间里，真实帧率下降超过 20%。这通常是游戏在加载新区域或可用内存不足：请关闭其他程序并降低纹理质量。
 sess.nr_off	会话期间神经渲染（NR）被关闭了（通过游戏中的对应按键）。
+measure.title	测量
+measure.intro	NR 在你的显卡上占用每帧多少时间。测量开启期间会有少量开销。
+measure.start	测量这个游戏…
+measure.started	测量已开启
+measure.waiting	测量已开启。启动游戏，玩一分钟后关闭：结果会显示在这里。
+measure.still_on	测量仍处于开启状态，会有少量开销。完成后请关闭。
+measure.stop	关闭测量…
+measure.stopped	测量已关闭
+measure.per_frame	每帧 NR（中位数）
+measure.share	占帧比例
+measure.detail	仅模型：{model} · NR 处理次数：{passes} · 样本数：{samples}
+measure.cadence	模型每 {n} 帧运行一次：这些时间来自它运行的帧，因此不显示占帧比例。
 card.launch	最后一步：Steam 启动选项
 card.launch_heroic	最后一步：Heroic 中的环境变量
 card.launch_lutris	最后一步：Lutris 选项

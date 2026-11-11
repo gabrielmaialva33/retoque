@@ -104,6 +104,7 @@ impl RetoqueApp {
             return;
         }
         self.session_card(ui);
+        self.measure_card(ui);
         if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target) {
             ui.add_enabled_ui(!self.busy(), |ui| {
                 crate::tabs::doctor::show(ui, card, target, self.lang, &self.cmd_tx, self.payload.is_some())

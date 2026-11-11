@@ -341,6 +341,18 @@ sess.use_x3	Usar x3…
 sess.use_x3_done	Ahora con x3
 sess.drops_advice	Los fotogramas reales cayeron más de un 20% en el {percent}% de la sesión. Suele deberse a que el juego carga zonas nuevas o a poca RAM libre: cierra otros programas y baja la calidad de las texturas.
 sess.nr_off	El renderizado neuronal (NR) se desactivó durante la sesión (con su tecla en el juego).
+measure.title	Medición
+measure.intro	Cuánto de cada fotograma ocupa el NR en tu tarjeta gráfica. Medir cuesta un poco mientras está activado.
+measure.start	Medir este juego…
+measure.started	Medición activada
+measure.waiting	La medición está activada. Abre el juego, juega un minuto y ciérralo: el resultado aparece aquí.
+measure.still_on	La medición sigue activada y cuesta un poco. Desactívala cuando termines.
+measure.stop	Desactivar la medición…
+measure.stopped	Medición desactivada
+measure.per_frame	NR por fotograma (mediana)
+measure.share	Parte del fotograma
+measure.detail	Solo el modelo: {model} · Pasadas del NR: {passes} · Muestras: {samples}
+measure.cadence	El modelo se ejecuta en un fotograma de cada {n}: estos tiempos son de los fotogramas en que se ejecuta, por eso no hay parte del fotograma.
 card.launch	Último paso: opción de lanzamiento de Steam
 card.launch_heroic	Último paso: variable de entorno en Heroic
 card.launch_lutris	Último paso: opción de Lutris

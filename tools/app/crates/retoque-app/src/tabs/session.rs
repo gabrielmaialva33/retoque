@@ -6,7 +6,7 @@ use egui::{Color32, Sense, Stroke, pos2, vec2};
 use retoque_data::session::{self, Advice, Level, Pacing};
 
 /// Decimal with the language's separator (pt-BR writes 4,0).
-fn decimal(lang: Lang, value: f64, places: usize) -> String {
+pub(crate) fn decimal(lang: Lang, value: f64, places: usize) -> String {
     let text = format!("{value:.places$}");
     if lang.decimal_comma() {
         text.replace('.', ",")
