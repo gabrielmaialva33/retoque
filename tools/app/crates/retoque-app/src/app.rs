@@ -93,6 +93,9 @@ pub(crate) struct GameView {
     pub(crate) doctor: Option<crate::tabs::doctor::DoctorCard>,
     pub(crate) intelligence: crate::intelligence::ViewState,
     pub(crate) ini_values: crate::state::settings::IniValues,
+    /// The review opened from a "Last session" advice button (its request id), so it is titled, confirmed and
+    /// toasted with that button's verb.
+    pub(crate) session_fix: Option<(u64, crate::tabs::session::SessionFix)>,
 }
 
 pub struct RetoqueApp {

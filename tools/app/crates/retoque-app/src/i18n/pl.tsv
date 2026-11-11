@@ -307,6 +307,8 @@ sess.steady	Stabilna sesja: nic do zmiany.
 sess.fake_nvapi	Ten Retoque dał grze zastępcze NVAPI, więc generowanie klatek DLSS może zniknąć z menu gry. Zaktualizuj Retoque w tej grze.
 sess.low_base	Generowanie klatek mnożyło tylko {base} prawdziwych klatek na sekundę. Poniżej około 40 gra wydaje się ociężała i się zacina: wybierz w grze DLSS Zrównoważony lub Wydajność.
 sess.low_base_x4	Przy niskiej bazie x3 zamiast x4 też działa stabilniej.
+sess.use_x3	Użyj x3…
+sess.use_x3_done	Teraz x3
 sess.drops_advice	Prawdziwa liczba klatek spadła o ponad 20% przez {percent}% sesji. Zwykle to gra wczytuje nowe obszary albo brakuje wolnej pamięci RAM: zamknij inne programy i obniż jakość tekstur.
 sess.nr_off	Renderowanie neuronowe zostało wyłączone w trakcie sesji (jego klawiszem w grze).
 card.launch	Ostatni krok: opcja uruchamiania w Steam
@@ -431,6 +433,8 @@ set.advanced	Ustawienia zaawansowane
 set.model_link	Wybierz model NR w zakładce Komponenty
 set.custom	Własna wartość
 set.automatic	Automatycznie
+set.passes_cost	Koszt: {n}× czas GPU modelu i {n} instancji modelu w pamięci wideo.
+set.passes_ampere	Na karcie RTX 30 wyższe liczby mogą zostać odrzucone przez jej budżet pamięci wideo.
 tab.install_first	Zainstaluj Retoque, aby skonfigurować tę grę
 tab.review_install	Przejrzyj instalację…
 tab.loading	Odczytywanie ustawień gry…
@@ -926,6 +930,8 @@ setting.DlssNr.Stage	Etap NR
 setting.DlssNr.Stage.help	Przed skalerem to tryb eksperymentalny. W Vulkan zmiana wymaga ponownego uruchomienia gry. Jeśli wybrany etap jest niedostępny, NR nie przełącza się samo.
 setting.DlssNr.WorkingScale	Skala modelu
 setting.DlssNr.WorkingScale.help	Automatycznie: dobierana do twojej karty graficznej. Od 0.25 do 2.0; powyżej 1 model działa w wyższej rozdzielczości. Ścieżki bez prawdziwego ruchu pozostają na 1 lub niżej.
+setting.DlssNr.Passes	Przebiegi modelu
+setting.DlssNr.Passes.help	Ile razy model działa na każdej klatce; każdy przebieg poprawia poprzedni. Tylko D3D12; natywne gry Vulkan używają jednego. Automatycznie: 1.
 setting.DlssNr.ModelFile	Plik modelu
 setting.DlssNr.ModelFile.help	Automatycznie: szuka nvngx_dlssnr.dll obok gry. Jeśli wybranego pliku brakuje, NR się wyłącza. Po zmianie uruchom grę ponownie.
 setting.DlssNr.GameProfiles	Profile gier

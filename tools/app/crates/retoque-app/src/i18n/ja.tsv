@@ -307,6 +307,8 @@ sess.steady	安定したセッションです。変更は不要です。
 sess.fake_nvapi	この Retoque はゲームに代替の NVAPI を渡していたため、ゲームのメニューから DLSS フレーム生成が消えることがあります。このゲームの Retoque を更新してください。
 sess.low_base	フレーム生成が倍増させた実フレームは、1 秒あたり {base} だけでした。およそ 40 を下回ると重く、カクつきます。ゲーム内で DLSS のバランスまたはパフォーマンスを選んでください。
 sess.low_base_x4	ベースが低い場合は、x4 より x3 のほうが安定します。
+sess.use_x3	x3 を使う…
+sess.use_x3_done	x3 を使用中
 sess.drops_advice	セッションの {percent}% で、実フレームレートが 20% 以上落ち込みました。多くの場合、ゲームが新しいエリアを読み込んでいるか、空きメモリが不足しています。ほかのプログラムを閉じ、テクスチャ品質を下げてください。
 sess.nr_off	セッション中にニューラルレンダリング (NR) がオフにされました（ゲーム内のキー操作による）。
 card.launch	最後のステップ：Steam の起動オプション
@@ -427,6 +429,8 @@ set.advanced	詳細設定
 set.model_link	NR モデルはコンポーネントで選択
 set.custom	カスタム値
 set.automatic	自動
+set.passes_cost	コスト: モデルの GPU 時間の {n} 倍、ビデオメモリ上のモデルインスタンス {n} 個。
+set.passes_ampere	RTX 30 カードでは、パス数を増やすとビデオメモリの予算により拒否されることがあります。
 tab.install_first	このゲームを設定するには Retoque をインストールしてください
 tab.review_install	インストールを確認…
 tab.loading	ゲームの設定を読み込んでいます…
@@ -918,6 +922,8 @@ setting.DlssNr.Stage	NR の段階
 setting.DlssNr.Stage.help	アップスケーラーの前は実験的です。Vulkan では変更にゲームの再起動が必要です。選択した段階が利用できない場合でも、NR が自動で切り替わることはありません。
 setting.DlssNr.WorkingScale	モデルのスケール
 setting.DlssNr.WorkingScale.help	自動：お使いの GPU に合わせて選択。0.25 から 2.0 まで。1 を超えるとモデルはより高い解像度で処理します。実際のモーションがない経路では 1 以下のままです。
+setting.DlssNr.Passes	モデルのパス数
+setting.DlssNr.Passes.help	各フレームでモデルを何回実行するか。各パスは前のパスの結果を磨きます。D3D12 のみ。ネイティブ Vulkan のゲームでは 1 回です。自動：1。
 setting.DlssNr.ModelFile	モデルファイル
 setting.DlssNr.ModelFile.help	自動：ゲームと同じフォルダーで nvngx_dlssnr.dll を探します。選択したファイルがない場合、NR はオフになります。変更後はゲームを再起動してください。
 setting.DlssNr.GameProfiles	ゲームプロファイル

@@ -307,6 +307,8 @@ sess.steady	会话表现稳定：无需更改。
 sess.fake_nvapi	此版本的 Retoque 向游戏提供了替代的 NVAPI，因此 DLSS 帧生成可能会从游戏菜单中消失。请在此游戏中更新 Retoque。
 sess.low_base	帧生成仅倍增了每秒 {base} 个真实帧。低于约 40 时会感觉迟滞和卡顿：请在游戏中选择 DLSS“平衡”或“性能”。
 sess.low_base_x4	基础帧率较低时，用 x3 代替 x4 也会更流畅。
+sess.use_x3	使用 x3…
+sess.use_x3_done	已改用 x3
 sess.drops_advice	在 {percent}% 的会话时间里，真实帧率下降超过 20%。这通常是游戏在加载新区域或可用内存不足：请关闭其他程序并降低纹理质量。
 sess.nr_off	会话期间神经渲染（NR）被关闭了（通过游戏中的对应按键）。
 card.launch	最后一步：Steam 启动选项
@@ -427,6 +429,8 @@ set.advanced	高级设置
 set.model_link	在“组件”中选择 NR 模型
 set.custom	自定义值
 set.automatic	自动
+set.passes_cost	开销：模型 GPU 时间的 {n} 倍，显存中 {n} 个模型实例。
+set.passes_ampere	在 RTX 30 显卡上，较高的遍数可能因显存预算不足而被拒绝。
 tab.install_first	安装 Retoque 以设置此游戏
 tab.review_install	审阅安装…
 tab.loading	正在读取游戏设置…
@@ -918,6 +922,8 @@ setting.DlssNr.Stage	NR 阶段
 setting.DlssNr.Stage.help	“超分辨率之前”为实验性功能。在 Vulkan 上更改后需重新启动游戏。如果所选阶段不可用，NR 不会自行切换。
 setting.DlssNr.WorkingScale	模型缩放
 setting.DlssNr.WorkingScale.help	自动：根据你的显卡选择。范围 0.25 到 2.0；大于 1 时模型以更高分辨率工作。没有真实运动信息的路径保持在 1 或以下。
+setting.DlssNr.Passes	模型遍数
+setting.DlssNr.Passes.help	每帧运行模型的次数，每一遍都在上一遍的基础上细化。仅限 D3D12；原生 Vulkan 游戏只用一遍。自动：1。
 setting.DlssNr.ModelFile	模型文件
 setting.DlssNr.ModelFile.help	自动：在游戏旁边查找 nvngx_dlssnr.dll。如果所选文件不存在，NR 会关闭。更改后请重新启动游戏。
 setting.DlssNr.GameProfiles	游戏配置文件

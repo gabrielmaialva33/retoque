@@ -307,6 +307,8 @@ sess.steady	Session stable : rien à modifier.
 sess.fake_nvapi	Ce Retoque a fourni au jeu un NVAPI de substitution, la génération d'images DLSS peut donc disparaître du menu du jeu. Mettez à jour Retoque dans ce jeu.
 sess.low_base	La génération d'images n'a multiplié que {base} images réelles par seconde. En dessous d'environ 40, elle paraît lourde et saccade : choisissez DLSS Équilibré ou Performance dans le jeu.
 sess.low_base_x4	x3 au lieu de x4 est aussi plus stable avec une base faible.
+sess.use_x3	Utiliser x3…
+sess.use_x3_done	x3 utilisé
 sess.drops_advice	Les images réelles ont chuté de plus de 20 % pendant {percent} % de la session. C'est généralement le jeu qui charge de nouvelles zones ou un manque de RAM libre : fermez d'autres programmes et baissez la qualité des textures.
 sess.nr_off	Le rendu neuronal (NR) a été désactivé pendant la session (avec sa touche dans le jeu).
 card.launch	Dernière étape : option de lancement Steam
@@ -427,6 +429,8 @@ set.advanced	Réglages avancés
 set.model_link	Choisir le modèle NR dans Composants
 set.custom	Valeur personnalisée
 set.automatic	Automatique
+set.passes_cost	Coût : {n}× le temps GPU du modèle et {n} instances du modèle en mémoire vidéo.
+set.passes_ampere	Sur une carte RTX 30, son budget de mémoire vidéo peut refuser les nombres plus élevés.
 tab.install_first	Installez Retoque pour configurer ce jeu
 tab.review_install	Vérifier l'installation…
 tab.loading	Lecture des réglages du jeu…
@@ -918,6 +922,8 @@ setting.DlssNr.Stage	Étape du NR
 setting.DlssNr.Stage.help	Avant l'upscaler est expérimental. Sous Vulkan, un changement nécessite de redémarrer le jeu. Si l'étape choisie n'est pas disponible, le NR ne bascule pas de lui-même.
 setting.DlssNr.WorkingScale	Échelle du modèle
 setting.DlssNr.WorkingScale.help	Automatique : choisie selon votre carte graphique. De 0,25 à 2,0 ; au-dessus de 1, le modèle travaille à une résolution plus élevée. Les routes sans mouvement réel restent à 1 ou moins.
+setting.DlssNr.Passes	Passes du modèle
+setting.DlssNr.Passes.help	Combien de fois le modèle s'exécute sur chaque image, chaque passe affinant la précédente. D3D12 uniquement ; les jeux Vulkan natifs en utilisent une. Automatique : 1.
 setting.DlssNr.ModelFile	Fichier du modèle
 setting.DlssNr.ModelFile.help	Automatique : cherche nvngx_dlssnr.dll à côté du jeu. Si le fichier choisi est absent, le NR se désactive. Redémarrez le jeu après l'avoir changé.
 setting.DlssNr.GameProfiles	Profils de jeux

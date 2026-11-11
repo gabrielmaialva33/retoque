@@ -10,6 +10,8 @@ pub(crate) enum AppCommand {
     PrepareRepair(std::path::PathBuf, retoque_data::doctor::Repair),
     RefreshSelected,
     RequestPlan(std::path::PathBuf, PlanKind, PlanInputs),
+    /// A "Last session" advice button: review its one settings change for this folder.
+    SessionFix(std::path::PathBuf, crate::tabs::session::SessionFix),
     RescanLibrary,
     ConfirmReview(u64),
     CancelReview,

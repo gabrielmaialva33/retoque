@@ -307,6 +307,8 @@ sess.steady	Stabile Sitzung: Nichts zu ändern.
 sess.fake_nvapi	Dieses Retoque hat dem Spiel ein Ersatz-NVAPI gegeben, daher kann die DLSS-Frame-Generierung aus dem Spielmenü verschwinden. Aktualisiere Retoque in diesem Spiel.
 sess.low_base	Die Frame-Generierung hat nur {base} echte Frames pro Sekunde vervielfacht. Unter etwa 40 fühlt es sich träge an und ruckelt: Wähle im Spiel DLSS Ausgewogen oder Leistung.
 sess.low_base_x4	x3 statt x4 fühlt sich bei niedriger Basis ebenfalls ruhiger an.
+sess.use_x3	x3 verwenden…
+sess.use_x3_done	Jetzt mit x3
 sess.drops_advice	Die echte Framerate fiel in {percent} % der Sitzung um mehr als 20 %. Meist lädt das Spiel neue Bereiche oder es ist zu wenig RAM frei: Schließe andere Programme und senke die Texturqualität.
 sess.nr_off	Neuronales Rendering (NR) wurde während der Sitzung ausgeschaltet (über seine Taste im Spiel).
 card.launch	Letzter Schritt: Steam-Startoption
@@ -427,6 +429,8 @@ set.advanced	Erweiterte Einstellungen
 set.model_link	NR-Modell unter Komponenten wählen
 set.custom	Eigener Wert
 set.automatic	Automatisch
+set.passes_cost	Kosten: {n}× die GPU-Zeit des Modells und {n} Modellinstanzen im Videospeicher.
+set.passes_ampere	Auf einer RTX-30-Karte kann ihr Videospeicherbudget höhere Anzahlen ablehnen.
 tab.install_first	Installiere Retoque, um dieses Spiel einzurichten
 tab.review_install	Installation prüfen…
 tab.loading	Einstellungen des Spiels werden gelesen…
@@ -918,6 +922,8 @@ setting.DlssNr.Stage	NR-Stufe
 setting.DlssNr.Stage.help	„Vor dem Upscaler“ ist experimentell. Unter Vulkan braucht eine Änderung einen Neustart des Spiels. Ist die gewählte Stufe nicht verfügbar, wechselt NR nicht von selbst.
 setting.DlssNr.WorkingScale	Modellskalierung
 setting.DlssNr.WorkingScale.help	Automatisch: passend zu deiner Grafikkarte gewählt. Von 0,25 bis 2,0; über 1 arbeitet das Modell mit höherer Auflösung. Routen ohne echte Bewegung bleiben bei 1 oder darunter.
+setting.DlssNr.Passes	Modell-Passes
+setting.DlssNr.Passes.help	Wie oft das Modell pro Frame läuft; jeder Pass verfeinert den vorherigen. Nur D3D12; native Vulkan-Spiele nutzen einen. Automatisch: 1.
 setting.DlssNr.ModelFile	Modelldatei
 setting.DlssNr.ModelFile.help	Automatisch: sucht nvngx_dlssnr.dll neben dem Spiel. Fehlt die gewählte Datei, schaltet sich NR aus. Starte das Spiel nach einer Änderung neu.
 setting.DlssNr.GameProfiles	Spielprofile
