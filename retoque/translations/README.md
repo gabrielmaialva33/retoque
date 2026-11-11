@@ -18,7 +18,11 @@ The menu only loads a file named `OptiScaler.lang` directly beside the OptiScale
 does not search this directory, inspect the system locale, or offer a language switch. Without that file,
 every lookup returns the original English string. Unknown entries also stay in English.
 
-To prepare activation, copy one `optional/<locale>.lang` to `OptiScaler.lang` beside the DLL in an
+The desktop app activates one for the user: Preferences › “In-game menu language” (default: the app's own language)
+is installed with Retoque, updates and Optimize as `OptiScaler.lang`, recorded in the install's receipt, and removed
+again by uninstall or by choosing English; a file the user put there is never replaced (tools/app/README.md).
+
+By hand, to prepare activation, copy one `optional/<locale>.lang` to `OptiScaler.lang` beside the DLL in an
 **isolated staging directory**. This instruction does not install anything into a game.
 Only deploy that staged selection as part of an explicitly authorized game test. Restart the
 application after changing or removing the active dictionary. Remove/rename `OptiScaler.lang`

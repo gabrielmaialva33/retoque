@@ -202,6 +202,7 @@ st.nr_on	NR activé
 st.nr_off	NR désactivé
 inst.proxy	Nom du fichier de chargement
 inst.proxy_help	Ne changez que si le jeu ne démarre pas avec la valeur par défaut.
+inst.menu_language	Langue du menu en jeu
 inst.enable_nr	Activer le rendu neuronal (NR)
 inst.keep_reshade	Conserver ReShade (chargé par OptiScaler)
 inst.replace_foreign	Remplacer un fichier qui n'est pas à nous (une copie est conservée)
@@ -257,6 +258,8 @@ prefs.open	Préférences…
 prefs.title	Préférences
 prefs.installs	Nouvelles installations
 prefs.installs_help	Le point de départ d'un jeu sans Retoque. Un jeu qui l'a déjà conserve ses propres choix.
+prefs.menu_lang_same	Comme l'application ({language})
+prefs.menu_lang_help	S'applique à chaque jeu lors de la prochaine installation, mise à jour ou optimisation. Un fichier de langue à vous reste tel quel. Les traductions sont des brouillons faits par machine.
 prefs.language	Langue
 prefs.language_help	Le texte de l'app change dès que vous choisissez.
 prefs.language_draft	Cette traduction est un brouillon automatique qui n'a pas encore été relu par un locuteur natif. Certaines formulations peuvent sembler maladroites.

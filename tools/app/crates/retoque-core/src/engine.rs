@@ -533,6 +533,66 @@ impl Installer<'_> {
         }
         Ok(())
     }
+    /// The in-game menu's language file. Ours (written by an install, per the receipt) is replaced or removed; one the
+    /// user put there is left as it is, with a note, never refused: the install does not depend on it.
+    fn menu_language(&mut self) -> Result<(), Error> {
+        let rel = MENU_LANG_NAME;
+        let want = match &self.options.menu_language {
+            MenuLanguage::Keep => return Ok(()),
+            MenuLanguage::English => None,
+            MenuLanguage::Pack(code) => {
+                if !MENU_PACKS.contains(&code.as_str()) {
+                    self.plan.notes.push(format!(
+                        "menu language {code}: not one of Retoque's packs; the menu is left as it is"
+                    ));
+                    return Ok(());
+                }
+                let name = format!("translations/optional/{code}.lang");
+                let src = [self.options.source_dir.join(&name)]
+                    .into_iter()
+                    .chain(repository().map(|repo| repo.join("retoque").join(&name)))
+                    .find(|p| p.is_file() && !linked(p));
+                match src {
+                    Some(src) => Some(src),
+                    None => {
+                        self.plan.notes.push(format!(
+                            "menu language {code}: the pack is not in Retoque's files; the menu is left as it is"
+                        ));
+                        return Ok(());
+                    }
+                }
+            }
+        };
+        check_parents(&self.plan.game_dir, rel)?;
+        if !cfg!(windows)
+            && let Some(hit) = variants(&self.plan.game_dir, rel).iter().find(|n| n.as_str() != rel)
+        {
+            self.plan.notes.push(format!(
+                "{hit} is already here and is not Retoque's; the menu language is left as it is"
+            ));
+            return Ok(());
+        }
+        let target = self.plan.game_dir.join(rel);
+        let present = exists(&target);
+        let ours = present && regular(&target) && !linked(&target) && owned(&self.receipt, rel, &sha_or_dash(&target));
+        if present && !ours {
+            // A note, not a Keep step: an install's Keep records the file as Retoque's, and uninstall would remove it.
+            self.plan
+                .notes
+                .push(format!("{rel} is not Retoque's; the menu language is left as it is"));
+            return Ok(());
+        }
+        match want {
+            Some(src) if present && hash(&src)? == sha_or_dash(&target) => self.plan.steps.push(Step::Keep {
+                path: rel.into(),
+                why: "already this menu language, left as it is".into(),
+            }),
+            Some(src) => self.copy(&src, rel),
+            None if present => self.plan.steps.push(Step::Remove { path: rel.into() }),
+            None => {}
+        }
+        Ok(())
+    }
     fn support(&mut self) -> Result<(), Error> {
         let root = self.options.source_dir.join("OptiScaler");
         let mut files = Vec::new();
@@ -681,6 +741,7 @@ pub(crate) fn plan_install(options: &InstallOptions) -> Result<Plan, Error> {
     }
     installer.ini()?;
     installer.support()?;
+    installer.menu_language()?;
     #[cfg(target_os = "linux")]
     if options.copy_nvngx {
         let candidates: Vec<PathBuf> = match std::env::var_os("RETOQUE_DEPLOY_TEST_NVNGX").filter(|s| !s.is_empty()) {

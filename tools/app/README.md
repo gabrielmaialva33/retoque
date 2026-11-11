@@ -234,7 +234,11 @@ sm86, ReShade or their caches put there, never follows links, keeps every other 
 its folder, refuses a folder with an executable, and refuses a folder that changed since the review.
 
 “Preferences…” in the top bar holds what a game without Retoque starts from (NR on, keep ReShade, the loader file
-name, and on Linux the driver's `_nvngx.dll`); a game that already has Retoque keeps its own. It also shows how much
+name, and on Linux the driver's `_nvngx.dll`); a game that already has Retoque keeps its own. “In-game menu language”
+(default: the app's own) applies to every game: each install, update and Optimize passes it to the engine as
+`InstallOptions::menu_language`, which copies `translations/optional/<code>.lang` beside OptiScaler as
+`OptiScaler.lang` (recorded in the receipt, so uninstall removes it), replaces or removes the one an install put there,
+and leaves a file of the user's own alone with a note. The CLI and the scripts keep the file as it is. It also shows how much
 the app's data folder takes. At startup `retoque_data::app_data` clears staging an interrupted import, download or
 unpack left there (`.import-…`, `.download-…`, `.unpack-…`, `.prepare-…`, `*.json.tmp`) once it is a day old, in the
 data folder and the folders directly inside it only, never following a link; catalogs, models and settings are never

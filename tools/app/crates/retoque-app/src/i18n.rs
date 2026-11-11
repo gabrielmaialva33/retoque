@@ -888,6 +888,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Change only if the game does not start with the default.",
         "Mude só se o jogo não abrir com o padrão.",
     ),
+    ("inst.menu_language", "In-game menu language", "Idioma do menu no jogo"),
     (
         "inst.enable_nr",
         "Turn Neural Rendering (NR) on",
@@ -1038,6 +1039,16 @@ const TEXT: &[(&str, &str, &str)] = &[
         "prefs.installs_help",
         "Where a game without Retoque starts. A game that already has it keeps its own choices.",
         "O ponto de partida para um jogo sem Retoque. Um jogo que já tem o Retoque mantém as escolhas dele.",
+    ),
+    (
+        "prefs.menu_lang_same",
+        "Same as the app ({language})",
+        "O mesmo do app ({language})",
+    ),
+    (
+        "prefs.menu_lang_help",
+        "Applies to every game at its next install, update or Optimize. A language file of your own is left as it is. The translations are machine-made drafts.",
+        "Vale para cada jogo na próxima instalação, atualização ou otimização. Um arquivo de idioma seu fica como está. As traduções são rascunhos feitos por máquina.",
     ),
     ("prefs.language", "Language", "Idioma"),
     (

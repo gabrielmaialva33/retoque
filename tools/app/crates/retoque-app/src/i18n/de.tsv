@@ -202,6 +202,7 @@ st.nr_on	NR an
 st.nr_off	NR aus
 inst.proxy	Name der Ladedatei
 inst.proxy_help	Nur ändern, wenn das Spiel mit dem Standardnamen nicht startet.
+inst.menu_language	Sprache des Menüs im Spiel
 inst.enable_nr	Neuronales Rendering (NR) einschalten
 inst.keep_reshade	ReShade behalten (über OptiScaler laden)
 inst.replace_foreign	Fremde Datei ersetzen (bleibt als Sicherungskopie)
@@ -257,6 +258,8 @@ prefs.open	Voreinstellungen…
 prefs.title	Voreinstellungen
 prefs.installs	Neue Installationen
 prefs.installs_help	Der Ausgangspunkt für ein Spiel ohne Retoque. Ein Spiel, das Retoque schon hat, behält seine eigenen Entscheidungen.
+prefs.menu_lang_same	Wie die App ({language})
+prefs.menu_lang_help	Gilt für jedes Spiel bei der nächsten Installation, Aktualisierung oder Optimierung. Eine eigene Sprachdatei bleibt unverändert. Die Übersetzungen sind maschinell erstellte Entwürfe.
 prefs.language	Sprache
 prefs.language_help	Der Text der App ändert sich, sobald du wählst.
 prefs.language_draft	Diese Übersetzung ist ein maschineller Entwurf, den noch kein Muttersprachler geprüft hat. Manche Formulierungen können holprig sein.

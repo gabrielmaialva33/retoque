@@ -202,6 +202,7 @@ st.nr_on	NR オン
 st.nr_off	NR オフ
 inst.proxy	ローダーファイル名
 inst.proxy_help	既定の名前でゲームが起動しない場合にのみ変更してください。
+inst.menu_language	ゲーム内メニューの言語
 inst.enable_nr	ニューラルレンダリング (NR) をオンにする
 inst.keep_reshade	ReShade を保持（OptiScaler 経由で読み込む）
 inst.replace_foreign	Retoque のものではないファイルを置き換える（バックアップとして保持）
@@ -257,6 +258,8 @@ prefs.open	環境設定…
 prefs.title	環境設定
 prefs.installs	新規インストール
 prefs.installs_help	Retoque のないゲームの初期状態です。すでに Retoque があるゲームは、それぞれの選択を保持します。
+prefs.menu_lang_same	アプリと同じ ({language})
+prefs.menu_lang_help	各ゲームの次回のインストール、更新、または最適化で適用されます。ご自身の言語ファイルはそのまま残ります。翻訳は機械による草稿です。
 prefs.language	言語
 prefs.language_help	選択するとすぐにアプリの表示言語が変わります。
 prefs.language_draft	この翻訳は機械翻訳の下書きで、ネイティブスピーカーによる確認はまだ済んでいません。不自然な表現が含まれる場合があります。
