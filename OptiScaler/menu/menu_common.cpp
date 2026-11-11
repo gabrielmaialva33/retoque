@@ -5111,8 +5111,13 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
         const bool dlssgInputOrOutput =
             state.activeFgOutput == FGOutput::DLSSG || state.activeFgInput == FGInput::DLSSG;
 
+        // The ratio combo and the DMFG checkbox share a line. With SameLine when the combo is not drawn, the checkbox
+        // followed the FG selection table past the column edge, clipped out of sight (found by ShyVortex, 86054259)
+        const bool ratioComboShown =
+            state.dlssgMfgMax.has_value() && state.dlssgMfgMax.value() >= 1 && !dlssgInputOrOutput;
+
         ImGui::BeginDisabled(state.dlssgGameDMFGSupported && config->FGDLSSGOverrideForceDMFG.value_or_default());
-        if (state.dlssgMfgMax.has_value() && state.dlssgMfgMax.value() >= 1 && !dlssgInputOrOutput)
+        if (ratioComboShown)
         {
             ImGui::PushItemWidth(150.0f * menuResScale);
 
@@ -5134,7 +5139,8 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
         if (state.dlssgGameDMFGSupported && !dlssgInputOrOutput)
         {
-            ImGui::SameLine(0.0f, 16.0f);
+            if (ratioComboShown)
+                ImGui::SameLine(0.0f, 16.0f);
 
             if (bool dynamicMFG = config->FGDLSSGOverrideForceDMFG.value_or_default();
                 ImGui::Checkbox("Force Dynamic MFG", &dynamicMFG))
