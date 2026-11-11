@@ -230,6 +230,40 @@ mod tests {
             },
         )
     }
+    /// A real install of a synthetic payload, so the game's status agrees with the facts a test sets: a status read
+    /// that lands mid-test (the model download refreshes it) must not turn "Optimize" into "Install and optimize".
+    fn install_retoque(root: &Path, game: &Path) {
+        let payload = root.join("payload");
+        fs::create_dir_all(&payload).unwrap();
+        fs::write(payload.join("OptiScaler.dll"), b"MZ OptiScaler working as %s").unwrap();
+        fs::write(payload.join(retoque_core::FORWARDER_NAME), b"MZ dlssnr_call_create").unwrap();
+        fs::write(payload.join(retoque_core::INI_NAME), b"[DlssNr]\nEnabled=true\n").unwrap();
+        let options = InstallOptions {
+            game_dir: game.to_owned(),
+            source_dir: payload,
+            copy_nvngx: false,
+            ..Default::default()
+        };
+        let plan = retoque_core::plan_install(&options).unwrap().into_verified().unwrap();
+        retoque_core::apply(&plan, &mut |_| {}).unwrap();
+    }
+    /// Every file under the install's state folder, with its bytes.
+    fn state_files(game: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut dirs = vec![game.join(retoque_core::STATE_DIR)];
+        while let Some(dir) = dirs.pop() {
+            for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                } else {
+                    out.push((path.clone(), fs::read(&path).unwrap()));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
     fn component(root: &Path) -> components::Component {
         let source = root.join("source");
         for file in [
@@ -370,6 +404,8 @@ mod tests {
             let component = component(temp.path());
             let game = temp.path().join("game");
             fs::create_dir(&game).unwrap();
+            install_retoque(temp.path(), &game);
+            let state_before = state_files(&game);
             let before = b"[LSFG]\nEnabled=true\n[DlssNr]\nModelFile=old.dll\n";
             fs::write(game.join("OptiScaler.ini"), before).unwrap();
             let mut app = crate::app_tests::shell_tests::app();
@@ -432,7 +468,11 @@ mod tests {
             );
             assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), before);
             assert!(!game.join("version.dll").exists());
-            assert!(!game.join(".retoque").exists());
+            assert_eq!(
+                state_files(&game),
+                state_before,
+                "a review writes nothing to the install's state"
+            );
         }
     }
     #[test]
@@ -464,6 +504,7 @@ mod tests {
             let component = component(temp.path());
             let game = temp.path().join("game");
             fs::create_dir(&game).unwrap();
+            install_retoque(temp.path(), &game);
             let before = b"[LSFG]\nEnabled=true\n[DlssNr]\nEnabled=true\nModelFile=auto\n";
             fs::write(game.join("OptiScaler.ini"), before).unwrap();
             let (entry, fetcher) = synthetic_model_fixture_for_optimize();
