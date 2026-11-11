@@ -395,6 +395,23 @@ shell.games_one	juego
 shell.games_other	juegos
 shell.updates_one	actualización disponible
 shell.updates_other	actualizaciones disponibles
+update_all.open	Actualizar todos…
+update_all.title	Actualizar todos
+update_all.note	Revisa cada juego. Se conservan tus ajustes actuales. Los juegos se actualizan uno por uno.
+update_all.confirm_one	Actualizar {count} juego
+update_all.confirm	Actualizar {count} juegos
+update_all.ready	Se actualizará Retoque
+update_all.skipped	Omitido
+update_all.running	Juego en ejecución. Ciérralo y vuelve a revisar.
+update_all.partial	Instalación incompleta. Abre este juego para terminar la limpieza primero.
+update_all.foreign	Instalación no registrada o de terceros. Revísala primero en la página del juego.
+update_all.unknown	Estado desconocido. Actualiza el estado del juego y vuelve a revisar.
+update_all.current	Ya está actualizado.
+update_all.refused	Actualización rechazada. Abre los detalles y revisa este juego por separado.
+update_all.overlap	Otra entrada actualiza esta carpeta. Revisa las carpetas duplicadas o superpuestas por separado.
+update_all.busy	Hay otro cambio en curso. Espera y vuelve a revisar.
+update_all.progress	Actualizando juegos · {done} de {total} completados
+update_all.done	Actualización finalizada: {updated} actualizados · {skipped} omitidos · {failed} fallidos
 shell.home_help	Agrega la carpeta de un juego o busca los juegos de tus lanzadores para empezar.
 shell.reinstall	Reinstalar…
 shell.resume	Terminar la limpieza…

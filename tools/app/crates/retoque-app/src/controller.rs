@@ -181,6 +181,7 @@ impl RetoqueApp {
             let current = self.view.target.clone();
             let ours = |t: &Path| current.as_deref() == Some(t);
             match outcome {
+                Outcome::UpdateAll(event) => self.update_all_event(event),
                 Outcome::DropClassified { request, paths } => self.intuitive.drop.receive(request, paths),
                 Outcome::HistoryWritten(Err(error)) => {
                     self.toast(self.tr("undo.save_failed").into(), Some(error), true)
@@ -463,6 +464,7 @@ impl RetoqueApp {
                     // Every job that arms a busy flag must release it here too: a worker that could not start or
                     // stopped unexpectedly never sends its own completion, and the spinner would stay for good.
                     match job {
+                        "update-all-plan" | "update-all-apply" => self.update_all_failed(job, message.clone().into()),
                         "autotune-plan" | "plan" => self.review = Some(Err(message.clone().into())),
                         "payload-fetch" => self.payload_ui.busy = false,
                         "nr-model-fetch" => {
@@ -515,6 +517,9 @@ impl RetoqueApp {
     }
 
     pub(crate) fn shell_shortcuts(&mut self, ctx: &egui::Context) {
+        if self.library_state.update_all.open {
+            return;
+        }
         if self.intuitive_shortcuts(ctx) {
             return;
         }

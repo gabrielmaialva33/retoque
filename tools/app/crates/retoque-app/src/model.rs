@@ -24,6 +24,7 @@ pub enum PlanKind {
 }
 
 pub enum Outcome {
+    UpdateAll(crate::update_all::Event),
     ReShade(Box<crate::reshade_ui::Event>),
     Dlss(crate::dlss_ui::Event),
     Lsfg(crate::lsfg_ui::Event),

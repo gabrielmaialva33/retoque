@@ -1389,6 +1389,67 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("shell.games_other", "games", "jogos"),
     ("shell.updates_one", "update available", "atualização disponível"),
     ("shell.updates_other", "updates available", "atualizações disponíveis"),
+    ("update_all.open", "Update all…", "Atualizar todos…"),
+    ("update_all.title", "Update all", "Atualizar todos"),
+    (
+        "update_all.note",
+        "Review each game. Your existing settings are kept. Games are updated one at a time.",
+        "Revise cada jogo. Seus ajustes atuais serão mantidos. Os jogos serão atualizados um de cada vez.",
+    ),
+    (
+        "update_all.confirm_one",
+        "Update {count} game",
+        "Atualizar {count} jogo",
+    ),
+    ("update_all.confirm", "Update {count} games", "Atualizar {count} jogos"),
+    ("update_all.ready", "Will update Retoque", "O Retoque será atualizado"),
+    ("update_all.skipped", "Skipped", "Ignorado"),
+    (
+        "update_all.running",
+        "Game running. Close it and review again.",
+        "Jogo em execução. Feche-o e revise novamente.",
+    ),
+    (
+        "update_all.partial",
+        "Incomplete install. Open this game to finish cleanup first.",
+        "Instalação incompleta. Abra este jogo para concluir a limpeza primeiro.",
+    ),
+    (
+        "update_all.foreign",
+        "Unregistered or foreign install. Review it on the game page first.",
+        "Instalação não registrada ou de terceiros. Revise-a na página do jogo primeiro.",
+    ),
+    (
+        "update_all.unknown",
+        "Status unknown. Refresh the game and review again.",
+        "Estado desconhecido. Atualize o estado do jogo e revise novamente.",
+    ),
+    ("update_all.current", "Already up to date.", "Já está atualizado."),
+    (
+        "update_all.refused",
+        "Update refused. Open the details and review this game separately.",
+        "Atualização recusada. Abra os detalhes e revise este jogo separadamente.",
+    ),
+    (
+        "update_all.overlap",
+        "Another entry updates this folder. Review duplicate or overlapping folders separately.",
+        "Outra entrada atualiza esta pasta. Revise pastas duplicadas ou sobrepostas separadamente.",
+    ),
+    (
+        "update_all.busy",
+        "Another change is in progress. Wait and review again.",
+        "Outra alteração está em andamento. Aguarde e revise novamente.",
+    ),
+    (
+        "update_all.progress",
+        "Updating games · {done} of {total} finished",
+        "Atualizando jogos · {done} de {total} concluídos",
+    ),
+    (
+        "update_all.done",
+        "Update finished: {updated} updated · {skipped} skipped · {failed} failed",
+        "Atualização concluída: {updated} atualizados · {skipped} ignorados · {failed} falharam",
+    ),
     (
         "shell.home_help",
         "Add a game folder or scan your launchers to get started.",

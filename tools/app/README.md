@@ -320,6 +320,12 @@ release has been published on GitHub yet, the app states so plainly and keeps th
 sources. When a newer payload is active, an installed game's page offers “Update and optimize…” (or “Update Retoque…”
 under “More actions”), both through the normal reviewed install `Plan`.
 
+When the library reports an available update, “Update all…” reviews every installed game, showing its current
+and available build and explaining skipped games (running, incomplete, unregistered, unknown or already current).
+Confirmation updates games sequentially through their individual sealed install plans, preserving each game's
+loader, NR and ReShade choices rather than the installation defaults. No download is started by this action.
+The result stays open with each game's outcome; a refused or stale plan is never silently rebuilt or forced.
+
 ## ReShade and add-ons
 
 The game page can prepare **ReShade 6.8.0 with full add-on support** from the official `reshade.me` installer,

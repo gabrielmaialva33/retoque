@@ -395,6 +395,23 @@ shell.games_one	ゲーム
 shell.games_other	ゲーム
 shell.updates_one	件の更新あり
 shell.updates_other	件の更新あり
+update_all.open	すべて更新…
+update_all.title	すべて更新
+update_all.note	各ゲームを確認してください。現在の設定を維持し、ゲームを1つずつ更新します。
+update_all.confirm_one	{count}個のゲームを更新
+update_all.confirm	{count}個のゲームを更新
+update_all.ready	Retoqueを更新します
+update_all.skipped	スキップ
+update_all.running	ゲームが起動中です。終了して再度確認してください。
+update_all.partial	インストールが不完全です。まずゲームのページでクリーンアップを完了してください。
+update_all.foreign	未登録または他のインストールです。まずゲームのページで確認してください。
+update_all.unknown	状態が不明です。ゲームの状態を再読み込みして確認してください。
+update_all.current	すでに最新です。
+update_all.refused	更新が拒否されました。詳細を開き、このゲームを個別に確認してください。
+update_all.overlap	別の項目がこのフォルダーを更新します。重複するフォルダーを個別に確認してください。
+update_all.busy	別の変更が進行中です。完了後に再度確認してください。
+update_all.progress	ゲームを更新中 · {total}件中{done}件完了
+update_all.done	更新完了：更新{updated}件 · スキップ{skipped}件 · 失敗{failed}件
 shell.home_help	ゲームのフォルダーを追加するか、ランチャーをスキャンして始めましょう。
 shell.reinstall	再インストール…
 shell.resume	クリーンアップを完了…

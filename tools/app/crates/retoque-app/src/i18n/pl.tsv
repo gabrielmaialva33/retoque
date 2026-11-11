@@ -397,6 +397,23 @@ shell.games_few	gry
 shell.games_many	gier
 shell.updates_one	dostępna aktualizacja
 shell.updates_other	dostępnych aktualizacji
+update_all.open	Aktualizuj wszystkie…
+update_all.title	Aktualizuj wszystkie
+update_all.note	Sprawdź każdą grę. Twoje ustawienia zostaną zachowane. Gry są aktualizowane pojedynczo.
+update_all.confirm_one	Aktualizuj {count} grę
+update_all.confirm	Aktualizuj gry: {count}
+update_all.ready	Retoque zostanie zaktualizowane
+update_all.skipped	Pominięto
+update_all.running	Gra jest uruchomiona. Zamknij ją i sprawdź ponownie.
+update_all.partial	Niekompletna instalacja. Otwórz grę, aby najpierw zakończyć czyszczenie.
+update_all.foreign	Niezarejestrowana lub obca instalacja. Sprawdź ją najpierw na stronie gry.
+update_all.unknown	Nieznany stan. Odśwież stan gry i sprawdź ponownie.
+update_all.current	Już aktualne.
+update_all.refused	Aktualizacja odrzucona. Otwórz szczegóły i sprawdź tę grę osobno.
+update_all.overlap	Inny wpis aktualizuje ten folder. Sprawdź osobno zduplikowane lub nakładające się foldery.
+update_all.busy	Trwa inna zmiana. Poczekaj i sprawdź ponownie.
+update_all.progress	Aktualizowanie gier · ukończono {done} z {total}
+update_all.done	Aktualizacja zakończona: zaktualizowano {updated} · pominięto {skipped} · błędy {failed}
 shell.updates_few	dostępne aktualizacje
 shell.updates_many	dostępnych aktualizacji
 shell.home_help	Aby zacząć, dodaj folder gry lub przeskanuj swoje launchery.
