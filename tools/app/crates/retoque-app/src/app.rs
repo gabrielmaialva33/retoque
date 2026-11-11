@@ -49,6 +49,9 @@ pub(crate) struct Saved {
     pub(crate) payload_source: Option<crate::payload_ui::PayloadSource>,
     #[serde(default)]
     pub(crate) nr_model_offer_seen: bool,
+    /// What a game without Retoque starts from (Preferences).
+    #[serde(default)]
+    pub(crate) install_defaults: crate::prefs_ui::InstallDefaults,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -138,6 +141,7 @@ pub struct RetoqueApp {
     pub(crate) process_notice: Option<Vec<(u32, String)>>,
     pub(crate) tuning: crate::autotune::UiState,
     pub(crate) lsfg: crate::lsfg_ui::State,
+    pub(crate) prefs: crate::prefs_ui::State,
     pub(crate) payload_ui: crate::payload_ui::State,
     pub(crate) nr_fetch: crate::tabs::model::NrFetchState,
     pub(crate) folder_dialog: Option<FolderDialog>,
@@ -188,6 +192,7 @@ impl RetoqueApp {
             process_notice: None,
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
+            prefs: crate::prefs_ui::State::default(),
             payload_ui: crate::payload_ui::State::default(),
             nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,
@@ -227,6 +232,7 @@ impl RetoqueApp {
         app.hash_payload();
         app.rescan();
         app.jobs.spawn("catalog", None, |_| model::catalog_list());
+        app.clean_app_data();
         app
     }
 
@@ -299,6 +305,7 @@ impl eframe::App for RetoqueApp {
         self.palette_sheet(ui.ctx());
         self.drop_sheet(ui.ctx());
         self.nr_fetch_dialog(ui.ctx());
+        self.prefs_dialog(ui.ctx());
         self.handle_commands();
     }
 

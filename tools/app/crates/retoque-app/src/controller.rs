@@ -55,12 +55,9 @@ impl RetoqueApp {
             .and_then(|t| self.drafts.get(t))
             .cloned()
             .unwrap_or_default();
-        let mut options = InstallOptions {
-            proxy: "dxgi.dll".into(),
-            enable_nr: true,
-            copy_nvngx: cfg!(not(windows)),
-            ..Default::default()
-        };
+        // A game starts from the install defaults (Preferences); once its status arrives, an existing install's
+        // own loader file name and NR setting take over.
+        let mut options = self.saved.install_defaults.options();
         if let Some(t) = &target {
             options.game_dir = t.clone();
         }
@@ -189,6 +186,7 @@ impl RetoqueApp {
                     self.toast(self.tr("undo.save_failed").into(), Some(error), true)
                 }
                 Outcome::Doctor(assessment) => self.receive_assessment(*assessment),
+                outcome @ (Outcome::AppDataCleaned(_) | Outcome::AppDataUsage(_)) => self.prefs_event(outcome),
                 Outcome::DoctorBadge {
                     generation,
                     target,
@@ -302,7 +300,11 @@ impl RetoqueApp {
                             self.view.options.proxy = proxy;
                         }
                         if let Some(nr) = s.nr_enabled {
-                            self.view.options.enable_nr = nr || s.receipt.is_none();
+                            self.view.options.enable_nr = if s.receipt.is_none() {
+                                self.saved.install_defaults.enable_nr
+                            } else {
+                                nr
+                            };
                         }
                     }
                     self.view.status = Some(result);

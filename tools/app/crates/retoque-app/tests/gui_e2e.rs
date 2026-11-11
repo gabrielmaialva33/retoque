@@ -62,6 +62,21 @@ fn click(ui: &mut Window, role: Role, text: &str) {
     ui.run_steps(3);
 }
 
+/// A tab click can land while a closing dialog still covers the page (its fade lasts a few frames) and be lost,
+/// as a person's would be. Click again until the tab reports itself selected.
+#[track_caller]
+fn select_tab(ui: &mut Window, text: &str) {
+    let start = Instant::now();
+    loop {
+        ui.get_by_role_and_label(Role::Tab, text).click_accesskit();
+        ui.run_steps(3);
+        if ui.get_by_role_and_label(Role::Tab, text).accesskit_node().is_selected() == Some(true) {
+            return;
+        }
+        assert!(start.elapsed() < Duration::from_secs(30), "tab never selected: {text}");
+    }
+}
+
 /// The install previews sit in a closed section on the Overview: "Install options" in the card that says what
 /// Retoque will do before install, "Reinstall options" at the end once installed.
 fn open_install_options(ui: &mut Window) {
@@ -92,7 +107,7 @@ fn select_game(ui: &mut Window) {
 }
 
 fn choose_stage(ui: &mut Window, value: &str) {
-    click(ui, Role::Tab, "Settings");
+    select_tab(ui, "Settings");
     wait_label(ui, "NR stage");
     // The combo box is labelled by its setting's name (labelled_by), so it is found by role and name.
     let choices: Vec<_> = ui.query_all_by_role_and_label(Role::ComboBox, "NR stage").collect();
@@ -269,7 +284,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     drop(ui);
     let mut ui = window();
     select_game(&mut ui);
-    click(&mut ui, Role::Tab, "Components");
+    select_tab(&mut ui, "Components");
     // The button is named after its model for screen readers ("Use in this game: Synthetic model").
     wait_label(&mut ui, "Use in this game: Synthetic model");
     let before_model = snapshot(&game);
@@ -309,7 +324,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
             .any(|(pid, _)| *pid == child.0.id())
     );
     let before_refusal = snapshot(&game);
-    click(&mut ui, Role::Tab, "Overview");
+    select_tab(&mut ui, "Overview");
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview install");
     wait_label(&mut ui, "The game is running");
@@ -328,7 +343,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     wait_label(&mut ui, "left in place, it changed since this script wrote it");
     assert_eq!(snapshot(&game), before_refusal);
     click(&mut ui, Role::Button, "Cancel");
-    click(&mut ui, Role::Tab, "Components");
+    select_tab(&mut ui, "Components");
     click(&mut ui, Role::Button, "Use the default search…");
     wait_label(&mut ui, &format!("[DlssNr] ModelFile: {model_value} -> auto"));
     click(&mut ui, Role::Button, "Apply");
@@ -338,7 +353,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     review_stage(&mut ui, &game, "1", "auto");
     assert_eq!(fs::read(game.join("OptiScaler.ini")).unwrap(), installed_ini);
     assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
-    click(&mut ui, Role::Tab, "Overview");
+    select_tab(&mut ui, "Overview");
     open_install_options(&mut ui);
     click(&mut ui, Role::Button, "Preview uninstall");
     wait(&mut ui, "uninstall plan", |ui| {

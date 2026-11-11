@@ -64,6 +64,9 @@ impl RetoqueApp {
                     .widget_info(|| {
                         egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "palette.language"))
                     });
+                if ui.button(self.tr("prefs.open")).clicked() {
+                    self.prefs_open();
+                }
                 if ui
                     .add_enabled(!self.scanning, egui::Button::new(self.tr("app.refresh")))
                     .clicked()
