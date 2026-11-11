@@ -84,10 +84,7 @@ impl RetoqueApp {
             entries.extend(settings::all().iter().map(|s| Entry {
                 label: format!(
                     "{} · {}",
-                    match self.lang {
-                        Lang::En => s.label_en,
-                        Lang::Pt => s.label_pt,
-                    },
+                    crate::i18n::setting_label(self.lang, s),
                     t(self.lang, "tab.settings")
                 ),
                 search: format!("[{}] {}", s.section, s.key),

@@ -46,24 +46,9 @@ impl RetoqueApp {
                 ui.label(RichText::new(self.tr("app.tagline")).color(theme::MUTED));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let label = match self.lang {
-                    Lang::En => t(self.lang, "lang.en"),
-                    Lang::Pt => t(self.lang, "lang.pt"),
-                };
-                egui::ComboBox::from_id_salt("lang")
-                    .selected_text(label)
-                    .show_ui(ui, |ui| {
-                        let before = self.lang;
-                        ui.selectable_value(&mut self.lang, Lang::En, t(Lang::En, "lang.en"));
-                        ui.selectable_value(&mut self.lang, Lang::Pt, t(Lang::Pt, "lang.pt"));
-                        if self.lang != before {
-                            self.saved.lang = Some(self.lang);
-                        }
-                    })
-                    .response
-                    .widget_info(|| {
-                        egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "palette.language"))
-                    });
+                self.language_combo(ui, "lang").widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "prefs.language"))
+                });
                 if ui.button(self.tr("prefs.open")).clicked() {
                     self.prefs_open();
                 }
@@ -486,7 +471,7 @@ impl RetoqueApp {
     pub(crate) fn home_count_line(&self, installed: usize, updates: usize) -> String {
         let games = self.library_state.games.len();
         let plural = |n: usize, one: &'static str, other: &'static str| {
-            format!("{n} {}", self.tr(if n == 1 { one } else { other }))
+            format!("{n} {}", crate::i18n::plural(self.lang, n, one, other))
         };
         let mut line = format!(
             "{} · {installed} {}",

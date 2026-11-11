@@ -37,10 +37,7 @@ impl Filter {
         self.matches = retoque_data::settings::all()
             .iter()
             .map(|s| {
-                let label = match lang {
-                    crate::i18n::Lang::En => s.label_en,
-                    crate::i18n::Lang::Pt => s.label_pt,
-                };
+                let label = crate::i18n::setting_label(lang, s);
                 search.score(&format!("{label} {} {}", s.section, s.key)).is_some()
             })
             .collect();

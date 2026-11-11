@@ -37,32 +37,17 @@ impl FolderMigration {
         }
         let moved: Vec<String> = self.moved_to_libraries.iter().map(|p| short_path(p)).collect();
         let dropped: Vec<String> = self.dropped_drive_roots.iter().map(|p| short_path(p)).collect();
-        Some(match (lang, moved.is_empty(), dropped.is_empty()) {
-            (Lang::En, false, false) => format!(
-                "Updated your folders: moved {} to folders with several games; ignored drive root {}.",
-                moved.join(", "),
-                dropped.join(", ")
-            ),
-            (Lang::En, false, true) => format!(
-                "Updated your folders: moved {} to folders with several games.",
-                moved.join(", ")
-            ),
-            (Lang::En, true, false) => format!("Updated your folders: ignored drive root {}.", dropped.join(", ")),
-            (Lang::Pt, false, false) => format!(
-                "Suas pastas foram atualizadas: {} movida(s) para pastas com vários jogos; raiz de unidade {} ignorada.",
-                moved.join(", "),
-                dropped.join(", ")
-            ),
-            (Lang::Pt, false, true) => format!(
-                "Suas pastas foram atualizadas: {} movida(s) para pastas com vários jogos.",
-                moved.join(", ")
-            ),
-            (Lang::Pt, true, false) => format!(
-                "Suas pastas foram atualizadas: raiz de unidade {} ignorada.",
-                dropped.join(", ")
-            ),
-            (_, true, true) => unreachable!(),
-        })
+        let key = match (moved.is_empty(), dropped.is_empty()) {
+            (false, false) => "folders.migrated_both",
+            (false, true) => "folders.migrated_moved",
+            (true, false) => "folders.migrated_dropped",
+            (true, true) => unreachable!(),
+        };
+        Some(
+            t(lang, key)
+                .replace("{moved}", &moved.join(", "))
+                .replace("{roots}", &dropped.join(", ")),
+        )
     }
 }
 impl Saved {
@@ -379,9 +364,10 @@ mod tests {
                 h.state().saved.libraries,
                 vec![PathBuf::from(r"F:\SteamLibrary"), multi.clone()]
             );
-            let expected_sub = match lang {
-                Lang::En => "Updated your folders: moved",
-                Lang::Pt => "Suas pastas foram atualizadas:",
+            let expected_sub = if lang == Lang::Pt {
+                "Suas pastas foram atualizadas:"
+            } else {
+                "Updated your folders: moved"
             };
             assert!(h.query_by_label_contains(expected_sub).is_some());
         }

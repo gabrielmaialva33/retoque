@@ -1,0 +1,977 @@
+# Retoque app text: Français (fr).
+# MACHINE-TRANSLATED DRAFT, pending review by a native speaker. Corrections welcome.
+# Format: one "key<TAB>text" per line, in the order of the English table; "#" starts a comment line.
+# English is the source (src/i18n.rs); a key missing here shows in English. Keep {placeholders} and a final "…".
+lsfg.found	Lossless Scaling trouvé
+lsfg.preparing	Préparation automatique des shaders…
+lsfg.downloading	Téléchargement du compilateur de shaders officiel…
+lsfg.cancel	Annuler la préparation
+lsfg.cancelled	Préparation annulée. Votre jeu n'a pas été modifié.
+lsfg.failed	Impossible de préparer les shaders LSFG. Réessayez ; si l'échec persiste, créez un fichier de diagnostic.
+lsfg.retry	Relancer la préparation
+lsfg.download_prompt	La préparation des shaders LSFG nécessite le compilateur de shaders de Microsoft. Retoque le télécharge depuis la version officielle de Microsoft dans les données de l'app, le contrôle et prépare les shaders. Votre jeu n'est pas modifié.
+lsfg.need_compiler	Les shaders nécessitent le compilateur de shaders de Microsoft, qui n'est pas encore téléchargé.
+lsfg.consent_title	Télécharger le compilateur de shaders
+lsfg.download_details	Microsoft DXC v1.8.2505.1 depuis github.com/microsoft/DirectXShaderCompiler (release-assets.githubusercontent.com), contrôlé avec un SHA-256 fixe.
+lsfg.download_confirm	Télécharger le compilateur…
+sm86.error.0	Plusieurs fichiers correspondent à la version sm86.
+sm86.error.1	Le dossier de données de l'app est indisponible.
+sm86.error.2	L'archive dépasse la taille maximale une fois décompressée.
+sm86.error.3	L'archive contient un lien, un chiffrement ou un fichier spécial non autorisé.
+sm86.error.4	La taille déclarée de l'archive n'est pas valide.
+sm86.error.5	Le fichier documenté de la version sm86 est introuvable.
+sm86.error.6	Des fichiers obligatoires de la version sm86 manquent.
+sm86.error.7	Les métadonnées de la version officielle sm86 ne sont pas valides.
+sm86.error.8	L'enregistrement local de la version n'est pas valide.
+sm86.error.9	Le cache du kit exige une empreinte publiée par GitHub.
+sm86.error.10	Le cache du kit exige une correspondance avec le SHA-256 publié par GitHub.
+sm86.error.11	Les métadonnées du kit dépassent la taille maximale.
+sm86.error.12	La redirection de la version n'indique pas de destination.
+sm86.error.13	L'adresse n'appartient pas à la version officielle sm86.
+sm86.error.14	L'archive du kit contient un binaire protégé qui ne peut pas être inclus.
+sm86.error.15	La destination de la redirection de la version sm86 n'est pas autorisée.
+sm86.error.16	L'API des versions a tenté une redirection non autorisée.
+sm86.error.17	Le SHA-256 du téléchargement ne correspond pas à celui publié.
+sm86.error.18	Le contenu de cette version a changé depuis le premier téléchargement.
+sm86.error.19	Les métadonnées de la version dépassent la taille maximale.
+sm86.error.20	L'enregistrement local de la version dépasse la taille maximale.
+sm86.error.21	La réponse du téléchargement dépasse la taille maximale.
+sm86.error.22	La taille du téléchargement ne correspond pas à celle déclarée.
+sm86.error.23	Impossible de consulter ou de télécharger la version sm86 en HTTPS.
+sm86.error.24	L'archive contient trop de fichiers.
+sm86.error.25	Le téléchargement a dépassé le nombre maximal de redirections.
+sm86.error.26	L'archive contient un fichier tronqué.
+sm86.error.27	Le serveur de la version a renvoyé un statut HTTP inattendu.
+sm86.error.28	L'archive contient un chemin dangereux ou des noms en conflit.
+sm86.error.29	L'algorithme d'empreinte publié n'est pas pris en charge.
+sm86.error.30	Cette version sm86 n'est pas prise en charge.
+note.sm86_upgrade	Mise à niveau de sm86 0.3.x : sauvegarder puis retirer l'ancien fichier de chargement et l'ancien INI avant de copier le runtime 0.4.x complet.
+note.sm86_install	Installer dlssg-sm86 depuis vos composants et enregistrer son identité et ses fichiers dans .retoque/components.txt. L'installateur du jeu ne fait aucune requête réseau.
+sm86.consent_title	Télécharger les composants officiels de génération d'images
+sm86.check_title	Rechercher une version plus récente
+sm86.check_consent	Demander à GitHub la dernière version des composants de génération d'images et la comparer à la vôtre ?
+sm86.check_details	Hôte : api.github.com (sdli1995/dlssg_for_sm86, dernière version). Rien n'est téléchargé.
+sm86.download_consent	Retoque télécharge dlssg_for_sm86 depuis sa version officielle et le contrôle. Les fichiers restent dans l'app jusqu'à ce que vous confirmiez la vérification d'un jeu. Aucune télémétrie.
+sm86.download_details	Hôtes : api.github.com et github.com (sdli1995/dlssg_for_sm86). Contrôlé avec le SHA-256 de la version. Au plus 256 MB à télécharger et 1 GB une fois décompressé.
+sm86.kit_available	Cette installation inclut un cache de premier lancement. Il sera contrôlé et importé localement, sans téléchargement.
+sm86.license	Les runtimes et noyaux tiers conservent leurs propres conditions ; l'ensemble n'est pas sous licence MIT. Les licences et mentions sont conservées dans le cache de l'app.
+sm86.import	Importer
+sm86.download_help	Téléchargez la version officielle une fois et réutilisez-la dans tous vos jeux. L'installation dans un jeu a toujours sa propre vérification.
+sm86.download	Télécharger la version officielle…
+sm86.check	Rechercher une mise à jour…
+sm86.progress	Préparation des composants officiels
+sm86.current	Cette version est disponible dans vos composants.
+sm86.new	Cette version n'est pas encore disponible dans vos composants.
+sm86.ignored	Éléments de l'archive ignorés (non extraits)
+optimize.review	Vérifier l'optimisation…
+optimize.experimental	Inclure sm86 expérimental sous Proton/Wine dans cette vérification
+optimize.choose_lsfg	Inclure LSFG dans cette vérification
+optimize.lsfg_unavailable	Lossless Scaling est introuvable, les shaders LSFG ne peuvent donc pas être préparés. Choisissez son dossier dans Composants › Génération d'images. Aucune modification n'a été appliquée.
+optimize.lsfg_preparing	Préparation préalable des shaders LSFG (données de l'app uniquement). La vérification s'ouvre dès qu'ils sont prêts.
+optimize.lsfg_failed	La préparation des shaders LSFG a échoué ; voir Composants › Génération d'images. Aucune modification n'a été appliquée.
+optimize.experimental_omitted	sm86 expérimental a été laissé de côté. Sélectionnez-le explicitement ci-dessus pour l'inclure dans une vérification.
+optimize.up_to_date	{game} a déjà les réglages recommandés pour votre carte graphique.
+optimize.install_first	Installez ou enregistrez Retoque avant d'optimiser.
+optimize.identity_missing	L'identité du composant installé est indisponible. Actualisez le jeu avant de vérifier.
+optimize.conflict	Les réglages proposés sont en conflit. Aucune modification n'a été appliquée.
+remedy.processes	Voir les processus en cours
+remedy.close_processes	Fermez ces programmes, puis réessayez
+remedy.retry	Réessayer
+remedy.replan	Préparer une nouvelle vérification
+remedy.foreign	Choisir de conserver ou remplacer…
+mdl.incompatible	Ne fonctionne pas sur cette carte graphique
+mdl.arch_match	Compatible avec votre carte graphique
+mdl.compat_unknown	Compatibilité non confirmée
+mdl.archs	Cibles CUDA trouvées :
+mdl.suggest	Un de vos modèles fonctionne sur cette carte :
+mdl.use_suggested	Vérifier le changement de modèle…
+ver.unknown	inconnue
+ver.mismatch	OptiScaler et le composant NR ont des versions de fichier différentes. Mettez-les à jour ensemble ; l'installation reste possible.
+ver.forwarder	Composant NR {v}
+welcome.title	Vos jeux, avec Retoque
+welcome.installed	avec Retoque
+set.nr	Rendu neuronal (NR)
+set.upscalers	Upscalers
+set.framegen	Génération d'images
+set.lsfg	LSFG (expérimental)
+set.no_match	Aucun réglage ne correspond à ce filtre.
+set.lsfg_note	Expérimental. Nécessite la génération d'images FSR et vos propres fichiers Lossless Scaling ; les fonctions indisponibles ne peuvent pas s'exécuter.
+mdl.version	Version
+mdl.dll_filter	Modèle NR (.dll)
+unit.ms	ms
+unknown	—
+log.route_unknown	Aucune route signalée pour l'instant.
+log.evidence_note	Les traces d'initialisation concernent cette session ; elles ne prouvent pas que le NR fonctionne encore. Le temps GPU ne compte que les mesures confirmées.
+log.showing	Affichage
+log.limited	Ce résumé est limité ; le fichier journal contient l'enregistrement complet.
+inst.advanced	Avancé
+st.build	Compilation locale
+st.release	Version {v}
+st.build_hash	Compilation {hash}
+inst.notes()	Notes
+dismiss.help	Fermer le message
+brand	Retoque
+lang.ja	Japonais
+lang.ko	Coréen
+lang.zh_cn	Chinois (simplifié)
+step.copy	Copier
+step.backup	Sauvegarder
+step.rename	Renommer
+step.ini	Régler
+step.remove	Retirer
+step.restore	Restaurer
+step.keep	Conserver
+value.unset	non défini
+ref.unknown_file	fichier inconnu
+ref.reshade	ReShade
+store.steam	Steam
+store.heroic	Heroic
+store.lutris	Lutris
+store.epic	Epic
+store.gog	GOG
+store.manual	Ajouté manuellement
+runtime.windows	Windows
+runtime.proton	Proton
+runtime.wine	Wine
+runtime.linux	Linux
+error.io	Impossible de lire ou d'écrire {file}.
+error.io_any	Impossible de lire ou d'écrire un fichier.
+technical.details	Détails techniques
+note.resume	L'installation précédente s'est arrêtée en cours de route. Ses traces sont conservées et cette installation reprend là où elle s'était arrêtée.
+note.driver	Le _nvngx.dll du pilote NVIDIA pour Wine est introuvable. Installez le composant Wine NGX du pilote ou placez le fichier à côté du jeu.
+note.model	Placez votre propre nvngx_dlssnr.dll à côté du jeu ou indiquez une autre copie dans [DlssNr] ModelFile. Le modèle n'est pas inclus.
+note.vk_skip	Hooks Vulkan : désactivés par le fichier marqueur
+note.vk_disabled	Hooks Vulkan : ACTIFS (le marqueur existe mais est désactivé)
+note.vk_active	Hooks Vulkan : ACTIFS (aucun marqueur). En cas de perte du périphérique, utilisez [Vulkan] SkipHooks=true.
+keep.same	correspond déjà à cette compilation ; laissé tel quel
+keep.model	modèle de NVIDIA ; conservé, jamais retiré
+keep.gone	déjà retiré
+keep.identical_component	identique au fichier du composant
+keep.user_settings	votre propre fichier de configuration, laissé tel quel
+keep.changed	conservé car il a été modifié après l'installation
+keep.no_backup	non restauré : c'est un modèle ou la copie de sauvegarde n'existe pas
+keep.no_rename	non renommé : c'est un modèle ou il a déjà été retiré
+keep.rename_changed	nom d'origine non restauré car le fichier a été modifié
+ref.ini_missing	OptiScaler.ini n'existe pas. Installez Retoque ou fournissez le fichier avant de modifier les réglages.
+ref.ini_value	La section, la clé et la valeur de l'INI doivent tenir sur une seule ligne, sans séparateurs structurels.
+note.windows_denied	Windows refuse l'accès en écriture à {path}. Corrigez les permissions pour continuer.
+note.second_proxy	{path} contient aussi OptiScaler. L'installation continuera avec --allow-second-proxy.
+keep.destination	{path} : non restauré car un fichier existe déjà à cet emplacement
+keep.blocked	nom d'origine non restauré : {path} occupe l'emplacement
+ref.proxy	OptiScaler n'accepte pas {path} comme nom du fichier de chargement
+app.refresh	Analyser à nouveau la bibliothèque
+app.payload	Fichiers de Retoque
+app.payload.none	introuvables à côté de l'app : choisissez le dossier contenant OptiScaler.dll pour installer ou mettre à jour
+app.payload.choose	Choisir…
+payload.missing	introuvables
+payload.files_note	L'app copie ces fichiers dans un jeu quand vous y installez ou mettez à jour Retoque.
+payload.files_source	Leur provenance
+payload.files_updates	Versions officielles
+lib.search	Rechercher des jeux
+lib.installed_only	Installés uniquement
+lib.add_folder	Ajouter un dossier…
+lib.scanning	Recherche de jeux…
+lib.empty	Aucun jeu trouvé. Ajoutez le dossier d'un jeu manuellement.
+lib.skipped	Lecture impossible
+game.root	dossier du jeu
+game.target	Dossier de l'exécutable
+game.no_target	Aucun dossier d'exécutable trouvé dans ce jeu.
+game.native	Version Linux native : Retoque ne fonctionne qu'avec la version Windows sous Proton ou Wine.
+tab.install	Vue d'ensemble
+tab.settings	Réglages
+tab.model	Composants
+comp.nr	Modèle NR
+comp.sm86_name	Génération d'images pour RTX 20/30 · version {version}
+comp.dlss	DLSS
+comp.fg	Génération d'images
+tab.compare	Avant / après
+tab.logs	Journaux
+set.invalid	OptiScaler n'accepte pas cette valeur ; corrigez-la pour vérifier les modifications.
+st.installed	Retoque installé
+st.installed_short	Installé
+st.current	Retoque à jour
+st.current_short	À jour
+st.update	Mise à jour disponible
+st.update_short	Mise à jour
+st.partial	Installation incomplète
+st.partial_short	Incomplète
+st.not_installed	Sans Retoque
+st.untracked	Ancienne installation
+st.untracked_short	Ancienne
+st.nr_on	NR activé
+st.nr_off	NR désactivé
+inst.proxy	Nom du fichier de chargement
+inst.proxy_help	Ne changez que si le jeu ne démarre pas avec la valeur par défaut.
+inst.enable_nr	Activer le rendu neuronal (NR)
+inst.keep_reshade	Conserver ReShade (chargé par OptiScaler)
+inst.replace_foreign	Remplacer un fichier qui n'est pas à nous (une copie est conservée)
+inst.second_proxy	Autoriser un second fichier de chargement d'OptiScaler
+inst.copy_nvngx	Copier le _nvngx.dll du pilote pour Wine
+inst.preview	Aperçu de l'installation
+inst.preview_uninstall	Aperçu de la désinstallation
+inst.install	Installer
+inst.update	Mettre à jour
+inst.uninstall	Désinstaller
+inst.plan	Ce qui sera fait
+inst.plan_title	Ce que Retoque va faire dans ce jeu
+inst.plan_install	Installer les fichiers de Retoque dans ce jeu
+inst.nothing	Rien à modifier.
+inst.working	En cours…
+inst.failed_install	L'installation n'a pas abouti
+inst.failed_uninstall	La désinstallation n'a pas abouti
+inst.failed_settings	Les réglages n'ont pas été enregistrés
+inst.launch_help	Collez ceci dans Propriétés › Options de lancement du jeu.
+inst.launch_help_heroic	Dans Heroic, ouvrez les paramètres du jeu › Avancé › Variables d'environnement et ajoutez WINEDLLOVERRIDES avec cette valeur.
+inst.launch_help_lutris	Dans Lutris, ouvrez Configurer › Options du système › Variables d'environnement du jeu et ajoutez WINEDLLOVERRIDES avec cette valeur.
+inst.launch_help_other	Le jeu doit charger Retoque au démarrage : mettez ceci dans les options de lancement de votre lanceur, avant la commande qui démarre le jeu.
+inst.launch_label	Option de lancement
+inst.copy	Copier
+inst.copied	Copié
+ref.running	Le jeu est en cours d'exécution. Fermez-le et réessayez :
+ref.foreign	Un fichier du même nom n'a pas été placé par Retoque :
+ref.second	Un autre fichier charge déjà OptiScaler dans ce jeu :
+ref.receipt	La trace d'installation est inutilisable :
+ref.usage	Action impossible :
+set.save	Vérifier les modifications…
+mdl.current	Modèle de ce jeu
+mdl.missing_file	Ce fichier n'existe pas : le NR sera indisponible dans ce jeu.
+mdl.catalog	Vos modèles
+mdl.import	Importer un modèle…
+mdl.use	Utiliser dans ce jeu…
+mdl.in_use	Utilisé
+mdl.use_auto	Utiliser la recherche par défaut…
+mdl.remove	Supprimer de l'app…
+mdl.remove_title	Supprimer ce modèle de l'app ?
+mdl.empty	Aucun modèle pour l'instant. Importez les fichiers nvngx_dlssnr.dll que vous avez ; ils sont copiés dans le dossier de l'app et ne sont jamais partagés.
+log.none	Pas encore de journal OptiScaler ici : jouez une fois avec Retoque installé.
+log.dlss	DLSS
+log.api	API
+log.gpu	Temps GPU du NR
+log.errors	Erreurs
+log.warnings	Avertissements
+log.lines	Lignes à lire
+log.bundle	Créer un fichier de diagnostic
+log.bundle_done	Écrit (dossier personnel et nom d'utilisateur retirés) :
+log.open_folder	Ouvrir le dossier
+prefs.open	Préférences…
+prefs.title	Préférences
+prefs.installs	Nouvelles installations
+prefs.installs_help	Le point de départ d'un jeu sans Retoque. Un jeu qui l'a déjà conserve ses propres choix.
+prefs.language	Langue
+prefs.language_help	Le texte de l'app change dès que vous choisissez.
+prefs.language_draft	Cette traduction est un brouillon automatique qui n'a pas encore été relu par un locuteur natif. Certaines formulations peuvent sembler maladroites.
+prefs.language_no_font	{languages} : cet ordinateur n'a aucune police avec les caractères chinois, japonais et coréens (comme Noto Sans CJK). Installez-en une et rouvrez Retoque.
+prefs.data	Données de l'app
+prefs.data_usage	{size} dans ce dossier
+prefs.data_measuring	Mesure du dossier…
+prefs.clean	Les restes de téléchargements et d'importations interrompus sont effacés d'eux-mêmes après un jour.
+prefs.cleaned	Effacé au démarrage : {n} reste(s) d'opérations interrompues ({size}).
+app.wait_write	Une écriture est encore en cours : attendez qu'elle se termine avant de fermer.
+inst.stale	Les options ou les fichiers de Retoque ont changé après cet aperçu : affichez-le à nouveau.
+set.apply	Appliquer
+mdl.remove_help	Supprime la copie conservée par l'app. Un jeu qui désigne ce fichier perd le NR jusqu'à ce qu'il reçoive un autre modèle.
+app.tagline	Le rendu neuronal pour vos jeux
+lib.group_installed	Avec Retoque
+lib.group_other	Autres jeux
+card.install_options	Options d'installation
+card.reinstall_options	Options de réinstallation
+left.title	Restes de jeux désinstallés
+left.why	Le magasin a retiré ces jeux, mais pas les fichiers que Retoque a ajoutés à leurs dossiers.
+left.summary	{count} dossiers · {size}
+left.review	Vérifier le nettoyage…
+left.removing	Suppression…
+left.review_title	Nettoyer les restes de jeux désinstallés
+left.review_note	Seuls les fichiers placés par Retoque, OptiScaler, sm86, ReShade ou leurs caches sont supprimés. Tout le reste, comme une sauvegarde de partie, reste en place, ainsi que son dossier. Rien ne change avant votre confirmation.
+left.folder_line	{files} fichiers · {size}
+left.keeps	Conserve {count} fichier(s) qui ne sont pas de Retoque
+left.confirm	Supprimer les restes ({size})
+left.done	Restes supprimés : {size} libérés
+left.failed	Nettoyage interrompu
+rs.ready	Prêt à installer :
+rs.checking	Contrôle de ReShade…
+rs.consent_title	Télécharger ReShade 6.8.0
+rs.consent_body	Retoque télécharge l'installateur officiel de ReShade avec prise en charge des add-ons depuis reshade.me et n'en garde que la DLL. Votre jeu n'est modifié qu'après une vérification séparée.
+rs.consent_details	Hôte : reshade.me. L'installateur et la DLL qui en est extraite ont des empreintes SHA-256 fixes. Licence : BSD-3-Clause.
+sess.title	Dernière session
+sess.driver	pilote
+sess.base	Images réelles
+sess.low	Pires 5 %
+sess.screen	À l'écran
+sess.generation	Génération d'images
+sess.generation_value	x{x} · {percent} %
+sess.drops	Chutes
+sess.median	médiane
+sess.curve	Images réelles par seconde au fil de la session
+sess.short	Session trop courte pour en juger. Jouez quelques minutes et revenez.
+sess.steady	Session stable : rien à modifier.
+sess.fake_nvapi	Ce Retoque a fourni au jeu un NVAPI de substitution, la génération d'images DLSS peut donc disparaître du menu du jeu. Mettez à jour Retoque dans ce jeu.
+sess.low_base	La génération d'images n'a multiplié que {base} images réelles par seconde. En dessous d'environ 40, elle paraît lourde et saccade : choisissez DLSS Équilibré ou Performance dans le jeu.
+sess.low_base_x4	x3 au lieu de x4 est aussi plus stable avec une base faible.
+sess.drops_advice	Les images réelles ont chuté de plus de 20 % pendant {percent} % de la session. C'est généralement le jeu qui charge de nouvelles zones ou un manque de RAM libre : fermez d'autres programmes et baissez la qualité des textures.
+sess.nr_off	Le rendu neuronal (NR) a été désactivé pendant la session (avec sa touche dans le jeu).
+card.launch	Dernière étape : option de lancement Steam
+card.launch_heroic	Dernière étape : variable d'environnement dans Heroic
+card.launch_lutris	Dernière étape : option Lutris
+card.launch_other	Dernière étape : option de lancement
+cancel	Annuler
+progress.of	sur
+not_now	Pas maintenant
+close	Fermer
+delete	Supprimer
+download	Télécharger
+check_now	Contrôler
+size.up_to	jusqu'à {size}
+busy.writing	Application des modifications à un jeu…
+busy.reading	Lecture des informations des jeux…
+canvas	Image de comparaison
+captures	Captures
+refresh	Actualiser
+loading	Chargement de la capture…
+scanning	Recherche de captures…
+scan_error	Impossible de lire le dossier des captures. Assurez-vous qu'il existe et qu'il est lisible, puis actualisez.
+load_error	Impossible de charger cette paire. Un fichier est peut-être incomplet, dans un format non pris en charge ou de dimensions différentes. Actualisez pour réessayer.
+wipe	Rideau
+side	Côte à côte
+flip	Alterner
+diff	Différence
+fit	Ajuster
+one	1:1
+original	Original
+processed	Retoque NR
+hold	Maintenir pour voir l'original
+stats	Aperçu d'affichage
+psnr	PSNR
+changed	Variation >5 %
+mad	Différence moyenne
+stats_help	Le PSNR RGB et la différence absolue moyenne utilisent les valeurs d'affichage 8 bits ; les pixels modifiés ont une différence absolue de luma supérieure à 5 %. Ce ne sont ni des mesures HDR brutes ni une note de qualité.
+hdr	Aperçu HDR en SDR · ACES + sRGB · exposition commune
+sdr	Capture SDR · valeurs d'affichage d'origine
+hdr_note	Le tonemapping et le post-traitement propres au jeu ne sont pas reproduits ici.
+diff_key	Carte des différences · gain fixe de 8× · noir = identique, bleu, jaune, rouge = différence croissante
+no_provenance	Aucune métadonnée de provenance trouvée (fichier annexe ou image).
+model	Modèle
+route	Route
+working	Résolution de traitement
+settings	Réglages
+cmp.unknown	Non enregistré
+loaded	Chargé en
+exposure	Exposition
+exposure_reset	Réinitialiser l'exposition
+exposure_help	0 EV utilise l'exposition automatique ou enregistrée. Chaque cran double ou divise par deux la lumière, de la même façon sur les deux images. L'aperçu se met à jour quand vous relâchez le curseur.
+exposure_updating	Mise à jour de l'aperçu…
+thumbnail_error	Miniature indisponible
+shell.uninstall_open	Désinstaller…
+shell.discard	Abandonner
+shell.restart_hint	Redémarrez le jeu pour utiliser les modifications.
+shell.library_checking	Contrôle des versions installées…
+shell.model_version	modèle
+shell.model_unknown	Modèle trouvé · version inconnue
+shell.review_shortcut	Vérifier les modifications (Ctrl+Enter) ; rien n'est écrit avant confirmation.
+shell.progress_install	Installation…
+shell.progress_update	Mise à jour…
+shell.progress_remove	Suppression…
+shell.progress_save	Enregistrement…
+shell.home	Retour à la bibliothèque
+shell.library_show	Afficher la liste des jeux
+shell.library_hide	Masquer la liste des jeux
+shell.back_library	‹ Bibliothèque
+shell.details	Détails
+shell.bundle_done	Fichier de diagnostic créé
+shell.failed	L'action n'a pas pu aboutir
+shell.catalog_changed	Vos modèles ont été mis à jour
+shell.checking	Contrôle de l'installation…
+shell.review_update	Vérifier la mise à jour de Retoque
+shell.review_install	Vérifier l'installation de Retoque
+shell.review_remove	Vérifier la désinstallation
+shell.review_note	Rien ne change avant votre confirmation.
+shell.undo_record	Trace de Retoque pour annuler cette opération
+shell.resolve	Résolvez le problème ci-dessus, fermez cette vérification et réessayez.
+shell.add	Ajouter
+shell.replace	Remplacer ou restaurer
+shell.keep	Conserver
+shell.remove	Retirer
+shell.settings	Réglages
+shell.games_one	jeu
+shell.games_other	jeux
+shell.updates_one	mise à jour disponible
+shell.updates_other	mises à jour disponibles
+shell.home_help	Ajoutez le dossier d'un jeu ou analysez vos lanceurs pour commencer.
+shell.reinstall	Réinstaller…
+shell.resume	Terminer le nettoyage…
+shell.update	Mettre à jour Retoque…
+shell.open_folder	Ouvrir le dossier du jeu
+shell.pending	modifications non enregistrées
+shell.preparing	Préparation de la vérification…
+shell.installed_done	Retoque installé
+shell.updated_done	Retoque mis à jour
+shell.removed_done	Retoque désinstallé
+shell.settings_done	Réglages appliqués
+set.advanced	Réglages avancés
+set.model_link	Choisir le modèle NR dans Composants
+set.custom	Valeur personnalisée
+set.automatic	Automatique
+tab.install_first	Installez Retoque pour configurer ce jeu
+tab.review_install	Vérifier l'installation…
+tab.loading	Lecture des réglages du jeu…
+mdl.loading	Lecture de la version du modèle…
+mdl.reading_catalog	Lecture de vos modèles…
+mdl.beside	Trouvé à côté du jeu
+mdl.from_catalog	Depuis vos modèles
+mdl.from_path	Depuis le fichier configuré
+mdl.version_unknown	Version non identifiée
+mdl.unresolved	Ce chemin ne peut pas être contrôlé sur ce système. Contrôlez-le dans le jeu.
+mdl.auto_unresolved	Aucun modèle à côté de l'exécutable. La recherche par défaut peut en trouver un dans un autre dossier.
+mdl.next_start	C'est le fichier choisi pour le prochain démarrage, pas une preuve de ce qu'un jeu en cours a chargé.
+mdl.catalog_empty	Vous n'avez pas encore de modèle
+mdl.optional	Ce jeu a déjà un modèle. En importer un autre est facultatif.
+mdl.drop	Déposez ici un modèle NR (nvngx_dlssnr.dll) ou choisissez un fichier
+mdl.import_review	Importer ce fichier dans vos modèles ? Le dossier du jeu reste inchangé.
+mdl.confirm_import	Importer le modèle
+mdl.used_games_none	Aucun jeu n'utilise ce modèle
+mdl.used_games_one	1 jeu utilise ce modèle
+mdl.used_games	Jeux utilisant ce modèle : {n}
+mdl.refresh	Contrôler à nouveau le modèle
+log.loading	Lecture du journal…
+log.latest	Dernière session
+log.history	Journal de la session
+log.no_sample	Aucune mesure confirmée
+log.details	Détails techniques
+log.no_evidence	Aucune activité NR confirmée dans ce journal
+log.initialized_only	NR initialisé ; l'exécution n'est pas confirmée
+log.ran	Exécution du NR enregistrée
+log.stage_pre	avant l'upscaler
+log.stage_post	après l'upscaler
+log.stage_present	à la présentation
+log.on_api	sur
+log.error_count_one	erreur
+log.error_count	erreurs
+log.hint_errors	Consultez les erreurs ci-dessous. Créez un fichier de diagnostic si vous avez besoin d'aide.
+log.hint_inactive	Assurez-vous que le NR est activé et qu'un modèle est disponible, puis relancez le jeu.
+log.hint_timing	Aucun temps GPU confirmé n'a été enregistré. Cela seul ne signifie pas que le NR a échoué.
+log.no_log_bundle	Le fichier de diagnostic inclut les réglages disponibles et l'état de l'installation, même sans journal.
+log.repeat_one	occurrence
+log.repeat	occurrences
+log.retry	Relire
+cmp.empty.no_shortcut	Le raccourci du menu est désactivé. Définissez Menu.ShortcutKey dans OptiScaler.ini, puis redémarrez le jeu.
+cmp.fit.short	Ajuster
+cmp.reset.short	0
+cmp.tools	Options de la comparaison
+cmp.more	…
+cmp.expand	Agrandir la comparaison
+cmp.close	Fermer la vue agrandie
+cmp.details	Détails de la capture
+cmp.shortcuts	Raccourcis clavier
+cmp.keyboard	Image sélectionnée : 1–4 modes · F ajuster · Espace original · flèches déplacer · Maj + gauche/droite déplace le séparateur · +/− zoom · Échap quitte la vue agrandie.
+cmp.divider	Position de la comparaison
+cmp.zoom_in	Zoom avant
+cmp.zoom_out	Zoom arrière
+cmp.preview	Aperçu SDR
+cmp.empty.title	Votre première comparaison
+cmp.empty.install	Commencez dans l'onglet {tab} pour vérifier l'installation, puis lancez le jeu avec le NR activé.
+cmp.empty.run	Lancez le jeu avec Retoque et le NR activé.
+cmp.empty.menu	Appuyez sur {key} pour ouvrir le menu de Retoque dans le jeu.
+cmp.empty.custom	Ouvrez le menu de Retoque dans le jeu avec votre touche de menu configurée.
+cmp.empty.disabled	Le menu dans le jeu est désactivé dans la configuration de ce jeu. Activez-le avant de capturer.
+cmp.empty.capture	Dans Compare, choisissez « Capture original and processed ». Attendez que les deux fichiers soient terminés, puis actualisez ici.
+cmp.empty.refresh	Rechercher des captures
+auto.gpu_reading	Détection de la carte graphique…
+auto.gpu_unknown	Carte graphique non détectée
+shell.install_optimize	Installer et optimiser…
+shell.register_optimize	Enregistrer et optimiser…
+shell.update_optimize	Mettre à jour et optimiser…
+shell.more	Plus d'actions
+shell.install_optimize_hint	Une seule vérification : Retoque, puis ce dont ce jeu et votre carte graphique ont besoin. Rien ne change avant votre confirmation.
+shell.install_only	Installer seulement…
+shell.optimize	Optimiser…
+shell.optimize_hint	Vérifier ce que ce jeu et votre carte graphique peuvent utiliser maintenant.
+shell.no_payload	Les fichiers de Retoque sont introuvables. Cliquez sur « Fichiers de Retoque » en bas de la fenêtre.
+auto.use_banner	« Installer et optimiser… » en haut fait tout cela en une seule vérification.
+tile.gpu	Carte graphique
+tile.nr	Rendu neuronal
+tile.dlss	DLSS
+tile.fg	Génération d'images
+tile.on	Activé
+tile.off	Désactivé
+tile.unknown	Inconnu
+tile.model_missing	Modèle manquant
+tile.fg_sm86	sm86 pour RTX 20/30
+tile.fg_game	Celle du jeu
+tile.fg_available	Disponible
+tile.fg_needs_sm86	Nécessite sm86 sur cette carte
+tile.dlss_none	Introuvable
+tile.dlss_detail	Fichiers dans le jeu
+auto.turing	Turing
+auto.ampere	Ampere
+auto.ada	Ada
+auto.blackwell	Blackwell
+auto.older	Carte NVIDIA de génération antérieure
+auto.other	Carte graphique
+auto.unknown	Architecture inconnue
+auto.gb	GB
+auto.driver	Pilote
+auto.title	Optimisé pour votre carte graphique
+auto.checking	Contrôle de ce jeu…
+auto.reading_components	Lecture de vos composants…
+auto.none	Aucune modification automatique recommandée pour cette carte graphique et ce jeu.
+auto.need_install	Installez d'abord Retoque dans ce jeu.
+auto.apply	Appliquer seulement ceci…
+auto.confirm	Appliquer
+auto.done	Modifications appliquées
+auto.done_optimize	Optimisation appliquée
+auto.done_install	Retoque installé et optimisé
+auto.done_update	Retoque mis à jour et optimisé
+auto.done_register	Retoque enregistré et optimisé
+auto.partial	Application incomplète ; opérations terminées
+auto.lsfg	Génération d'images avec Lossless Scaling
+auto.ls_help	Choisissez un multiplicateur pour vérifier les modifications. Vos fichiers Lossless Scaling sont utilisés sur place, jamais copiés. Redémarrez le jeu après avoir appliqué.
+auto.off	Désactivé…
+auto.x2	x2…
+auto.x3	x3…
+auto.x4	x4…
+auto.ls_ready	Shaders Lossless Scaling prêts
+auto.ls_missing	Lossless Scaling introuvable
+auto.choose_lossless	Choisir le dossier de Lossless Scaling…
+auto.ls_conflict	Désinstallez sm86 dans Composants › Génération d'images avant d'activer LSFG.
+auto.components	Composants de génération d'images
+auto.no_component	Aucun composant sm86 dans vos composants
+auto.component_installed	Composant installé dans ce jeu
+auto.component_install	Vérifier l'installation du composant…
+auto.component_remove	Vérifier le retrait du composant
+auto.catalog_remove	Supprimer le composant de l'app…
+auto.catalog_remove_title	Supprimer ce composant de l'app ?
+auto.catalog_remove_help	Supprime la copie conservée par l'app. Les jeux qui l'ont gardent leurs fichiers ; pour l'installer à nouveau, importez-le ou téléchargez-le de nouveau.
+auto.none_installed	Aucun composant géré n'est installé dans ce jeu.
+rec.sm86.title	Génération d'images DLSS pour votre carte graphique
+rec.sm86.why	Ce jeu a DLSS-G. Votre chargeur sm86 importé peut fournir la génération d'images sur Turing ou Ampere ; LSFG sera désactivé.
+rec.sm86_mfg.title	Génération d'images DLSS via sm86
+rec.sm86_mfg.why	sm86 est installé et ce jeu a DLSS-G : la génération d'images propre à Retoque est mise de côté et, sauf si le jeu a déjà un choix, deux images générées sont demandées pour chaque image réelle (x3), ce qui reste plus stable que x4 sur une RTX 30. En dessous d'environ 30 images réelles par seconde, choisissez DLSS Équilibré ou Performance dans le jeu. Vous pouvez le modifier dans Réglages.
+rec.rtx30_nr.title	Rendu neuronal (NR) adapté aux RTX 30
+rec.rtx30_nr.why	Détail complet au centre de l'écran pour le même coût (compression périphérique) et un effet plus fort (1,5). Mesuré sur une RTX 3060 ; vous pouvez modifier les deux dans Réglages.
+rec.lsfg.title	Lossless Scaling x2
+rec.lsfg.why	Aucun DLSS-G détecté dans ce jeu. Utilisez votre installation de Lossless Scaling pour générer une image supplémentaire pour chaque image réelle.
+rec.install.title	Installez d'abord Retoque
+rec.install.why	Les réglages adaptés à votre carte graphique sont disponibles après l'installation de Retoque dans ce jeu.
+rec.adopt.title	Enregistrer cette installation de Retoque
+rec.adopt.why	Retoque est présent mais pas enregistré (installé par un ancien script). Le réinstaller via l'app enregistre chaque fichier, pour pouvoir le mettre à jour et le retirer sans risque plus tard.
+rec.sm86_update.title	Mettre à jour DLSS-G pour RTX 30 (dlssg_for_sm86)
+rec.sm86_update.why	Ce jeu a un ancien dlssg_for_sm86 (0.3.x). La version de vos composants le remplace ; les anciens fichiers sont conservés comme copie de sauvegarde.
+store.xbox	Xbox
+folders.title	Vos dossiers
+folders.migrated_both	Vos dossiers ont été mis à jour : {moved} déplacé(s) vers les dossiers à plusieurs jeux ; racine de lecteur {roots} ignorée.
+folders.migrated_moved	Vos dossiers ont été mis à jour : {moved} déplacé(s) vers les dossiers à plusieurs jeux.
+folders.migrated_dropped	Vos dossiers ont été mis à jour : racine de lecteur {roots} ignorée.
+folders.question	Que contient ce dossier ?
+folders.game	Un jeu
+folders.library	Un dossier avec plusieurs jeux
+folders.game_help	Choisissez le dossier d'un jeu ou d'un émulateur.
+folders.library_help	Chaque sous-dossier est examiné à la recherche d'un jeu. Choisissez le dossier parent qui les contient.
+folders.help	Ces dossiers sont analysés quand vous relancez la recherche. Retirer une entrée arrête seulement l'analyse de ce dossier ; aucun fichier n'est supprimé.
+folders.empty	Aucun dossier ajouté pour l'instant.
+folders.games	Jeux et émulateurs individuels
+folders.libraries	Dossiers avec plusieurs jeux
+folders.remove	Retirer de la liste
+folders.remove_help	Retirer uniquement de cette liste. Les fichiers restent où ils sont.
+folders.close	Fermer
+folders.unregistered	Absent de la liste du magasin
+palette.title	Commandes
+palette.search	Rechercher des jeux, onglets, réglages et actions
+palette.keys	Flèches pour choisir · Entrée pour ouvrir · Échap pour fermer
+palette.empty	Aucun résultat
+palette.game	Jeu
+palette.uninstall	Désinstaller Retoque…
+palette.review_settings	Vérifier les modifications des réglages…
+palette.focus	Aller à la recherche en cours
+set.filter	Filtrer les réglages
+set.only_changed	Modifiés uniquement
+set.reset	Revenir à automatique : {label}
+set.source_draft	Modifié, pas encore appliqué. Vérifiez pour appliquer.
+undo.exact	L'annulation de l'INI restaure les octets d'origine ; l'empreinte enregistrée après application correspond toujours.
+undo.conservative	Annulation prudente de l'INI : le fichier a changé ou l'historique exact est indisponible. Les autres octets sont conservés ; la restauration n'est pas identique octet pour octet.
+undo.provenance_mismatch	Les données d'annulation de l'INI ne correspondent pas aux modifications demandées
+undo.invalid_provenance	Données d'annulation de l'INI non valides ; aucun fichier n'a été modifié
+undo.stale_provenance	Les données d'annulation ne correspondent plus à l'INI ; préparez une nouvelle vérification
+undo.stale_value	La valeur de l'INI a changé depuis la vérification ; préparez une nouvelle vérification
+undo.title	Annuler la dernière modification…
+undo.empty	Aucune modification de réglages enregistrée à annuler pour ce jeu.
+undo.conflict	Annulation refusée : ce réglage a changé après la modification enregistrée. Vérifiez les réglages actuels :
+undo.save_failed	Réglages appliqués, mais l'historique d'annulation n'a pas pu être enregistré
+undo.auto_note	L'annulation est vérifiée avant d'être appliquée. Les réglages qui n'étaient pas dans le fichier auparavant sont de nouveau retirés.
+drop.hover	Déposez pour vérifier l'import d'un modèle, d'un composant ou l'ajout d'un jeu
+drop.title	Vérifier l'élément déposé
+drop.model	Importer ce modèle NR dans vos modèles ?
+drop.component	Importer ce composant sm86 dans vos composants ? L'installation nécessite une vérification séparée.
+drop.game	Enregistrer ce dossier de jeu dans la bibliothèque ? Aucun fichier du jeu ne sera modifié.
+drop.unsupported	Élément non pris en charge. Choisissez un fichier nvngx_dlssnr*.dll ou un dossier de jeu ou de composant.
+drop.import	Importer
+drop.add_game	Ajouter à la bibliothèque
+drop.checking	Contrôle du fichier…
+doctor.title	Diagnostic de Retoque
+doctor.prepare	Vérifier la correction…
+doctor.evidence	Éléments constatés
+doctor.badge	Problèmes détectés
+doctor.issues_one	1 problème
+doctor.issues	{n} problèmes
+watch.manual	Mises à jour automatiques indisponibles. Actualisez manuellement.
+watch.refresh	Actualiser le jeu sélectionné
+log.diagnoses	Diagnostic du journal
+dlss.title	NVIDIA DLSS
+dlss.installed	DLSS dans ce jeu
+dlss.available	disponible
+dlss.current	à jour
+dlss.update	Mettre à jour DLSS…
+dlss.restore	Restaurer le DLSS d'origine et désinstaller Retoque…
+dlss.restore_only	Restaurer le DLSS d'origine…
+dlss.restore_confirm	Restaurer le DLSS d'origine
+dlss.optimize	Mettre aussi à jour DLSS (facultatif)
+dlss.download	Télécharger DLSS 310.9.16…
+dlss.all_current	Tous les fichiers DLSS de ce jeu sont déjà dans cette version ou une plus récente.
+dlss.downloading	Téléchargement de NVIDIA DLSS contrôlé
+dlss.download_first	Téléchargez d'abord DLSS dans Composants › DLSS, puis vérifiez la mise à jour.
+dlss.consent	Retoque télécharge Super Resolution, Ray Reconstruction et Frame Generation directement depuis NVIDIA. Seuls les types que le jeu possède déjà sont remplacés, après une vérification séparée.
+dlss.consent_title	Télécharger NVIDIA DLSS 310.9.16
+dlss.consent_details	Hôtes : raw.githubusercontent.com et media.githubusercontent.com (NVIDIA/DLSS, v310.9.16). Chaque fichier est contrôlé avec une taille et un SHA-256 fixes. La licence NVIDIA DLSS s'applique.
+dlss.caution	Remplacer des DLL peut être incompatible avec un jeu ou son anti-triche. Consultez la politique du jeu avant de mettre à jour. Les originaux sont sauvegardés pour pouvoir être restaurés.
+dlss.license	Lire la licence NVIDIA
+dlss.error.0	La trace d'installation DLSS à la racine appartient à une autre installation
+dlss.error.1	Racine du jeu non valide ou liste DLSS vide
+dlss.error.2	Chemin DLSS non valide ou en double
+dlss.error.3	Destination DLSS manquante, liée ou ambiguë
+dlss.error.4	Restaurez la trace d'installation DLSS précédente avant de changer sa racine
+dlss.error.5	Le marqueur DLSS de la racine n'appartient pas à la trace d'installation
+dlss.error.6	Marqueur de la copie DLSS de l'app non valide
+dlss.error.7	Chemin DLSS avec un encodage non valide
+dlss.error.8	Fichier de la copie DLSS de l'app manquant ou lié
+dlss.error.9	La DLL a changé depuis la mise à jour précédente ; restaurez-la ou réconciliez d'abord
+dlss.error.10	Dossier cible hors de la racine du jeu
+dlss.error.11	La taille ou le SHA-256 du DLSS ne correspond pas
+dlss.error.12	La copie DLSS de l'app est un lien
+dlss.error.13	Dossier de la copie DLSS de l'app non valide
+dlss.error.14	Fichier de la copie DLSS de l'app non valide
+dlss.error.15	Le téléchargement de DLSS nécessite une confirmation
+dlss.error.16	La copie DLSS de l'app est apparue pendant le téléchargement
+dlss.error.17	DLSS n'est pas encore téléchargé
+dlss.error.18	La copie DLSS de l'app a disparu
+dlss.error.19	Profondeur maximale de la recherche DLSS dépassée
+dlss.error.20	Nombre maximal de fichiers de la recherche DLSS dépassé
+dlss.error.21	Chemin avec un encodage non valide dans la recherche DLSS
+dlss.error.22	Chemin DLSS non valide
+dlss.error.23	La restauration ne peut pas être combinée avec une optimisation
+dlss.error.24	Seules les installations dans la même racine peuvent être combinées
+dlss.error.25	Les plans d'installation modifient les mêmes chemins
+dlss.error.26	Les fichiers ont changé entre les plans d'installation
+dlss.error.component_changed	Le composant a changé depuis la vérification
+payload.source.beside	Utiliser les fichiers à côté de l'app
+payload.source.folder	Utiliser le dossier choisi
+payload.source.release	Utiliser la version téléchargée
+payload.download	Télécharger la version…
+payload.download_now	Télécharger la mise à jour…
+payload.check	Rechercher des mises à jour…
+payload.consent_title	Version officielle de Retoque
+payload.check_consent	Demander à GitHub s'il existe une version plus récente des fichiers de Retoque ?
+payload.download_consent	Retoque télécharge ses fichiers les plus récents depuis la version officielle et les contrôle. Vos jeux ne changent pas tant que vous n'avez pas vérifié une installation.
+payload.hosts_note	Hôtes HTTPS autorisés : api.github.com, github.com/gabrielmaialva33/retoque et release-assets.githubusercontent.com. Contrôlé avec SHA256SUMS et l'empreinte SHA-256 de GitHub.
+payload.progress	Téléchargement des fichiers de Retoque…
+payload.no_release	Aucune version officielle n'est encore publiée sur GitHub ; le dossier choisi ou les fichiers à côté de l'app restent utilisés.
+payload.new_release	Nouvelle version disponible
+payload.up_to_date	Version à jour
+payload.error.0	Le SHA-256 des fichiers de Retoque ne correspond pas à l'empreinte publiée par GitHub.
+payload.error.1	Le SHA-256 des fichiers de Retoque ne correspond pas au fichier SHA256SUMS.
+payload.error.2	Le SHA-256 du fichier SHA256SUMS ne correspond pas à l'empreinte publiée.
+payload.error.3	Le fichier SHA256SUMS ne mentionne pas les fichiers de Retoque.
+payload.error.4	Un fichier interdit se trouve parmi les fichiers de Retoque.
+payload.error.5	Un fichier supplémentaire non autorisé se trouve parmi les fichiers de Retoque.
+payload.error.6	Les versions de fichier d'OptiScaler.dll et de nvngx.dll_dlssnr.dll ne correspondent pas.
+payload.error.7	Des fichiers obligatoires de Retoque manquent dans cette version.
+payload.error.8	Les métadonnées de la version officielle de Retoque ne sont pas valides.
+payload.error.9	Impossible de consulter ou de télécharger la version de Retoque en HTTPS.
+payload.error.10	Adresse hors du dépôt officiel de Retoque.
+payload.error.11	Redirection de la version de Retoque refusée.
+payload.error.12	Le contenu de cette version a changé depuis le premier téléchargement.
+nr_fetch.title	Modèle NR de la communauté (RankFTW/rhi-repo)
+nr_fetch.source_note	Redistribution communautaire depuis RankFTW/rhi-repo (référencée par ApolloF/DLSS5-Updater-catalog), pas un téléchargement officiel de NVIDIA. Contrôlé par taille et SHA-256 avant l'import.
+nr_fetch.get_compatible	Télécharger un modèle compatible…
+nr_fetch.consent_title	Télécharger un modèle NR compatible
+nr_fetch.consent_body	Ce modèle vient de la communauté, pas de NVIDIA. Retoque le contrôle et ne garde que le fichier du modèle. Les réglages de votre jeu ne changent qu'après une vérification séparée.
+nr_fetch.refresh_catalog	Actualiser la liste de la communauté…
+nr_fetch.refresh_title	Actualiser la liste des modèles NR de la communauté
+nr_fetch.refresh_body	Télécharger depuis GitHub la dernière liste des modèles NR de la communauté ?
+nr_fetch.refresh_details	catalog.json depuis ApolloF/DLSS5-Updater-catalog (raw.githubusercontent.com, au plus 8 MB). Seules les entrées des versions de RankFTW/rhi-repo avec un SHA-256 sont acceptées ; les entrées non testées ne sont jamais considérées comme compatibles.
+nr_fetch.confirm_refresh	Actualiser la liste
+nr_fetch.downloading	Téléchargement du modèle NR de la communauté
+nr_fetch.refreshing	Téléchargement de la liste des modèles de la communauté…
+nr_fetch.no_compatible_gpu	Aucun modèle compatible ne peut être choisi automatiquement, car la carte graphique n'a pas été identifiée.
+nr_fetch.unavailable	Aucun modèle NR compatible n'est disponible pour cette carte graphique. Aucune modification n'a été appliquée.
+nr_fetch.available_variants	Variantes disponibles dans la communauté
+nr_fetch.download_variant	Télécharger…
+nr_fetch.error.0	Le SHA-256 du modèle dans la liste est manquant ou non valide.
+nr_fetch.error.1	La liste des modèles dépasse la taille maximale.
+nr_fetch.error.2	La liste des modèles contient trop d'entrées.
+nr_fetch.error.3	Les métadonnées de la liste des modèles ne sont pas valides.
+nr_fetch.error.4	L'adresse n'appartient pas aux versions publiées de RankFTW/rhi-repo.
+nr_fetch.error.5	La destination de la redirection du modèle n'est pas autorisée.
+nr_fetch.error.6	La liste des modèles a tenté une redirection non autorisée.
+nr_fetch.error.7	La redirection du modèle n'indique pas de destination.
+nr_fetch.error.8	Impossible de consulter ou de télécharger le modèle en HTTPS.
+nr_fetch.error.9	Le serveur du modèle a renvoyé un statut HTTP inattendu.
+nr_fetch.error.10	La réponse du téléchargement du modèle dépasse la taille maximale.
+nr_fetch.error.11	Le téléchargement du modèle a dépassé le nombre maximal de redirections.
+nr_fetch.error.12	Le fichier nvngx_dlssnr.dll est introuvable dans l'archive.
+nr_fetch.error.13	L'archive contient plusieurs nvngx_dlssnr.dll.
+nr_fetch.error.14	La taille du modèle ne correspond pas à celle déclarée.
+nr_fetch.error.15	Le SHA-256 du modèle ne correspond pas à celui attendu.
+nr_fetch.error.16	Les métadonnées de la liste contredisent une version connue épinglée.
+rs.undo_addon	Annuler les modifications de l'add-on
+rs.error.restored	original déjà restauré
+rs.error.0	La taille ou le SHA-256 de ReShade ne correspond pas
+rs.error.1	Le fichier ReShade fourni dépasse la taille maximale
+rs.error.2	Le fichier ReShade fourni n'est pas un exécutable PE
+rs.error.3	L'installateur de ReShade ne contient pas de ZIP annexé
+rs.error.4	Le ZIP de ReShade contient trop d'entrées
+rs.error.5	ReShade64.dll ambigu ou lien
+rs.error.6	ReShade64.dll absent de l'installateur
+rs.error.7	La DLL de ReShade dépasse la taille maximale
+rs.error.8	DLL de ReShade non valide
+rs.error.9	Le fichier ReShade dépasse la taille maximale
+rs.error.10	Identifiant de la copie ReShade de l'app non valide
+rs.error.11	Échec du contrôle d'intégrité de la copie ReShade de l'app
+rs.error.12	DLL de ReShade non reconnue ; une DLL x64 identifiée comme ReShade est nécessaire
+rs.error.13	Le cache de ReShade a disparu
+rs.error.14	Nom de fichier ReShade non valide
+rs.error.15	Le téléchargement de ReShade nécessite une confirmation
+rs.error.16	Le fichier ReShade fourni est un lien ou n'est pas un fichier ordinaire
+rs.error.17	Le fichier ReShade fourni dépasse la taille maximale
+rs.error.18	Noms de fichiers ReShade ambigus à cause de la casse
+rs.error.19	AddonPath utilise un lecteur Wine non résolu ou un chemin réseau
+rs.error.20	AddonPath est un lien
+rs.error.21	Nombre maximal d'add-ons analysés dépassé
+rs.error.22	Nom d'add-on non encodé en UTF-8
+rs.error.23	Noms d'add-ons ambigus à cause de la casse
+rs.error.24	L'add-on est un lien ou n'est pas un fichier ordinaire
+rs.error.25	L'analyse des add-ons dépasse la taille maximale
+rs.error.26	L'état de ReShade a été modifié ou n'appartient pas à la trace d'installation
+rs.error.27	État de ReShade non valide
+rs.error.28	L'historique d'annulation de ReShade dépasse la limite
+rs.error.29	Conflit de casse dans la destination ReShade/add-on
+rs.error.30	Le fichier ReShade/add-on fourni n'est pas une DLL PE x64
+rs.error.31	Special K est présent et gère le chargement de ReShade
+rs.error.32	Un autre chargeur ReShade est présent ; utilisez d'abord la migration keep_reshade existante
+rs.error.33	ReShade exige que le fichier de chargement et l'exécutable soient dans le même dossier
+rs.error.34	Installez Retoque avant son composant ReShade
+rs.error.35	OptiScaler.ini est manquant
+rs.error.36	Chemin de l'INI d'annulation non valide
+rs.error.37	Identité de la modification d'annulation non valide
+rs.error.38	LoadReshade a changé depuis l'installation vérifiée ; conservez l'état d'annulation
+rs.error.39	Le composant n'a pas été importé par Retoque
+rs.error.40	L'identité de l'état du composant ne correspond pas
+rs.error.41	Le fichier importé a changé ; aucun fichier n'a été retiré
+rs.error.42	La copie de sauvegarde de ReShade a changé ; conservez la trace d'installation
+rs.error.43	Sélectionnez un fichier .addon64 ou .addon avec un nom sûr
+rs.error.44	AddonPath diffère du dossier du jeu ; un import ici ne chargerait pas l'add-on
+rs.error.45	Nom de fichier de l'add-on non valide
+rs.error.46	L'add-on n'est pas dans l'AddonPath de ReShade
+rs.error.47	La version de ReShade est limitée ou inconnue ; la prise en charge complète des add-ons n'est pas confirmée
+rs.error.48	Annulation prudente de l'INI : les autres modifications sont conservées ; la restauration n'est pas identique octet pour octet
+rs.error.49	Fichier existant identique ; conserver son appartenance d'origine
+rs.error.50	Annulation de l'INI non valide
+rs.error.51	Option ReShade/add-on inconnue
+rs.error.52	Trop d'arguments ReShade/add-on
+rs.error.53	addon add nécessite un fichier
+rs.error.54	Le nom de l'add-on est obligatoire
+rs.error.55	Action ReShade/add-on inconnue
+rs.title	ReShade et add-ons
+rs.description	Retoque conserve le fichier de chargement du jeu et charge ReShade64.dll.
+rs.enabled	Activé
+rs.disabled	Désactivé
+rs.full	Prise en charge complète des add-ons
+rs.limited	Version limitée de ReShade : les add-ons externes ne peuvent pas se charger
+rs.unknown	Version de ReShade inconnue
+rs.missing	ReShade est absent
+rs.recommend	Installer ReShade avec prise en charge des add-ons
+rs.recommend_why	Des add-ons sont présents, mais la prise en charge complète de ReShade est absente ou non confirmée. Vérifiez l'installation séparément.
+rs.static	Pas encore testé dans ce jeu. Redémarrez le jeu après les modifications.
+rs.addons	Add-ons
+rs.build	Version de ReShade
+rs.install	Vérifier l'installation de ReShade…
+rs.uninstall	Retirer le composant ReShade
+rs.import	Importer une DLL ou un installateur ReShade local…
+rs.add	Importer un add-on…
+rs.remove_addon	Retirer l'add-on importé
+rs.review	Vérifier les modifications de ReShade / add-on
+rs.drop_addon	Copier cet add-on dans le jeu sélectionné après vérification.
+rs.drop_reshade	Importer cette DLL ou cet installateur ReShade dans l'app ? Son installation dans un jeu a sa propre vérification.
+rs.select_game	Sélectionnez un jeu avant d'importer un add-on.
+rs.nr_off	Rendu neuronal (NR) : désactivé
+rs.nr_addon	Rendu neuronal (NR) : par l'add-on RenoDX DLSS5
+rs.nr_retoque	Rendu neuronal (NR) : par Retoque
+rs.input_title	Le menu de ReShade prend la souris au menu de Retoque
+rs.input_why	Quand le traitement des entrées de ReShade est sur « tout bloquer » (sa valeur par défaut), le menu de Retoque ne reçoit ni souris ni clavier tant que l'overlay de ReShade est ouvert. Ne bloquer que lorsque le curseur est sur les fenêtres de ReShade permet d'utiliser les deux menus ensemble.
+rs.input_mode	ReShade.ini [INPUT]
+rs.input_fix	Laisser les deux menus utiliser la souris…
+rs.yield	Laisser l'add-on NR prendre le relais (par défaut)
+rs.ignore	Conserver le NR de Retoque (experts)
+rs.consent	Télécharger ReShade 6.8.0 avec prise en charge complète des add-ons depuis reshade.me ? L'installateur officiel de 4,3 MB et la DLL extraite ont des empreintes SHA-256 épinglées. La licence BSD-3-Clause s'applique. Les modifications du jeu nécessitent une vérification séparée.
+rs.preparing	Préparation de ReShade…
+rs.cli_confirm	Tapez yes pour confirmer le téléchargement :
+rs.download_first	Importez ou téléchargez d'abord ReShade ; dry-run ne télécharge rien.
+rs.dry	Simulation : aucune modification du jeu ni de vos composants.
+rs.done	Modifications vérifiées appliquées.
+severity.warning	Avertissement
+severity.error	Erreur
+doctor.journal_unreadable.why	Une trace d'installation inachevée existe, mais Retoque n'a pas pu examiner cette installation. Conservez-la et vérifiez la réparation ; les autres contrôles sont indisponibles.
+log.load.title	Le modèle NR ne s'est pas chargé
+log.load.why	Le chargeur direct n'a pas pu charger le modèle sélectionné. Contrôlez le fichier et ses dépendances ; la compatibilité seule n'en identifie pas la cause.
+doctor.healthy	Aucun problème dans les éléments disponibles ; les éléments non examinés restent inconnus.
+doctor.review	Vérifiez un nouveau plan avant toute réparation.
+doctor.unfinished.title	Installation incomplète
+doctor.unfinished.why	La dernière installation ou désinstallation s'est arrêtée en cours de route. Vérifiez la réparation pour la terminer.
+doctor.version.title	Les fichiers de Retoque ont des versions différentes
+doctor.version.why	Préparez une mise à jour des deux fichiers depuis la même version.
+doctor.model_missing.title	Modèle NR manquant
+doctor.model_missing.why	Le NR est activé, mais le modèle sélectionné est absent. Désactivez le NR ou sélectionnez un modèle disponible.
+doctor.model_incompatible.title	Le modèle NR ne fonctionne pas sur cette carte graphique
+doctor.model_incompatible.why	Le modèle n'a pas été conçu pour cette carte graphique. Un modèle suggéré parmi vos modèles n'a pas encore été testé dans ce jeu.
+doctor.lsfg_ready.title	Les fichiers LSFG ne sont pas prêts
+doctor.lsfg_ready.why	LSFG est activé sans les fichiers ou le cache de shaders nécessaires. Désactivez-le jusqu'à ce qu'ils soient prêts.
+doctor.lsfg_output.title	Sortie incompatible avec LSFG
+doctor.lsfg_output.why	LSFG nécessite la sortie de génération d'images FSR (Réglages › Génération d'images › Sortie de la génération). Ce réglage seul ne prouve pas qu'il est prêt.
+doctor.fg_conflict.title	Sources de génération d'images en conflit
+doctor.fg_conflict.why	sm86 est installé et LSFG est activé. Vérifiez la désactivation de LSFG avant d'utiliser sm86.
+doctor.launch.title	Option de lancement manquante
+doctor.launch.why	Le jeu ne sait pas encore qu'il doit charger Retoque. Copiez l'option de lancement affichée dans cet onglet dans votre lanceur.
+log.vulkan.title	Périphérique Vulkan perdu
+log.vulkan.why	La vidange du NR lors du redimensionnement a signalé une perte du périphérique. Vérifiez la désactivation du NR pour comparer ; cela n'en établit pas la cause.
+log.ngx.title	Échec de l'initialisation NGX
+log.ngx.why	L'initialisation du modèle sous Vulkan a échoué. Contrôlez la compatibilité du modèle et du pilote.
+log.model.title	Échec d'une opération du modèle NR
+log.model.why	Le suivi côté CPU a enregistré des opérations du modèle en échec. Cela seul n'identifie ni une erreur de chargement ni sa cause.
+log.model.incompatible	Les échecs du modèle coïncident avec un modèle incompatible d'après l'analyse du fichier. Vérifiez un modèle compatible parmi vos modèles ; la cause reste non prouvée.
+log.pre.title	Le NR avant la mise à l'échelle s'est replié sur le mode sûr
+log.pre.why	Réglez Étape du NR sur Après l'upscaler dans Réglages pour utiliser la route après la mise à l'échelle.
+log.nvngx.title	Fichier NGX du pilote Wine absent
+log.nvngx.why	La sonde du pilote ne s'est pas initialisée et l'examen n'a trouvé aucun fichier NGX du pilote. Contrôlez l'installation Wine du pilote ; la sonde seule n'est pas une preuve.
+confidence.verified	Contrôlé lors de la dernière session
+confidence.static	Pas encore testé dans ce jeu
+confidence.proton	Expérimental sous Proton/Wine
+confidence.sm86_proton	sm86 0.4.1 documente Windows 10/11 x64 et D3D12. Sa note sur Vulkan décrit une couverture limitée et des correctifs communautaires, pas une validation sous Proton.
+evidence.installed	Installation reconnue
+evidence.tracked	Trace d'installation
+evidence.runtime	Environnement d'exécution
+evidence.dlss	DLL DLSS présente
+evidence.dlssg	DLL DLSSG présente
+evidence.sm86	sm86 installé
+evidence.sm86_legacy	Ancien sm86
+evidence.sm86_docs	Documentation sm86
+evidence.field	Test en jeu
+evidence.lsfg	LSFG activé
+evidence.gpu	Identité de la carte graphique
+evidence.api	API de la dernière session
+evidence.receipt	État de la trace d'installation
+evidence.pending	Opération inachevée
+evidence.proxy_version	Version du fichier de chargement
+evidence.forwarder_version	Version du composant NR
+evidence.nr_enabled	NR activé
+evidence.model_present	Modèle sélectionné présent
+evidence.model_targets	Cibles CUDA du modèle
+evidence.catalog_model	SHA256 du modèle alternatif
+evidence.lsfg_ready	État de préparation LSFG
+evidence.fg_output	Sortie de génération d'images
+evidence.launch_option	Option de lancement requise
+evidence.override	Option de lancement présente
+evidence.log	Ligne de journal anonymisée
+severity.info	Information
+doctor.dlss.title	Une version plus récente de DLSS est disponible
+doctor.dlss.why	NVIDIA DLSS 310.9.16 peut remplacer d'anciens fichiers SR/RR/FG après vérification. La compatibilité avec le jeu n'est pas garantie.
+doctor.dlss_root.title	La trace d'installation DLSS doit être récupérée
+doctor.dlss_root.why	Une opération DLSS en attente ou incomplète subsiste à la racine de l'installation du jeu. Vérifiez la restauration des deux traces d'installation.
+evidence.dlss_file_version	Version DLSS du jeu
+evidence.community_model	SHA256 du modèle de la communauté
+setting.DlssNr.Enabled	Rendu neuronal (NR)
+setting.DlssNr.Enabled.help	Nécessite un modèle NR (nvngx_dlssnr.dll) que vous fournissez. Automatique : désactivé.
+setting.DlssNr.Stage	Étape du NR
+setting.DlssNr.Stage.help	Avant l'upscaler est expérimental. Sous Vulkan, un changement nécessite de redémarrer le jeu. Si l'étape choisie n'est pas disponible, le NR ne bascule pas de lui-même.
+setting.DlssNr.WorkingScale	Échelle du modèle
+setting.DlssNr.WorkingScale.help	Automatique : choisie selon votre carte graphique. De 0,25 à 2,0 ; au-dessus de 1, le modèle travaille à une résolution plus élevée. Les routes sans mouvement réel restent à 1 ou moins.
+setting.DlssNr.ModelFile	Fichier du modèle
+setting.DlssNr.ModelFile.help	Automatique : cherche nvngx_dlssnr.dll à côté du jeu. Si le fichier choisi est absent, le NR se désactive. Redémarrez le jeu après l'avoir changé.
+setting.DlssNr.GameProfiles	Profils de jeux
+setting.DlssNr.GameProfiles.help	Applique au démarrage du jeu des réglages connus pour bien fonctionner avec lui, uniquement là où un réglage est laissé sur Automatique.
+setting.DlssNr.HookMethod	Emplacement du NR
+setting.DlssNr.HookMethod.help	Où le NR reçoit l'image. Les jeux Vulkan natifs l'ignorent. Certains choix nécessitent de redémarrer le jeu.
+setting.DlssNr.ApplyModel	Appliquer le modèle
+setting.DlssNr.ApplyModel.help	Désactivé affiche l'image d'origine pendant que le NR continue de tourner, pour comparer.
+setting.DlssNr.HighlightRecovery	Récupération des hautes lumières
+setting.DlssNr.HighlightRecovery.help	Préserve les couleurs vives, au prix d'un peu de détail du modèle. Uniquement pour les jeux avec sortie HDR.
+setting.DlssNr.Transfer	Agrandissement du modèle
+setting.DlssNr.Transfer.help	Comment l'image du modèle est agrandie quand il travaille sous la pleine résolution. Résiduel + DLSS ne fonctionne que sur certaines routes.
+setting.DlssNr.Compare	Comparer les images
+setting.DlssNr.Compare.help	Affiche l'image d'origine et l'image retouchée ensemble dans le jeu.
+setting.DlssNr.CompareSplit	Position du rideau
+setting.DlssNr.CompareSplit.help	Emplacement du séparateur (0,5 = milieu). S'applique au mode Rideau. Automatique : milieu.
+setting.DlssNr.CompareSwap	Inverser les côtés de la comparaison
+setting.DlssNr.CompareSwap.help	Inverse les côtés de l'image d'origine et de l'image retouchée pendant la comparaison.
+setting.Upscalers.Dx11Upscaler	Upscaler D3D11
+setting.Upscalers.Dx11Upscaler.help	Les options marquées « pont D3D12 » passent par D3D12 ; NVIDIA DLSS (pont D3D12) peut aussi exécuter le NR. Intel XeSS sans le pont nécessite une carte Intel Arc.
+setting.Upscalers.Dx12Upscaler	Upscaler D3D12
+setting.Upscalers.Dx12Upscaler.help	Automatique : choisi selon votre carte graphique.
+setting.Upscalers.VulkanUpscaler	Upscaler Vulkan
+setting.Upscalers.VulkanUpscaler.help	Les options marquées « pont D3D12 » passent par D3D12. Automatique : choisi selon votre carte graphique.
+setting.FrameGen.Enabled	Génération d'images
+setting.FrameGen.Enabled.help	Automatique : désactivée, sauf quand la source est la génération d'images DLSS propre au jeu ; elle suit alors le réglage du jeu.
+setting.FrameGen.FGInput	Entrée de la génération
+setting.FrameGen.FGInput.help	Quelle source de génération d'images du jeu utiliser. Synthétisée est expérimentale, en D3D11 et D3D12 uniquement.
+setting.FrameGen.FGOutput	Sortie de la génération
+setting.FrameGen.FGOutput.help	Nécessite les fichiers de la source choisie et une carte graphique qui la prend en charge.
+setting.FrameGen.FGNvngxReplacement	Remplacement DLSSG
+setting.FrameGen.FGNvngxReplacement.help	Utilisé uniquement avec la source NVIDIA NGX ou la sortie de génération d'images DLSS. Nécessite les fichiers du remplacement.
+setting.LSFG.Enabled	LSFG (expérimental)
+setting.LSFG.Enabled.help	Nécessite la sortie de génération d'images FSR et vos propres shaders Lossless Scaling. Les images que LSFG ne peut pas traiter passent par FidelityFX.
+setting.LSFG.FlowScale	Échelle du flux LSFG
+setting.LSFG.FlowScale.help	Des valeurs plus basses coûtent moins et suivent le mouvement moins finement. Automatique : 1.
+setting.LSFG.PerformanceMode	Mode performance LSFG
+setting.LSFG.PerformanceMode.help	Moins coûteux, avec un mouvement moins net.
+setting.LSFG.ShaderDir	Dossier des shaders LSFG
+setting.LSFG.ShaderDir.help	Shaders préparés à partir de votre propre copie de Lossless Scaling ; aucun n'est fourni. Automatique : aucun dossier.
+setting.LSFG.DllPath	Emplacement de Lossless Scaling
+setting.LSFG.DllPath.help	lsfg-vk.dll, Lossless.dll ou son dossier. Automatique : recherché dans vos dossiers Steam et Wine.
+setting.LSFG.Multiplier	Multiplicateur LSFG
+setting.LSFG.Multiplier.help	Images affichées pour chaque image réelle. Passer de 2 à 3 ou 4 nécessite de redémarrer le jeu.
+choice.automatic	Automatique
+choice.on	Activé
+choice.off	Désactivé
+choice.after_the_upscaler	Après l'upscaler
+choice.before_the_upscaler_experimental	Avant l'upscaler (expérimental)
+choice.automatic_route	Route automatique
+choice.upscaled_image	Image mise à l'échelle
+choice.at_presentation	À la présentation
+choice.classic	Classique
+choice.residual	Résiduel
+choice.residual_dlss	Résiduel + DLSS
+choice.sharp_residual	Résiduel net
+choice.side_by_side	Côte à côte
+choice.wipe	Rideau
+choice.fsr_2_1	FSR 2.1
+choice.fsr_2_2	FSR 2.2
+choice.fsr_3_1	FSR 3.1
+choice.fidelityfx	FidelityFX
+choice.intel_xess	Intel XeSS
+choice.nvidia_dlss	NVIDIA DLSS
+choice.fsr_2_1_d3d12_bridge	FSR 2.1 (pont D3D12)
+choice.fsr_2_2_d3d12_bridge	FSR 2.2 (pont D3D12)
+choice.fidelityfx_d3d12_bridge	FidelityFX (pont D3D12)
+choice.intel_xess_d3d12_bridge	Intel XeSS (pont D3D12)
+choice.nvidia_dlss_d3d12_bridge	NVIDIA DLSS (pont D3D12)
+choice.none	Aucun
+choice.dlss_frame_generation	Génération d'images DLSS
+choice.nvidia_ngx	NVIDIA NGX
+choice.fsr_frame_generation	Génération d'images FSR
+choice.fsr_3_0_frame_generation	Génération d'images FSR 3.0
+choice.intel_xe_frame_generation	Génération d'images Intel Xe
+choice.from_the_upscaler	Depuis l'upscaler
+choice.synthesized_experimental	Synthétisée (expérimental)
+choice.nukem_s_replacement	Remplacement de Nukem
+choice.artur_s_replacement	Remplacement d'Artur
+choice.fidelityfx_replacement	Remplacement FidelityFX
+choice.combined_replacements	Remplacements combinés
+choice.2_frames	Images ×2
+choice.3_frames	Images ×3
+choice.4_frames	Images ×4

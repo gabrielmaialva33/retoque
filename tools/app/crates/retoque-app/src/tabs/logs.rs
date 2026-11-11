@@ -158,7 +158,10 @@ impl RetoqueApp {
                                     egui::Label::new(RichText::new(line).monospace().small().color(theme::BAD)).wrap(),
                                 );
                                 if count > 1 {
-                                    ui.label(format!("{count} {}", self.tr("log.repeat")));
+                                    ui.label(format!(
+                                        "{count} {}",
+                                        crate::i18n::plural(self.lang, count, "log.repeat_one", "log.repeat")
+                                    ));
                                 }
                             }
                             if errors > s.errors.len() {
@@ -232,10 +235,10 @@ pub(crate) fn log_verdict(lang: Lang, summary: &Summary) -> String {
             verdict.push_str(&format!(" {}", t(lang, stage)));
         }
     }
+    let errors = summary.error_count.max(summary.errors.len());
     verdict.push_str(&format!(
-        " · {} {}",
-        summary.error_count.max(summary.errors.len()),
-        t(lang, "log.error_count")
+        " · {errors} {}",
+        crate::i18n::plural(lang, errors, "log.error_count_one", "log.error_count")
     ));
     verdict
 }
