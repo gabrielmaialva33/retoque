@@ -423,3 +423,40 @@ fn menu_input_repair_alone_on_an_existing_reshade() {
     // ReShade compares names case-sensitively: a differently cased key is not its setting.
     assert!(menu_input_blocked(b"[input]\ninputprocessing=1\n"));
 }
+
+#[test]
+fn nr_addon_markers_match_the_runtime_list() {
+    // The runtime decides who owns NR from retoque/dlssnr/DlssNr_ConsumerMarkers.h; the app must name the same add-ons.
+    let header =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../retoque/dlssnr/DlssNr_ConsumerMarkers.h");
+    let source = fs::read_to_string(&header).unwrap();
+    let table = &source[source.find("kCompetitors[]").expect("kCompetitors moved")..];
+    let table = &table[..table.find("};").unwrap()];
+    let mut runtime: Vec<&str> = table
+        .split("L\"")
+        .skip(1)
+        .map(|rest| &rest[..rest.find('"').unwrap()])
+        .collect();
+    let mut app = NR_ADDON_MARKERS.to_vec();
+    runtime.sort_unstable();
+    app.sort_unstable();
+    assert_eq!(app, runtime);
+}
+
+#[test]
+fn every_neural_addon_the_runtime_yields_to_is_an_nr_candidate() {
+    for file in [
+        "renodx-dlss5.addon64",
+        "RenoDX_DLSS.addon64",
+        "DLSS5-Feeder.addon64",
+        "dlss5_feed.addon",
+        "deep-fried-chicken.addon64",
+        "AMDLSS5.addon64",
+        "nr_native_adapter.dll",
+    ] {
+        assert!(is_nr_addon(file), "{file}");
+    }
+    for file in ["ReShade64.dll", "renodx-ff7rebirth.addon64", "framegen.addon64"] {
+        assert!(!is_nr_addon(file), "{file}");
+    }
+}
