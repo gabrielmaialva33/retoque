@@ -6,6 +6,8 @@
 
 #include <detours/detours.h>
 
+#include <array>
+#include <atomic>
 #include <tlhelp32.h>
 #include <vector>
 #include <string_view>
@@ -25,6 +27,9 @@ static bool positionIATHooks = false;
 
 namespace OptiInput
 {
+// The "pressed since the last call" bit Opti's own polling took from the game, handed back on its next call
+static std::array<std::atomic_bool, 256> asyncKeyPressTaken {};
+
 SHORT RealGetAsyncKeyStateSafe(int vk)
 {
     // Physical state, beneath other overlays' detours of GetAsyncKeyState (retoque/menu/input/native_key_state.h)
@@ -36,15 +41,41 @@ SHORT RealGetAsyncKeyStateSafe(int vk)
         return reader;
     }();
 
+    SHORT state = 0;
+
+    // user32's GetAsyncKeyState is this same win32u call, so a native read takes the game's pressed bit too
     if (native != nullptr && vk >= 0 && vk < 256)
-        return native(vk);
+    {
+        state = native(vk);
+    }
+    else
+    {
+        ScopedHookBypass bypass;
+        state = o_GetAsyncKeyState != nullptr ? o_GetAsyncKeyState(vk) : ::GetAsyncKeyState(vk);
+    }
 
-    ScopedHookBypass bypass;
+    if ((state & 1) != 0 && vk >= 0 && vk < static_cast<int>(asyncKeyPressTaken.size()))
+        asyncKeyPressTaken[vk] = true;
 
-    if (o_GetAsyncKeyState != nullptr)
-        return o_GetAsyncKeyState(vk);
+    return state;
+}
 
-    return ::GetAsyncKeyState(vk);
+void ForgetTakenAsyncKeyPresses()
+{
+    for (auto& taken : asyncKeyPressTaken)
+        taken = false;
+}
+
+SHORT WithTakenAsyncKeyPress(int vk, SHORT state, bool blocked)
+{
+    if (vk < 0 || vk >= static_cast<int>(asyncKeyPressTaken.size()))
+        return state;
+
+    // A press while blocked belongs to the menu
+    if (asyncKeyPressTaken[vk].exchange(false) && !blocked)
+        state |= 1;
+
+    return state;
 }
 
 SHORT RealGetKeyStateSafe(int vk)

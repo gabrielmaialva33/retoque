@@ -70,6 +70,7 @@ Do not assume the main branch still points where another session left it; inspec
 | [2026-11-09](linux-proton/upstream-20261109.md) | Trial integration: lifecycle, NGX lazy init, Vulkan presentation and shader rings; pending qualification |
 | [2026-11-03](linux-proton/upstream-20261103.md) | Plugin API, occluded swapchain creation and Pascal FSR4 pipeline retry |
 | [2026-11-04](linux-proton/upstream-20261104.md) | Vulkan release waits on the feature's device, DP4a features, 1.3 for DLSS-G |
+| [2026-11-11](linux-proton/upstream-20261111.md) | Menu input hand-back, custom DLSSD, shared NGX exports, FG stop on DLSSG off |
 
 The archived [patch table](history/maintainer-notes-20261029.md#linux--proton-patches-this-forks-own-layer)
 preserves earlier decisions, including ports deliberately not taken. Check current source before reusing its

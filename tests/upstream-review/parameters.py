@@ -1,5 +1,5 @@
 from support import source,function,execute
-proxy=source('OptiScaler/proxies/NVNGX_Proxy.h')
+proxy=source('OptiScaler/proxies/Nvngx_Proxy.h')
 pre=r'''
 #include <cassert>
 #include <cstdint>

@@ -4,7 +4,7 @@
 #include "DlssNr_GuideMatch_Dx12.h"
 #include <dlssnr/DlssNr_ReplayClock.h>
 #include <dlssnr/DlssNr_DriverInitGate.h>
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 #include <State.h>
 #include <Logger.h>
 #include <algorithm>

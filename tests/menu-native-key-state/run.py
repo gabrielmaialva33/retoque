@@ -33,8 +33,14 @@ for anchor in ("void PollVirtualKeyLocked(int vk, DWORD time)", "bool PollMouseB
 if re.search(r"(?<![\w:])(?:::)?GetAsyncKeyState\(", system):
     problems.append("input_system.cpp polls GetAsyncKeyState directly, through the detour chain")
 
+# The pressed-since-last-call bit the menu's reads take from the game (upstream 75d6d8b2), on both read paths
+taken = "static std::array<std::atomic_bool, 256> asyncKeyPressTaken {};"
+if detours.count(taken) != 1:
+    problems.append("asyncKeyPressTaken is no longer declared as the test expects")
 safe = function(detours, "SHORT RealGetAsyncKeyStateSafe(int vk)")
-unit = (HERE / "cases.cpp").read_text() + "\nnamespace OptiInput\n{\n" + safe + "\n}\n" + (HERE / "main.cpp").read_text()
+handBack = function(detours, "SHORT WithTakenAsyncKeyPress(int vk, SHORT state, bool blocked)")
+unit = ((HERE / "cases.cpp").read_text() + "\nnamespace OptiInput\n{\n" + taken + "\n" + safe + "\n" + handBack +
+        "\n}\n" + (HERE / "main.cpp").read_text())
 
 results = []
 with tempfile.TemporaryDirectory(prefix="retoque-menu-native-key-state-") as folder:

@@ -563,7 +563,7 @@ extern "C"
     // The _Ext variant puts the version BEFORE the feature info. That is the entire difference between
     // NVSDK_NGX_D3D11_Init and NVSDK_NGX_D3D11_Init_Ext, and getting it backwards is not a wrong answer,
     // it is a fault: NGX would take the version as a pointer and dereference 0x15 to read PathListInfo.
-    // The correct order is in this repo already, at proxies/NVNGX_Proxy.h.
+    // The correct order is in this repo already, at proxies/Nvngx_Proxy.h.
     using PFN_NrD3D11Init = int(__cdecl*)(unsigned long long, const wchar_t*, void*, int, const void*);
     using PFN_NrD3D11Create = int(__cdecl*)(void*, int, const void*, void**);
     using PFN_NrD3D11Evaluate = int(__cdecl*)(void*, const void*, const void*, void*);

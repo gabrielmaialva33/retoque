@@ -47,7 +47,7 @@
 #include <State.h>
 #include <Util.h>
 
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 #include <hooks/D3D12_Hooks.h>
 #include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_PresentCpuTiming.h>

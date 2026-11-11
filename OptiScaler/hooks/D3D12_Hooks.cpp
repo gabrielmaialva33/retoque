@@ -1269,10 +1269,10 @@ static void RestoreBindings(ID3D12GraphicsCommandList* cmdList, const RootBindin
 
 void D3D12Hooks::SetRootSignatureTracking(bool enable) { t_upscalerActive = !enable; }
 
-// A known list with nothing bound since Reset is restorable, there is just nothing to restore
 bool D3D12Hooks::CanRestoreRootSignature(ID3D12GraphicsCommandList* cmdList)
 {
-    return GetCmdListState(cmdList, false) != nullptr;
+    auto* state = GetCmdListState(cmdList, false);
+    return state != nullptr && (state->compute.signature != nullptr || state->graphics.signature != nullptr);
 }
 
 void D3D12Hooks::RestoreRoot(ID3D12GraphicsCommandList* cmdList)
@@ -1441,15 +1441,19 @@ static HRESULT hkD3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVEL Minimum
 
     HRESULT result;
     _creatingD3D12Device = true;
-    if (desc.VendorId == VendorId::Intel)
     {
-        ScopedSkipSpoofingThread skipSpoofingThread {};
-        result = o_D3D12CreateDevice(pAdapter, minLevel, riid, ppDevice);
-    }
-    else
-    {
-        ScopedCreatingD3DDevice skipCreatingD3DDevice {};
-        result = o_D3D12CreateDevice(pAdapter, minLevel, riid, ppDevice);
+        std::scoped_lock probeLock(IdentifyGpu::probeDeviceMutex);
+
+        if (desc.VendorId == VendorId::Intel)
+        {
+            ScopedSkipSpoofingThread skipSpoofingThread {};
+            result = o_D3D12CreateDevice(pAdapter, minLevel, riid, ppDevice);
+        }
+        else
+        {
+            ScopedCreatingD3DDevice skipCreatingD3DDevice {};
+            result = o_D3D12CreateDevice(pAdapter, minLevel, riid, ppDevice);
+        }
     }
     _creatingD3D12Device = false;
 
@@ -1604,16 +1608,20 @@ static HRESULT hkCreateDevice(ID3D12DeviceFactory* pFactory, IUnknown* pAdapter,
     }
 
     HRESULT result;
-    if (desc.VendorId == VendorId::Intel)
     {
-        ScopedSkipSpoofingThread skipSpoofingThread {};
-        ScopedCreatingD3DDevice skipCreatingD3DDevice {};
-        result = o_CreateDevice(pFactory, pAdapter, minLevel, riid, ppDevice);
-    }
-    else
-    {
-        ScopedCreatingD3DDevice skipCreatingD3DDevice {};
-        result = o_CreateDevice(pFactory, pAdapter, minLevel, riid, ppDevice);
+        std::scoped_lock probeLock(IdentifyGpu::probeDeviceMutex);
+
+        if (desc.VendorId == VendorId::Intel)
+        {
+            ScopedSkipSpoofingThread skipSpoofingThread {};
+            ScopedCreatingD3DDevice skipCreatingD3DDevice {};
+            result = o_CreateDevice(pFactory, pAdapter, minLevel, riid, ppDevice);
+        }
+        else
+        {
+            ScopedCreatingD3DDevice skipCreatingD3DDevice {};
+            result = o_CreateDevice(pFactory, pAdapter, minLevel, riid, ppDevice);
+        }
     }
 
     LOG_DEBUG("o_D3D12CreateDevice result: {:X}", (UINT) result);
