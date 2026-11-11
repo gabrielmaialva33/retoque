@@ -55,8 +55,14 @@ static void Start(DXGI_FORMAT format, Extent e = {}, Transfer t = {})
     g_nr.calibUsable = true;
 }
 
-static bool AnyReset() { return g_nr.reset || g_nr.passReset[0] || g_nr.passReset[1] || g_nr.passReset[2]; }
-static bool AllReset() { return g_nr.reset && g_nr.passReset[0] && g_nr.passReset[1] && g_nr.passReset[2]; }
+static bool AnyReset()
+{
+    return g_nr.reset || std::any_of(g_nr.passReset.begin(), g_nr.passReset.end(), [](bool r) { return r; });
+}
+static bool AllReset()
+{
+    return g_nr.reset && std::all_of(g_nr.passReset.begin(), g_nr.passReset.end(), [](bool r) { return r; });
+}
 static bool CalibrationKept() { return g_nr.calibCount == 42 && g_nr.calibUsable && g_nr.calibSuggestion == 1.5f; }
 static bool CalibrationForgotten() { return g_nr.calibCount == 0 && !g_nr.calibUsable; }
 

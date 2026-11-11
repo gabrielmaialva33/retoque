@@ -8,7 +8,9 @@ int main()
 {
     unsigned cases = 0;
     // Production routing: original proxy is immutable, odd/even answers and partial failure.
-    for (unsigned count = 1; count <= 3; ++count)
+    // Every count the setting allows (ten since 2026-11-11): two surfaces carry any chain length.
+    static_assert(DlssNr::PassConfig::MaxPasses == 10);
+    for (unsigned count = 1; count <= DlssNr::PassConfig::MaxPasses; ++count)
     {
         DlssNr::Chain::Routing<int> route(10, 20, 30);
         for (unsigned i = 0; i < count; ++i)
@@ -22,7 +24,7 @@ int main()
         assert(route.original == 10);
         ++cases;
     }
-    for (unsigned failAt = 0; failAt < 3; ++failAt)
+    for (unsigned failAt = 0; failAt < DlssNr::PassConfig::MaxPasses; ++failAt)
     {
         DlssNr::Chain::Routing<int> route(10, 20, 30);
         for (unsigned i = 0; i < failAt; ++i) route.Success();
@@ -72,6 +74,12 @@ int main()
     snapshot.Count = 1;
     assert(!schedule.Stable(snapshot, start + 3s));
     assert(snapshot.Settings[1].Intensity == 0.4f); ++cases;
+    // A setting of the tenth pass settles like any other.
+    assert(schedule.Stable(snapshot, start + 3500ms));
+    snapshot.Count = 10;
+    snapshot.Settings[9].LocalTone = 0.3f;
+    assert(!schedule.Stable(snapshot, start + 4s));
+    assert(schedule.Stable(snapshot, start + 4500ms)); ++cases;
 
     constexpr uint64_t GiB = 1ull << 30;
     assert(!DlssNr::Chain::Admit(0, 0, 0, 0));

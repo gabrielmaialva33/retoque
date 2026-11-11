@@ -247,7 +247,7 @@ def _run(raw, capture, capture_hash, shape, path):
         need((interval <= 4 if skipped else interval == 1 if kind == "every" else 2 <= interval <= 4), "raw kind/interval mismatch")
         requested = integer(frame.get("requested_passes"), "requested passes", 0 if skipped else 1)
         completed = integer(frame.get("completed_passes"), "completed passes")
-        need(requested <= 3 and completed == (0 if kind in ("carried", "skipped") else requested), "partial/invalid model pass coverage")
+        need(requested <= 10 and completed == (0 if kind in ("carried", "skipped") else requested), "partial/invalid model pass coverage")
         need(frame.get("completion") == "fence-complete", "uncertified raw frame")
         number(frame.get("gpu_ms"), "raw frame gpu_ms", 0)
         if "model_result" in frame:

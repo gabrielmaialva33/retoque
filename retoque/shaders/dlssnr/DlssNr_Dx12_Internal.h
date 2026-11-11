@@ -21,6 +21,7 @@
 #include "DlssNr_DetailStats_Dx12.h"
 #include "DlssNr_Pulse_Dx12.h"
 #include <Config.h>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -194,13 +195,24 @@ struct NrState
     //
     // Indexed by pass, so [0] is unused and the first extra pass is [1]. Wasting one pointer keeps
     // every index here equal to the pass number it belongs to.
-    void* passFeature[3] = {};
+    //
+    // Sized for the most passes the setting allows (ten since 2026-11-11). These are bookkeeping only: a
+    // feature, its history and the model's memory exist only for the passes the configured count asks for,
+    // created one at a time by Dispatch. passPing is one texture whatever the count.
+    static constexpr uint32_t kMaxPasses = DlssNr::PassConfig::MaxPasses;
+    void* passFeature[kMaxPasses] = {};
     ID3D12Resource* passPing = nullptr;
-    DlssNrResolvedPassSettings passBuilt[3] {};
-    bool passReset[3] { true, true, true };
-    bool passFailed[3] {};
-    DlssNr::Submission::Usage creation[3];
-    uint64_t creationFrame[3] {};
+    DlssNrResolvedPassSettings passBuilt[kMaxPasses] {};
+    // Every pass starts with its history reset pending.
+    std::array<bool, kMaxPasses> passReset = []
+    {
+        std::array<bool, kMaxPasses> all {};
+        all.fill(true);
+        return all;
+    }();
+    bool passFailed[kMaxPasses] {};
+    DlssNr::Submission::Usage creation[kMaxPasses];
+    uint64_t creationFrame[kMaxPasses] {};
     uint64_t measuredModelBytes = 0;
 
     // The model cannot read and write one resource, so the frame is staged through these.

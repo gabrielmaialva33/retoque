@@ -42,9 +42,12 @@ call = ('ReleaseSurfacesIfFormatChanged(f, w, h, ww, wh, t)' if takes_transfer
         else '((void) (t), ReleaseSurfacesIfFormatChanged(f, w, h, ww, wh))')
 
 prelude = r'''
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <dlssnr/DlssNr_PassSettings.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -114,7 +117,12 @@ struct NrState
     } alt;
     DlssNr::FormatTwin::Transfer surfaceTransfer {};
     bool reset = true;
-    bool passReset[3] { true, true, true };
+    std::array<bool, DlssNr::PassConfig::MaxPasses> passReset = []
+    {
+        std::array<bool, DlssNr::PassConfig::MaxPasses> all {};
+        all.fill(true);
+        return all;
+    }();
     unsigned int calibCount = 0;
     float calibSuggestion = 0.0f;
     float calibSteadiness = 0.0f;

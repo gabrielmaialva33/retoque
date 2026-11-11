@@ -127,11 +127,11 @@ oracle do not receive an invented “guides correct” assertion.
 Every capture frame, including warmup, has exactly one run entry in the same order. `kind` is
 `every` (interval1), `model` or `carried` (interval2–4), or `skipped` only when the corresponding
 capture frame has score=false. A skipped entry requires a nonempty string `skip` reason,
-completed_passes=0, interval=0–4 and requested_passes=0–3 (zero means the decision was not
+completed_passes=0, interval=0–4 and requested_passes=0–10 (zero means the decision was not
 reached). It still requires a fenced output descriptor and finite nonnegative GPU timing;
 it contributes no model/carried coverage and breaks temporal/pulse pairs in either run.
 A scored skip is INVALID with its reason, never silently omitted. Model/every entries complete all requested
-passes (1–3); carried entries complete zero model passes. GPU milliseconds are actual finite
+passes (1–10 since 2026-11-11, 1–3 before); carried entries complete zero model passes. GPU milliseconds are actual finite
 nonnegative per-evaluation measurements, not a fabricated zero on missing timing. Requirements
 count scored entries; missing requested coverage/partial chains/incomplete fences → INVALID.
 Reference runs must be every-frame (`every`, interval1), except reasoned unscored skips.

@@ -12,6 +12,10 @@ namespace DlssNr::GpuTiming
 {
 struct Metadata;
 }
+namespace DlssNr::PassConfig
+{
+inline constexpr uint32_t MaxPasses = 10; // DlssNr_PassSettings.h; g_nr sizes its per-pass state by it (run.py checks)
+}
 namespace DlssNr::FormatTwin
 {
 struct Transfer // DlssNr_FormatTwin.h; g_nr holds one by value

@@ -35,9 +35,18 @@ struct DlssNrPassSettings
 
 namespace DlssNr::PassConfig
 {
-inline constexpr uint32_t MaxPasses = 3;
+// Up to ten sequential D3D12 passes since 2026-11-11 (three before), as NeuRotic offers them
+// (OptiScaler/shaders/dlssnr/NrCompositionPool.h, MaxPasses = 10, commit beae4eea). Every pass past the first
+// is a full model evaluation with its own NGX feature and history, created only when the configured count asks
+// for it: GPU time and video memory grow with the count. docs/dlssnr/design/bounded-chain.md has the cost.
+inline constexpr uint32_t MaxPasses = 10;
+// After native Ray Reconstruction ([DlssNr] RRPasses) the chain stays at three: ten was asked for Passes only, and
+// RRWorkingScale reaches 2.0, where one model instance measured about 1.8 GB (chain-in-flight.md).
+inline constexpr uint32_t MaxRRPasses = 3;
+static_assert(MaxRRPasses <= MaxPasses, "the RR route uses the same per-pass state");
 using Overrides = std::map<uint32_t, DlssNrPassSettings>;
 inline uint32_t BoundCount(uint32_t count) { return std::clamp(count, 1u, MaxPasses); }
+inline uint32_t BoundRRCount(uint32_t count) { return std::clamp(count, 1u, MaxRRPasses); }
 
 inline bool EqualAscii(std::string_view a, std::string_view b)
 {

@@ -7,9 +7,11 @@ It fails on compiler errors, sanitizer findings or assertion failures.
 The production portable chain helpers are executed directly: odd/even final output,
 immutable original proxy, partial-failure selection, one observed evaluation per present,
 500 ms configuration debounce and creation spacing, adapter-budget admission, retirement
-cap, matched native/working resolve pair and creation submitted/completed gating. There
-are 20 cases and 1000 repeated same-present refusals. Source checks confirm the renderer
-uses those helpers and has exactly one supersampling down-leg using the final answer.
+cap, matched native/working resolve pair and creation submitted/completed gating, for every
+pass count to ten. Source checks confirm the renderer uses those helpers and has exactly one
+supersampling down-leg using the final answer, and that the per-pass renderer state, its loops
+and the GPU timing pairs follow the ten-pass bound (`DlssNr::PassConfig::MaxPasses`) with no
+leftover three.
 
 This does not run the D3D12 renderer, the NGX model, shader code, real queue submissions,
 real memory-budget accounting or GPU timing. Partial failure here tests selection policy,

@@ -24,9 +24,9 @@ not render pixels or exercise the actual Windows Config, renderer, NGX or GPU.
 | State | Controls and meaning |
 | --- | --- |
 | Native Vulkan (including before first NR evaluation) or driver proxy | Single/master limitation text; no count or individual editors |
-| D3D12, individual off | Requested count 1..3, last-evaluation count/status, individual toggle; no per-pass editor |
+| D3D12, individual off | Requested count 1..10 (1..3 before 2026-11-11), from two passes a cost line ("Cost: Nx the model's GPU time and N model instances in video memory."), last-evaluation count/status, individual toggle; no per-pass editor |
 | D3D12, individual on, one requested pass | Pass 1 fields; no meaningless pass-selection slider |
-| D3D12, individual on, multiple requested passes | Selector limited to requested passes; seven optional overrides |
+| D3D12, individual on, multiple requested passes | One selector limited to requested passes (up to ten), not one block per pass; seven optional overrides |
 | Field inherited | Readout of current master; Override can create an explicit value |
 | Field explicit | Its editor; unchecking Override clears the sparse value |
 | No explicit fields | No clear-pass button |

@@ -421,8 +421,11 @@ bool RetiredCapacity()
     const size_t counted = g_nrRetired.size() - std::min<size_t>(stuck, 64);
     // A rebuild can retire at most 18 objects (16, and peripheral compression's unpacked pair), the six of
     // the other colour format's set with a resolution change (ParkAltSurfaces), and Transfer 2's bundle (one
-    // entry for its feature and its five textures). Refuse BEFORE recording or allocation, not after
-    // unsubmitted slider/DRS changes already consumed arbitrary memory.
+    // entry for its feature and its five textures). Those 18 count three passes' features; each pass past the
+    // third adds one, so ten passes can retire 25. The cap stays where it is: past it the pass skips until the
+    // parked objects drain, which at ten passes can follow a single rebuild (bounded-chain.md, "Ten passes").
+    // Refuse BEFORE recording or allocation, not after unsubmitted slider/DRS changes already consumed arbitrary
+    // memory.
     return DlssNr::Chain::RetirementAllowed(counted);
 }
 

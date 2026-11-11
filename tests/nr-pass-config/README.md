@@ -20,7 +20,7 @@ menu integration. The full Windows Config translation unit is checked by Release
 
 ## Integration API and locking
 
-`GetDlssNrPassSnapshot()` returns Count, Individual and all three resolved Settings under
+`GetDlssNrPassSnapshot()` returns Count, Individual and all ten resolved Settings under
 one short lock. Renderer code should read it once per recording. Pass indices in APIs are
 zero-based; INI section numbers are one-based. `GetDlssNrMasterSettings()` returns the pure
 master, and `GetDlssNrPassOverrides()` returns a copy of sparse values without inserting.
@@ -38,7 +38,10 @@ shared SimpleIni object merges LoadFile calls. This avoids resurrecting sections
 from disk. Master keys retain the repository's existing first-config-wins semantics.
 Saving owns only valid `DlssNr.PassN` sections: unknown keys in those sections are removed;
 other sections, including malformed names, are not changed. Canonical section numbers are
-1 through UINT32_MAX; runtime pass count is independently limited to three.
+1 through UINT32_MAX; runtime pass count is independently limited to ten (three before 2026-11-11;
+`RRPasses` keeps three). The suite checks that `Passes` 1..10 round-trip through the read, save and reload lines of
+`Config.cpp` (pinned by text), that values above ten save as ten, that malformed text stays at the default, and that
+0..3 resolve exactly as the old bound did.
 
 ## Adversarial config review
 
