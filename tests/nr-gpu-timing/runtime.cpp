@@ -76,7 +76,8 @@ struct Device : ID3D12Device
                                     const void*, void** output) override
     {
         ++buffers;
-        assert(heap->Type == D3D12_HEAP_TYPE_READBACK && desc->Width == kQueries * sizeof(uint64_t) && state == D3D12_RESOURCE_STATE_COPY_DEST);
+        assert(heap->Type == D3D12_HEAP_TYPE_READBACK && desc->Width == kQueries * sizeof(uint64_t) &&
+               state == D3D12_RESOURCE_STATE_COPY_DEST);
         if (failBuffer)
             return E_FAIL;
         *output = new Buffer;

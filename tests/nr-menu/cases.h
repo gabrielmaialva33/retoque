@@ -123,7 +123,8 @@ int main()
     ImGui::actions["10/Style/Override###override"] = true;
     ImGui::actions["10/Style/Style"] = 2;
     run();
-    assert(c.overrides.size() == 1 && c.overrides.at(9).Intensity == c.master.Intensity && c.overrides.at(9).Style == 2u);
+    assert(c.overrides.size() == 1 && c.overrides.at(9).Intensity == c.master.Intensity &&
+           c.overrides.at(9).Style == 2u);
     assert(!ImGui::Saw("9/Intensity/Override###override") && !ImGui::Saw("1/Intensity/Override###override"));
     ImGui::Reset();
     ImGui::actions["Requested passes###nrPassCount"] = 11;
