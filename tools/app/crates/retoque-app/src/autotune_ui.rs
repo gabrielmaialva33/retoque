@@ -290,12 +290,16 @@ impl RetoqueApp {
                 .selected_text(
                     selected
                         .as_ref()
-                        .map(|c| c.label.as_str())
-                        .unwrap_or(self.tr("auto.no_component")),
+                        .map(|c| component_name(self.lang, c))
+                        .unwrap_or_else(|| self.tr("auto.no_component").to_owned()),
                 )
                 .show_ui(ui, |ui| {
                     for c in items {
-                        ui.selectable_value(&mut self.tuning.selected_component, Some(c.id.clone()), &c.label);
+                        ui.selectable_value(
+                            &mut self.tuning.selected_component,
+                            Some(c.id.clone()),
+                            component_name(self.lang, c),
+                        );
                     }
                 });
         }
@@ -321,15 +325,9 @@ impl RetoqueApp {
                     }
                     for c in items {
                         ui.push_id(&c.id, |ui| {
-                            ui.label(
-                                RichText::new(format!(
-                                    "{} · {}",
-                                    c.label,
-                                    c.version.as_deref().unwrap_or(self.tr("mdl.version_unknown"))
-                                ))
-                                .strong(),
-                            );
-                            ui.label(RichText::new(short_path(&c.root)).small());
+                            // A plain name; where the app keeps it (a folder named by its hash) is in the hover.
+                            ui.label(RichText::new(component_name(self.lang, &c)).strong())
+                                .on_hover_text(crate::format::display_path(&c.root));
                             let installed = self
                                 .tuning
                                 .installed
@@ -345,7 +343,11 @@ impl RetoqueApp {
                                 } else {
                                     let install =
                                         ui.add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")));
-                                    widgets::name_after(&install, self.tr("auto.component_install"), &c.label);
+                                    widgets::name_after(
+                                        &install,
+                                        self.tr("auto.component_install"),
+                                        &component_name(self.lang, &c),
+                                    );
                                     if install.clicked() {
                                         self.autotune_request(
                                             self.tr("auto.component_install").into(),
@@ -360,9 +362,13 @@ impl RetoqueApp {
                                 let delete = ui
                                     .add_enabled(!self.jobs.busy(), egui::Button::new(self.tr("auto.catalog_remove")))
                                     .on_hover_text(self.tr("auto.catalog_remove_help"));
-                                widgets::name_after(&delete, self.tr("auto.catalog_remove"), &c.label);
+                                widgets::name_after(
+                                    &delete,
+                                    self.tr("auto.catalog_remove"),
+                                    &component_name(self.lang, &c),
+                                );
                                 if delete.clicked() {
-                                    let pending = (c.id.clone(), c.label.clone());
+                                    let pending = (c.id.clone(), component_name(self.lang, &c));
                                     ui.ctx().data_mut(|d| d.insert_temp(component_delete_id(), pending));
                                 }
                             });
@@ -550,4 +556,58 @@ pub(crate) fn recommendation_evidence(ui: &mut egui::Ui, lang: Lang, rec: &recom
     widgets::collapsible(ui, ("evidence", rec.id), title, widgets::Fold::Details, |ui| {
         evidence(ui, lang, &rec.evidence)
     });
+}
+
+/// A component as people read it. The official sm86 download is stored as "DLSS-G for sm86 {version} · {RFC 3339
+/// time}"; show what it is for, its version once, and the date in the user's format. Anything else keeps its label.
+pub(crate) fn component_name(lang: Lang, c: &autotune::components::Component) -> String {
+    if let Some(rest) = c.label.strip_prefix("DLSS-G for sm86 ") {
+        let (version, published) = rest.split_once(" · ").unwrap_or((rest, ""));
+        let mut name = t(lang, "comp.sm86_name").replace("{version}", version);
+        if let Some(date) = crate::format::date_text(lang, published) {
+            name = format!("{name} · {date}");
+        }
+        return name;
+    }
+    match c.version.as_deref() {
+        Some(v) if !c.label.contains(v) => format!("{} · {v}", c.label),
+        _ => c.label.clone(),
+    }
+}
+
+#[cfg(test)]
+mod component_name_tests {
+    use super::*;
+    use autotune::components::{Component, ComponentKind};
+    fn component(label: &str, version: Option<&str>) -> Component {
+        Component {
+            id: "id".into(),
+            kind: ComponentKind::DlssgSm86,
+            version: version.map(Into::into),
+            label: label.into(),
+            root: std::path::PathBuf::from("components/id"),
+            files: vec![],
+        }
+    }
+    #[test]
+    fn the_official_sm86_download_reads_as_what_it_is_for() {
+        let sm86 = component("DLSS-G for sm86 0.4.1 · 2026-10-27T06:27:00Z", Some("0.4.1"));
+        assert_eq!(
+            component_name(Lang::Pt, &sm86),
+            "Geração de quadros para RTX 20/30 · versão 0.4.1 · 27/10/2026"
+        );
+        assert_eq!(
+            component_name(Lang::En, &sm86),
+            "Frame generation for RTX 20/30 · version 0.4.1 · 2026-10-27"
+        );
+        // Other components keep their label, with the version once.
+        assert_eq!(
+            component_name(Lang::Pt, &component("My kit", Some("2.0"))),
+            "My kit · 2.0"
+        );
+        assert_eq!(
+            component_name(Lang::Pt, &component("My kit 2.0", Some("2.0"))),
+            "My kit 2.0"
+        );
+    }
 }

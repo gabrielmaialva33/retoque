@@ -25,6 +25,14 @@ pub(crate) fn evidence(ui: &mut egui::Ui, lang: Lang, evidence: &[FactEvidence])
         });
     }
 }
+/// Findings that ask for attention: the badge counts warnings and errors, never information (a newer DLSS
+/// being available is news, not a problem).
+pub(crate) fn attention_count(findings: &[Finding]) -> usize {
+    findings
+        .iter()
+        .filter(|f| !matches!(f.severity, Severity::Info))
+        .count()
+}
 pub(crate) fn repair_button(
     ui: &mut egui::Ui,
     repair: Option<&Repair>,
@@ -35,8 +43,14 @@ pub(crate) fn repair_button(
 ) {
     if let Some(repair) = repair {
         let enabled = !matches!(repair, Repair::Reinstall) || can_reinstall;
+        // The button names what its review will do, in the words the rest of the app uses for that action.
         let label = match repair {
             Repair::FetchCompatibleModel { .. } => t(lang, "nr_fetch.get_compatible"),
+            Repair::UpdateDlss => t(lang, "dlss.update"),
+            Repair::Reinstall => t(lang, "shell.reinstall"),
+            Repair::ReconcileInstallation => t(lang, "shell.resume"),
+            Repair::InstallReShade => t(lang, "rs.install"),
+            Repair::ReShadeMenuInput => t(lang, "rs.input_fix"),
             _ => t(lang, "doctor.prepare"),
         };
         let button = ui.add_enabled(enabled, egui::Button::new(label));
@@ -63,7 +77,7 @@ pub(crate) fn show(
     widgets::card(ui, |ui| {
         ui.horizontal(|ui| {
             widgets::card_title(ui, t(lang, "doctor.title"));
-            badge(ui, card.findings.len(), lang);
+            badge(ui, attention_count(&card.findings), lang);
         });
         for finding in &card.findings {
             ui.push_id(finding.id, |ui| {
@@ -128,5 +142,31 @@ pub(crate) fn badge(ui: &mut egui::Ui, count: usize, lang: Lang) {
     if count > 0 {
         ui.colored_label(theme::WARN, "!")
             .on_hover_text(t(lang, "doctor.badge"));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn finding(severity: Severity) -> Finding {
+        Finding {
+            id: "synthetic",
+            severity,
+            title_key: "doctor.title",
+            why_key: "doctor.title",
+            evidence: vec![],
+            repair: Some(Repair::UpdateDlss),
+        }
+    }
+    #[test]
+    fn the_badge_counts_problems_not_news() {
+        // A newer DLSS being available is information: it shows in the card, but no badge or "1 issue".
+        assert_eq!(attention_count(&[finding(Severity::Info)]), 0);
+        let mixed = [
+            finding(Severity::Info),
+            finding(Severity::Warning),
+            finding(Severity::Error),
+        ];
+        assert_eq!(attention_count(&mixed), 2);
     }
 }
