@@ -1,0 +1,977 @@
+# Retoque app text: 日本語 (ja).
+# MACHINE-TRANSLATED DRAFT, pending review by a native speaker. Corrections welcome.
+# Format: one "key<TAB>text" per line, in the order of the English table; "#" starts a comment line.
+# English is the source (src/i18n.rs); a key missing here shows in English. Keep {placeholders} and a final "…".
+lsfg.found	Lossless Scaling が見つかりました
+lsfg.preparing	シェーダーを自動で準備しています…
+lsfg.downloading	公式のシェーダーコンパイラーをダウンロードしています…
+lsfg.cancel	準備をキャンセル
+lsfg.cancelled	準備をキャンセルしました。ゲームは変更されていません。
+lsfg.failed	LSFG シェーダーを準備できませんでした。もう一度お試しください。失敗が続く場合は診断ファイルを作成してください。
+lsfg.retry	準備を再試行
+lsfg.download_prompt	LSFG シェーダーの準備には Microsoft のシェーダーコンパイラーが必要です。Retoque は Microsoft の公式リリースからアプリのデータ内にダウンロードし、検証してからシェーダーを準備します。ゲームは変更されません。
+lsfg.need_compiler	シェーダーには Microsoft のシェーダーコンパイラーが必要ですが、まだダウンロードされていません。
+lsfg.consent_title	シェーダーコンパイラーをダウンロード
+lsfg.download_details	Microsoft DXC v1.8.2505.1（github.com/microsoft/DirectXShaderCompiler、release-assets.githubusercontent.com から取得）。固定の SHA-256 で検証します。
+lsfg.download_confirm	コンパイラーをダウンロード…
+sm86.error.0	sm86 リリースに該当するファイルが複数あります。
+sm86.error.1	アプリのデータフォルダーを利用できません。
+sm86.error.2	アーカイブが展開後のサイズ上限を超えています。
+sm86.error.3	アーカイブに許可されていないリンク、暗号化、または特殊ファイルが含まれています。
+sm86.error.4	アーカイブに記載されたサイズが無効です。
+sm86.error.5	sm86 リリースに記載されたファイルが見つかりません。
+sm86.error.6	sm86 リリースに必要なファイルが不足しています。
+sm86.error.7	公式 sm86 リリースのメタデータが無効です。
+sm86.error.8	リリースのローカル記録が無効です。
+sm86.error.9	キットのキャッシュには GitHub が公開したハッシュが必要です。
+sm86.error.10	キットのキャッシュには GitHub が公開した SHA-256 との一致が必要です。
+sm86.error.11	キットのメタデータがサイズ上限を超えています。
+sm86.error.12	リリースのリダイレクト先が示されていません。
+sm86.error.13	このアドレスは公式 sm86 リリースのものではありません。
+sm86.error.14	キットのアーカイブに、含めることのできない保護されたバイナリがあります。
+sm86.error.15	sm86 リリースのリダイレクト先は許可されていません。
+sm86.error.16	リリース API が許可されていないリダイレクトを試みました。
+sm86.error.17	ダウンロードの SHA-256 が公開値と一致しません。
+sm86.error.18	このリリースの内容は最初のダウンロード以降に変更されています。
+sm86.error.19	リリースのメタデータがサイズ上限を超えています。
+sm86.error.20	リリースのローカル記録がサイズ上限を超えています。
+sm86.error.21	ダウンロードの応答がサイズ上限を超えています。
+sm86.error.22	ダウンロードのサイズが記載と一致しません。
+sm86.error.23	HTTPS で sm86 リリースを照会またはダウンロードできませんでした。
+sm86.error.24	アーカイブ内のファイルが多すぎます。
+sm86.error.25	ダウンロードのリダイレクト回数が上限を超えました。
+sm86.error.26	アーカイブに途中で切れたファイルがあります。
+sm86.error.27	リリースのサーバーが予期しない HTTP ステータスを返しました。
+sm86.error.28	アーカイブに安全でないパス、または競合する名前があります。
+sm86.error.29	公開されたハッシュの方式はサポートされていません。
+sm86.error.30	この sm86 リリースはサポートされていません。
+note.sm86_upgrade	sm86 0.3.x の更新：完全な 0.4.x ランタイムをコピーする前に、古いローダーファイルと INI をバックアップして削除します。
+note.sm86_install	マイコンポーネントの dlssg-sm86 をインストールし、その識別情報とファイルを .retoque/components.txt に記録します。ゲームのインストーラーはネットワーク通信を行いません。
+sm86.consent_title	公式のフレーム生成コンポーネントをダウンロード
+sm86.check_title	新しいバージョンをチェック
+sm86.check_consent	フレーム生成コンポーネントの最新バージョンを GitHub に問い合わせ、お使いのものと比較しますか？
+sm86.check_details	ホスト：api.github.com（sdli1995/dlssg_for_sm86、最新リリース）。何もダウンロードしません。
+sm86.download_consent	Retoque は dlssg_for_sm86 を公式リリースからダウンロードして検証します。ゲームの確認画面で確定するまで、ファイルはアプリ内に留まります。テレメトリーはありません。
+sm86.download_details	ホスト：api.github.com と github.com（sdli1995/dlssg_for_sm86）。リリースの SHA-256 で検証します。ダウンロードは最大 256 MB、展開後は最大 1 GB です。
+sm86.kit_available	このインストールには初回起動用のキャッシュが含まれています。ダウンロードせずに、ローカルで検証して取り込みます。
+sm86.license	サードパーティのランタイムとカーネルには、それぞれのライセンス条件が適用されます。パッケージ全体は MIT ではありません。ライセンス文と告知はアプリのキャッシュに保存されています。
+sm86.import	インポート
+sm86.download_help	公式リリースを一度ダウンロードすれば、複数のゲームで再利用できます。ゲームへのインストールには、必ず別の確認があります。
+sm86.download	公式リリースをダウンロード…
+sm86.check	更新をチェック…
+sm86.progress	公式コンポーネントを準備中
+sm86.current	このリリースはマイコンポーネントにあります。
+sm86.new	このリリースはまだマイコンポーネントにありません。
+sm86.ignored	無視されたアーカイブ内のファイル（展開されません）
+optimize.review	最適化を確認…
+optimize.experimental	Proton/Wine 上の実験的な sm86 をこの確認に含める
+optimize.choose_lsfg	LSFG をこの確認に含める
+optimize.lsfg_unavailable	Lossless Scaling が見つからないため、LSFG シェーダーを準備できません。コンポーネント › フレーム生成 でフォルダーを選択してください。変更は適用されていません。
+optimize.lsfg_preparing	先に LSFG シェーダーを準備しています（アプリのデータのみ）。準備ができると確認画面が開きます。
+optimize.lsfg_failed	LSFG シェーダーの準備に失敗しました。コンポーネント › フレーム生成 を開いてください。変更は適用されていません。
+optimize.experimental_omitted	実験的な sm86 は除外されました。確認に含めるには、上で明示的に選択してください。
+optimize.up_to_date	{game} はすでにお使いの GPU に推奨される設定になっています。
+optimize.install_first	最適化の前に、Retoque をインストールするか旧インストールを登録してください。
+optimize.identity_missing	インストール済みコンポーネントの識別情報を取得できません。確認の前にゲームを再読み込みしてください。
+optimize.conflict	提案された設定どうしが競合しています。変更は適用されていません。
+remedy.processes	実行中のプロセスを表示
+remedy.close_processes	これらのプログラムを閉じてから、もう一度お試しください
+remedy.retry	もう一度試す
+remedy.replan	新しい確認を用意
+remedy.foreign	保持するか置き換えるかを選択…
+mdl.incompatible	この GPU では動作しません
+mdl.arch_match	お使いの GPU に対応
+mdl.compat_unknown	対応状況は未確認
+mdl.archs	検出された CUDA ターゲット：
+mdl.suggest	マイモデルの中に、この GPU で動作するものがあります：
+mdl.use_suggested	モデルの変更を確認…
+ver.unknown	不明
+ver.mismatch	OptiScaler と NR コンポーネントのファイルバージョンが異なります。両方を一緒に更新してください。インストールは引き続き可能です。
+ver.forwarder	NR コンポーネント {v}
+welcome.title	あなたのゲームに Retoque を
+welcome.installed	Retoque インストール済み
+set.nr	ニューラルレンダリング (NR)
+set.upscalers	アップスケーラー
+set.framegen	フレーム生成
+set.lsfg	LSFG（実験的）
+set.no_match	このフィルターに一致する設定はありません。
+set.lsfg_note	実験的な機能です。FSR のフレーム生成と、ご自身の Lossless Scaling のファイルが必要です。利用できない機能は動作しません。
+mdl.version	バージョン
+mdl.dll_filter	NR モデル (.dll)
+unit.ms	ms
+unknown	—
+log.route_unknown	まだ経路が報告されていません。
+log.evidence_note	初期化の記録はこのセッションのものであり、NR が現在も動作していることを示すものではありません。GPU 時間には確認済みのサンプルのみが含まれます。
+log.showing	表示中
+log.limited	要約は一部のみです。完全な記録はログファイルにあります。
+inst.advanced	詳細設定
+st.build	ローカルビルド
+st.release	バージョン {v}
+st.build_hash	ビルド {hash}
+inst.notes()	メモ
+dismiss.help	メッセージを閉じる
+brand	Retoque
+lang.ja	日本語
+lang.ko	韓国語
+lang.zh_cn	中国語（簡体字）
+step.copy	コピー
+step.backup	バックアップ
+step.rename	名前を変更
+step.ini	設定
+step.remove	削除
+step.restore	復元
+step.keep	保持
+value.unset	未設定
+ref.unknown_file	不明なファイル
+ref.reshade	ReShade
+store.steam	Steam
+store.heroic	Heroic
+store.lutris	Lutris
+store.epic	Epic
+store.gog	GOG
+store.manual	手動
+runtime.windows	Windows
+runtime.proton	Proton
+runtime.wine	Wine
+runtime.linux	Linux
+error.io	{file} を読み書きできませんでした。
+error.io_any	ファイルを読み書きできませんでした。
+technical.details	技術的な詳細
+note.resume	前回のデプロイは途中で止まりました。その記録は保持され、今回はその続きから行います
+note.driver	NVIDIA の Wine 用 _nvngx.dll が見つかりません。ドライバーの Wine NGX コンポーネントをインストールするか、ゲームと同じフォルダーに置いてください。
+note.model	ご自身の nvngx_dlssnr.dll をゲームと同じフォルダーに置いてください（または [DlssNr] ModelFile で別のコピーを指定）。モデルは含まれていません。
+note.vk_skip	Vulkan フック：マーカーファイルによりスキップ
+note.vk_disabled	Vulkan フック：有効（マーカーはありますが無効化されています）
+note.vk_active	Vulkan フック：有効（マーカーなし）。デバイスロストが起きる場合は [Vulkan] SkipHooks=true を設定してください
+keep.same	すでにこのビルドのため、そのまま
+keep.model	NVIDIA のモデルは削除せず、そのまま残します
+keep.gone	すでに存在しません
+keep.identical_component	同一のコンポーネントファイル
+keep.user_settings	ご自身の設定ファイルのため、そのまま保持
+keep.changed	このスクリプトが書き込んだ後に変更されたため、そのまま残します
+keep.no_backup	復元しません（モデル、またはバックアップなし）
+keep.no_rename	名前を変更しません（モデル、またはすでに存在しない）
+keep.rename_changed	その後変更されたため、名前を戻しません
+ref.ini_missing	OptiScaler.ini がありません。設定を編集する前に、インストールするかファイルを用意してください
+ref.ini_value	INI の編集には、構造区切り文字を含まない 1 行のセクション、キー、値が必要です
+note.windows_denied	Windows が {path} への書き込みを拒否しています。権限を修正するまで適用できません
+note.second_proxy	{path} にも OptiScaler のビルドがあります。それでもデプロイします（--allow-second-proxy）
+keep.destination	{path}：まだファイルがあるため、復元しません
+keep.blocked	{path} が存在するため、名前を戻しません
+ref.proxy	{path} は OptiScaler が認識する名前ではありません
+app.refresh	ライブラリを再スキャン
+app.payload	Retoque ファイル
+app.payload.none	アプリと同じ場所にありません。インストールまたは更新するには、OptiScaler.dll のあるフォルダーを選択してください
+app.payload.choose	選択…
+payload.missing	見つかりません
+payload.files_note	ゲームに Retoque をインストールまたは更新すると、アプリがこれらのファイルをそのゲームにコピーします。
+payload.files_source	入手元
+payload.files_updates	公式リリース
+lib.search	ゲームを検索
+lib.installed_only	インストール済みのみ
+lib.add_folder	フォルダーを追加…
+lib.scanning	ゲームを探しています…
+lib.empty	ゲームが見つかりません。ゲームのフォルダーを手動で追加してください。
+lib.skipped	読み取れませんでした
+game.root	ゲームフォルダー
+game.target	実行ファイルのフォルダー
+game.no_target	このゲームには実行ファイルのフォルダーが見つかりません。
+game.native	ネイティブ Linux 版です。Retoque は Proton または Wine 上の Windows 版でのみ動作します。
+tab.install	概要
+tab.settings	設定
+tab.model	コンポーネント
+comp.nr	NR モデル
+comp.sm86_name	RTX 20/30 向けフレーム生成 · バージョン {version}
+comp.dlss	DLSS
+comp.fg	フレーム生成
+tab.compare	変更前 / 変更後
+tab.logs	ログ
+set.invalid	OptiScaler はこの値を受け付けません。変更を確認するには、値を修正してください。
+st.installed	Retoque インストール済み
+st.installed_short	インストール済み
+st.current	Retoque は最新
+st.current_short	最新
+st.update	更新あり
+st.update_short	更新
+st.partial	不完全なインストール
+st.partial_short	不完全
+st.not_installed	未インストール
+st.untracked	旧インストール
+st.untracked_short	旧
+st.nr_on	NR オン
+st.nr_off	NR オフ
+inst.proxy	ローダーファイル名
+inst.proxy_help	既定の名前でゲームが起動しない場合にのみ変更してください。
+inst.enable_nr	ニューラルレンダリング (NR) をオンにする
+inst.keep_reshade	ReShade を保持（OptiScaler 経由で読み込む）
+inst.replace_foreign	Retoque のものではないファイルを置き換える（バックアップとして保持）
+inst.second_proxy	2 つ目の OptiScaler ローダーファイルを許可
+inst.copy_nvngx	Wine 用にドライバーの _nvngx.dll をコピー
+inst.preview	インストールをプレビュー
+inst.preview_uninstall	アンインストールをプレビュー
+inst.install	インストール
+inst.update	更新
+inst.uninstall	アンインストール
+inst.plan	実行内容
+inst.plan_title	Retoque がこのゲームで行うこと
+inst.plan_install	このゲームに Retoque ファイルをインストール
+inst.nothing	変更はありません。
+inst.working	処理中…
+inst.failed_install	インストールが完了しませんでした
+inst.failed_uninstall	アンインストールが完了しませんでした
+inst.failed_settings	設定は保存されませんでした
+inst.launch_help	これをゲームのプロパティ › 起動オプションに貼り付けてください。
+inst.launch_help_heroic	Heroic でゲームの設定 › 詳細 › 環境変数 を開き、この値で WINEDLLOVERRIDES を追加してください。
+inst.launch_help_lutris	Lutris でゲームの 設定 › システムオプション › 環境変数 を開き、この値で WINEDLLOVERRIDES を追加してください。
+inst.launch_help_other	ゲームの起動時に Retoque を読み込む必要があります。ランチャーの起動オプションで、ゲームを起動するコマンドの前にこれを入力してください。
+inst.launch_label	起動オプション
+inst.copy	コピー
+inst.copied	コピーしました
+ref.running	ゲームが実行中です。閉じてからもう一度お試しください：
+ref.foreign	同じ名前のファイルがありますが、Retoque が置いたものではありません：
+ref.second	このゲームでは、別のファイルがすでに OptiScaler を読み込んでいます：
+ref.receipt	インストール記録を使用できません：
+ref.usage	この操作は実行できません：
+set.save	変更を確認…
+mdl.current	このゲームで使用中
+mdl.missing_file	このファイルは存在しません。このゲームでは NR を利用できません。
+mdl.catalog	マイモデル
+mdl.import	モデルをインポート…
+mdl.use	このゲームで使用…
+mdl.in_use	使用中
+mdl.use_auto	既定の検索を使用…
+mdl.remove	アプリから削除…
+mdl.remove_title	このモデルをアプリから削除しますか？
+mdl.empty	まだモデルがありません。お持ちの nvngx_dlssnr.dll ファイルをインポートしてください。アプリのフォルダーにコピーされ、共有されることはありません。
+log.none	まだ OptiScaler のログがありません。Retoque をインストールした状態で、一度ゲームをプレイしてください。
+log.dlss	DLSS
+log.api	API
+log.gpu	NR の GPU 時間
+log.errors	エラー
+log.warnings	警告
+log.lines	注目すべき行
+log.bundle	診断ファイルを作成
+log.bundle_done	書き出しました（ホームフォルダーとユーザー名は除去済み）：
+log.open_folder	フォルダーを開く
+prefs.open	環境設定…
+prefs.title	環境設定
+prefs.installs	新規インストール
+prefs.installs_help	Retoque のないゲームの初期状態です。すでに Retoque があるゲームは、それぞれの選択を保持します。
+prefs.language	言語
+prefs.language_help	選択するとすぐにアプリの表示言語が変わります。
+prefs.language_draft	この翻訳は機械翻訳の下書きで、ネイティブスピーカーによる確認はまだ済んでいません。不自然な表現が含まれる場合があります。
+prefs.language_no_font	{languages}：このコンピューターには中国語・日本語・韓国語の文字を含むフォント（Noto Sans CJK など）がありません。フォントをインストールしてから Retoque を開き直してください。
+prefs.data	アプリのデータ
+prefs.data_usage	このフォルダーで {size} 使用中
+prefs.data_measuring	フォルダーのサイズを計測しています…
+prefs.clean	中断されたダウンロードやインポートの残りは、1 日後に自動で消去されます。
+prefs.cleaned	起動時に消去：中断された操作の残り {n} 件（{size}）。
+app.wait_write	書き込みがまだ実行中です。終了するまで待ってから閉じてください。
+inst.stale	このプレビューの後にオプションまたは Retoque ファイルが変更されました。もう一度プレビューしてください。
+set.apply	適用
+mdl.remove_help	アプリが保持しているコピーを削除します。このファイルを指定しているゲームでは、別のモデルを用意するまで NR が使えなくなります。
+app.tagline	あなたのゲームにニューラルレンダリングを
+lib.group_installed	Retoque あり
+lib.group_other	その他のゲーム
+card.install_options	インストールのオプション
+card.reinstall_options	再インストールのオプション
+left.title	アンインストールされたゲームの残り
+left.why	ストアはこれらのゲームを削除しましたが、Retoque がフォルダーに追加したファイルは残っています。
+left.summary	{count} フォルダー · {size}
+left.review	クリーンアップを確認…
+left.removing	削除しています…
+left.review_title	アンインストールされたゲームの残りをクリーンアップ
+left.review_note	削除されるのは、Retoque、OptiScaler、sm86、ReShade、またはそれらのキャッシュが置いたファイルだけです。セーブデータなどそれ以外のものは、そのフォルダーごと残ります。確定するまで何も変更されません。
+left.folder_line	{files} ファイル · {size}
+left.keeps	Retoque のものではないファイル {count} 件を保持
+left.confirm	残りを削除 ({size})
+left.done	残りを削除しました：{size} を解放
+left.failed	クリーンアップが中断されました
+rs.ready	インストールの準備ができました：
+rs.checking	ReShade をチェックしています…
+rs.consent_title	ReShade 6.8.0 をダウンロード
+rs.consent_body	Retoque は reshade.me からアドオン対応の公式 ReShade インストーラーをダウンロードし、その DLL だけを保持します。ゲームが変更されるのは、別の確認を経た後だけです。
+rs.consent_details	ホスト：reshade.me。インストーラーとそこから取り出す DLL には、固定の SHA-256 ハッシュがあります。ライセンス：BSD-3-Clause。
+sess.title	前回のセッション
+sess.driver	ドライバー
+sess.base	実フレーム
+sess.low	下位 5%
+sess.screen	画面表示
+sess.generation	フレーム生成
+sess.generation_value	x{x} · {percent}%
+sess.drops	落ち込み
+sess.median	中央値
+sess.curve	セッション中の 1 秒あたりの実フレーム数
+sess.short	このセッションは短すぎて判断できません。数分プレイしてから戻ってきてください。
+sess.steady	安定したセッションです。変更は不要です。
+sess.fake_nvapi	この Retoque はゲームに代替の NVAPI を渡していたため、ゲームのメニューから DLSS フレーム生成が消えることがあります。このゲームの Retoque を更新してください。
+sess.low_base	フレーム生成が倍増させた実フレームは、1 秒あたり {base} だけでした。およそ 40 を下回ると重く、カクつきます。ゲーム内で DLSS のバランスまたはパフォーマンスを選んでください。
+sess.low_base_x4	ベースが低い場合は、x4 より x3 のほうが安定します。
+sess.drops_advice	セッションの {percent}% で、実フレームレートが 20% 以上落ち込みました。多くの場合、ゲームが新しいエリアを読み込んでいるか、空きメモリが不足しています。ほかのプログラムを閉じ、テクスチャ品質を下げてください。
+sess.nr_off	セッション中にニューラルレンダリング (NR) がオフにされました（ゲーム内のキー操作による）。
+card.launch	最後のステップ：Steam の起動オプション
+card.launch_heroic	最後のステップ：Heroic の環境変数
+card.launch_lutris	最後のステップ：Lutris のオプション
+card.launch_other	最後のステップ：起動オプション
+cancel	キャンセル
+progress.of	/
+not_now	後で
+close	閉じる
+delete	削除
+download	ダウンロード
+check_now	チェック
+size.up_to	最大 {size}
+busy.writing	ゲームに変更を適用しています…
+busy.reading	ゲームの情報を読み込んでいます…
+canvas	比較画像
+captures	キャプチャー
+refresh	再読み込み
+loading	キャプチャーを読み込んでいます…
+scanning	キャプチャーを探しています…
+scan_error	キャプチャーフォルダーを読み取れませんでした。フォルダーが存在し、読み取り可能か確かめてから、再読み込みしてください。
+load_error	このペアを読み込めませんでした。ファイルが不完全、非対応、またはサイズが異なる可能性があります。再読み込みして再試行してください。
+wipe	分割
+side	左右に並べる
+flip	切り替え
+diff	差分
+fit	全体表示
+one	1:1
+original	オリジナル
+processed	Retoque NR
+hold	押している間オリジナルを表示
+stats	表示プレビュー
+psnr	PSNR
+changed	変化 >5%
+mad	平均差
+stats_help	RGB の PSNR と平均絶対差は 8 ビットの表示値を使います。変化したピクセルとは、輝度コードの絶対差が 5% を超えるものです。これらは HDR の生の指標でも、画質のスコアでもありません。
+hdr	HDR → SDR プレビュー · ACES + sRGB · 共通の露出
+sdr	SDR キャプチャー · 元の表示値
+hdr_note	ゲーム独自のトーンマッピングやポストプロセスは、ここでは再現されません。
+diff_key	ヒートマップ · 固定 8× ゲイン · 黒 = 同一、青・黄・赤 = 差が大きくなる
+no_provenance	サイドカーファイルや埋め込みの出所情報は見つかりませんでした。
+model	モデル
+route	経路
+working	処理解像度
+settings	設定
+cmp.unknown	記録なし
+loaded	読み込み時間
+exposure	露出
+exposure_reset	露出をリセット
+exposure_help	0 EV では自動または記録済みの露出を使います。1 段ごとに光量が 2 倍または半分になり、両方の画像に同じく適用されます。スライダーを離すとプレビューが更新されます。
+exposure_updating	プレビューを更新しています…
+thumbnail_error	サムネイルを表示できません
+shell.uninstall_open	アンインストール…
+shell.discard	破棄
+shell.restart_hint	変更を反映するには、ゲームを再起動してください。
+shell.library_checking	インストール済みのバージョンをチェックしています…
+shell.model_version	モデル
+shell.model_unknown	モデルあり · バージョン不明
+shell.review_shortcut	変更を確認 (Ctrl+Enter)。確定するまで何も書き込まれません。
+shell.progress_install	インストールしています…
+shell.progress_update	更新しています…
+shell.progress_remove	削除しています…
+shell.progress_save	保存しています…
+shell.home	ライブラリに戻る
+shell.library_show	ゲーム一覧を表示
+shell.library_hide	ゲーム一覧を隠す
+shell.back_library	‹ ライブラリ
+shell.details	詳細
+shell.bundle_done	診断ファイルを作成しました
+shell.failed	操作を完了できませんでした
+shell.catalog_changed	マイモデルを更新しました
+shell.checking	インストールをチェックしています…
+shell.review_update	Retoque の更新を確認
+shell.review_install	Retoque のインストールを確認
+shell.review_remove	アンインストールを確認
+shell.review_note	確定するまで何も変更されません。
+shell.undo_record	元に戻すための Retoque の記録
+shell.resolve	上の問題を解決し、この確認画面を閉じてからもう一度お試しください。
+shell.add	追加
+shell.replace	置き換えまたは復元
+shell.keep	保持
+shell.remove	削除
+shell.settings	設定
+shell.games_one	ゲーム
+shell.games_other	ゲーム
+shell.updates_one	件の更新あり
+shell.updates_other	件の更新あり
+shell.home_help	ゲームのフォルダーを追加するか、ランチャーをスキャンして始めましょう。
+shell.reinstall	再インストール…
+shell.resume	クリーンアップを完了…
+shell.update	Retoque を更新…
+shell.open_folder	ゲームフォルダーを開く
+shell.pending	未保存の変更
+shell.preparing	確認画面を準備しています…
+shell.installed_done	Retoque をインストールしました
+shell.updated_done	Retoque を更新しました
+shell.removed_done	Retoque をアンインストールしました
+shell.settings_done	設定を適用しました
+set.advanced	詳細設定
+set.model_link	NR モデルはコンポーネントで選択
+set.custom	カスタム値
+set.automatic	自動
+tab.install_first	このゲームを設定するには Retoque をインストールしてください
+tab.review_install	インストールを確認…
+tab.loading	ゲームの設定を読み込んでいます…
+mdl.loading	モデルのバージョンを読み取っています…
+mdl.reading_catalog	マイモデルを読み込んでいます…
+mdl.beside	ゲームと同じフォルダーで検出
+mdl.from_catalog	マイモデルから
+mdl.from_path	設定されたファイルから
+mdl.version_unknown	バージョンを特定できません
+mdl.unresolved	このパスはこのシステムでは検証できません。ゲーム内で確認してください。
+mdl.auto_unresolved	実行ファイルと同じフォルダーにモデルがありません。既定の検索で別のフォルダーから見つかる場合があります。
+mdl.next_start	これは次回起動時に選択されるファイルであり、実行中のゲームが読み込んだものを示すものではありません。
+mdl.catalog_empty	まだモデルがありません
+mdl.optional	このゲームにはすでにモデルがあります。別のモデルのインポートは任意です。
+mdl.drop	NR モデル (nvngx_dlssnr.dll) をここにドロップするか、ファイルを選択してください
+mdl.import_review	このファイルをマイモデルにインポートしますか？ゲームフォルダーは変更されません。
+mdl.confirm_import	モデルをインポート
+mdl.used_games_none	このモデルを使っているゲームはありません
+mdl.used_games_one	このモデルを使っているゲーム：1
+mdl.used_games	このモデルを使っているゲーム：{n}
+mdl.refresh	モデルを再チェック
+log.loading	ログを読み込んでいます…
+log.latest	最新のセッション
+log.history	セッションのログ
+log.no_sample	確認済みのサンプルなし
+log.details	技術的な詳細
+log.no_evidence	このログでは NR の動作が確認されていません
+log.initialized_only	NR は初期化されましたが、評価は確認されていません
+log.ran	NR の評価が記録されています
+log.stage_pre	アップスケーラーの前
+log.stage_post	アップスケーラーの後
+log.stage_present	表示時
+log.on_api	·
+log.error_count_one	エラー
+log.error_count	エラー
+log.hint_errors	下のエラーを確かめてください。サポートが必要な場合は診断ファイルを作成してください。
+log.hint_inactive	NR が有効でモデルが利用可能か確かめてから、ゲームを再起動してください。
+log.hint_timing	確認済みの GPU 時間は記録されていません。これだけでは NR が失敗したことにはなりません。
+log.no_log_bundle	ログがなくても、診断ファイルには利用可能な設定とインストールの状態が含まれます。
+log.repeat_one	回
+log.repeat	回
+log.retry	再読み込み
+cmp.empty.no_shortcut	メニューのショートカットが無効になっています。OptiScaler.ini で Menu.ShortcutKey を設定してから、ゲームを再起動してください。
+cmp.fit.short	全体
+cmp.reset.short	0
+cmp.tools	ビューアーのオプション
+cmp.more	…
+cmp.expand	比較を拡大
+cmp.close	拡大表示を閉じる
+cmp.details	キャプチャーの詳細
+cmp.shortcuts	キーボードショートカット
+cmp.keyboard	画像にフォーカスして操作：1–4 モード · F 全体表示 · Space オリジナル · 矢印キー 移動 · Shift + 左右 分割線を移動 · +/− ズーム · Esc 拡大表示を終了。
+cmp.divider	比較の位置
+cmp.zoom_in	拡大
+cmp.zoom_out	縮小
+cmp.preview	SDR プレビュー
+cmp.empty.title	はじめての比較
+cmp.empty.install	まず {tab} タブでインストールを確認し、NR を有効にしてゲームを起動してください。
+cmp.empty.run	Retoque と NR を有効にしてゲームを起動してください。
+cmp.empty.menu	{key} を押して Retoque のゲーム内メニューを開いてください。
+cmp.empty.custom	設定したメニューキーで Retoque のゲーム内メニューを開いてください。
+cmp.empty.disabled	このゲームの設定では、ゲーム内メニューが無効になっています。キャプチャーの前に有効にしてください。
+cmp.empty.capture	比較で「オリジナルと処理後をキャプチャー」を選びます。両方のファイルが完成するのを待ってから、ここで再読み込みしてください。
+cmp.empty.refresh	キャプチャーを探す
+auto.gpu_reading	GPU を検出しています…
+auto.gpu_unknown	GPU を検出できません
+shell.install_optimize	インストールして最適化…
+shell.register_optimize	登録して最適化…
+shell.update_optimize	更新して最適化…
+shell.more	その他の操作
+shell.install_optimize_hint	1 つの確認画面で、Retoque に加えて、このゲームとお使いの GPU に必要なものをまとめて行います。確定するまで何も変更されません。
+shell.install_only	インストールのみ…
+shell.optimize	最適化…
+shell.optimize_hint	このゲームとお使いの GPU で今すぐ使えるものを確認します。
+shell.no_payload	Retoque ファイルが見つかりません。ウィンドウ下部の「Retoque ファイル」をクリックしてください。
+auto.use_banner	上部の「インストールして最適化…」なら、これらすべてを 1 つの確認画面で行えます。
+tile.gpu	GPU
+tile.nr	ニューラルレンダリング
+tile.dlss	DLSS
+tile.fg	フレーム生成
+tile.on	オン
+tile.off	オフ
+tile.unknown	不明
+tile.model_missing	モデルなし
+tile.fg_sm86	RTX 20/30 向け sm86
+tile.fg_game	ゲーム独自
+tile.fg_available	利用可能
+tile.fg_needs_sm86	この GPU では sm86 が必要
+tile.dlss_none	見つかりません
+tile.dlss_detail	ゲーム内のファイル
+auto.turing	Turing
+auto.ampere	Ampere
+auto.ada	Ada
+auto.blackwell	Blackwell
+auto.older	旧世代の NVIDIA GPU
+auto.other	GPU
+auto.unknown	不明なアーキテクチャ
+auto.gb	GB
+auto.driver	ドライバー
+auto.title	お使いの GPU 向けに最適化
+auto.checking	このゲームをチェックしています…
+auto.reading_components	マイコンポーネントを読み込んでいます…
+auto.none	この GPU とゲームに推奨される自動の変更はありません。
+auto.need_install	まずこのゲームに Retoque をインストールしてください。
+auto.apply	これだけを適用…
+auto.confirm	適用
+auto.done	変更を適用しました
+auto.done_optimize	最適化を適用しました
+auto.done_install	Retoque をインストールして最適化しました
+auto.done_update	Retoque を更新して最適化しました
+auto.done_register	Retoque を登録して最適化しました
+auto.partial	一部のみ適用されました。完了した操作
+auto.lsfg	Lossless Scaling のフレーム生成
+auto.ls_help	倍率を選ぶと変更を確認できます。Lossless Scaling のファイルは参照されるだけで、コピーされることはありません。適用後はゲームを再起動してください。
+auto.off	オフ…
+auto.x2	x2…
+auto.x3	x3…
+auto.x4	x4…
+auto.ls_ready	Lossless Scaling のシェーダーの準備完了
+auto.ls_missing	Lossless Scaling が見つかりません
+auto.choose_lossless	Lossless Scaling のフォルダーを選択…
+auto.ls_conflict	LSFG をオンにする前に、コンポーネント › フレーム生成 で sm86 をアンインストールしてください。
+auto.components	フレーム生成コンポーネント
+auto.no_component	マイコンポーネントに sm86 コンポーネントがありません
+auto.component_installed	このゲームにインストール済みのコンポーネント
+auto.component_install	コンポーネントのインストールを確認…
+auto.component_remove	コンポーネントの削除を確認
+auto.catalog_remove	コンポーネントをアプリから削除…
+auto.catalog_remove_title	このコンポーネントをアプリから削除しますか？
+auto.catalog_remove_help	アプリが保持しているコピーを削除します。インストール済みのゲームのファイルはそのまま残ります。再度インストールするには、もう一度インポートまたはダウンロードしてください。
+auto.none_installed	このゲームには管理対象のコンポーネントがインストールされていません。
+rec.sm86.title	お使いの GPU 向けの DLSS フレーム生成
+rec.sm86.why	このゲームは DLSS-G に対応しています。インポート済みの sm86 ローダーで、Turing または Ampere でもフレーム生成を利用できます。LSFG はオフになります。
+rec.sm86_mfg.title	sm86 による DLSS フレーム生成
+rec.sm86_mfg.why	sm86 がインストールされ、このゲームは DLSS-G に対応しています。Retoque 独自のフレーム生成は使わず、ゲーム側にすでに選択がない限り、実フレーム 1 枚につき 2 枚の生成フレーム (x3) を要求します。RTX 30 では x4 より安定します。実フレームが 1 秒あたりおよそ 30 を下回る場合は、ゲーム内で DLSS のバランスまたはパフォーマンスを選んでください。設定で変更できます。
+rec.rtx30_nr.title	RTX 30 向けに調整したニューラルレンダリング (NR)
+rec.rtx30_nr.why	同じ負荷で画面中央をフル解像度に保ち（周辺部を圧縮）、効果を強め (1.5) ます。RTX 3060 で計測しました。どちらも設定で変更できます。
+rec.lsfg.title	Lossless Scaling x2
+rec.lsfg.why	このゲームでは DLSS-G が検出されませんでした。Lossless Scaling のインストールを使って、実フレームごとに 1 枚の追加フレームを生成します。
+rec.install.title	まず Retoque をインストール
+rec.install.why	このゲームに Retoque をインストールすると、GPU に合わせた設定を利用できるようになります。
+rec.adopt.title	この Retoque のインストールを登録
+rec.adopt.why	Retoque はありますが、登録されていません（古いスクリプトでインストールされたもの）。アプリから再インストールするとすべてのファイルが記録され、後から安全に更新・削除できるようになります。
+rec.sm86_update.title	RTX 30 向け DLSS-G を更新 (dlssg_for_sm86)
+rec.sm86_update.why	このゲームには古い dlssg_for_sm86 (0.3.x) があります。マイコンポーネントのバージョンで置き換え、古いファイルはバックアップとして保持します。
+store.xbox	Xbox
+folders.title	マイフォルダー
+folders.migrated_both	フォルダーを更新しました：{moved} を複数のゲームを含むフォルダーに移し、ドライブのルート {roots} は無視しました。
+folders.migrated_moved	フォルダーを更新しました：{moved} を複数のゲームを含むフォルダーに移しました。
+folders.migrated_dropped	フォルダーを更新しました：ドライブのルート {roots} は無視しました。
+folders.question	このフォルダーには何が入っていますか？
+folders.game	1 つのゲーム
+folders.library	複数のゲームを含むフォルダー
+folders.game_help	1 つのゲームまたはエミュレーターのフォルダーを選択してください。
+folders.library_help	各サブフォルダーでゲームを探します。それらを含む親フォルダーを選択してください。
+folders.help	再スキャン時にこれらのフォルダーを探します。リストから外しても、そのフォルダーを探さなくなるだけで、ファイルは削除されません。
+folders.empty	まだフォルダーが追加されていません。
+folders.games	個別のゲームとエミュレーター
+folders.libraries	複数のゲームを含むフォルダー
+folders.remove	リストから外す
+folders.remove_help	このリストから外すだけです。ファイルはそのまま残ります。
+folders.close	閉じる
+folders.unregistered	ストアのリストにありません
+palette.title	コマンド
+palette.search	ゲーム、タブ、設定、操作を検索
+palette.keys	矢印キーで選択 · Enter で開く · Esc で閉じる
+palette.empty	一致するものはありません
+palette.game	ゲーム
+palette.uninstall	Retoque をアンインストール…
+palette.review_settings	設定の変更を確認…
+palette.focus	現在の検索にフォーカス
+set.filter	設定を絞り込む
+set.only_changed	変更したもののみ
+set.reset	自動に戻す：{label}
+set.source_draft	変更済み、未適用です。確認して適用してください。
+undo.exact	INI の取り消しで元のバイトを復元します。記録された適用後のハッシュはまだ一致しています。
+undo.conservative	INI の控えめな取り消し：ファイルが変更されたか、正確な履歴がありません。ほかのバイトは保持されますが、バイト単位の完全な復元ではありません。
+undo.provenance_mismatch	INI の取り消し用の記録が、要求された編集と一致しません
+undo.invalid_provenance	INI の取り消し用の記録が無効です。ファイルは変更されていません
+undo.stale_provenance	INI の取り消し用の記録が一致しなくなりました。もう一度確認してください
+undo.stale_value	確認の後に INI の値が変更されました。もう一度確認してください
+undo.title	直前の変更を取り消す…
+undo.empty	このゲームには取り消せる保存済みの設定変更がありません。
+undo.conflict	取り消しを拒否しました：記録された編集の後に、この設定が変更されています。現在の設定を確認してください：
+undo.save_failed	設定は適用されましたが、取り消し履歴を保存できませんでした
+undo.auto_note	取り消しは適用前に確認されます。元のファイルになかった設定は再び削除されます。
+drop.hover	ドロップすると、モデルのインポート、コンポーネントのインポート、またはゲームの追加を確認できます
+drop.title	ドロップした項目を確認
+drop.model	この NR モデルをマイモデルにインポートしますか？
+drop.component	この sm86 コンポーネントをマイコンポーネントにインポートしますか？インストールには別の確認が必要です。
+drop.game	このゲームフォルダーをライブラリに登録しますか？ゲームのファイルは変更されません。
+drop.unsupported	対応していない項目です。nvngx_dlssnr*.dll ファイル、またはゲーム／コンポーネントのフォルダーを選択してください。
+drop.import	インポート
+drop.add_game	ライブラリに追加
+drop.checking	ファイルをチェックしています…
+doctor.title	Retoque ヘルスチェック
+doctor.prepare	修正を確認…
+doctor.evidence	根拠
+doctor.badge	検出された問題
+doctor.issues_one	問題：1 件
+doctor.issues	問題：{n} 件
+watch.manual	自動更新を利用できません。手動で再読み込みしてください。
+watch.refresh	選択したゲームを再読み込み
+log.diagnoses	ログの診断
+dlss.title	NVIDIA DLSS
+dlss.installed	このゲームの DLSS
+dlss.available	利用可能
+dlss.current	最新
+dlss.update	DLSS を更新…
+dlss.restore	元の DLSS を復元して Retoque をアンインストール…
+dlss.restore_only	元の DLSS を復元…
+dlss.restore_confirm	元の DLSS を復元
+dlss.optimize	DLSS も更新する（任意）
+dlss.download	DLSS 310.9.16 をダウンロード…
+dlss.all_current	このゲームの DLSS ファイルは、すべてこのバージョン以降です。
+dlss.downloading	検証済みの NVIDIA DLSS をダウンロードしています
+dlss.download_first	先にコンポーネント › DLSS で DLSS をダウンロードしてから、更新を確認してください。
+dlss.consent	Retoque は Super Resolution、Ray Reconstruction、Frame Generation を NVIDIA から直接ダウンロードします。置き換えるのはゲームにすでにある種類だけで、別の確認を経た後に行います。
+dlss.consent_title	NVIDIA DLSS 310.9.16 をダウンロード
+dlss.consent_details	ホスト：raw.githubusercontent.com と media.githubusercontent.com（NVIDIA/DLSS、v310.9.16）。各ファイルを固定のサイズと SHA-256 で検証します。NVIDIA DLSS のライセンスが適用されます。
+dlss.caution	DLL の変更は、ゲームやそのアンチチートと互換性がない場合があります。更新の前にゲームの規約を確認してください。元のファイルは復元用にバックアップされます。
+dlss.license	NVIDIA のライセンスを読む
+dlss.error.0	ルートにあるインストール記録は別のインストールのものです
+dlss.error.1	ゲームのルートが無効か、DLSS の一覧が空です
+dlss.error.2	DLSS のパスが無効または重複しています
+dlss.error.3	DLSS の保存先がない、リンクである、または曖昧です
+dlss.error.4	ルートを変更する前に、以前の DLSS インストール記録を復元してください
+dlss.error.5	ルートの DLSS マーカーはインストール記録に属していません
+dlss.error.6	DLSS カタログのマーカーが無効です
+dlss.error.7	DLSS のパスの文字コードが無効です
+dlss.error.8	DLSS カタログのファイルがないか、リンクです
+dlss.error.9	前回の更新以降に DLL が変更されています。先に復元するか整合させてください
+dlss.error.10	対象フォルダーがゲームのルートの外にあります
+dlss.error.11	DLSS のサイズまたは SHA-256 が一致しません
+dlss.error.12	DLSS カタログがリンクです
+dlss.error.13	DLSS カタログのフォルダーが無効です
+dlss.error.14	DLSS カタログのファイルが無効です
+dlss.error.15	DLSS のダウンロードには確認が必要です
+dlss.error.16	ダウンロード中に DLSS カタログが現れました
+dlss.error.17	DLSS カタログはまだダウンロードされていません
+dlss.error.18	DLSS カタログが見つからなくなりました
+dlss.error.19	DLSS の検索で階層の上限を超えました
+dlss.error.20	DLSS の検索でファイル数の上限を超えました
+dlss.error.21	DLSS の検索で文字コードが無効なパスがありました
+dlss.error.22	DLSS のパスが無効です
+dlss.error.23	復元と最適化は同時に行えません
+dlss.error.24	同時に行えるのは同じルートへのインストールだけです
+dlss.error.25	複数のインストール計画が同じパスを変更します
+dlss.error.26	インストール計画の間でファイルが変更されました
+dlss.error.component_changed	確認の後にコンポーネントが変更されました
+payload.source.beside	アプリと同じ場所のファイルを使用
+payload.source.folder	選択したフォルダーを使用
+payload.source.release	ダウンロードしたリリースを使用
+payload.download	リリースをダウンロード…
+payload.download_now	更新をダウンロード…
+payload.check	更新をチェック…
+payload.consent_title	Retoque の公式リリース
+payload.check_consent	Retoque ファイルの新しいバージョンがあるか GitHub に問い合わせますか？
+payload.download_consent	Retoque は公式リリースから最新のファイルをダウンロードして検証します。インストールを確認するまで、ゲームは変更されません。
+payload.hosts_note	許可されている HTTPS ホスト：api.github.com、github.com/gabrielmaialva33/retoque、release-assets.githubusercontent.com。SHA256SUMS と GitHub の SHA-256 ダイジェストで検証します。
+payload.progress	Retoque ファイルをダウンロードしています…
+payload.no_release	GitHub にはまだ公式リリースが公開されていません。ローカルのフォルダー、またはアプリと同じ場所のファイルを引き続き使います。
+payload.new_release	新しいリリースがあります
+payload.up_to_date	リリースは最新です
+payload.error.0	Retoque ファイルの SHA-256 が、GitHub が公開したダイジェストと一致しません。
+payload.error.1	Retoque ファイルの SHA-256 が SHA256SUMS ファイルと一致しません。
+payload.error.2	SHA256SUMS ファイルの SHA-256 が、公開されたダイジェストと一致しません。
+payload.error.3	SHA256SUMS ファイルに Retoque ファイルが記載されていません。
+payload.error.4	Retoque ファイルの中に禁止されたファイルがあります。
+payload.error.5	Retoque ファイルの中に、許可されていない余分なファイルがあります。
+payload.error.6	OptiScaler.dll と nvngx.dll_dlssnr.dll のファイルバージョンが一致しません。
+payload.error.7	このリリースには必要な Retoque ファイルが不足しています。
+payload.error.8	Retoque の公式リリースのメタデータが無効です。
+payload.error.9	HTTPS で Retoque のリリースを照会またはダウンロードできませんでした。
+payload.error.10	URL が Retoque の公式リポジトリのものではありません。
+payload.error.11	Retoque リリースのリダイレクトを拒否しました。
+payload.error.12	このリリースのパッケージは最初のダウンロード以降に変更されています。
+nr_fetch.title	コミュニティの NR モデル (RankFTW/rhi-repo)
+nr_fetch.source_note	RankFTW/rhi-repo によるコミュニティの再配布（ApolloF/DLSS5-Updater-catalog に掲載）で、NVIDIA の公式ダウンロードではありません。インポート前にサイズと SHA-256 で検証します。
+nr_fetch.get_compatible	対応モデルをダウンロード…
+nr_fetch.consent_title	対応する NR モデルをダウンロード
+nr_fetch.consent_body	このモデルは NVIDIA ではなくコミュニティが提供するものです。Retoque は検証してモデルファイルだけを保持します。ゲームの設定が変更されるのは、別の確認を経た後だけです。
+nr_fetch.refresh_catalog	コミュニティのカタログを更新…
+nr_fetch.refresh_title	コミュニティの NR モデルカタログを更新
+nr_fetch.refresh_body	コミュニティの NR モデルの最新リストを GitHub からダウンロードしますか？
+nr_fetch.refresh_details	ApolloF/DLSS5-Updater-catalog の catalog.json（raw.githubusercontent.com、最大 8 MB）。SHA-256 付きの RankFTW/rhi-repo リリースの項目だけを受け付けます。未検証の項目を対応済みとみなすことはありません。
+nr_fetch.confirm_refresh	カタログを更新
+nr_fetch.downloading	コミュニティの NR モデルをダウンロードしています
+nr_fetch.refreshing	コミュニティのモデルリストをダウンロードしています…
+nr_fetch.no_compatible_gpu	GPU を特定できなかったため、対応モデルを自動で選べません。
+nr_fetch.unavailable	この GPU に対応する NR モデルの項目はありません。変更は適用されていません。
+nr_fetch.available_variants	利用可能なコミュニティ版
+nr_fetch.download_variant	ダウンロード…
+nr_fetch.error.0	カタログにモデルの SHA-256 がないか、無効です。
+nr_fetch.error.1	モデルのカタログがサイズ上限を超えています。
+nr_fetch.error.2	モデルのカタログの項目が多すぎます。
+nr_fetch.error.3	モデルのカタログのメタデータが無効です。
+nr_fetch.error.4	このアドレスは RankFTW/rhi-repo の公開リリースのものではありません。
+nr_fetch.error.5	モデルのリダイレクト先は許可されていません。
+nr_fetch.error.6	モデルのカタログが許可されていないリダイレクトを試みました。
+nr_fetch.error.7	モデルのリダイレクト先が示されていません。
+nr_fetch.error.8	HTTPS でモデルを照会またはダウンロードできませんでした。
+nr_fetch.error.9	モデルのサーバーが予期しない HTTP ステータスを返しました。
+nr_fetch.error.10	モデルのダウンロードの応答がサイズ上限を超えています。
+nr_fetch.error.11	モデルのダウンロードのリダイレクト回数が上限を超えました。
+nr_fetch.error.12	アーカイブに nvngx_dlssnr.dll がありません。
+nr_fetch.error.13	アーカイブに nvngx_dlssnr.dll が複数あります。
+nr_fetch.error.14	モデルのサイズが記載と一致しません。
+nr_fetch.error.15	モデルの SHA-256 が想定と一致しません。
+nr_fetch.error.16	カタログのメタデータが、既知の固定バージョンと矛盾しています。
+rs.undo_addon	アドオンの変更を取り消す
+rs.error.restored	元のファイルは復元済み
+rs.error.0	ReShade のサイズまたは SHA-256 が一致しません
+rs.error.1	ReShade の入力がサイズ上限を超えています
+rs.error.2	ReShade の入力が PE 実行ファイルではありません
+rs.error.3	ReShade のインストーラーに ZIP が付加されていません
+rs.error.4	ReShade の ZIP の項目が多すぎます
+rs.error.5	ReShade64.dll が曖昧か、リンクです
+rs.error.6	インストーラーに ReShade64.dll がありません
+rs.error.7	ReShade の DLL がサイズ上限を超えています
+rs.error.8	ReShade の DLL が無効です
+rs.error.9	ReShade のファイルがサイズ上限を超えています
+rs.error.10	ReShade カタログの ID が無効です
+rs.error.11	ReShade カタログの整合性チェックに失敗しました
+rs.error.12	認識できない ReShade の DLL です。ReShade の識別情報を持つ x64 DLL が必要です
+rs.error.13	ReShade のキャッシュが見つからなくなりました
+rs.error.14	ReShade のファイル名が無効です
+rs.error.15	ReShade のダウンロードには確認が必要です
+rs.error.16	ReShade の入力がリンクか、通常のファイルではありません
+rs.error.17	ReShade の入力がサイズ制限を超えています
+rs.error.18	ReShade のファイル名が大文字・小文字の違いで曖昧です
+rs.error.19	AddonPath が未解決の Wine ドライブ、またはネットワークパスを使用しています
+rs.error.20	AddonPath がリンクです
+rs.error.21	アドオンの検索上限を超えました
+rs.error.22	アドオンのファイル名が UTF-8 ではありません
+rs.error.23	アドオンのファイル名が大文字・小文字の違いで曖昧です
+rs.error.24	アドオンがリンクか、通常のファイルではありません
+rs.error.25	アドオンの検査がサイズ上限を超えています
+rs.error.26	ReShade の状態が変更されているか、インストール記録に属していません
+rs.error.27	ReShade の状態が無効です
+rs.error.28	ReShade の取り消し履歴が上限を超えています
+rs.error.29	ReShade／アドオンの保存先で大文字・小文字が競合しています
+rs.error.30	ReShade／アドオンの入力が x64 PE DLL ではありません
+rs.error.31	Special K があり、ReShade の読み込みを管理しています
+rs.error.32	別の ReShade ローダーがあります。先に既存の keep_reshade 移行を行ってください
+rs.error.33	ReShade には、ローダーファイルと実行ファイルが同じフォルダーにある必要があります
+rs.error.34	ReShade コンポーネントの前に Retoque をインストールしてください
+rs.error.35	OptiScaler.ini がありません
+rs.error.36	取り消し用の INI パスが無効です
+rs.error.37	取り消し用の編集の識別情報が無効です
+rs.error.38	確認したインストールの後に LoadReshade が変更されました。取り消し用の状態を保持してください
+rs.error.39	このコンポーネントは Retoque がインポートしたものではありません
+rs.error.40	コンポーネントの状態の識別情報が一致しません
+rs.error.41	インポートしたファイルが変更されています。ファイルは削除されていません
+rs.error.42	ReShade のバックアップが変更されています。インストール記録を保持してください
+rs.error.43	安全なファイル名の .addon64 または .addon ファイルを選択してください
+rs.error.44	AddonPath がゲームフォルダーと異なります。ここにインポートしてもアドオンは読み込まれません
+rs.error.45	アドオンのファイル名が無効です
+rs.error.46	アドオンが ReShade の AddonPath にありません
+rs.error.47	ReShade のバージョンが機能限定版か不明です。アドオンの完全なサポートは確認されていません
+rs.error.48	INI の控えめな取り消し：ほかの編集は保持されますが、バイト単位の完全な復元ではありません
+rs.error.49	同一のファイルがすでにあります。元の所有状態を保持します
+rs.error.50	INI の取り消しが無効です
+rs.error.51	不明な ReShade／アドオンのオプションです
+rs.error.52	ReShade／アドオンの引数が多すぎます
+rs.error.53	addon add にはファイルが必要です
+rs.error.54	アドオンのファイル名を指定してください
+rs.error.55	不明な ReShade／アドオンの操作です
+rs.title	ReShade とアドオン
+rs.description	Retoque はゲームのローダーファイルを保持し、ReShade64.dll を読み込みます。
+rs.enabled	有効
+rs.disabled	無効
+rs.full	アドオンを完全サポート
+rs.limited	機能限定版の ReShade：外部アドオンは読み込めません
+rs.unknown	不明な ReShade バージョン
+rs.missing	ReShade がありません
+rs.recommend	アドオン対応の ReShade をインストール
+rs.recommend_why	アドオンはありますが、ReShade の完全なサポートがないか、確認されていません。インストールは別途確認してください。
+rs.static	このゲームではまだテストされていません。変更後はゲームを再起動してください。
+rs.addons	アドオン
+rs.build	ReShade のバージョン
+rs.install	ReShade のインストールを確認…
+rs.uninstall	ReShade コンポーネントを削除
+rs.import	ローカルの ReShade DLL またはインストーラーをインポート…
+rs.add	アドオンをインポート…
+rs.remove_addon	インポートしたアドオンを削除
+rs.review	ReShade／アドオンの変更を確認
+rs.drop_addon	確認済みの計画を通じて、このアドオンを選択中のゲームにコピーします。
+rs.drop_reshade	この ReShade の DLL またはインストーラーをアプリにインポートしますか？ゲームへのインストールには別の確認があります。
+rs.select_game	アドオンをインポートする前にゲームを選択してください。
+rs.nr_off	ニューラルレンダリング (NR)：オフ
+rs.nr_addon	ニューラルレンダリング (NR)：アドオン RenoDX DLSS5 による
+rs.nr_retoque	ニューラルレンダリング (NR)：Retoque による
+rs.input_title	ReShade のメニューが Retoque のメニューからマウスを奪います
+rs.input_why	ReShade の入力処理が「すべてブロック」（既定）の場合、そのオーバーレイを開いている間は Retoque のメニューでマウスもキーボードも使えません。カーソルが ReShade のウィンドウ上にあるときだけブロックするように設定すると、両方のメニューを同時に使えます。
+rs.input_mode	ReShade.ini [INPUT]
+rs.input_fix	両方のメニューでマウスを使えるようにする…
+rs.yield	NR アドオンに任せる（既定）
+rs.ignore	Retoque の NR を保持（上級者向け）
+rs.consent	reshade.me からアドオンを完全サポートした ReShade 6.8.0 をダウンロードしますか？4.3 MB の公式インストーラーと取り出した DLL には、固定の SHA-256 ハッシュがあります。BSD-3-Clause が適用されます。ゲームの変更には別の確認が必要です。
+rs.preparing	ReShade を準備しています…
+rs.cli_confirm	ダウンロードを確定するには yes と入力してください：
+rs.download_first	先に ReShade をインポートまたはダウンロードしてください。ドライランではダウンロードしません。
+rs.dry	ドライラン：ゲームとカタログは変更されません。
+rs.done	確認した変更を適用しました。
+severity.warning	警告
+severity.error	エラー
+doctor.journal_unreadable.why	未完了のインストール記録がありますが、Retoque はこのインストールを調べられませんでした。記録を残したまま修復を確認してください。ほかのチェックは利用できません。
+log.load.title	NR モデルが読み込まれませんでした
+log.load.why	ダイレクトローダーが選択したモデルを読み込めませんでした。ファイルとその依存関係を確かめてください。互換性だけでは原因を特定できません。
+doctor.healthy	利用可能な根拠では問題は見つかりませんでした。調べていない入力については不明のままです。
+doctor.review	修復の前に、新しい計画を確認してください。
+doctor.unfinished.title	未完了のインストール
+doctor.unfinished.why	前回のインストールまたはアンインストールが途中で止まりました。修復を確認して完了させてください。
+doctor.version.title	Retoque ファイルのバージョンが異なります
+doctor.version.why	同じリリースから両方のファイルを更新する準備をしてください。
+doctor.model_missing.title	NR モデルがありません
+doctor.model_missing.why	NR が有効ですが、選択したモデルがありません。NR を無効にするか、利用可能なモデルを選択してください。
+doctor.model_incompatible.title	NR モデルがこの GPU で動作しません
+doctor.model_incompatible.why	このモデルはこの GPU 向けに作られていません。マイモデルから提案されるモデルも、このゲームではまだテストされていません。
+doctor.lsfg_ready.title	LSFG のアセットの準備ができていません
+doctor.lsfg_ready.why	必要なアセットやシェーダーキャッシュがないまま、LSFG が有効になっています。準備ができるまで無効にしてください。
+doctor.lsfg_output.title	LSFG の出力設定が競合しています
+doctor.lsfg_output.why	LSFG には FSR のフレーム生成出力が必要です（設定 › フレーム生成 › フレーム生成の出力）。この設定だけでは準備完了とは限りません。
+doctor.fg_conflict.title	フレーム生成の提供元が競合しています
+doctor.fg_conflict.why	sm86 がインストールされ、LSFG が有効になっています。sm86 を使う前に、LSFG の無効化を確認してください。
+doctor.launch.title	起動オプションがありません
+doctor.launch.why	ゲームにはまだ Retoque を読み込むよう指示されていません。このタブに表示されている起動オプションをランチャーにコピーしてください。
+log.vulkan.title	Vulkan のデバイスロスト
+log.vulkan.why	NR のリサイズ処理でデバイスロストが報告されました。比較のため NR を無効にした実行を確認してください。原因はこれだけでは特定できません。
+log.ngx.title	NGX の初期化に失敗しました
+log.ngx.why	Vulkan でのモデルの初期化が失敗を返しました。モデルとドライバーの互換性を調べてください。
+log.model.title	NR モデルの処理に失敗しました
+log.model.why	CPU 側の記録に、失敗したモデルの処理があります。これだけでは読み込みエラーやその原因は特定できません。
+log.model.incompatible	モデルの処理の失敗は、静的に非互換と判定されたモデルと同時に起きています。マイモデルの中の対応モデルを確認してください。因果関係は未検証です。
+log.pre.title	アップスケーリング前の NR が安全な経路に切り替わりました
+log.pre.why	アップスケーリング後の経路を使うには、設定で NR の段階を「アップスケーラーの後」にしてください。
+log.nvngx.title	Wine ドライバーの NGX ファイルがありません
+log.nvngx.why	ドライバーの検査が初期化されず、ドライバーの NGX ファイルも見つかりませんでした。Wine ドライバーのインストールを確かめてください。検査結果だけでは証明になりません。
+confidence.verified	前回のセッションで確認済み
+confidence.static	このゲームではまだテストされていません
+confidence.proton	Proton/Wine では実験的
+confidence.sm86_proton	sm86 0.4.1 の文書が対象とするのは Windows 10/11 x64 と D3D12 です。Vulkan に関する記述は限定的な対応とコミュニティのパッチについてであり、Proton での動作保証ではありません。
+evidence.installed	認識されたインストール
+evidence.tracked	インストール記録
+evidence.runtime	ランタイム
+evidence.dlss	DLSS の DLL あり
+evidence.dlssg	DLSSG の DLL あり
+evidence.sm86	sm86 インストール済み
+evidence.sm86_legacy	旧 sm86
+evidence.sm86_docs	sm86 の文書
+evidence.field	実地テスト
+evidence.lsfg	LSFG 有効
+evidence.gpu	GPU の識別情報
+evidence.api	前回のセッションの API
+evidence.receipt	インストール記録の状態
+evidence.pending	未完了の操作
+evidence.proxy_version	ローダーファイルのバージョン
+evidence.forwarder_version	NR コンポーネントのバージョン
+evidence.nr_enabled	NR 有効
+evidence.model_present	選択したモデルあり
+evidence.model_targets	モデルの CUDA ターゲット
+evidence.catalog_model	代替モデルの SHA256
+evidence.lsfg_ready	LSFG の準備状況
+evidence.fg_output	フレーム生成の出力
+evidence.launch_option	必要な起動オプション
+evidence.override	起動オプションあり
+evidence.log	個人情報を除去したログの行
+severity.info	情報
+doctor.dlss.title	新しい DLSS があります
+doctor.dlss.why	確認の後、NVIDIA DLSS 310.9.16 で古い SR/RR/FG ファイルを置き換えられます。ゲームとの互換性は保証されません。
+doctor.dlss_root.title	DLSS のインストール記録の復旧が必要です
+doctor.dlss_root.why	ゲームのインストールのルートに、保留中または不完全な DLSS の操作が残っています。両方のインストール記録の復元を確認してください。
+evidence.dlss_file_version	ゲームの DLSS バージョン
+evidence.community_model	コミュニティモデルの SHA256
+setting.DlssNr.Enabled	ニューラルレンダリング (NR)
+setting.DlssNr.Enabled.help	ご自身で用意した NR モデル (nvngx_dlssnr.dll) が必要です。自動：オフ。
+setting.DlssNr.Stage	NR の段階
+setting.DlssNr.Stage.help	アップスケーラーの前は実験的です。Vulkan では変更にゲームの再起動が必要です。選択した段階が利用できない場合でも、NR が自動で切り替わることはありません。
+setting.DlssNr.WorkingScale	モデルのスケール
+setting.DlssNr.WorkingScale.help	自動：お使いの GPU に合わせて選択。0.25 から 2.0 まで。1 を超えるとモデルはより高い解像度で処理します。実際のモーションがない経路では 1 以下のままです。
+setting.DlssNr.ModelFile	モデルファイル
+setting.DlssNr.ModelFile.help	自動：ゲームと同じフォルダーで nvngx_dlssnr.dll を探します。選択したファイルがない場合、NR はオフになります。変更後はゲームを再起動してください。
+setting.DlssNr.GameProfiles	ゲームプロファイル
+setting.DlssNr.GameProfiles.help	ゲームの起動時に、このゲームで動作が確認された設定を適用します。対象は「自動」のままの設定だけです。
+setting.DlssNr.HookMethod	NR の配置
+setting.DlssNr.HookMethod.help	NR が画像を受け取る場所です。ネイティブ Vulkan のゲームでは無視されます。選択によってはゲームの再起動が必要です。
+setting.DlssNr.ApplyModel	モデルを適用
+setting.DlssNr.ApplyModel.help	オフにすると、NR は動作したまま元の画像を表示します。比較に使えます。
+setting.DlssNr.HighlightRecovery	ハイライトの復元
+setting.DlssNr.HighlightRecovery.help	明るい色を保ちますが、モデルのディテールが多少犠牲になります。HDR 出力のゲーム専用です。
+setting.DlssNr.Transfer	モデルの拡大
+setting.DlssNr.Transfer.help	モデルがフル解像度未満で処理するときに、その画像を拡大する方法です。Residual + DLSS は一部の経路でのみ動作します。
+setting.DlssNr.Compare	画像を比較
+setting.DlssNr.Compare.help	ゲーム内で元の画像と処理後の画像を並べて表示します。
+setting.DlssNr.CompareSplit	分割線の位置
+setting.DlssNr.CompareSplit.help	分割線の位置です (0.5 = 中央)。「分割」モードに適用されます。自動：中央。
+setting.DlssNr.CompareSwap	比較の左右を入れ替え
+setting.DlssNr.CompareSwap.help	比較中に、元の画像と処理後の画像の左右を入れ替えます。
+setting.Upscalers.Dx11Upscaler	D3D11 アップスケーラー
+setting.Upscalers.Dx11Upscaler.help	「D3D12 ブリッジ」と表示された選択肢は D3D12 を経由して動作します。NVIDIA DLSS (D3D12 ブリッジ) では NR も動作します。ブリッジなしの Intel XeSS には Intel Arc カードが必要です。
+setting.Upscalers.Dx12Upscaler	D3D12 アップスケーラー
+setting.Upscalers.Dx12Upscaler.help	自動：お使いの GPU に合わせて選択。
+setting.Upscalers.VulkanUpscaler	Vulkan アップスケーラー
+setting.Upscalers.VulkanUpscaler.help	「D3D12 ブリッジ」と表示された選択肢は D3D12 を経由して動作します。自動：お使いの GPU に合わせて選択。
+setting.FrameGen.Enabled	フレーム生成
+setting.FrameGen.Enabled.help	自動：オフ。ただし、ゲーム自体の DLSS フレーム生成が入力元の場合は、ゲームの設定に従います。
+setting.FrameGen.FGInput	フレーム生成の入力
+setting.FrameGen.FGInput.help	ゲームのどのフレーム生成ソースを使うかを選びます。「合成」は実験的で、D3D11 と D3D12 のみです。
+setting.FrameGen.FGOutput	フレーム生成の出力
+setting.FrameGen.FGOutput.help	選択した提供元のファイルと、それに対応した GPU が必要です。
+setting.FrameGen.FGNvngxReplacement	DLSSG の置き換え
+setting.FrameGen.FGNvngxReplacement.help	NVIDIA NGX ソース、または DLSS フレーム生成の出力でのみ使われます。置き換え用のファイルが必要です。
+setting.LSFG.Enabled	LSFG（実験的）
+setting.LSFG.Enabled.help	FSR のフレーム生成出力と、ご自身の Lossless Scaling のシェーダーが必要です。LSFG で処理できないフレームは FidelityFX で処理されます。
+setting.LSFG.FlowScale	LSFG フロースケール
+setting.LSFG.FlowScale.help	値を下げると負荷が減り、動きの追従が粗くなります。自動：1。
+setting.LSFG.PerformanceMode	LSFG パフォーマンスモード
+setting.LSFG.PerformanceMode.help	負荷が軽く、動きはやわらかくなります。
+setting.LSFG.ShaderDir	LSFG シェーダーフォルダー
+setting.LSFG.ShaderDir.help	ご自身の Lossless Scaling から準備したシェーダーです。同梱はされていません。自動：未設定。
+setting.LSFG.DllPath	Lossless Scaling の場所
+setting.LSFG.DllPath.help	lsfg-vk.dll、Lossless.dll、またはそのフォルダー。自動：Steam と Wine のフォルダーから探します。
+setting.LSFG.Multiplier	LSFG 倍率
+setting.LSFG.Multiplier.help	実フレーム 1 枚ごとに表示するフレーム数です。2 から 3 または 4 に変えるには、ゲームの再起動が必要です。
+choice.automatic	自動
+choice.on	オン
+choice.off	オフ
+choice.after_the_upscaler	アップスケーラーの後
+choice.before_the_upscaler_experimental	アップスケーラーの前（実験的）
+choice.automatic_route	自動の経路
+choice.upscaled_image	アップスケーリング後の画像
+choice.at_presentation	表示時
+choice.classic	クラシック
+choice.residual	Residual
+choice.residual_dlss	Residual + DLSS
+choice.sharp_residual	Sharp Residual
+choice.side_by_side	左右に並べる
+choice.wipe	分割
+choice.fsr_2_1	FSR 2.1
+choice.fsr_2_2	FSR 2.2
+choice.fsr_3_1	FSR 3.1
+choice.fidelityfx	FidelityFX
+choice.intel_xess	Intel XeSS
+choice.nvidia_dlss	NVIDIA DLSS
+choice.fsr_2_1_d3d12_bridge	FSR 2.1 (D3D12 ブリッジ)
+choice.fsr_2_2_d3d12_bridge	FSR 2.2 (D3D12 ブリッジ)
+choice.fidelityfx_d3d12_bridge	FidelityFX (D3D12 ブリッジ)
+choice.intel_xess_d3d12_bridge	Intel XeSS (D3D12 ブリッジ)
+choice.nvidia_dlss_d3d12_bridge	NVIDIA DLSS (D3D12 ブリッジ)
+choice.none	なし
+choice.dlss_frame_generation	DLSS フレーム生成
+choice.nvidia_ngx	NVIDIA NGX
+choice.fsr_frame_generation	FSR フレーム生成
+choice.fsr_3_0_frame_generation	FSR 3.0 フレーム生成
+choice.intel_xe_frame_generation	Intel Xe フレーム生成
+choice.from_the_upscaler	アップスケーラーから
+choice.synthesized_experimental	合成（実験的）
+choice.nukem_s_replacement	Nukem の置き換え
+choice.artur_s_replacement	Artur の置き換え
+choice.fidelityfx_replacement	FidelityFX の置き換え
+choice.combined_replacements	置き換えの組み合わせ
+choice.2_frames	2× フレーム
+choice.3_frames	3× フレーム
+choice.4_frames	4× フレーム

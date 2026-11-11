@@ -1,29 +1,251 @@
-//! The app's text in English and Brazilian Portuguese. A key missing from the table shows the key itself, so a gap
-//! is visible instead of silently empty.
+//! The app's text. English and Brazilian Portuguese live in the table below; eight more languages are packs in
+//! `i18n/<code>.tsv` (one `key<TAB>text` per line, embedded at build time and parsed on first use). A key missing
+//! from a pack shows in English; a key missing from the table shows the key itself, so a gap is visible instead of
+//! silently empty. The packs are machine-translated drafts pending native review (see tools/app/README.md).
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// The app's languages. Saved by variant name ("En", "Pt", "ZhCn"), so a variant is never renamed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Lang {
     En,
     Pt,
+    De,
+    Es,
+    Fr,
+    Ja,
+    Ko,
+    Pl,
+    Ru,
+    ZhCn,
 }
 
 impl Lang {
-    /// pt-BR when the system locale is Portuguese, English otherwise.
+    /// Every language in the order the selector lists them: by native name, Latin, then Cyrillic, then CJK.
+    pub const ALL: [Lang; 10] = [
+        Lang::De,
+        Lang::En,
+        Lang::Es,
+        Lang::Fr,
+        Lang::Pl,
+        Lang::Pt,
+        Lang::Ru,
+        Lang::Ja,
+        Lang::Ko,
+        Lang::ZhCn,
+    ];
+
+    /// The language's name in itself, as the selector shows it whatever language the app is in.
+    pub fn native_name(self) -> &'static str {
+        match self {
+            Lang::En => "English",
+            Lang::Pt => "Português (Brasil)",
+            Lang::De => "Deutsch",
+            Lang::Es => "Español",
+            Lang::Fr => "Français",
+            Lang::Ja => "日本語",
+            Lang::Ko => "한국어",
+            Lang::Pl => "Polski",
+            Lang::Ru => "Русский",
+            Lang::ZhCn => "简体中文",
+        }
+    }
+
+    /// The BCP 47 tag, also the pack's file name.
+    pub fn code(self) -> &'static str {
+        match self {
+            Lang::En => "en",
+            Lang::Pt => "pt-BR",
+            Lang::De => "de",
+            Lang::Es => "es",
+            Lang::Fr => "fr",
+            Lang::Ja => "ja",
+            Lang::Ko => "ko",
+            Lang::Pl => "pl",
+            Lang::Ru => "ru",
+            Lang::ZhCn => "zh-CN",
+        }
+    }
+
+    /// Text in Chinese, Japanese or Korean needs a system font with those glyphs (egui's own fonts have none).
+    pub fn needs_cjk(self) -> bool {
+        matches!(self, Lang::Ja | Lang::Ko | Lang::ZhCn)
+    }
+
+    /// A machine-translated pack that no native speaker has reviewed yet.
+    pub fn is_draft(self) -> bool {
+        !matches!(self, Lang::En | Lang::Pt)
+    }
+
+    /// Writes 4,0 rather than 4.0.
+    pub fn decimal_comma(self) -> bool {
+        matches!(self, Lang::Pt | Lang::De | Lang::Es | Lang::Fr | Lang::Pl | Lang::Ru)
+    }
+
+    /// The column of the built-in tables a language falls back to: Portuguese for pt-BR, English for the rest.
+    fn table(self) -> Lang {
+        if self == Lang::Pt { Lang::Pt } else { Lang::En }
+    }
+
+    /// The language for text that `retoque-data` writes itself (English for a language it does not have).
+    pub fn data_language(self) -> retoque_data::messages::Language {
+        match self.table() {
+            Lang::Pt => retoque_data::messages::Language::Portuguese,
+            _ => retoque_data::messages::Language::English,
+        }
+    }
+
+    /// The supported language a locale names ("de-DE", "pt_BR.UTF-8", "zh-Hans-CN"), if any. Traditional Chinese
+    /// is not Simplified Chinese, so it is not matched.
+    pub fn from_locale(locale: &str) -> Option<Lang> {
+        let tag = locale
+            .split(['.', '@'])
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .replace('_', "-");
+        let mut parts = tag.split('-');
+        Some(match parts.next()? {
+            "en" => Lang::En,
+            "pt" => Lang::Pt,
+            "de" => Lang::De,
+            "es" => Lang::Es,
+            "fr" => Lang::Fr,
+            "ja" => Lang::Ja,
+            "ko" => Lang::Ko,
+            "pl" => Lang::Pl,
+            "ru" => Lang::Ru,
+            "zh" if !parts.any(|p| matches!(p, "hant" | "tw" | "hk" | "mo")) => Lang::ZhCn,
+            _ => return None,
+        })
+    }
+
+    /// The system locale's language when the app has it, English otherwise. RETOQUE_LANG (a tag such as "de" or
+    /// "pt-BR") forces one for tests and screenshots.
     pub fn from_system() -> Lang {
-        // RETOQUE_LANG=en|pt forces the language (tests, screenshots); otherwise the system locale decides.
         if let Ok(forced) = std::env::var("RETOQUE_LANG") {
-            return if forced.to_ascii_lowercase().starts_with("pt") {
-                Lang::Pt
-            } else {
-                Lang::En
-            };
+            return Lang::from_locale(&forced).unwrap_or(Lang::En);
         }
-        match sys_locale::get_locale() {
-            Some(l) if l.to_ascii_lowercase().starts_with("pt") => Lang::Pt,
-            _ => Lang::En,
+        sys_locale::get_locale()
+            .and_then(|l| Lang::from_locale(&l))
+            .unwrap_or(Lang::En)
+    }
+}
+
+/// A language pack: key → text, borrowed from the embedded file.
+type Pack = HashMap<&'static str, &'static str>;
+
+/// The embedded pack of a language that is not in the built-in table.
+fn pack_source(lang: Lang) -> Option<&'static str> {
+    Some(match lang {
+        Lang::En | Lang::Pt => return None,
+        Lang::De => include_str!("i18n/de.tsv"),
+        Lang::Es => include_str!("i18n/es.tsv"),
+        Lang::Fr => include_str!("i18n/fr.tsv"),
+        Lang::Ja => include_str!("i18n/ja.tsv"),
+        Lang::Ko => include_str!("i18n/ko.tsv"),
+        Lang::Pl => include_str!("i18n/pl.tsv"),
+        Lang::Ru => include_str!("i18n/ru.tsv"),
+        Lang::ZhCn => include_str!("i18n/zh-CN.tsv"),
+    })
+}
+
+/// `key<TAB>text` lines; blank lines and lines starting with "#" are skipped (tests reject anything else).
+fn parse_pack(source: &'static str) -> Pack {
+    source
+        .lines()
+        .map(|line| line.trim_end_matches('\r'))
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once('\t'))
+        .collect()
+}
+
+/// Parsed once per language, on first use.
+fn pack(lang: Lang) -> Option<&'static Pack> {
+    static PACKS: [OnceLock<Pack>; Lang::ALL.len()] = [const { OnceLock::new() }; Lang::ALL.len()];
+    let source = pack_source(lang)?;
+    Some(PACKS[lang as usize].get_or_init(|| parse_pack(source)))
+}
+
+/// The CLDR plural category of a whole count: "one", "few", "many" or "other".
+fn plural_category(lang: Lang, n: usize) -> &'static str {
+    let (units, tens) = (n % 10, n % 100);
+    let few = (2..=4).contains(&units) && !(12..=14).contains(&tens);
+    match lang {
+        Lang::Ja | Lang::Ko | Lang::ZhCn => "other",
+        Lang::Fr if n <= 1 => "one",
+        Lang::Pl if n == 1 => "one",
+        Lang::Pl if few => "few",
+        Lang::Pl => "many",
+        Lang::Ru if units == 1 && tens != 11 => "one",
+        Lang::Ru if few => "few",
+        Lang::Ru => "many",
+        _ if n == 1 => "one",
+        _ => "other",
+    }
+}
+
+/// The word that follows a count ("1 game", "3 games"). The table has a `_one` key and the other form (`x_other`,
+/// or plain `x`); a pack whose language has more forms adds `x_few` and `x_many` (Polish "2 gry", "5 gier"), else
+/// the other form serves.
+pub fn plural(lang: Lang, n: usize, one: &'static str, other: &'static str) -> &'static str {
+    let category = plural_category(lang, n);
+    let base = other.strip_suffix("_other").unwrap_or(other);
+    let extra = matches!(category, "few" | "many")
+        .then(|| pack(lang).and_then(|p| p.get(format!("{base}_{category}").as_str()).copied()))
+        .flatten();
+    extra.unwrap_or_else(|| t(lang, if category == "one" { one } else { other }))
+}
+
+/// A per-game setting's label and help line.
+pub fn setting_text(lang: Lang, setting: &retoque_data::settings::Setting) -> (&'static str, &'static str) {
+    let builtin = match lang.table() {
+        Lang::Pt => (setting.label_pt, setting.help_pt),
+        _ => (setting.label_en, setting.help_en),
+    };
+    let Some(pack) = pack(lang) else {
+        return builtin;
+    };
+    let key = format!("setting.{}.{}", setting.section, setting.key);
+    (
+        pack.get(key.as_str()).copied().unwrap_or(builtin.0),
+        pack.get(format!("{key}.help").as_str()).copied().unwrap_or(builtin.1),
+    )
+}
+
+/// A per-game setting's label alone.
+pub fn setting_label(lang: Lang, setting: &retoque_data::settings::Setting) -> &'static str {
+    setting_text(lang, setting).0
+}
+
+/// The pack key of a drop-down value, from its English label: "Before the upscaler (experimental)" →
+/// "choice.before_the_upscaler_experimental".
+fn choice_key(en: &str) -> String {
+    let mut key = String::from("choice.");
+    for word in en
+        .to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+    {
+        if !key.ends_with('.') {
+            key.push('_');
         }
+        key.push_str(word);
+    }
+    key
+}
+
+/// A drop-down value's label, given its English and Portuguese labels from `Setting::choice_labels`.
+pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static str {
+    match lang {
+        Lang::En => en,
+        Lang::Pt => pt,
+        _ => pack(lang)
+            .and_then(|p| p.get(choice_key(en).as_str()).copied())
+            .unwrap_or(en),
     }
 }
 
@@ -450,8 +672,9 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.notes()", "Notes", "Observações"),
     ("dismiss.help", "Dismiss message", "Fechar mensagem"),
     ("brand", "Retoque", "Retoque"),
-    ("lang.en", "English", "English"),
-    ("lang.pt", "Português (BR)", "Português (BR)"),
+    ("lang.ja", "Japanese", "Japonês"),
+    ("lang.ko", "Korean", "Coreano"),
+    ("lang.zh_cn", "Chinese (Simplified)", "Chinês (simplificado)"),
     ("step.copy", "Copy", "Copiar"),
     ("step.backup", "Back up", "Salvar cópia"),
     ("step.rename", "Rename", "Renomear"),
@@ -815,6 +1038,22 @@ const TEXT: &[(&str, &str, &str)] = &[
         "prefs.installs_help",
         "Where a game without Retoque starts. A game that already has it keeps its own choices.",
         "O ponto de partida para um jogo sem Retoque. Um jogo que já tem o Retoque mantém as escolhas dele.",
+    ),
+    ("prefs.language", "Language", "Idioma"),
+    (
+        "prefs.language_help",
+        "The app's text changes as soon as you choose.",
+        "O texto do app muda assim que você escolhe.",
+    ),
+    (
+        "prefs.language_draft",
+        "This translation is a machine-made draft that a native speaker has not reviewed yet. Some wording may be off.",
+        "Esta tradução é um rascunho automático que ainda não foi revisado por um falante nativo. Algumas frases podem soar estranhas.",
+    ),
+    (
+        "prefs.language_no_font",
+        "{languages}: this computer has no font with Chinese, Japanese and Korean characters (such as Noto Sans CJK). Install one and open Retoque again.",
+        "{languages}: este computador não tem uma fonte com caracteres chineses, japoneses e coreanos (como a Noto Sans CJK). Instale uma e abra o Retoque de novo.",
     ),
     ("prefs.data", "App data", "Dados do app"),
     ("prefs.data_usage", "{size} in this folder", "{size} nesta pasta"),
@@ -1263,6 +1502,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("log.stage_post", "after the upscaler", "depois da ampliação"),
     ("log.stage_present", "at presentation", "na apresentação"),
     ("log.on_api", "on", "em"),
+    ("log.error_count_one", "error", "erro"),
     ("log.error_count", "errors", "erros"),
     (
         "log.hint_errors",
@@ -1284,6 +1524,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "The diagnostic includes available settings and installation state even without a log.",
         "O diagnóstico inclui os ajustes disponíveis e o estado da instalação, mesmo sem registro.",
     ),
+    ("log.repeat_one", "occurrence", "ocorrência"),
     ("log.repeat", "occurrences", "ocorrências"),
     ("log.retry", "Read again", "Ler novamente"),
     // Comparison UX (worker C): keep this block together for the integration merge.
@@ -1599,6 +1840,21 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("store.xbox", "Xbox", "Xbox"),
     ("folders.title", "Your folders", "Suas pastas"),
     (
+        "folders.migrated_both",
+        "Updated your folders: moved {moved} to folders with several games; ignored drive root {roots}.",
+        "Suas pastas foram atualizadas: {moved} movida(s) para pastas com vários jogos; raiz de unidade {roots} ignorada.",
+    ),
+    (
+        "folders.migrated_moved",
+        "Updated your folders: moved {moved} to folders with several games.",
+        "Suas pastas foram atualizadas: {moved} movida(s) para pastas com vários jogos.",
+    ),
+    (
+        "folders.migrated_dropped",
+        "Updated your folders: ignored drive root {roots}.",
+        "Suas pastas foram atualizadas: raiz de unidade {roots} ignorada.",
+    ),
+    (
         "folders.question",
         "What does this folder contain?",
         "O que há nesta pasta?",
@@ -1652,7 +1908,6 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Não consta na lista da loja",
     ),
     // Intuitive shell: append-only translation keys.
-    ("palette.language", "Language", "Idioma"),
     ("palette.title", "Commands", "Comandos"),
     (
         "palette.search",
@@ -2245,21 +2500,25 @@ const TEXT: &[(&str, &str, &str)] = &[
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {
+    text_in(pack(lang), lang, key)
+}
+
+/// A key's text in a pack, else in the built-in table for the language's fallback column.
+fn text_in<'a>(pack: Option<&Pack>, lang: Lang, key: &'a str) -> &'a str {
+    match pack.and_then(|p| p.get(key)) {
+        Some(text) => text,
+        None => builtin(lang.table(), key),
+    }
+}
+
+/// The built-in table (English or Portuguese), then retoque-data's shared messages, then the key itself.
+fn builtin(lang: Lang, key: &str) -> &str {
     for (k, en, pt) in TEXT {
         if *k == key {
-            return match lang {
-                Lang::En => en,
-                Lang::Pt => pt,
-            };
+            return if lang == Lang::Pt { pt } else { en };
         }
     }
-    retoque_data::messages::text(
-        key,
-        match lang {
-            Lang::En => retoque_data::messages::Language::English,
-            Lang::Pt => retoque_data::messages::Language::Portuguese,
-        },
-    )
+    retoque_data::messages::text(key, lang.data_language())
 }
 
 #[cfg(test)]
@@ -2300,19 +2559,290 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod packs {
+    use super::*;
+    use retoque_data::settings::Kind;
+
+    /// Every key a pack may translate, with its English text: the table, retoque-data's messages, the settings'
+    /// labels and help lines, and the drop-down values a setting can show.
+    fn english() -> HashMap<String, &'static str> {
+        let mut keys: HashMap<String, &'static str> = TEXT
+            .iter()
+            .chain(retoque_data::messages::TEXT)
+            .map(|(k, en, _)| (k.to_string(), *en))
+            .collect();
+        for s in retoque_data::settings::all() {
+            keys.insert(format!("setting.{}.{}", s.section, s.key), s.label_en);
+            keys.insert(format!("setting.{}.{}.help", s.section, s.key), s.help_en);
+            let mut values = vec!["auto", "true", "false"];
+            if let Kind::Choice(choices) = s.kind {
+                values.extend(choices);
+            }
+            for value in values {
+                if let Some((en, _)) = s.choice_labels(value) {
+                    keys.insert(choice_key(en), en);
+                }
+            }
+        }
+        keys
+    }
+
+    /// The English a pack line is checked against: its own key, or for a `_few`/`_many` plural form the `_other`
+    /// form beside an `_one` (only languages with those forms may add them).
+    fn source_of<'a>(english: &'a HashMap<String, &'static str>, key: &str) -> Option<&'a str> {
+        if let Some(en) = english.get(key) {
+            return Some(en);
+        }
+        let base = key.strip_suffix("_few").or_else(|| key.strip_suffix("_many"))?;
+        english.get(&format!("{base}_one"))?;
+        english
+            .get(&format!("{base}_other"))
+            .or_else(|| english.get(base))
+            .copied()
+    }
+
+    fn drafts() -> impl Iterator<Item = (Lang, &'static str)> {
+        Lang::ALL.into_iter().filter_map(|l| pack_source(l).map(|s| (l, s)))
+    }
+
+    fn placeholders(text: &str) -> Vec<&str> {
+        let mut found: Vec<&str> = text
+            .match_indices('{')
+            .filter_map(|(at, _)| {
+                let end = at + text[at..].find('}')?;
+                let inner = &text[at + 1..end];
+                inner
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+                    .then(|| &text[at..=end])
+            })
+            .collect();
+        found.sort_unstable();
+        found
+    }
+
+    #[test]
+    fn every_language_but_english_and_portuguese_is_a_pack() {
+        assert_eq!(drafts().count(), 8);
+        for lang in Lang::ALL {
+            assert_eq!(pack_source(lang).is_some(), lang.is_draft(), "{lang:?}");
+        }
+    }
+
+    #[test]
+    fn packs_hold_known_keys_once_and_are_marked_as_drafts() {
+        let english = english();
+        for (lang, source) in drafts() {
+            let header: String = source.lines().take_while(|l| l.starts_with('#')).collect();
+            assert!(
+                header.contains("MACHINE-TRANSLATED DRAFT") && header.contains(&format!("({})", lang.code())),
+                "{lang:?}: the header must say the pack is an unreviewed machine translation"
+            );
+            let mut seen = std::collections::HashSet::new();
+            for (number, line) in source.lines().enumerate() {
+                let line = line.trim_end_matches('\r');
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                let at = format!("{}.tsv line {}", lang.code(), number + 1);
+                let (key, text) = line.split_once('\t').unwrap_or_else(|| panic!("{at}: no TAB"));
+                assert!(!text.contains('\t'), "{at}: more than one TAB");
+                assert!(source_of(&english, key).is_some(), "{at}: unknown key {key}");
+                assert!(seen.insert(key), "{at}: duplicate key {key}");
+                assert!(
+                    !text.trim().is_empty() && text.trim() == text,
+                    "{at}: empty or padded text"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn packs_keep_placeholders_and_the_dialog_ellipsis() {
+        let english = english();
+        for (lang, _) in drafts() {
+            for (key, text) in pack(lang).unwrap() {
+                let en = source_of(&english, key).unwrap();
+                assert_eq!(placeholders(text), placeholders(en), "{lang:?} {key}: \"{text}\"");
+                // DESIGN.md: "…" promises that a dialog opens, in every language or in none.
+                assert_eq!(en.ends_with('…'), text.ends_with('…'), "{lang:?} {key}: \"{text}\"");
+                assert!(!text.contains("..."), "{lang:?} {key}: \"...\" instead of \"…\"");
+            }
+        }
+    }
+
+    #[test]
+    fn placeholder_scan_counts_every_occurrence() {
+        assert_eq!(
+            placeholders("{n} of {n}, {} and {size}"),
+            vec!["{n}", "{n}", "{size}", "{}"]
+        );
+        assert!(placeholders("{ not one } {X}").is_empty());
+    }
+
+    #[test]
+    fn a_key_missing_from_a_pack_shows_in_english() {
+        let pack = parse_pack("# comment\r\n\nprefs.title\tEinstellungen\r\nmalformed line\n");
+        assert_eq!(pack.len(), 1);
+        assert_eq!(text_in(Some(&pack), Lang::De, "prefs.title"), "Einstellungen");
+        assert_eq!(text_in(Some(&pack), Lang::De, "prefs.open"), "Preferences…");
+        assert_eq!(text_in(Some(&pack), Lang::De, "no.such.key"), "no.such.key");
+        // retoque-data's shared messages too.
+        assert_eq!(
+            text_in(Some(&pack), Lang::De, "rs.undo_addon"),
+            t(Lang::En, "rs.undo_addon")
+        );
+        assert_eq!(t(Lang::Pt, "prefs.open"), "Preferências…");
+    }
+
+    #[test]
+    fn settings_and_their_values_are_translated() {
+        let stage = retoque_data::settings::all()
+            .iter()
+            .find(|s| s.section == "DlssNr" && s.key == "Stage")
+            .unwrap();
+        assert_eq!(setting_text(Lang::En, stage), (stage.label_en, stage.help_en));
+        assert_eq!(setting_text(Lang::Pt, stage), (stage.label_pt, stage.help_pt));
+        let (en, pt) = stage.choice_labels("1").unwrap();
+        assert_eq!(choice_key(en), "choice.before_the_upscaler_experimental");
+        assert_eq!(choice_text(Lang::Pt, en, pt), pt);
+        for (lang, _) in drafts() {
+            let (label, help) = setting_text(lang, stage);
+            assert!(label != stage.label_en && help != stage.help_en, "{lang:?}");
+            assert_ne!(choice_text(lang, en, pt), en, "{lang:?}");
+        }
+    }
+
+    #[test]
+    fn locales_choose_a_supported_language() {
+        for (locale, lang) in [
+            ("en-US", Some(Lang::En)),
+            ("pt-BR", Some(Lang::Pt)),
+            ("pt_PT.UTF-8", Some(Lang::Pt)),
+            ("de-DE", Some(Lang::De)),
+            ("de_AT.UTF-8@euro", Some(Lang::De)),
+            ("es-419", Some(Lang::Es)),
+            ("fr-CA", Some(Lang::Fr)),
+            ("ja-JP", Some(Lang::Ja)),
+            ("ko-KR", Some(Lang::Ko)),
+            ("pl-PL", Some(Lang::Pl)),
+            ("ru-RU", Some(Lang::Ru)),
+            ("zh-CN", Some(Lang::ZhCn)),
+            ("zh-Hans-SG", Some(Lang::ZhCn)),
+            ("zh", Some(Lang::ZhCn)),
+            ("zh-TW", None),
+            ("zh-Hant-HK", None),
+            ("it-IT", None),
+            ("C", None),
+            ("", None),
+            ("deu", None),
+        ] {
+            assert_eq!(Lang::from_locale(locale), lang, "{locale}");
+        }
+        for lang in Lang::ALL {
+            assert_eq!(Lang::from_locale(lang.code()), Some(lang));
+        }
+    }
+
+    #[test]
+    fn the_saved_choice_keeps_its_spelling() {
+        // Older saves hold "En" or "Pt"; a renamed variant would silently reset someone's language.
+        assert_eq!(serde_json::from_str::<Lang>("\"En\"").unwrap(), Lang::En);
+        assert_eq!(serde_json::from_str::<Lang>("\"Pt\"").unwrap(), Lang::Pt);
+        assert_eq!(serde_json::to_string(&Lang::ZhCn).unwrap(), "\"ZhCn\"");
+        for lang in Lang::ALL {
+            let json = serde_json::to_string(&lang).unwrap();
+            assert_eq!(serde_json::from_str::<Lang>(&json).unwrap(), lang);
+        }
+        let mut names: Vec<_> = Lang::ALL.iter().map(|l| l.native_name()).collect();
+        names.dedup();
+        assert_eq!(names.len(), Lang::ALL.len());
+        assert_eq!(Lang::Pt.native_name(), "Português (Brasil)");
+    }
+
+    #[test]
+    fn counted_words_follow_each_language() {
+        let category = |lang, n| plural_category(lang, n);
+        assert_eq!(
+            [1, 2, 5, 12, 22, 25].map(|n| category(Lang::Pl, n)),
+            ["one", "few", "many", "many", "few", "many"]
+        );
+        assert_eq!(
+            [1, 21, 11, 3, 14, 0].map(|n| category(Lang::Ru, n)),
+            ["one", "one", "many", "few", "many", "many"]
+        );
+        assert_eq!([0, 1, 2].map(|n| category(Lang::Fr, n)), ["one", "one", "other"]);
+        assert_eq!([0, 1, 2].map(|n| category(Lang::Pt, n)), ["other", "one", "other"]);
+        assert_eq!([1, 2].map(|n| category(Lang::Ja, n)), ["other", "other"]);
+        assert_eq!(plural(Lang::En, 1, "shell.games_one", "shell.games_other"), "game");
+        assert_eq!(plural(Lang::Pt, 3, "shell.games_one", "shell.games_other"), "jogos");
+        for lang in [Lang::Pl, Lang::Ru] {
+            let few = plural(lang, 3, "shell.games_one", "shell.games_other");
+            let many = plural(lang, 5, "shell.games_one", "shell.games_other");
+            assert_ne!(few, many, "{lang:?} has its own form for 2–4");
+        }
+    }
+
+    #[test]
+    fn pack_text_draws_without_missing_glyphs() {
+        // egui's own fonts cover Latin and Cyrillic; Chinese, Japanese and Korean come from a system font, so they
+        // are checked only where one is installed.
+        for (lang, _) in drafts() {
+            if !crate::fonts::can_show(lang) {
+                eprintln!("{lang:?}: no CJK system font here; not drawn");
+                continue;
+            }
+            let ctx = egui::Context::default();
+            crate::fonts::apply(&ctx, lang);
+            ctx.set_missing_glyph_policy(egui::MissingGlyphPolicy::Panic);
+            let mut texts: Vec<&str> = pack(lang).unwrap().values().copied().collect();
+            texts.sort_unstable();
+            for _ in 0..2 {
+                let mut output = ctx.run_ui(Default::default(), |ui| {
+                    for text in &texts {
+                        ui.label(*text);
+                    }
+                });
+                output.textures_delta.clear();
+            }
+        }
+    }
+
+    /// Run with `--ignored` to list what each pack still shows in English.
+    #[test]
+    #[ignore = "a report for translators: packs may lag behind the English table"]
+    fn untranslated_keys() {
+        let english = english();
+        let mut missing = 0;
+        for (lang, _) in drafts() {
+            let pack = pack(lang).unwrap();
+            let mut keys: Vec<_> = english.keys().filter(|k| !pack.contains_key(k.as_str())).collect();
+            keys.sort();
+            missing += keys.len();
+            println!("{}: {} untranslated {keys:?}", lang.code(), keys.len());
+        }
+        assert_eq!(missing, 0);
+    }
+}
+
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
     crate::applog::shown_error(message);
-    let translated = retoque_data::messages::reshade_diagnostic(
-        message,
-        match lang {
-            Lang::En => retoque_data::messages::Language::English,
-            Lang::Pt => retoque_data::messages::Language::Portuguese,
-        },
-    );
-    if translated != message {
-        return translated;
+    if lang.is_draft() {
+        // retoque-data only knows English and Portuguese: translate its ReShade reasons through the pack.
+        if let Some((key, en, _)) = retoque_data::messages::TEXT
+            .iter()
+            .find(|(key, en, _)| key.starts_with("rs.error.") && message.contains(en))
+        {
+            return message.replace(en, t(lang, key));
+        }
+    } else {
+        let translated = retoque_data::messages::reshade_diagnostic(message, lang.data_language());
+        if translated != message {
+            return translated;
+        }
     }
 
     if let Some((key, en, _)) = TEXT

@@ -156,7 +156,10 @@ impl RetoqueApp {
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
             .unwrap_or_default();
+        // The saved choice, else the system's language; Chinese, Japanese or Korean only with a font that has them.
         let lang = saved.lang.unwrap_or_else(Lang::from_system);
+        let lang = if crate::fonts::can_show(lang) { lang } else { Lang::En };
+        crate::fonts::apply(&cc.egui_ctx, lang);
         let payload = match saved.payload_source {
             Some(crate::payload_ui::PayloadSource::Folder) => saved
                 .payload
@@ -245,6 +248,17 @@ impl RetoqueApp {
 
 impl eframe::App for RetoqueApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.window(ui);
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, STORAGE_KEY, &self.saved);
+    }
+}
+
+impl RetoqueApp {
+    /// One frame of the whole window. Apart from `eframe::App` so tests can draw the real window headless.
+    pub(crate) fn window(&mut self, ui: &mut egui::Ui) {
         self.receive();
         self.global_drop_input(ui.ctx());
         self.shell_shortcuts(ui.ctx());
@@ -307,10 +321,6 @@ impl eframe::App for RetoqueApp {
         self.nr_fetch_dialog(ui.ctx());
         self.prefs_dialog(ui.ctx());
         self.handle_commands();
-    }
-
-    fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        eframe::set_value(storage, STORAGE_KEY, &self.saved);
     }
 }
 

@@ -9,13 +9,7 @@ pub(crate) struct DoctorCard {
 }
 
 pub(crate) fn text(lang: Lang, key: &str) -> &str {
-    retoque_data::messages::text(
-        key,
-        match lang {
-            Lang::En => retoque_data::messages::Language::English,
-            Lang::Pt => retoque_data::messages::Language::Portuguese,
-        },
-    )
+    t(lang, key)
 }
 pub(crate) fn evidence(ui: &mut egui::Ui, lang: Lang, evidence: &[FactEvidence]) {
     for fact in evidence {

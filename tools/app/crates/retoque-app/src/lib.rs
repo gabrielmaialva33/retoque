@@ -4,6 +4,7 @@
 pub mod app;
 pub mod applog;
 pub mod compare;
+pub(crate) mod fonts;
 pub mod i18n;
 pub mod jobs;
 pub mod leftovers_ui;
@@ -40,6 +41,8 @@ pub(crate) mod intelligence;
 pub(crate) mod intuitive;
 #[cfg(test)]
 mod intuitive_tests;
+#[cfg(test)]
+mod lang_tests;
 pub(crate) mod watcher;
 
 pub(crate) mod lsfg_ui;

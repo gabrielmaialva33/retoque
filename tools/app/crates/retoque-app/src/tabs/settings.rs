@@ -172,10 +172,7 @@ impl RetoqueApp {
                     commands.send(AppCommand::SwitchTab(Tab::Model));
                 }
             }
-            let (label, help) = match lang {
-                Lang::En => (s.label_en, s.help_en),
-                Lang::Pt => (s.label_pt, s.help_pt),
-            };
+            let (label, help) = crate::i18n::setting_text(lang, s);
             let key = (s.section.to_owned(), s.key.to_owned());
             let present = self.view.ini_values.get(s.section, s.key);
             let on_disk = present.unwrap_or("auto");
@@ -270,13 +267,7 @@ pub(crate) fn value_widget(
                         if response.clicked() {
                             *value = option.into();
                         }
-                        response.on_hover_text(format!(
-                            "{}: {label}",
-                            match lang {
-                                Lang::En => setting.label_en,
-                                Lang::Pt => setting.label_pt,
-                            }
-                        ))
+                        response.on_hover_text(format!("{}: {label}", crate::i18n::setting_label(lang, setting)))
                     });
                     let first = responses.next().unwrap();
                     responses.fold(first, |all, response| all.union(response))
@@ -344,10 +335,7 @@ pub(crate) fn value_widget(
 
 pub(crate) fn choice_label<'a>(setting: &settings::Setting, value: &'a str, lang: Lang) -> &'a str {
     match setting.choice_labels(value) {
-        Some((en, pt)) => match lang {
-            Lang::En => en,
-            Lang::Pt => pt,
-        },
+        Some((en, pt)) => crate::i18n::choice_text(lang, en, pt),
         None => t(lang, "set.custom"),
     }
 }

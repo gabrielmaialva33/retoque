@@ -143,10 +143,7 @@ fn settings_filter_only_changed_reset_and_composite_accessibility_both_languages
             .type_text("WorkingScale");
         h.run_steps(3);
         let setting = settings::all().iter().find(|s| s.key == "WorkingScale").unwrap();
-        let actual_label = match lang {
-            Lang::En => setting.label_en,
-            Lang::Pt => setting.label_pt,
-        };
+        let actual_label = crate::i18n::setting_label(lang, setting);
         h.get_by_role_and_label(egui::Role::SpinButton, actual_label);
         h.get_by_role_and_label(egui::Role::CheckBox, t(lang, "set.only_changed"))
             .click();
@@ -179,11 +176,7 @@ fn settings_filter_by_localized_label_and_draft_changed_includes_auto_on_disk() 
     let index = settings::all().iter().position(|s| s.key == "WorkingScale").unwrap();
     let s = &settings::all()[index];
     for lang in [Lang::En, Lang::Pt] {
-        filter.query = match lang {
-            Lang::En => s.label_en,
-            Lang::Pt => s.label_pt,
-        }
-        .into();
+        filter.query = crate::i18n::setting_label(lang, s).into();
         filter.only_changed = true;
         filter.refresh(lang);
         assert!(!filter.includes(index, "auto", None));
