@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Retoque
+GenericName=Neural rendering for games
+GenericName[pt_BR]=Renderização neural para jogos
+Comment=Install and tune Retoque in your games
+Comment[pt_BR]=Instale e ajuste o Retoque nos seus jogos
+Exec=retoque-app
+Icon=retoque
+Terminal=false
+Categories=Game;Utility;
+StartupWMClass=retoque

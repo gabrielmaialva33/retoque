@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="stroke" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#E07F2C"/>
+      <stop offset="1" stop-color="#F8C66C"/>
+    </linearGradient>
+    <linearGradient id="after" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1C2129"/>
+      <stop offset="1" stop-color="#2B3240"/>
+    </linearGradient>
+    <clipPath id="frame"><rect width="256" height="256" rx="56"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="256" height="256" fill="#14171C"/>
+    <path d="M256 0 L256 256 L0 256 Z" fill="url(#after)"/>
+    <rect x="24" y="24" width="38" height="38" rx="5" fill="#2B323D"/><rect x="68" y="24" width="38" height="38" rx="5" fill="#353D4A"/><rect x="112" y="24" width="38" height="38" rx="5" fill="#404959"/><rect x="24" y="68" width="38" height="38" rx="5" fill="#404959"/><rect x="68" y="68" width="38" height="38" rx="5" fill="#2B323D"/><rect x="24" y="112" width="38" height="38" rx="5" fill="#353D4A"/>
+    <path d="M30 226 C 92 178, 150 116, 226 30" fill="none" stroke="url(#stroke)" stroke-width="34" stroke-linecap="round"/>
+    <path d="M190 150 l7 21 21 7 -21 7 -7 21 -7 -21 -21 -7 21 -7 z" fill="#F8C66C"/>
+  </g>
+  <rect x="1.5" y="1.5" width="253" height="253" rx="54.5" fill="none" stroke="#2A2F37" stroke-width="3"/>
+</svg>
