@@ -78,9 +78,16 @@ pub enum Event {
     Done,
 }
 
-/// Receipt-owned choices, never Preferences. Existing INI bytes survive the normal install path. In particular,
-/// `auto`/absent NR is not converted to enabled, and a deliberately disabled ReShade loader stays disabled.
-pub(crate) fn update_options(target: &Path, source: &Path, status: &Status, ini: &Ini) -> Option<InstallOptions> {
+/// Receipt-owned choices, never Preferences, except the in-game menu language, which Preferences sets for every game
+/// (as the single-game install does). Existing INI bytes survive the normal install path. In particular, `auto`/absent
+/// NR is not converted to enabled, and a deliberately disabled ReShade loader stays disabled.
+pub(crate) fn update_options(
+    target: &Path,
+    source: &Path,
+    status: &Status,
+    ini: &Ini,
+    menu_language: retoque_core::MenuLanguage,
+) -> Option<InstallOptions> {
     let receipt = status.receipt.as_ref()?;
     let proxy = crate::controller::first_proxy(receipt)?;
     Some(InstallOptions {
@@ -101,10 +108,15 @@ pub(crate) fn update_options(target: &Path, source: &Path, status: &Status, ini:
             .any(|r| matches!(r, Record::File { path, .. } if path.eq_ignore_ascii_case("_nvngx.dll"))),
         replace_foreign: false,
         allow_second_proxy: false,
+        menu_language,
     })
 }
 
-pub(crate) fn prepare(games: Vec<(String, PathBuf)>, source: &Path) -> Vec<Row> {
+pub(crate) fn prepare(
+    games: Vec<(String, PathBuf)>,
+    source: &Path,
+    menu_language: retoque_core::MenuLanguage,
+) -> Vec<Row> {
     let new = Build {
         version: retoque_core::pe_version::file_version(&source.join("OptiScaler.dll")),
         hash: retoque_core::status(source).ok().and_then(|s| s.build_sha256),
@@ -144,7 +156,7 @@ pub(crate) fn prepare(games: Vec<(String, PathBuf)>, source: &Path) -> Vec<Row> 
                 let (_, bytes) = retoque_core::read_ini(&row.target)
                     .map_err(|e| Skip::error(e.into()))?
                     .ok_or_else(|| Skip::new("update_all.unknown"))?;
-                let options = update_options(&row.target, source, &status, &Ini::parse(&bytes))
+                let options = update_options(&row.target, source, &status, &Ini::parse(&bytes), menu_language.clone())
                     .ok_or_else(|| Skip::new("update_all.unknown"))?;
                 // This is exactly the per-game update planning entrypoint, including all core refusals.
                 let Outcome::Plan { result, .. } =
@@ -261,8 +273,9 @@ impl RetoqueApp {
             focus: self.context.memory(|m| m.focused()),
             ..Default::default()
         };
+        let menu_language = self.saved.install_defaults.menu_language(self.lang);
         self.jobs.spawn("update-all-plan", None, move |_| {
-            Outcome::UpdateAll(Event::Prepared(prepare(games, &source)))
+            Outcome::UpdateAll(Event::Prepared(prepare(games, &source, menu_language)))
         });
     }
     fn confirm_update_all(&mut self) {

@@ -45,7 +45,7 @@ impl Fixture {
         }
     }
     fn rows(&self) -> Vec<Row> {
-        prepare(self.games.clone(), &self.source)
+        prepare(self.games.clone(), &self.source, retoque_core::MenuLanguage::Keep)
     }
 }
 fn bytes(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
@@ -74,7 +74,14 @@ fn update_all_preserves_each_games_options_and_uses_only_reviewed_plans() {
     for (i, row) in rows.iter().enumerate() {
         let status = retoque_core::status(&row.target).unwrap();
         let (_, ini) = retoque_core::read_ini(&row.target).unwrap().unwrap();
-        let options = update_options(&row.target, &f.source, &status, &Ini::parse(&ini)).unwrap();
+        let options = update_options(
+            &row.target,
+            &f.source,
+            &status,
+            &Ini::parse(&ini),
+            retoque_core::MenuLanguage::Keep,
+        )
+        .unwrap();
         assert_eq!(options.proxy, if i == 0 { "winmm.dll" } else { "dxgi.dll" });
         assert_eq!(options.enable_nr, i == 0);
         assert_eq!(options.keep_reshade, i == 1);
