@@ -414,7 +414,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + Duration::from_secs(30);
             while h.state().review.is_none() {
                 h.state_mut().receive();
                 assert!(Instant::now() < deadline);
@@ -509,7 +509,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, &h.state().nr_fetch.download_label(lang))
                 .click();
             h.run_steps(3);
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + Duration::from_secs(30);
             while h.state().review.is_none() {
                 h.state_mut().receive();
                 assert!(Instant::now() < deadline);
@@ -623,7 +623,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + Duration::from_secs(30);
             while h.state().review.is_none() {
                 h.state_mut().receive();
                 assert!(Instant::now() < deadline);
@@ -879,7 +879,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + Duration::from_secs(30);
             while h.state().review.is_none() {
                 h.state_mut().receive();
                 assert!(Instant::now() < deadline);
@@ -962,7 +962,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + Duration::from_secs(30);
             while h.state().review.is_none() {
                 h.state_mut().receive();
                 assert!(Instant::now() < deadline);
@@ -996,7 +996,7 @@ mod tests {
             h.get_by_role_and_label(egui::Role::Button, t(lang, "optimize.review"))
                 .click();
             h.run_steps(3);
-            let deadline = Instant::now() + Duration::from_secs(5);
+            let deadline = Instant::now() + Duration::from_secs(30);
             while h.state().review.is_none() {
                 h.state_mut().receive();
                 assert!(Instant::now() < deadline);

@@ -233,6 +233,12 @@ review lists per folder what goes and what stays. `retoque_core::leftovers` remo
 sm86, ReShade or their caches put there, never follows links, keeps every other file (saves, store stamps) and
 its folder, refuses a folder with an executable, and refuses a folder that changed since the review.
 
+The app's icon is `crates/retoque-app/assets/retoque.svg` (a retouch stroke across coarse pixels): the window
+uses its 256 px PNG, and on Windows `build.rs` embeds `retoque.ico` (16-256 px) and the version into the executable
+with the MinGW `windres` (`WINDRES` overrides it; without one the build warns and the exe keeps the default icon).
+On Linux, `packaging/linux/retoque.desktop` with `Icon=retoque` and `StartupWMClass=retoque` (the window's app id)
+goes to `~/.local/share/applications/`, and the PNG to `~/.local/share/icons/hicolor/256x256/apps/retoque.png`.
+
 “Preferences…” in the top bar holds what a game without Retoque starts from (NR on, keep ReShade, the loader file
 name, and on Linux the driver's `_nvngx.dll`); a game that already has Retoque keeps its own. “In-game menu language”
 (default: the app's own) applies to every game: each install, update and Optimize passes it to the engine as
