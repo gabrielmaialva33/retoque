@@ -8,7 +8,8 @@ passes an immutable evaluation contract (stage, dimensions, settings generation,
 configured sampling interval. Sampling counts eligible NR evaluations, not presentation frames.
 
 A bounded pool owns one timestamp query heap and readback buffer per in-flight sample. Each sample
-records its total begin/end and up to three model begin/end pairs on the same command list, within one
+records its total begin/end and one model begin/end pair per pass (up to three as written; ten since 2026-11-11,
+[bounded-chain](bounded-chain.md)) on the same command list, within one
 renderer evaluation. ResolveQueryData only resolves initialized queries. Total, model sum and the
 remaining measured interval come from that single sample; failed or incomplete evaluations are not
 published as successful NR costs. The remaining interval includes all commands between total markers

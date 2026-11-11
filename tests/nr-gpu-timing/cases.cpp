@@ -106,6 +106,16 @@ int main()
     assert(GpuTiming::Detail::Decode(three, 8, 3, 1000, result));
     assert(result.totalMs == 100 && result.modelMs == 60 && result.outsideModelMs == 40);
     ++cases;
+    // Ten passes (bounded-chain.md, "Ten passes"): one pair per pass decodes; an eleventh is malformed.
+    static_assert(GpuTiming::Detail::MaxModels == 10 && GpuTiming::Detail::MaxQueries == 22);
+    uint64_t ten[23] {};
+    for (size_t i = 0; i < 23; ++i)
+        ten[i] = 100 + 10 * i;
+    ten[21] = 400; // the last outside-model interval: total end
+    assert(GpuTiming::Detail::Decode(ten, 22, 10, 1000, result));
+    assert(result.modelMs == 100 && result.totalMs == 300 && result.outsideModelMs == 200);
+    assert(!GpuTiming::Detail::Decode(ten, 23, 11, 1000, result));
+    ++cases;
     const uint64_t unordered[] { 100, 160, 110, 180 };
     assert(!GpuTiming::Detail::Decode(unordered, 4, 1, 1000, result));
     ++cases;
@@ -161,7 +171,7 @@ int main()
         assert(GpuTiming::Detail::Certify(*e, done, frequency).accepted);
     }
     ++cases;
-    if (cases != 31)
+    if (cases != 32)
         return 2; // A runner that exercises nothing must fail loudly.
     std::cout << "PASS " << cases << " timing model cases; 3000 confirmed epoch cycles\n";
 }

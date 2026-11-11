@@ -35,8 +35,8 @@ Small (13) text styles, and `CARD_GAP` (12) between cards. Colours are `ACCENT`,
 
 - **One primary per view.** The accent fill marks the one thing the user most likely came to do. Every other
   action is a plain button.
-- **"…" means a dialog or review opens.** A label ends in "…" in both languages if clicking it opens a review,
-  dialog or file picker, and in neither otherwise. A review's title is the label without "…".
+- **"…" means a dialog or review opens.** A label ends in "…" in every language if clicking it opens a review,
+  dialog or file picker, and in none otherwise. A review's title is the label without "…".
 - **The confirm and the result repeat the verb.** "Instalar e otimizar…" leads to a review confirmed with
   "Instalar e otimizar" and a toast "Retoque instalado e otimizado". Never "Confirmar" or "OK".
 - **Nothing internal reaches the user.** No Rust `Debug` output, job names, exit codes, INI syntax, hashes or
@@ -52,7 +52,8 @@ Small (13) text styles, and `CARD_GAP` (12) between cards. Colours are `ACCENT`,
 
 ## Glossary
 
-One term per idea. Portuguese is the default language; English is the second.
+One term per idea. Portuguese is the default language; English is the second and the source of the eight
+translated packs (`src/i18n/*.tsv`, see the app README), each of which renders every row below with one term too.
 
 | Idea | pt-BR | en | Never |
 |---|---|---|---|

@@ -1,0 +1,641 @@
+# OptiScaler optional German (de) dictionary. See translations/README.md.
+# Not loaded from this directory. Activation requires OptiScaler.lang beside the DLL.
+# Machine-translated draft, pending native review: corrections from native speakers are welcome.
+# 112 entries come from NeuRotic's machine-translated drafts (localization/machine-drafts/de.nrlang,
+# GPL-3.0, commit beae4eea), matched by identical English text; the rest were translated for this pack.
+DLSS Neural Rendering	DLSS Neural Rendering
+Enable Neural Rendering	Neural Rendering aktivieren
+Apply the model	Das Modell anwenden
+Reset	Zurücksetzen
+Retry	Wiederholen
+Can be toggled with a key -- bind it under Keybinds, "Neural Rendering".	Per Taste umschaltbar -- unter Tastenbelegung "Neural Rendering" belegen.
+Off. The model stays loaded, so turning this back on is immediate.	Aus. Das Modell bleibt geladen, daher wirkt das Wiedereinschalten sofort.
+Off for this session: %s.	Für diese Sitzung aus: %s.
+Waiting for the upscaler to run.	Warten auf den Upscaler.
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), inside the driver on the game's own device, where the pass cannot run after it. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which carries the pass: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	Das DLSS dieses Spiels läuft nativ auf D3D11 (Dx11Upscaler dlss), im Treiber auf dem spieleigenen Device, wo der Pass nicht danach laufen kann. DLSS w/Dx12 (dlss_12) führt dasselbe DLSS auf der D3D12-Brücke von OptiScaler aus, die den Pass trägt: unter Upscaler auswählen oder in der ini setzen: Dx11Upscaler=dlss_12.
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), and its depth and motion are not reaching the pass at present, so it runs without them; the log's 'native D3D11 guides' line says why. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which hands them over: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	Das DLSS dieses Spiels läuft nativ auf D3D11 (Dx11Upscaler dlss), und seine Tiefe und Bewegung erreichen den Pass beim Present nicht, daher läuft er ohne sie; die Logzeile 'native D3D11 guides' nennt den Grund. DLSS w/Dx12 (dlss_12) führt dasselbe DLSS auf der D3D12-Brücke von OptiScaler aus, die sie übergibt: unter Upscaler auswählen oder in der ini setzen: Dx11Upscaler=dlss_12.
+Running natively on Vulkan - %llu frames%s	Läuft nativ auf Vulkan - %llu Frames%s
+Running.%s	Läuft.%s
+  (model running, edit hidden)	  (Modell läuft, Ergebnis ausgeblendet)
+ natively on Vulkan	 nativ auf Vulkan
+Stage	Phase
+After the upscaler	Nach dem Upscaler
+Before the upscaler (experimental)	Vor dem Upscaler (experimentell)
+Stage: after the upscaler (native Vulkan)	Phase: nach dem Upscaler (natives Vulkan)
+Model resolution	Modellauflösung
+Pause when the game turns frame generation off	Pausieren, wenn das Spiel Frame Generation abschaltet
+Look	Optik
+Natural	Natürlich
+Cinematic	Kino
+Subtle	Dezent
+Gentle	Sanft
+Game colour	Spielfarbe
+The model's own defaults: style A, everything at 1.	Die eigenen Standardwerte des Modells: Stil A, alles auf 1.
+NVIDIA's style B: softer contrast and saturation, kinder to skin.	Stil B von NVIDIA: weicherer Kontrast und Sättigung, schonender für Haut.
+NVIDIA's style C: a gentler, filmic saturation.	Stil C von NVIDIA: eine sanftere, filmische Sättigung.
+What NVIDIA's RTX Remix ships: structure 0.7, tone 0.3, no skin mask -- closer to the game.	Was RTX Remix von NVIDIA mitliefert: Struktur 0.7, Ton 0.3, keine Hautmaske -- näher am Spiel.
+A conservative community recipe: intensity 0.5, structure 0.7, tone 0.3, colour 0.5, detail 0.85.	Ein zurückhaltendes Community-Rezept: Intensität 0.5, Struktur 0.7, Ton 0.3, Farbe 0.5, Detail 0.85.
+Keeps the game's own hue (colour strength 0); only the light changes.	Behält den spieleigenen Farbton (Farbstärke 0); nur das Licht ändert sich.
+A starting point for how NR looks, in one click: it sets the model's style and\nstrengths and the colour and detail strength, and every control still shows and\nedits what it set. Custom means the current values are not one of these.\n\nPerformance settings (resolution, passes, cadence) and exposure are left alone.\nWith individual pass settings on, a pass's own overrides still win for that pass.	Ein Ausgangspunkt für die Optik von NR mit einem Klick: setzt Stil und Stärken des Modells\nsowie Farb- und Detailstärke, und jedes Steuerelement zeigt und bearbeitet weiter, was\nes gesetzt hat. Benutzerdefiniert heißt, die aktuellen Werte entsprechen keinem davon.\n\nLeistungseinstellungen (Auflösung, Passes, Kadenz) und Belichtung bleiben unverändert.\nMit Einstellungen pro Pass gelten die eigenen Überschreibungen eines Passes weiterhin für ihn.
+Many games turn their own DLSS frame generation off in menus, dialogue and\ncutscenes, and lift the frame cap with it, so NR runs at the full uncapped rate.\nThis skips NR there and resumes the moment frame generation comes back.\n\nOnly after the game's frame generation was seen on, after half a second off,\nand never while this menu is open (the menu turns frame generation off itself).	Viele Spiele schalten ihre eigene DLSS Frame Generation in Menüs, Dialogen und\nZwischensequenzen ab und heben dabei die Framebegrenzung auf, sodass NR mit voller, unbegrenzter Rate läuft.\nDies überspringt NR dort und setzt wieder ein, sobald Frame Generation zurückkehrt.\n\nNur nachdem die Frame Generation des Spiels als aktiv erkannt wurde, nach einer halben Sekunde ohne sie,\nund nie, während dieses Menü offen ist (das Menü schaltet Frame Generation selbst ab).
+Downscaler (NR)	Downscaler (NR)
+Enlargement	Vergrößerung
+Classic	Klassisch
+Matched residual	Angepasster Restwert
+How much of it lands	Wie viel davon ankommt
+Detail strength	Detailstärke
+Colour strength	Farbstärke
+Reversible proxy (experimental)	Reversibler Proxy (experimentell)
+Off (soft knee)	Aus (Soft Knee)
+Neutwo proxy + composed	Neutwo Proxy + komponiert
+Neutwo proxy + replace	Neutwo Proxy + ersetzen
+Hybrid proxy + composed	Hybrid-Proxy + komponiert
+Hybrid proxy + replace	Hybrid-Proxy + ersetzen
+Model	Modell
+Read when the model is built, so a change rebuilds it after a moment.	Wird beim Erstellen des Modells gelesen; eine Änderung baut es nach kurzer Zeit neu auf.
+Default	Standard
+Preset 1	Preset 1
+Preset 2	Preset 2
+Preset 3	Preset 3
+Model preset	Modell-Voreinstellung
+Model preset: this model has one weight set, so there is nothing to choose.	Modell-Voreinstellung: Dieses Modell hat nur einen Gewichtssatz, es gibt nichts zu wählen.
+Model A (Default)	Modell A (Standard)
+Model B (Natural)	Modell B (Natürlich)
+Model C (Cinematic)	Modell C (Kino)
+Style	Stil
+Intensity	Intensität
+Local structure	Lokale Struktur
+Local tone	Lokaler Ton
+Skin structure	Hautstruktur
+Auto skin mask	Automatische Hautmaske
+Colour	Farbe
+Paper white only	Nur Papierweiß
+The game's own exposure	Die spielinterne Belichtung
+A buffer the scan found	Ein Buffer, den der Scan gefunden hat
+White point from	Weißpunkt-Quelle
+Waiting for a frame...	Warten auf einen Frame...
+Reading the exposure...	Belichtung wird gelesen...
+Trim (x the scan)	Trim (x Scan)
+Trim (x the game's exposure)	Trim (x Spielbelichtung)
+Paper white	Papierweiß
+Highlight guard	Highlight-Guard
+Highlight recovery	Highlight-Rückgewinnung
+Show the light meter on screen	Belichtungsmesser auf dem Bildschirm anzeigen
+Choose the buffer by matching it to the light	Buffer anhand des Lichts wählen
+Off: the buffer whose value travels widest drives the white point, as before.\nA counter or a timer travels widest of all, and then the picture drifts.\n\nOn: the buffer whose value follows the light of the game's own frame the\nway an exposure does -- a little behind it, as eyes adapt -- and nothing\nuntil that is sure, which takes about half a minute of walking between\nlight and shade. Timers, frozen values and the frame's own brightness\nare turned down. Paper white is used until then.\n\nAnchors set under one rule may need setting again under the other.\nCosts one small measuring pass a frame. Adapted from janblade's fork.	Aus: Der Buffer, dessen Wert am weitesten schwankt, bestimmt den Weißpunkt, wie bisher.\nEin Zähler oder Timer schwankt am weitesten von allen, und dann driftet das Bild.\n\nAn: Der Buffer, dessen Wert dem Licht des spieleigenen Frames so folgt\nwie eine Belichtung -- etwas verzögert, wie sich Augen anpassen --, und keiner,\nbis das sicher ist, was etwa eine halbe Minute Gehen zwischen Licht und\nSchatten dauert. Timer, eingefrorene Werte und die Helligkeit des Frames selbst\nwerden abgewertet. Bis dahin wird Papierweiß verwendet.\n\nAnker, die unter einer Regel gesetzt wurden, müssen unter der anderen eventuell neu gesetzt werden.\nKostet einen kleinen Messpass pro Frame. Übernommen aus dem Fork von janblade.
+Anchor here	Hier verankern
+The number runs the other way	Die Zahl verläuft in die andere Richtung
+Advanced	Erweitert
+Walk from shade into daylight. A real exposure moves.	Gehen Sie aus dem Schatten ins Tageslicht. Eine echte Belichtung bewegt sich.
+One that only ever climbs is a counter, not an exposure.	Etwas, das immer nur ansteigt, ist ein Zähler, keine Belichtung.
+Compare	Vergleichen
+Hold frame	Frame halten
+Off	Aus
+Side by side	Nebeneinander
+Wipe	Wischvergleich
+Swap sides	Seiten tauschen
+Label the sides	Seiten beschriften
+Label size	Beschriftungsgröße
+Zoom	Zoom
+Split	Teilung
+Debug view	Debug-Ansicht
+Proxy (what the model sees)	Proxy (was das Modell sieht)
+Model output (raw)	Modellausgabe (roh)
+Difference (amplified)	Differenz (verstärkt)
+Save Settings	Einstellungen speichern
+Close	Schließen
+Menu Scale	Menügröße
+Keybinds	Tastenbelegung
+Logging	Protokollierung
+Advanced Settings	Erweiterte Einstellungen
+Menu Theme and Color	Menüdesign und Farbe
+FPS Overlay	FPS-Overlay
+Upscaler Inputs	Upscaler-Eingaben
+V-Sync Settings	V-Sync-Einstellungen
+Magnifier	Lupe
+Resource Barriers	Ressourcenbarrieren
+Root Signatures	Root-Signaturen
+Active Quirks	Aktive Eigenheiten
+Dx11 with Dx12 Settings	Einstellungen für Dx11 mit Dx12
+Vulkan with Dx12 Settings	Einstellungen für Vulkan mit Dx12
+XeSS Settings	XeSS-Einstellungen
+Advanced FG Settings	Erweiterte FG-Einstellungen
+Before the upscaler: edited render-resolution color supplied	Vor dem Upscaler: bearbeitete Farbe in Renderauflösung übergeben
+Waiting for a stable render resolution (500 ms); original color retained	Warten auf stabile Renderauflösung (500 ms); Originalfarbe beibehalten
+Synthesises detail in the upscaler's output, before frame generation sees it.\n\nNeeds two similarly named files beside OptiScaler, one character apart:\n  nvngx_dlssnr.dll       NVIDIA's model (~165 MB) -- you supply it\n  nvngx.dll_dlssnr.dll   the forwarder (~115 KB) -- ships in this package\nUndocumented and driven directly, so none of this is officially supported.	Synthetisiert Details in der Ausgabe des Upscalers, bevor Frame Generation sie sieht.\n\nBenötigt zwei ähnlich benannte Dateien neben OptiScaler, ein Zeichen auseinander:\n  nvngx_dlssnr.dll       Modell von NVIDIA (~165 MB) -- selbst bereitzustellen\n  nvngx.dll_dlssnr.dll   der Forwarder (~115 KB) -- in diesem Paket enthalten\nUndokumentiert und direkt angesteuert, daher wird nichts davon offiziell unterstützt.
+Whether the model's edit is applied. Off shows the clean upscaler frame while the\npass keeps running -- so with Hold frame (under Compare) you can freeze a\nframe and toggle this to see the same frozen frame with and without Neural\nRendering. Leave it on for normal use.	Ob die Bearbeitung des Modells angewendet wird. Aus zeigt den sauberen Upscaler-Frame, während\nder Pass weiterläuft -- so kann man mit Frame halten (unter Vergleichen) einen Frame\neinfrieren und dies umschalten, um denselben Frame mit und ohne Neural\nRendering zu sehen. Im normalen Betrieb eingeschaltet lassen.
+Before: runs Neural Rendering on the game's render-resolution color, then\nupscales the edited copy. This may reduce GPU cost, but can introduce shimmer\nand unstable detail on moving edges. Compare the picture in motion.\n\nExperimental on D3D12 and the D3D12 bridges. Ray reconstruction, Hold frame,\nthe driver proxy, and unsupported inputs use the after-upscale path.\nChanging render dimensions pauses NR until they stay stable for 500 ms.\nThe original game color is used while the model is being built or skipped.	Vor: führt Neural Rendering auf der Farbe des Spiels in Renderauflösung aus und\nskaliert dann die bearbeitete Kopie hoch. Das kann GPU-Kosten sparen, aber Flimmern\nund instabile Details an bewegten Kanten verursachen. Das Bild in Bewegung vergleichen.\n\nExperimentell auf D3D12 und den D3D12-Brücken. Ray Reconstruction, Frame halten,\nder Treiber-Proxy und nicht unterstützte Eingaben nutzen den Pfad nach dem Upscaler.\nGeänderte Renderabmessungen pausieren NR, bis sie 500 ms stabil bleiben.\nWährend das Modell erstellt oder übersprungen wird, wird die Originalfarbe des Spiels verwendet.
+Default leaves the choice to the model.\n\nNot the same scale as the super resolution or ray reconstruction presets --\nthe same number means something different here.\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,\nPreset 2 the smaller October one, and Default (or any other number) falls back\nto Preset 2. The line below is what the model says it built.	Standard überlässt die Wahl dem Modell.\n\nNicht dieselbe Skala wie die Presets für Super Resolution oder Ray Reconstruction --\ndieselbe Zahl bedeutet hier etwas anderes.\n\n310.9.16 enthält zwei Gewichtssätze: Preset 1 ist das ursprüngliche September-Modell,\nPreset 2 das kleinere Oktober-Modell, und Standard (oder jede andere Zahl) fällt auf\nPreset 2 zurück. Die Zeile darunter zeigt, was das Modell nach eigener Aussage erstellt hat.
+Running:	Läuft:
+Game profile:	Spielprofil:
+Keys this game needs before Neural Rendering can run in it, applied when the game started,\nonly where OptiScaler.ini leaves them on auto, and never written back to it. A value\nyou set in the ini always wins. [DlssNr] GameProfiles=false turns this off.	Schlüssel, die dieses Spiel braucht, damit Neural Rendering darin laufen kann; beim Spielstart angewendet,\nnur wo OptiScaler.ini sie auf auto lässt, und nie dorthin zurückgeschrieben. Ein selbst\nin der ini gesetzter Wert hat immer Vorrang. [DlssNr] GameProfiles=false schaltet dies ab.
+(preset %d)	(Preset %d)
+September model (the original)	September-Modell (das ursprüngliche)
+October model (smaller, faster)	Oktober-Modell (kleiner, schneller)
+The model's own report of the weight set it built. It carries:	Die eigene Angabe des Modells zum erstellten Gewichtssatz. Er enthält:
+The model's own strength control, applied inside it. Distinct from detail\nstrength above, which scales the result afterwards.	Die eigene Stärkeregelung des Modells, intern angewendet. Unterscheidet sich von der Detailstärke\noben, die das Ergebnis nachträglich skaliert.
+-1 means follow local structure, and is the model's own default -- it is not a\nstrength of zero. 0 and above set skin independently of the rest of the frame.\n\nRead only with the auto skin mask on; with it off the model ignores this.	-1 heißt: der lokalen Struktur folgen, und ist der Standard des Modells -- keine\nStärke von null. Ab 0 wird die Haut unabhängig vom Rest des Frames eingestellt.\n\nNur mit aktiver automatischer Hautmaske gelesen; ohne sie ignoriert das Modell dies.
+Lets the model find skin itself rather than treating the frame uniformly.	Lässt das Modell Haut selbst erkennen, statt den Frame einheitlich zu behandeln.
+Freezes the frame the model works on. While held, change paper white, the\nstrengths, the reversible mode, the model preset -- anything below the\nupscaler -- and only that setting moves; the scene does not.\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream\n(the upscaler is not re-run on a held frame), and the game's own HUD and\npost-processing, which run after this pass and keep updating. The white\npoint stops being measured and holds its value while frozen, so it cannot\ndrift and confound the comparison.\n\nHide the menu and it stays held. Untoggle to resume.	Friert den Frame ein, an dem das Modell arbeitet. Solange er gehalten wird, Papierweiß, die\nStärken, den reversiblen Modus oder die Modell-Voreinstellung ändern -- alles unterhalb des\nUpscalers --, und nur diese Einstellung bewegt sich, die Szene nicht.\n\nWas es NICHT zeigen kann: Presets der Upscaler DLSS/FSR/XeSS oder alles davor\n(der Upscaler läuft auf einem gehaltenen Frame nicht erneut) sowie das HUD und das\nPost-Processing des Spiels, die nach diesem Pass laufen und sich weiter aktualisieren. Der Weißpunkt\nwird nicht mehr gemessen und hält im eingefrorenen Zustand seinen Wert, sodass er nicht\nabdriften und den Vergleich verfälschen kann.\n\nBei ausgeblendetem Menü bleibt er gehalten. Zum Fortsetzen wieder ausschalten.
+Where the wipe cuts. Left of it is the frame as the upscaler produced it,\nright of it is the frame the model edited.	Position der Teilung beim Wischvergleich. Links davon der Frame, wie der Upscaler ihn erzeugt hat,\nrechts davon der vom Modell bearbeitete Frame.
+Proxy is the picture handed to the model -- if that looks wrong, the white point\nis wrong and nothing downstream can be judged.\n\nDifference shows what the model actually changed, amplified twenty times and\ncentred on grey. A flat grey frame there means it is doing nothing.	Proxy ist das Bild, das das Modell bekommt -- sieht es falsch aus, ist der Weißpunkt\nfalsch, und nichts danach lässt sich beurteilen.\n\nDifferenz zeigt, was das Modell tatsächlich geändert hat, zwanzigfach verstärkt und\num Grau zentriert. Ein gleichmäßig grauer Frame bedeutet dort, dass es nichts tut.
+
+# Bounded pass editor. New interactive controls carry stable IDs.
+Sequential model passes	Sequenzielle Modell-Passes
+Requested passes	Angeforderte Passes
+Last evaluation: %u successful model passes	Letzte Auswertung: %u erfolgreiche Modell-Passes
+Individual pass settings	Einstellungen pro Pass
+Edit pass	Pass bearbeiten
+Editing pass 1	Pass 1 wird bearbeitet
+Uncheck Override to inherit the live master value.	Überschreiben abwählen, um den aktuellen Hauptwert zu übernehmen.
+Override	Überschreiben
+Override auto skin mask	Automatische Hautmaske überschreiben
+Auto skin mask: inherit %s	Automatische Hautmaske: übernimmt %s
+Inherit all master settings	Alle Haupteinstellungen übernehmen
+%s: inherit %.2f	%s: übernimmt %.2f
+%s: inherit %s	%s: übernimmt %s
+This backend uses one pass with master settings. Sequential passes and individual settings are unavailable.	Dieses Backend nutzt einen Pass mit den Haupteinstellungen. Sequenzielle Passes und Einstellungen pro Pass sind nicht verfügbar.
+Apply after Ray Reconstruction	Nach Ray Reconstruction anwenden
+RR Passes	RR-Passes
+RR Working scale	RR-Arbeitsskala
+Runs Neural Rendering over native Ray Reconstruction (DLSSD) output.\n\nDisabled by default: Ray Reconstruction already synthesizes denoised output.\nEnable if you want to run DLSS-NR over the final RR result at configured scale.	Führt Neural Rendering über der Ausgabe der nativen Ray Reconstruction (DLSSD) aus.\n\nStandardmäßig aus: Ray Reconstruction synthetisiert bereits eine entrauschte Ausgabe.\nAktivieren, um DLSS-NR in der eingestellten Skala über das fertige RR-Ergebnis laufen zu lassen.
+Output stabilizer	Ausgabestabilisator
+Stabilizer strength	Stabilisatorstärke
+Stabilizer tolerance	Stabilisatortoleranz
+
+# 2026-09-28: GPU timing, hook method and present options, the colour and exposure-scan help,
+# synthesized frame generation, section headers, and the status and failure reasons the NR panel shows.
+# Filter names stay in English; they are listed as themselves because every label needs an entry.
+Fence-confirmed GPU timing	Fence-bestätigte GPU-Zeitmessung
+Confirmed timing is available on the D3D12 NR path and its bridges. This backend is not instrumented.	Bestätigte Zeitmessung ist auf dem D3D12-NR-Pfad und seinen Brücken verfügbar. Dieses Backend ist nicht instrumentiert.
+Measure NR on the GPU	NR auf der GPU messen
+Each published sample belongs to one NR evaluation and one observed queue submission. It is read only after that submission completes and the command-list recording is sealed against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded.\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.\n\nD3D12 Present and guide capture have independent samples at the same interval. The Present route includes its copies, guide preparation, Dispatch and HDR conversion; CPU waits are excluded. The native Vulkan and D3D11 Present hosts do not have this route bracket.	Jeder veröffentlichte Messwert gehört zu genau einer NR-Auswertung und einer beobachteten Queue-Übermittlung. Er wird erst gelesen, wenn diese Übermittlung abgeschlossen und die Aufzeichnung der Command List gegen Wiederholung versiegelt ist. Es wird kein Warten auf die GPU eingeführt. Nicht unterstützte oder mehrdeutige Messwerte werden verworfen.\n\nDas Intervall umfasst die GPU-Befehle innerhalb des NR-Dispatch, einschließlich Kopien, Modellaufrufen, Komposition und Wiederherstellung von Ressourcen. Die Vorbereitung vor dem Upscaling auf Aufruferseite, der Upscaler und Frame Generation liegen außerhalb dieses Intervalls. Die in der Queue vergangene Zeit ist keine reine Kernel-Auslastungszeit.\n\nD3D12-Present und Guide-Erfassung haben eigene Messwerte im selben Intervall. Die Present-Route umfasst ihre Kopien, die Guide-Vorbereitung, Dispatch und HDR-Konvertierung; CPU-Wartezeiten sind ausgenommen. Die nativen Vulkan- und D3D11-Present-Hosts haben diese Routenmessung nicht.
+Measurement off. Pending samples may still be retained safely.	Messung aus. Ausstehende Messwerte können weiterhin sicher gehalten werden.
+Sample every N eligible evaluations	Jede N-te zulässige Auswertung messen
+The first eligible evaluation is sampled, then every %u evaluations. An evaluation is not necessarily a presentation frame.	Die erste zulässige Auswertung wird gemessen, dann alle %u Auswertungen. Eine Auswertung ist nicht unbedingt ein angezeigter Frame.
+Accepted %llu | discarded %llu | pending %u	Akzeptiert %llu | verworfen %llu | ausstehend %u
+No confirmed GPU sample yet.	Noch kein bestätigter GPU-Messwert.
+Last confirmed sample: %.3f ms dispatch = %.3f ms model + %.3f ms outside model	Letzter bestätigter Messwert: %.3f ms Dispatch = %.3f ms Modell + %.3f ms außerhalb des Modells
+Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u passes	Historischer Messwert %llu, %.1f s seit Aufzeichnung; %s, Modell %ux%u, %u Passes
+Sample contract %llu, evaluation %llu, run %llu; interval was %u evaluations	Messvertrag %llu, Auswertung %llu, Lauf %llu; Intervall war %u Auswertungen
+This is one historical sample, not the current frame or an average. Use matching contracts in the INFO log for comparisons.	Dies ist ein einzelner historischer Messwert, nicht der aktuelle Frame und kein Durchschnitt. Für Vergleiche passende Verträge im INFO-Log verwenden.
+Each extra pass processes the previous answer and has its own model history. Every pass is a full model evaluation: the model's GPU time and video memory grow with the count, and ten passes cost about ten times one. Extra passes are built one at a time, half a second apart, and one the adapter's memory budget cannot hold is refused. A failed extra pass keeps the last successful answer. Requested passes are not proof of completed work; check the last evaluation and INFO log.\n\nEnabling this after untracked NR has already run requires restarting the application. Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.	Jeder zusätzliche Pass verarbeitet die vorherige Antwort und hat seinen eigenen Modellverlauf. Jeder Pass ist eine vollständige Modellauswertung: GPU-Zeit und Videospeicher des Modells wachsen mit der Anzahl, und zehn Passes kosten etwa zehnmal so viel wie einer. Zusätzliche Passes werden nacheinander im Abstand von einer halben Sekunde erstellt, und einer, den das Speicherbudget des Adapters nicht fassen kann, wird abgelehnt. Ein fehlgeschlagener Zusatz-Pass behält die letzte erfolgreiche Antwort. Angeforderte Passes belegen keine erledigte Arbeit; letzte Auswertung und INFO-Log prüfen.\n\nWurde NR bereits ohne Tracking ausgeführt, erfordert das Aktivieren einen Neustart der Anwendung. Wiederholen kann frühere GPU-Arbeit nicht nachträglich erfassen. Nicht unterstützte Übermittlungspfade verweigern zusätzliche Passes.
+Cost: %ux the model's GPU time and %u model instances in video memory.	Kosten: %ux die GPU-Zeit des Modells und %u Modellinstanzen im Videospeicher.
+The Model controls above are the master settings. Unchecked overrides inherit their current values. Turning individual settings off or reducing the pass count keeps saved edits.	Die Modell-Regler oben sind die Haupteinstellungen. Nicht angehakte Überschreibungen übernehmen deren aktuelle Werte. Das Abschalten der Einstellungen pro Pass oder eine geringere Pass-Anzahl behält gespeicherte Änderungen.
+on	an
+off	aus
+Running%s - legacy timer %.2f ms (unconfirmed)%s	Läuft%s - Legacy-Timer %.2f ms (unbestätigt)%s
+The native Vulkan timer is legacy and is not fence-confirmed.\nFor D3D12, use the separate Fence-confirmed GPU timing panel.\nA historical sample is not the current frame's cost.	Der native Vulkan-Timer ist ein Legacy-Timer und nicht Fence-bestätigt.\nFür D3D12 das separate Panel Fence-bestätigte GPU-Zeitmessung verwenden.\nEin historischer Messwert entspricht nicht den Kosten des aktuellen Frames.
+Source	Quelle
+Auto	Auto
+Upscaled	Hochskaliert
+Present	Present
+Hook method	Hook-Methode
+Where the pass runs, and what it runs on.\n\nAuto: the swapchain backbuffer, as soon as the game's upscaler has handed over its depth and motion; the upscaler's output until then.\n\nUpscaled: in place, immediately after the game's upscaler has written its output. That output is linear and un-tonemapped, so the Colour section below must map it into something the model recognises -- the paper white is where a game that moves its exposure makes itself felt.\n\nPresent: at the moment of present, on the swapchain's backbuffer -- the frame the game has finished and tone-mapped, which is exactly the kind of picture the model was trained on. There is nothing to divide and no white point to find, and with frame generation the base frame is enhanced before the generated frames are made from it. This is how the ReShade implementations run it, and the one a title like KCD2 wants.\n\nA native Vulkan game ignores this. When the upscaler runs through OptiScaler's D3D12 bridge (a Vulkan or D3D11 game) there is no D3D12 present hook: Auto stays on the upscaler's output and Present runs nothing, except on a D3D11 game, where Present hosts the pass on the bridge's swapchain and takes effect after a restart.	Wo der Pass läuft und worauf.\n\nAuto: der Backbuffer der Swapchain, sobald der Upscaler des Spiels Tiefe und Bewegung übergeben hat; bis dahin die Ausgabe des Upscalers.\n\nHochskaliert: direkt an Ort und Stelle, unmittelbar nachdem der Upscaler des Spiels seine Ausgabe geschrieben hat. Diese Ausgabe ist linear und nicht tonemapped, daher muss der Abschnitt Farbe unten sie in etwas umsetzen, das das Modell erkennt -- beim Papierweiß macht sich ein Spiel bemerkbar, das seine Belichtung bewegt.\n\nPresent: im Moment des Present, auf dem Backbuffer der Swapchain -- der Frame, den das Spiel fertiggestellt und tonemapped hat, genau die Art Bild, mit der das Modell trainiert wurde. Es gibt nichts zu teilen und keinen Weißpunkt zu finden, und mit Frame Generation wird der Basis-Frame verbessert, bevor die generierten Frames daraus entstehen. So betreiben es die ReShade-Implementierungen, und so will es ein Titel wie KCD2.\n\nEin natives Vulkan-Spiel ignoriert dies. Läuft der Upscaler über die D3D12-Brücke von OptiScaler (ein Vulkan- oder D3D11-Spiel), gibt es keinen D3D12-Present-Hook: Auto bleibt auf der Ausgabe des Upscalers und Present führt nichts aus, außer bei einem D3D11-Spiel, wo Present den Pass auf der Swapchain der Brücke ausführt und nach einem Neustart wirkt.
+Require DLSS temporal inputs	Temporale DLSS-Eingaben verlangen
+Present needs the game's depth and motion to reproject its history, and uses them only on the frame they were captured for. With this on, a frame that has none -- none captured yet, or one that cannot be shown to be its own -- is shown as the game rendered it. With it off, the pass runs on dummy temporals -- constant depth, no motion -- and treats the scene as standing still, which is right for a title whose upscaler is not DLSS.	Present braucht Tiefe und Bewegung des Spiels, um seinen Verlauf zu reprojizieren, und nutzt sie nur auf dem Frame, für den sie erfasst wurden. Ist dies an, wird ein Frame ohne sie -- noch nichts erfasst, oder Daten, die nicht nachweisbar zu ihm gehören -- so gezeigt, wie das Spiel ihn gerendert hat. Ist es aus, läuft der Pass mit Platzhalter-Temporaldaten -- konstante Tiefe, keine Bewegung -- und behandelt die Szene als stillstehend, was für einen Titel richtig ist, dessen Upscaler nicht DLSS ist.
+Synthesized motion	Synthetische Bewegung
+Experimental. Only for frames with no motion from the game (no upscaler to take it from). Instead of telling the model nothing moved, the motion is estimated from this frame and the last, so its history follows a moving camera rather than ghosting behind it. The estimate is coarse at thin edges and text and costs a little GPU time; depth stays constant. "No history without motion" below no longer applies to a frame that has it.	Experimentell. Nur für Frames ohne Bewegung vom Spiel (kein Upscaler, von dem sie käme). Statt dem Modell zu sagen, dass sich nichts bewegt hat, wird die Bewegung aus diesem und dem letzten Frame geschätzt, sodass sein Verlauf einer bewegten Kamera folgt, statt hinter ihr Geisterbilder zu ziehen. Die Schätzung ist an dünnen Kanten und Text grob und kostet etwas GPU-Zeit; die Tiefe bleibt konstant. "Kein Verlauf ohne Bewegung" unten gilt nicht mehr für einen Frame, der Bewegung hat.
+Protect the HUD	HUD schützen
+Experimental. Pixels that stay exactly the same while the scene around them moves are taken for interface and handed back untouched through the model's own UI correction, so text and HUD lines stay crisp. A HUD is only found once the camera has moved behind it, and it stays protected for about a second and a half after the scene stops. A still, detailed patch next to motion can be taken for HUD; it is then shown as the game drew it.	Experimentell. Pixel, die exakt gleich bleiben, während sich die Szene um sie herum bewegt, werden als Oberfläche gewertet und über die modelleigene UI-Korrektur unverändert zurückgegeben, sodass Text und HUD-Linien scharf bleiben. Ein HUD wird erst gefunden, nachdem sich die Kamera dahinter bewegt hat, und bleibt nach dem Stillstand der Szene etwa anderthalb Sekunden geschützt. Eine ruhige, detailreiche Fläche neben Bewegung kann für HUD gehalten werden; sie wird dann so gezeigt, wie das Spiel sie gezeichnet hat.
+No history without motion	Kein Verlauf ohne Bewegung
+Only for frames that run on dummy temporals. The model is told nothing moved, so a moving camera leaves ghosts and doubled edges where things used to be. On, it starts its history over every frame: no ghosts, but none of its temporal smoothing either. Frames with the game's own depth and motion are not affected.	Nur für Frames, die mit Platzhalter-Temporaldaten laufen. Dem Modell wird gesagt, dass sich nichts bewegt hat, daher hinterlässt eine bewegte Kamera Geisterbilder und doppelte Kanten, wo Dinge vorher waren. Ist dies an, startet es seinen Verlauf in jedem Frame neu: keine Geisterbilder, aber auch keine zeitliche Glättung. Frames mit Tiefe und Bewegung des Spiels sind nicht betroffen.
+Present sync	Present-Sync
+Waits for the backbuffer write-back to finish before the flip. Frame generation needs it: without it a paced flip can show an unfinished picture. Left on auto it waits only when frame generation could be involved, because otherwise the wait just holds the game back. Ticking or unticking this box forces it either way.	Wartet vor dem Flip, bis das Zurückschreiben in den Backbuffer fertig ist. Frame Generation braucht das: Ohne kann ein getakteter Flip ein unfertiges Bild zeigen. Auf auto wartet es nur, wenn Frame Generation beteiligt sein könnte, da das Warten sonst nur das Spiel ausbremst. Anhaken oder Abwählen dieses Kästchens erzwingt das eine oder das andere.
+Stage: swapchain present (bypasses upscaler stages)	Phase: Swapchain-Present (umgeht Upscaler-Phasen)
+Not on this route right now: the game is not running Ray Reconstruction, so "Model resolution" below is what governs. These two take effect if it starts.	Auf dieser Route gerade nicht: Das Spiel nutzt keine Ray Reconstruction, daher gilt "Modellauflösung" unten. Diese beiden wirken, sobald sie startet.
+Above 1x the model supersamples: no new detail, and cost grows with the area. Ray Reconstruction already denoises this frame.	Über 1x supersampelt das Modell: keine neuen Details, und die Kosten wachsen mit der Fläche. Ray Reconstruction entrauscht diesen Frame bereits.
+Model resolution: set by RR Working scale on this route	Modellauflösung: auf dieser Route durch RR-Arbeitsskala festgelegt
+Supersampling %.2fx: the model runs ABOVE native, then\nis sampled back down. Experimental, and costly -- time grows with the area.	Supersampling %.2fx: Das Modell läuft ÜBER der nativen Auflösung und\nwird dann wieder herunterskaliert. Experimentell und teuer -- die Zeit wächst mit der Fläche.
+The filter that averages the model's above-native answer back to display size --\nthis is what turns supersampling into LESS noise rather than more. Sharper\nfilters (Lanczos3, Kaiser3) keep the most detail; softer ones (Bicubic,\nCatmull-Rom) are gentler on ringing. Independent of the Output Scaling\ndownscaler, so the two can differ and run at the same time.	Der Filter, der die über-native Antwort des Modells auf Anzeigegröße zurückmittelt --\ndadurch wird Supersampling zu WENIGER Rauschen statt mehr. Schärfere\nFilter (Lanczos3, Kaiser3) erhalten die meisten Details; weichere (Bicubic,\nCatmull-Rom) neigen weniger zu Ringing. Unabhängig vom Downscaler der Ausgabeskalierung,\ndaher können beide verschieden sein und gleichzeitig laufen.
+What fraction of the frame the model works at. Cost falls with the square of\nthis, so half resolution is roughly a quarter of the time.\n\nThe frame is never reduced. Only the model's contribution is computed small\nand enlarged, so the picture underneath is untouched whatever this says.\n\nWhat it trades: the shading the model adds is broad and survives enlargement;\nthe fine structure it synthesises does not, and softens. Worth having when the\npass costs more than you want to pay for the detail it returns.\n\nThe frame itself stays at full detail whatever this says -- only the\nmodel's own work is done small.\n\nauto is full size on RTX 40 and later and half size on RTX 20 and 30: an RTX 3060\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces\nit; Auto puts it back.	Welchen Anteil des Frames das Modell bearbeitet. Die Kosten fallen mit dem Quadrat\ndavon, halbe Auflösung braucht also etwa ein Viertel der Zeit.\n\nDer Frame wird nie verkleinert. Nur der Beitrag des Modells wird klein berechnet\nund vergrößert, das Bild darunter bleibt also unberührt, egal was hier steht.\n\nDer Tausch: Die Schattierung, die das Modell hinzufügt, ist großflächig und übersteht die Vergrößerung;\ndie feine Struktur, die es synthetisiert, nicht, und wird weicher. Lohnt sich, wenn der\nPass mehr kostet, als man für die gelieferten Details zahlen will.\n\nDer Frame selbst behält volle Details, egal was hier steht -- nur die\neigene Arbeit des Modells wird klein ausgeführt.\n\nauto ist volle Größe auf RTX 40 und neuer und halbe Größe auf RTX 20 und 30: An einer RTX 3060\nwurden die 25-fachen Pixelkosten einer RTX 4090 gemessen. Den Regler zu bewegen ersetzt\nden Wert; Auto stellt ihn wieder her.
+Matched residual, sharp	Angepasster Restwert, scharf
+Matched residual + DLSS	Angepasster Restwert + DLSS
+How far the frame moves toward the model's picture.\n\nThe model's answer is not added to the frame -- it is a complete picture of its\nown, rescaled so its luminance sits where the original says it should. This\nblends between the two, so both ends are real pictures and everything between\nthem is one too.\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture.\n\nAbove 1 carries on past it in the same direction, which is not something the\nmodel asked for -- use it to see what it is doing, then come back down. This\nis the control to push if you want more effect: Intensity belongs to the model\nand it decides what to do with it.	Wie weit sich der Frame dem Bild des Modells annähert.\n\nDie Antwort des Modells wird nicht zum Frame addiert -- sie ist ein vollständiges eigenes\nBild, so skaliert, dass seine Luminanz dort liegt, wo das Original sie vorgibt. Dies\nblendet zwischen beiden, also sind beide Enden echte Bilder und alles dazwischen\nebenfalls.\n\n0 gibt genau das zurück, was der Upscaler erzeugt hat. 1 ist das Bild des Modells.\n\nÜber 1 geht es in derselben Richtung darüber hinaus, was das Modell nicht\nverlangt hat -- nutzen, um zu sehen, was es tut, dann wieder zurückgehen. Dies\nist der Regler, den man erhöht, wenn man mehr Effekt will: Intensität gehört dem Modell,\nund es entscheidet, was es damit macht.
+Whether the model's colour arrives with its light.\n\n0 keeps the game's own hue exactly -- every pixel is the original colour with\nonly its brightness carrying the model's verdict. Game-accurate colour, with\nthe detail. 1 brings the model's colour as well, in its own hue, clamped into\nAP1 so nothing unreachable is asked for.\n\nThis cannot shift hue on its own: it interpolates between two finished\npictures rather than adding a colour difference to one, which is what used to\nlet a warm subject come back green.\n\nAbove 1 it OVER-SATURATES: the colour keeps its hue but grows more vivid,\nand rolls off at the edge of what the display can show rather than clipping\ninto a flat blown patch. 1 is the model's own colour; push past it for punch.	Ob die Farbe des Modells mit seinem Licht ankommt.\n\n0 behält den Farbton des Spiels exakt -- jedes Pixel hat die Originalfarbe, und\nnur seine Helligkeit trägt das Urteil des Modells. Spielgetreue Farbe, mit\nden Details. 1 bringt auch die Farbe des Modells mit, in ihrem eigenen Farbton, in\nAP1 begrenzt, damit nichts Unerreichbares verlangt wird.\n\nDies kann den Farbton nicht von sich aus verschieben: Es interpoliert zwischen zwei fertigen\nBildern, statt einem davon eine Farbdifferenz hinzuzufügen -- genau das ließ früher\nein warmes Motiv grün zurückkommen.\n\nÜber 1 ÜBERSÄTTIGT es: Die Farbe behält ihren Farbton, wird aber kräftiger,\nund läuft am Rand dessen, was das Display zeigen kann, weich aus, statt in\neine flache, ausgebrannte Fläche zu clippen. 1 ist die eigene Farbe des Modells; darüber für mehr Wucht.
+What the model is shown, and how its answer comes back.\n\nOff (soft knee): the default. It rolls highlights off so hard the model\ncannot resolve detail in them -- fine in soft-lit scenes, weak in bright ones.\n\nNeutwo composed: an unclipped curve so the model sees highlight detail, then\neverything above (Detail/Colour strength, highlight guard, palette). It wins in\nbright scenes, but the curve compresses MIDTONES too, so in soft-lit content it\ncan be worse than Off. It also shifts paper white -- re-check it when you switch.\n\nHybrid composed: the best of both, and the one to use. Identity in the\nmidtones -- as good as Off there -- and the unclipped roll only in the\nhighlights, so it recovers the detail Off crushes without giving up the\nmidtones Neutwo does. It barely shifts paper white.\n\nReplace: the raw model straight back through the exact inverse, none of the\ncomposition -- no guard, no palette, no strengths. Gorgeous where there are no\nbright lights, but they FLASH in motion. A reference, not a daily setting.\n\nHybrid replace: the raw model like Replace, but on the hybrid curve -- the\ndecode is identity in the midtones, so the flashing is confined to genuine\nbright highlights instead of everywhere. Most of Replace's detail, far more\nstable. If you love the Replace look but the flicker bothers you, use this.\n\nOff is byte-identical to before.	Was dem Modell gezeigt wird und wie seine Antwort zurückkommt.\n\nAus (Soft Knee): der Standard. Rollt Highlights so stark ab, dass das Modell\ndarin keine Details auflösen kann -- gut in weich beleuchteten Szenen, schwach in hellen.\n\nNeutwo Proxy + komponiert: eine Kurve ohne Clipping, damit das Modell Highlight-Details sieht, danach\nalles Weitere (Detail-/Farbstärke, Highlight-Guard, Palette). Gewinnt in\nhellen Szenen, aber die Kurve komprimiert auch die MITTELTÖNE, daher kann es bei weich beleuchteten Inhalten\nschlechter sein als Aus. Verschiebt außerdem das Papierweiß -- beim Umschalten erneut prüfen.\n\nHybrid-Proxy + komponiert: das Beste aus beiden und die empfohlene Wahl. Identität in den\nMitteltönen -- dort so gut wie Aus -- und das Abrollen ohne Clipping nur in den\nHighlights, so werden die Details zurückgewonnen, die Aus zerdrückt, ohne die\nMitteltöne zu opfern wie Neutwo. Verschiebt das Papierweiß kaum.\n\nNeutwo Proxy + ersetzen: das rohe Modell direkt durch die exakte Inverse zurück, ohne\nKomposition -- kein Guard, keine Palette, keine Stärken. Herrlich, wo es keine\nhellen Lichter gibt, aber diese FLACKERN in Bewegung. Eine Referenz, keine Alltagseinstellung.\n\nHybrid-Proxy + ersetzen: das rohe Modell wie bei Neutwo Proxy + ersetzen, aber auf der Hybridkurve -- die\nDekodierung ist in den Mitteltönen Identität, daher bleibt das Flackern auf echte\nhelle Highlights beschränkt statt überall. Die meisten Details von Ersetzen, viel\nstabiler. Wer den Ersetzen-Look mag, aber das Flackern störend findet, nimmt dies.\n\nAus ist byte-identisch zum bisherigen Verhalten.
+Neural Rendering Model selection (DLSSNR.Style):\n\nModel A (Default): standard reference neural model with default local tone and structure.\n\nModel B (Natural): subtle contrast (-0.25) and saturation (-0.10) compensation. Preserves natural skin tones and softens harsh highlights.\n\nModel C (Cinematic): gentle saturation adjustment (-0.15) for filmic presentation.\n\nTuning changes apply instantly on the live frame with seamless temporal reset.	Auswahl des Neural-Rendering-Modells (DLSSNR.Style):\n\nModell A (Standard): neuronales Standard-Referenzmodell mit Standardwerten für lokalen Ton und lokale Struktur.\n\nModell B (Natürlich): dezente Kompensation von Kontrast (-0.25) und Sättigung (-0.10). Erhält natürliche Hauttöne und mildert harte Lichter.\n\nModell C (Kino): sanfte Sättigungsanpassung (-0.15) für eine filmische Darstellung.\n\nÄnderungen wirken sofort auf den laufenden Frame, mit nahtlosem zeitlichem Reset.
+Holds still parts of the picture still. Where the frame the model was shown did not\nchange, keep what was shown last frame and let the model's new answer in slowly;\nwhere it changed, show the model's answer as it is. Aimed at the model re-deciding\nstill content -- a slope that brightens and darkens with nothing moving.\n\n0 is off and costs nothing. 1 holds a still pixel outright. It stands down on the\nbefore-upscale stage, where the frame is jittered and every pixel moves.	Hält ruhige Bildteile ruhig. Wo sich der Frame, den das Modell gezeigt bekam, nicht\ngeändert hat, wird das zuletzt Gezeigte behalten und die neue Antwort des Modells langsam eingeblendet;\nwo er sich geändert hat, wird die Antwort des Modells unverändert gezeigt. Gedacht für ein Modell, das\nruhige Inhalte neu entscheidet -- ein Hang, der heller und dunkler wird, ohne dass sich etwas bewegt.\n\n0 ist aus und kostet nichts. 1 hält ein ruhiges Pixel vollständig. In der Phase vor dem\nUpscaler setzt er aus, da der Frame dort gejittert ist und sich jedes Pixel bewegt.
+How far the model's input may drift, relative to its brightness, before a pixel\ncounts as moved. Lower follows subtle lighting changes sooner; higher tolerates\nmore flicker in the input before letting go.	Wie weit die Eingabe des Modells relativ zu ihrer Helligkeit abweichen darf, bevor ein Pixel\nals bewegt gilt. Niedriger folgt feinen Lichtänderungen früher; höher toleriert\nmehr Flimmern in der Eingabe, bevor losgelassen wird.
+Hook method is set to Present: the swapchain backbuffer is already\ntone-mapped and display-referred sRGB. White point and exposure mapping\ncontrols are bypassed.	Hook-Methode steht auf Present: Der Backbuffer der Swapchain ist bereits\ntonemapped und anzeigebezogenes sRGB. Die Regler für Weißpunkt und\nBelichtungs-Mapping werden umgangen.
+The model was trained on finished, sRGB-encoded frames. The upscaler's\noutput is not one: it is linear and open-ended. These decide how it is\nmapped into something the model recognises. A frame the game reports as\nalready tone-mapped is passed over untouched and none of this applies.	Das Modell wurde mit fertigen, sRGB-kodierten Frames trainiert. Die Ausgabe des Upscalers\nist keiner: Sie ist linear und nach oben offen. Diese Regler bestimmen, wie sie\nin etwas umgesetzt wird, das das Modell erkennt. Ein Frame, den das Spiel als\nbereits tonemapped meldet, wird unverändert durchgereicht, und nichts hiervon gilt.
+Where the number that divides the frame comes from.\n\nPaper white only -- the slider below and nothing else. Right for a\ngame whose exposure never moves, wrong the moment it does: one\nconstant cannot serve a cave and a field.\n\nThe game's own exposure -- read from the texture the game hands\nthe upscaler. The best source there is, because it is decided\nupstream and nothing this pass does can move it. Not every game\nsupplies one.\n\nA buffer the scan found -- for games that compute an exposure and\nnever pass it on. A GUESS: candidates are matched by shape, and in\nGTA V the best one tracks the real exposure but at its own scale,\nwhich the anchor's ratio cancels. Needs anchoring once, and checking\nafterwards.	Woher die Zahl kommt, durch die der Frame geteilt wird.\n\nNur Papierweiß -- der Regler unten und sonst nichts. Richtig für ein\nSpiel, dessen Belichtung sich nie bewegt, falsch, sobald sie es tut: Eine\nKonstante kann nicht Höhle und Feld zugleich bedienen.\n\nDie spielinterne Belichtung -- gelesen aus der Textur, die das Spiel\ndem Upscaler übergibt. Die beste Quelle überhaupt, da sie\nvorgelagert entschieden wird und nichts, was dieser Pass tut, sie verschieben kann. Nicht jedes Spiel\nliefert eine.\n\nEin Buffer, den der Scan gefunden hat -- für Spiele, die eine Belichtung berechnen und\nnie weitergeben. Eine VERMUTUNG: Kandidaten werden nach Form abgeglichen, und in\nGTA V folgt der beste der echten Belichtung, aber in eigener Skalierung,\ndie das Verhältnis des Ankers aufhebt. Muss einmal verankert und danach\ngeprüft werden.
+This game supplies no exposure -- paper white is in use. Try the scan instead.	Dieses Spiel liefert keine Belichtung -- Papierweiß wird verwendet. Versuchen Sie stattdessen den Scan.
+This game's exposure is not usable here; paper white is in use.	Die Belichtung dieses Spiels ist hier nicht nutzbar; Papierweiß wird verwendet.
+This game supplies an exposure and it is being read.	Dieses Spiel liefert eine Belichtung, und sie wird gelesen.
+Game exposure %.4f  ->  white point %.2f%s	Spielbelichtung %.4f  ->  Weißpunkt %.2f%s
+  (held: absent this frame)	  (gehalten: in diesem Frame nicht vorhanden)
+Nothing in this game is shaped like an exposure.	Nichts in diesem Spiel hat die Form einer Belichtung.
+The exposure scan needs a restart: Neural Rendering was off when the game started.	Der Belichtungs-Scan braucht einen Neustart: Neural Rendering war beim Spielstart aus.
+Watching %u, none moving yet -- go between light and shade.	Beobachte %u, noch bewegt sich nichts -- gehen Sie zwischen Licht und Schatten.
+Found one. Set paper white below until the picture looks right, then press Anchor here.	Einen gefunden. Stellen Sie das Papierweiß unten ein, bis das Bild richtig aussieht, drücken Sie dann auf Hier verankern.
+This game supplies an exposure -- the option above would use it.	Dieses Spiel liefert eine Belichtung -- die obige Option würde sie verwenden.
+Scan %.5f  ->  white point %.2f   (points: %u)	Scan %.5f  ->  Weißpunkt %.2f   (Punkte: %u)
+Paper white (editing point %d)	Papierweiß (Punkt %d wird bearbeitet)
+The white point for the selected calibration point, or -- with no row\nselected -- the value the next Anchor press captures.\n\nSet it until the picture looks right here, then Anchor. Move to very\ndifferent light and do it again: two points fix the buffer's real\nrelationship and the white point holds between them. Click a row below\nto come back and adjust that point; click it again to let go.	Der Weißpunkt für den gewählten Kalibrierpunkt oder -- ohne gewählte\nZeile -- der Wert, den der nächste Druck auf Hier verankern erfasst.\n\nEinstellen, bis das Bild hier richtig aussieht, dann Hier verankern. In sehr\nanderes Licht gehen und wiederholen: Zwei Punkte legen die echte Beziehung\ndes Buffers fest, und der Weißpunkt hält dazwischen. Eine Zeile unten anklicken,\num zu diesem Punkt zurückzukehren und ihn anzupassen; erneut klicken, um ihn freizugeben.
+A multiplier on the scan's white point, and the control you adjust between\nanchor points: dial it until the picture looks right in the current\nlight, then press Anchor here -- it captures the trimmed value as a new\npoint and resets the trim to 1.	Ein Multiplikator auf den Weißpunkt des Scans und der Regler, den man zwischen\nAnkerpunkten verstellt: einstellen, bis das Bild im aktuellen\nLicht richtig aussieht, dann Hier verankern drücken -- das erfasst den getrimmten Wert als neuen\nPunkt und setzt den Trim auf 1 zurück.
+A multiplier on the exposure the game supplied. 1.00x takes its number\nexactly, and that is the right answer here.\n\nThis is not a fudge factor. If a game needs the trim far from 1 to look\nright, that is evidence the exposure being read is wrong for that game,\nnot that the game wants trimming. Somewhere around 0.8 to 1.25 is honest\ntuning; reaching for 4 means something upstream is broken and the trim is\nhiding it.\n\nYour manual paper white is kept separately and comes back untouched if\nyou switch the option above off.	Ein Multiplikator für die vom Spiel gelieferte Belichtung. 1.00x nimmt genau seine Zahl\nauf, und das ist hier die richtige Antwort.\n\nDies ist kein Schummelfaktor. Wenn ein Spiel den Trim weit entfernt von 1 benötigt, um richtig\nauszusehen, ist das ein Beweis dafür, dass die gelesene Belichtung für dieses Spiel falsch ist,\nnicht, dass das Spiel getrimmt werden möchte. Irgendwo zwischen 0.8 und 1.25 liegt ehrliches\nTuning; das Ansteuern von 4 bedeutet, dass etwas Vorgelagertes defekt ist und der Trim es\nverbirgt.\n\nIhr manuelles Papierweiß wird separat aufbewahrt und bleibt unberührt, wenn\nSie die Option oben ausschalten.
+What the frame is divided by before the model sees it. There is no other white\npoint; this is the whole of it.\n\nThe model was trained on finished frames where white sits at 1. The\nupscaler's output is linear and open-ended, so something has to say where\nwhite is -- and where the game's DLSS buffer is linear HDR, that number is\nrarely anywhere near 1. Measured in Monster Hunter Wilds it takes 16 or more\nbefore the model's detail reaches the frame at all, and the value that suits\na shaded camp is still too small for the same game out in daylight.\n\nToo low and almost every pixel trips the soft knee: the model is shown a\nflat near-white picture, its answer is scaled away, and only its hue\nsurvives -- which reads as a colour cast rather than as lost detail. Too\nhigh and it is shown an underexposed one, its answer degrades, and this same\nnumber multiplies that error on the way out.\n\nRaise it until the picture stops improving. Past that point it does not\nplateau, it gets worse in the other direction.\n\nThis was once a multiplier on a measured white point. The measurement is\ngone: it read scene brightness rather than where white belongs, handed the\nmodel a picture three times too dark, and left the highlight path nothing to\ngive back.\n\nAt strength zero the frame is still bit-identical whatever this says.	Wodurch der Frame geteilt wird, bevor das Modell ihn sieht. Es gibt keinen anderen Weißpunkt;\ndas ist alles.\n\nDas Modell wurde auf fertigen Frames trainiert, in denen Weiß bei 1 liegt. Die\nAusgabe des Upscalers ist linear und nach oben offen, also muss etwas vorgeben, wo\nWeiß ist -- und wo der DLSS-Puffer des Spiels lineares HDR ist, liegt diese Zahl\nselten annähernd bei 1. Gemessen in Monster Hunter Wilds braucht es 16 oder mehr,\nbevor die Details des Modells den Frame überhaupt erreichen, und der Wert, der zu\neinem schattigen Lager passt, ist für dasselbe Spiel im Tageslicht immer noch zu klein.\n\nZu niedrig und fast jedes Pixel löst das Soft Knee aus: dem Modell wird ein\nflaches, fast weißes Bild gezeigt, seine Antwort wird weggeskaliert und nur sein Farbton\nüberlebt -- was als Farbstich und nicht als verlorenes Detail wahrgenommen wird. Zu\nhoch und es wird ein unterbelichtetes Bild gezeigt, seine Antwort verschlechtert sich, und dieselbe\nZahl multipliziert diesen Fehler auf dem Weg nach draußen.\n\nErhöhen Sie es, bis das Bild nicht mehr besser wird. Über diesen Punkt hinaus stagniert es\nnicht, es wird in die andere Richtung schlimmer.\n\nDies war früher ein Multiplikator auf einem gemessenen Weißpunkt. Die Messung ist\nweg: Sie las die Szenenhelligkeit statt wo Weiß hingehört, lieferte dem\nModell ein dreimal zu dunkles Bild und ließ dem Highlight-Pfad nichts, was er\nzurückgeben konnte.\n\nBei Stärke null ist der Frame immer noch bit-identisch, egal was dies sagt.
+The most the pass may move any pixel, as a multiple of what it already was, in\nboth directions -- a pixel may not be brightened past this nor darkened past\nits reciprocal. Lights are where the model has least to say and rescaling its\nanswer does the most damage; 2x leaves detail intact while stopping a strip\nlight turning into a string of coloured cells. Raise it only if bright areas\nlook clipped.	Wie weit der Pass ein Pixel höchstens verändern darf, als Vielfaches seines bisherigen Werts, in\nbeide Richtungen -- ein Pixel darf weder darüber hinaus aufgehellt noch unter den\nKehrwert abgedunkelt werden. Bei Lichtern hat das Modell am wenigsten zu sagen, und das Neuskalieren seiner\nAntwort richtet dort den größten Schaden an; 2x lässt Details intakt und verhindert, dass eine\nLichtleiste zu einer Kette farbiger Zellen wird. Nur erhöhen, wenn helle Bereiche\nabgeschnitten wirken.
+NVIDIA's highlight recovery, from RTX Remix. The model is shown everything\nbrighter than paper white squeezed into the top of its range, so its\nverdict there -- above all its colour -- is made without knowing how\nbright the pixel really is. This hands pixels that were very bright (one\nto eight times paper white) back to the game's own frame, a little at\nfirst and wholly at the top, so a fire keeps its orange and a coloured\nlight keeps its brightness.\n\nIt costs some of the model's detail in bright areas. Shadows and\nmidtones are untouched. Off is the composition as it always was.\n\nOnly offered on a linear HDR buffer, the one case where the model was\nshown a compressed picture.	Highlight-Rückgewinnung von NVIDIA, aus RTX Remix. Das Modell bekommt alles, was\nheller als Papierweiß ist, in den oberen Teil seines Bereichs gequetscht gezeigt, daher\nfällt sein Urteil dort -- vor allem über die Farbe -- ohne zu wissen, wie\nhell das Pixel wirklich ist. Dies gibt sehr helle Pixel (ein- bis\nachtfaches Papierweiß) an den spieleigenen Frame zurück, anfangs ein wenig\nund an der Spitze vollständig, sodass ein Feuer sein Orange und ein farbiges\nLicht seine Helligkeit behält.\n\nEs kostet in hellen Bereichen etwas Modelldetail. Schatten und\nMitteltöne bleiben unberührt. Aus ist die Komposition wie immer.\n\nNur bei einem linearen HDR-Buffer angeboten, dem einzigen Fall, in dem das Modell\nein komprimiertes Bild gezeigt bekam.
+A lamp in the corner: red for dark, green for full light, and the\nshades between, with the reading beside it.\n\nIt is how you see at a glance that the scan is TRACKING rather\nthan merely running. Walk into shade and it should slide toward\nred; step out and it should go green. If it moves the wrong way,\nthat is what the setting above is for.\n\nPurely a readout. It changes nothing.	Eine Lampe in der Ecke: rot für dunkel, grün für volles Licht und die\nZwischenstufen, mit dem Messwert daneben.\n\nSo können Sie auf einen Blick erkennen, ob der Scan TRACKT, anstatt\nnur zu laufen. Gehen Sie in den Schatten und es sollte in Richtung\nRot wandern; treten Sie ins Licht und es sollte grün werden. Wenn es sich in die falsche Richtung bewegt,\nist die Einstellung oben dafür gedacht.\n\nRein eine Anzeige. Es ändert nichts.
+Make the picture look right, then press this -- it captures the current look\nas a point. For the first point use the Paper white slider above; for\nevery point after, move to different light and use the Trim, which the\nAnchor then bakes into a new point.\n\nThe first press calibrates one point -- the white point then\nfollows the scan by ratio from there, as before. Walk into very\ndifferent light, set paper white again, and press it again: the\nsecond point pins down the buffer's real curve and everything\nbetween the two is right, not just near one anchor. Up to eight.\n\nThe table is per game and shareable: one person calibrates a game\nand the numbers are the same for everyone who takes the profile.	Das Bild richtig einstellen, dann dies drücken -- es erfasst den aktuellen Look\nals Punkt. Für den ersten Punkt den Papierweiß-Regler oben verwenden; für\njeden weiteren in anderes Licht gehen und den Trim verwenden, den\nHier verankern dann in einen neuen Punkt übernimmt.\n\nDer erste Druck kalibriert einen Punkt -- der Weißpunkt folgt\ndem Scan von dort an proportional, wie bisher. In sehr\nanderes Licht gehen, Papierweiß erneut einstellen und erneut drücken: Der\nzweite Punkt legt die echte Kurve des Buffers fest, und alles\nzwischen beiden stimmt, nicht nur nahe einem Anker. Bis zu acht.\n\nDie Tabelle gilt pro Spiel und ist teilbar: Eine Person kalibriert ein Spiel,\nund die Zahlen sind für alle gleich, die das Profil übernehmen.
+(the scan is only watching -- the white point above comes from somewhere else)	(der Scan schaut nur zu -- der Weißpunkt oben kommt von woanders her)
+%s scan %.4f  ->  white %.2f%s	%s Scan %.4f  ->  Weiß %.2f%s
+   [editing]	   [Bearbeitung]
+Click a row to edit it with the slider above; click it again to control the live point. > is the point in use now.	Klicken Sie auf eine Zeile, um sie mit dem Schieberegler oben zu bearbeiten; klicken Sie erneut, um den Live-Punkt zu steuern. > ist der aktuell verwendete Punkt.
+Flip this if the picture gets worse in the direction it should be\ngetting better. Most engines store an exposure that falls as\nthe scene brightens; some store its reciprocal, and a buffer\nfound by shape does not say which. Add a second anchor point in\ndifferent light and this is decided for you, so it disappears.	Umschalten, wenn das Bild in die Richtung schlechter wird, in die es\nbesser werden sollte. Die meisten Engines speichern eine Belichtung, die sinkt, wenn\ndie Szene heller wird; manche speichern den Kehrwert, und ein Buffer,\nder nach Form gefunden wurde, verrät nicht, welches. Einen zweiten Ankerpunkt in\nanderem Licht hinzufügen, dann wird dies automatisch entschieden und verschwindet.
+nothing matched yet.	noch nichts abgeglichen.
+%zu. %s -- not read yet	%zu. %s -- noch nicht gelesen
+%zu. %s = %.5f  (seen %.5f..%.5f) %s	%zu. %s = %.5f  (gesehen %.5f..%.5f) %s
+MOVES	BEWEGT
+flat so far	bisher flach
+Shows the pass against itself, so the two can be seen at once rather than\ntoggled and remembered.\n\nSide by side puts the whole frame in each half, untouched on the left and\nedited on the right. Both halves are squeezed horizontally to fit, so it is\nfor looking at rather than playing in.\n\nWipe cuts a single frame at the split and resamples nothing, so the picture\nis the right shape and can be played normally. Drag the split below; it is a\nstored setting and stays put once the menu is closed.\n\nNeither needs the menu open to keep working. A hairline marks the join.	Zeigt den Pass gegen sich selbst, sodass beides gleichzeitig zu sehen ist, statt\numzuschalten und sich zu erinnern.\n\nNebeneinander zeigt den ganzen Frame in jeder Hälfte, unbearbeitet links und\nbearbeitet rechts. Beide Hälften werden horizontal gestaucht, damit sie passen, daher ist es\nzum Ansehen gedacht, nicht zum Spielen.\n\nWischvergleich schneidet einen einzelnen Frame an der Teilung und skaliert nichts um, daher hat das Bild\ndie richtige Form und lässt sich normal spielen. Die Teilung unten ziehen; sie ist eine\ngespeicherte Einstellung und bleibt, wo sie ist, wenn das Menü geschlossen wird.\n\nBeide funktionieren auch ohne geöffnetes Menü weiter. Eine Haarlinie markiert die Nahtstelle.
+Writes which side is which onto the frame itself, so a screenshot still\nsays so after it has left this machine. Drawn into the picture's own\nplane: in the wipe the split reveals and hides the label exactly as it\ndoes the images, and there is nothing to drag. Swap sides moves the\nlabels with their pictures.	Schreibt auf den Frame selbst, welche Seite welche ist, sodass ein Screenshot es auch\nnoch zeigt, nachdem er diesen Rechner verlassen hat. In die Ebene des Bildes selbst\ngezeichnet: Beim Wischvergleich zeigt und verbirgt die Teilung die Beschriftung genau wie\ndie Bilder, und es gibt nichts zu ziehen. Seiten tauschen bewegt die\nBeschriftungen mit ihren Bildern.
+Puts the edited frame on the other side.\n\nWorth doing once you have decided which you prefer: the eye is not\neven-handed about left and right, and a difference can read as an\nimprovement purely from where it sits. If the same side still wins after\nswapping, it is the pass you are seeing and not the placement.	Legt den bearbeiteten Frame auf die andere Seite.\n\nLohnt sich, sobald man sich entschieden hat, was man bevorzugt: Das Auge ist links\nund rechts nicht unparteiisch, und ein Unterschied kann allein durch\nseine Position wie eine Verbesserung wirken. Gewinnt nach dem Tauschen weiter\ndieselbe Seite, sieht man den Pass und nicht die Platzierung.
+How much of the frame each half shows.\n\nA half is half as wide as the frame and just as tall, so the frame\ncannot fill it and keep its shape.\n\nAt 1 the whole frame is there at its right proportions, with bars above\nand below. At 2 the half is filled and the sides are cropped away\ninstead. Anything between trades one for the other.	Wie viel vom Frame jede Hälfte zeigt.\n\nEine Hälfte ist halb so breit wie der Frame und genauso hoch, daher kann der Frame\nsie nicht füllen und seine Form behalten.\n\nBei 1 ist der ganze Frame in richtigen Proportionen zu sehen, mit Balken oben\nund unten. Bei 2 ist die Hälfte gefüllt, und stattdessen werden die Seiten\nabgeschnitten. Werte dazwischen tauschen das eine gegen das andere.
+FSR 3 Upscaler Manual Tuning	Manuelles Tuning des FSR-3-Upscalers
+Advanced FSR FG Settings	Erweiterte FSR-FG-Einstellungen
+Extended XeFG Settings	Erweiterte XeFG-Einstellungen
+Advanced OptiFG Settings	Erweiterte OptiFG-Einstellungen
+Active DispatchFlags	Aktive DispatchFlags
+FoV & Camera Values	FoV & Kamera-Werte
+VRR Frame Cap Calculator	VRR Frame-Cap-Rechner
+Advanced DA Parameters	Erweiterte DA-Parameter
+Motion Adaptive Sharpness	Bewegungsadaptive Schärfe
+Advanced Init Flags	Erweiterte Init-Flags
+Mipmap Bias	Mipmap Bias
+Anisotropic Filtering	Anisotrope Filterung
+Keyboard Input Fix	Tastatureingabe-Korrektur
+Enable Input Fix	Eingabekorrektur aktivieren
+Hands frame generation a motion field estimated from the presented\nframes instead of zero motion; the same estimate DLSS-NR uses when\nboth are on	Übergibt Frame Generation ein aus den angezeigten Frames geschätztes\nBewegungsfeld statt Nullbewegung; dieselbe Schätzung, die DLSS-NR nutzt, wenn\nbeide aktiv sind
+Incoherent motion	Inkohärente Bewegung
+Repeats frames instead of interpolating them where the motion breaks up:\nwhile more than this share of neighbouring motion samples disagree and the\nmedian motion exceeds 1%% of the image width (parallax, disocclusion, thin\nobjects over a far background). A uniform pan keeps interpolating at any\nspeed. 25%% is a starting point; lower repeats more. 0 is off	Wiederholt Frames, statt sie zu interpolieren, wo die Bewegung zerfällt:\nsolange mehr als dieser Anteil benachbarter Bewegungsproben abweicht und die\nmediane Bewegung 1 %% der Bildbreite übersteigt (Parallaxe, Disokklusion, dünne\nObjekte vor fernem Hintergrund). Ein gleichmäßiger Schwenk wird bei jeder\nGeschwindigkeit weiter interpoliert. 25 %% ist ein Ausgangspunkt; niedriger wiederholt mehr. 0 ist aus
+Fast motion cap	Grenze für schnelle Bewegung
+Repeats frames whenever the median motion exceeds this many pixels per\nbase frame, however coherent, like AMD's Fast Motion Response. With\nFSR FG, every repeat restarts its optical flow for several frames, so\nkeep it above normal camera speed. 0 is no cap	Wiederholt Frames, sobald die mediane Bewegung diese Pixelzahl pro\nBasis-Frame übersteigt, egal wie kohärent, wie Fast Motion Response von AMD. Mit\nFSR FG startet jede Wiederholung seinen Optical Flow für mehrere Frames neu, daher\nüber normaler Kamerageschwindigkeit halten. 0 ist keine Grenze
+Minimum base fps	Minimale Basis-FPS
+HUD depth	HUD-Tiefe
+Detects the HUD (pixels that stay still while the scene around\nthem moves) and hands it to frame generation as near depth, so the\nscene beside it is not blended with it and its own motion is kept.\nNeeds Synthesized motion	Erkennt das HUD (Pixel, die stillstehen, während sich die Szene um sie\nherum bewegt) und übergibt es Frame Generation als nahe Tiefe, damit die\nSzene daneben nicht mit ihm vermischt wird und seine eigene Bewegung erhalten bleibt.\nBenötigt "Synthetische Bewegung"
+HUD layer	HUD-Ebene
+Experimental, FSR FG output only. Composes the detected HUD over\ngenerated frames from the real frame, through FSR FG's own UI layer,\nso it is never warped; real frames are unchanged. Off while "Disable\nUI texture" is on	Experimentell, nur FSR-FG-Ausgabe. Legt das erkannte HUD aus dem echten Frame über\ngenerierte Frames, über die eigene UI-Ebene von FSR FG,\nsodass es nie verzerrt wird; echte Frames bleiben unverändert. Aus, solange "Disable\nUI texture" aktiv ist
+HUD margin	HUD-Rand
+How far around the detected HUD, in pixels, generated frames show\nthe real frame, to cover the smear beside each element; the outer\nhalf fades out. It covers the smear fully up to this many pixels of\nmotion per base frame. Around the HUD the background then moves at\nthe base frame rate. 0 is the detected HUD alone	Wie weit um das erkannte HUD herum, in Pixeln, generierte Frames\nden echten Frame zeigen, um die Schliere neben jedem Element zu verdecken; die äußere\nHälfte blendet aus. Die Schliere wird bis zu so vielen Pixeln Bewegung pro\nBasis-Frame vollständig verdeckt. Um das HUD bewegt sich der Hintergrund dann mit\nder Basis-Framerate. 0 ist nur das erkannte HUD
+How the model's work is brought back up when it ran below the frame's size.\n\nClassic composes the model's small picture directly against the full-size\nframe. Those two disagree by the shrink's blur as well as by the model's edit,\nand the composition cannot tell them apart -- it reads the blur as brightness\nthe frame has and the model never saw. The lower the model resolution the\nlarger that error, and it is the colour shift that shows up at half size.\n\nMatched residual carries up only the model's difference and lays it on the\nframe's own proxy, so both pictures being compared are full size and the only\nthing that came from the small raster is the edit itself.\n\nMatched residual, sharp is the same, with the model's difference enlarged by\na sharper filter (Catmull-Rom, held to its neighbours so it cannot ring), so\nmore of the fine structure the model drew at the small size survives.\n\nMatched residual + DLSS hands the model's difference to a private DLSS Super\nResolution, which builds it up over frames and so can return detail finer\nthan the small raster holds. D3D12 only, and it needs nvngx_dlss.dll. Where it\ncannot run -- native Vulkan, before the upscaler, no real depth and motion,\nwhile it starts -- Matched residual runs, and the line below says why.\n\nNo effect at full size or above: there is no residual to carry and all four are\nidentical (supersampling brings its answer down to frame size before this).\n\nFrom hhkbble's multi-pass work on this fork; the DLSS enlargement is wilsjo2's.	Wie die Arbeit des Modells wieder hochgebracht wird, wenn es unter der Frame-Größe lief.\n\nKlassisch setzt das kleine Bild des Modells direkt gegen den Frame in voller Größe.\nDie beiden unterscheiden sich durch die Unschärfe der Verkleinerung und durch die Bearbeitung des Modells,\nund die Komposition kann das nicht auseinanderhalten -- sie liest die Unschärfe als Helligkeit,\ndie der Frame hat und das Modell nie gesehen hat. Je niedriger die Modellauflösung, desto\ngrößer der Fehler, und das ist die Farbverschiebung, die bei halber Größe auftaucht.\n\nAngepasster Restwert bringt nur die Differenz des Modells hoch und legt sie auf den\neigenen Proxy des Frames, sodass beide verglichenen Bilder volle Größe haben und das Einzige,\nwas aus dem kleinen Raster stammt, die Bearbeitung selbst ist.\n\nAngepasster Restwert, scharf ist dasselbe, wobei die Differenz des Modells mit\neinem schärferen Filter vergrößert wird (Catmull-Rom, an seine Nachbarn gebunden, damit kein Ringing entsteht),\nsodass mehr von der feinen Struktur überlebt, die das Modell in kleiner Größe gezeichnet hat.\n\nAngepasster Restwert + DLSS übergibt die Differenz des Modells an ein privates DLSS Super\nResolution, das sie über mehrere Frames aufbaut und so feinere Details liefern kann,\nals das kleine Raster enthält. Nur D3D12, und es braucht nvngx_dlss.dll. Wo es\nnicht laufen kann -- natives Vulkan, vor dem Upscaler, keine echte Tiefe und Bewegung,\nwährend es startet --, läuft Angepasster Restwert, und die Zeile darunter nennt den Grund.\n\nKeine Wirkung bei voller Größe oder darüber: Es gibt keinen Restwert zu übertragen, und alle vier sind\nidentisch (Supersampling bringt seine Antwort vorher auf Frame-Größe herunter).\n\nAus der Multi-Pass-Arbeit von hhkbble an diesem Fork; die DLSS-Vergrößerung stammt von wilsjo2.
+# Transfer 2, Matched residual + DLSS: the status line under Enlargement (dlss-enlargement.md).
+Waiting for the first frame.	Warten auf den ersten Frame.
+D3D12 only: native Vulkan runs Matched residual.	Nur D3D12: Auf nativem Vulkan läuft Angepasster Restwert.
+The model runs at full size or above: nothing to enlarge, Matched residual runs.	Das Modell läuft in voller Größe oder darüber: nichts zu vergrößern, Angepasster Restwert läuft.
+Before the upscaler: Matched residual runs.	Vor dem Upscaler: Angepasster Restwert läuft.
+No real depth and motion here: Matched residual runs.	Hier keine echte Tiefe und Bewegung: Angepasster Restwert läuft.
+The guides could not be brought to the model's size: Matched residual runs.	Die Guides konnten nicht auf die Größe des Modells gebracht werden: Angepasster Restwert läuft.
+Debug view shows the model output: Matched residual runs.	Die Debug-Ansicht zeigt die Modellausgabe: Angepasster Restwert läuft.
+Starting DLSS: Matched residual until it is ready.	DLSS startet: Angepasster Restwert, bis es bereit ist.
+DLSS failed (see the log): Matched residual until Retry.	DLSS fehlgeschlagen (siehe Log): Angepasster Restwert bis Wiederholen.
+Running: DLSS enlarges the model's edit.	Läuft: DLSS vergrößert die Bearbeitung des Modells.
+The model is below a third of the frame, further than DLSS enlarges: Matched residual runs.	Das Modell liegt unter einem Drittel des Frames, weiter als DLSS vergrößert: Angepasster Restwert läuft.
+The driver proxy runs the model without the resolve: nothing is enlarged.	Der Treiber-Proxy führt das Modell ohne Resolve aus: Es wird nichts vergrößert.
+Stops generating frames while the base frame rate is below this,\nand resumes once it recovers. 0 is off. Not a frame rate target:\nabove the game's base frame rate, frame generation never runs	Stoppt die Frame-Erzeugung, solange die Basis-Framerate darunter liegt,\nund setzt fort, sobald sie sich erholt. 0 ist aus. Kein Framerate-Ziel:\nliegt der Wert über der Basis-Framerate des Spiels, läuft Frame Generation nie
+nvngx.dll_dlssnr.dll is missing	nvngx.dll_dlssnr.dll fehlt
+nvngx.dll_dlssnr.dll would not load	nvngx.dll_dlssnr.dll ließ sich nicht laden
+the forwarder is missing its exports	dem Forwarder fehlen seine Exporte
+nvngx.dll_dlssnr.dll is from a different build	nvngx.dll_dlssnr.dll stammt aus einem anderen Build
+the model faulted inside its own code; off for this session	das Modell ist in seinem eigenen Code abgestürzt; für diese Sitzung aus
+the NGX core would not initialise	der NGX-Kern ließ sich nicht initialisieren
+the NGX core has no capability parameters	der NGX-Kern hat keine Capability-Parameter
+the NGX core refused its capability parameters	der NGX-Kern hat seine Capability-Parameter abgelehnt
+Single pass (master settings)	Einzelner Pass (Haupteinstellungen)
+Restart required: existing NR work has no submission lifetime evidence; single/master retained	Neustart erforderlich: Für bestehende NR-Arbeit fehlt der Nachweis zur Lebensdauer der Übermittlung; einzelner Pass/Haupteinstellungen beibehalten
+Another NR recording scope owns the resources; new recording refused	Ein anderer NR-Aufzeichnungsbereich besitzt die Ressourcen; neue Aufzeichnung abgelehnt
+Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may decrease)	Warten auf Reset der vorherigen NR-Aufzeichnung und alle GPU-Fences; neue Aufzeichnung übersprungen (Durchsatz kann sinken)
+More than three earlier NR recordings still on the GPU; new recording skipped this frame	Mehr als drei frühere NR-Aufzeichnungen noch auf der GPU; neue Aufzeichnung in diesem Frame übersprungen
+Earlier NR recordings still running on two GPU queues; new recording skipped until one finishes	Frühere NR-Aufzeichnungen laufen noch auf zwei GPU-Queues; neue Aufzeichnung übersprungen, bis eine fertig ist
+This command list already holds an unsubmitted NR recording; new recording skipped	Diese Command List enthält bereits eine nicht übermittelte NR-Aufzeichnung; neue Aufzeichnung übersprungen
+An NR recording is still waiting for the game to submit it; new recordings skipped until it runs or is discarded	Eine NR-Aufzeichnung wartet noch darauf, dass das Spiel sie übermittelt; neue Aufzeichnungen übersprungen, bis sie läuft oder verworfen wird
+The GPU is eight NR recordings behind; new recording skipped this frame	Die GPU liegt acht NR-Aufzeichnungen zurück; neue Aufzeichnung in diesem Frame übersprungen
+Waiting for the previous NR recording to finish on the GPU (one queue not yet established, or more than one in use)	Warten, bis die vorherige NR-Aufzeichnung auf der GPU fertig ist (eine Queue noch nicht festgestellt oder mehr als eine in Gebrauch)
+Retired resource limit reached: pending/unknown GPU recordings retained; rebuild refused until completion or restart	Limit für ausgemusterte Ressourcen erreicht: ausstehende/unbekannte GPU-Aufzeichnungen beibehalten; Neuaufbau bis zum Abschluss oder Neustart abgelehnt
+Driver proxy uses one pass and master settings; overrides are inactive	Der Treiber-Proxy nutzt einen Pass und die Haupteinstellungen; Überschreibungen sind inaktiv
+chain generation refused: insufficient or unavailable adapter headroom (retry latched)	Kettenerzeugung abgelehnt: Adapter-Reserve unzureichend oder nicht verfügbar (wartet auf "Wiederholen")
+Chain generation waits for the previous one to be freed (adapter headroom); NR resumes once it is	Die Kettenerzeugung wartet, bis die vorherige freigegeben ist (Adapter-Reserve); NR läuft weiter, sobald das geschieht
+chain generation waits for the previous one to be freed (adapter headroom)	Kettenerzeugung wartet, bis die vorherige freigegeben ist (Adapter-Reserve)
+chain scratch initialization failed; retry latched	Initialisierung des Ketten-Scratch-Speichers fehlgeschlagen; wartet auf "Wiederholen"
+nvngx_dlssnr.dll was not found beside OptiScaler or the game	nvngx_dlssnr.dll wurde weder neben OptiScaler noch neben dem Spiel gefunden
+the model would not initialise	das Modell ließ sich nicht initialisieren
+Additional pass refused: adapter budget/headroom unavailable or insufficient (retry latched)	Zusätzlicher Pass abgelehnt: Adapter-Budget/-Reserve nicht verfügbar oder unzureichend (wartet auf "Wiederholen")
+Additional pass initialization failed (retry latched); last successful answer retained	Initialisierung des zusätzlichen Passes fehlgeschlagen (wartet auf "Wiederholen"); letzte erfolgreiche Antwort beibehalten
+the colour codec would not compile	der Farb-Codec ließ sich nicht kompilieren
+the game's depth or motion vectors could not be made readable	Tiefe oder Bewegungsvektoren des Spiels konnten nicht lesbar gemacht werden
+the proxy path could not run the model	der Proxy-Pfad konnte das Modell nicht ausführen
+All requested passes completed; one final composition	Alle angeforderten Passes abgeschlossen; eine abschließende Komposition
+the model refused to run	das Modell hat die Ausführung verweigert
+the present hook's backbuffer copy could not be created	die Backbuffer-Kopie des Present-Hooks konnte nicht erstellt werden
+the present hook's dummy temporals could not be created	die Platzhalter-Temporaldaten des Present-Hooks konnten nicht erstellt werden
+FSR1	FSR1
+Bicubic	Bicubic
+Catmull-Rom	Catmull-Rom
+Lanczos2	Lanczos2
+Lanczos3	Lanczos3
+Kaiser2	Kaiser2
+Kaiser3	Kaiser3
+MAGIC	MAGIC
+x	x
+# 2026-10-04: the redesigned menu's tabs, groups, card and section titles, and the Custom tab picker.
+MAIN	HAUPT
+SYSTEM	SYSTEM
+ADVANCED	ERWEITERT
+Custom	Benutzerdefiniert
+Upscaling	Upscaling
+Neural Rendering	Neural Rendering
+Frame Gen	Frame Gen
+Latency	Latenz
+Status	Status
+Textures	Texturen
+Compatibility	Kompatibilität
+# 2026-10-23: upstream 76219dd4/c220ad9e split the Compatibility tab into these cards; the technical names stay.
+Startup	Start
+Hooks	Hooks
+Spoofing	Spoofing
+Shaders	Shader
+Menu	Menü
+Help / Status	Hilfe / Status
+Accent Colour	Akzentfarbe
+Background Colour	Hintergrundfarbe
+Custom Tab	Eigener Tab
+DLSSG Settings	DLSSG-Einstellungen
+Detected	Erkannt
+FSR Common Settings	Allgemeine FSR-Einstellungen
+FSR FG Settings	FSR-FG-Einstellungen
+FSR-FG Inputs	FSR-FG-Eingaben
+Frame Generation	Frame Generation
+Frame Generation (Enabler + FFX)	Frame Generation (Enabler + FFX)
+Frame Generation (FSR-FG Inputs)	Frame Generation (FSR-FG-Eingaben)
+Frame Generation (FSR3-FG via Nukem's DLSSG)	Frame Generation (FSR3-FG über Nukems DLSSG)
+Frame Generation (FSR3-MFG via DLSS Enabler)	Frame Generation (FSR3-MFG über DLSS Enabler)
+Frame Generation (FSRFG via FFX)	Frame Generation (FSRFG über FFX)
+Frame Generation (Streamline FG Inputs)	Frame Generation (Streamline FG-Eingaben)
+Framerate	Framerate
+Hooks / Config	Hooks / Konfiguration
+Init Flags	Init-Flags
+Init Flags (active)	Init-Flags (aktiv)
+Low Latency	Niedrige Latenz
+Nvngx FG replacement	Nvngx-FG-Ersatz
+OptiFG Settings	OptiFG-Einstellungen
+Output Scaling	Ausgabeskalierung
+Per shader GPU times	GPU-Zeiten pro Shader
+Plugins / Startup	Plugins / Start
+Reprojection Settings	Reprojektionseinstellungen
+Shaders / Limits	Shader / Grenzen
+Sharpness	Schärfe
+Spoofing / Hooking	Spoofing / Hooks
+Streamline FG Inputs	Streamline-FG-Eingaben
+System	System
+Theme and Color	Design und Farbe
+Upscale Ratio Override	Upscale-Verhältnis überschreiben
+Upscalers	Upscaler
+V-Sync	V-Sync
+XeFG Settings	XeFG-Einstellungen
+fakenvapi	fakenvapi
+
+# 2026-10-04: model cadence (docs/dlssnr/design/model-cadence.md): the control, its help, the GPU timing
+# kind line and the status line under the control (DlssNr::Cadence::Describe).
+Model cadence	Modell-Kadenz
+Every frame	Jeder Frame
+Every 2nd frame	Jeder 2. Frame
+Every 3rd frame	Jeder 3. Frame
+Every 4th frame	Jeder 4. Frame
+Allow with frame generation	Mit Frame Generation erlauben
+Runs the model on one frame in N and carries its edit along the game's motion onto the frames in\nbetween. It buys frame rate and costs stability in motion: detail can pop each time the model\nruns again, and what a moving object uncovers can ghost, or show the plain frame, until then.\nFrame times alternate long and short. A still scene looks as it does with every frame.\n\nIt needs the game's own depth and motion, so it stands down before the upscaler, on frames\nwithout them, with Hold frame or a capture, and while frame generation is active unless allowed\nbelow. Off costs nothing.	Führt das Modell auf einem von N Frames aus und trägt seine Bearbeitung entlang der Spielbewegung auf die Frames\ndazwischen. Das bringt Framerate und kostet Stabilität in Bewegung: Details können jedes Mal springen, wenn das Modell\nerneut läuft, und was ein bewegtes Objekt freilegt, kann bis dahin nachziehen oder den unbearbeiteten Frame zeigen.\nFrame-Zeiten wechseln zwischen lang und kurz. Eine ruhige Szene sieht aus wie mit "Jeder Frame".\n\nEs braucht Tiefe und Bewegung des Spiels und setzt daher vor dem Upscaler aus, bei Frames\nohne sie, mit Frame halten oder einer Aufnahme, und solange Frame Generation aktiv ist, sofern unten nicht\nerlaubt. Aus kostet nichts.
+Off by default. Frame generation interpolates between frames whose cost alternates, and DLSS-G\nwas measured unable to pace through that: stutter and flashes that grow with the multiplier and\nthe cadence. Turn it on to measure it, not to play.	Standardmäßig aus. Frame Generation interpoliert zwischen Frames mit wechselnden Kosten, und DLSS-G\nkonnte dabei nachweislich nicht gleichmäßig takten: Ruckler und Blitze, die mit dem Multiplikator und\nder Kadenz zunehmen. Zum Messen einschalten, nicht zum Spielen.
+A carried frame of model cadence %u: no model call, so no model time.	Ein übertragener Frame der Modell-Kadenz %u: kein Modellaufruf, also keine Modellzeit.
+A model frame of model cadence %u. With an interval that is a multiple of the cadence, every sample is the same kind of frame.	Ein Modell-Frame der Modell-Kadenz %u. Mit einem Intervall, das ein Vielfaches der Kadenz ist, ist jeder Messwert dieselbe Art Frame.
+Running the model every 4th frame; the frames between carry its last edit.	Das Modell läuft jeden 4. Frame; die Frames dazwischen tragen seine letzte Bearbeitung.
+Running the model every 3rd frame; the frames between carry its last edit.	Das Modell läuft jeden 3. Frame; die Frames dazwischen tragen seine letzte Bearbeitung.
+Running the model every 2nd frame; the frame between carries its last edit.	Das Modell läuft jeden 2. Frame; der Frame dazwischen trägt seine letzte Bearbeitung.
+The model runs this frame: no edit is stored to carry.	Das Modell läuft in diesem Frame: keine gespeicherte Bearbeitung zum Übertragen.
+The model runs this frame: a history reset is pending.	Das Modell läuft in diesem Frame: Ein Verlaufs-Reset steht aus.
+The model runs this frame: its size, format, route or settings changed.	Das Modell läuft in diesem Frame: Größe, Format, Route oder Einstellungen haben sich geändert.
+The model runs this frame: the pass did not run for a while.	Das Modell läuft in diesem Frame: Der Pass lief eine Weile nicht.
+The model runs every frame: the pass ran more than once in one present.	Das Modell läuft in jedem Frame: Der Pass lief mehr als einmal in einem Present.
+Off: the model runs every frame.	Aus: Das Modell läuft in jedem Frame.
+The model runs every frame: model cadence is not available on native Vulkan.	Das Modell läuft in jedem Frame: Modell-Kadenz ist auf nativem Vulkan nicht verfügbar.
+The model runs every frame: model cadence does not run with the driver proxy.	Das Modell läuft in jedem Frame: Modell-Kadenz läuft nicht mit dem Treiber-Proxy.
+The model runs every frame: this build has no model cadence shader.	Das Modell läuft in jedem Frame: Diesem Build fehlt der Shader für Modell-Kadenz.
+The model runs every frame: this route does not present through OptiScaler's swapchain, so model cadence cannot count frames.	Das Modell läuft in jedem Frame: Diese Route präsentiert nicht über die Swapchain von OptiScaler, daher kann Modell-Kadenz keine Frames zählen.
+The model runs every frame: model cadence does not run before the upscaler.	Das Modell läuft in jedem Frame: Modell-Kadenz läuft nicht vor dem Upscaler.
+The model runs every frame: this frame has no game depth and motion to carry the edit with.	Das Modell läuft in jedem Frame: Dieser Frame hat keine Tiefe und Bewegung des Spiels, mit denen die Bearbeitung übertragen werden könnte.
+The model runs every frame: frame generation is active (see Allow with frame generation).	Das Modell läuft in jedem Frame: Frame Generation ist aktiv (siehe Mit Frame Generation erlauben).
+The model runs every frame while Hold frame is on.	Das Modell läuft in jedem Frame, solange Frame halten an ist.
+The model runs every frame while a capture is running.	Das Modell läuft in jedem Frame, solange eine Aufnahme läuft.
+The model runs every frame: the model cadence surfaces could not be allocated.	Das Modell läuft in jedem Frame: Die Oberflächen für Modell-Kadenz konnten nicht alloziert werden.
+Waiting for the pass to run.	Warten auf den Pass.
+
+# Peripheral compression (docs/dlssnr/design/peripheral-compression.md)
+Peripheral compression	Randkompression
+Centre band	Mittelband
+Packed extent	Gepackte Ausdehnung
+Packed model input	Gepackte Modelleingabe
+Experimental. The model's input is packed denser in the centre than at the edges, so at the\nsame cost the centre keeps full detail and the edges give some up. Its answer is unpacked\nbefore it is composed; the frame itself is untouched.\n\nThe defaults, 80 and 90, cost what a Model resolution of 90 costs, so that is the\ncomparison to make, not 100. Matched residual is used at full model resolution too;\nClassic blurs colour at the edges here.\n\nD3D12, after the upscaler or at present. Not above Model resolution 100 and not with the\ndriver proxy. Moving a slider restarts the model's history; a new packed size rebuilds it\nafter a moment.	Experimentell. Die Eingabe des Modells wird in der Mitte dichter gepackt als an den Rändern, sodass bei\ngleichen Kosten die Mitte volle Details behält und die Ränder etwas abgeben. Seine Antwort wird vor der\nKomposition entpackt; der Frame selbst bleibt unberührt.\n\nDie Standardwerte, 80 und 90, kosten so viel wie eine Modellauflösung von 90, also ist das der\nrichtige Vergleich, nicht 100. Angepasster Restwert wird auch bei voller Modellauflösung verwendet;\nKlassisch verwischt hier die Farbe an den Rändern.\n\nD3D12, nach dem Upscaler oder beim Present. Nicht über Modellauflösung 100 und nicht mit dem\nTreiber-Proxy. Einen Regler zu bewegen startet den Modellverlauf neu; eine neue gepackte Größe baut das Modell\nnach kurzer Zeit neu auf.
+How much of each axis, around the middle, the model sees at full density.	Wie viel jeder Achse um die Mitte herum das Modell in voller Dichte sieht.
+How much of each axis the model's input spans, before Model resolution. Everything past the\ncentre is squeezed into the rest, to no less than half its size: this has to be at least\nhalfway between the centre band and 100.	Wie viel jeder Achse die Eingabe des Modells abdeckt, vor der Modellauflösung. Alles jenseits der\nMitte wird in den Rest gequetscht, auf nicht weniger als die Hälfte seiner Größe: Dies muss mindestens\nhalb zwischen Mittelband und 100 liegen.
+Active: the model works at %ux%u for a %ux%u frame, %.0f percent of the pixels it would work on without it.	Aktiv: Das Modell arbeitet mit %ux%u für einen %ux%u-Frame, %.0f Prozent der Pixel, die es ohne sie bearbeiten würde.
+Not active: %s.	Nicht aktiv: %s.
+Peripheral compression is running, so this applies at full model resolution too.	Randkompression läuft, daher gilt dies auch bei voller Modellauflösung.
+Packed model input: what the model was handed, edges squeezed, stretched over the frame.	Gepackte Modelleingabe: was das Modell bekam, Ränder gequetscht, über den Frame gestreckt.
+the frame is too small to lay out	der Frame ist zu klein für das Layout
+supersampling (Model resolution above 100) is not supported with peripheral compression	Supersampling (Modellauflösung über 100) wird mit Randkompression nicht unterstützt
+the centre band must be at least 10 and smaller than the packed extent, which must be below 100	das Mittelband muss mindestens 10 und kleiner als die gepackte Ausdehnung sein, die unter 100 liegen muss
+the edges would be squeezed below half their size, which aliases: widen the packed extent or narrow the centre band (packed extent x 2 must be at least 100 + centre band)	die Ränder würden unter die Hälfte ihrer Größe gequetscht, was Aliasing erzeugt: gepackte Ausdehnung vergrößern oder Mittelband verkleinern (gepackte Ausdehnung x 2 muss mindestens 100 + Mittelband sein)
+the packed model would be under a quarter of the frame: raise Model resolution or the packed extent	das gepackte Modell läge unter einem Viertel des Frames: Modellauflösung oder gepackte Ausdehnung erhöhen
+less than one packed pixel would be left on a side of the centre band	auf einer Seite des Mittelbands bliebe weniger als ein gepacktes Pixel übrig
+not on the before-upscale stage	nicht in der Phase vor dem Upscaler
+not with the driver proxy (UseProxy)	nicht mit dem Treiber-Proxy (UseProxy)
+this build has no pack/unpack shader	diesem Build fehlt der Pack-/Entpack-Shader
+the pack/unpack pass could not be built or run on this device	der Pack-/Entpack-Pass konnte auf diesem Gerät nicht erstellt oder ausgeführt werden
+Peripheral compression is running: Matched residual runs.	Randkompression läuft: Angepasster Restwert läuft.
+The model runs every frame: model cadence does not run with replace curves.	Das Modell läuft in jedem Frame: Modell-Kadenz läuft nicht mit Ersetzungskurven.
+
+# Measure detail
+Measure detail	Detail messen
+Measure detail: failed to initialize compute pass	Detail messen: Compute-Pass konnte nicht initialisiert werden
+Cancel	Abbrechen
+Measures NR's output on the scene on screen at the current settings for 60 evaluations, against the game's own frame (ideally with Hold frame on):\n  - Detail: fine band detail added (sigma ~1.2 px vs ~3 px)\n  - Flicker: frame-to-frame output change beyond input change\n  - Colour: saturation change and warmth shift\n  - Shadows: darkening and crushed share\nResults are compared against the previous measurement.	Misst die NR-Ausgabe für die Szene auf dem Bildschirm mit den aktuellen Einstellungen über 60 Auswertungen, gegen den spieleigenen Frame (idealerweise mit Frame halten an):\n  - Detail: hinzugefügtes Feinband-Detail (Sigma ~1.2 px vs. ~3 px)\n  - Flimmern: Ausgabeänderung von Frame zu Frame über die Eingabeänderung hinaus\n  - Farbe: Sättigungsänderung und Wärmeverschiebung\n  - Schatten: Abdunklung und abgesoffener Anteil\nErgebnisse werden mit der vorherigen Messung verglichen.
+Measure detail stopped: this command list cannot be tracked (see the log).	Detail messen gestoppt: Diese Command List kann nicht verfolgt werden (siehe Log).
+Measure detail stopped: no sample completed (see the log).	Detail messen gestoppt: Kein Messwert abgeschlossen (siehe Log).
+Measure detail: the scene moved, too few still frames (turn on Hold frame).	Detail messen: Die Szene hat sich bewegt, zu wenige ruhige Frames (Frame halten einschalten).
+# 2026-10-12: upstream's Quirks tab (b97dd476) and the Open Wiki button (899b9488), merged from optiscaler/master.
+Quirks	Eigenheiten
+Quirks / ASI	Eigenheiten / ASI
+Loaded ASI Plugins	Geladene ASI-Plugins
+Open Wiki	Wiki öffnen
+Compatibility list, known issues and FG options explained	Kompatibilitätsliste, bekannte Probleme und FG-Optionen erklärt
+# 2026-10-13: the session guard (docs/dlssnr/design/session-guard.md).
+Enable anyway	Trotzdem aktivieren
+Neural Rendering is off for this session. Your settings are unchanged.	Neural Rendering ist für diese Sitzung aus. Die Einstellungen bleiben unverändert.
+The last session ended without closing, soon after the model started.	Die letzte Sitzung endete ohne Schließen, kurz nachdem das Modell gestartet war.
+The last two sessions ended without closing.	Die letzten beiden Sitzungen endeten ohne Schließen.
+An earlier session ended without closing, and this has not been confirmed since.	Eine frühere Sitzung endete ohne Schließen, und das wurde seitdem nicht bestätigt.
+# 2026-10-30: the NR minimum-driver gate (docs/dlssnr/design/driver-gate.md).
+Neural Rendering is off for this session: it needs NVIDIA driver %s or newer (%s or newer recommended), and this one is %s. Your settings are unchanged.	Neural Rendering ist für diese Sitzung aus: Es braucht NVIDIA-Treiber %s oder neuer (%s oder neuer empfohlen), dieser ist %s. Die Einstellungen bleiben unverändert.
+this NVIDIA driver is too old for Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	dieser NVIDIA-Treiber ist zu alt für Neural Rendering; auf 610.88 oder neuer aktualisieren (616.64 oder neuer empfohlen)
+NGX answered FAIL_OutOfDate: this NVIDIA driver cannot run Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	NGX meldete FAIL_OutOfDate: Dieser NVIDIA-Treiber kann Neural Rendering nicht ausführen; auf 610.88 oder neuer aktualisieren (616.64 oder neuer empfohlen)
+The last session ended without closing. If it was a crash, this one may too.	Die letzte Sitzung endete ohne Schließen. Falls es ein Absturz war, kann diese auch abstürzen.
+# 2026-10-14: session guard v2: how the last session ended, and the numbers line.
+The last session ended with an error soon after the model started.	Die letzte Sitzung endete kurz nach dem Start des Modells mit einem Fehler.
+The last session ended with an error. If it was a crash, this one may too.	Die letzte Sitzung endete mit einem Fehler. Falls es ein Absturz war, kann diese auch abstürzen.
+The last session crashed while the model was running.	Die letzte Sitzung stürzte ab, während das Modell lief.
+The last session crashed, long after the model started. If the next one does too, Neural Rendering will be switched off.	Die letzte Sitzung stürzte lange nach dem Start des Modells ab. Stürzt auch die nächste ab, wird Neural Rendering abgeschaltet.
+The graphics device was lost while the model was running in the last session.	Das Grafikgerät ging verloren, während das Modell in der letzten Sitzung lief.
+The graphics device was lost in the last session, long after the model started. If it happens again, Neural Rendering will be switched off.	Das Grafikgerät ging in der letzten Sitzung verloren, lange nach dem Start des Modells. Passiert es erneut, wird Neural Rendering abgeschaltet.
+Exception 0x%08X after the model had run for %lld s.	Ausnahme 0x%08X, nachdem das Modell %lld s gelaufen war.
+Exit code %u after the model had run for %lld s.	Exit-Code %u, nachdem das Modell %lld s gelaufen war.
+The model had run for %lld s.	Das Modell war %lld s gelaufen.
+# 2026-10-13: the pulse metric (docs/dlssnr/design/pulse-metric.md): the control under Compare and its help.
+Measure the light step	Lichtsprung messen
+How far the picture's light moves from one frame to the next because of the edit: the\nchange of log2(output light / frame light), in stops, averaged over two seconds.\nFrames where the model ran and frames where model cadence carried its edit are kept\napart, so the step on the model's frames against the carried ones is the cadence's\npulse as a number. A still scene reads cleanest; a pan adds its own changes.\n\nOne small measuring pass a frame while on. Also logged every 10 seconds.	Wie weit sich das Licht des Bildes wegen der Bearbeitung von einem Frame zum nächsten bewegt: die\nÄnderung von log2(Ausgabelicht / Frame-Licht), in Blendenstufen, gemittelt über zwei Sekunden.\nFrames, in denen das Modell lief, und Frames, in denen Modell-Kadenz seine Bearbeitung übertrug, werden\ngetrennt gehalten, sodass der Sprung auf den Modell-Frames gegenüber den übertragenen das Pulsieren\nder Kadenz als Zahl ist. Eine ruhige Szene liest sich am saubersten; ein Schwenk fügt eigene Änderungen hinzu.\n\nEin kleiner Messpass pro Frame, solange an. Wird außerdem alle 10 Sekunden geloggt.
+Light step: the measuring pass could not be built.	Lichtsprung: Der Messpass konnte nicht erstellt werden.
+# 2026-10-13: model cadence smoothing (docs/dlssnr/design/cadence-smoothing.md): the control and its help.
+Smooth the model's frames	Modell-Frames glätten
+Without it, each new answer of the model replaces the carried one on the frame the model runs,\nand the picture's light steps there every N frames: the pulse. With it, the new answer is walked\nin from the carried one over the whole interval, in N equal steps, and the mean light of what the\ncadence shows may move by at most 1.5 stops a second while the frame's own light holds still.\n\nOnly what is shown changes: the stored edit and the model's own history stay as the model made\nthem. The previous answer stays on screen, fading, for up to N-1 frames longer, which can trail a\nlittle where things move fast. Measure it with "Measure the light step" under Compare.	Ohne Glättung ersetzt jede neue Antwort des Modells die übertragene in dem Frame, in dem das Modell läuft,\nund das Licht des Bildes springt dort alle N Frames: das Pulsieren. Mit Glättung wird die neue Antwort\nüber das ganze Intervall in N gleichen Schritten von der übertragenen aus eingeblendet, und das mittlere Licht\ndessen, was die Kadenz zeigt, darf sich um höchstens 1,5 Blendenstufen pro Sekunde bewegen, solange das Licht des Frames selbst stillsteht.\n\nNur das Angezeigte ändert sich: Die gespeicherte Bearbeitung und der eigene Verlauf des Modells bleiben, wie das Modell\nsie erzeugt hat. Die vorherige Antwort bleibt bis zu N-1 Frames länger verblassend auf dem Bildschirm, was dort, wo sich\nDinge schnell bewegen, leicht nachziehen kann. Mit "Lichtsprung messen" unter Vergleichen messen.
+# 2026-10-13: the residual limit (docs/dlssnr/design/residual-limit.md): the control and its help.
+Residual limit	Restwert-Grenze
+The most the model may move any pixel's light, either way, in stops: 0.5 allows\nat most 1.41x brighter or darker, 1 at most 2x. Off at 0, the composition as\nit always was.\n\nAimed at blotches and flicker: a patch of wall the model brightens by a stop\none frame and not the next. It bounds the model's real corrections the same\nway, so start high and lower it until the blotches go. It sits inside the\nhighlight guard and can only narrow it.	Wie weit das Modell das Licht eines Pixels höchstens bewegen darf, in beide Richtungen, in Blendenstufen: 0.5 erlaubt\nhöchstens 1,41x heller oder dunkler, 1 höchstens 2x. Bei 0 aus, die Komposition wie\nimmer.\n\nGedacht gegen Flecken und Flimmern: ein Stück Wand, das das Modell in einem Frame um eine Stufe aufhellt\nund im nächsten nicht. Es begrenzt die echten Korrekturen des Modells ebenso,\nalso hoch anfangen und senken, bis die Flecken verschwinden. Es liegt innerhalb des\nHighlight-Guard und kann ihn nur verengen.
+# 2026-10-13: HDR10 and scRGB at present (docs/dlssnr/design/hdr-present-conversion.md): the switch, its readout, its
+# Paper white, its timing line, and the reasons the conversion gives in the readout.
+HDR output (HDR10 and scRGB)	HDR-Ausgabe (HDR10 und scRGB)
+The game presents in HDR: HDR10 (PQ, Rec.2020) or scRGB (linear light). Off, its\nframes are shown as the game rendered them and the pass does not run on them.\n\nOn, each frame is decoded to linear light, the pass runs on it as on any HDR\nframe, and it is encoded back with the game's own frame as the reference: every\npixel the pass leaves alone -- the interface, at strength zero -- keeps its exact\ncode. The model uses the display's Windows SDR white level times Paper white,\nor 203 nits when the display query is unavailable.\n\nExperimental: not yet measured on a real HDR display. HLG, studio-range or YCbCr\nPQ and other colour spaces stay declined.	Das Spiel präsentiert in HDR: HDR10 (PQ, Rec.2020) oder scRGB (lineares Licht). Bei Aus werden seine\nFrames gezeigt, wie das Spiel sie gerendert hat, und der Pass läuft nicht auf ihnen.\n\nBei An wird jeder Frame in lineares Licht dekodiert, der Pass läuft darauf wie auf jedem HDR-Frame,\nund er wird mit dem spieleigenen Frame als Referenz zurückkodiert: Jedes\nPixel, das der Pass unverändert lässt -- die Oberfläche, bei Stärke null --, behält exakt seinen\nCode. Das Modell nutzt den SDR-Weißwert des Displays aus Windows mal Papierweiß,\noder 203 Nits, wenn die Displayabfrage nicht verfügbar ist.\n\nExperimentell: noch nicht an einem echten HDR-Display gemessen. HLG, PQ im Studio-Range oder\nYCbCr und andere Farbräume bleiben abgelehnt.
+HDR10	HDR10
+scRGB	scRGB
+%s, SDR white %.0f nits x %.2f	%s, SDR-Weiß %.0f Nits x %.2f
+Off: this %s swapchain is shown as the game rendered it.	Aus: Diese %s-Swapchain wird gezeigt, wie das Spiel sie gerendert hat.
+Paper white (x the display's SDR white)	Papierweiß (x SDR-Weiß des Displays)
+The same Paper white as on any other frame, measured here against the display's\nSDR white shown above: 1.00 uses that value. Raise it if the\ngame's own HDR paper white is set brighter, lower it if darker. It changes what\nthe model is shown, not the frame where the pass leaves it alone.	Dasselbe Papierweiß wie bei jedem anderen Frame, hier gemessen am oben gezeigten SDR-Weiß\ndes Displays: 1.00 nutzt diesen Wert. Erhöhen, wenn das\nHDR-Papierweiß des Spiels heller eingestellt ist, senken, wenn dunkler. Es ändert, was\ndas Modell gezeigt bekommt, nicht den Frame, wo der Pass ihn unverändert lässt.
+HDR conversion, outside the dispatch: %.3f ms = %.3f ms decode + %.3f ms encode (sample %llu, %.1f s since recording)	HDR-Konvertierung, außerhalb des Dispatch: %.3f ms = %.3f ms Dekodierung + %.3f ms Kodierung (Messwert %llu, %.1f s seit Aufzeichnung)
+the swapchain's format is typeless, which the HDR conversion does not take; the frame is shown as the game rendered it	das Format der Swapchain ist typeless, was die HDR-Konvertierung nicht annimmt; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+nothing is known about this swapchain's colour space, and the HDR conversion does not guess; the frame is shown as the game rendered it	über den Farbraum dieser Swapchain ist nichts bekannt, und die HDR-Konvertierung rät nicht; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the swapchain changed format after its colour space was set, and the HDR conversion waits for it to be set again; the frame is shown as the game rendered it	die Swapchain hat ihr Format geändert, nachdem ihr Farbraum gesetzt wurde, und die HDR-Konvertierung wartet, bis er erneut gesetzt wird; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the swapchain's colour space was recorded for another format; the frame is shown as the game rendered it	der Farbraum der Swapchain wurde für ein anderes Format erfasst; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the swapchain is PQ in studio range or YCbCr, which the HDR conversion does not take; the frame is shown as the game rendered it	die Swapchain ist PQ im Studio-Range oder YCbCr, was die HDR-Konvertierung nicht annimmt; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the swapchain is ten-bit with a linear (scRGB) colour space, which the HDR conversion does not take; the frame is shown as the game rendered it	die Swapchain hat zehn Bit mit linearem Farbraum (scRGB), was die HDR-Konvertierung nicht annimmt; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the swapchain is FP16 with a colour space other than scRGB, which the HDR conversion does not take; the frame is shown as the game rendered it	die Swapchain ist FP16 mit einem anderen Farbraum als scRGB, was die HDR-Konvertierung nicht annimmt; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the swapchain's colour space is HLG, Rec.2020 with a gamma curve or another the HDR conversion does not take; the frame is shown as the game rendered it	der Farbraum der Swapchain ist HLG, Rec.2020 mit Gammakurve oder ein anderer, den die HDR-Konvertierung nicht annimmt; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+this build carries no HDR conversion shader; the frame is shown as the game rendered it	diesem Build fehlt der Shader für die HDR-Konvertierung; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the HDR conversion's pass could not be built; the frame is shown as the game rendered it	der Pass der HDR-Konvertierung konnte nicht erstellt werden; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+this GPU cannot read this swapchain's format in a shader or store to it from one (typed UAV store), so the HDR conversion cannot run; the frame is shown as the game rendered it	diese GPU kann das Format dieser Swapchain in einem Shader weder lesen noch aus einem Shader hineinschreiben (typed UAV store), daher kann die HDR-Konvertierung nicht laufen; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the HDR conversion's textures could not be created; the frame is shown as the game rendered it	die Texturen der HDR-Konvertierung konnten nicht erstellt werden; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the HDR conversion was built for another D3D12 device; the frame is shown as the game rendered it	die HDR-Konvertierung wurde für ein anderes D3D12-Device erstellt; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+the backbuffer's format is not the swapchain's, so the HDR conversion does not trust its colour space; the frame is shown as the game rendered it	das Format des Backbuffers ist nicht das der Swapchain, daher traut die HDR-Konvertierung ihrem Farbraum nicht; der Frame wird gezeigt, wie das Spiel ihn gerendert hat
+# 2026-10-13: the comparison capture (docs/dlssnr/design/comparison-capture.md): the button, its help and its states.
+Capture original and processed	Original und Ergebnis aufnehmen
+Saves the next frame twice, as the pass read it and as the pass wrote it, into the\nretoque-captures folder beside OptiScaler. Each file carries a record of the build, the route,\nthe model and every setting that shapes the picture, and a .json beside them says the same.\n\nA display-referred frame is saved as PNG, a linear HDR frame as PFM (32-bit float). On the\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the\nupscaler's output, before the game's own tonemapper, post-processing and interface.\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler\nasks for the same capture from outside the game on D3D12 routes.	Speichert den nächsten Frame zweimal, wie der Pass ihn gelesen und wie er ihn geschrieben hat, im\nOrdner retoque-captures neben OptiScaler. Jede Datei enthält einen Eintrag zu Build, Route,\nModell und jeder Einstellung, die das Bild prägt, und eine .json daneben sagt dasselbe.\n\nEin anzeigebezogener Frame wird als PNG gespeichert, ein linearer HDR-Frame als PFM (32-Bit-Float). Auf den\nPresent-Routen ist es der fertige Frame, bevor das Menü gezeichnet wird; nach dem Upscaler ist es die\nAusgabe des Upscalers, vor Tonemapper, Post-Processing und Oberfläche des Spiels.\n\nDie neuesten 64 Paare werden behalten. Eine Datei namens dlssnr-capture.trigger neben OptiScaler\nfordert auf D3D12-Routen dieselbe Aufnahme von außerhalb des Spiels an.
+Saved %s (the pair and its .json)	%s gespeichert (das Paar und seine .json)
+Turn off Compare to capture the result.	Vergleichen ausschalten, um das Ergebnis aufzunehmen.
+Turn off the debug view to capture the result.	Debug-Ansicht ausschalten, um das Ergebnis aufzunehmen.
+Not with the driver proxy: it returns before the pass writes the frame.	Nicht mit dem Treiber-Proxy: Er kehrt zurück, bevor der Pass den Frame schreibt.
+Capture is unavailable on this route; native Vulkan requires the after-upscale pass.	Aufnahme ist auf dieser Route nicht verfügbar; natives Vulkan erfordert den Pass nach dem Upscaler.
+The capture folder could not be created (see the log).	Der Aufnahmeordner konnte nicht erstellt werden (siehe Log).
+No frame reached the pass in time; nothing was captured.	Kein Frame hat den Pass rechtzeitig erreicht; nichts wurde aufgenommen.
+Earlier captures are still held for the GPU; try again shortly.	Frühere Aufnahmen werden noch für die GPU gehalten; gleich erneut versuchen.
+The readback buffers could not be created.	Die Readback-Buffer konnten nicht erstellt werden.
+The GPU never confirmed the copies; nothing was written, and the capture is off for this session.	Die GPU hat die Kopien nie bestätigt; nichts wurde geschrieben, und die Aufnahme ist für diese Sitzung aus.
+The writer could not be started.	Der Schreibvorgang konnte nicht gestartet werden.
+The files could not be written (see the log).	Die Dateien konnten nicht geschrieben werden (siehe Log).
+This frame's format is not one the capture can write yet.	Das Format dieses Frames kann die Aufnahme noch nicht schreiben.
+The two surfaces differ in shape; nothing was captured.	Die beiden Oberflächen haben unterschiedliche Formen; nichts wurde aufgenommen.
+Waiting for the next frame the pass writes...	Warten auf den nächsten Frame, den der Pass schreibt...
+Waiting for the GPU to finish the copies...	Warten, bis die GPU die Kopien abgeschlossen hat...
+Writing the files...	Dateien werden geschrieben...
+# 2026-10-15: the comparison capture's review fixes: a surface the copy cannot take, a failure while the frame was
+# recorded, and a request made while one is under way.
+This frame is not a single-sample 2D texture; nothing was captured.	Dieser Frame ist keine 2D-Textur mit einem Sample; nichts wurde aufgenommen.
+The capture failed while the frame was being described or recorded; nothing was captured (see the log).	Die Aufnahme ist beim Beschreiben oder Aufzeichnen des Frames fehlgeschlagen; nichts wurde aufgenommen (siehe Log).
+A capture is already under way.	Eine Aufnahme läuft bereits.
+This route's commands cannot be followed to the GPU's completion; nothing was captured (see the log).	Die Befehle dieser Route lassen sich nicht bis zum Abschluss auf der GPU verfolgen; nichts wurde aufgenommen (siehe Log).
+# 2026-10-13: the LSFG panel under FSR FG Settings (study branch; tools/lsfg-study/MFG_PRESENTER.md): its controls, the
+# multiplier and what it says about the swapchain the game started with, and the status line.
+LSFG 3.1 Interpolator (Lossless Scaling)	LSFG-3.1-Interpolator (Lossless Scaling)
+Replaces FSR-FG's internal optical flow interpolation with Lossless Scaling's LSFG 3.1.\nNeeds lsfg-vk.dll from Lossless Scaling (auto-detected or configured in [LSFG] DllPath).	Ersetzt die interne Optical-Flow-Interpolation von FSR-FG durch LSFG 3.1 von Lossless Scaling.\nBenötigt lsfg-vk.dll aus Lossless Scaling (automatisch erkannt oder in [LSFG] DllPath festgelegt).
+Enable LSFG	LSFG aktivieren
+Enable LSFG 3.1 frame interpolation under FSR-FG.\nWhen disabled or building, FSR-FG uses standard FFX interpolation.	Aktiviert die LSFG-3.1-Frame-Interpolation unter FSR-FG.\nWenn deaktiviert oder im Aufbau, nutzt FSR-FG die Standard-Interpolation von FFX.
+Flow Scale	Flussskalierung
+Internal optical flow pyramid resolution relative to display frame.\n1.00 = Native resolution (highest quality)\n0.85 = Balanced quality/performance\n0.50 = Half resolution (faster, lower VRAM)	Auflösung der internen Optical-Flow-Pyramide relativ zum Anzeige-Frame.\n1.00 = Native Auflösung (höchste Qualität)\n0.85 = Ausgewogen zwischen Qualität und Leistung\n0.50 = Halbe Auflösung (schneller, weniger VRAM)
+Performance Mode	Leistungsmodus
+Halves feature channels across motion pyramids.\nCheaper on GPU with slightly softer motion edges.	Halbiert die Feature-Kanäle über die Bewegungspyramiden.\nGünstiger für die GPU, mit etwas weicheren Bewegungskanten.
+Multiplier	Multiplikator
+%dx (after a restart)	%dx (nach Neustart)
+Frames shown per real frame. 2x adds one generated frame; 3x and 4x add two or three,\npresented by OptiScaler's own frame-generation swapchain, a fork of FFX's.\n\nThe swapchain is chosen when the game creates it. Started at 3x or 4x, every choice\napplies at the next frame. Started at 2x, 3x and 4x are saved and need a restart.	Angezeigte Frames pro echtem Frame. 2x fügt einen generierten Frame hinzu; 3x und 4x fügen zwei oder drei hinzu,\nausgegeben über die eigene Frame-Generation-Swapchain von OptiScaler, einen Fork der von FFX.\n\nDie Swapchain wird gewählt, wenn das Spiel sie erstellt. Bei Start mit 3x oder 4x gilt jede Wahl\nab dem nächsten Frame. Bei Start mit 2x werden 3x und 4x gespeichert und brauchen einen Neustart.
+Now %dx: the game started with FFX's swapchain, which shows one generated frame. Save Settings and restart the game for %dx.	Jetzt %dx: Das Spiel startete mit der Swapchain von FFX, die einen generierten Frame zeigt. Einstellungen speichern und das Spiel neu starten für %dx.
+Now 2x, while FFX interpolates in LSFG's place (see Status).	Jetzt 2x, während FFX anstelle von LSFG interpoliert (siehe Status).
+Status: Disabled (using FFX interpolation)	Status: Deaktiviert (nutzt FFX-Interpolation)
+Status: Active at %ux%u (%.2f ms/frame)	Status: Aktiv bei %ux%u (%.2f ms/Frame)
+Status: Active at %ux%u	Status: Aktiv bei %ux%u
+Status: %s	Status: %s
+Status: Waiting for frames	Status: Warten auf Frames
+
+HDR swapchain description unavailable; the frame stays original	HDR-Swapchain-Beschreibung nicht verfügbar; der Frame bleibt original
+HDR conversion resource contract unavailable; the frame stays original	Ressourcenvertrag der HDR-Konvertierung nicht verfügbar; der Frame bleibt original
+Windows SDR white	Windows-SDR-Weiß
+203-nit fallback	203-Nit-Ersatzwert
+HDR conversion did not produce a submitted frame	HDR-Konvertierung hat keinen übermittelten Frame erzeugt
+
+HDR present conversion is inactive; the game's original frame is shown.	HDR-Konvertierung beim Present ist inaktiv; der Originalframe des Spiels wird gezeigt.
+
+Show all settings	Alle Einstellungen anzeigen
+Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Das vollständige Neural-Rendering-Panel anzeigen. Ausgeblendete Einstellungen bleiben aktiv und unverändert.
+
+Minimum brightness	Mindesthelligkeit
+Final luminance relative to the original frame: 0.75 keeps at least 75 percent.\nApplied once, after composition, including replace curves. 0 is off.\nRestores darkened pixels toward the original; does not cap individual channels.\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB.\nLater game processing and temporal stabilization are outside this limit.	Endluminanz relativ zum Originalframe: 0.75 behält mindestens 75 Prozent.\nEinmal nach der Komposition angewendet, auch bei Ersetzungskurven. 0 ist aus.\nHellt abgedunkelte Pixel in Richtung Original auf; begrenzt keine einzelnen Kanäle.\nHDR nutzt lineare Buffer-Luminanz; Passthrough nutzt bereits tonemapped RGB.\nSpätere Verarbeitung durch das Spiel und zeitliche Stabilisierung liegen außerhalb dieser Grenze.
+Adapt cadence to motion	Kadenz an Bewegung anpassen
+Adaptive cadence: running the model every frame until feedback permits reuse.	Adaptive Kadenz: Das Modell läuft in jedem Frame, bis das Feedback Wiederverwendung erlaubt.
+Shortens the interval when motion or rejected carry coverage is high; lengthens after 300 ms of calm.\nCadence above is the maximum. Delayed GPU feedback cannot catch a cut on its first frame.\nRequires a restart when enabled after NR has already run. Missing feedback runs the model every frame.\nExperimental: measured in the moving fixture, not validated in games. Off adds no probe work.	Verkürzt das Intervall bei viel Bewegung oder hoher abgelehnter Übertragungsabdeckung; verlängert es nach 300 ms Ruhe.\nDie Kadenz oben ist das Maximum. Verzögertes GPU-Feedback kann einen Schnitt im ersten Frame nicht erfassen.\nErfordert einen Neustart, wenn nach bereits gelaufenem NR aktiviert. Fehlt Feedback, läuft das Modell in jedem Frame.\nExperimentell: in der bewegten Testszene gemessen, nicht in Spielen validiert. Aus fügt keine Sondierungsarbeit hinzu.
+Record replay clip	Replay-Clip aufnehmen
+Recording: %u frames, %u written	Aufnahme: %u Frames, %u geschrieben
+Clip of %u frames written to %s (%s)	Clip mit %u Frames nach %s geschrieben (%s)
+Records about six seconds of what the pass receives -- the upscaler's colour, depth and motion\nvectors, and the game's parameters -- into the dlssnr-replay folder beside OptiScaler, for the\noffline replay harness (tests/dlssnr-loopback --replay-nr). Nothing is recorded until pressed.\n\nAbout 50-60 MB a frame at 3440x1440: a clip is 1-4 GB. Dropping a file named\ndlssnr-capture.trigger containing the word replay asks for the same clip from outside the game.	Nimmt etwa sechs Sekunden dessen auf, was der Pass erhält -- Farbe, Tiefe und Bewegungsvektoren\ndes Upscalers sowie die Parameter des Spiels -- im Ordner dlssnr-replay neben OptiScaler, für das\nOffline-Replay-Harness (tests/dlssnr-loopback --replay-nr). Bis zum Drücken wird nichts aufgenommen.\n\nEtwa 50-60 MB pro Frame bei 3440x1440: Ein Clip hat 1-4 GB. Eine Datei namens\ndlssnr-capture.trigger mit dem Wort replay fordert denselben Clip von außerhalb des Spiels an.
+# 2026-10-27: the FPS overlay's section titles from upstream's overlay rework (#1238, 5f6a2e69).
+Presets	Voreinstellungen
+Layout	Layout
+Text	Text
+Colors	Farben
+# 2026-10-30: the NR panel's "Copy NR diagnostics" button (docs/dlssnr/design/diagnostic-export.md). The report it copies stays English.
+Copy NR diagnostics	NR-Diagnose kopieren
+Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths are replaced by <path>. Assembled only when pressed; the report itself is in English.	Kopiert einen Klartextbericht darüber, was Neural Rendering erkannt und verwendet hat -- Build, Plattform, Route, Guides, Einstellungen, der letzte bestätigte GPU-Messwert und LSFG -- für einen Fehlerbericht. Absolute Pfade werden durch <path> ersetzt. Wird nur beim Drücken erstellt; der Bericht selbst ist auf Englisch.
+Copied to the clipboard.	In die Zwischenablage kopiert.
+# 2026-10-30: the NR panel's line while the game runs its own NR through Streamline (docs/dlssnr/design/streamline-native-nr.md).
+The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	Das Spiel führt sein eigenes NR aus (Streamline DLSS-NR), daher setzt dieser Pass aus, statt NR doppelt anzuwenden. Er läuft 5 s nach dem Ende des NR des Spiels wieder.
+# 2026-10-30: the model's own VRAM count beside the status line (docs/dlssnr/design/model-vram-stats.md).
+(model: %llu MiB)	(Modell: %llu MiB)
+
+# 2026-11-01: independent historical Present and guide-capture GPU samples.
+%s: no confirmed sample (pending %u, discarded %llu; %s)	%s: kein bestätigter Messwert (ausstehend %u, verworfen %llu; %s)
+%s: %.3f ms (historical sample %llu, %.1f s since recording)	%s: %.3f ms (historischer Messwert %llu, %.1f s seit Aufzeichnung)
+Guides: %s; capture %llu; guide extent %ux%u, output %ux%u	Guides: %s; Erfassung %llu; Guide-Ausdehnung %ux%u, Ausgabe %ux%u
+Game capture %llu, age at selection %llu ms	Spielerfassung %llu, Alter bei Auswahl %llu ms
+Observed Present %llu; boundary %s, HDR %s, NR recorded %s	Beobachtetes Present %llu; Grenze %s, HDR %s, NR aufgezeichnet %s
+GPU route includes Dispatch and HDR conversion. CPU waits and submission are excluded.	Die GPU-Route umfasst Dispatch und HDR-Konvertierung. CPU-Wartezeiten und Übermittlung sind ausgenommen.
+Guide capture uses a separate producer recording. Do not add it to a Present sample.	Die Guide-Erfassung nutzt eine separate Producer-Aufzeichnung. Nicht zu einem Present-Messwert addieren.
+Present and guide capture each count their own eligible regions.	Present und Guide-Erfassung zählen jeweils ihre eigenen zulässigen Bereiche.
+Present route GPU	Present-Route GPU
+Guide capture GPU	Guide-Erfassung GPU
+Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)	Dispatch-Aufruf %.3f ms, außerhalb des Dispatch %.3f ms (dieselbe Aufzeichnung)
+No Dispatch call in this recording: total only	Kein Dispatch-Aufruf in dieser Aufzeichnung: nur Gesamtwert
+game depth + motion	Spieltiefe + Bewegung
+zero depth + synthesized motion	Null-Tiefe + synthetische Bewegung
+zero depth + motion	Null-Tiefe + Bewegung
+unknown	unbekannt
+no-sample	kein Messwert
+yes	ja
+no	nein
+
+The capture recording was discarded or invalidated; nothing was written.	Die Aufnahme-Aufzeichnung wurde verworfen oder ungültig; nichts wurde geschrieben.
+# Native Vulkan pre-upscale experiment
+Stage: before the upscaler requested (native Vulkan)	Phase: vor dem Upscaler angefordert (natives Vulkan)
+Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;\nthere is no after-upscale NR fallback. One outstanding recording is admitted.\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation.\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.	Experimentelle native Vulkan-NGX-Eingaberoute. Nicht unterstützte Eingaben behalten die originale Color;\nes gibt keinen NR-Fallback nach dem Upscaler. Eine ausstehende Aufzeichnung wird zugelassen.\nErfordert Opt-in beim Start, nachgewiesene Layouts/Ownership und eine unveränderte bereite Generation.\nNeuaufbauten und fehlende Nachweise überspringen NR. Die Validierung in DOOM Eternal steht noch aus.
+
+# Controls introduced with upstream 34d492d6. Vulkan API mode names are retained.
+Flip HUDless	HUD-lose Textur spiegeln
+Present Mode	Present-Modus
+Upscaler Debug View	Upscaler-Debug-Ansicht
+Game's	Vom Spiel
+Game's present mode: %s	Present-Modus des Spiels: %s
+Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	Spiegelt die HUD-lose Textur\nSpiele können es auch über den Parameter Opti.Hudless.Flip anfordern
+Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	Überschreibt den Vulkan-Present-Modus des Spiels; das Spiel erstellt seine Swapchain neu, um ihn anzuwenden.\n\nImmediate: kein V-Sync, Tearing.\nMailbox: kein Tearing, der neueste Frame ersetzt den wartenden.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, Tearing unterhalb der Bildwiederholrate.\nFIFO Latest Ready: V-Sync, zeigt bei jeder Aktualisierung den neuesten fertigen Frame.\n\nMailbox und FIFO Latest Ready können generierte Frames oberhalb der Bildwiederholrate verwerfen.\nEs werden nur Modi aufgelistet, die das Display unterstützt.

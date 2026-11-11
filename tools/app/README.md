@@ -42,6 +42,44 @@ confirmation from our official GitHub releases (`gabrielmaialva33/retoque`).
   are the user's own files, kept in the app's data folder, chosen with `[DlssNr] ModelFile`.
 - Settings are written key by key into the ini on disk, so a change the in-game menu made to another key survives.
 
+## Languages
+
+The window speaks English and Brazilian Portuguese, plus German, Spanish, French, Japanese, Korean, Polish, Russian
+and Simplified Chinese. Preferences (and the top bar) list each language by its own name; a choice applies at once
+and is saved. On first run the app follows the system locale when it names one of these languages (any Portuguese
+locale gives pt-BR; Traditional Chinese does not match), else English. `RETOQUE_LANG=de` (any of the codes below)
+forces one for tests and screenshots.
+
+| Code | Language | Source |
+|---|---|---|
+| `en`, `pt-BR` | English, Português (Brasil) | The `(key, en, pt)` table in `crates/retoque-app/src/i18n.rs`, plus `retoque-data`'s messages and the settings schema |
+| `de`, `es`, `fr`, `ja`, `ko`, `pl`, `ru`, `zh-CN` | Deutsch, Español, Français, 日本語, 한국어, Polski, Русский, 简体中文 | `crates/retoque-app/src/i18n/<code>.tsv` |
+
+The eight packs are **machine-translated drafts pending review by native speakers** (each file's header says so,
+and Preferences tells the user). A pack is one `key<TAB>text` per line, in the English table's order, `#` starting a
+comment; it is embedded at build time and parsed the first time the language is used. A key missing from a pack
+shows in English, so a new English string never needs eight translations to ship. Besides the table's keys a pack
+translates per-game settings (`setting.<Section>.<Key>` and `.help`), their drop-down values (`choice.<english
+label in snake case>`) and, for languages with more plural forms (Polish, Russian), `_few` / `_many` beside a
+counted word's `_one`. Tests reject an unknown or duplicate key, a lost or added `{placeholder}`, a final "…" that
+does not match the English (DESIGN.md: "…" means a dialog opens) and a missing draft header; they also draw every
+pack string with egui's fonts (Latin and Cyrillic) or the system CJK font, failing on a missing glyph, and draw the
+main views in every language in a 1024×768 window. To see what a pack still shows in English:
+`cargo test -p retoque-app untranslated_keys -- --ignored --nocapture`.
+
+To add a language: add a `Lang` variant (never rename one; the saved choice is the variant name) with its native
+name and code, a `pack_source` arm with `include_str!("i18n/<code>.tsv")`, its decimal separator, date order and
+plural rule (`plural_category`), and the pack itself, starting from DESIGN.md's glossary so that each idea keeps
+one word. Corrections to an existing pack only touch its `.tsv`.
+
+Chinese, Japanese and Korean need a font egui does not ship and the app does not bundle. A font provider
+(`src/fonts.rs`) takes one from the system the first time such a character is drawn: on Windows Yu Gothic, Meiryo,
+Malgun Gothic, Microsoft YaHei or SimSun from `%WINDIR%\Fonts`; on Linux Noto Sans CJK (Arch, Debian/Ubuntu and
+Fedora paths), IPA Gothic, Nanum Gothic or WenQuanYi Micro Hei, and when none of those paths exists, one bounded
+`fc-match` query per script. Han characters use the face of the reader's region. The file is read once per process,
+and only when needed. Without such a font the selector lists that language disabled, by its name in the current
+language, with the reason, and a saved CJK choice opens in English rather than in boxes.
+
 ## What is not proven here
 
 The unit tests and the parity suite run on fake game folders. They do not prove that a game works with Retoque, that

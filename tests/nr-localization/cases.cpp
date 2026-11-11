@@ -27,20 +27,24 @@ static ImGuiID ExpectedId(const Dictionary& dictionary, const char* label, ImGui
 // shared one in English.
 static void AssertSameCollisions(const Dictionary& dictionary, const std::vector<const char*>& labels)
 {
-    for (size_t a = 0; a < labels.size(); ++a)
-        for (size_t b = a + 1; b < labels.size(); ++b)
-            for (const auto seed : { 0u, 0x12345678u })
-            {
-                const bool english = ImHashStr(labels[a], 0, seed) == ImHashStr(labels[b], 0, seed);
-                const bool translated = ImHashStr(dictionary.LabelValue(labels[a]).c_str(), 0, seed) ==
-                                        ImHashStr(dictionary.LabelValue(labels[b]).c_str(), 0, seed);
-                assert(english == translated);
-            }
+    for (const auto seed : { 0u, 0x12345678u })
+    {
+        // Hash each label once per seed; the pairwise comparison is then over integers.
+        std::vector<ImGuiID> english, translated;
+        for (const auto* label : labels)
+        {
+            english.push_back(ImHashStr(label, 0, seed));
+            translated.push_back(ImHashStr(dictionary.LabelValue(label).c_str(), 0, seed));
+        }
+        for (size_t a = 0; a < labels.size(); ++a)
+            for (size_t b = a + 1; b < labels.size(); ++b)
+                assert((english[a] == english[b]) == (translated[a] == translated[b]));
+    }
 }
 
 int main(int argc, char** argv)
 {
-    assert(argc == 2);
+    assert(argc >= 2);
     Dictionary dictionary;
     const char* english = "Unknown label";
     assert(dictionary.Find(english) == english);
@@ -116,25 +120,36 @@ int main(int argc, char** argv)
     assert(bad.Load(bom));
     assert(std::string(bad.Find("a")) == "á");
     assert(Dictionary::ValidUtf8("ação órgão referência 😀"));
-    std::ifstream pack(argv[1], std::ios::binary);
-    Dictionary shipped;
-    assert(pack && shipped.Load(pack));
-    assert(shipped.Size() >= 100);
-    assert(std::string(shipped.Find("Save Settings")) == "Salvar configurações");
-    size_t translatedLabels = 0;
-    for (const auto* label : menuLabels)
+    // argv[1] is pt-BR, the reference pack; every other pack must load and cover the same production labels.
+    size_t referenceSize = 0;
+    for (int arg = 1; arg < argc; ++arg)
     {
-        translatedLabels += shipped.LabelValue(label) != label;
-        // Every production label has an entry; a name kept in English is listed as itself.
-        const std::string original(label);
-        const std::string visible = original.substr(0, original.find("##"));
-        assert(visible.empty() || shipped.Find(visible.c_str()) != visible.c_str());
-        for (const auto seed : { 0u, 1u, 0x12345678u, 0xFFFFFFFFu })
-            assert(ExpectedId(shipped, label, seed) == ImHashStr(shipped.LabelValue(label).c_str(), 0, seed));
+        std::ifstream pack(argv[arg], std::ios::binary);
+        Dictionary shipped;
+        assert(pack && shipped.Load(pack));
+        assert(shipped.Size() >= 100);
+        if (arg == 1)
+        {
+            referenceSize = shipped.Size();
+            assert(std::string(shipped.Find("Save Settings")) == "Salvar configurações");
+        }
+        assert(shipped.Size() == referenceSize);
+        size_t translatedLabels = 0;
+        for (const auto* label : menuLabels)
+        {
+            translatedLabels += shipped.LabelValue(label) != label;
+            // Every production label has an entry; a name kept in English is listed as itself.
+            const std::string original(label);
+            const std::string visible = original.substr(0, original.find("##"));
+            assert(visible.empty() || shipped.Find(visible.c_str()) != visible.c_str());
+            for (const auto seed : { 0u, 1u, 0x12345678u, 0xFFFFFFFFu })
+                assert(ExpectedId(shipped, label, seed) == ImHashStr(shipped.LabelValue(label).c_str(), 0, seed));
+        }
+        AssertSameCollisions(shipped, std::vector<const char*>(std::begin(menuLabels), std::end(menuLabels)));
+        if (arg == 1)
+            std::cout << "PASS: real parser and ImHashStr; default English, UTF-8, printf signatures, malformed packs, "
+                         "transactional fallback, ##/### identities across four seeds\n";
+        std::cout << "PASS: " << argv[arg] << ": " << shipped.Size() << " entries; " << translatedLabels << " of "
+                  << std::size(menuLabels) << " production menu labels translated, identities and collisions checked\n";
     }
-    AssertSameCollisions(shipped, std::vector<const char*>(std::begin(menuLabels), std::end(menuLabels)));
-    std::cout << "PASS: real parser and ImHashStr; default English, UTF-8, printf signatures, malformed packs, "
-                 "transactional fallback, ##/### identities across four seeds; " << shipped.Size()
-              << " shipped pt-BR entries; " << translatedLabels << " of " << std::size(menuLabels)
-              << " production menu labels translated, identities and collisions checked\n";
 }

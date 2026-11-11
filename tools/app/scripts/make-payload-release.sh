@@ -112,7 +112,11 @@ require_regular_file "${OUT_DIR}/OptiScaler.dll" "OptiScaler.dll"
 require_regular_file "${OUT_DIR}/nvngx.dll_dlssnr.dll" "nvngx.dll_dlssnr.dll"
 require_regular_file "${REPO_ROOT}/OptiScaler.ini" "OptiScaler.ini"
 require_regular_file "${REPO_ROOT}/Licenses/RenoDX_ATTRIBUTION.txt" "Licenses/RenoDX_ATTRIBUTION.txt"
-require_regular_file "${REPO_ROOT}/retoque/translations/optional/pt-BR.lang" "translations/optional/pt-BR.lang"
+# Optional menu text packs, all inactive (retoque/translations/README.md). A fixed list: a stray .lang never ships.
+LANG_PACKS=(pt-BR de es fr ja ko pl ru zh-CN)
+for pack in "${LANG_PACKS[@]}"; do
+    require_regular_file "${REPO_ROOT}/retoque/translations/optional/${pack}.lang" "translations/optional/${pack}.lang"
+done
 require_regular_file "${REPO_ROOT}/retoque/translations/README.md" "translations/README.md"
 
 # Reject forbidden proprietary/external files if any were placed in the build output directory.
@@ -339,7 +343,9 @@ for lic in "${REPO_ROOT}/Licenses/"*; do
 done
 require_regular_file "$STAGE_DIR/Licenses/RenoDX_ATTRIBUTION.txt" "staged Licenses/RenoDX_ATTRIBUTION.txt"
 
-cp -f "${REPO_ROOT}/retoque/translations/optional/pt-BR.lang" "$STAGE_DIR/translations/optional/pt-BR.lang"
+for pack in "${LANG_PACKS[@]}"; do
+    cp -f "${REPO_ROOT}/retoque/translations/optional/${pack}.lang" "$STAGE_DIR/translations/optional/${pack}.lang"
+done
 cp -f "${REPO_ROOT}/retoque/translations/README.md" "$STAGE_DIR/translations/README.md"
 
 if [[ -d "${OUT_DIR}/OptiScaler" ]]; then

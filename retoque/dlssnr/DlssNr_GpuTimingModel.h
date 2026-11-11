@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DlssNr_PassSettings.h"
 #include "DlssNr_SubmissionModel.h"
 #include <array>
 #include <cstddef>
@@ -9,7 +10,9 @@
 namespace DlssNr::GpuTiming::Detail
 {
 constexpr size_t SlotCount = 16;
-constexpr size_t MaxModels = 3;
+// One model begin/end pair per pass the chain can run, so a sample at the largest pass count is not malformed. Ten
+// passes make a slot 22 timestamps (176 bytes of readback), allocated only while timing is on.
+constexpr size_t MaxModels = PassConfig::MaxPasses;
 constexpr size_t MaxQueries = 2 + 2 * MaxModels;
 
 struct Certificate

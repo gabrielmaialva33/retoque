@@ -25,6 +25,8 @@ static const Dictionary& ActiveDictionary()
     return dictionary;
 }
 
+const Dictionary& Active() { return ActiveDictionary(); }
+
 const char* Tr(const char* source) { return ActiveDictionary().Find(source); }
 
 const char* Label(const char* source)

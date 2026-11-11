@@ -844,7 +844,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     g_activePasses = 0;
     auto passSnapshot = cfg.GetDlssNrPassSnapshot();
     if (frame.AfterRayReconstruction)
-        passSnapshot.Count = DlssNr::PassConfig::BoundCount(cfg.DlssNrRRPasses.value_or_default());
+        passSnapshot.Count = DlssNr::PassConfig::BoundRRCount(cfg.DlssNrRRPasses.value_or_default());
     std::optional<DlssNr::Chain::RecordingLease> ownedRecording;
     if (!recording && WantsTrackedRecording(passSnapshot, frame.NativeDx11Scene))
     {
@@ -922,7 +922,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // the change. Say one, because one is what runs.
         const bool chainCanStillArm = !g_legacyRecorded && !useProxy;
         passSnapshot.Count = (frame.AfterRayReconstruction && chainCanStillArm)
-                                 ? DlssNr::PassConfig::BoundCount(cfg.DlssNrRRPasses.value_or_default())
+                                 ? DlssNr::PassConfig::BoundRRCount(cfg.DlssNrRRPasses.value_or_default())
                                  : 1;
         passSnapshot.Individual = false;
         const auto master =
@@ -1495,13 +1495,13 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     if (chainEnabled)
     {
-        for (unsigned i = 1; i < 3; ++i)
+        for (unsigned i = 1; i < NrState::kMaxPasses; ++i)
         {
             if (g_nr.passFeature[i] &&
                 (i >= passSnapshot.Count || g_nr.passBuilt[i].Preset != passSnapshot.Settings[i].Preset))
             {
                 ParkNrFeature(g_nr.passFeature[i]);
-                for (unsigned downstream = i; downstream < 3; ++downstream)
+                for (unsigned downstream = i; downstream < NrState::kMaxPasses; ++downstream)
                     g_nr.passReset[downstream] = true;
             }
             else if (g_nr.passFeature[i] && g_nr.passBuilt[i] != passSnapshot.Settings[i])
@@ -1917,7 +1917,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // A pending reset is held until a model frame runs: it forces one, and a carried frame never clears it.
     bool cadenceResetPending = g_nr.reset;
-    for (unsigned i = 1; chainEnabled && i < passSnapshot.Count && i < 3; ++i)
+    for (unsigned i = 1; chainEnabled && i < passSnapshot.Count && i < NrState::kMaxPasses; ++i)
         cadenceResetPending = cadenceResetPending || g_nr.passReset[i];
 
     const int64_t cadenceNowMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
@@ -2835,7 +2835,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 {
                     g_nr.passFailed[i] = true;
                     ParkNrFeature(g_nr.passFeature[i]);
-                    for (unsigned downstream = i; downstream < 3; ++downstream)
+                    for (unsigned downstream = i; downstream < NrState::kMaxPasses; ++downstream)
                         g_nr.passReset[downstream] = true;
                     LOG_INFO("DLSS-NR chain: pass {} failed result=0x{:X}, completed={}, CPU-call-ms={:.3f}; "
                              "preserving previous answer",

@@ -411,7 +411,7 @@ def load_run(path, capture):
         )
         completed = integer(f.get("completed_passes"), "completed_passes")
         need(
-            requested <= 3
+            requested <= 10
             and completed == (0 if kind in ("carried", "skipped") else requested),
             "partial/invalid pass coverage",
         )

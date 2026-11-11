@@ -8,9 +8,10 @@ use retoque_data::session::{self, Advice, Level, Pacing};
 /// Decimal with the language's separator (pt-BR writes 4,0).
 fn decimal(lang: Lang, value: f64, places: usize) -> String {
     let text = format!("{value:.places$}");
-    match lang {
-        Lang::Pt => text.replace('.', ","),
-        Lang::En => text,
+    if lang.decimal_comma() {
+        text.replace('.', ",")
+    } else {
+        text
     }
 }
 

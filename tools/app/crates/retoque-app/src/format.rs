@@ -260,7 +260,7 @@ pub(crate) fn download_label(lang: Lang, bytes: Option<u64>) -> String {
     }
 }
 
-/// The date of an RFC 3339 time ("2026-10-27T06:27:00Z") in the user's format: 27/10/2026 or 2026-10-27.
+/// The date of an RFC 3339 time ("2026-10-27T06:27:00Z") in the user's format: 27/10/2026, 27.10.2026, 2026-10-27 …
 pub(crate) fn date_text(lang: crate::i18n::Lang, time: &str) -> Option<String> {
     let date = time.get(..10)?;
     let mut parts = date.split('-');
@@ -269,13 +269,18 @@ pub(crate) fn date_text(lang: crate::i18n::Lang, time: &str) -> Option<String> {
     {
         return None;
     }
+    use crate::i18n::Lang;
     Some(match lang {
-        crate::i18n::Lang::Pt => format!("{d}/{m}/{y}"),
-        crate::i18n::Lang::En => date.to_owned(),
+        Lang::En => date.to_owned(),
+        Lang::Pt | Lang::Es | Lang::Fr => format!("{d}/{m}/{y}"),
+        Lang::De | Lang::Pl | Lang::Ru => format!("{d}.{m}.{y}"),
+        Lang::Ja | Lang::ZhCn => format!("{y}/{m}/{d}"),
+        Lang::Ko => format!("{y}. {m}. {d}."),
     })
 }
 
-/// A size in user units (KB, MB, GB), with the decimal comma in Portuguese. The one way the app writes sizes.
+/// A size in user units (KB, MB, GB), with the decimal comma where the language uses one. The one way the app
+/// writes sizes.
 pub(crate) fn size_text(lang: crate::i18n::Lang, bytes: u64) -> String {
     let (value, unit) = match bytes {
         b if b >= 1 << 30 => (b as f64 / (1u64 << 30) as f64, "GB"),
@@ -287,9 +292,10 @@ pub(crate) fn size_text(lang: crate::i18n::Lang, bytes: u64) -> String {
     } else {
         format!("{value:.0} {unit}")
     };
-    match lang {
-        crate::i18n::Lang::Pt => text.replace('.', ","),
-        crate::i18n::Lang::En => text,
+    if lang.decimal_comma() {
+        text.replace('.', ",")
+    } else {
+        text
     }
 }
 

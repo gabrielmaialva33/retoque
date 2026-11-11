@@ -1,0 +1,977 @@
+# Retoque app text: 简体中文 (zh-CN).
+# MACHINE-TRANSLATED DRAFT, pending review by a native speaker. Corrections welcome.
+# Format: one "key<TAB>text" per line, in the order of the English table; "#" starts a comment line.
+# English is the source (src/i18n.rs); a key missing here shows in English. Keep {placeholders} and a final "…".
+lsfg.found	已找到 Lossless Scaling
+lsfg.preparing	正在自动准备着色器…
+lsfg.downloading	正在下载官方着色器编译器…
+lsfg.cancel	取消准备
+lsfg.cancelled	准备已取消。你的游戏没有被更改。
+lsfg.failed	无法准备 LSFG 着色器。请重试；如果仍然失败，请生成诊断文件。
+lsfg.retry	重新准备
+lsfg.download_prompt	准备 LSFG 着色器需要 Microsoft 的着色器编译器。Retoque 会从 Microsoft 的官方版本将它下载到应用数据中，进行校验并准备着色器。你的游戏不会被更改。
+lsfg.need_compiler	这些着色器需要 Microsoft 的着色器编译器，但尚未下载。
+lsfg.consent_title	下载着色器编译器
+lsfg.download_details	Microsoft DXC v1.8.2505.1，来自 github.com/microsoft/DirectXShaderCompiler（release-assets.githubusercontent.com），使用固定的 SHA-256 校验。
+lsfg.download_confirm	下载编译器…
+sm86.error.0	有多个文件与该 sm86 版本匹配。
+sm86.error.1	应用数据目录不可用。
+sm86.error.2	压缩包超出解压后的大小限制。
+sm86.error.3	压缩包包含不允许的链接、加密或特殊文件。
+sm86.error.4	压缩包声明的大小无效。
+sm86.error.5	找不到该 sm86 版本中记录的文件。
+sm86.error.6	该 sm86 版本缺少必需的文件。
+sm86.error.7	官方 sm86 版本的元数据无效。
+sm86.error.8	本地版本记录无效。
+sm86.error.9	组件包缓存需要 GitHub 公布的哈希值。
+sm86.error.10	组件包缓存必须与 GitHub 公布的 SHA-256 一致。
+sm86.error.11	组件包元数据超出大小限制。
+sm86.error.12	版本重定向没有给出目标地址。
+sm86.error.13	该地址不属于官方 sm86 版本。
+sm86.error.14	组件包压缩包中含有不能包含的受保护二进制文件。
+sm86.error.15	不允许该 sm86 版本的重定向目标。
+sm86.error.16	版本 API 尝试了不允许的重定向。
+sm86.error.17	下载内容的 SHA-256 与公布的不一致。
+sm86.error.18	此版本的内容在首次下载后已发生变化。
+sm86.error.19	版本元数据超出大小限制。
+sm86.error.20	本地版本记录超出大小限制。
+sm86.error.21	下载响应超出大小限制。
+sm86.error.22	下载大小与声明的不一致。
+sm86.error.23	无法通过 HTTPS 查询或下载 sm86 版本。
+sm86.error.24	压缩包中的文件过多。
+sm86.error.25	下载超出了重定向次数上限。
+sm86.error.26	压缩包中有一个文件不完整。
+sm86.error.27	版本服务器返回了意外的 HTTP 状态。
+sm86.error.28	压缩包中含有不安全的路径或冲突的文件名。
+sm86.error.29	不支持所公布的哈希算法。
+sm86.error.30	不支持此 sm86 版本。
+note.sm86_upgrade	升级 sm86 0.3.x：先备份并移除旧的加载器文件和 INI，再复制完整的 0.4.x 运行时。
+note.sm86_install	从你的组件中安装 dlssg-sm86，并将其标识和文件记录到 .retoque/components.txt。游戏安装程序不会发出网络请求。
+sm86.consent_title	下载官方帧生成组件
+sm86.check_title	检查是否有新版本
+sm86.check_consent	要向 GitHub 查询帧生成组件的最新版本，并与你现有的版本对比吗？
+sm86.check_details	主机：api.github.com（sdli1995/dlssg_for_sm86，最新版本）。不会下载任何内容。
+sm86.download_consent	Retoque 会从官方版本下载 dlssg_for_sm86 并进行校验。在你确认某个游戏的审阅之前，这些文件只保存在应用中。不收集遥测数据。
+sm86.download_details	主机：api.github.com 和 github.com（sdli1995/dlssg_for_sm86）。使用该版本的 SHA-256 校验。下载最多 256 MB，解压后最多 1 GB。
+sm86.kit_available	此安装包含首次运行缓存。它将在本地校验并导入，无需下载。
+sm86.license	第三方运行时和内核保留各自的条款；完整组件包并非 MIT 许可。许可文本和声明保存在应用缓存中。
+sm86.import	导入
+sm86.download_help	官方版本只需下载一次，即可在所有游戏中使用。安装到游戏时始终会单独审阅。
+sm86.download	下载官方版本…
+sm86.check	检查更新…
+sm86.progress	正在准备官方组件
+sm86.current	此版本已在你的组件中。
+sm86.new	此版本尚未在你的组件中。
+sm86.ignored	已忽略的压缩包条目（未解压）
+optimize.review	审阅优化…
+optimize.experimental	在本次审阅中包含 Proton/Wine 下的实验性 sm86
+optimize.choose_lsfg	在本次审阅中包含 LSFG
+optimize.lsfg_unavailable	未找到 Lossless Scaling，因此无法准备 LSFG 着色器。请在“组件 › 帧生成”中选择它的文件夹。未应用任何更改。
+optimize.lsfg_preparing	正在先准备 LSFG 着色器（仅在应用数据中）。准备好后将打开审阅。
+optimize.lsfg_failed	LSFG 着色器准备失败；请查看“组件 › 帧生成”。未应用任何更改。
+optimize.experimental_omitted	实验性 sm86 未被包含。如需在审阅中包含它，请在上方明确选择。
+optimize.up_to_date	{game} 已采用适合你显卡的推荐设置。
+optimize.install_first	请先安装或登记 Retoque，再进行优化。
+optimize.identity_missing	无法获取已安装组件的标识。请先刷新游戏再审阅。
+optimize.conflict	建议的设置相互冲突。未应用任何更改。
+remedy.processes	查看正在运行的进程
+remedy.close_processes	关闭这些程序，然后重试
+remedy.retry	重试
+remedy.replan	准备新的审阅
+remedy.foreign	选择保留或替换…
+mdl.incompatible	不适用于此显卡
+mdl.arch_match	与你的显卡兼容
+mdl.compat_unknown	兼容性未确认
+mdl.archs	找到的 CUDA 目标：
+mdl.suggest	你的模型中有一个适用于此显卡：
+mdl.use_suggested	审阅模型更换…
+ver.unknown	未知
+ver.mismatch	OptiScaler 与 NR 组件的文件版本不同。请一起更新它们；仍然可以安装。
+ver.forwarder	NR 组件 {v}
+welcome.title	你的游戏，搭配 Retoque
+welcome.installed	已装 Retoque
+set.nr	神经渲染（NR）
+set.upscalers	超分辨率方案
+set.framegen	帧生成
+set.lsfg	LSFG（实验性）
+set.no_match	没有符合此筛选条件的设置。
+set.lsfg_note	实验性功能。需要 FSR 帧生成和你自己的 Lossless Scaling 文件；不可用的功能无法运行。
+mdl.version	版本
+mdl.dll_filter	NR 模型 (.dll)
+unit.ms	ms
+unknown	—
+log.route_unknown	尚未报告路径。
+log.evidence_note	初始化记录描述的是本次会话；它们不能证明 NR 仍在运行。GPU 时间仅包含已确认的样本。
+log.showing	显示
+log.limited	摘要内容有限；完整记录请查看日志文件。
+inst.advanced	高级
+st.build	本地构建
+st.release	版本 {v}
+st.build_hash	构建 {hash}
+inst.notes()	备注
+dismiss.help	关闭消息
+brand	Retoque
+lang.ja	日语
+lang.ko	韩语
+lang.zh_cn	简体中文
+step.copy	复制
+step.backup	备份
+step.rename	重命名
+step.ini	设置
+step.remove	移除
+step.restore	还原
+step.keep	保留
+value.unset	未设置
+ref.unknown_file	未知文件
+ref.reshade	ReShade
+store.steam	Steam
+store.heroic	Heroic
+store.lutris	Lutris
+store.epic	Epic
+store.gog	GOG
+store.manual	手动添加
+runtime.windows	Windows
+runtime.proton	Proton
+runtime.wine	Wine
+runtime.linux	Linux
+error.io	无法读取或写入 {file}。
+error.io_any	无法读取或写入文件。
+technical.details	技术详情
+note.resume	上一次安装中途停止了。其记录已保留，本次安装将从中断处继续。
+note.driver	未找到 NVIDIA 驱动用于 Wine 的 _nvngx.dll。请安装驱动的 Wine NGX 组件，或将该文件放在游戏旁边。
+note.model	请将你自己的 nvngx_dlssnr.dll 放在游戏旁边，或通过 [DlssNr] ModelFile 指定另一份副本。模型不随附。
+note.vk_skip	Vulkan 钩子：已被标记文件禁用
+note.vk_disabled	Vulkan 钩子：已启用（标记文件存在但已停用）
+note.vk_active	Vulkan 钩子：已启用（无标记文件）。如果出现设备丢失，请设置 [Vulkan] SkipHooks=true。
+keep.same	已是此构建，保持原样
+keep.model	NVIDIA 的模型，从不移除；保留原处
+keep.gone	已不存在
+keep.identical_component	与组件文件相同
+keep.user_settings	你自己的设置文件，保持原样
+keep.changed	保留原处：安装后该文件已被更改
+keep.no_backup	未还原：这是模型，或备份不存在
+keep.no_rename	未重命名：这是模型，或文件已不存在
+keep.rename_changed	未改回原名：该文件之后已被更改
+ref.ini_missing	OptiScaler.ini 不存在。请先安装 Retoque 或提供该文件，再编辑设置。
+ref.ini_value	INI 的节、键和值必须各占一行，且不能包含结构分隔符。
+note.windows_denied	Windows 拒绝写入 {path}。请先修正权限再继续。
+note.second_proxy	{path} 中也有 OptiScaler。将继续安装（--allow-second-proxy）。
+keep.destination	{path}：未还原，目标位置已有文件
+keep.blocked	未改回原名：{path} 占用了目标位置
+ref.proxy	OptiScaler 不接受 {path} 作为加载器文件名
+app.refresh	重新扫描游戏库
+app.payload	Retoque 文件
+app.payload.none	不在应用旁边：请选择包含 OptiScaler.dll 的文件夹以进行安装或更新
+app.payload.choose	选择…
+payload.missing	未找到
+payload.files_note	当你在游戏中安装或更新 Retoque 时，应用会将这些文件复制到游戏中。
+payload.files_source	来源
+payload.files_updates	官方版本
+lib.search	搜索游戏
+lib.installed_only	仅显示已安装
+lib.add_folder	添加文件夹…
+lib.scanning	正在查找游戏…
+lib.empty	未找到游戏。请手动添加游戏文件夹。
+lib.skipped	无法读取
+game.root	游戏文件夹
+game.target	可执行文件所在文件夹
+game.no_target	此游戏中未找到包含可执行文件的文件夹。
+game.native	Linux 原生版本：Retoque 仅适用于在 Proton 或 Wine 下运行的 Windows 版本。
+tab.install	概览
+tab.settings	设置
+tab.model	组件
+comp.nr	NR 模型
+comp.sm86_name	适用于 RTX 20/30 的帧生成 · 版本 {version}
+comp.dlss	DLSS
+comp.fg	帧生成
+tab.compare	前后对比
+tab.logs	日志
+set.invalid	OptiScaler 不接受此值；请修正后再审阅更改。
+st.installed	已安装 Retoque
+st.installed_short	已安装
+st.current	Retoque 已是最新
+st.current_short	已是最新
+st.update	有可用更新
+st.update_short	更新
+st.partial	未完成的安装
+st.partial_short	未完成
+st.not_installed	未安装
+st.untracked	旧安装
+st.untracked_short	旧
+st.nr_on	NR 已开启
+st.nr_off	NR 已关闭
+inst.proxy	加载器文件名
+inst.proxy_help	仅当游戏使用默认值无法启动时才更改。
+inst.enable_nr	开启神经渲染（NR）
+inst.keep_reshade	保留 ReShade（通过 OptiScaler 加载）
+inst.replace_foreign	替换不属于我们的文件（保留备份）
+inst.second_proxy	允许第二个 OptiScaler 加载器文件
+inst.copy_nvngx	为 Wine 复制驱动的 _nvngx.dll
+inst.preview	预览安装
+inst.preview_uninstall	预览卸载
+inst.install	安装
+inst.update	更新
+inst.uninstall	卸载
+inst.plan	将执行的操作
+inst.plan_title	Retoque 将在此游戏中执行的操作
+inst.plan_install	在此游戏中安装 Retoque 文件
+inst.nothing	没有需要更改的内容。
+inst.working	正在处理…
+inst.failed_install	安装未完成
+inst.failed_uninstall	卸载未完成
+inst.failed_settings	设置未保存
+inst.launch_help	将其粘贴到游戏的“属性 › 启动选项”中。
+inst.launch_help_heroic	在 Heroic 中，打开游戏的设置 › 高级 › 环境变量，添加 WINEDLLOVERRIDES 并填入此值。
+inst.launch_help_lutris	在 Lutris 中，打开游戏的“配置 › 系统选项 › 环境变量”，添加 WINEDLLOVERRIDES 并填入此值。
+inst.launch_help_other	游戏启动时必须加载 Retoque：请将其放到启动器的启动选项中，位于启动游戏的命令之前。
+inst.launch_label	启动选项
+inst.copy	复制
+inst.copied	已复制
+ref.running	游戏正在运行。请关闭后重试：
+ref.foreign	有一个同名文件不是 Retoque 放置的：
+ref.second	此游戏中已有另一个文件在加载 OptiScaler：
+ref.receipt	无法使用安装记录：
+ref.usage	无法执行此操作：
+set.save	审阅更改…
+mdl.current	此游戏使用
+mdl.missing_file	此文件不存在：此游戏中将无法使用 NR。
+mdl.catalog	你的模型
+mdl.import	导入模型…
+mdl.use	在此游戏中使用…
+mdl.in_use	使用中
+mdl.use_auto	使用默认搜索…
+mdl.remove	从应用中删除…
+mdl.remove_title	要从应用中删除此模型吗？
+mdl.empty	还没有模型。请导入你已有的 nvngx_dlssnr.dll 文件；它们会被复制到应用的文件夹中，绝不会被共享。
+log.none	这里还没有 OptiScaler 日志：请在安装 Retoque 后玩一次游戏。
+log.dlss	DLSS
+log.api	API
+log.gpu	NR 的 GPU 时间
+log.errors	错误
+log.warnings	警告
+log.lines	值得一看的行
+log.bundle	生成诊断文件
+log.bundle_done	已写入（已移除主文件夹和用户名）：
+log.open_folder	打开文件夹
+prefs.open	偏好设置…
+prefs.title	偏好设置
+prefs.installs	新安装
+prefs.installs_help	未安装 Retoque 的游戏从这里开始。已安装 Retoque 的游戏保留自己的选择。
+prefs.language	语言
+prefs.language_help	选择后，应用的文字会立即切换。
+prefs.language_draft	此翻译是机器生成的草稿，尚未经过母语人士审阅。部分措辞可能不够准确。
+prefs.language_no_font	{languages}：此电脑没有包含中文、日文和韩文字符的字体（例如 Noto Sans CJK）。请安装一种字体，然后重新打开 Retoque。
+prefs.data	应用数据
+prefs.data_usage	此文件夹中共 {size}
+prefs.data_measuring	正在计算文件夹大小…
+prefs.clean	中断的下载和导入留下的残留文件会在一天后自动清除。
+prefs.cleaned	启动时已清除：中断操作的残留文件 {n} 个（{size}）。
+app.wait_write	仍有写入正在进行：请等待完成后再关闭。
+inst.stale	此预览之后，选项或 Retoque 文件已发生变化：请重新预览。
+set.apply	应用
+mdl.remove_help	删除应用中保存的副本。指定此文件的游戏将无法使用 NR，直到获得另一个模型。
+app.tagline	为你的游戏带来神经渲染
+lib.group_installed	已装 Retoque
+lib.group_other	其他游戏
+card.install_options	安装选项
+card.reinstall_options	重新安装选项
+left.title	已卸载游戏留下的文件
+left.why	商店移除了这些游戏，但没有移除 Retoque 添加到其文件夹中的文件。
+left.summary	{count} 个文件夹 · {size}
+left.review	审阅清理…
+left.removing	正在移除…
+left.review_title	清理已卸载游戏留下的文件
+left.review_note	只会移除 Retoque、OptiScaler、sm86、ReShade 或它们的缓存放在那里的文件。其他任何内容（例如存档）都会保留，所在的文件夹也会保留。在你确认之前不会有任何更改。
+left.folder_line	{files} 个文件 · {size}
+left.keeps	保留 {count} 个不属于 Retoque 的文件
+left.confirm	移除残留文件（{size}）
+left.done	残留文件已移除：释放了 {size}
+left.failed	清理已停止
+rs.ready	可以安装：
+rs.checking	正在检查 ReShade…
+rs.consent_title	下载 ReShade 6.8.0
+rs.consent_body	Retoque 会从 reshade.me 下载支持插件的官方 ReShade 安装程序，并只保留其中的 DLL。只有在单独审阅之后，你的游戏才会被更改。
+rs.consent_details	主机：reshade.me。安装程序及从中提取的 DLL 都有固定的 SHA-256 哈希值。许可证：BSD-3-Clause。
+sess.title	上次会话
+sess.driver	驱动
+sess.base	真实帧
+sess.low	最差 5%
+sess.screen	屏幕显示
+sess.generation	帧生成
+sess.generation_value	x{x} · {percent}%
+sess.drops	掉帧
+sess.median	中位数
+sess.curve	会话期间每秒真实帧数
+sess.short	此会话太短，无法判断。请玩几分钟后再回来。
+sess.steady	会话表现稳定：无需更改。
+sess.fake_nvapi	此版本的 Retoque 向游戏提供了替代的 NVAPI，因此 DLSS 帧生成可能会从游戏菜单中消失。请在此游戏中更新 Retoque。
+sess.low_base	帧生成仅倍增了每秒 {base} 个真实帧。低于约 40 时会感觉迟滞和卡顿：请在游戏中选择 DLSS“平衡”或“性能”。
+sess.low_base_x4	基础帧率较低时，用 x3 代替 x4 也会更流畅。
+sess.drops_advice	在 {percent}% 的会话时间里，真实帧率下降超过 20%。这通常是游戏在加载新区域或可用内存不足：请关闭其他程序并降低纹理质量。
+sess.nr_off	会话期间神经渲染（NR）被关闭了（通过游戏中的对应按键）。
+card.launch	最后一步：Steam 启动选项
+card.launch_heroic	最后一步：Heroic 中的环境变量
+card.launch_lutris	最后一步：Lutris 选项
+card.launch_other	最后一步：启动选项
+cancel	取消
+progress.of	/
+not_now	暂不
+close	关闭
+delete	删除
+download	下载
+check_now	检查
+size.up_to	最多 {size}
+busy.writing	正在将更改应用到游戏…
+busy.reading	正在读取游戏信息…
+canvas	对比图像
+captures	截图
+refresh	刷新
+loading	正在加载截图…
+scanning	正在查找截图…
+scan_error	无法读取截图文件夹。请确认它存在且可读取，然后刷新。
+load_error	无法加载这对图像。可能有文件不完整、格式不受支持或尺寸不同。请刷新重试。
+wipe	分割
+side	并排
+flip	切换
+diff	差异
+fit	适应窗口
+one	1:1
+original	原始
+processed	Retoque NR
+hold	按住查看原始图像
+stats	显示预览
+psnr	PSNR
+changed	变化 >5%
+mad	平均差异
+stats_help	RGB PSNR 和平均绝对差异基于 8 位显示值计算；变化像素指亮度编码绝对差异超过 5% 的像素。这些不是原始 HDR 指标，也不是画质评分。
+hdr	HDR 转 SDR 预览 · ACES + sRGB · 共享曝光
+sdr	SDR 截图 · 原始显示值
+hdr_note	此处不会重现游戏自身的色调映射和后期处理。
+diff_key	差异热图 · 固定 8× 增益 · 黑色 = 相同，蓝、黄、红 = 差异依次增大
+no_provenance	未找到附带文件或内嵌的来源信息。
+model	模型
+route	路径
+working	处理分辨率
+settings	设置
+cmp.unknown	未记录
+loaded	加载于
+exposure	曝光
+exposure_reset	重置曝光
+exposure_help	0 EV 使用自动或记录的曝光。每一档会使两张图像的亮度同样加倍或减半。松开滑块时预览会更新。
+exposure_updating	正在更新预览…
+thumbnail_error	缩略图不可用
+shell.uninstall_open	卸载…
+shell.discard	放弃
+shell.restart_hint	重新启动游戏以使用这些更改。
+shell.library_checking	正在检查已安装的版本…
+shell.model_version	模型
+shell.model_unknown	已找到模型 · 版本未知
+shell.review_shortcut	审阅更改（Ctrl+Enter）；确认之前不会写入任何内容。
+shell.progress_install	正在安装…
+shell.progress_update	正在更新…
+shell.progress_remove	正在移除…
+shell.progress_save	正在保存…
+shell.home	返回游戏库
+shell.library_show	显示游戏列表
+shell.library_hide	隐藏游戏列表
+shell.back_library	‹ 游戏库
+shell.details	详情
+shell.bundle_done	已生成诊断文件
+shell.failed	无法完成此操作
+shell.catalog_changed	你的模型已更新
+shell.checking	正在检查安装…
+shell.review_update	审阅 Retoque 更新
+shell.review_install	审阅 Retoque 安装
+shell.review_remove	审阅卸载
+shell.review_note	在你确认之前不会有任何更改。
+shell.undo_record	Retoque 用于撤销的记录
+shell.resolve	请解决上述问题，关闭此审阅后重试。
+shell.add	添加
+shell.replace	替换或还原
+shell.keep	保留
+shell.remove	移除
+shell.settings	设置
+shell.games_one	个游戏
+shell.games_other	个游戏
+shell.updates_one	个可用更新
+shell.updates_other	个可用更新
+shell.home_help	添加游戏文件夹或扫描你的启动器即可开始。
+shell.reinstall	重新安装…
+shell.resume	完成清理…
+shell.update	更新 Retoque…
+shell.open_folder	打开游戏文件夹
+shell.pending	未保存的更改
+shell.preparing	正在准备审阅…
+shell.installed_done	Retoque 已安装
+shell.updated_done	Retoque 已更新
+shell.removed_done	Retoque 已卸载
+shell.settings_done	设置已应用
+set.advanced	高级设置
+set.model_link	在“组件”中选择 NR 模型
+set.custom	自定义值
+set.automatic	自动
+tab.install_first	安装 Retoque 以设置此游戏
+tab.review_install	审阅安装…
+tab.loading	正在读取游戏设置…
+mdl.loading	正在读取模型版本…
+mdl.reading_catalog	正在读取你的模型…
+mdl.beside	在游戏旁边找到
+mdl.from_catalog	来自你的模型
+mdl.from_path	来自配置的文件
+mdl.version_unknown	版本未识别
+mdl.unresolved	无法在此系统上验证此路径。请在游戏中检查。
+mdl.auto_unresolved	可执行文件旁边没有模型。默认搜索可能会在其他文件夹中找到一个。
+mdl.next_start	这是为下次启动选择的文件，并不代表正在运行的游戏实际加载了它。
+mdl.catalog_empty	你还没有模型
+mdl.optional	此游戏已有模型。导入其他模型是可选的。
+mdl.drop	将 NR 模型（nvngx_dlssnr.dll）拖放到此处，或选择文件
+mdl.import_review	要将此文件导入你的模型吗？游戏文件夹不会改变。
+mdl.confirm_import	导入模型
+mdl.used_games_none	没有游戏使用此模型
+mdl.used_games_one	1 个游戏使用此模型
+mdl.used_games	{n} 个游戏使用此模型
+mdl.refresh	重新检查模型
+log.loading	正在读取日志…
+log.latest	最近一次会话
+log.history	会话日志
+log.no_sample	没有已确认的样本
+log.details	技术详情
+log.no_evidence	此日志中未确认任何 NR 活动
+log.initialized_only	NR 已初始化；尚未确认实际运行
+log.ran	已记录 NR 运行
+log.stage_pre	在超分辨率之前
+log.stage_post	在超分辨率之后
+log.stage_present	在画面呈现时
+log.on_api	于
+log.error_count_one	个错误
+log.error_count	个错误
+log.hint_errors	请查看下方的错误。如需帮助，请生成诊断文件。
+log.hint_inactive	请确认 NR 已开启且有可用的模型，然后重新启动游戏。
+log.hint_timing	未记录到已确认的 GPU 时间。仅凭这一点并不代表 NR 失败。
+log.no_log_bundle	即使没有日志，诊断文件也会包含可用的设置和安装状态。
+log.repeat_one	次
+log.repeat	次
+log.retry	重新读取
+cmp.empty.no_shortcut	菜单快捷键已禁用。请在 OptiScaler.ini 中设置 Menu.ShortcutKey，然后重新启动游戏。
+cmp.fit.short	适应
+cmp.reset.short	0
+cmp.tools	查看器选项
+cmp.more	…
+cmp.expand	放大对比
+cmp.close	关闭放大视图
+cmp.details	截图详情
+cmp.shortcuts	键盘快捷键
+cmp.keyboard	图像获得焦点时：1–4 切换模式 · F 适应窗口 · Space 查看原始 · 方向键平移 · Shift + 左/右 移动分割线 · +/− 缩放 · Esc 退出放大视图。
+cmp.divider	对比位置
+cmp.zoom_in	放大
+cmp.zoom_out	缩小
+cmp.preview	SDR 预览
+cmp.empty.title	你的第一次对比
+cmp.empty.install	先在“{tab}”标签页中审阅安装，然后在开启 NR 的情况下启动游戏。
+cmp.empty.run	在启用 Retoque 和 NR 的情况下启动游戏。
+cmp.empty.menu	按 {key} 打开 Retoque 的游戏内菜单。
+cmp.empty.custom	使用你设置的菜单键打开 Retoque 的游戏内菜单。
+cmp.empty.disabled	此游戏的配置中禁用了游戏内菜单。截图前请先启用它。
+cmp.empty.capture	在“对比”中选择“截取原始与处理后图像”。等待两个文件都保存完成，然后在此处刷新。
+cmp.empty.refresh	查找截图
+auto.gpu_reading	正在检测显卡…
+auto.gpu_unknown	未检测到显卡
+shell.install_optimize	安装并优化…
+shell.register_optimize	登记并优化…
+shell.update_optimize	更新并优化…
+shell.more	更多操作
+shell.install_optimize_hint	一次审阅：先是 Retoque，然后是此游戏和你的显卡所需的内容。在你确认之前不会有任何更改。
+shell.install_only	仅安装…
+shell.optimize	优化…
+shell.optimize_hint	审阅此游戏和你的显卡现在可以使用的内容。
+shell.no_payload	未找到 Retoque 文件。请点击窗口底部的“Retoque 文件”。
+auto.use_banner	顶部的“安装并优化…”可以在一次审阅中完成所有这些操作。
+tile.gpu	显卡
+tile.nr	神经渲染
+tile.dlss	DLSS
+tile.fg	帧生成
+tile.on	开启
+tile.off	关闭
+tile.unknown	未知
+tile.model_missing	缺少模型
+tile.fg_sm86	适用于 RTX 20/30 的 sm86
+tile.fg_game	游戏自带
+tile.fg_available	可用
+tile.fg_needs_sm86	此显卡需要 sm86
+tile.dlss_none	未找到
+tile.dlss_detail	游戏中的文件
+auto.turing	Turing
+auto.ampere	Ampere
+auto.ada	Ada
+auto.blackwell	Blackwell
+auto.older	较早的 NVIDIA 显卡
+auto.other	显卡
+auto.unknown	未知架构
+auto.gb	GB
+auto.driver	驱动
+auto.title	针对你的显卡优化
+auto.checking	正在检查此游戏…
+auto.reading_components	正在读取你的组件…
+auto.none	对于此显卡和此游戏，没有推荐的自动更改。
+auto.need_install	请先在此游戏中安装 Retoque。
+auto.apply	仅应用此项…
+auto.confirm	应用
+auto.done	更改已应用
+auto.done_optimize	优化已应用
+auto.done_install	Retoque 已安装并优化
+auto.done_update	Retoque 已更新并优化
+auto.done_register	Retoque 已登记并优化
+auto.partial	未完全应用；已完成的操作
+auto.lsfg	Lossless Scaling 帧生成
+auto.ls_help	选择倍数以审阅更改。你的 Lossless Scaling 文件只会被引用，不会被复制。应用后请重新启动游戏。
+auto.off	关闭…
+auto.x2	x2…
+auto.x3	x3…
+auto.x4	x4…
+auto.ls_ready	Lossless Scaling 着色器已就绪
+auto.ls_missing	未找到 Lossless Scaling
+auto.choose_lossless	选择 Lossless Scaling 文件夹…
+auto.ls_conflict	开启 LSFG 之前，请先在“组件 › 帧生成”中卸载 sm86。
+auto.components	帧生成组件
+auto.no_component	你的组件中没有 sm86 组件
+auto.component_installed	此游戏中已安装该组件
+auto.component_install	审阅组件安装…
+auto.component_remove	审阅组件移除
+auto.catalog_remove	从应用中删除组件…
+auto.catalog_remove_title	要从应用中删除此组件吗？
+auto.catalog_remove_help	删除应用中保存的副本。已安装它的游戏会保留其文件；如需再次安装，请重新导入或下载。
+auto.none_installed	此游戏中没有安装受管理的组件。
+rec.sm86.title	适用于你显卡的 DLSS 帧生成
+rec.sm86.why	此游戏支持 DLSS-G。你导入的 sm86 加载器可以在 Turing 或 Ampere 上提供帧生成；LSFG 将被关闭。
+rec.sm86_mfg.title	通过 sm86 实现 DLSS 帧生成
+rec.sm86_mfg.why	sm86 已安装且此游戏支持 DLSS-G：关闭 Retoque 自己的帧生成以免冲突；如果游戏尚未设定倍数，则为每个真实帧生成两个帧（x3），在 RTX 30 上比 x4 更稳定。如果每秒真实帧数低于约 30，请在游戏中选择 DLSS“平衡”或“性能”。你可以在“设置”中更改。
+rec.rtx30_nr.title	针对 RTX 30 调整的神经渲染（NR）
+rec.rtx30_nr.why	以相同开销在屏幕中央保留完整细节（周边压缩），并增强效果（1.5）。在 RTX 3060 上测得；两者都可以在“设置”中更改。
+rec.lsfg.title	Lossless Scaling x2
+rec.lsfg.why	此游戏未检测到 DLSS-G。使用你的 Lossless Scaling 为每个真实帧额外生成一帧。
+rec.install.title	请先安装 Retoque
+rec.install.why	在此游戏中安装 Retoque 后，即可使用针对显卡的设置。
+rec.adopt.title	登记此 Retoque 安装
+rec.adopt.why	此处有 Retoque，但未登记（由旧脚本安装）。通过应用重新安装会记录每个文件，以便日后安全地更新和移除。
+rec.sm86_update.title	更新适用于 RTX 30 的 DLSS-G（dlssg_for_sm86）
+rec.sm86_update.why	此游戏中的 dlssg_for_sm86 较旧（0.3.x）。你的组件中的版本将替换它；旧文件会保留为备份。
+store.xbox	Xbox
+folders.title	你的文件夹
+folders.migrated_both	已更新你的文件夹：{moved} 已移至“包含多个游戏的文件夹”；已忽略驱动器根目录 {roots}。
+folders.migrated_moved	已更新你的文件夹：{moved} 已移至“包含多个游戏的文件夹”。
+folders.migrated_dropped	已更新你的文件夹：已忽略驱动器根目录 {roots}。
+folders.question	此文件夹包含什么？
+folders.game	单个游戏
+folders.library	包含多个游戏的文件夹
+folders.game_help	选择单个游戏或模拟器的文件夹。
+folders.library_help	将检查每个子文件夹中是否有游戏。请选择包含这些游戏的上级文件夹。
+folders.help	重新扫描时会检查这些文件夹。移除条目只会停止检查该文件夹，不会删除任何文件。
+folders.empty	尚未添加文件夹。
+folders.games	单个游戏和模拟器
+folders.libraries	包含多个游戏的文件夹
+folders.remove	从列表中移除
+folders.remove_help	仅从此列表中移除。文件保留在原处。
+folders.close	关闭
+folders.unregistered	不在商店的列表中
+palette.title	命令
+palette.search	搜索游戏、标签页、设置和操作
+palette.keys	方向键选择 · Enter 打开 · Esc 关闭
+palette.empty	无匹配结果
+palette.game	游戏
+palette.uninstall	卸载 Retoque…
+palette.review_settings	审阅设置更改…
+palette.focus	聚焦当前搜索
+set.filter	筛选设置
+set.only_changed	仅显示已更改
+set.reset	恢复为自动：{label}
+set.source_draft	已更改，尚未应用。请审阅后应用。
+undo.exact	撤销会还原 INI 的原始字节；记录的应用后哈希值仍然一致。
+undo.conservative	保守撤销 INI：文件已改变或没有精确历史记录。其他字节会保留；还原不是逐字节的。
+undo.provenance_mismatch	INI 撤销记录与请求的编辑不一致
+undo.invalid_provenance	INI 撤销记录无效；没有更改任何文件
+undo.stale_provenance	INI 撤销记录已不再一致；请重新审阅
+undo.stale_value	审阅后 INI 值已更改；请重新审阅
+undo.title	撤销上次更改…
+undo.empty	此游戏没有可撤销的已保存设置更改。
+undo.conflict	撤销被拒绝：此设置在记录的编辑之后又被更改。请审阅当前设置：
+undo.save_failed	设置已应用，但无法保存撤销历史
+undo.auto_note	撤销会先审阅再应用。原本不在文件中的设置会再次被移除。
+drop.hover	拖放到此处以审阅模型导入、组件导入或游戏添加
+drop.title	审阅拖入的项目
+drop.model	要将此 NR 模型导入你的模型吗？
+drop.component	要将此 sm86 组件导入你的组件吗？安装需要单独审阅。
+drop.game	要将此游戏文件夹添加到游戏库吗？不会更改任何游戏文件。
+drop.unsupported	不支持的项目。请选择 nvngx_dlssnr*.dll 文件，或游戏/组件文件夹。
+drop.import	导入
+drop.add_game	添加到游戏库
+drop.checking	正在检查文件…
+doctor.title	Retoque 健康检查
+doctor.prepare	审阅修复…
+doctor.evidence	依据
+doctor.badge	健康检查发现
+doctor.issues_one	1 个问题
+doctor.issues	{n} 个问题
+watch.manual	实时更新不可用。请手动刷新。
+watch.refresh	刷新所选游戏
+log.diagnoses	日志诊断
+dlss.title	NVIDIA DLSS
+dlss.installed	此游戏中的 DLSS
+dlss.available	可用
+dlss.current	已是最新
+dlss.update	更新 DLSS…
+dlss.restore	还原原始 DLSS 并卸载 Retoque…
+dlss.restore_only	还原原始 DLSS…
+dlss.restore_confirm	还原原始 DLSS
+dlss.optimize	同时更新 DLSS（可选）
+dlss.download	下载 DLSS 310.9.16…
+dlss.all_current	此游戏中的所有 DLSS 文件均已是此版本或更新版本。
+dlss.downloading	正在下载经过校验的 NVIDIA DLSS
+dlss.download_first	请先在“组件 › DLSS”中下载 DLSS，然后再审阅更新。
+dlss.consent	Retoque 会直接从 NVIDIA 下载 Super Resolution、Ray Reconstruction 和 Frame Generation。只有游戏中已有的类型才会被替换，且需经过单独审阅。
+dlss.consent_title	下载 NVIDIA DLSS 310.9.16
+dlss.consent_details	主机：raw.githubusercontent.com 和 media.githubusercontent.com（NVIDIA/DLSS，v310.9.16）。每个文件都会按固定的大小和 SHA-256 校验。适用 NVIDIA DLSS 许可证。
+dlss.caution	更换 DLL 可能与游戏或其反作弊系统不兼容。更新前请查看游戏的相关政策。原始文件会被备份以便还原。
+dlss.license	阅读 NVIDIA 许可证
+dlss.error.0	根目录中的 DLSS 安装记录属于另一个安装
+dlss.error.1	游戏根目录无效或 DLSS 文件列表为空
+dlss.error.2	DLSS 路径无效或重复
+dlss.error.3	DLSS 目标位置缺失、是链接或不明确
+dlss.error.4	更改根目录前，请先还原之前的 DLSS 安装记录
+dlss.error.5	根目录中的 DLSS 标记不属于安装记录
+dlss.error.6	应用中的 DLSS 文件标记无效
+dlss.error.7	DLSS 路径编码无效
+dlss.error.8	应用中的 DLSS 文件缺失或是链接
+dlss.error.9	DLSS 文件在上次更新后已更改；请先还原或核对
+dlss.error.10	目标位置在游戏根目录之外
+dlss.error.11	DLSS 的大小或 SHA-256 不一致
+dlss.error.12	应用中的 DLSS 文件是链接
+dlss.error.13	应用中的 DLSS 文件目录无效
+dlss.error.14	应用中的 DLSS 文件无效
+dlss.error.15	下载 DLSS 需要确认
+dlss.error.16	下载期间应用中出现了 DLSS 文件
+dlss.error.17	应用中的 DLSS 文件尚未下载
+dlss.error.18	应用中的 DLSS 文件已消失
+dlss.error.19	DLSS 扫描超出深度限制
+dlss.error.20	DLSS 扫描超出文件数量限制
+dlss.error.21	DLSS 扫描中有编码无效的路径
+dlss.error.22	DLSS 路径无效
+dlss.error.23	还原不能与优化同时进行
+dlss.error.24	只能合并同一根目录下的安装
+dlss.error.25	多个安装计划会更改相同的路径
+dlss.error.26	安装计划之间的文件已发生变化
+dlss.error.component_changed	审阅后组件已更改
+payload.source.beside	使用应用旁边的文件
+payload.source.folder	使用所选文件夹
+payload.source.release	使用已下载的版本
+payload.download	下载版本…
+payload.download_now	下载更新…
+payload.check	检查更新…
+payload.consent_title	Retoque 官方版本
+payload.check_consent	要向 GitHub 查询 Retoque 文件是否有新版本吗？
+payload.download_consent	Retoque 会从官方版本下载最新文件并进行校验。在你审阅安装之前，你的游戏不会改变。
+payload.hosts_note	允许的 HTTPS 主机：api.github.com、github.com/gabrielmaialva33/retoque 和 release-assets.githubusercontent.com。使用 SHA256SUMS 和 GitHub 的 SHA-256 摘要校验。
+payload.progress	正在下载 Retoque 文件…
+payload.no_release	GitHub 上尚未发布官方版本；继续使用所选文件夹或应用旁边的文件。
+payload.new_release	有新版本可用
+payload.up_to_date	版本已是最新
+payload.error.0	Retoque 文件的 SHA-256 与 GitHub 公布的摘要不一致。
+payload.error.1	Retoque 文件的 SHA-256 与 SHA256SUMS 文件不一致。
+payload.error.2	SHA256SUMS 文件的 SHA-256 与公布的摘要不一致。
+payload.error.3	SHA256SUMS 文件中没有列出 Retoque 文件。
+payload.error.4	Retoque 文件中有一个禁止的文件。
+payload.error.5	Retoque 文件中有一个不允许的多余文件。
+payload.error.6	OptiScaler.dll 与 nvngx.dll_dlssnr.dll 的文件版本不一致。
+payload.error.7	此版本缺少必需的 Retoque 文件。
+payload.error.8	Retoque 官方版本的元数据无效。
+payload.error.9	无法通过 HTTPS 查询或下载 Retoque 版本。
+payload.error.10	该地址不属于 Retoque 官方仓库。
+payload.error.11	已拒绝 Retoque 版本的重定向。
+payload.error.12	此版本的内容在首次下载后已发生变化。
+nr_fetch.title	社区 NR 模型（RankFTW/rhi-repo）
+nr_fetch.source_note	来自 RankFTW/rhi-repo 的社区再分发（由 ApolloF/DLSS5-Updater-catalog 列出），并非 NVIDIA 官方下载。导入前会按大小和 SHA-256 校验。
+nr_fetch.get_compatible	下载兼容的模型…
+nr_fetch.consent_title	下载兼容的 NR 模型
+nr_fetch.consent_body	此模型来自社区，而非 NVIDIA。Retoque 会对其进行校验，并只保留模型文件。只有在单独审阅之后，你的游戏设置才会更改。
+nr_fetch.refresh_catalog	刷新社区目录…
+nr_fetch.refresh_title	刷新社区 NR 模型目录
+nr_fetch.refresh_body	要从 GitHub 下载最新的社区 NR 模型列表吗？
+nr_fetch.refresh_details	来自 ApolloF/DLSS5-Updater-catalog 的 catalog.json（raw.githubusercontent.com，最多 8 MB）。只接受 RankFTW/rhi-repo 版本中带有 SHA-256 的条目；未经测试的条目绝不会被视为兼容。
+nr_fetch.confirm_refresh	刷新目录
+nr_fetch.downloading	正在下载社区 NR 模型
+nr_fetch.refreshing	正在下载社区模型列表…
+nr_fetch.no_compatible_gpu	无法识别显卡，因此无法自动选择兼容的模型。
+nr_fetch.unavailable	没有适用于此显卡的兼容 NR 模型。未应用任何更改。
+nr_fetch.available_variants	社区中可用的变体
+nr_fetch.download_variant	下载…
+nr_fetch.error.0	目录中模型的 SHA-256 缺失或无效。
+nr_fetch.error.1	模型目录超出大小限制。
+nr_fetch.error.2	模型目录中的条目过多。
+nr_fetch.error.3	模型目录的元数据无效。
+nr_fetch.error.4	该地址不属于 RankFTW/rhi-repo 已发布的版本。
+nr_fetch.error.5	不允许该模型的重定向目标。
+nr_fetch.error.6	模型目录尝试了不允许的重定向。
+nr_fetch.error.7	模型的重定向没有给出目标地址。
+nr_fetch.error.8	无法通过 HTTPS 查询或下载该模型。
+nr_fetch.error.9	模型服务器返回了意外的 HTTP 状态。
+nr_fetch.error.10	模型下载响应超出大小限制。
+nr_fetch.error.11	模型下载超出了重定向次数上限。
+nr_fetch.error.12	压缩包中找不到 nvngx_dlssnr.dll 文件。
+nr_fetch.error.13	压缩包中含有多个 nvngx_dlssnr.dll。
+nr_fetch.error.14	模型大小与声明的不一致。
+nr_fetch.error.15	模型的 SHA-256 与预期不一致。
+nr_fetch.error.16	目录的元数据与已知的固定版本冲突。
+rs.undo_addon	撤销插件更改
+rs.error.restored	原始文件已还原
+rs.error.0	ReShade 的大小或 SHA-256 不一致
+rs.error.1	ReShade 输入文件超出大小上限
+rs.error.2	ReShade 输入文件不是 PE 可执行文件
+rs.error.3	ReShade 安装程序中没有附加的 ZIP
+rs.error.4	ReShade ZIP 中的条目过多
+rs.error.5	ReShade64.dll 不明确或是链接
+rs.error.6	安装程序中缺少 ReShade64.dll
+rs.error.7	ReShade DLL 超出大小上限
+rs.error.8	ReShade DLL 无效
+rs.error.9	ReShade 文件超出大小上限
+rs.error.10	ReShade 文件标识无效
+rs.error.11	应用中的 ReShade 文件完整性校验失败
+rs.error.12	无法识别的 ReShade DLL；需要带有 ReShade 标识的 x64 DLL
+rs.error.13	ReShade 缓存已消失
+rs.error.14	ReShade 文件名无效
+rs.error.15	下载 ReShade 需要确认
+rs.error.16	ReShade 输入文件是链接或不是常规文件
+rs.error.17	ReShade 输入文件超出大小限制
+rs.error.18	ReShade 文件名仅大小写不同，无法区分
+rs.error.19	AddonPath 使用了无法解析的 Wine 驱动器或网络路径
+rs.error.20	AddonPath 是链接
+rs.error.21	插件扫描超出限制
+rs.error.22	插件文件名不是 UTF-8 编码
+rs.error.23	插件文件名仅大小写不同，无法区分
+rs.error.24	插件是链接或不是常规文件
+rs.error.25	插件检查超出大小预算
+rs.error.26	ReShade 状态已被更改，或不属于安装记录
+rs.error.27	ReShade 状态无效
+rs.error.28	ReShade 撤销历史超出限制
+rs.error.29	ReShade/插件目标位置存在大小写冲突
+rs.error.30	ReShade/插件输入文件不是 x64 PE DLL
+rs.error.31	检测到 Special K；ReShade 的加载由它负责
+rs.error.32	已存在另一个 ReShade 加载器；请先使用现有的 keep_reshade 迁移
+rs.error.33	ReShade 要求加载器文件与可执行文件位于同一文件夹
+rs.error.34	请先安装 Retoque，再安装其 ReShade 组件
+rs.error.35	OptiScaler.ini 不存在
+rs.error.36	用于撤销的 INI 路径无效
+rs.error.37	用于撤销的编辑标识无效
+rs.error.38	LoadReshade 在审阅安装后已更改；请保留撤销状态
+rs.error.39	该组件不是由 Retoque 导入的
+rs.error.40	组件状态标识不一致
+rs.error.41	导入的文件已更改；没有移除任何文件
+rs.error.42	ReShade 备份已更改；请保留安装记录
+rs.error.43	请选择文件名安全的 .addon64 或 .addon 文件
+rs.error.44	AddonPath 与游戏文件夹不同；导入到这里不会加载该插件
+rs.error.45	插件文件名无效
+rs.error.46	该插件不在 ReShade 的 AddonPath 中
+rs.error.47	ReShade 版本受限或未知；无法确认完整的插件支持
+rs.error.48	保守撤销 INI：其他编辑会保留；还原不是逐字节的
+rs.error.49	已存在相同的文件；保留其原有归属
+rs.error.50	INI 撤销无效
+rs.error.51	未知的 ReShade/插件选项
+rs.error.52	ReShade/插件参数过多
+rs.error.53	addon add 需要一个文件
+rs.error.54	需要提供插件文件名
+rs.error.55	未知的 ReShade/插件操作
+rs.title	ReShade 和插件
+rs.description	Retoque 保留游戏的加载器文件，并加载 ReShade64.dll。
+rs.enabled	已启用
+rs.disabled	已停用
+rs.full	完整插件支持
+rs.limited	受限的 ReShade 版本：无法加载外部插件
+rs.unknown	未知的 ReShade 版本
+rs.missing	缺少 ReShade
+rs.recommend	安装支持插件的 ReShade
+rs.recommend_why	存在插件，但 ReShade 的完整支持缺失或未确认。请单独审阅安装。
+rs.static	尚未在此游戏中测试。更改后请重新启动游戏。
+rs.addons	插件
+rs.build	ReShade 版本
+rs.install	审阅 ReShade 安装…
+rs.uninstall	移除 ReShade 组件
+rs.import	导入本地 ReShade DLL 或安装程序…
+rs.add	导入插件…
+rs.remove_addon	移除已导入的插件
+rs.review	审阅 ReShade / 插件更改
+rs.drop_addon	通过审阅后的计划将此插件复制到所选游戏。
+rs.drop_reshade	要将此 ReShade DLL 或安装程序导入应用吗？安装到游戏时会单独审阅。
+rs.select_game	导入插件前请先选择一个游戏。
+rs.nr_off	神经渲染（NR）：关闭
+rs.nr_addon	神经渲染（NR）：由插件 RenoDX DLSS5 提供
+rs.nr_retoque	神经渲染（NR）：由 Retoque 提供
+rs.input_title	ReShade 菜单抢走了 Retoque 菜单的鼠标
+rs.input_why	当 ReShade 的输入处理设为“全部阻止”（其默认值）时，只要它的界面打开，Retoque 菜单就收不到鼠标和键盘输入。改为仅在光标位于 ReShade 自己的窗口上时阻止，即可同时使用两个菜单。
+rs.input_mode	ReShade.ini [INPUT]
+rs.input_fix	让两个菜单都能使用鼠标…
+rs.yield	交由 NR 插件接管（默认）
+rs.ignore	保留 Retoque 的 NR（高级）
+rs.consent	要从 reshade.me 下载完整支持插件的 ReShade 6.8.0 吗？4.3 MB 的官方安装程序和提取出的 DLL 都有固定的 SHA-256 哈希值。适用 BSD-3-Clause 许可证。更改游戏需要单独审阅。
+rs.preparing	正在准备 ReShade…
+rs.cli_confirm	输入 yes 以确认下载：
+rs.download_first	请先导入或下载 ReShade；dry-run 不会下载。
+rs.dry	模拟运行：不会更改游戏或你的组件。
+rs.done	已应用审阅过的更改。
+severity.warning	警告
+severity.error	错误
+doctor.journal_unreadable.why	存在未完成的安装记录，但 Retoque 无法检查此安装。请保留它并审阅修复；其他检查不可用。
+log.load.title	NR 模型未加载
+log.load.why	直接加载器无法加载所选模型。请检查该文件及其依赖项；仅凭兼容性无法确定原因。
+doctor.healthy	在现有依据中未发现问题；未检查的项目仍属未知。
+doctor.review	进行任何修复前，请先审阅新的计划。
+doctor.unfinished.title	未完成的安装
+doctor.unfinished.why	上一次安装或卸载中途停止了。请审阅修复以完成它。
+doctor.version.title	Retoque 文件的版本不一致
+doctor.version.why	请准备用同一版本更新这两个文件。
+doctor.model_missing.title	缺少 NR 模型
+doctor.model_missing.why	NR 已开启，但所选模型不存在。请关闭 NR 或选择可用的模型。
+doctor.model_incompatible.title	NR 模型不适用于此显卡
+doctor.model_incompatible.why	此模型并非为此显卡构建。你的模型中推荐的那个尚未在此游戏中测试。
+doctor.lsfg_ready.title	LSFG 文件尚未就绪
+doctor.lsfg_ready.why	LSFG 已开启，但缺少所需文件或着色器缓存。请在就绪前将其关闭。
+doctor.lsfg_output.title	LSFG 输出设置冲突
+doctor.lsfg_output.why	LSFG 需要 FSR 帧生成输出（设置 › 帧生成 › 帧生成输出）。仅凭此设置并不能证明它已就绪。
+doctor.fg_conflict.title	帧生成提供方冲突
+doctor.fg_conflict.why	已安装 sm86 且 LSFG 已开启。使用 sm86 之前，请审阅关闭 LSFG 的更改。
+doctor.launch.title	缺少启动选项
+doctor.launch.why	游戏尚未被告知加载 Retoque。请将此标签页中显示的启动选项复制到你的启动器中。
+log.vulkan.title	Vulkan 设备丢失
+log.vulkan.why	NR 在调整尺寸时的排空过程报告了设备丢失。请审阅关闭 NR 的更改以进行对比运行；这并不能确定原因。
+log.ngx.title	NGX 初始化失败
+log.ngx.why	Vulkan 模型初始化返回失败。请检查模型和驱动的兼容性。
+log.model.title	NR 模型操作失败
+log.model.why	CPU 覆盖记录显示模型操作失败。仅凭这一点无法确定是否为加载错误及其原因。
+log.model.incompatible	模型操作失败与静态检查判定不兼容的模型同时出现。请审阅你的模型中的兼容模型；因果关系尚未验证。
+log.pre.title	超分辨率之前的 NR 已回退到安全路径
+log.pre.why	在“设置”中将“NR 阶段”设为“超分辨率之后”，以使用超分辨率后的路径。
+log.nvngx.title	缺少 Wine 驱动的 NGX 文件
+log.nvngx.why	驱动探测未能初始化，且检查未找到驱动的 NGX 文件。请检查 Wine 驱动的安装；仅凭探测结果不能作为证明。
+confidence.verified	已在上次会话中验证
+confidence.static	尚未在此游戏中测试
+confidence.proton	在 Proton/Wine 下为实验性
+confidence.sm86_proton	sm86 0.4.1 的文档说明支持 Windows 10/11 x64 和 D3D12。其 Vulkan 说明描述的是有限支持和社区补丁，并未认证 Proton。
+evidence.installed	已识别的安装
+evidence.tracked	安装记录
+evidence.runtime	运行环境
+evidence.dlss	存在 DLSS DLL
+evidence.dlssg	存在 DLSSG DLL
+evidence.sm86	已安装 sm86
+evidence.sm86_legacy	旧版 sm86
+evidence.sm86_docs	sm86 文档
+evidence.field	实际游戏测试
+evidence.lsfg	LSFG 已开启
+evidence.gpu	显卡标识
+evidence.api	上次会话的 API
+evidence.receipt	安装记录状态
+evidence.pending	未完成的操作
+evidence.proxy_version	加载器文件版本
+evidence.forwarder_version	NR 组件版本
+evidence.nr_enabled	NR 已开启
+evidence.model_present	所选模型存在
+evidence.model_targets	模型的 CUDA 目标
+evidence.catalog_model	备选模型 SHA256
+evidence.lsfg_ready	LSFG 就绪状态
+evidence.fg_output	帧生成输出
+evidence.launch_option	所需的启动选项
+evidence.override	已有启动选项
+evidence.log	已脱敏的日志行
+severity.info	信息
+doctor.dlss.title	有更新的 DLSS 可用
+doctor.dlss.why	经审阅后，NVIDIA DLSS 310.9.16 可以替换较旧的 SR/RR/FG 文件。不保证与游戏兼容。
+doctor.dlss_root.title	DLSS 安装记录需要恢复
+doctor.dlss_root.why	游戏安装根目录中仍有一个待处理或未完成的 DLSS 操作。请审阅还原这两份安装记录的更改。
+evidence.dlss_file_version	游戏的 DLSS 版本
+evidence.community_model	社区模型 SHA256
+setting.DlssNr.Enabled	神经渲染（NR）
+setting.DlssNr.Enabled.help	需要你自行提供的 NR 模型（nvngx_dlssnr.dll）。自动：关闭。
+setting.DlssNr.Stage	NR 阶段
+setting.DlssNr.Stage.help	“超分辨率之前”为实验性功能。在 Vulkan 上更改后需重新启动游戏。如果所选阶段不可用，NR 不会自行切换。
+setting.DlssNr.WorkingScale	模型缩放
+setting.DlssNr.WorkingScale.help	自动：根据你的显卡选择。范围 0.25 到 2.0；大于 1 时模型以更高分辨率工作。没有真实运动信息的路径保持在 1 或以下。
+setting.DlssNr.ModelFile	模型文件
+setting.DlssNr.ModelFile.help	自动：在游戏旁边查找 nvngx_dlssnr.dll。如果所选文件不存在，NR 会关闭。更改后请重新启动游戏。
+setting.DlssNr.GameProfiles	游戏配置文件
+setting.DlssNr.GameProfiles.help	游戏启动时应用已知适用于此游戏的设置，仅作用于保持“自动”的设置。
+setting.DlssNr.HookMethod	NR 接入位置
+setting.DlssNr.HookMethod.help	NR 从哪里接收画面。原生 Vulkan 游戏会忽略此项。部分选项需要重新启动游戏。
+setting.DlssNr.ApplyModel	应用模型
+setting.DlssNr.ApplyModel.help	关闭时显示原始画面，NR 仍在运行，便于对比。
+setting.DlssNr.HighlightRecovery	高光恢复
+setting.DlssNr.HighlightRecovery.help	保留明亮的色彩，但会损失部分模型细节。仅适用于有 HDR 输出的游戏。
+setting.DlssNr.Transfer	模型放大方式
+setting.DlssNr.Transfer.help	当模型以低于完整分辨率工作时，如何放大模型的画面。Residual + DLSS 仅在部分路径上有效。
+setting.DlssNr.Compare	对比画面
+setting.DlssNr.Compare.help	在游戏中同时显示原始画面和处理后的画面。
+setting.DlssNr.CompareSplit	分割位置
+setting.DlssNr.CompareSplit.help	分割线所在位置（0.5 = 中间）。适用于“分割”模式。自动：中间。
+setting.DlssNr.CompareSwap	交换对比两侧
+setting.DlssNr.CompareSwap.help	对比时交换原始画面和处理后画面的位置。
+setting.Upscalers.Dx11Upscaler	D3D11 超分辨率方案
+setting.Upscalers.Dx11Upscaler.help	标有“D3D12 桥接”的选项通过 D3D12 运行；NVIDIA DLSS（D3D12 桥接）也可以运行 NR。不使用桥接的 Intel XeSS 需要 Intel Arc 显卡。
+setting.Upscalers.Dx12Upscaler	D3D12 超分辨率方案
+setting.Upscalers.Dx12Upscaler.help	自动：根据你的显卡选择。
+setting.Upscalers.VulkanUpscaler	Vulkan 超分辨率方案
+setting.Upscalers.VulkanUpscaler.help	标有“D3D12 桥接”的选项通过 D3D12 运行。自动：根据你的显卡选择。
+setting.FrameGen.Enabled	帧生成
+setting.FrameGen.Enabled.help	自动：关闭；但当来源是游戏自身的 DLSS 帧生成时，跟随游戏的设置。
+setting.FrameGen.FGInput	帧生成输入
+setting.FrameGen.FGInput.help	使用游戏的哪个帧生成来源。“合成”为实验性功能，仅限 D3D11 和 D3D12。
+setting.FrameGen.FGOutput	帧生成输出
+setting.FrameGen.FGOutput.help	需要所选提供方的文件以及支持它的显卡。
+setting.FrameGen.FGNvngxReplacement	DLSSG 替代
+setting.FrameGen.FGNvngxReplacement.help	仅在使用 NVIDIA NGX 来源或 DLSS 帧生成输出时使用。需要替代方案的文件。
+setting.LSFG.Enabled	LSFG（实验性）
+setting.LSFG.Enabled.help	需要 FSR 帧生成输出和你自己的 Lossless Scaling 着色器。LSFG 无法处理的帧会回退到 FidelityFX。
+setting.LSFG.FlowScale	LSFG 光流缩放
+setting.LSFG.FlowScale.help	数值越低开销越小，但运动追踪越粗略。自动：1。
+setting.LSFG.PerformanceMode	LSFG 性能模式
+setting.LSFG.PerformanceMode.help	开销更低，但运动画面更柔和。
+setting.LSFG.ShaderDir	LSFG 着色器文件夹
+setting.LSFG.ShaderDir.help	由你自己的 Lossless Scaling 副本准备的着色器；不随附任何着色器。自动：未设置。
+setting.LSFG.DllPath	Lossless Scaling 位置
+setting.LSFG.DllPath.help	lsfg-vk.dll、Lossless.dll 或其所在文件夹。自动：在你的 Steam 和 Wine 文件夹中搜索。
+setting.LSFG.Multiplier	LSFG 倍数
+setting.LSFG.Multiplier.help	每个真实帧显示的帧数。从 2 改为 3 或 4 需要重新启动游戏。
+choice.automatic	自动
+choice.on	开启
+choice.off	关闭
+choice.after_the_upscaler	超分辨率之后
+choice.before_the_upscaler_experimental	超分辨率之前（实验性）
+choice.automatic_route	自动路径
+choice.upscaled_image	超分辨率后的画面
+choice.at_presentation	画面呈现时
+choice.classic	经典
+choice.residual	Residual
+choice.residual_dlss	Residual + DLSS
+choice.sharp_residual	锐利 Residual
+choice.side_by_side	并排
+choice.wipe	分割
+choice.fsr_2_1	FSR 2.1
+choice.fsr_2_2	FSR 2.2
+choice.fsr_3_1	FSR 3.1
+choice.fidelityfx	FidelityFX
+choice.intel_xess	Intel XeSS
+choice.nvidia_dlss	NVIDIA DLSS
+choice.fsr_2_1_d3d12_bridge	FSR 2.1（D3D12 桥接）
+choice.fsr_2_2_d3d12_bridge	FSR 2.2（D3D12 桥接）
+choice.fidelityfx_d3d12_bridge	FidelityFX（D3D12 桥接）
+choice.intel_xess_d3d12_bridge	Intel XeSS（D3D12 桥接）
+choice.nvidia_dlss_d3d12_bridge	NVIDIA DLSS（D3D12 桥接）
+choice.none	无
+choice.dlss_frame_generation	DLSS 帧生成
+choice.nvidia_ngx	NVIDIA NGX
+choice.fsr_frame_generation	FSR 帧生成
+choice.fsr_3_0_frame_generation	FSR 3.0 帧生成
+choice.intel_xe_frame_generation	Intel Xe 帧生成
+choice.from_the_upscaler	来自超分辨率方案
+choice.synthesized_experimental	合成（实验性）
+choice.nukem_s_replacement	Nukem 的替代方案
+choice.artur_s_replacement	Artur 的替代方案
+choice.fidelityfx_replacement	FidelityFX 替代方案
+choice.combined_replacements	组合替代方案
+choice.2_frames	2× 帧
+choice.3_frames	3× 帧
+choice.4_frames	4× 帧

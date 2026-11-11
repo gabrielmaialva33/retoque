@@ -69,6 +69,23 @@ pub enum NrOwner {
 pub fn yields_to_addons(value: Option<&str>) -> bool {
     !value.is_some_and(|v| v.trim().eq_ignore_ascii_case("false") || v.trim() == "0")
 }
+/// The add-ons Retoque's NR hands over to, as file-name markers: the runtime's list in
+/// retoque/dlssnr/DlssNr_ConsumerMarkers.h (`kCompetitors`), matched the same way (ASCII case-insensitive, anywhere in
+/// the file name). A test keeps the two lists equal.
+pub const NR_ADDON_MARKERS: [&str; 7] = [
+    "deep-fried-chicken",
+    "renodx-dlss",
+    "renodx_dlss",
+    "dlss5-feed",
+    "dlss5_feed",
+    "amdlss5",
+    "nr_native_adapter",
+];
+/// Whether the runtime would hand NR to an add-on with this file name.
+pub fn is_nr_addon(file: &str) -> bool {
+    let lower = file.to_ascii_lowercase();
+    NR_ADDON_MARKERS.iter().any(|marker| lower.contains(marker))
+}
 pub fn nr_owner(nr_on: bool, yield_to_addons: Option<&str>, addons: &[Addon]) -> NrOwner {
     if !nr_on {
         NrOwner::Off
@@ -245,7 +262,7 @@ pub fn addons(game: &Path) -> Result<Vec<Addon>, Error> {
             .unwrap_or_else(|| Path::new(&file).file_stem().unwrap().to_string_lossy().into_owned());
         result.push(Addon {
             enabled: !disabled_list.iter().any(|t| disabled(t, &file, &name)),
-            nr_candidate: file.to_ascii_lowercase().contains("renodx-dlss"),
+            nr_candidate: is_nr_addon(&file),
             tracked: exists(&game.join(addon_state(&file))),
             imported: exists(&game.join(addon_state(&file)))
                 && receipt

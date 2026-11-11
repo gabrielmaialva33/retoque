@@ -804,16 +804,26 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
 
     auto snapshot = config->GetDlssNrPassSnapshot();
     int count = static_cast<int>(snapshot.Count);
-    if (ImGui::SliderInt(Localization::Label("Requested passes###nrPassCount"), &count, 1, 3))
+    if (ImGui::SliderInt(Localization::Label("Requested passes###nrPassCount"), &count, 1,
+                         static_cast<int>(DlssNr::PassConfig::MaxPasses)))
     {
-        config->SetDlssNrPassCount(static_cast<uint32_t>(count));
+        // A typed value below one is one, not a wrapped unsigned that bounds to the most passes.
+        config->SetDlssNrPassCount(static_cast<uint32_t>(std::max(count, 1)));
         snapshot = config->GetDlssNrPassSnapshot();
     }
+    // The cost where the count is chosen (bounded-chain.md, "Ten passes"): every pass is the whole model again, with
+    // its own instance and history in video memory. One pass is the plain model and says nothing.
+    if (snapshot.Count > 1)
+        ImGui::TextDisabled(Localization::Tr("Cost: %ux the model's GPU time and %u model instances in video memory."),
+                            snapshot.Count, snapshot.Count);
     ImGui::Text(Localization::Tr("Last evaluation: %u successful model passes"), DlssNr::ActivePassCount());
     ImGui::TextWrapped("%s", Localization::Tr(DlssNr::MultipassStatus()));
     HelpMarker("Each extra pass processes the previous answer and has its own model history. "
-               "Cost and VRAM grow. A failed extra pass keeps the last successful answer. "
-               "Requested passes are not proof of completed work; check the last evaluation and INFO log."
+               "Every pass is a full model evaluation: the model's GPU time and video memory grow with the "
+               "count, and ten passes cost about ten times one. Extra passes are built one at a time, half a "
+               "second apart, and one the adapter's memory budget cannot hold is refused. A failed extra pass "
+               "keeps the last successful answer. Requested passes are not proof of completed work; check the "
+               "last evaluation and INFO log."
                "\n\nEnabling this after untracked NR has already run requires restarting the application. "
                "Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.");
 
@@ -1659,7 +1669,7 @@ void RenderMenu(Config* config, float menuResScale)
                    "\npass costs more than you want to pay for the detail it returns."
                    "\n\nThe frame itself stays at full detail whatever this says -- only the"
                    "\nmodel's own work is done small."
-                   "\n\nauto is 100% on RTX 40 and later and 50% on RTX 20 and 30: an RTX 3060"
+                   "\n\nauto is full size on RTX 40 and later and half size on RTX 20 and 30: an RTX 3060"
                    "\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces"
                    "\nit; Auto puts it back.");
 
@@ -1732,7 +1742,7 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nthan the small raster holds. D3D12 only, and it needs nvngx_dlss.dll. Where it"
                        "\ncannot run -- native Vulkan, before the upscaler, no real depth and motion,"
                        "\nwhile it starts -- Matched residual runs, and the line below says why."
-                       "\n\nNo effect at 100% or above: there is no residual to carry and all four are"
+                       "\n\nNo effect at full size or above: there is no residual to carry and all four are"
                        "\nidentical (supersampling brings its answer down to frame size before this)."
                        "\n\nFrom hhkbble's multi-pass work on this fork; the DLSS enlargement is wilsjo2's.");
 
@@ -2217,8 +2227,8 @@ void RenderMenu(Config* config, float menuResScale)
                                 config->DlssNrScanTrim.value_or_default());
 
                             ImGui::TextColored(ImVec4(0.45f, 0.8f, 0.45f, 1.0f),
-                                               Localization::Tr("Scan %.5f  ->  white point %.2f   (%u point%s)"),
-                                               liveScan, w, (unsigned) anchors.size(), anchors.size() == 1 ? "" : "s");
+                                               Localization::Tr("Scan %.5f  ->  white point %.2f   (points: %u)"),
+                                               liveScan, w, (unsigned) anchors.size());
                         }
                     }
 

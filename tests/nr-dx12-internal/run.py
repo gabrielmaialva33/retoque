@@ -17,6 +17,11 @@ from nr_sources import renderer_internal_header, renderer_source
 
 HERE = Path(__file__).resolve().parent
 header = renderer_internal_header()
+# The stub's pass bound is the production one, so the fixture lays g_nr out as the DLL does.
+production_passes = re.search(r'inline constexpr uint32_t MaxPasses = (\d+);',
+                              (HERE.parents[1] / 'retoque/dlssnr/DlssNr_PassSettings.h').read_text())
+assert production_passes and f'inline constexpr uint32_t MaxPasses = {production_passes[1]};' in \
+    (HERE / 'platform.h').read_text(), 'platform.h MaxPasses differs from DlssNr_PassSettings.h'
 source = renderer_source()
 contract = json.loads((HERE / 'state-contract.json').read_text())
 assert '#include "pch.h"' not in header
