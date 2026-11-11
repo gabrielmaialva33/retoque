@@ -202,6 +202,7 @@ st.nr_on	NR 켜짐
 st.nr_off	NR 꺼짐
 inst.proxy	로더 파일 이름
 inst.proxy_help	기본값으로 게임이 시작되지 않을 때만 변경하세요.
+inst.menu_language	게임 내 메뉴 언어
 inst.enable_nr	뉴럴 렌더링(NR) 켜기
 inst.keep_reshade	ReShade 유지(OptiScaler를 통해 불러오기)
 inst.replace_foreign	Retoque가 두지 않은 파일 교체(백업으로 보관)
@@ -257,6 +258,8 @@ prefs.open	환경 설정…
 prefs.title	환경 설정
 prefs.installs	새 설치
 prefs.installs_help	Retoque가 없는 게임의 시작 설정입니다. 이미 Retoque가 있는 게임은 자체 선택을 유지합니다.
+prefs.menu_lang_same	앱과 같음 ({language})
+prefs.menu_lang_help	각 게임의 다음 설치, 업데이트 또는 최적화 때 적용됩니다. 직접 넣은 언어 파일은 그대로 둡니다. 번역은 기계 번역 초안입니다.
 prefs.language	언어
 prefs.language_help	선택하는 즉시 앱의 텍스트가 바뀝니다.
 prefs.language_draft	이 번역은 원어민이 아직 검토하지 않은 기계 번역 초안입니다. 일부 표현이 어색할 수 있습니다.

@@ -202,6 +202,7 @@ st.nr_on	NR włączone
 st.nr_off	NR wyłączone
 inst.proxy	Nazwa pliku ładującego
 inst.proxy_help	Zmieniaj tylko wtedy, gdy gra nie uruchamia się z domyślną.
+inst.menu_language	Język menu w grze
 inst.enable_nr	Włącz renderowanie neuronowe (NR)
 inst.keep_reshade	Zachowaj ReShade (ładuj go przez OptiScaler)
 inst.replace_foreign	Zastąp plik, który nie jest nasz (zostanie zachowany jako kopia zapasowa)
@@ -257,6 +258,8 @@ prefs.open	Preferencje…
 prefs.title	Preferencje
 prefs.installs	Nowe instalacje
 prefs.installs_help	Od czego zaczyna gra bez Retoque. Gra, która już go ma, zachowuje własne wybory.
+prefs.menu_lang_same	Taki jak w aplikacji ({language})
+prefs.menu_lang_help	Obowiązuje w każdej grze przy następnej instalacji, aktualizacji lub optymalizacji. Twój własny plik języka zostaje bez zmian. Tłumaczenia to robocze wersje maszynowe.
 prefs.language	Język
 prefs.language_help	Tekst aplikacji zmienia się od razu po wyborze.
 prefs.language_draft	To tłumaczenie jest wersją roboczą przygotowaną maszynowo i nie zostało jeszcze sprawdzone przez rodzimego użytkownika języka. Niektóre sformułowania mogą być nietrafne.
