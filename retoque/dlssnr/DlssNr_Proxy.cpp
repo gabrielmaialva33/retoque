@@ -6,7 +6,7 @@
 
 #include <Config.h>
 #include <Logger.h>
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 #include <State.h>
 
 namespace

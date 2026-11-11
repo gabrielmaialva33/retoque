@@ -7,7 +7,7 @@ import tempfile
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
-source = (root / 'OptiScaler/proxies/NVNGX_Proxy.h').read_text()
+source = (root / 'OptiScaler/proxies/Nvngx_Proxy.h').read_text()
 vk_input = (root / 'OptiScaler/inputs/NVNGX_DLSS_Vk.cpp').read_text()
 feature_vk = (root / 'retoque/dlssnr/DlssNrFeature_Vk.cpp').read_text()
 
@@ -37,8 +37,8 @@ dx11_types = between('typedef NVSDK_NGX_Result (*PFN_D3D11_Shutdown)',
                      'typedef NVSDK_NGX_Result (*PFN_D3D11_GetParameters)')
 dx11_slots = between('    PFN_D3D11_Shutdown D3D11_Shutdown = nullptr;',
                      '    PFN_D3D11_GetParameters D3D11_GetParameters = nullptr;')
-dx11_load = between('            _module.D3D11_Shutdown1 =',
-                    '            _module.D3D11_GetParameters =')
+# NvngxModule::LoadExports (upstream 55f231b6) loads every export through Export(prefix, name).
+dx11_load = '_module.' + between('        D3D11_Shutdown1 = (', '        D3D11_GetParameters =').strip() + '\n'
 dx11_getter = between('    static PFN_D3D11_Shutdown1 D3D11_Shutdown1()', '    // DirectX12')
 types = between('typedef NVSDK_NGX_Result (*PFN_D3D12_Shutdown)',
                 'typedef NVSDK_NGX_Result (*PFN_D3D12_GetParameters)')
@@ -48,9 +48,10 @@ custom_shutdown = between('    static void ShutdownCustomDx12(', '    static voi
 getter = between('    static PFN_D3D12_Shutdown1 D3D12_Shutdown1()', '    // Vulkan')
 vk_types = between('typedef NVSDK_NGX_Result (*PFN_VULKAN_Shutdown)',
                    'typedef NVSDK_NGX_Result (*PFN_VULKAN_GetParameters)')
-vk_slots = between('    PFN_VULKAN_Shutdown VULKAN_Shutdown = nullptr;',
-                   '    PFN_VULKAN_GetParameters VULKAN_GetParameters = nullptr;')
-vk_load = between('            _module.VULKAN_Shutdown1 =', '            _module.VULKAN_GetParameters =')
+# VULKAN_Shutdown sits in the shared NgxExports base, the runtime's two-argument VULKAN_Shutdown1 in NvngxModule.
+vk_slots = ''.join(between(slot, '\n') + '\n' for slot in ('    PFN_VULKAN_Shutdown VULKAN_Shutdown = nullptr;',
+                                                           '    PFN_VULKAN_CoreShutdown1 VULKAN_Shutdown1 = nullptr;'))
+vk_load = '_module.' + between('        VULKAN_Shutdown1 = (PFN_VULKAN_CoreShutdown1)', '        VULKAN_GetParameters =').strip() + '\n'
 vk_getter = between('    static PFN_VULKAN_Shutdown1 VULKAN_Shutdown1()', '    static PFN_UpdateFeature UpdateFeature()')
 # Both consumers of the public getter: the SDK input (with the all-devices shutdown it ends in) and the NR present host.
 vk_public = (definition(vk_input, 'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)') +
@@ -110,9 +111,13 @@ class NVNGXProxy
     static void SetVulkanInited(bool value) { _vulkanInited = value; }
     static bool IsVulkanInited() { return _vulkanInited; }
     static PFN_VULKAN_Shutdown VULKAN_Shutdown() { return _vulkanInited ? _module.VULKAN_Shutdown : nullptr; }
+    // The loader line as NvngxModule::LoadExports has it, its Export resolved through KernelBaseProxy.
+    static void* Export(const char*, const char* name) { return KernelBaseProxy::GetProcAddress_()(_module.dll, name); }
     static void LoadDx11() {
+        constexpr auto prefix = "NVSDK_NGX_";
 """ + dx11_load + """    }
     static void LoadVulkan() {
+        constexpr auto prefix = "NVSDK_NGX_";
 """ + vk_load + """    }
 """ + adapter + dx11_getter + getter + vk_getter + custom_shutdown + """};
 
@@ -154,6 +159,12 @@ struct Nvngx_FG
     inline static unsigned shutdownCalls = 0, shutdown1Calls = 0;
     static NVSDK_NGX_Result VULKAN_Shutdown() { ++shutdownCalls; return NVSDK_NGX_Result_Success; }
     static NVSDK_NGX_Result VULKAN_Shutdown1(VkDevice) { ++shutdown1Calls; return NVSDK_NGX_Result_Success; }
+};
+// The custom ray reconstruction dll (upstream c2a40331), shut down beside Nvngx_FG.
+struct Nvngx_RR
+{
+    inline static unsigned shutdownCalls = 0;
+    static void ShutdownVulkan(VkDevice) { ++shutdownCalls; }
 };
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable" // production keeps the core's result in an unread local

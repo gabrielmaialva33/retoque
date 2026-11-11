@@ -19,7 +19,7 @@
 #include <proxies/XeSS_Proxy.h>
 #include <proxies/XeFG_Proxy.h>
 #include <proxies/XeLL_Proxy.h>
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 #include <proxies/FfxApi_Proxy.h>
 
 #include "inputs/FSR2_Dx11.h"
@@ -527,7 +527,6 @@ typedef int(WINAPI* PFN_ExeEntry)(PVOID);
 static PFN_ExeEntry o_ExeEntry = nullptr;
 static std::atomic<bool> _entryLoadsStarted = false;
 static std::atomic<bool> _entryLoadsDone = false;
-static bool _asiAtEntry = false;
 
 // Not call_once, an asi creating a factory while loading would call this again
 static void RunEntryLoads()
@@ -547,8 +546,9 @@ static void RunEntryLoads()
 
     LOG_INFO("Loading injected dlls");
 
-    // So ReShade hooks the factory methods after us, Special K should hook before us
-    if (skModule != nullptr || !Config::Instance()->LoadSpecialK.value_or_default())
+    // Special K and ReShade should hook before us, ReShade above our FG swapchain uses freed objects
+    if ((skModule != nullptr || !Config::Instance()->LoadSpecialK.value_or_default()) &&
+        !Config::Instance()->LoadReShade.value_or_default())
         DxgiHooks::HookFactoryMethods();
 
     // Detection fails under the loader lock, nvapi loaded by an injected dll's DllMain would pick fakenvapi
@@ -556,12 +556,6 @@ static void RunEntryLoads()
 
     DxgiHooks::LoadForLuma();
     LoadInjectedDlls();
-
-    if (_asiAtEntry)
-    {
-        spdlog::info("");
-        LoadAsiPlugins();
-    }
 
     // Started here to not create a factory together with the one above
     CreateThread(nullptr, 0, getGpuInfo, GetDllNameWModule(&dx12NamesW), 0, nullptr);
@@ -1263,6 +1257,14 @@ static void CheckWorkingMode()
         StreamlineHooks::hookDlss(slDlss);
     }
 
+    HMODULE slDlssd = GetDllNameWModule(&slDlssdNamesW);
+    if (slDlssd != nullptr)
+    {
+        State::Instance().postCodes |= PostCode::SlPluginsAlreadyInMemory;
+        LOG_WARN("sl.dlss_d.dll already in memory");
+        StreamlineHooks::hookDlssd(slDlssd);
+    }
+
     HMODULE slDlssg = nullptr;
     slDlssg = GetDllNameWModule(&slDlssgNamesW);
     if (slDlssg != nullptr)
@@ -1840,6 +1842,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         CustomProviders::ResolveDx12Upscaler();
         CustomProviders::ResolveVulkanUpscaler();
         CustomProviders::ResolveFGNvngx();
+        CustomProviders::ResolveRRUpscaler();
 
         spdlog::info("");
         if (Util::GetRealWindowsVersion(winVer))
@@ -2121,18 +2124,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
                 Config::Instance()->FpsOverlayPosition.set_volatile_value(FpsOverlayPos_TopRight);
         }
 
-        // Asi plugins, after the injected dlls like before
+        // Asi plugins stay in DllMain, some expect to run before other dlls and the exe's TLS callbacks
         if (Config::Instance()->LoadAsiPlugins.value_or_default())
         {
-            if (_staticLoad && HookExeEntry())
-            {
-                _asiAtEntry = true;
-            }
-            else
-            {
-                spdlog::info("");
-                LoadAsiPlugins();
-            }
+            spdlog::info("");
+            LoadAsiPlugins();
         }
 
         if (!Config::Instance()->DxgiSpoofing.has_value() && !State::Instance().nvngxReplacement.has_value())

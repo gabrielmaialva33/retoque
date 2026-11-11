@@ -8,7 +8,7 @@
 #include <dlssnr/DlssNr_ModelLog.h>
 #include <dlssnr/DlssNr_ModelStats.h>
 #include <dlssnr/DlssNr_Session.h>
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 #include <State.h>
 #include <Util.h>
 #include <dxgi1_4.h>

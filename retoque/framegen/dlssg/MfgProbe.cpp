@@ -9,7 +9,7 @@
 #include <misc/IdentifyGpu.h>
 #include <proxies/KernelBase_Proxy.h>
 #include <proxies/Ntdll_Proxy.h>
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 
 #include <nvsdk_ngx_defs.h>
 

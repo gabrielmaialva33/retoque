@@ -30,6 +30,11 @@ int main(int argc, char** argv)
         const int native = fake::nativeCalls;
         Check(!Down(-1) && !Down(256), "keys out of range are up");
         Check(fake::nativeCalls == native, "and never reach the system call");
+        // A tap between two of the game's reads: the menu's read takes the press bit, the game's next read gets it back
+        fake::pressedSinceLastRead[0x20] = true; // VK_SPACE
+        Check((OptiInput::RealGetAsyncKeyStateSafe(0x20) & 1) != 0, "the menu's native read takes the press bit");
+        Check((OptiInput::WithTakenAsyncKeyPress(0x20, 0, false) & 1) != 0, "the game's next read gets it back");
+        Check((OptiInput::WithTakenAsyncKeyPress(0x20, 0, false) & 1) == 0, "once");
     }
     else if (name == "missing")
     {

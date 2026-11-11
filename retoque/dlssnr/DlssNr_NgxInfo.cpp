@@ -6,7 +6,7 @@
 #include <State.h>
 #include <Util.h>
 #include <nvapi/fakenvapi.h>
-#include <proxies/NVNGX_Proxy.h>
+#include <proxies/Nvngx_Proxy.h>
 
 #include <format>
 #include <map>

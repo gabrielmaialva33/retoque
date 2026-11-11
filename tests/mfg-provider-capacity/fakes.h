@@ -70,8 +70,14 @@ struct Nvngx_FG
     static int getMaxFakeFramesCount() { return maxFrames; }
     static int limitToProvider(int count);
 };
+// Streamline_Inputs' report of the game's DLSSG mode (upstream 29cb5a66); the capacity paths only call it.
+struct FakeSlFGInputs
+{
+    void reportGameMode(sl::DLSSGMode) {}
+};
 struct State
 {
+    FakeSlFGInputs slFGInputs;
     FGNvngxReplacement activeFgNvngx = FGNvngxReplacement::None;
     std::optional<int> dlssgMfgMax;
     feature_version streamlineVersion { 2, 7, 1 };

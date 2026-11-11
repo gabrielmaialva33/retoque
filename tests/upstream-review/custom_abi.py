@@ -1,5 +1,5 @@
 from support import source,function,execute
-s=source('OptiScaler/proxies/NVNGX_Proxy.h')
+s=source('OptiScaler/proxies/Nvngx_Proxy.h')
 types=s[s.index('typedef NVSDK_NGX_Result (*PFN_D3D12_Shutdown)'):s.index('typedef NVSDK_NGX_Result (*PFN_D3D12_GetParameters)')]
 custom=function(s,'struct CustomNgxModule')+';\n'
 shutdown=function(s,'    static void ShutdownCustomDx12(')

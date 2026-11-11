@@ -185,7 +185,7 @@
     <ClInclude Include="dllmain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="proxies\NVNGX_Proxy.h">
+    <ClInclude Include="proxies\Nvngx_Proxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="upscalers\dlssd\DLSSDFeature.h">
@@ -195,6 +195,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="upscalers\dlssd\DLSSDFeature_Dx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="upscalers\nvngx\Nvngx_RR.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="proxies\Nvngx_RRDllProxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="upscalers\dlssd\DLSSDFeature_Vk.h">
@@ -1154,7 +1160,7 @@
     <ClInclude Include="framegen\nvngx\Nvngx_Nukems.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="framegen\nvngx\Nvngx_DllProxy.h">
+    <ClInclude Include="proxies\Nvngx_DllProxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="framegen\nvngx\Nvngx_Arturs.h">
@@ -1395,6 +1401,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="upscalers\dlssd\DLSSDFeature_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="upscalers\nvngx\Nvngx_RR.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="proxies\Nvngx_RRDllProxy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="upscalers\dlssd\DLSSDFeature_Vk.cpp">
@@ -1940,7 +1952,7 @@
     <ClCompile Include="framegen\nvngx\Nvngx_Nukems.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="framegen\nvngx\Nvngx_DllProxy.cpp">
+    <ClCompile Include="proxies\Nvngx_DllProxy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="framegen\nvngx\Nvngx_Arturs.cpp">
