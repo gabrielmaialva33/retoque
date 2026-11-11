@@ -935,6 +935,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\dlssnr\DlssNr_GameProfiles.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Replay.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_ReplayRecorder.cpp" />
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_WindowHost.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_PresentGuides.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Inputs.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dx12_Diagnostics.cpp" />
@@ -1035,6 +1036,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ReplayClock.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ReplayRecorder.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ReplayRecorderDx12.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_WindowHost.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Enlarge.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_FormatTwin.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PrivateSr.h" />

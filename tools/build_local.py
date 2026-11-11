@@ -373,8 +373,10 @@ def _build(root, config, extra):
     common = ['/nologo', '/v:minimal', '/p:CL_MPCount=16', f'/p:Configuration={config}',
               '/p:Platform=x64', '/p:PreBuildEventUseInBuild=false', '/p:PostBuildEventUseInBuild=false',
               f'/p:SolutionDir={windows_root}']
+    # The window host (NR on any window) links nothing of the DLL; it is built last and published with the pair.
     for label, project in (('forwarder', 'retoque/dlssnr/forwarder/dlssnr_forwarder.vcxproj'),
-                           ('optiscaler', 'OptiScaler/OptiScaler.vcxproj')):
+                           ('optiscaler', 'OptiScaler/OptiScaler.vcxproj'),
+                           ('window-host', 'retoque/window_host/window_host.vcxproj')):
         log_path = logs/f'build-{label}.log'
         result = run_step([str(compiler), project, *common, *extra], cwd=root, env=env, log_path=log_path,
                           cpu_progress_filter=_build_cpu_progress,
@@ -385,9 +387,10 @@ def _build(root, config, extra):
         if result:
             print(f'{label} failed ({result}); evidence: {log_path}', file=sys.stderr)
             return result
-    sources = [_artifact(root, config, name) for name in ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll')]
+    sources = [_artifact(root, config, name)
+               for name in ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'RetoqueWindowHost.exe')]
     if any(source is None for source in sources):
-        raise RuntimeError('compiler reported success but a required DLL is missing')
+        raise RuntimeError('compiler reported success but a required DLL or RetoqueWindowHost.exe is missing')
     if changed and _fingerprint(sources[0]) == before:
         raise RuntimeError('OptiScaler DLL is stale after build stamps changed')
     publish_pair(sources, root/'x64/out')

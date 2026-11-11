@@ -7,9 +7,10 @@ Every script derives the repo root from its own location, so each runs from any 
 
 ## build-local.sh
 
-Builds OptiScaler and the DLSS-NR forwarder on Linux with msvc-wine (MSVC under Wine).
+Builds OptiScaler, the DLSS-NR forwarder and `RetoqueWindowHost.exe` (NR on any window,
+[design](../docs/dlssnr/design/nr-anything.md)) on Linux with msvc-wine (MSVC under Wine).
 The shell entry delegates to `build_local.py`, which takes the shared compiler-prefix
-lock before changing build stamps or starting either project.
+lock before changing build stamps or starting any project.
 
 ```bash
 tools/build-local.sh [Release|Debug] [extra msbuild args]
