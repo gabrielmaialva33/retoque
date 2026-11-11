@@ -261,6 +261,33 @@ prefs.language	언어
 prefs.language_help	선택하는 즉시 앱의 텍스트가 바뀝니다.
 prefs.language_draft	이 번역은 원어민이 아직 검토하지 않은 기계 번역 초안입니다. 일부 표현이 어색할 수 있습니다.
 prefs.language_no_font	{languages}: 이 컴퓨터에 한중일 문자를 지원하는 글꼴(예: Noto Sans CJK)이 없습니다. 글꼴을 설치한 뒤 Retoque를 다시 여세요.
+app_install.heading	Retoque 앱
+app_install.install	이 컴퓨터에 Retoque 설치…
+app_install.install_title	이 컴퓨터에 Retoque 설치
+app_install.install_confirm	Retoque 설치
+app_install.install_body	이 프로그램 폴더를 만들고 아래 파일을 복사합니다:
+app_install.files	파일(폴더 포함)
+app_install.shortcuts	시작 메뉴와 바탕 화면에 바로 가기 만들기:
+app_install.registration	이 사용자의 Windows 앱 및 기능에 Retoque를 등록합니다.
+app_install.preserve	앱 데이터와 게임의 Retoque는 유지됩니다.
+app_install.installed	Retoque가 설치되었습니다. 설치된 사본을 사용하려면 다시 시작하세요.
+app_install.check	앱 업데이트 확인…
+app_install.check_title	앱 업데이트 확인
+app_install.check_body	GitHub 공식 릴리스에서 새 Windows 앱을 확인할까요? 시작 시에는 다운로드하지 않습니다.
+app_install.available	앱 버전 {version}을 사용할 수 있습니다.
+app_install.update	앱 업데이트…
+app_install.update_title	앱 업데이트
+app_install.download_body	GitHub에서 새 앱과 Retoque 파일을 다운로드하고 확인합니다. 설치된 파일을 교체하기 전에 다시 시작을 검토합니다.
+app_install.current	앱이 최신 버전입니다.
+app_install.no_release	아직 게시된 Windows 앱 릴리스가 없습니다.
+app_install.ready	앱 업데이트를 다운로드하고 확인했습니다. 준비되면 다시 시작하세요.
+app_install.restart_offer	앱 다시 시작…
+app_install.restart_title	앱 다시 시작
+app_install.restart_confirm	앱 다시 시작
+app_install.restart_body	앱을 다시 시작하여 설치된 파일을 확인된 업데이트로 교체합니다. 새 사본이 시작될 때까지 이전 앱을 유지합니다.
+app_install.busy	앱 설치 준비 중
+app_install.uninstall_body	Retoque 앱, 프로그램 폴더, 바로 가기 및 앱 및 기능 항목을 제거할까요? 앱 데이터와 게임의 Retoque는 유지됩니다.
+app_install.failed	앱을 설치, 업데이트 또는 제거할 수 없습니다. 다른 Retoque 창을 닫고 다시 시도하세요. 세부 정보:
 prefs.data	앱 데이터
 prefs.data_usage	이 폴더에 {size}
 prefs.data_measuring	폴더 크기를 측정하는 중…

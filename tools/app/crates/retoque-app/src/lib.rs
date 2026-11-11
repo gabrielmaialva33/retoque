@@ -53,3 +53,7 @@ mod main_action_tests;
 pub(crate) mod payload_ui;
 
 pub(crate) mod reshade_ui;
+
+pub mod app_install;
+#[cfg(windows)]
+mod app_install_ui;

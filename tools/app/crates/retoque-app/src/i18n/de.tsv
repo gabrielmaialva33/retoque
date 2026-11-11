@@ -261,6 +261,33 @@ prefs.language	Sprache
 prefs.language_help	Der Text der App ändert sich, sobald du wählst.
 prefs.language_draft	Diese Übersetzung ist ein maschineller Entwurf, den noch kein Muttersprachler geprüft hat. Manche Formulierungen können holprig sein.
 prefs.language_no_font	{languages}: Auf diesem Computer fehlt eine Schrift mit chinesischen, japanischen und koreanischen Zeichen (etwa Noto Sans CJK). Installiere eine und öffne Retoque erneut.
+app_install.heading	Retoque-App
+app_install.install	Retoque auf diesem Computer installieren…
+app_install.install_title	Retoque auf diesem Computer installieren
+app_install.install_confirm	Retoque installieren
+app_install.install_body	Diesen Programmordner erstellen und die folgenden Dateien hineinkopieren:
+app_install.files	Dateien (einschließlich ihrer Ordner)
+app_install.shortcuts	Verknüpfungen im Startmenü und auf dem Desktop erstellen:
+app_install.registration	Retoque für diesen Benutzer unter Windows Apps und Features registrieren.
+app_install.preserve	Deine App-Daten und Retoque in deinen Spielen bleiben erhalten.
+app_install.installed	Retoque installiert. Starte neu, um die installierte Kopie zu verwenden.
+app_install.check	Nach App-Updates suchen…
+app_install.check_title	Nach App-Updates suchen
+app_install.check_body	Unsere offiziellen GitHub-Versionen nach einer neueren Windows-App durchsuchen? Beim Start wird nichts heruntergeladen.
+app_install.available	App-Version {version} ist verfügbar.
+app_install.update	App aktualisieren…
+app_install.update_title	App aktualisieren
+app_install.download_body	Die neue App und ihre Retoque-Dateien von GitHub herunterladen und prüfen. Vor dem Ersetzen der installierten Dateien bestätigst du den Neustart.
+app_install.current	Die App ist aktuell.
+app_install.no_release	Noch keine Windows-App-Version veröffentlicht.
+app_install.ready	App-Update heruntergeladen und geprüft. Starte neu, wenn du bereit bist.
+app_install.restart_offer	App neu starten…
+app_install.restart_title	App neu starten
+app_install.restart_confirm	App neu starten
+app_install.restart_body	Die App neu starten, um ihre installierten Dateien durch das geprüfte Update zu ersetzen. Die vorherige App bleibt erhalten, bis die neue Kopie startet.
+app_install.busy	App-Installation wird vorbereitet
+app_install.uninstall_body	Die Retoque-App, ihren Programmordner, Verknüpfungen und den Eintrag unter Apps und Features deinstallieren? Deine App-Daten und Retoque in deinen Spielen bleiben erhalten.
+app_install.failed	Die App konnte nicht installiert, aktualisiert oder deinstalliert werden. Schließe andere Retoque-Fenster und versuche es erneut. Details:
 prefs.data	App-Daten
 prefs.data_usage	{size} in diesem Ordner
 prefs.data_measuring	Ordner wird gemessen…

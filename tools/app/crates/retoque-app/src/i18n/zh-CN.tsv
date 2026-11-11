@@ -261,6 +261,33 @@ prefs.language	语言
 prefs.language_help	选择后，应用的文字会立即切换。
 prefs.language_draft	此翻译是机器生成的草稿，尚未经过母语人士审阅。部分措辞可能不够准确。
 prefs.language_no_font	{languages}：此电脑没有包含中文、日文和韩文字符的字体（例如 Noto Sans CJK）。请安装一种字体，然后重新打开 Retoque。
+app_install.heading	Retoque 应用
+app_install.install	在此电脑上安装 Retoque…
+app_install.install_title	在此电脑上安装 Retoque
+app_install.install_confirm	安装 Retoque
+app_install.install_body	创建此程序文件夹并将以下文件复制到其中：
+app_install.files	文件（包括其文件夹）
+app_install.shortcuts	创建开始菜单和桌面快捷方式：
+app_install.registration	为此用户在 Windows 应用和功能中注册 Retoque。
+app_install.preserve	保留应用数据和游戏中的 Retoque。
+app_install.installed	Retoque 已安装。请重启以使用已安装的副本。
+app_install.check	检查应用更新…
+app_install.check_title	检查应用更新
+app_install.check_body	是否访问 GitHub 官方版本以检查新版 Windows 应用？启动时不会下载任何内容。
+app_install.available	应用版本 {version} 可用。
+app_install.update	更新应用…
+app_install.update_title	更新应用
+app_install.download_body	从 GitHub 下载并验证新版应用及其 Retoque 文件。在替换已安装的文件前，您将确认重启。
+app_install.current	应用已是最新版本。
+app_install.no_release	尚未发布 Windows 应用版本。
+app_install.ready	应用更新已下载并验证。请在准备好后重启。
+app_install.restart_offer	重启应用…
+app_install.restart_title	重启应用
+app_install.restart_confirm	重启应用
+app_install.restart_body	重启应用以使用已验证的更新替换已安装的文件。在新副本启动前保留旧版应用。
+app_install.busy	正在准备应用安装
+app_install.uninstall_body	是否卸载 Retoque 应用、程序文件夹、快捷方式及应用和功能条目？应用数据和游戏中的 Retoque 将被保留。
+app_install.failed	无法安装、更新或卸载应用。请关闭其他 Retoque 窗口后重试。详细信息：
 prefs.data	应用数据
 prefs.data_usage	此文件夹中共 {size}
 prefs.data_measuring	正在计算文件夹大小…

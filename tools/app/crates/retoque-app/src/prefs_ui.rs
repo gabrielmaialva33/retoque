@@ -153,6 +153,9 @@ impl RetoqueApp {
                 });
                 ui.label(RichText::new(t(lang, "inst.proxy_help")).small().color(theme::MUTED));
 
+                #[cfg(windows)]
+                self.app_install_controls(ui);
+
                 widgets::section_header(ui, t(lang, "prefs.data"));
                 let dir = retoque_data::lsfg_prepare::data_dir().ok();
                 ui.horizontal_wrapped(|ui| {

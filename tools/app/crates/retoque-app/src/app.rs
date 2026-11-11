@@ -142,6 +142,8 @@ pub struct RetoqueApp {
     pub(crate) tuning: crate::autotune::UiState,
     pub(crate) lsfg: crate::lsfg_ui::State,
     pub(crate) prefs: crate::prefs_ui::State,
+    #[cfg(windows)]
+    pub(crate) app_installer: crate::app_install_ui::State,
     pub(crate) payload_ui: crate::payload_ui::State,
     pub(crate) nr_fetch: crate::tabs::model::NrFetchState,
     pub(crate) folder_dialog: Option<FolderDialog>,
@@ -196,6 +198,8 @@ impl RetoqueApp {
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
             prefs: crate::prefs_ui::State::default(),
+            #[cfg(windows)]
+            app_installer: crate::app_install_ui::State::default(),
             payload_ui: crate::payload_ui::State::default(),
             nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,
@@ -320,6 +324,8 @@ impl RetoqueApp {
         self.drop_sheet(ui.ctx());
         self.nr_fetch_dialog(ui.ctx());
         self.prefs_dialog(ui.ctx());
+        #[cfg(windows)]
+        self.app_install_dialog(ui.ctx());
         self.handle_commands();
     }
 }
