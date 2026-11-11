@@ -194,7 +194,8 @@ impl RetoqueApp {
             );
         }
         if let Some(release) = &self.tuning.sm86.release {
-            ui.label(format!("{} · {}", release.version, release.published_at));
+            let date = crate::format::date_text(self.lang, &release.published_at).unwrap_or_default();
+            ui.label(format!("{} · {date}", release.version));
             ui.label(self.tr(if self.tuning.sm86.available {
                 "sm86.current"
             } else {
@@ -531,12 +532,17 @@ impl RetoqueApp {
                     self.tuning.sm86.error = Some(AppError::warning(self.tr("optimize.experimental_omitted")));
                 }
             }
-            Ok(c) => {
-                self.tuning.sm86.error = Some(if c.experimental_omitted {
-                    AppError::warning(self.tr("optimize.experimental_omitted"))
-                } else {
-                    AppError::info(self.tr("optimize.nothing"))
-                })
+            // Nothing to review: say so where the user clicked (the banner may be on any tab), not only in the
+            // Overview card, which already reads "no automatic changes recommended".
+            Ok(c) if c.experimental_omitted => {
+                let warning = self.tr("optimize.experimental_omitted").to_owned();
+                self.toast(warning.clone(), None, false);
+                self.tuning.sm86.error = Some(AppError::warning(warning));
+            }
+            Ok(_) => {
+                let game = self.selected_game().map(|g| g.name.clone()).unwrap_or_default();
+                self.toast(self.tr("optimize.up_to_date").replace("{game}", &game), None, false);
+                self.tuning.sm86.error = None;
             }
         }
     }

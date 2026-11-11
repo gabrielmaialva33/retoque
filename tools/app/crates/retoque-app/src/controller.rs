@@ -217,7 +217,9 @@ impl RetoqueApp {
                                 Outcome::DoctorBadge {
                                     generation,
                                     target,
-                                    count: retoque_data::doctor::diagnose(&inputs).len(),
+                                    count: crate::tabs::doctor::attention_count(&retoque_data::doctor::diagnose(
+                                        &inputs,
+                                    )),
                                 }
                             },
                         );

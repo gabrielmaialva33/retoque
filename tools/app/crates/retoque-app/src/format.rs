@@ -134,7 +134,7 @@ pub(crate) fn short_path(p: &Path) -> String {
             return if rest.as_os_str().is_empty() {
                 "~".into()
             } else {
-                format!("~/{}", rest.display())
+                format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display())
             };
         }
     }
@@ -260,6 +260,21 @@ pub(crate) fn download_label(lang: Lang, bytes: Option<u64>) -> String {
     }
 }
 
+/// The date of an RFC 3339 time ("2026-10-27T06:27:00Z") in the user's format: 27/10/2026 or 2026-10-27.
+pub(crate) fn date_text(lang: crate::i18n::Lang, time: &str) -> Option<String> {
+    let date = time.get(..10)?;
+    let mut parts = date.split('-');
+    let (y, m, d) = (parts.next()?, parts.next()?, parts.next()?);
+    if y.len() != 4 || m.len() != 2 || d.len() != 2 || ![y, m, d].iter().all(|p| p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return None;
+    }
+    Some(match lang {
+        crate::i18n::Lang::Pt => format!("{d}/{m}/{y}"),
+        crate::i18n::Lang::En => date.to_owned(),
+    })
+}
+
 /// A size in user units (KB, MB, GB), with the decimal comma in Portuguese. The one way the app writes sizes.
 pub(crate) fn size_text(lang: crate::i18n::Lang, bytes: u64) -> String {
     let (value, unit) = match bytes {
@@ -281,6 +296,31 @@ pub(crate) fn size_text(lang: crate::i18n::Lang, bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dates_read_in_the_users_format() {
+        use crate::i18n::Lang;
+        assert_eq!(
+            date_text(Lang::Pt, "2026-10-27T06:27:00Z").as_deref(),
+            Some("27/10/2026")
+        );
+        assert_eq!(
+            date_text(Lang::En, "2026-10-27T06:27:00Z").as_deref(),
+            Some("2026-10-27")
+        );
+        assert_eq!(date_text(Lang::Pt, "soon"), None);
+        assert_eq!(date_text(Lang::Pt, ""), None);
+    }
+
+    #[test]
+    fn model_usage_has_a_singular_and_a_zero() {
+        use crate::i18n::Lang;
+        use crate::tabs::model::used_games_text;
+        assert_eq!(used_games_text(Lang::Pt, 0), "Nenhum jogo usa este modelo");
+        assert_eq!(used_games_text(Lang::Pt, 1), "1 jogo usando este modelo");
+        assert_eq!(used_games_text(Lang::Pt, 3), "3 jogos usando este modelo");
+        assert_eq!(used_games_text(Lang::En, 1), "1 game using this model");
+    }
 
     #[test]
     fn a_verbatim_model_file_is_the_same_path() {

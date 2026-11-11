@@ -213,7 +213,10 @@ impl RetoqueApp {
         if self.view.target.as_ref() != Some(&assessment.target) {
             return;
         }
-        self.doctor_badges.insert(assessment.target, assessment.findings.len());
+        self.doctor_badges.insert(
+            assessment.target,
+            crate::tabs::doctor::attention_count(&assessment.findings),
+        );
         self.view.doctor = Some(crate::tabs::doctor::DoctorCard {
             findings: assessment.findings,
         });

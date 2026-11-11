@@ -342,9 +342,9 @@ const TEXT: &[(&str, &str, &str)] = &[
         "O sm86 experimental ficou de fora. Selecione-o explicitamente acima para incluí-lo em uma revisão.",
     ),
     (
-        "optimize.nothing",
-        "No applicable changes with the current choices.",
-        "Nenhuma alteração aplicável com as escolhas atuais.",
+        "optimize.up_to_date",
+        "{game} already has the recommended settings for your graphics card.",
+        "{game} já está com os ajustes recomendados para sua placa de vídeo.",
     ),
     (
         "optimize.install_first",
@@ -632,6 +632,11 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("tab.model", "Components", "Componentes"),
     // The Components tab's sections, in the order a game uses them.
     ("comp.nr", "NR model", "Modelo NR"),
+    (
+        "comp.sm86_name",
+        "Frame generation for RTX 20/30 · version {version}",
+        "Geração de quadros para RTX 20/30 · versão {version}",
+    ),
     ("comp.dlss", "DLSS", "DLSS"),
     ("comp.fg", "Frame generation", "Geração de quadros"),
     ("tab.compare", "Before / after", "Antes e depois"),
@@ -1201,7 +1206,21 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Importar este arquivo para seus modelos? A pasta do jogo continua como está.",
     ),
     ("mdl.confirm_import", "Import model", "Importar modelo"),
-    ("mdl.used_games", "games using this model", "jogos usando este modelo"),
+    (
+        "mdl.used_games_none",
+        "No game uses this model",
+        "Nenhum jogo usa este modelo",
+    ),
+    (
+        "mdl.used_games_one",
+        "1 game using this model",
+        "1 jogo usando este modelo",
+    ),
+    (
+        "mdl.used_games",
+        "{n} games using this model",
+        "{n} jogos usando este modelo",
+    ),
     ("mdl.refresh", "Check model again", "Verificar modelo novamente"),
     ("log.loading", "Reading log…", "Lendo registro…"),
     ("log.latest", "Latest session", "Última sessão"),
@@ -1726,7 +1745,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("drop.add_game", "Add to library", "Adicionar à biblioteca"),
     ("drop.checking", "Checking the file…", "Verificando o arquivo…"),
     ("doctor.title", "Retoque health check", "Diagnóstico do Retoque"),
-    ("doctor.prepare", "Prepare repair…", "Preparar reparo…"),
+    ("doctor.prepare", "Review fix…", "Revisar correção…"),
     ("doctor.evidence", "Evidence", "Evidências"),
     ("doctor.badge", "Health findings", "Problemas detectados"),
     ("doctor.issues_one", "1 issue", "1 problema"),

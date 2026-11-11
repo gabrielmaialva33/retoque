@@ -30,7 +30,8 @@ pub struct NrFetchState {
     pub fetcher: Option<SharedModelFetcher>,
 }
 
-#[cfg(test)]
+// Only the model tab's tests use it, and they do not build on Windows.
+#[cfg(all(test, not(windows)))]
 impl NrFetchState {
     /// The confirm label of the open download consent ("Download (12 MB)").
     pub(crate) fn download_label(&self, lang: Lang) -> String {
@@ -232,7 +233,7 @@ impl RetoqueApp {
                 self.model_compatibility_label(ui, &m.compatibility);
                 if let Some(count) = used {
                     ui.label(
-                        RichText::new(format!("{count} {}", self.tr("mdl.used_games")))
+                        RichText::new(used_games_text(self.lang, count))
                             .small()
                             .color(theme::MUTED),
                     );
@@ -766,6 +767,15 @@ pub(crate) fn synthetic_model_fixture_for_optimize() -> (RemoteModel, SharedMode
             catalog_json: Vec::new(),
         }),
     )
+}
+
+/// "Nenhum jogo usa este modelo", "1 jogo usando este modelo", "3 jogos usando este modelo".
+pub(crate) fn used_games_text(lang: Lang, count: usize) -> String {
+    match count {
+        0 => t(lang, "mdl.used_games_none").to_owned(),
+        1 => t(lang, "mdl.used_games_one").to_owned(),
+        n => t(lang, "mdl.used_games").replace("{n}", &n.to_string()),
+    }
 }
 
 #[cfg(all(test, not(windows)))]
