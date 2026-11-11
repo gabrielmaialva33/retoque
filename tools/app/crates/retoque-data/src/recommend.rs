@@ -176,14 +176,18 @@ impl Recommendation {
     }
 }
 
-/// DLSS-G through sm86 on RTX 30 (Ampere), as measured on an RTX 3060 in Dying Light: The Beast (2026-11-10): the game's
-/// own DLSS-G at 4.0x on screen with NR on. FGNvngxReplacement=None keeps OptiScaler from putting its own frame
-/// generation (auto = Nukems) in front of sm86's; OverrideInterpolationCount=3 asks for MFG x4 (three generated
-/// frames), which sm86 0.4.1 allows (MaxGeneratedFrames=3).
+/// DLSS-G through sm86 on RTX 30 (Ampere), from an RTX 3060 in Dying Light: The Beast (2026-11-10): the game's own DLSS-G
+/// through sm86 with NR on. FGNvngxReplacement=None keeps OptiScaler from putting its own frame generation (auto =
+/// Nukems) in front of sm86's. OverrideInterpolationCount=2 asks for MFG x3 (two generated frames): that session ran
+/// x4 (3, which sm86 0.4.1 allows) on 23-27 real frames per second and it stuttered, and an RTX 30 rarely has the base
+/// x4 needs. A count the game already has is the user's choice and is kept (SM86_MFG_KEEP).
 pub const SM86_MFG: [(&str, &str, &str); 2] = [
     ("FrameGen", "FGNvngxReplacement", "None"),
-    ("DLSSG", "OverrideInterpolationCount", "3"),
+    ("DLSSG", "OverrideInterpolationCount", "2"),
 ];
+/// Profile keys proposed only while the game has no value of its own ("auto" or absent): another value is a choice,
+/// such as x4 on a game with a high base, which the session card can still advise against.
+const SM86_MFG_KEEP: [(&str, &str); 1] = [("DLSSG", "OverrideInterpolationCount")];
 /// Neural Rendering on RTX 30 (Ampere) from the same session: peripheral compression keeps full detail in the centre at the
 /// same cost, and a stronger transfer is the look the user chose. WorkingScale 0.5 and Preset 2 are already the
 /// automatic values on these cards, and the white point belongs to one game's exposure, so neither is set here.
@@ -196,19 +200,24 @@ pub const RTX30_NR: [(&str, &str, &str); 2] = [
 pub const PROFILE_IDS: [&str; 2] = ["rtx30_nr", "sm86_mfg"];
 const FIELD_EVIDENCE: &str = "Dying Light: The Beast, RTX 3060, Windows, 2026-11-10";
 
-/// The profile edits whose value differs from the game's (numbers compare as numbers: the menu saves 1.500000).
+/// The profile edits whose value differs from the game's (numbers compare as numbers: the menu saves 1.500000). A key in
+/// SM86_MFG_KEEP that the game already sets is left as it is.
 fn missing(edits: &[(&str, &str, &str)], game: &GameFacts) -> Vec<(String, String, String)> {
     let same = |a: &str, b: &str| match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
         (Ok(x), Ok(y)) => (x - y).abs() < 1e-6,
         _ => a.trim().eq_ignore_ascii_case(b.trim()),
     };
+    let kept = |section: &str, key: &str| {
+        SM86_MFG_KEEP
+            .iter()
+            .any(|(s, k)| s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key))
+    };
     edits
         .iter()
         .filter(|(section, key, value)| {
-            !game
-                .profile_values
-                .iter()
-                .any(|(s, k, v)| s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key) && same(v, value))
+            !game.profile_values.iter().any(|(s, k, v)| {
+                s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key) && (kept(section, key) || same(v, value))
+            })
         })
         .map(|(section, key, value)| edit(section, key, value))
         .collect()
@@ -652,7 +661,7 @@ mod tests {
             set("sm86_mfg"),
             [
                 edit("FrameGen", "FGNvngxReplacement", "None"),
-                edit("DLSSG", "OverrideInterpolationCount", "3")
+                edit("DLSSG", "OverrideInterpolationCount", "2")
             ]
         );
         assert_eq!(
@@ -673,12 +682,36 @@ mod tests {
             ..fresh.clone()
         };
         assert!(ids(&applied).is_empty());
-        // A user who chose x3 still gets x4 offered (a recommendation, reviewed, never forced); D3D11/Vulkan get no NR profile.
-        let x3 = GameFacts {
-            profile_values: vec![edit("DLSSG", "OverrideInterpolationCount", "2")],
+        // A count the game already has is the user's choice: x4 (set on that RTX 3060 before x3 became the proposal) and
+        // x2 stay, and only the missing replacement key is proposed. D3D11/Vulkan get no NR profile.
+        for chosen in ["3", "1"] {
+            let facts = GameFacts {
+                profile_values: vec![edit("DLSSG", "OverrideInterpolationCount", chosen)],
+                ..fresh.clone()
+            };
+            let rec = recommend(Some(&gpu(Arch::Ampere)), &facts);
+            let mfg = rec
+                .iter()
+                .find(|r| r.id == "sm86_mfg")
+                .expect("the replacement key is still missing");
+            assert_eq!(
+                mfg.actions,
+                vec![Action::SetIni {
+                    section: "FrameGen".into(),
+                    key: "FGNvngxReplacement".into(),
+                    value: "None".into()
+                }],
+                "count {chosen} is kept"
+            );
+        }
+        let x4_applied = GameFacts {
+            profile_values: vec![
+                edit("FrameGen", "FGNvngxReplacement", "None"),
+                edit("DLSSG", "OverrideInterpolationCount", "3"),
+            ],
             ..fresh.clone()
         };
-        assert!(ids(&x3).contains(&"sm86_mfg"));
+        assert!(!ids(&x4_applied).contains(&"sm86_mfg"));
         let vulkan = GameFacts {
             last_session_api: Some("Vulkan".into()),
             ..fresh.clone()

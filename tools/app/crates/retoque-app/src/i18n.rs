@@ -1541,13 +1541,13 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "rec.sm86_mfg.title",
-        "DLSS frame generation x4",
-        "Geração de quadros DLSS x4",
+        "DLSS frame generation through sm86",
+        "Geração de quadros DLSS pelo sm86",
     ),
     (
         "rec.sm86_mfg.why",
-        "sm86 is installed and this game has DLSS-G: ask for three generated frames per real one (x4) and keep Retoque's own frame generation out of the way. You can lower it in Settings.",
-        "O sm86 está instalado e este jogo tem DLSS-G: pede três quadros gerados para cada real (x4) e tira a geração de quadros do Retoque do caminho. Dá para baixar em Ajustes.",
+        "sm86 is installed and this game has DLSS-G: keep Retoque's own frame generation out of the way and, unless the game already has a choice, ask for two generated frames per real one (x3), which stays steadier than x4 on an RTX 30. Below about 30 real frames per second, pick DLSS Balanced or Performance in the game. You can change it in Settings.",
+        "O sm86 está instalado e este jogo tem DLSS-G: tira a geração de quadros do Retoque do caminho e, se o jogo ainda não tem uma escolha, pede dois quadros gerados para cada real (x3), que fica mais estável que x4 numa RTX 30. Abaixo de uns 30 quadros reais por segundo, escolha DLSS Balanceado ou Desempenho no jogo. Dá para mudar em Ajustes.",
     ),
     (
         "rec.rtx30_nr.title",

@@ -198,9 +198,12 @@ candidates. Games Retoque has been run in are listed, one dated observation per 
 
 On RTX 30 (Ampere) two tuning items come from one field session (Dying Light: The Beast, RTX 3060, Windows,
 2026-11-10, DLSS-G through sm86 at 4.0x on screen with NR on): with sm86 and a game that ships DLSS-G,
-`[FrameGen] FGNvngxReplacement=None` and `[DLSSG] OverrideInterpolationCount=3` (MFG x4); for a D3D12 game,
-`[DlssNr] PeripheryCompression=true` and `TransferStrength=1.5`. A value already set (numbers compare as
-numbers) is not proposed again. They never choose a frame-generation provider. RTX 20 and RTX 40+ get neither
+`[FrameGen] FGNvngxReplacement=None` and `[DLSSG] OverrideInterpolationCount=2` (MFG x3; that session's x4 stuttered on
+23-27 real frames per second); for a D3D12 game, `[DlssNr] PeripheryCompression=true` and `TransferStrength=1.5`. A
+value already set (numbers compare as numbers) is not proposed again, and a frame count the game already has (x4
+included) is kept as the user's choice; the "Last session" card still advises x3 on a low base. The card also says to
+pick DLSS Balanced or Performance in the game below about 30 real frames per second: the DLSS mode is the game's
+setting, which the app does not change. They never choose a frame-generation provider. RTX 20 and RTX 40+ get neither
 until a game is measured there; one session is a starting point, not a qualification.
 
 The kit builder can opt into `INCLUDE_OFFICIAL_SM86=1`. The `cache_sm86` example stores the exact archive plus
