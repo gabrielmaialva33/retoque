@@ -30,6 +30,10 @@ pub enum Outcome {
     PayloadFetch(Box<crate::payload_ui::Event>),
     NrFetch(crate::tabs::model::NrFetchEvent),
     HistoryWritten(Result<(), AppError>),
+    /// What the startup cleanup removed from the app's data folder.
+    AppDataCleaned(retoque_data::app_data::Cleaned),
+    /// Bytes in the app's data folder.
+    AppDataUsage(u64),
     DropClassified {
         request: u64,
         paths: Vec<(PathBuf, crate::drop_import::Route)>,

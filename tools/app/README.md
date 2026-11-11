@@ -188,6 +188,14 @@ review lists per folder what goes and what stays. `retoque_core::leftovers` remo
 sm86, ReShade or their caches put there, never follows links, keeps every other file (saves, store stamps) and
 its folder, refuses a folder with an executable, and refuses a folder that changed since the review.
 
+“Preferences…” in the top bar holds what a game without Retoque starts from (NR on, keep ReShade, the loader file
+name, and on Linux the driver's `_nvngx.dll`); a game that already has Retoque keeps its own. It also shows how much
+the app's data folder takes. At startup `retoque_data::app_data` clears staging an interrupted import, download or
+unpack left there (`.import-…`, `.download-…`, `.unpack-…`, `.prepare-…`, `*.json.tmp`) once it is a day old, in the
+data folder and the folders directly inside it only, never following a link; catalogs, models and settings are never
+candidates. Games Retoque has been run in are listed, one dated observation per row, in
+[docs/games.md](../../docs/games.md).
+
 On RTX 30 (Ampere) two tuning items come from one field session (Dying Light: The Beast, RTX 3060, Windows,
 2026-11-10, DLSS-G through sm86 at 4.0x on screen with NR on): with sm86 and a game that ships DLSS-G,
 `[FrameGen] FGNvngxReplacement=None` and `[DLSSG] OverrideInterpolationCount=3` (MFG x4); for a D3D12 game,

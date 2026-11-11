@@ -8,6 +8,7 @@ pub mod i18n;
 pub mod jobs;
 pub mod leftovers_ui;
 pub mod model;
+mod prefs_ui;
 pub mod theme;
 pub mod widgets;
 

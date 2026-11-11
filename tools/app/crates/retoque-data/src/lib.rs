@@ -12,6 +12,7 @@ pub mod gpu;
 pub mod lsfg;
 pub mod recommend;
 
+pub mod app_data;
 pub mod model_compat;
 pub mod model_facts;
 pub mod model_fetch;

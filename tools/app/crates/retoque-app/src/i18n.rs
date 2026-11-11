@@ -808,6 +808,27 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Gravado (pasta pessoal e nome de usuário removidos):",
     ),
     ("log.open_folder", "Open folder", "Abrir pasta"),
+    ("prefs.open", "Preferences…", "Preferências…"),
+    ("prefs.title", "Preferences", "Preferências"),
+    ("prefs.installs", "New installs", "Novas instalações"),
+    (
+        "prefs.installs_help",
+        "Where a game without Retoque starts. A game that already has it keeps its own choices.",
+        "O ponto de partida para um jogo sem Retoque. Um jogo que já tem o Retoque mantém as escolhas dele.",
+    ),
+    ("prefs.data", "App data", "Dados do app"),
+    ("prefs.data_usage", "{size} in this folder", "{size} nesta pasta"),
+    ("prefs.data_measuring", "Measuring the folder…", "Medindo a pasta…"),
+    (
+        "prefs.clean",
+        "Leftovers of interrupted downloads and imports are cleared on their own after a day.",
+        "Sobras de downloads e importações interrompidos são apagadas sozinhas depois de um dia.",
+    ),
+    (
+        "prefs.cleaned",
+        "Cleared at startup: {n} leftover(s) of interrupted operations ({size}).",
+        "Apagado ao abrir: {n} sobra(s) de operações interrompidas ({size}).",
+    ),
     (
         "app.wait_write",
         "A write is still running: wait for it to finish before closing.",

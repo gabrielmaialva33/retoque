@@ -7,6 +7,7 @@ current checkout or a freshly packaged binary. Upstream-owned files keep their p
 |---|---|
 | What is Retoque and how do I install it? | [README](../README.md) |
 | Which behavior exists and where was it validated? | [Capabilities and evidence](capabilities.md) |
+| Which games has Retoque been run in? | [Games tried](games.md), one dated observation per row |
 | How do I contribute safely? | [Contributor guide](contributing.md), [NR invariants](dlssnr/design/DEVELOPMENT.md) |
 | Where does each responsibility live? | [Architecture](architecture.md), then code-adjacent READMEs |
 | What work is next or blocked? | [Roadmap](dlssnr/roadmap.md) |
