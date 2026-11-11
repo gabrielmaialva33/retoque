@@ -227,6 +227,9 @@ impl RetoqueApp {
             if edits.get(&key).is_some_and(|v| !s.accepts(v)) {
                 ui.colored_label(theme::BAD, RichText::new(t(lang, "set.invalid")).small());
             }
+            if (s.section, s.key) == ("DlssNr", "Passes") {
+                self.passes_notes(ui, &value);
+            }
             if value != before {
                 if value == on_disk {
                     edits.remove(&key);
@@ -235,6 +238,18 @@ impl RetoqueApp {
                 }
             }
             ui.add_space(6.0);
+        }
+    }
+
+    /// Under the pass count: what the chosen count costs (as the in-game menu says it, from two passes up), and on an
+    /// RTX 30 card that its video memory budget may refuse the later passes (bounded-chain.md, "Ten passes").
+    fn passes_notes(&self, ui: &mut egui::Ui, value: &str) {
+        if let Some(cost) = passes_cost(self.lang, value) {
+            ui.add(egui::Label::new(RichText::new(cost).small().color(theme::MUTED)).wrap());
+        }
+        let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
+        if gpu.is_some_and(|g| g.arch == retoque_data::gpu::Arch::Ampere) {
+            ui.add(egui::Label::new(RichText::new(self.tr("set.passes_ampere")).small().color(theme::MUTED)).wrap());
         }
     }
 
@@ -318,24 +333,132 @@ pub(crate) fn value_widget(
             })
             .inner
         }
-        Kind::Int { min, max } => match value.trim().parse::<i64>() {
-            Ok(mut i) => {
-                let response = ui.add(egui::DragValue::new(&mut i).range(*min..=*max));
-                if response.changed() {
-                    *value = i.to_string();
+        // As Float: Automatic is a toggle beside the number, never "auto" typed into it.
+        Kind::Int { min, max } => {
+            ui.horizontal(|ui| {
+                let automatic = value.eq_ignore_ascii_case("auto");
+                let toggle = ui.add(egui::Button::selectable(automatic, t(lang, "set.automatic")));
+                if toggle.clicked() {
+                    *value = if automatic {
+                        1_i64.clamp(*min, *max).to_string()
+                    } else {
+                        "auto".into()
+                    };
                 }
-                response
-            }
-            Err(_) => ui.add(egui::TextEdit::singleline(value).desired_width(ui.available_width().min(120.0))),
-        },
+                if automatic {
+                    return toggle;
+                }
+                match value.trim().parse::<i64>() {
+                    Ok(mut i) => {
+                        let response = ui.add(egui::DragValue::new(&mut i).range(*min..=*max));
+                        if response.changed() {
+                            *value = i.to_string();
+                        }
+                        toggle.union(response)
+                    }
+                    Err(_) => toggle.union(ui.add(egui::TextEdit::singleline(value).desired_width(70.0))),
+                }
+            })
+            .inner
+        }
         Kind::Text => ui.add(egui::TextEdit::singleline(value).desired_width(ui.available_width())),
     };
     response.on_hover_text(raw)
+}
+
+/// The cost line for a pass count: None for one pass (the plain model), Automatic, or a value OptiScaler would not
+/// accept (that row already says so).
+pub(crate) fn passes_cost(lang: Lang, value: &str) -> Option<String> {
+    let setting = settings::all()
+        .iter()
+        .find(|s| (s.section, s.key) == ("DlssNr", "Passes"))?;
+    let count = value.trim().parse::<i64>().ok()?;
+    (setting.accepts(value) && count > 1).then(|| t(lang, "set.passes_cost").replace("{n}", &count.to_string()))
 }
 
 pub(crate) fn choice_label<'a>(setting: &settings::Setting, value: &'a str, lang: Lang) -> &'a str {
     match setting.choice_labels(value) {
         Some((en, pt)) => crate::i18n::choice_text(lang, en, pt),
         None => t(lang, "set.custom"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use egui_kittest::{Harness, kittest::Queryable};
+
+    #[test]
+    fn the_pass_cost_follows_the_value() {
+        for lang in [Lang::En, Lang::Pt] {
+            for n in 2..=10 {
+                let cost = passes_cost(lang, &n.to_string()).unwrap();
+                assert_eq!(cost, t(lang, "set.passes_cost").replace("{n}", &n.to_string()));
+                assert_eq!(cost.matches(&format!("{n}")).count(), 2, "{cost}");
+            }
+            // One pass is the plain model; invalid values already say so on their row.
+            for value in ["auto", "1", "0", "11", "abc", ""] {
+                assert_eq!(passes_cost(lang, value), None, "{value}");
+            }
+        }
+    }
+
+    #[test]
+    fn passes_round_trip_through_the_reviewed_settings_plan() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("OptiScaler.ini"), "[DlssNr]\nPasses=auto\n").unwrap();
+        for n in (1..=10).map(|n| n.to_string()).chain(["auto".to_owned()]) {
+            let edits = vec![("DlssNr".to_owned(), "Passes".to_owned(), n.clone())];
+            let plan = retoque_core::plan_settings(temp.path(), &edits).unwrap();
+            retoque_core::apply(&plan.into_verified().unwrap(), &mut |_| ()).unwrap();
+            let (_, bytes) = retoque_core::read_ini(temp.path()).unwrap().unwrap();
+            let values = crate::state::settings::IniValues::read(&Ini::parse(&bytes));
+            assert_eq!(values.get("DlssNr", "Passes"), Some(n.as_str()));
+        }
+    }
+
+    fn settings_with(passes: &str, ampere: bool) -> Harness<'static, RetoqueApp> {
+        let text = format!("[DlssNr]\nPasses={passes}\n");
+        let ini = Ini::parse(text.as_bytes());
+        let mut app = crate::app_tests::shell_tests::app();
+        app.view.target = Some("/synthetic/game".into());
+        app.view.ini_values = crate::state::settings::IniValues::read(&ini);
+        app.view.ini = Some(Ok(Some(ini)));
+        // While filtering, the advanced NR rows are shown unfolded.
+        app.intuitive.settings.query = "Passes".into();
+        if ampere {
+            app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
+        }
+        Harness::builder().with_size([1100., 900.]).build_ui_state(
+            |ui, app: &mut RetoqueApp| {
+                let mut edits = std::mem::take(&mut app.view.edits);
+                app.settings_tab(ui, &mut edits, &app.cmd_tx.clone());
+                app.view.edits = edits;
+            },
+            app,
+        )
+    }
+
+    #[test]
+    fn passes_row_shows_its_cost_and_the_rtx30_note() {
+        let lang = Lang::En;
+        let label = all_label();
+        let h = settings_with("4", true);
+        assert!(h.query_all_by_label(label).next().is_some());
+        h.get_by_label(&passes_cost(lang, "4").unwrap());
+        h.get_by_label(t(lang, "set.passes_ampere"));
+        // One pass costs nothing extra; another card gets no RTX 30 note.
+        let h = settings_with("1", false);
+        assert!(h.query_all_by_label(label).next().is_some());
+        assert!(h.query_by_label_contains("model instances").is_none());
+        assert!(h.query_by_label(t(lang, "set.passes_ampere")).is_none());
+    }
+
+    fn all_label() -> &'static str {
+        settings::all()
+            .iter()
+            .find(|s| (s.section, s.key) == ("DlssNr", "Passes"))
+            .unwrap()
+            .label_en
     }
 }

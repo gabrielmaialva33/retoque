@@ -1185,6 +1185,8 @@ const TEXT: &[(&str, &str, &str)] = &[
         "x3 instead of x4 also feels steadier on a low base.",
         "x3 em vez de x4 também fica mais estável com a base baixa.",
     ),
+    ("sess.use_x3", "Use x3…", "Usar x3…"),
+    ("sess.use_x3_done", "Now using x3", "Agora usando x3"),
     (
         "sess.drops_advice",
         "The real frame rate dropped more than 20% in {percent}% of the session. It is usually the game loading new areas or too little free RAM: close other programs and lower texture quality.",
@@ -1413,6 +1415,16 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("set.custom", "Custom value", "Valor personalizado"),
     ("set.automatic", "Automatic", "Automático"),
+    (
+        "set.passes_cost",
+        "Cost: {n}× the model's GPU time and {n} model instances in video memory.",
+        "Custo: {n}× o tempo de GPU do modelo e {n} instâncias do modelo na memória de vídeo.",
+    ),
+    (
+        "set.passes_ampere",
+        "On an RTX 30 card, higher counts may be refused by its video memory budget.",
+        "Numa placa RTX 30, contagens maiores podem ser recusadas pelo limite de memória de vídeo dela.",
+    ),
     (
         "tab.install_first",
         "Install Retoque to set up this game",

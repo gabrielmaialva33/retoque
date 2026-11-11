@@ -148,6 +148,10 @@ impl RetoqueApp {
         };
         self.review_open = false;
         self.restore_focus();
+        // A change from the "Last session" card is toasted with its own verb ("Now using x3").
+        if let Some(fix) = self.session_fix_for(self.view.request) {
+            self.tuning.writes.insert(target.clone(), fix.done);
+        }
         self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, plan.steps().len()));
         self.write_kinds.insert(target.clone(), kind);
@@ -337,6 +341,8 @@ impl RetoqueApp {
                     });
                     let title = if self.intuitive.undo_request == Some(request) {
                         self.tr("undo.title")
+                    } else if let Some(fix) = self.session_fix_for(request) {
+                        self.tr(fix.label).trim_end_matches('…')
                     } else {
                         title
                     };
@@ -662,6 +668,7 @@ impl RetoqueApp {
                         self.start_plan(kind, inputs);
                     }
                 }
+                AppCommand::SessionFix(target, fix) => self.start_session_fix(target, fix),
                 AppCommand::RescanLibrary => self.rescan(),
                 AppCommand::Remedy(remedy, target) => self.remediate(remedy, target),
                 AppCommand::SwitchTab(tab) => self.tab = tab,
@@ -800,7 +807,10 @@ impl RetoqueApp {
                             ReviewKind::Standard(PlanKind::Install) if installed => self.tr("inst.update"),
                             ReviewKind::Standard(PlanKind::Install) => self.tr("inst.install"),
                             ReviewKind::Standard(PlanKind::Uninstall) => self.tr("inst.uninstall"),
-                            ReviewKind::Standard(PlanKind::Settings) => self.tr("set.apply"),
+                            ReviewKind::Standard(PlanKind::Settings) => match self.session_fix_for(review.request_id) {
+                                Some(fix) => self.tr(fix.label).trim_end_matches('…'),
+                                None => self.tr("set.apply"),
+                            },
                         };
                         if self.intuitive.undo_request == Some(review.request_id) {
                             ui.label(self.tr("undo.auto_note"));
