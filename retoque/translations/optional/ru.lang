@@ -1,0 +1,640 @@
+# OptiScaler optional Russian (ru) dictionary. See translations/README.md.
+# Not loaded from this directory. Activation requires OptiScaler.lang beside the DLL.
+# Machine-translated draft, pending native review: corrections from native speakers are welcome.
+# 103 entries come from NeuRotic's machine-translated drafts (localization/machine-drafts/ru.nrlang,
+# GPL-3.0, commit beae4eea), matched by identical English text; the rest were translated for this pack.
+DLSS Neural Rendering	DLSS Neural Rendering
+Enable Neural Rendering	Включить Neural Rendering
+Apply the model	Применить модель
+Reset	Сбросить
+Retry	Повторить
+Can be toggled with a key -- bind it under Keybinds, "Neural Rendering".	Можно переключать клавишей: назначьте "Neural Rendering" в разделе "Горячие клавиши".
+Off. The model stays loaded, so turning this back on is immediate.	Выключено. Модель остается загруженной, поэтому повторное включение происходит мгновенно.
+Off for this session: %s.	Выключено для этого сеанса: %s.
+Waiting for the upscaler to run.	Ожидание запуска апскейлера.
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), inside the driver on the game's own device, where the pass cannot run after it. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which carries the pass: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	DLSS этой игры работает нативно на D3D11 (Dx11Upscaler dlss), внутри драйвера на собственном устройстве игры, где проход не может выполниться после него. DLSS w/Dx12 (dlss_12) запускает тот же DLSS на мосту D3D12 от OptiScaler, который поддерживает проход: выберите его в разделе "Апскейлеры" или задайте Dx11Upscaler=dlss_12.
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), and its depth and motion are not reaching the pass at present, so it runs without them; the log's 'native D3D11 guides' line says why. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which hands them over: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	DLSS этой игры работает нативно на D3D11 (Dx11Upscaler dlss), и его глубина и движение сейчас не доходят до прохода, поэтому он работает без них; причину объясняет строка 'native D3D11 guides' в логе. DLSS w/Dx12 (dlss_12) запускает тот же DLSS на мосту D3D12 от OptiScaler, который их передает: выберите его в разделе "Апскейлеры" или задайте Dx11Upscaler=dlss_12.
+Running natively on Vulkan - %llu frames%s	Работает нативно на Vulkan - кадров: %llu%s
+Running.%s	Работает.%s
+  (model running, edit hidden)	  (модель работает, правка скрыта)
+ natively on Vulkan	 нативно на Vulkan
+Stage	Стадия
+After the upscaler	После апскейлера
+Before the upscaler (experimental)	До апскейлера (экспериментально)
+Stage: after the upscaler (native Vulkan)	Стадия: после апскейлера (нативный Vulkan)
+Model resolution	Разрешение модели
+Pause when the game turns frame generation off	Пауза, когда игра выключает генерацию кадров
+Look	Вид
+Natural	Естественный
+Cinematic	Кинематографичный
+Subtle	Сдержанный
+Gentle	Мягкий
+Game colour	Цвет игры
+The model's own defaults: style A, everything at 1.	Собственные значения модели по умолчанию: стиль A, все на 1.
+NVIDIA's style B: softer contrast and saturation, kinder to skin.	Стиль B от NVIDIA: мягче контраст и насыщенность, бережнее к коже.
+NVIDIA's style C: a gentler, filmic saturation.	Стиль C от NVIDIA: более мягкая, кинематографичная насыщенность.
+What NVIDIA's RTX Remix ships: structure 0.7, tone 0.3, no skin mask -- closer to the game.	То, что поставляется в RTX Remix от NVIDIA: структура 0.7, тон 0.3, без маски кожи -- ближе к игре.
+A conservative community recipe: intensity 0.5, structure 0.7, tone 0.3, colour 0.5, detail 0.85.	Консервативный рецепт сообщества: интенсивность 0.5, структура 0.7, тон 0.3, цвет 0.5, детали 0.85.
+Keeps the game's own hue (colour strength 0); only the light changes.	Сохраняет собственный оттенок игры (сила цвета 0); меняется только свет.
+A starting point for how NR looks, in one click: it sets the model's style and\nstrengths and the colour and detail strength, and every control still shows and\nedits what it set. Custom means the current values are not one of these.\n\nPerformance settings (resolution, passes, cadence) and exposure are left alone.\nWith individual pass settings on, a pass's own overrides still win for that pass.	Отправная точка для вида NR в один клик: задает стиль и силы модели,\nа также силу цвета и деталей, и каждый элемент управления по-прежнему показывает\nи меняет то, что задано. "Пользовательский" означает, что текущие значения не совпадают ни с одним из них.\n\nНастройки производительности (разрешение, проходы, периодичность) и экспозиция не меняются.\nКогда включены "Отдельные настройки проходов", переопределения прохода по-прежнему действуют для него.
+Many games turn their own DLSS frame generation off in menus, dialogue and\ncutscenes, and lift the frame cap with it, so NR runs at the full uncapped rate.\nThis skips NR there and resumes the moment frame generation comes back.\n\nOnly after the game's frame generation was seen on, after half a second off,\nand never while this menu is open (the menu turns frame generation off itself).	Многие игры выключают свою генерацию кадров DLSS в меню, диалогах и\nроликах, а вместе с ней снимают ограничение кадров, и NR работает на полной, ничем не ограниченной частоте.\nЭта опция пропускает NR в такие моменты и возобновляет его, как только генерация кадров вернется.\n\nТолько после того, как генерация кадров игры была замечена включенной, спустя полсекунды выключения\nи никогда при открытом меню (меню само выключает генерацию кадров).
+Downscaler (NR)	Фильтр уменьшения (NR)
+Enlargement	Увеличение
+Classic	Классический
+Matched residual	Согласованный остаток
+How much of it lands	Степень применения
+Detail strength	Сила деталей
+Colour strength	Сила цвета
+Reversible proxy (experimental)	Обратимый прокси (экспериментально)
+Off (soft knee)	Выкл. (мягкое ограничение)
+Neutwo proxy + composed	Прокси Neutwo + композиция
+Neutwo proxy + replace	Прокси Neutwo + замена
+Hybrid proxy + composed	Гибридный прокси + композиция
+Hybrid proxy + replace	Гибридный прокси + замена
+Model	Модель
+Read when the model is built, so a change rebuilds it after a moment.	Считывается при создании модели, поэтому изменение пересоздает ее через мгновение.
+Default	По умолчанию
+Preset 1	Пресет 1
+Preset 2	Пресет 2
+Preset 3	Пресет 3
+Model preset	Пресет модели
+Model preset: this model has one weight set, so there is nothing to choose.	Пресет модели: у этой модели один набор весов, выбирать нечего.
+Model A (Default)	Модель A (По умолчанию)
+Model B (Natural)	Модель B (Естественный)
+Model C (Cinematic)	Модель C (Кинематографичный)
+Style	Стиль
+Intensity	Интенсивность
+Local structure	Локальная структура
+Local tone	Локальный тон
+Skin structure	Структура кожи
+Auto skin mask	Автоматическая маска кожи
+Colour	Цвет
+Paper white only	Только опорный белый
+The game's own exposure	Собственная экспозиция игры
+A buffer the scan found	Буфер, найденный при сканировании
+White point from	Источник точки белого
+Waiting for a frame...	Ожидание кадра...
+Reading the exposure...	Чтение экспозиции...
+Trim (x the scan)	Подстройка (x от сканирования)
+Trim (x the game's exposure)	Подстройка (x от экспозиции игры)
+Paper white	Опорный белый
+Highlight guard	Защита светлых участков
+Highlight recovery	Восстановление светлых участков
+Show the light meter on screen	Показывать экспонометр на экране
+Choose the buffer by matching it to the light	Выбирать буфер по соответствию освещению
+Off: the buffer whose value travels widest drives the white point, as before.\nA counter or a timer travels widest of all, and then the picture drifts.\n\nOn: the buffer whose value follows the light of the game's own frame the\nway an exposure does -- a little behind it, as eyes adapt -- and nothing\nuntil that is sure, which takes about half a minute of walking between\nlight and shade. Timers, frozen values and the frame's own brightness\nare turned down. Paper white is used until then.\n\nAnchors set under one rule may need setting again under the other.\nCosts one small measuring pass a frame. Adapted from janblade's fork.	Выкл.: точку белого задает буфер, значение которого меняется в самом широком диапазоне, как раньше.\nСчетчик или таймер меняется шире всех, и тогда картинка уплывает.\n\nВкл.: буфер, значение которого следует за светом собственного кадра игры\nтак, как это делает экспозиция -- с небольшим отставанием, как адаптируется глаз, -- а пока\nэто не станет надежным, никакой; на это уходит около полуминуты ходьбы между\nсветом и тенью. Таймеры, застывшие значения и собственная яркость кадра\nотсеиваются. До тех пор используется опорный белый.\n\nТочки, зафиксированные по одному правилу, может понадобиться задать заново по другому.\nСтоит одного небольшого измерительного прохода за кадр. Адаптировано из форка janblade.
+Anchor here	Зафиксировать здесь
+The number runs the other way	Значение меняется в обратную сторону
+Advanced	Дополнительно
+Walk from shade into daylight. A real exposure moves.	Перейдите из тени на дневной свет. Реальная экспозиция меняется.
+One that only ever climbs is a counter, not an exposure.	Значение, которое только растет, -- это счетчик, а не экспозиция.
+Compare	Сравнить
+Hold frame	Удержать кадр
+Off	Выкл.
+Side by side	Бок о бок
+Wipe	Шторка
+Swap sides	Поменять стороны местами
+Label the sides	Подписать стороны
+Label size	Размер меток
+Zoom	Масштаб
+Split	Положение шторки
+Debug view	Отладочный вид
+Proxy (what the model sees)	Прокси (то, что видит модель)
+Model output (raw)	Вывод модели (сырой)
+Difference (amplified)	Разница (усиленная)
+Save Settings	Сохранить настройки
+Close	Закрыть
+Menu Scale	Масштаб меню
+Keybinds	Горячие клавиши
+Logging	Логирование
+Advanced Settings	Расширенные настройки
+Menu Theme and Color	Тема и цвета меню
+FPS Overlay	Оверлей FPS
+Upscaler Inputs	Входные данные апскейлера
+V-Sync Settings	Настройки V-Sync
+Magnifier	Лупа
+Resource Barriers	Барьеры ресурсов
+Root Signatures	Корневые подписи
+Active Quirks	Активные особенности
+Dx11 with Dx12 Settings	Настройки Dx11 с Dx12
+Vulkan with Dx12 Settings	Настройки Vulkan с Dx12
+XeSS Settings	Настройки XeSS
+Advanced FG Settings	Расширенные настройки FG
+Before the upscaler: edited render-resolution color supplied	До апскейлера: передан отредактированный цвет в разрешении рендеринга
+Waiting for a stable render resolution (500 ms); original color retained	Ожидание стабильного разрешения рендеринга (500 мс); исходный цвет сохранен
+Synthesises detail in the upscaler's output, before frame generation sees it.\n\nNeeds two similarly named files beside OptiScaler, one character apart:\n  nvngx_dlssnr.dll       NVIDIA's model (~165 MB) -- you supply it\n  nvngx.dll_dlssnr.dll   the forwarder (~115 KB) -- ships in this package\nUndocumented and driven directly, so none of this is officially supported.	Синтезирует детали в выводе апскейлера до того, как его получит генерация кадров.\n\nНужны два файла с похожими именами рядом с OptiScaler, различающиеся одним символом:\n  nvngx_dlssnr.dll       модель NVIDIA (~165 МБ) -- предоставляете вы\n  nvngx.dll_dlssnr.dll   форвардер (~115 КБ) -- входит в этот пакет\nНе документировано и управляется напрямую, поэтому ничего из этого официально не поддерживается.
+Whether the model's edit is applied. Off shows the clean upscaler frame while the\npass keeps running -- so with Hold frame (under Compare) you can freeze a\nframe and toggle this to see the same frozen frame with and without Neural\nRendering. Leave it on for normal use.	Применяется ли правка модели. Выкл. показывает чистый кадр апскейлера, пока\nпроход продолжает работать, -- так что с "Удержать кадр" (в разделе "Сравнить") можно заморозить\nкадр и переключать этот флажок, чтобы видеть тот же замороженный кадр с Neural Rendering\nи без него. Для обычной игры оставьте включенным.
+Before: runs Neural Rendering on the game's render-resolution color, then\nupscales the edited copy. This may reduce GPU cost, but can introduce shimmer\nand unstable detail on moving edges. Compare the picture in motion.\n\nExperimental on D3D12 and the D3D12 bridges. Ray reconstruction, Hold frame,\nthe driver proxy, and unsupported inputs use the after-upscale path.\nChanging render dimensions pauses NR until they stay stable for 500 ms.\nThe original game color is used while the model is being built or skipped.	До: запускает Neural Rendering на цвете игры в разрешении рендеринга, затем\nмасштабирует отредактированную копию. Это может снизить нагрузку на GPU, но может вызвать мерцание\nи нестабильные детали на движущихся краях. Сравнивайте картинку в движении.\n\nЭкспериментально на D3D12 и мостах D3D12. Ray Reconstruction, "Удержать кадр",\nпрокси драйвера и неподдерживаемые входные данные используют путь после апскейлера.\nИзменение размеров рендеринга приостанавливает NR, пока они не будут стабильны 500 мс.\nПока модель создается или пропускается, используется исходный цвет игры.
+Default leaves the choice to the model.\n\nNot the same scale as the super resolution or ray reconstruction presets --\nthe same number means something different here.\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,\nPreset 2 the smaller October one, and Default (or any other number) falls back\nto Preset 2. The line below is what the model says it built.	"По умолчанию" оставляет выбор модели.\n\nЭто не та же шкала, что у пресетов super resolution или ray reconstruction, --\nто же число здесь означает другое.\n\nВ 310.9.16 два набора весов: Пресет 1 -- исходная сентябрьская модель,\nПресет 2 -- меньшая октябрьская, а "По умолчанию" (или любое другое число) сводится\nк Пресету 2. Строка ниже -- то, что, по словам модели, она собрала.
+Running:	Работает:
+Game profile:	Профиль игры:
+Keys this game needs before Neural Rendering can run in it, applied when the game started,\nonly where OptiScaler.ini leaves them on auto, and never written back to it. A value\nyou set in the ini always wins. [DlssNr] GameProfiles=false turns this off.	Ключи, которые нужны этой игре, чтобы в ней мог работать Neural Rendering; применяются при запуске игры,\nтолько там, где OptiScaler.ini оставляет их на auto, и никогда не записываются в него. Значение,\nзаданное вами в ini, всегда важнее. [DlssNr] GameProfiles=false отключает это.
+(preset %d)	(пресет %d)
+September model (the original)	Сентябрьская модель (исходная)
+October model (smaller, faster)	Октябрьская модель (меньше, быстрее)
+The model's own report of the weight set it built. It carries:	Собственный отчет модели о собранном наборе весов. В нем:
+The model's own strength control, applied inside it. Distinct from detail\nstrength above, which scales the result afterwards.	Собственный регулятор силы модели, применяемый внутри нее. Отличается от силы\nдеталей выше, которая масштабирует результат уже после.
+-1 means follow local structure, and is the model's own default -- it is not a\nstrength of zero. 0 and above set skin independently of the rest of the frame.\n\nRead only with the auto skin mask on; with it off the model ignores this.	-1 означает следовать локальной структуре и является значением модели по умолчанию -- это не\nнулевая сила. 0 и выше задают кожу независимо от остального кадра.\n\nУчитывается только при включенной автоматической маске кожи; без нее модель это игнорирует.
+Lets the model find skin itself rather than treating the frame uniformly.	Позволяет модели самой находить кожу, а не обрабатывать кадр равномерно.
+Freezes the frame the model works on. While held, change paper white, the\nstrengths, the reversible mode, the model preset -- anything below the\nupscaler -- and only that setting moves; the scene does not.\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream\n(the upscaler is not re-run on a held frame), and the game's own HUD and\npost-processing, which run after this pass and keep updating. The white\npoint stops being measured and holds its value while frozen, so it cannot\ndrift and confound the comparison.\n\nHide the menu and it stays held. Untoggle to resume.	Замораживает кадр, с которым работает модель. Пока он удерживается, меняйте опорный белый,\nсилы, обратимый режим, пресет модели -- все, что ниже\nапскейлера, -- и меняется только эта настройка, а не сцена.\n\nЧего это НЕ МОЖЕТ показать: пресеты апскейлеров DLSS/FSR/XeSS и все, что выше по цепочке\n(апскейлер не запускается повторно на удержанном кадре), а также собственные HUD и\nпостобработку игры, которые выполняются после этого прохода и продолжают обновляться. Точка белого\nперестает измеряться и сохраняет значение, пока кадр заморожен, поэтому она не может\nуплыть и исказить сравнение.\n\nСкройте меню -- кадр останется удержанным. Снимите флажок, чтобы продолжить.
+Where the wipe cuts. Left of it is the frame as the upscaler produced it,\nright of it is the frame the model edited.	Где шторка делит кадр. Слева от нее -- кадр, каким его выдал апскейлер,\nсправа -- кадр, отредактированный моделью.
+Proxy is the picture handed to the model -- if that looks wrong, the white point\nis wrong and nothing downstream can be judged.\n\nDifference shows what the model actually changed, amplified twenty times and\ncentred on grey. A flat grey frame there means it is doing nothing.	Прокси -- это картинка, которую получает модель: если она выглядит неправильно, точка белого\nневерна, и ничего дальше по цепочке оценить нельзя.\n\nРазница показывает, что модель действительно изменила, усиленное в двадцать раз и\nотцентрированное на сером. Ровный серый кадр означает, что модель ничего не делает.
+
+# Bounded pass editor. New interactive controls carry stable IDs.
+Sequential model passes	Последовательные проходы модели
+Requested passes	Запрошено проходов
+Last evaluation: %u successful model passes	Последнее вычисление: успешных проходов модели -- %u
+Individual pass settings	Отдельные настройки проходов
+Edit pass	Изменить проход
+Editing pass 1	Изменение прохода 1
+Uncheck Override to inherit the live master value.	Снимите флажок "Переопределить", чтобы наследовать текущее основное значение.
+Override	Переопределить
+Override auto skin mask	Переопределить автоматическую маску кожи
+Auto skin mask: inherit %s	Автоматическая маска кожи: наследовать %s
+Inherit all master settings	Наследовать все основные настройки
+%s: inherit %.2f	%s: наследовать %.2f
+%s: inherit %s	%s: наследовать %s
+This backend uses one pass with master settings. Sequential passes and individual settings are unavailable.	Этот бэкенд использует один проход с основными настройками. Последовательные проходы и отдельные настройки недоступны.
+Apply after Ray Reconstruction	Применять после Ray Reconstruction
+RR Passes	Проходы RR
+RR Working scale	Рабочий масштаб RR
+Runs Neural Rendering over native Ray Reconstruction (DLSSD) output.\n\nDisabled by default: Ray Reconstruction already synthesizes denoised output.\nEnable if you want to run DLSS-NR over the final RR result at configured scale.	Запускает Neural Rendering поверх вывода нативного Ray Reconstruction (DLSSD).\n\nВыключено по умолчанию: Ray Reconstruction уже синтезирует очищенный от шума вывод.\nВключите, если хотите запускать DLSS-NR поверх итогового результата RR в заданном масштабе.
+Output stabilizer	Стабилизатор вывода
+Stabilizer strength	Сила стабилизатора
+Stabilizer tolerance	Допуск стабилизатора
+
+# 2026-09-28: GPU timing, hook method and present options, the colour and exposure-scan help,
+# synthesized frame generation, section headers, and the status and failure reasons the NR panel shows.
+# Filter names stay in English; they are listed as themselves because every label needs an entry.
+Fence-confirmed GPU timing	Время GPU, подтвержденное fence
+Confirmed timing is available on the D3D12 NR path and its bridges. This backend is not instrumented.	Подтвержденное время доступно на пути NR в D3D12 и его мостах. Этот бэкенд не инструментирован.
+Measure NR on the GPU	Измерять NR на GPU
+Each published sample belongs to one NR evaluation and one observed queue submission. It is read only after that submission completes and the command-list recording is sealed against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded.\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.\n\nD3D12 Present and guide capture have independent samples at the same interval. The Present route includes its copies, guide preparation, Dispatch and HDR conversion; CPU waits are excluded. The native Vulkan and D3D11 Present hosts do not have this route bracket.	Каждый опубликованный замер относится к одному вычислению NR и одной наблюдаемой отправке в очередь. Он считывается только после завершения этой отправки, когда запись списка команд защищена от повторного воспроизведения. Ожидание GPU не добавляется. Неподдерживаемые или неоднозначные замеры отбрасываются.\n\nИнтервал охватывает команды GPU внутри Dispatch NR, включая копирования, вызовы модели, композицию и восстановление ресурсов. Подготовка перед апскейлом на стороне вызывающего, апскейлер и генерация кадров находятся вне этого интервала. Время, прошедшее в очереди, -- не чистое время занятости ядра.\n\nPresent D3D12 и захват направляющих имеют независимые замеры с тем же интервалом. Маршрут Present включает свои копирования, подготовку направляющих, Dispatch и преобразование HDR; ожидания CPU исключены. У нативных хостов Present для Vulkan и D3D11 нет такого замера маршрута.
+Measurement off. Pending samples may still be retained safely.	Измерение выключено. Ожидающие замеры по-прежнему могут безопасно храниться.
+Sample every N eligible evaluations	Замер каждые N подходящих вычислений
+The first eligible evaluation is sampled, then every %u evaluations. An evaluation is not necessarily a presentation frame.	Замеряется первое подходящее вычисление, затем каждое %u-е. Вычисление -- не обязательно показанный кадр.
+Accepted %llu | discarded %llu | pending %u	Принято %llu | отброшено %llu | ожидает %u
+No confirmed GPU sample yet.	Подтвержденного замера GPU пока нет.
+Last confirmed sample: %.3f ms dispatch = %.3f ms model + %.3f ms outside model	Последний подтвержденный замер: dispatch %.3f мс = модель %.3f мс + вне модели %.3f мс
+Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u passes	Исторический замер %llu, %.1f с с момента записи; %s, модель %ux%u, проходов: %u
+Sample contract %llu, evaluation %llu, run %llu; interval was %u evaluations	Контракт замера %llu, вычисление %llu, запуск %llu; интервал в вычислениях: %u
+This is one historical sample, not the current frame or an average. Use matching contracts in the INFO log for comparisons.	Это один исторический замер, а не текущий кадр и не среднее. Для сравнений используйте совпадающие контракты в логе INFO.
+Each extra pass processes the previous answer and has its own model history. Cost and VRAM grow. A failed extra pass keeps the last successful answer. Requested passes are not proof of completed work; check the last evaluation and INFO log.\n\nEnabling this after untracked NR has already run requires restarting the application. Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.	Каждый дополнительный проход обрабатывает предыдущий ответ и имеет собственную историю модели. Растут нагрузка и расход VRAM. Неудачный дополнительный проход сохраняет последний успешный ответ. Запрошенные проходы не доказывают выполненную работу; проверьте последнее вычисление и лог INFO.\n\nВключение после того, как NR уже работал без отслеживания, требует перезапуска приложения. "Повторить" не может сделать прежнюю работу GPU отслеживаемой. Неподдерживаемые пути отправки отклоняют дополнительные проходы.
+The Model controls above are the master settings. Unchecked overrides inherit their current values. Turning individual settings off or reducing the pass count keeps saved edits.	Элементы "Модель" выше -- это основные настройки. Неотмеченные переопределения наследуют их текущие значения. Выключение отдельных настроек или уменьшение числа проходов не удаляет сохраненные правки.
+on	вкл
+off	выкл
+Running%s - legacy timer %.2f ms (unconfirmed)%s	Работает%s - устаревший таймер %.2f мс (не подтвержден)%s
+The native Vulkan timer is legacy and is not fence-confirmed.\nFor D3D12, use the separate Fence-confirmed GPU timing panel.\nA historical sample is not the current frame's cost.	Нативный таймер Vulkan устаревший и не подтверждается fence.\nДля D3D12 используйте отдельную панель "Время GPU, подтвержденное fence".\nИсторический замер -- это не стоимость текущего кадра.
+Source	Источник
+Auto	Авто
+Upscaled	Выход апскейлера
+Present	Present
+Hook method	Метод перехвата
+Where the pass runs, and what it runs on.\n\nAuto: the swapchain backbuffer, as soon as the game's upscaler has handed over its depth and motion; the upscaler's output until then.\n\nUpscaled: in place, immediately after the game's upscaler has written its output. That output is linear and un-tonemapped, so the Colour section below must map it into something the model recognises -- the paper white is where a game that moves its exposure makes itself felt.\n\nPresent: at the moment of present, on the swapchain's backbuffer -- the frame the game has finished and tone-mapped, which is exactly the kind of picture the model was trained on. There is nothing to divide and no white point to find, and with frame generation the base frame is enhanced before the generated frames are made from it. This is how the ReShade implementations run it, and the one a title like KCD2 wants.\n\nA native Vulkan game ignores this. When the upscaler runs through OptiScaler's D3D12 bridge (a Vulkan or D3D11 game) there is no D3D12 present hook: Auto stays on the upscaler's output and Present runs nothing, except on a D3D11 game, where Present hosts the pass on the bridge's swapchain and takes effect after a restart.	Где выполняется проход и с чем он работает.\n\nАвто: бэкбуфер swapchain, как только апскейлер игры передал свою глубину и движение; до тех пор -- вывод апскейлера.\n\nВыход апскейлера: на месте, сразу после того, как апскейлер игры записал свой вывод. Этот вывод линейный и без тонмаппинга, поэтому раздел "Цвет" ниже должен привести его к тому, что модель узнает, -- и именно в опорном белом сказывается игра, меняющая экспозицию.\n\nPresent: в момент present, на бэкбуфере swapchain -- кадр, который игра уже закончила и пропустила через тонмаппинг, ровно та картинка, на которой обучалась модель. Делить нечего и точку белого искать не нужно, а с генерацией кадров базовый кадр улучшается до того, как из него создаются сгенерированные кадры. Так работают реализации для ReShade, и именно это нужно такой игре, как KCD2.\n\nНативная игра на Vulkan это игнорирует. Когда апскейлер работает через мост D3D12 от OptiScaler (игра на Vulkan или D3D11), хука present D3D12 нет: "Авто" остается на выводе апскейлера, а Present ничего не запускает, кроме игры на D3D11, где Present размещает проход на swapchain моста и вступает в силу после перезапуска.
+Require DLSS temporal inputs	Требовать временные данные DLSS
+Present needs the game's depth and motion to reproject its history, and uses them only on the frame they were captured for. With this on, a frame that has none -- none captured yet, or one that cannot be shown to be its own -- is shown as the game rendered it. With it off, the pass runs on dummy temporals -- constant depth, no motion -- and treats the scene as standing still, which is right for a title whose upscaler is not DLSS.	Present нужны глубина и движение игры, чтобы репроецировать историю, и он использует их только на том кадре, для которого они были захвачены. Когда это включено, кадр без них -- еще ничего не захвачено или захват не удается подтвердить как относящийся к этому кадру -- показывается так, как его отрисовала игра. Когда выключено, проход работает на фиктивных временных данных -- постоянная глубина, без движения -- и считает сцену неподвижной, что правильно для игры, чей апскейлер не DLSS.
+Synthesized motion	Синтезированное движение
+Experimental. Only for frames with no motion from the game (no upscaler to take it from). Instead of telling the model nothing moved, the motion is estimated from this frame and the last, so its history follows a moving camera rather than ghosting behind it. The estimate is coarse at thin edges and text and costs a little GPU time; depth stays constant. "No history without motion" below no longer applies to a frame that has it.	Экспериментально. Только для кадров без движения от игры (нет апскейлера, откуда его взять). Вместо того чтобы сообщать модели, что ничего не двигалось, движение оценивается по этому и предыдущему кадрам, поэтому ее история следует за движущейся камерой, а не оставляет за ней шлейф. Оценка груба на тонких краях и тексте и стоит немного времени GPU; глубина остается постоянной. "Сброс истории без движения" ниже больше не применяется к кадру, у которого движение есть.
+Protect the HUD	Защищать HUD
+Experimental. Pixels that stay exactly the same while the scene around them moves are taken for interface and handed back untouched through the model's own UI correction, so text and HUD lines stay crisp. A HUD is only found once the camera has moved behind it, and it stays protected for about a second and a half after the scene stops. A still, detailed patch next to motion can be taken for HUD; it is then shown as the game drew it.	Экспериментально. Пиксели, которые остаются точно такими же, пока сцена вокруг движется, считаются интерфейсом и возвращаются нетронутыми через собственную коррекцию UI модели, поэтому текст и линии HUD остаются четкими. HUD обнаруживается только после того, как камера сдвинулась за ним, и остается защищенным около полутора секунд после остановки сцены. Неподвижный детализированный участок рядом с движением может быть принят за HUD; тогда он показывается так, как его нарисовала игра.
+No history without motion	Сброс истории без движения
+Only for frames that run on dummy temporals. The model is told nothing moved, so a moving camera leaves ghosts and doubled edges where things used to be. On, it starts its history over every frame: no ghosts, but none of its temporal smoothing either. Frames with the game's own depth and motion are not affected.	Только для кадров на фиктивных временных данных. Модели сообщается, что ничего не двигалось, поэтому движущаяся камера оставляет шлейфы и двоящиеся края там, где раньше были объекты. Когда включено, история начинается заново каждый кадр: шлейфов нет, но нет и временного сглаживания. Кадры с собственной глубиной и движением игры не затрагиваются.
+Present sync	Синхронизация present
+Waits for the backbuffer write-back to finish before the flip. Frame generation needs it: without it a paced flip can show an unfinished picture. Left on auto it waits only when frame generation could be involved, because otherwise the wait just holds the game back. Ticking or unticking this box forces it either way.	Ждет завершения обратной записи в бэкбуфер перед flip. Это нужно генерации кадров: без этого flip по таймингу может показать незаконченную картинку. В режиме auto ждет, только когда может участвовать генерация кадров, потому что иначе ожидание лишь тормозит игру. Установка или снятие этого флажка принудительно задает тот или иной вариант.
+Stage: swapchain present (bypasses upscaler stages)	Стадия: present swapchain (в обход стадий апскейлера)
+Not on this route right now: the game is not running Ray Reconstruction, so "Model resolution" below is what governs. These two take effect if it starts.	Сейчас не на этом маршруте: игра не использует Ray Reconstruction, поэтому действует "Разрешение модели" ниже. Эти два параметра вступят в силу, если он запустится.
+Above 1x the model supersamples: no new detail, and cost grows with the area. Ray Reconstruction already denoises this frame.	Выше 1x модель выполняет суперсэмплинг: новых деталей нет, а стоимость растет с площадью. Ray Reconstruction уже убирает шум из этого кадра.
+Model resolution: set by RR Working scale on this route	Разрешение модели: задается параметром "Рабочий масштаб RR" на этом маршруте
+Supersampling %.2fx: the model runs ABOVE native, then\nis sampled back down. Experimental, and costly -- time grows with the area.	Суперсэмплинг %.2fx: модель работает ВЫШЕ нативного разрешения, затем\nрезультат уменьшается обратно. Экспериментально и затратно -- время растет с площадью.
+The filter that averages the model's above-native answer back to display size --\nthis is what turns supersampling into LESS noise rather than more. Sharper\nfilters (Lanczos3, Kaiser3) keep the most detail; softer ones (Bicubic,\nCatmull-Rom) are gentler on ringing. Independent of the Output Scaling\ndownscaler, so the two can differ and run at the same time.	Фильтр, который усредняет ответ модели выше нативного обратно до размера экрана, --\nименно он превращает суперсэмплинг в МЕНЬШИЙ шум, а не в больший. Более резкие\nфильтры (Lanczos3, Kaiser3) сохраняют больше деталей; более мягкие (Bicubic,\nCatmull-Rom) дают меньше звона. Не зависит от фильтра уменьшения в "Масштабирование вывода",\nпоэтому они могут различаться и работать одновременно.
+What fraction of the frame the model works at. Cost falls with the square of\nthis, so half resolution is roughly a quarter of the time.\n\nThe frame is never reduced. Only the model's contribution is computed small\nand enlarged, so the picture underneath is untouched whatever this says.\n\nWhat it trades: the shading the model adds is broad and survives enlargement;\nthe fine structure it synthesises does not, and softens. Worth having when the\npass costs more than you want to pay for the detail it returns.\n\nThe frame itself stays at full detail whatever this says -- only the\nmodel's own work is done small.\n\nauto is full size on RTX 40 and later and half size on RTX 20 and 30: an RTX 3060\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces\nit; Auto puts it back.	Доля кадра, в которой работает модель. Стоимость падает пропорционально квадрату\nэтого значения, поэтому половинное разрешение занимает примерно четверть времени.\n\nКадр никогда не уменьшается. Только вклад модели вычисляется в малом размере\nи увеличивается, поэтому картинка под ним остается нетронутой, каким бы ни было значение.\n\nЧем приходится платить: затенение, добавляемое моделью, крупное и переживает увеличение;\nтонкая структура, которую она синтезирует, -- нет, и размывается. Имеет смысл, когда\nпроход стоит больше, чем вы готовы платить за возвращаемые им детали.\n\nСам кадр остается в полной детализации, каким бы ни было значение, -- только\nработа модели выполняется в малом размере.\n\nauto -- это полный размер на RTX 40 и новее и половинный на RTX 20 и 30: RTX 3060\nпоказала стоимость на пиксель в 25 раз выше, чем RTX 4090. Перемещение ползунка заменяет\nэто значение; "Авто" возвращает его.
+Matched residual, sharp	Согласованный остаток, резкий
+Matched residual + DLSS	Согласованный остаток + DLSS
+How far the frame moves toward the model's picture.\n\nThe model's answer is not added to the frame -- it is a complete picture of its\nown, rescaled so its luminance sits where the original says it should. This\nblends between the two, so both ends are real pictures and everything between\nthem is one too.\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture.\n\nAbove 1 carries on past it in the same direction, which is not something the\nmodel asked for -- use it to see what it is doing, then come back down. This\nis the control to push if you want more effect: Intensity belongs to the model\nand it decides what to do with it.	Насколько кадр сдвигается к картинке модели.\n\nОтвет модели не прибавляется к кадру -- это самостоятельная полная картинка,\nперемасштабированная так, чтобы ее яркость была там, где ее указывает оригинал. Этот\nрегулятор смешивает их, поэтому оба края -- настоящие картинки, и все между\nними тоже.\n\n0 возвращает ровно то, что выдал апскейлер. 1 -- картинка модели.\n\nВыше 1 продолжает дальше в том же направлении, чего модель не\nпросила, -- используйте это, чтобы увидеть, что она делает, и затем вернитесь. Именно этот\nрегулятор стоит поднимать, если нужно больше эффекта: "Интенсивность" принадлежит модели,\nи она сама решает, что с ней делать.
+Whether the model's colour arrives with its light.\n\n0 keeps the game's own hue exactly -- every pixel is the original colour with\nonly its brightness carrying the model's verdict. Game-accurate colour, with\nthe detail. 1 brings the model's colour as well, in its own hue, clamped into\nAP1 so nothing unreachable is asked for.\n\nThis cannot shift hue on its own: it interpolates between two finished\npictures rather than adding a colour difference to one, which is what used to\nlet a warm subject come back green.\n\nAbove 1 it OVER-SATURATES: the colour keeps its hue but grows more vivid,\nand rolls off at the edge of what the display can show rather than clipping\ninto a flat blown patch. 1 is the model's own colour; push past it for punch.	Приходит ли цвет модели вместе с ее светом.\n\n0 точно сохраняет собственный оттенок игры -- каждый пиксель имеет исходный цвет,\nи лишь его яркость несет вердикт модели. Точный цвет игры вместе с\nдеталями. 1 добавляет и цвет модели, в ее собственном оттенке, ограниченный\nAP1, чтобы не запрашивалось ничего недостижимого.\n\nСамо по себе это не может сдвинуть оттенок: оно интерполирует между двумя готовыми\nкартинками, а не добавляет разницу цвета к одной из них, из-за чего раньше\nтеплый объект мог вернуться зеленым.\n\nВыше 1 -- ПЕРЕНАСЫЩЕНИЕ: цвет сохраняет оттенок, но становится ярче\nи плавно ограничивается у края того, что может показать дисплей, а не обрезается\nв плоское выбитое пятно. 1 -- собственный цвет модели; идите дальше ради сочности.
+What the model is shown, and how its answer comes back.\n\nOff (soft knee): the default. It rolls highlights off so hard the model\ncannot resolve detail in them -- fine in soft-lit scenes, weak in bright ones.\n\nNeutwo composed: an unclipped curve so the model sees highlight detail, then\neverything above (Detail/Colour strength, highlight guard, palette). It wins in\nbright scenes, but the curve compresses MIDTONES too, so in soft-lit content it\ncan be worse than Off. It also shifts paper white -- re-check it when you switch.\n\nHybrid composed: the best of both, and the one to use. Identity in the\nmidtones -- as good as Off there -- and the unclipped roll only in the\nhighlights, so it recovers the detail Off crushes without giving up the\nmidtones Neutwo does. It barely shifts paper white.\n\nReplace: the raw model straight back through the exact inverse, none of the\ncomposition -- no guard, no palette, no strengths. Gorgeous where there are no\nbright lights, but they FLASH in motion. A reference, not a daily setting.\n\nHybrid replace: the raw model like Replace, but on the hybrid curve -- the\ndecode is identity in the midtones, so the flashing is confined to genuine\nbright highlights instead of everywhere. Most of Replace's detail, far more\nstable. If you love the Replace look but the flicker bothers you, use this.\n\nOff is byte-identical to before.	Что показывается модели и как возвращается ее ответ.\n\nВыкл. (мягкое ограничение): по умолчанию. Света сглаживаются так сильно, что модель\nне может различить в них детали -- хорошо в мягко освещенных сценах, слабо в ярких.\n\nNeutwo + композиция: кривая без обрезки, чтобы модель видела детали в светах, затем\nвсе, что выше (сила деталей и цвета, защита светлых участков, палитра). Выигрывает в\nярких сценах, но кривая сжимает и ПОЛУТОНА, поэтому в мягко освещенных сценах она\nможет быть хуже, чем Выкл. Она также сдвигает опорный белый -- перепроверьте его при переключении.\n\nГибридный + композиция: лучшее из обоих, и именно его стоит использовать. Тождественность в\nполутонах -- там он так же хорош, как Выкл., -- и сглаживание без обрезки только в\nсветах, поэтому он восстанавливает детали, которые Выкл. давит, не жертвуя\nполутонами, как Neutwo. Опорный белый почти не сдвигается.\n\nЗамена: сырой ответ модели прямо через точную обратную кривую, без всякой\nкомпозиции -- без защиты, без палитры, без сил. Великолепно там, где нет\nярких источников света, но они МЕРЦАЮТ в движении. Эталон, а не повседневная настройка.\n\nГибридный + замена: сырой ответ модели, как в Замене, но на гибридной кривой --\nдекодирование тождественно в полутонах, поэтому мерцание ограничено настоящими\nяркими светами, а не идет повсюду. Большая часть деталей Замены и намного\nбольше стабильности. Если вам нравится вид Замены, но мешает мерцание, используйте этот режим.\n\nВыкл. побитово идентичен прежнему поведению.
+Neural Rendering Model selection (DLSSNR.Style):\n\nModel A (Default): standard reference neural model with default local tone and structure.\n\nModel B (Natural): subtle contrast (-0.25) and saturation (-0.10) compensation. Preserves natural skin tones and softens harsh highlights.\n\nModel C (Cinematic): gentle saturation adjustment (-0.15) for filmic presentation.\n\nTuning changes apply instantly on the live frame with seamless temporal reset.	Выбор модели Neural Rendering (DLSSNR.Style):\n\nМодель A (По умолчанию): стандартная эталонная нейромодель с локальным тоном и структурой по умолчанию.\n\nМодель B (Естественный): мягкая компенсация контраста (-0.25) и насыщенности (-0.10). Сохраняет естественные оттенки кожи и смягчает резкие света.\n\nМодель C (Кинематографичный): мягкая коррекция насыщенности (-0.15) для кинематографичной картинки.\n\nИзменения применяются мгновенно на живом кадре с бесшовным временным сбросом.
+Holds still parts of the picture still. Where the frame the model was shown did not\nchange, keep what was shown last frame and let the model's new answer in slowly;\nwhere it changed, show the model's answer as it is. Aimed at the model re-deciding\nstill content -- a slope that brightens and darkens with nothing moving.\n\n0 is off and costs nothing. 1 holds a still pixel outright. It stands down on the\nbefore-upscale stage, where the frame is jittered and every pixel moves.	Удерживает неподвижные части картинки неподвижными. Где кадр, показанный модели, не\nизменился, сохраняет то, что было показано в прошлом кадре, и впускает новый ответ модели медленно;\nгде изменился -- показывает ответ модели как есть. Нацелено на случаи, когда модель заново решает\nнеподвижный контент, -- склон, который светлеет и темнеет, хотя ничего не движется.\n\n0 -- выключено и ничего не стоит. 1 полностью удерживает неподвижный пиксель. Не действует на\nстадии до апскейлера, где у кадра есть джиттер и каждый пиксель движется.
+How far the model's input may drift, relative to its brightness, before a pixel\ncounts as moved. Lower follows subtle lighting changes sooner; higher tolerates\nmore flicker in the input before letting go.	Насколько вход модели может отклониться относительно своей яркости, прежде чем пиксель\nсчитается сдвинувшимся. Меньше -- раньше следует за тонкими изменениями освещения; больше -- допускает\nбольше мерцания на входе, прежде чем отпустить.
+Hook method is set to Present: the swapchain backbuffer is already\ntone-mapped and display-referred sRGB. White point and exposure mapping\ncontrols are bypassed.	Метод перехвата установлен на Present: бэкбуфер swapchain уже прошел\nтонмаппинг и представлен в sRGB для дисплея. Регуляторы точки белого и отображения\nэкспозиции не используются.
+The model was trained on finished, sRGB-encoded frames. The upscaler's\noutput is not one: it is linear and open-ended. These decide how it is\nmapped into something the model recognises. A frame the game reports as\nalready tone-mapped is passed over untouched and none of this applies.	Модель обучалась на готовых кадрах в кодировке sRGB. Вывод апскейлера\nне такой: он линейный и без верхнего предела. Эти параметры определяют, как\nон приводится к тому, что модель узнает. Кадр, о котором игра сообщает, что он\nуже прошел тонмаппинг, передается нетронутым, и ничего из этого не применяется.
+Where the number that divides the frame comes from.\n\nPaper white only -- the slider below and nothing else. Right for a\ngame whose exposure never moves, wrong the moment it does: one\nconstant cannot serve a cave and a field.\n\nThe game's own exposure -- read from the texture the game hands\nthe upscaler. The best source there is, because it is decided\nupstream and nothing this pass does can move it. Not every game\nsupplies one.\n\nA buffer the scan found -- for games that compute an exposure and\nnever pass it on. A GUESS: candidates are matched by shape, and in\nGTA V the best one tracks the real exposure but at its own scale,\nwhich the anchor's ratio cancels. Needs anchoring once, and checking\nafterwards.	Откуда берется число, на которое делится кадр.\n\nТолько опорный белый -- ползунок ниже и ничего больше. Подходит\nигре, чья экспозиция никогда не меняется, и не подходит, как только она меняется: одна\nконстанта не может обслужить и пещеру, и поле.\n\nСобственная экспозиция игры -- считывается из текстуры, которую игра передает\nапскейлеру. Лучший из возможных источников, потому что он определяется\nвыше по цепочке и ничто в этом проходе не может его сдвинуть. Не каждая игра\nего предоставляет.\n\nБуфер, найденный при сканировании -- для игр, которые вычисляют экспозицию и\nникуда ее не передают. ДОГАДКА: кандидаты подбираются по форме, и в\nGTA V лучший из них следует за реальной экспозицией, но в собственном масштабе,\nкоторый компенсируется соотношением точки фиксации. Нужно один раз зафиксировать и затем\nпроверить.
+This game supplies no exposure -- paper white is in use. Try the scan instead.	Эта игра не предоставляет экспозицию -- используется опорный белый. Попробуйте сканирование.
+This game's exposure is not usable here; paper white is in use.	Экспозицию этой игры здесь использовать нельзя; используется опорный белый.
+This game supplies an exposure and it is being read.	Эта игра предоставляет экспозицию, и она считывается.
+Game exposure %.4f  ->  white point %.2f%s	Экспозиция игры %.4f  ->  точка белого %.2f%s
+  (held: absent this frame)	  (удержано: отсутствует в этом кадре)
+Nothing in this game is shaped like an exposure.	Ничто в этой игре не имеет форму экспозиции.
+The exposure scan needs a restart: Neural Rendering was off when the game started.	Сканированию экспозиции нужен перезапуск: Neural Rendering был выключен при запуске игры.
+Watching %u, none moving yet -- go between light and shade.	Наблюдение за %u, пока ни один не меняется -- переходите между светом и тенью.
+Found one. Set paper white below until the picture looks right, then press Anchor here.	Кандидат найден. Настройте "Опорный белый" ниже, пока картинка не станет правильной, затем нажмите "Зафиксировать здесь".
+This game supplies an exposure -- the option above would use it.	Эта игра предоставляет экспозицию — опция выше использовала бы ее.
+Scan %.5f  ->  white point %.2f   (points: %u)	Сканирование %.5f  ->  точка белого %.2f   (точек: %u)
+Paper white (editing point %d)	Опорный белый (изменение точки %d)
+The white point for the selected calibration point, or -- with no row\nselected -- the value the next Anchor press captures.\n\nSet it until the picture looks right here, then Anchor. Move to very\ndifferent light and do it again: two points fix the buffer's real\nrelationship and the white point holds between them. Click a row below\nto come back and adjust that point; click it again to let go.	Точка белого для выбранной точки калибровки или -- если строка не\nвыбрана -- значение, которое запишет следующее нажатие "Зафиксировать здесь".\n\nНастраивайте, пока картинка здесь не станет правильной, затем зафиксируйте. Перейдите к совсем\nдругому освещению и повторите: две точки задают реальную зависимость\nбуфера, и точка белого держится между ними. Нажмите на строку ниже,\nчтобы вернуться и подправить эту точку; нажмите еще раз, чтобы отпустить.
+A multiplier on the scan's white point, and the control you adjust between\nanchor points: dial it until the picture looks right in the current\nlight, then press Anchor here -- it captures the trimmed value as a new\npoint and resets the trim to 1.	Множитель к точке белого сканирования и регулятор, который вы настраиваете между\nточками фиксации: крутите его, пока картинка не станет правильной при текущем\nосвещении, затем нажмите "Зафиксировать здесь" -- подстроенное значение запишется как новая\nточка, а подстройка сбросится на 1.
+A multiplier on the exposure the game supplied. 1.00x takes its number\nexactly, and that is the right answer here.\n\nThis is not a fudge factor. If a game needs the trim far from 1 to look\nright, that is evidence the exposure being read is wrong for that game,\nnot that the game wants trimming. Somewhere around 0.8 to 1.25 is honest\ntuning; reaching for 4 means something upstream is broken and the trim is\nhiding it.\n\nYour manual paper white is kept separately and comes back untouched if\nyou switch the option above off.	Множитель к экспозиции, предоставленной игрой. 1.00x берет ее число\nточно, и здесь это правильный ответ.\n\nЭто не поправочный коэффициент "на глаз". Если игре нужна подстройка далеко от 1, чтобы выглядеть\nправильно, это говорит о том, что считываемая экспозиция для этой игры неверна,\nа не о том, что игре нужна подстройка. Примерно от 0.8 до 1.25 -- честная\nнастройка; если тянет к 4, значит, что-то выше по цепочке сломано, а подстройка\nэто скрывает.\n\nВаш ручной опорный белый хранится отдельно и вернется нетронутым, если\nвы выключите опцию выше.
+What the frame is divided by before the model sees it. There is no other white\npoint; this is the whole of it.\n\nThe model was trained on finished frames where white sits at 1. The\nupscaler's output is linear and open-ended, so something has to say where\nwhite is -- and where the game's DLSS buffer is linear HDR, that number is\nrarely anywhere near 1. Measured in Monster Hunter Wilds it takes 16 or more\nbefore the model's detail reaches the frame at all, and the value that suits\na shaded camp is still too small for the same game out in daylight.\n\nToo low and almost every pixel trips the soft knee: the model is shown a\nflat near-white picture, its answer is scaled away, and only its hue\nsurvives -- which reads as a colour cast rather than as lost detail. Too\nhigh and it is shown an underexposed one, its answer degrades, and this same\nnumber multiplies that error on the way out.\n\nRaise it until the picture stops improving. Past that point it does not\nplateau, it gets worse in the other direction.\n\nThis was once a multiplier on a measured white point. The measurement is\ngone: it read scene brightness rather than where white belongs, handed the\nmodel a picture three times too dark, and left the highlight path nothing to\ngive back.\n\nAt strength zero the frame is still bit-identical whatever this says.	То, на что делится кадр, прежде чем его увидит модель. Другой точки белого\nнет; это она целиком.\n\nМодель обучалась на готовых кадрах, где белый находится на 1. Вывод\nапскейлера линейный и без верхнего предела, поэтому что-то должно указать, где\nбелый, -- а там, где буфер DLSS игры -- линейный HDR, это число\nредко бывает близко к 1. В Monster Hunter Wilds замеры показали, что нужно 16 или больше,\nчтобы детали модели вообще дошли до кадра, а значение, подходящее\nдля лагеря в тени, все равно слишком мало для той же игры при дневном свете.\n\nСлишком низко -- и почти каждый пиксель попадает в мягкое ограничение: модели показывают\nплоскую почти белую картинку, ее ответ масштабируется почти до нуля, и выживает только\nоттенок, -- что выглядит как цветовой сдвиг, а не как потерянные детали. Слишком\nвысоко -- и ей показывают недоэкспонированную картинку, ее ответ ухудшается, а это же\nчисло умножает ошибку на выходе.\n\nПовышайте, пока картинка не перестанет улучшаться. Дальше этой точки\nплато нет: становится хуже в другую сторону.\n\nКогда-то это был множитель к измеренной точке белого. Измерения\nбольше нет: оно считывало яркость сцены, а не то, где должен быть белый, давало\nмодели картинку в три раза темнее и не оставляло восстановлению светлых участков ничего для возврата.\n\nПри нулевой силе кадр остается побитово идентичным, что бы здесь ни было указано.
+The most the pass may move any pixel, as a multiple of what it already was, in\nboth directions -- a pixel may not be brightened past this nor darkened past\nits reciprocal. Lights are where the model has least to say and rescaling its\nanswer does the most damage; 2x leaves detail intact while stopping a strip\nlight turning into a string of coloured cells. Raise it only if bright areas\nlook clipped.	Максимум, на который проход может изменить любой пиксель, как кратное его исходного значения, в\nобе стороны: пиксель нельзя осветлить больше этого или затемнить больше\nобратной величины. Источники света -- то место, где модели меньше всего есть что сказать и где перемасштабирование ее\nответа вредит сильнее всего; 2x сохраняет детали и не дает световой полосе\nпревратиться в цепочку цветных ячеек. Повышайте, только если яркие участки\nвыглядят обрезанными.
+NVIDIA's highlight recovery, from RTX Remix. The model is shown everything\nbrighter than paper white squeezed into the top of its range, so its\nverdict there -- above all its colour -- is made without knowing how\nbright the pixel really is. This hands pixels that were very bright (one\nto eight times paper white) back to the game's own frame, a little at\nfirst and wholly at the top, so a fire keeps its orange and a coloured\nlight keeps its brightness.\n\nIt costs some of the model's detail in bright areas. Shadows and\nmidtones are untouched. Off is the composition as it always was.\n\nOnly offered on a linear HDR buffer, the one case where the model was\nshown a compressed picture.	Восстановление светлых участков от NVIDIA, из RTX Remix. Модели показывается все,\nчто ярче опорного белого, сжатым в верх ее диапазона, поэтому ее\nвердикт там -- прежде всего по цвету -- выносится без знания того, насколько\nярок пиксель на самом деле. Это возвращает очень яркие пиксели (от одного\nдо восьми опорных белых) собственному кадру игры, сначала немного,\nа на самом верху полностью, так что огонь сохраняет свой оранжевый, а цветной\nсвет -- свою яркость.\n\nЭто стоит части деталей модели в ярких областях. Тени и\nполутона не затрагиваются. Выкл. -- композиция, как была всегда.\n\nПредлагается только для линейного HDR-буфера -- единственного случая, когда модели\nпоказывали сжатую картинку.
+A lamp in the corner: red for dark, green for full light, and the\nshades between, with the reading beside it.\n\nIt is how you see at a glance that the scan is TRACKING rather\nthan merely running. Walk into shade and it should slide toward\nred; step out and it should go green. If it moves the wrong way,\nthat is what the setting above is for.\n\nPurely a readout. It changes nothing.	Индикатор в углу: красный -- темно, зеленый -- полный свет, и\nоттенки между ними, с показанием рядом.\n\nТак сразу видно, что сканирование ОТСЛЕЖИВАЕТ, а не\nпросто работает. Зайдите в тень -- он должен сместиться к\nкрасному; выйдите -- должен стать зеленым. Если он движется не в ту сторону,\nдля этого есть настройка выше.\n\nТолько индикатор. Он ничего не меняет.
+Make the picture look right, then press this -- it captures the current look\nas a point. For the first point use the Paper white slider above; for\nevery point after, move to different light and use the Trim, which the\nAnchor then bakes into a new point.\n\nThe first press calibrates one point -- the white point then\nfollows the scan by ratio from there, as before. Walk into very\ndifferent light, set paper white again, and press it again: the\nsecond point pins down the buffer's real curve and everything\nbetween the two is right, not just near one anchor. Up to eight.\n\nThe table is per game and shareable: one person calibrates a game\nand the numbers are the same for everyone who takes the profile.	Сделайте картинку правильной, затем нажмите это -- текущий вид запишется\nкак точка. Для первой точки используйте ползунок "Опорный белый" выше; для\nкаждой следующей перейдите к другому освещению и используйте подстройку, которую\n"Зафиксировать здесь" затем впишет в новую точку.\n\nПервое нажатие калибрует одну точку -- дальше точка белого\nследует за сканированием по соотношению, как раньше. Перейдите к совсем\nдругому освещению, снова задайте опорный белый и нажмите еще раз: вторая\nточка задает реальную кривую буфера, и все\nмежду двумя точками правильно, а не только рядом с одной. До восьми.\n\nТаблица своя для каждой игры, и ею можно делиться: один человек калибрует игру,\nи числа одинаковы для всех, кто возьмет профиль.
+(the scan is only watching -- the white point above comes from somewhere else)	(сканирование только наблюдает — точка белого выше берется из другого источника)
+%s scan %.4f  ->  white %.2f%s	%s сканирование %.4f  ->  белый %.2f%s
+   [editing]	   [редактирование]
+Click a row to edit it with the slider above; click it again to control the live point. > is the point in use now.	Нажмите на строку, чтобы редактировать ее ползунком выше; нажмите еще раз, чтобы управлять активной точкой. > — это используемая сейчас точка.
+Flip this if the picture gets worse in the direction it should be\ngetting better. Most engines store an exposure that falls as\nthe scene brightens; some store its reciprocal, and a buffer\nfound by shape does not say which. Add a second anchor point in\ndifferent light and this is decided for you, so it disappears.	Включите, если картинка ухудшается в том направлении, где должна\nулучшаться. Большинство движков хранят экспозицию, которая падает, когда\nсцена становится ярче; некоторые хранят обратную величину, а буфер,\nнайденный по форме, не говорит, какую. Добавьте вторую точку фиксации при\nдругом освещении -- и это решится за вас, поэтому опция исчезнет.
+nothing matched yet.	пока ничего не совпало.
+%zu. %s -- not read yet	%zu. %s — еще не прочитано
+%zu. %s = %.5f  (seen %.5f..%.5f) %s	%zu. %s = %.5f  (диапазон %.5f..%.5f) %s
+MOVES	МЕНЯЕТСЯ
+flat so far	пока не меняется
+Shows the pass against itself, so the two can be seen at once rather than\ntoggled and remembered.\n\nSide by side puts the whole frame in each half, untouched on the left and\nedited on the right. Both halves are squeezed horizontally to fit, so it is\nfor looking at rather than playing in.\n\nWipe cuts a single frame at the split and resamples nothing, so the picture\nis the right shape and can be played normally. Drag the split below; it is a\nstored setting and stays put once the menu is closed.\n\nNeither needs the menu open to keep working. A hairline marks the join.	Показывает результат прохода рядом с исходником, чтобы видеть оба сразу, а не\nпереключать и запоминать.\n\n"Бок о бок" помещает весь кадр в каждую половину: нетронутый слева,\nотредактированный справа. Обе половины сжаты по горизонтали, чтобы поместиться, поэтому режим\nдля разглядывания, а не для игры.\n\n"Шторка" разрезает один кадр по линии раздела и ничего не пересэмплирует, поэтому картинка\nсохраняет правильную форму и играть можно как обычно. Линию двигает "Положение шторки" ниже; это\nсохраняемая настройка, и она остается на месте после закрытия меню.\n\nНи одному из режимов не нужно открытое меню. Стык отмечен тонкой линией.
+Writes which side is which onto the frame itself, so a screenshot still\nsays so after it has left this machine. Drawn into the picture's own\nplane: in the wipe the split reveals and hides the label exactly as it\ndoes the images, and there is nothing to drag. Swap sides moves the\nlabels with their pictures.	Пишет на самом кадре, какая сторона какая, так что скриншот сообщает это\nи после того, как покинет этот компьютер. Рисуется в плоскости самой\nкартинки: в режиме "Шторка" линия раздела открывает и скрывает подпись точно так же, как\nизображения, и перетаскивать нечего. "Поменять стороны местами" перемещает\nподписи вместе с их картинками.
+Puts the edited frame on the other side.\n\nWorth doing once you have decided which you prefer: the eye is not\neven-handed about left and right, and a difference can read as an\nimprovement purely from where it sits. If the same side still wins after\nswapping, it is the pass you are seeing and not the placement.	Переносит отредактированный кадр на другую сторону.\n\nСтоит сделать, когда вы уже решили, что вам больше нравится: глаз\nнеодинаково воспринимает левое и правое, и разница может казаться\nулучшением просто из-за расположения. Если после смены сторон по-прежнему выигрывает тот же вариант,\nвы видите эффект прохода, а не расположения.
+How much of the frame each half shows.\n\nA half is half as wide as the frame and just as tall, so the frame\ncannot fill it and keep its shape.\n\nAt 1 the whole frame is there at its right proportions, with bars above\nand below. At 2 the half is filled and the sides are cropped away\ninstead. Anything between trades one for the other.	Какую часть кадра показывает каждая половина.\n\nПоловина вдвое уже кадра и такой же высоты, поэтому кадр\nне может заполнить ее, сохранив пропорции.\n\nПри 1 весь кадр виден в правильных пропорциях, с полосами сверху\nи снизу. При 2 половина заполнена, а вместо этого обрезаются бока.\nЛюбое промежуточное значение меняет одно на другое.
+FSR 3 Upscaler Manual Tuning	Ручная настройка апскейлера FSR 3
+Advanced FSR FG Settings	Расширенные настройки FSR FG
+Extended XeFG Settings	Расширенные настройки XeFG
+Advanced OptiFG Settings	Расширенные настройки OptiFG
+Active DispatchFlags	Активные DispatchFlags
+FoV & Camera Values	Значения FoV и камеры
+VRR Frame Cap Calculator	Калькулятор лимита кадров VRR
+Advanced DA Parameters	Расширенные параметры DA
+Motion Adaptive Sharpness	Адаптивная к движению резкость
+Advanced Init Flags	Расширенные флаги инициализации
+Mipmap Bias	Смещение MIP-текстурирования
+Anisotropic Filtering	Анизотропная фильтрация
+Keyboard Input Fix	Исправление ввода с клавиатуры
+Enable Input Fix	Включить исправление ввода
+Hands frame generation a motion field estimated from the presented\nframes instead of zero motion; the same estimate DLSS-NR uses when\nboth are on	Передает генерации кадров поле движения, оцененное по показанным\nкадрам, вместо нулевого движения; ту же оценку использует DLSS-NR, когда\nвключены оба
+Incoherent motion	Несогласованное движение
+Repeats frames instead of interpolating them where the motion breaks up:\nwhile more than this share of neighbouring motion samples disagree and the\nmedian motion exceeds 1%% of the image width (parallax, disocclusion, thin\nobjects over a far background). A uniform pan keeps interpolating at any\nspeed. 25%% is a starting point; lower repeats more. 0 is off	Повторяет кадры вместо интерполяции там, где движение распадается:\nпока не согласна больше этой доли соседних выборок движения, а\nмедианное движение превышает 1%% ширины изображения (параллакс, раскрытие, тонкие\nобъекты на дальнем фоне). Равномерная панорама продолжает интерполироваться на любой\nскорости. 25%% -- отправная точка; меньше -- больше повторов. 0 -- выкл.
+Fast motion cap	Предел быстрого движения
+Repeats frames whenever the median motion exceeds this many pixels per\nbase frame, however coherent, like AMD's Fast Motion Response. With\nFSR FG, every repeat restarts its optical flow for several frames, so\nkeep it above normal camera speed. 0 is no cap	Повторяет кадры всякий раз, когда медианное движение превышает это число пикселей на\nбазовый кадр, каким бы согласованным оно ни было, как Fast Motion Response от AMD. С\nFSR FG каждый повтор перезапускает его оптический поток на несколько кадров, поэтому\nдержите значение выше обычной скорости камеры. 0 -- без ограничения
+Minimum base fps	Минимальный базовый FPS
+HUD depth	Глубина HUD
+Detects the HUD (pixels that stay still while the scene around\nthem moves) and hands it to frame generation as near depth, so the\nscene beside it is not blended with it and its own motion is kept.\nNeeds Synthesized motion	Обнаруживает HUD (пиксели, которые остаются неподвижными, пока сцена вокруг\nдвижется) и передает его генерации кадров как ближнюю глубину, чтобы\nсцена рядом не смешивалась с ним, а его собственное движение сохранялось.\nНужно "Синтезированное движение"
+HUD layer	Слой HUD
+Experimental, FSR FG output only. Composes the detected HUD over\ngenerated frames from the real frame, through FSR FG's own UI layer,\nso it is never warped; real frames are unchanged. Off while "Disable\nUI texture" is on	Экспериментально, только вывод FSR FG. Накладывает обнаруженный HUD из реального кадра\nна сгенерированные кадры через собственный слой UI в FSR FG,\nпоэтому он никогда не искажается; реальные кадры не меняются. Выключено, пока включено "Disable\nUI texture"
+HUD margin	Отступ HUD
+How far around the detected HUD, in pixels, generated frames show\nthe real frame, to cover the smear beside each element; the outer\nhalf fades out. It covers the smear fully up to this many pixels of\nmotion per base frame. Around the HUD the background then moves at\nthe base frame rate. 0 is the detected HUD alone	На каком расстоянии вокруг обнаруженного HUD, в пикселях, сгенерированные кадры показывают\nреальный кадр, чтобы закрыть размытие рядом с каждым элементом; внешняя\nполовина плавно гаснет. Размытие полностью закрывается при движении до стольких пикселей\nна базовый кадр. Вокруг HUD фон тогда движется с\nбазовой частотой кадров. 0 -- только сам обнаруженный HUD
+How the model's work is brought back up when it ran below the frame's size.\n\nClassic composes the model's small picture directly against the full-size\nframe. Those two disagree by the shrink's blur as well as by the model's edit,\nand the composition cannot tell them apart -- it reads the blur as brightness\nthe frame has and the model never saw. The lower the model resolution the\nlarger that error, and it is the colour shift that shows up at half size.\n\nMatched residual carries up only the model's difference and lays it on the\nframe's own proxy, so both pictures being compared are full size and the only\nthing that came from the small raster is the edit itself.\n\nMatched residual, sharp is the same, with the model's difference enlarged by\na sharper filter (Catmull-Rom, held to its neighbours so it cannot ring), so\nmore of the fine structure the model drew at the small size survives.\n\nMatched residual + DLSS hands the model's difference to a private DLSS Super\nResolution, which builds it up over frames and so can return detail finer\nthan the small raster holds. D3D12 only, and it needs nvngx_dlss.dll. Where it\ncannot run -- native Vulkan, before the upscaler, no real depth and motion,\nwhile it starts -- Matched residual runs, and the line below says why.\n\nNo effect at full size or above: there is no residual to carry and all four are\nidentical (supersampling brings its answer down to frame size before this).\n\nFrom hhkbble's multi-pass work on this fork; the DLSS enlargement is wilsjo2's.	Как работа модели возвращается к полному размеру, если она выполнялась меньше размера кадра.\n\n"Классический" накладывает маленькую картинку модели прямо на полноразмерный\nкадр. Они различаются и размытием от уменьшения, и правкой модели,\nи композиция не может их различить -- она принимает размытие за яркость,\nкоторая есть у кадра, но которую модель не видела. Чем ниже разрешение модели, тем\nбольше эта ошибка, и именно она проявляется как сдвиг цвета при половинном размере.\n\n"Согласованный остаток" переносит вверх только разницу модели и накладывает ее на\nсобственный прокси кадра, так что обе сравниваемые картинки полноразмерные, и единственное,\nчто пришло из малого растра, -- сама правка.\n\n"Согласованный остаток, резкий" -- то же самое, но разница модели увеличивается\nболее резким фильтром (Catmull-Rom, ограниченным соседями, чтобы не было звона), так что\nсохраняется больше тонкой структуры, нарисованной моделью в малом размере.\n\n"Согласованный остаток + DLSS" передает разницу модели отдельному DLSS Super\nResolution, который накапливает ее по кадрам и поэтому может вернуть детали мельче,\nчем вмещает малый растр. Только D3D12, и нужен nvngx_dlss.dll. Где он\nне может работать -- нативный Vulkan, до апскейлера, нет реальных глубины и движения,\nпока он запускается, -- работает "Согласованный остаток", а строка ниже объясняет почему.\n\nПри полном размере или выше эффекта нет: остатка для переноса нет, и все четыре варианта\nидентичны (суперсэмплинг еще до этого приводит свой ответ к размеру кадра).\n\nИз многопроходной работы hhkbble в этом форке; увеличение через DLSS -- от wilsjo2.
+# Transfer 2, Matched residual + DLSS: the status line under Enlargement (dlss-enlargement.md).
+Waiting for the first frame.	Ожидание первого кадра.
+D3D12 only: native Vulkan runs Matched residual.	Только D3D12: на нативном Vulkan работает "Согласованный остаток".
+The model runs at full size or above: nothing to enlarge, Matched residual runs.	Модель работает в полном размере или выше: увеличивать нечего, работает "Согласованный остаток".
+Before the upscaler: Matched residual runs.	До апскейлера: работает "Согласованный остаток".
+No real depth and motion here: Matched residual runs.	Здесь нет реальных глубины и движения: работает "Согласованный остаток".
+The guides could not be brought to the model's size: Matched residual runs.	Направляющие не удалось привести к размеру модели: работает "Согласованный остаток".
+Debug view shows the model output: Matched residual runs.	Отладочный вид показывает вывод модели: работает "Согласованный остаток".
+Starting DLSS: Matched residual until it is ready.	Запуск DLSS: "Согласованный остаток", пока он не будет готов.
+DLSS failed (see the log): Matched residual until Retry.	Сбой DLSS (см. лог): "Согласованный остаток" до нажатия "Повторить".
+Running: DLSS enlarges the model's edit.	Работает: DLSS увеличивает правку модели.
+The model is below a third of the frame, further than DLSS enlarges: Matched residual runs.	Модель меньше трети кадра, дальше, чем увеличивает DLSS: работает "Согласованный остаток".
+The driver proxy runs the model without the resolve: nothing is enlarged.	Прокси драйвера запускает модель без resolve: ничего не увеличивается.
+Stops generating frames while the base frame rate is below this,\nand resumes once it recovers. 0 is off. Not a frame rate target:\nabove the game's base frame rate, frame generation never runs	Прекращает генерацию кадров, пока базовая частота кадров ниже этого значения,\nи возобновляет, когда она восстанавливается. 0 -- выкл. Это не целевая частота кадров:\nвыше базовой частоты кадров игры генерация кадров не работает никогда
+nvngx.dll_dlssnr.dll is missing	nvngx.dll_dlssnr.dll отсутствует
+nvngx.dll_dlssnr.dll would not load	nvngx.dll_dlssnr.dll не загрузился
+the forwarder is missing its exports	у форвардера нет его экспортов
+nvngx.dll_dlssnr.dll is from a different build	nvngx.dll_dlssnr.dll от другой сборки
+the model faulted inside its own code; off for this session	сбой модели внутри ее собственного кода; выключено на этот сеанс
+the NGX core would not initialise	ядро NGX не инициализировалось
+the NGX core has no capability parameters	у ядра NGX нет параметров возможностей
+the NGX core refused its capability parameters	ядро NGX отклонило свои параметры возможностей
+Single pass (master settings)	Один проход (основные настройки)
+Restart required: existing NR work has no submission lifetime evidence; single/master retained	Нужен перезапуск: у существующей работы NR нет подтверждения времени жизни отправок; оставлен один проход с основными настройками
+Another NR recording scope owns the resources; new recording refused	Ресурсами владеет другая область записи NR; новая запись отклонена
+Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may decrease)	Ожидание Reset предыдущей записи NR и всех fence GPU; новая запись пропущена (производительность может снизиться)
+More than three earlier NR recordings still on the GPU; new recording skipped this frame	Более трех предыдущих записей NR еще на GPU; новая запись в этом кадре пропущена
+Earlier NR recordings still running on two GPU queues; new recording skipped until one finishes	Предыдущие записи NR еще выполняются в двух очередях GPU; новая запись пропускается, пока одна не завершится
+This command list already holds an unsubmitted NR recording; new recording skipped	Этот список команд уже содержит неотправленную запись NR; новая запись пропущена
+An NR recording is still waiting for the game to submit it; new recordings skipped until it runs or is discarded	Запись NR еще ждет, пока игра ее отправит; новые записи пропускаются, пока она не выполнится или не будет отброшена
+The GPU is eight NR recordings behind; new recording skipped this frame	GPU отстает на восемь записей NR; новая запись в этом кадре пропущена
+Waiting for the previous NR recording to finish on the GPU (one queue not yet established, or more than one in use)	Ожидание завершения предыдущей записи NR на GPU (единственная очередь еще не установлена или используется более одной)
+Retired resource limit reached: pending/unknown GPU recordings retained; rebuild refused until completion or restart	Достигнут предел выведенных ресурсов: ожидающие/неизвестные записи GPU сохранены; пересоздание отклонено до завершения или перезапуска
+Driver proxy uses one pass and master settings; overrides are inactive	Прокси драйвера использует один проход и основные настройки; переопределения неактивны
+chain generation refused: insufficient or unavailable adapter headroom (retry latched)	создание цепочки отклонено: запаса адаптера недостаточно или он недоступен (ожидается "Повторить")
+Chain generation waits for the previous one to be freed (adapter headroom); NR resumes once it is	Создание цепочки ждет освобождения предыдущей (запас адаптера); NR возобновится, когда она освободится
+chain generation waits for the previous one to be freed (adapter headroom)	создание цепочки ждет освобождения предыдущей (запас адаптера)
+chain scratch initialization failed; retry latched	сбой инициализации рабочей памяти цепочки; ожидается "Повторить"
+nvngx_dlssnr.dll was not found beside OptiScaler or the game	nvngx_dlssnr.dll не найден рядом с OptiScaler или игрой
+the model would not initialise	модель не инициализировалась
+Additional pass refused: adapter budget/headroom unavailable or insufficient (retry latched)	Дополнительный проход отклонен: бюджет/запас адаптера недоступен или недостаточен (ожидается "Повторить")
+Additional pass initialization failed (retry latched); last successful answer retained	Сбой инициализации дополнительного прохода (ожидается "Повторить"); сохранен последний успешный ответ
+the colour codec would not compile	цветовой кодек не скомпилировался
+the game's depth or motion vectors could not be made readable	не удалось сделать читаемыми глубину или векторы движения игры
+the proxy path could not run the model	путь прокси не смог запустить модель
+All requested passes completed; one final composition	Все запрошенные проходы выполнены; одна финальная композиция
+the model refused to run	модель отказалась работать
+the present hook's backbuffer copy could not be created	не удалось создать копию бэкбуфера для хука present
+the present hook's dummy temporals could not be created	не удалось создать фиктивные временные данные для хука present
+FSR1	FSR1
+Bicubic	Bicubic
+Catmull-Rom	Catmull-Rom
+Lanczos2	Lanczos2
+Lanczos3	Lanczos3
+Kaiser2	Kaiser2
+Kaiser3	Kaiser3
+MAGIC	MAGIC
+x	x
+# 2026-10-04: the redesigned menu's tabs, groups, card and section titles, and the Custom tab picker.
+MAIN	ГЛАВНОЕ
+SYSTEM	СИСТЕМА
+ADVANCED	ДОПОЛНИТЕЛЬНО
+Custom	Пользовательский
+Upscaling	Масштабирование
+Neural Rendering	Нейронный рендеринг
+Frame Gen	Генерация кадров
+Latency	Задержка
+Status	Статус
+Textures	Текстуры
+Compatibility	Совместимость
+# 2026-10-23: upstream 76219dd4/c220ad9e split the Compatibility tab into these cards; the technical names stay.
+Startup	Запуск
+Hooks	Хуки
+Spoofing	Спуфинг
+Shaders	Шейдеры
+Menu	Меню
+Help / Status	Справка / Статус
+Accent Colour	Цвет акцента
+Background Colour	Цвет фона
+Custom Tab	Своя вкладка
+DLSSG Settings	Настройки DLSSG
+Detected	Обнаружено
+FSR Common Settings	Общие настройки FSR
+FSR FG Settings	Настройки FSR FG
+FSR-FG Inputs	Входные данные FSR-FG
+Frame Generation	Генерация кадров
+Frame Generation (Enabler + FFX)	Генерация кадров (Enabler + FFX)
+Frame Generation (FSR-FG Inputs)	Генерация кадров (Входные данные FSR-FG)
+Frame Generation (FSR3-FG via Nukem's DLSSG)	Генерация кадров (FSR3-FG через DLSSG Nukem)
+Frame Generation (FSR3-MFG via DLSS Enabler)	Генерация кадров (FSR3-MFG через DLSS Enabler)
+Frame Generation (FSRFG via FFX)	Генерация кадров (FSRFG через FFX)
+Frame Generation (Streamline FG Inputs)	Генерация кадров (Входные данные Streamline FG)
+Framerate	Частота кадров
+Hooks / Config	Хуки / Конфигурация
+Init Flags	Флаги инициализации
+Init Flags (active)	Флаги инициализации (активные)
+Low Latency	Низкая задержка
+Nvngx FG replacement	Замена FG Nvngx
+OptiFG Settings	Настройки OptiFG
+Output Scaling	Масштабирование вывода
+Per shader GPU times	Время GPU по шейдерам
+Plugins / Startup	Плагины / Запуск
+Reprojection Settings	Настройки репроекции
+Shaders / Limits	Шейдеры / Ограничения
+Sharpness	Резкость
+Spoofing / Hooking	Спуфинг / Хуки
+Streamline FG Inputs	Входные данные Streamline FG
+System	Система
+Theme and Color	Тема и цвета
+Upscale Ratio Override	Переопределение коэффициента масштабирования
+Upscalers	Апскейлеры
+V-Sync	V-Sync
+XeFG Settings	Настройки XeFG
+fakenvapi	fakenvapi
+
+# 2026-10-04: model cadence (docs/dlssnr/design/model-cadence.md): the control, its help, the GPU timing
+# kind line and the status line under the control (DlssNr::Cadence::Describe).
+Model cadence	Периодичность модели
+Every frame	Каждый кадр
+Every 2nd frame	Каждый 2-й кадр
+Every 3rd frame	Каждый 3-й кадр
+Every 4th frame	Каждый 4-й кадр
+Allow with frame generation	Разрешить с генерацией кадров
+Runs the model on one frame in N and carries its edit along the game's motion onto the frames in\nbetween. It buys frame rate and costs stability in motion: detail can pop each time the model\nruns again, and what a moving object uncovers can ghost, or show the plain frame, until then.\nFrame times alternate long and short. A still scene looks as it does with every frame.\n\nIt needs the game's own depth and motion, so it stands down before the upscaler, on frames\nwithout them, with Hold frame or a capture, and while frame generation is active unless allowed\nbelow. Off costs nothing.	Запускает модель на одном кадре из N и переносит ее правку вдоль движения игры на промежуточные\nкадры. Это дает частоту кадров ценой стабильности в движении: детали могут скакать каждый раз, когда модель\nзапускается снова, а то, что открывает движущийся объект, может оставлять шлейф или показывать чистый кадр до этого момента.\nВремя кадров чередуется: длинное и короткое. Неподвижная сцена выглядит так же, как при "Каждый кадр".\n\nНужны собственные глубина и движение игры, поэтому периодичность отключается до апскейлера, на кадрах\nбез них, с "Удержать кадр" или захватом, а также пока активна генерация кадров, если это не разрешено\nниже. Выкл. ничего не стоит.
+Off by default. Frame generation interpolates between frames whose cost alternates, and DLSS-G\nwas measured unable to pace through that: stutter and flashes that grow with the multiplier and\nthe cadence. Turn it on to measure it, not to play.	По умолчанию выключено. Генерация кадров интерполирует между кадрами с чередующейся стоимостью, и замеры показали, что DLSS-G\nне может выдержать такой ритм: подергивания и вспышки, растущие с множителем и\nпериодичностью. Включайте для измерений, а не для игры.
+A carried frame of model cadence %u: no model call, so no model time.	Перенесенный кадр при периодичности модели %u: вызова модели нет, поэтому нет и времени модели.
+A model frame of model cadence %u. With an interval that is a multiple of the cadence, every sample is the same kind of frame.	Кадр модели при периодичности модели %u. При интервале, кратном периодичности, каждый замер -- кадр одного и того же типа.
+Running the model every 4th frame; the frames between carry its last edit.	Модель запускается каждый 4-й кадр; кадры между ними несут ее последнюю правку.
+Running the model every 3rd frame; the frames between carry its last edit.	Модель запускается каждый 3-й кадр; кадры между ними несут ее последнюю правку.
+Running the model every 2nd frame; the frame between carries its last edit.	Модель запускается каждый 2-й кадр; кадр между ними несет ее последнюю правку.
+The model runs this frame: no edit is stored to carry.	Модель работает в этом кадре: нет сохраненной правки для переноса.
+The model runs this frame: a history reset is pending.	Модель работает в этом кадре: ожидается сброс истории.
+The model runs this frame: its size, format, route or settings changed.	Модель работает в этом кадре: изменились ее размер, формат, маршрут или настройки.
+The model runs this frame: the pass did not run for a while.	Модель работает в этом кадре: проход какое-то время не выполнялся.
+The model runs every frame: the pass ran more than once in one present.	Модель работает каждый кадр: проход выполнился больше одного раза за один present.
+Off: the model runs every frame.	Выкл.: модель работает каждый кадр.
+The model runs every frame: model cadence is not available on native Vulkan.	Модель работает каждый кадр: периодичность модели недоступна на нативном Vulkan.
+The model runs every frame: model cadence does not run with the driver proxy.	Модель работает каждый кадр: периодичность модели не работает с прокси драйвера.
+The model runs every frame: this build has no model cadence shader.	Модель работает каждый кадр: в этой сборке нет шейдера периодичности модели.
+The model runs every frame: this route does not present through OptiScaler's swapchain, so model cadence cannot count frames.	Модель работает каждый кадр: этот маршрут не выводит кадры через swapchain OptiScaler, поэтому периодичность модели не может считать кадры.
+The model runs every frame: model cadence does not run before the upscaler.	Модель работает каждый кадр: периодичность модели не работает до апскейлера.
+The model runs every frame: this frame has no game depth and motion to carry the edit with.	Модель работает каждый кадр: в этом кадре нет глубины и движения игры, чтобы перенести правку.
+The model runs every frame: frame generation is active (see Allow with frame generation).	Модель работает каждый кадр: активна генерация кадров (см. "Разрешить с генерацией кадров").
+The model runs every frame while Hold frame is on.	Модель работает каждый кадр, пока включено "Удержать кадр".
+The model runs every frame while a capture is running.	Модель работает каждый кадр, пока идет захват.
+The model runs every frame: the model cadence surfaces could not be allocated.	Модель работает каждый кадр: не удалось выделить поверхности периодичности модели.
+Waiting for the pass to run.	Ожидание выполнения прохода.
+
+# Peripheral compression (docs/dlssnr/design/peripheral-compression.md)
+Peripheral compression	Периферийное сжатие
+Centre band	Центральная полоса
+Packed extent	Упакованный охват
+Packed model input	Упакованный вход модели
+Experimental. The model's input is packed denser in the centre than at the edges, so at the\nsame cost the centre keeps full detail and the edges give some up. Its answer is unpacked\nbefore it is composed; the frame itself is untouched.\n\nThe defaults, 80 and 90, cost what a Model resolution of 90 costs, so that is the\ncomparison to make, not 100. Matched residual is used at full model resolution too;\nClassic blurs colour at the edges here.\n\nD3D12, after the upscaler or at present. Not above Model resolution 100 and not with the\ndriver proxy. Moving a slider restarts the model's history; a new packed size rebuilds it\nafter a moment.	Экспериментально. Вход модели упаковывается плотнее в центре, чем по краям, поэтому при\nтой же стоимости центр сохраняет полную детализацию, а края немного теряют. Ее ответ распаковывается\nперед композицией; сам кадр не затрагивается.\n\nЗначения по умолчанию, 80 и 90, стоят столько же, сколько "Разрешение модели" 90, поэтому сравнивать\nнужно с ним, а не со 100. "Согласованный остаток" используется и при полном разрешении модели;\n"Классический" здесь размывает цвет по краям.\n\nD3D12, после апскейлера или при present. Не выше "Разрешение модели" 100 и не с\nпрокси драйвера. Перемещение ползунка перезапускает историю модели; новый упакованный размер пересоздает ее\nчерез мгновение.
+How much of each axis, around the middle, the model sees at full density.	Какую часть каждой оси вокруг середины модель видит с полной плотностью.
+How much of each axis the model's input spans, before Model resolution. Everything past the\ncentre is squeezed into the rest, to no less than half its size: this has to be at least\nhalfway between the centre band and 100.	Какую часть каждой оси охватывает вход модели, до применения "Разрешение модели". Все за пределами\nцентра сжимается в оставшееся место, но не меньше чем вдвое: это значение должно быть как минимум\nпосередине между центральной полосой и 100.
+Active: the model works at %ux%u for a %ux%u frame, %.0f percent of the pixels it would work on without it.	Активно: модель работает в %ux%u для кадра %ux%u -- это %.0f из 100 пикселей, которые она обрабатывала бы без сжатия.
+Not active: %s.	Неактивно: %s.
+Peripheral compression is running, so this applies at full model resolution too.	Активно периферийное сжатие, поэтому это действует и при полном разрешении модели.
+Packed model input: what the model was handed, edges squeezed, stretched over the frame.	Упакованный вход модели: то, что получила модель, со сжатыми краями, растянутое на кадр.
+the frame is too small to lay out	кадр слишком мал для раскладки
+supersampling (Model resolution above 100) is not supported with peripheral compression	суперсэмплинг ("Разрешение модели" выше 100) не поддерживается с периферийным сжатием
+the centre band must be at least 10 and smaller than the packed extent, which must be below 100	центральная полоса должна быть не меньше 10 и меньше упакованного охвата, который должен быть ниже 100
+the edges would be squeezed below half their size, which aliases: widen the packed extent or narrow the centre band (packed extent x 2 must be at least 100 + centre band)	края были бы сжаты меньше чем вдвое, что дает алиасинг: увеличьте упакованный охват или сузьте центральную полосу (упакованный охват x 2 должен быть не меньше 100 + центральная полоса)
+the packed model would be under a quarter of the frame: raise Model resolution or the packed extent	упакованная модель была бы меньше четверти кадра: увеличьте "Разрешение модели" или упакованный охват
+less than one packed pixel would be left on a side of the centre band	с одной стороны центральной полосы осталось бы меньше одного упакованного пикселя
+not on the before-upscale stage	не на стадии до апскейлера
+not with the driver proxy (UseProxy)	не с прокси драйвера (UseProxy)
+this build has no pack/unpack shader	в этой сборке нет шейдера упаковки/распаковки
+the pack/unpack pass could not be built or run on this device	проход упаковки/распаковки не удалось создать или запустить на этом устройстве
+Peripheral compression is running: Matched residual runs.	Активно периферийное сжатие: работает "Согласованный остаток".
+The model runs every frame: model cadence does not run with replace curves.	Модель работает каждый кадр: периодичность модели не работает с кривыми замены.
+
+# Measure detail
+Measure detail	Измерить детали
+Measure detail: failed to initialize compute pass	Измерить детали: не удалось инициализировать вычислительный проход
+Cancel	Отмена
+Measures NR's output on the scene on screen at the current settings for 60 evaluations, against the game's own frame (ideally with Hold frame on):\n  - Detail: fine band detail added (sigma ~1.2 px vs ~3 px)\n  - Flicker: frame-to-frame output change beyond input change\n  - Colour: saturation change and warmth shift\n  - Shadows: darkening and crushed share\nResults are compared against the previous measurement.	Измеряет вывод NR в текущей сцене при текущих настройках на протяжении 60 вычислений относительно собственного кадра игры (в идеале с включенным "Удержать кадр"):\n  - Детали: добавленные тонкие детали в полосе частот (sigma ~1.2 px против ~3 px)\n  - Мерцание: изменение вывода от кадра к кадру сверх изменения входа\n  - Цвет: изменение насыщенности и сдвиг теплоты\n  - Тени: затемнение и доля провалов в черное\nРезультаты сравниваются с предыдущим измерением.
+Measure detail stopped: this command list cannot be tracked (see the log).	Измерить детали: остановлено, этот список команд нельзя отследить (см. лог).
+Measure detail stopped: no sample completed (see the log).	Измерить детали: остановлено, ни один замер не завершился (см. лог).
+Measure detail: the scene moved, too few still frames (turn on Hold frame).	Измерить детали: сцена двигалась, слишком мало неподвижных кадров (включите "Удержать кадр").
+# 2026-10-12: upstream's Quirks tab (b97dd476) and the Open Wiki button (899b9488), merged from optiscaler/master.
+Quirks	Особенности
+Quirks / ASI	Особенности / ASI
+Loaded ASI Plugins	Загруженные плагины ASI
+Open Wiki	Открыть Wiki
+Compatibility list, known issues and FG options explained	Список совместимости, известные проблемы и объяснение опций FG
+# 2026-10-13: the session guard (docs/dlssnr/design/session-guard.md).
+Enable anyway	Все равно включить
+Neural Rendering is off for this session. Your settings are unchanged.	Neural Rendering выключен на этот сеанс. Ваши настройки не изменены.
+The last session ended without closing, soon after the model started.	Прошлый сеанс завершился без закрытия вскоре после запуска модели.
+The last two sessions ended without closing.	Два последних сеанса завершились без закрытия.
+An earlier session ended without closing, and this has not been confirmed since.	Один из прошлых сеансов завершился без закрытия, и с тех пор стабильная работа не подтверждена.
+# 2026-10-30: the NR minimum-driver gate (docs/dlssnr/design/driver-gate.md).
+Neural Rendering is off for this session: it needs NVIDIA driver %s or newer (%s or newer recommended), and this one is %s. Your settings are unchanged.	Neural Rendering выключен на этот сеанс: нужен драйвер NVIDIA %s или новее (рекомендуется %s или новее), а у вас %s. Ваши настройки не изменены.
+this NVIDIA driver is too old for Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	этот драйвер NVIDIA слишком старый для Neural Rendering; обновите до 610.88 или новее (рекомендуется 616.64 или новее)
+NGX answered FAIL_OutOfDate: this NVIDIA driver cannot run Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	NGX ответил FAIL_OutOfDate: этот драйвер NVIDIA не может запускать Neural Rendering; обновите до 610.88 или новее (рекомендуется 616.64 или новее)
+The last session ended without closing. If it was a crash, this one may too.	Прошлый сеанс завершился без закрытия. Если это был сбой, этот сеанс тоже может завершиться сбоем.
+# 2026-10-14: session guard v2: how the last session ended, and the numbers line.
+The last session ended with an error soon after the model started.	Прошлый сеанс завершился с ошибкой вскоре после запуска модели.
+The last session ended with an error. If it was a crash, this one may too.	Прошлый сеанс завершился с ошибкой. Если это был сбой, этот сеанс тоже может завершиться сбоем.
+The last session crashed while the model was running.	Прошлый сеанс аварийно завершился, пока работала модель.
+The last session crashed, long after the model started. If the next one does too, Neural Rendering will be switched off.	Прошлый сеанс аварийно завершился спустя долгое время после запуска модели. Если следующий тоже завершится так, Neural Rendering будет выключен.
+The graphics device was lost while the model was running in the last session.	В прошлом сеансе графическое устройство было потеряно, пока работала модель.
+The graphics device was lost in the last session, long after the model started. If it happens again, Neural Rendering will be switched off.	В прошлом сеансе графическое устройство было потеряно спустя долгое время после запуска модели. Если это повторится, Neural Rendering будет выключен.
+Exception 0x%08X after the model had run for %lld s.	Исключение 0x%08X после %lld с работы модели.
+Exit code %u after the model had run for %lld s.	Код выхода %u после %lld с работы модели.
+The model had run for %lld s.	Модель проработала %lld с.
+# 2026-10-13: the pulse metric (docs/dlssnr/design/pulse-metric.md): the control under Compare and its help.
+Measure the light step	Измерить шаг света
+How far the picture's light moves from one frame to the next because of the edit: the\nchange of log2(output light / frame light), in stops, averaged over two seconds.\nFrames where the model ran and frames where model cadence carried its edit are kept\napart, so the step on the model's frames against the carried ones is the cadence's\npulse as a number. A still scene reads cleanest; a pan adds its own changes.\n\nOne small measuring pass a frame while on. Also logged every 10 seconds.	Насколько свет картинки меняется от кадра к кадру из-за правки:\nизменение log2(свет вывода / свет кадра) в ступенях экспозиции, усредненное за две секунды.\nКадры, где работала модель, и кадры, куда периодичность модели перенесла ее правку, учитываются\nраздельно, так что шаг на кадрах модели относительно перенесенных -- это\nпульсация периодичности в виде числа. Чище всего показания в неподвижной сцене; панорама добавляет свои изменения.\n\nПока включено -- один небольшой измерительный проход за кадр. Также пишется в лог каждые 10 секунд.
+Light step: the measuring pass could not be built.	Шаг света: не удалось создать измерительный проход.
+# 2026-10-13: model cadence smoothing (docs/dlssnr/design/cadence-smoothing.md): the control and its help.
+Smooth the model's frames	Сглаживать кадры модели
+Without it, each new answer of the model replaces the carried one on the frame the model runs,\nand the picture's light steps there every N frames: the pulse. With it, the new answer is walked\nin from the carried one over the whole interval, in N equal steps, and the mean light of what the\ncadence shows may move by at most 1.5 stops a second while the frame's own light holds still.\n\nOnly what is shown changes: the stored edit and the model's own history stay as the model made\nthem. The previous answer stays on screen, fading, for up to N-1 frames longer, which can trail a\nlittle where things move fast. Measure it with "Measure the light step" under Compare.	Без этого каждый новый ответ модели заменяет перенесенный на кадре, где работает модель,\nи свет картинки там скачет каждые N кадров: это пульсация. С этим новый ответ плавно вводится\nот перенесенного на протяжении всего интервала, N равными шагами, а средний свет того, что\nпоказывает периодичность, может меняться не более чем на 1.5 ступени в секунду, пока собственный свет кадра неизменен.\n\nМеняется только то, что показывается: сохраненная правка и собственная история модели остаются такими, какими их\nсоздала модель. Предыдущий ответ остается на экране, угасая, еще до N-1 кадров, что может давать небольшой\nшлейф там, где все быстро движется. Измеряйте это с помощью "Измерить шаг света" в разделе "Сравнить".
+# 2026-10-13: the residual limit (docs/dlssnr/design/residual-limit.md): the control and its help.
+Residual limit	Предел остатка
+The most the model may move any pixel's light, either way, in stops: 0.5 allows\nat most 1.41x brighter or darker, 1 at most 2x. Off at 0, the composition as\nit always was.\n\nAimed at blotches and flicker: a patch of wall the model brightens by a stop\none frame and not the next. It bounds the model's real corrections the same\nway, so start high and lower it until the blotches go. It sits inside the\nhighlight guard and can only narrow it.	Насколько максимум модель может изменить свет любого пикселя, в любую сторону, в ступенях экспозиции: 0.5 допускает\nне более чем в 1.41x ярче или темнее, 1 -- не более чем в 2x. При 0 выключено, композиция\nкак всегда.\n\nНацелено на пятна и мерцание: участок стены, который модель осветляет на ступень\nв одном кадре и не осветляет в следующем. Так же ограничиваются и настоящие поправки модели,\nпоэтому начните с высокого значения и снижайте, пока пятна не исчезнут. Действует внутри\nзащиты светлых участков и может лишь сузить ее.
+# 2026-10-13: HDR10 and scRGB at present (docs/dlssnr/design/hdr-present-conversion.md): the switch, its readout, its
+# Paper white, its timing line, and the reasons the conversion gives in the readout.
+HDR output (HDR10 and scRGB)	Вывод HDR (HDR10 и scRGB)
+The game presents in HDR: HDR10 (PQ, Rec.2020) or scRGB (linear light). Off, its\nframes are shown as the game rendered them and the pass does not run on them.\n\nOn, each frame is decoded to linear light, the pass runs on it as on any HDR\nframe, and it is encoded back with the game's own frame as the reference: every\npixel the pass leaves alone -- the interface, at strength zero -- keeps its exact\ncode. The model uses the display's Windows SDR white level times Paper white,\nor 203 nits when the display query is unavailable.\n\nExperimental: not yet measured on a real HDR display. HLG, studio-range or YCbCr\nPQ and other colour spaces stay declined.	Игра выводит в HDR: HDR10 (PQ, Rec.2020) или scRGB (линейный свет). Когда выключено, ее\nкадры показываются так, как их отрисовала игра, и проход на них не выполняется.\n\nКогда включено, каждый кадр декодируется в линейный свет, проход выполняется на нем, как на любом\nHDR-кадре, и он кодируется обратно с собственным кадром игры в качестве эталона: каждый\nпиксель, который проход не трогает, -- интерфейс, при нулевой силе, -- сохраняет свой точный\nкод. Модель использует уровень белого SDR дисплея из Windows, умноженный на "Опорный белый",\nили 203 нит, если запрос к дисплею недоступен.\n\nЭкспериментально: еще не измерено на реальном HDR-дисплее. HLG, PQ в студийном диапазоне или YCbCr\nи другие цветовые пространства по-прежнему отклоняются.
+HDR10	HDR10
+scRGB	scRGB
+%s, SDR white %.0f nits x %.2f	%s, белый SDR %.0f нит x %.2f
+Off: this %s swapchain is shown as the game rendered it.	Выкл.: этот swapchain %s показывается так, как его отрисовала игра.
+Paper white (x the display's SDR white)	Опорный белый (x белый SDR дисплея)
+The same Paper white as on any other frame, measured here against the display's\nSDR white shown above: 1.00 uses that value. Raise it if the\ngame's own HDR paper white is set brighter, lower it if darker. It changes what\nthe model is shown, not the frame where the pass leaves it alone.	Тот же "Опорный белый", что и для любого другого кадра, но здесь он отсчитывается от\nбелого SDR дисплея, показанного выше: 1.00 использует это значение. Повысьте, если\nсобственный опорный белый HDR в игре выставлен ярче, понизьте, если темнее. Это меняет то, что\nпоказывается модели, а не кадр там, где проход его не трогает.
+HDR conversion, outside the dispatch: %.3f ms = %.3f ms decode + %.3f ms encode (sample %llu, %.1f s since recording)	Преобразование HDR вне dispatch: %.3f мс = %.3f мс декодирования + %.3f мс кодирования (замер %llu, %.1f с с момента записи)
+the swapchain's format is typeless, which the HDR conversion does not take; the frame is shown as the game rendered it	формат swapchain -- typeless, а преобразование HDR его не принимает; кадр показывается так, как его отрисовала игра
+nothing is known about this swapchain's colour space, and the HDR conversion does not guess; the frame is shown as the game rendered it	о цветовом пространстве этого swapchain ничего не известно, а преобразование HDR не угадывает; кадр показывается так, как его отрисовала игра
+the swapchain changed format after its colour space was set, and the HDR conversion waits for it to be set again; the frame is shown as the game rendered it	swapchain сменил формат после того, как было задано его цветовое пространство, и преобразование HDR ждет, пока оно будет задано снова; кадр показывается так, как его отрисовала игра
+the swapchain's colour space was recorded for another format; the frame is shown as the game rendered it	цветовое пространство swapchain было записано для другого формата; кадр показывается так, как его отрисовала игра
+the swapchain is PQ in studio range or YCbCr, which the HDR conversion does not take; the frame is shown as the game rendered it	swapchain использует PQ в студийном диапазоне или YCbCr, что преобразование HDR не принимает; кадр показывается так, как его отрисовала игра
+the swapchain is ten-bit with a linear (scRGB) colour space, which the HDR conversion does not take; the frame is shown as the game rendered it	swapchain десятибитный с линейным (scRGB) цветовым пространством, что преобразование HDR не принимает; кадр показывается так, как его отрисовала игра
+the swapchain is FP16 with a colour space other than scRGB, which the HDR conversion does not take; the frame is shown as the game rendered it	swapchain в FP16 с цветовым пространством, отличным от scRGB, что преобразование HDR не принимает; кадр показывается так, как его отрисовала игра
+the swapchain's colour space is HLG, Rec.2020 with a gamma curve or another the HDR conversion does not take; the frame is shown as the game rendered it	цветовое пространство swapchain -- HLG, Rec.2020 с гамма-кривой или другое, которое преобразование HDR не принимает; кадр показывается так, как его отрисовала игра
+this build carries no HDR conversion shader; the frame is shown as the game rendered it	в этой сборке нет шейдера преобразования HDR; кадр показывается так, как его отрисовала игра
+the HDR conversion's pass could not be built; the frame is shown as the game rendered it	не удалось создать проход преобразования HDR; кадр показывается так, как его отрисовала игра
+this GPU cannot read this swapchain's format in a shader or store to it from one (typed UAV store), so the HDR conversion cannot run; the frame is shown as the game rendered it	этот GPU не может читать формат этого swapchain в шейдере или записывать в него из шейдера (typed UAV store), поэтому преобразование HDR не может работать; кадр показывается так, как его отрисовала игра
+the HDR conversion's textures could not be created; the frame is shown as the game rendered it	не удалось создать текстуры преобразования HDR; кадр показывается так, как его отрисовала игра
+the HDR conversion was built for another D3D12 device; the frame is shown as the game rendered it	преобразование HDR создано для другого устройства D3D12; кадр показывается так, как его отрисовала игра
+the backbuffer's format is not the swapchain's, so the HDR conversion does not trust its colour space; the frame is shown as the game rendered it	формат бэкбуфера не совпадает с форматом swapchain, поэтому преобразование HDR не доверяет его цветовому пространству; кадр показывается так, как его отрисовала игра
+# 2026-10-13: the comparison capture (docs/dlssnr/design/comparison-capture.md): the button, its help and its states.
+Capture original and processed	Захват исходного и обработанного
+Saves the next frame twice, as the pass read it and as the pass wrote it, into the\nretoque-captures folder beside OptiScaler. Each file carries a record of the build, the route,\nthe model and every setting that shapes the picture, and a .json beside them says the same.\n\nA display-referred frame is saved as PNG, a linear HDR frame as PFM (32-bit float). On the\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the\nupscaler's output, before the game's own tonemapper, post-processing and interface.\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler\nasks for the same capture from outside the game on D3D12 routes.	Сохраняет следующий кадр дважды -- как проход его прочитал и как записал -- в\nпапку retoque-captures рядом с OptiScaler. Каждый файл содержит сведения о сборке, маршруте,\nмодели и всех настройках, влияющих на картинку, и то же самое указано в .json рядом с ними.\n\nКадр для дисплея сохраняется как PNG, линейный HDR-кадр -- как PFM (32-bit float). На\nмаршрутах present это готовый кадр до отрисовки меню; после апскейлера -- это\nвывод апскейлера до собственных тонмаппера, постобработки и интерфейса игры.\n\nХранятся 64 последние пары. Файл с именем dlssnr-capture.trigger, положенный рядом с OptiScaler,\nзапрашивает тот же захват извне игры на маршрутах D3D12.
+Saved %s (the pair and its .json)	Сохранено %s (пара и ее .json)
+Turn off Compare to capture the result.	Выключите "Сравнить", чтобы захватить результат.
+Turn off the debug view to capture the result.	Выключите отладочный вид, чтобы захватить результат.
+Not with the driver proxy: it returns before the pass writes the frame.	Не с прокси драйвера: он возвращает управление до того, как проход запишет кадр.
+Capture is unavailable on this route; native Vulkan requires the after-upscale pass.	Захват недоступен на этом маршруте; нативному Vulkan нужен проход после апскейлера.
+The capture folder could not be created (see the log).	Не удалось создать папку захватов (см. лог).
+No frame reached the pass in time; nothing was captured.	Ни один кадр не дошел до прохода вовремя; ничего не захвачено.
+Earlier captures are still held for the GPU; try again shortly.	Прежние захваты еще удерживаются для GPU; попробуйте чуть позже.
+The readback buffers could not be created.	Не удалось создать буферы считывания.
+The GPU never confirmed the copies; nothing was written, and the capture is off for this session.	GPU так и не подтвердил копирования; ничего не записано, и захват выключен на этот сеанс.
+The writer could not be started.	Не удалось запустить запись файлов.
+The files could not be written (see the log).	Не удалось записать файлы (см. лог).
+This frame's format is not one the capture can write yet.	Захват пока не умеет записывать формат этого кадра.
+The two surfaces differ in shape; nothing was captured.	Две поверхности различаются по форме; ничего не захвачено.
+Waiting for the next frame the pass writes...	Ожидание следующего кадра, который запишет проход...
+Waiting for the GPU to finish the copies...	Ожидание, пока GPU завершит копирования...
+Writing the files...	Запись файлов...
+# 2026-10-15: the comparison capture's review fixes: a surface the copy cannot take, a failure while the frame was
+# recorded, and a request made while one is under way.
+This frame is not a single-sample 2D texture; nothing was captured.	Этот кадр -- не 2D-текстура с одним сэмплом; ничего не захвачено.
+The capture failed while the frame was being described or recorded; nothing was captured (see the log).	Захват завершился сбоем, пока кадр описывался или записывался; ничего не захвачено (см. лог).
+A capture is already under way.	Захват уже идет.
+This route's commands cannot be followed to the GPU's completion; nothing was captured (see the log).	Команды этого маршрута нельзя отследить до завершения на GPU; ничего не захвачено (см. лог).
+# 2026-10-13: the LSFG panel under FSR FG Settings (study branch; tools/lsfg-study/MFG_PRESENTER.md): its controls, the
+# multiplier and what it says about the swapchain the game started with, and the status line.
+LSFG 3.1 Interpolator (Lossless Scaling)	Интерполятор LSFG 3.1 (Lossless Scaling)
+Replaces FSR-FG's internal optical flow interpolation with Lossless Scaling's LSFG 3.1.\nNeeds lsfg-vk.dll from Lossless Scaling (auto-detected or configured in [LSFG] DllPath).	Заменяет внутреннюю интерполяцию FSR-FG на основе оптического потока на LSFG 3.1 из Lossless Scaling.\nНужен lsfg-vk.dll из Lossless Scaling (определяется автоматически или задается в [LSFG] DllPath).
+Enable LSFG	Включить LSFG
+Enable LSFG 3.1 frame interpolation under FSR-FG.\nWhen disabled or building, FSR-FG uses standard FFX interpolation.	Включает интерполяцию кадров LSFG 3.1 в FSR-FG.\nКогда выключено или идет сборка, FSR-FG использует стандартную интерполяцию FFX.
+Flow Scale	Масштаб потока
+Internal optical flow pyramid resolution relative to display frame.\n1.00 = Native resolution (highest quality)\n0.85 = Balanced quality/performance\n0.50 = Half resolution (faster, lower VRAM)	Разрешение внутренней пирамиды оптического потока относительно кадра на экране.\n1.00 = нативное разрешение (наивысшее качество)\n0.85 = баланс качества и производительности\n0.50 = половинное разрешение (быстрее, меньше VRAM)
+Performance Mode	Режим производительности
+Halves feature channels across motion pyramids.\nCheaper on GPU with slightly softer motion edges.	Вдвое уменьшает число каналов признаков в пирамидах движения.\nДешевле для GPU, края движения чуть мягче.
+Multiplier	Множитель
+%dx (after a restart)	%dx (после перезапуска)
+Frames shown per real frame. 2x adds one generated frame; 3x and 4x add two or three,\npresented by OptiScaler's own frame-generation swapchain, a fork of FFX's.\n\nThe swapchain is chosen when the game creates it. Started at 3x or 4x, every choice\napplies at the next frame. Started at 2x, 3x and 4x are saved and need a restart.	Кадров на экране на каждый реальный кадр. 2x добавляет один сгенерированный кадр; 3x и 4x -- два или три,\nвыводимые собственным swapchain генерации кадров OptiScaler, форком swapchain FFX.\n\nSwapchain выбирается, когда игра его создает. Если игра запущена на 3x или 4x, любой выбор\nприменяется со следующего кадра. Если на 2x, то 3x и 4x сохраняются и требуют перезапуска.
+Now %dx: the game started with FFX's swapchain, which shows one generated frame. Save Settings and restart the game for %dx.	Сейчас %dx: игра запустилась со swapchain FFX, который показывает один сгенерированный кадр. Нажмите "Сохранить настройки" и перезапустите игру для %dx.
+Now 2x, while FFX interpolates in LSFG's place (see Status).	Сейчас 2x, пока FFX интерполирует вместо LSFG (см. "Статус").
+Status: Disabled (using FFX interpolation)	Статус: выключено (используется интерполяция FFX)
+Status: Active at %ux%u (%.2f ms/frame)	Статус: активно в %ux%u (%.2f мс/кадр)
+Status: Active at %ux%u	Статус: активно в %ux%u
+Status: %s	Статус: %s
+Status: Waiting for frames	Статус: ожидание кадров
+
+HDR swapchain description unavailable; the frame stays original	Описание HDR swapchain недоступно; кадр остается исходным
+HDR conversion resource contract unavailable; the frame stays original	Контракт ресурсов преобразования HDR недоступен; кадр остается исходным
+Windows SDR white	Белый SDR Windows
+203-nit fallback	Резервные 203 нит
+HDR conversion did not produce a submitted frame	Преобразование HDR не выдало отправленного кадра
+
+HDR present conversion is inactive; the game's original frame is shown.	Преобразование HDR при present неактивно; показывается исходный кадр игры.
+
+Show all settings	Показать все настройки
+Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Показать полную панель Neural Rendering. Скрытые настройки остаются активными и неизменными.
+
+Minimum brightness	Минимальная яркость
+Final luminance relative to the original frame: 0.75 keeps at least 75 percent.\nApplied once, after composition, including replace curves. 0 is off.\nRestores darkened pixels toward the original; does not cap individual channels.\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB.\nLater game processing and temporal stabilization are outside this limit.	Итоговая яркость относительно исходного кадра: 0.75 сохраняет не менее 75 процентов.\nПрименяется один раз, после композиции, включая кривые замены. 0 -- выкл.\nВозвращает затемненные пиксели к исходным; не ограничивает отдельные каналы.\nHDR использует линейную яркость буфера; passthrough -- RGB, уже прошедший тонмаппинг.\nПоследующая обработка игры и временная стабилизация находятся вне этого предела.
+Adapt cadence to motion	Адаптировать периодичность к движению
+Adaptive cadence: running the model every frame until feedback permits reuse.	Адаптивная периодичность: модель запускается каждый кадр, пока обратная связь не позволит повторное использование.
+Shortens the interval when motion or rejected carry coverage is high; lengthens after 300 ms of calm.\nCadence above is the maximum. Delayed GPU feedback cannot catch a cut on its first frame.\nRequires a restart when enabled after NR has already run. Missing feedback runs the model every frame.\nExperimental: measured in the moving fixture, not validated in games. Off adds no probe work.	Сокращает интервал при сильном движении или высокой доле отклоненного переноса; удлиняет после 300 мс спокойствия.\nПериодичность выше -- это максимум. Запаздывающая обратная связь от GPU не может поймать смену сцены в ее первом кадре.\nТребует перезапуска, если включено после того, как NR уже работал. Без обратной связи модель работает каждый кадр.\nЭкспериментально: измерено на тестовой сцене с движением, не проверено в играх. Выкл. не добавляет работы по пробам.
+Record replay clip	Записать replay-клип
+Recording: %u frames, %u written	Запись: кадров %u, записано %u
+Clip of %u frames written to %s (%s)	Клип (кадров: %u) записан в %s (%s)
+Records about six seconds of what the pass receives -- the upscaler's colour, depth and motion\nvectors, and the game's parameters -- into the dlssnr-replay folder beside OptiScaler, for the\noffline replay harness (tests/dlssnr-loopback --replay-nr). Nothing is recorded until pressed.\n\nAbout 50-60 MB a frame at 3440x1440: a clip is 1-4 GB. Dropping a file named\ndlssnr-capture.trigger containing the word replay asks for the same clip from outside the game.	Записывает около шести секунд того, что получает проход, -- цвет, глубину и векторы движения\nапскейлера и параметры игры -- в папку dlssnr-replay рядом с OptiScaler, для\nофлайн-стенда replay (tests/dlssnr-loopback --replay-nr). До нажатия ничего не записывается.\n\nОколо 50-60 МБ на кадр при 3440x1440: клип занимает 1-4 ГБ. Файл dlssnr-capture.trigger\nсо словом replay запрашивает тот же клип извне игры.
+# 2026-10-27: the FPS overlay's section titles from upstream's overlay rework (#1238, 5f6a2e69).
+Presets	Пресеты
+Layout	Макет
+Text	Текст
+Colors	Цвета
+# 2026-10-30: the NR panel's "Copy NR diagnostics" button (docs/dlssnr/design/diagnostic-export.md). The report it copies stays English.
+Copy NR diagnostics	Копировать диагностику NR
+Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths are replaced by <path>. Assembled only when pressed; the report itself is in English.	Копирует текстовый отчет о том, что Neural Rendering обнаружил и что использовал, -- сборка, платформа, маршрут, направляющие, настройки, последний подтвержденный замер GPU и LSFG -- для сообщения об ошибке. Абсолютные пути заменяются на <path>. Собирается только при нажатии; сам отчет на английском.
+Copied to the clipboard.	Скопировано в буфер обмена.
+# 2026-10-30: the NR panel's line while the game runs its own NR through Streamline (docs/dlssnr/design/streamline-native-nr.md).
+The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	Игра запускает собственный NR (Streamline DLSS-NR), поэтому этот проход отключается, чтобы не применять NR дважды. Он снова заработает через 5 с после того, как NR игры остановится.
+# 2026-10-30: the model's own VRAM count beside the status line (docs/dlssnr/design/model-vram-stats.md).
+(model: %llu MiB)	(модель: %llu МиБ)
+
+# 2026-11-01: independent historical Present and guide-capture GPU samples.
+%s: no confirmed sample (pending %u, discarded %llu; %s)	%s: нет подтвержденного замера (ожидает %u, отброшено %llu; %s)
+%s: %.3f ms (historical sample %llu, %.1f s since recording)	%s: %.3f мс (исторический замер %llu, %.1f с с момента записи)
+Guides: %s; capture %llu; guide extent %ux%u, output %ux%u	Направляющие: %s; захват %llu; размер направляющих %ux%u, вывод %ux%u
+Game capture %llu, age at selection %llu ms	Захват игры %llu, возраст при выборе %llu мс
+Observed Present %llu; boundary %s, HDR %s, NR recorded %s	Наблюдаемый Present %llu; граница %s, HDR %s, NR записан %s
+GPU route includes Dispatch and HDR conversion. CPU waits and submission are excluded.	Маршрут GPU включает Dispatch и преобразование HDR. Ожидания CPU и отправка исключены.
+Guide capture uses a separate producer recording. Do not add it to a Present sample.	Захват направляющих использует отдельную запись производителя. Не добавляйте его к замеру Present.
+Present and guide capture each count their own eligible regions.	Present и захват направляющих считают свои подходящие области отдельно.
+Present route GPU	Маршрут Present на GPU
+Guide capture GPU	Захват направляющих на GPU
+Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)	Вызов Dispatch %.3f мс, вне Dispatch %.3f мс (та же запись)
+No Dispatch call in this recording: total only	В этой записи нет вызова Dispatch: только общее время
+game depth + motion	глубина + движение игры
+zero depth + synthesized motion	нулевая глубина + синтезированное движение
+zero depth + motion	нулевые глубина + движение
+unknown	неизвестно
+no-sample	нет замера
+yes	да
+no	нет
+
+The capture recording was discarded or invalidated; nothing was written.	Запись захвата была отброшена или признана недействительной; ничего не записано.
+# Native Vulkan pre-upscale experiment
+Stage: before the upscaler requested (native Vulkan)	Стадия: запрошено до апскейлера (нативный Vulkan)
+Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;\nthere is no after-upscale NR fallback. One outstanding recording is admitted.\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation.\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.	Экспериментальный маршрут входа NGX на нативном Vulkan. Неподдерживаемые входы сохраняют исходный Color;\nзапасного варианта NR после апскейлера нет. Допускается одна незавершенная запись.\nТребует включения при запуске, подтвержденных layout и владения и неизменного готового поколения.\nПересоздания и отсутствие подтверждений приводят к пропуску NR. Проверка в DOOM Eternal еще не проведена.
+
+# Controls introduced with upstream 34d492d6. Vulkan API mode names are retained.
+Flip HUDless	Отразить текстуру без HUD
+Present Mode	Режим презентации
+Upscaler Debug View	Отладочный вид апскейлера
+Game's	Как в игре
+Game's present mode: %s	Режим презентации игры: %s
+Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	Отразить текстуру без HUD\nИгры также могут запросить это параметром Opti.Hudless.Flip
+Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	Переопределяет режим презентации Vulkan в игре; игра пересоздает swapchain, чтобы применить его.\n\nImmediate: без V-Sync, с разрывами.\nMailbox: без разрывов, новейший кадр заменяет ожидающий в очереди.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, разрывы ниже частоты обновления.\nFIFO Latest Ready: V-Sync, на каждом обновлении показывает новейший готовый кадр.\n\nMailbox и FIFO Latest Ready могут отбрасывать сгенерированные кадры выше частоты обновления.\nПеречислены только режимы, поддерживаемые дисплеем.

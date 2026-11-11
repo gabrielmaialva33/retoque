@@ -1,0 +1,640 @@
+# OptiScaler optional Japanese (ja) dictionary. See translations/README.md.
+# Not loaded from this directory. Activation requires OptiScaler.lang beside the DLL.
+# Machine-translated draft, pending native review: corrections from native speakers are welcome.
+# 119 entries come from NeuRotic's machine-translated drafts (localization/machine-drafts/ja.nrlang,
+# GPL-3.0, commit beae4eea), matched by identical English text; the rest were translated for this pack.
+DLSS Neural Rendering	DLSS Neural Rendering
+Enable Neural Rendering	Neural Rendering を有効にする
+Apply the model	モデルを適用する
+Reset	リセット
+Retry	再試行
+Can be toggled with a key -- bind it under Keybinds, "Neural Rendering".	キーで切り替えられます。キー割り当ての「Neural Rendering」で設定してください。
+Off. The model stays loaded, so turning this back on is immediate.	オフ。モデルは読み込まれたままなので、再びオンにするとすぐに有効になります。
+Off for this session: %s.	このセッションではオフ: %s。
+Waiting for the upscaler to run.	アップスケーラーの実行を待機しています。
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), inside the driver on the game's own device, where the pass cannot run after it. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which carries the pass: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	このゲームの DLSS は D3D11 上でネイティブに動作しており (Dx11Upscaler dlss)、ゲーム自身のデバイス上のドライバー内で実行されるため、その後でパスを実行できません。DLSS w/Dx12 (dlss_12) は同じ DLSS を OptiScaler の D3D12 ブリッジ上で実行し、そこでパスを実行できます。アップスケーラーで選択するか、次を設定してください: Dx11Upscaler=dlss_12.
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), and its depth and motion are not reaching the pass at present, so it runs without them; the log's 'native D3D11 guides' line says why. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which hands them over: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	このゲームの DLSS は D3D11 上でネイティブに動作しており (Dx11Upscaler dlss)、現在そのデプスとモーションがパスに届いていないため、それらなしで実行されています。理由はログの 'native D3D11 guides' 行に記載されています。DLSS w/Dx12 (dlss_12) は同じ DLSS を OptiScaler の D3D12 ブリッジ上で実行し、それらを受け渡します。アップスケーラーで選択するか、次を設定してください: Dx11Upscaler=dlss_12.
+Running natively on Vulkan - %llu frames%s	Vulkan でネイティブに実行中 - %llu フレーム%s
+Running.%s	実行中。%s
+  (model running, edit hidden)	  (モデル実行中、編集結果は非表示)
+ natively on Vulkan	 (Vulkan ネイティブ)
+Stage	ステージ
+After the upscaler	アップスケーラーの後
+Before the upscaler (experimental)	アップスケーラーの前 (実験的)
+Stage: after the upscaler (native Vulkan)	ステージ: アップスケーラーの後 (ネイティブ Vulkan)
+Model resolution	モデル解像度
+Pause when the game turns frame generation off	ゲームがフレーム生成をオフにしたら一時停止
+Look	見た目
+Natural	ナチュラル
+Cinematic	シネマティック
+Subtle	控えめ
+Gentle	穏やか
+Game colour	ゲームの色
+The model's own defaults: style A, everything at 1.	モデル自体のデフォルト: スタイル A、すべて 1。
+NVIDIA's style B: softer contrast and saturation, kinder to skin.	NVIDIA のスタイル B: コントラストと彩度を抑え、肌にやさしい。
+NVIDIA's style C: a gentler, filmic saturation.	NVIDIA のスタイル C: より穏やかでフィルム調の彩度。
+What NVIDIA's RTX Remix ships: structure 0.7, tone 0.3, no skin mask -- closer to the game.	NVIDIA の RTX Remix の設定: 構造 0.7、トーン 0.3、スキンマスクなし -- ゲームに近い。
+A conservative community recipe: intensity 0.5, structure 0.7, tone 0.3, colour 0.5, detail 0.85.	控えめなコミュニティ設定: 強度 0.5、構造 0.7、トーン 0.3、カラー 0.5、ディテール 0.85。
+Keeps the game's own hue (colour strength 0); only the light changes.	ゲーム本来の色相を維持 (カラー強度 0)。光だけが変わります。
+A starting point for how NR looks, in one click: it sets the model's style and\nstrengths and the colour and detail strength, and every control still shows and\nedits what it set. Custom means the current values are not one of these.\n\nPerformance settings (resolution, passes, cadence) and exposure are left alone.\nWith individual pass settings on, a pass's own overrides still win for that pass.	NR の見た目をワンクリックで決める出発点です。モデルのスタイルと強度、カラー強度とディテール強度を設定し、各コントロールは引き続きその値を表示・編集できます。「カスタム」は現在の値がどれにも一致しないことを意味します。\n\nパフォーマンス設定 (解像度、パス、ケイデンス) と露出は変更されません。個別のパス設定がオンの場合、そのパス自体のオーバーライドが引き続き優先されます。
+Many games turn their own DLSS frame generation off in menus, dialogue and\ncutscenes, and lift the frame cap with it, so NR runs at the full uncapped rate.\nThis skips NR there and resumes the moment frame generation comes back.\n\nOnly after the game's frame generation was seen on, after half a second off,\nand never while this menu is open (the menu turns frame generation off itself).	多くのゲームはメニュー、会話、カットシーンで DLSS フレーム生成をオフにし、同時にフレームレート上限も解除するため、NR が上限なしのフルレートで実行されます。この設定はそこで NR をスキップし、フレーム生成が戻った瞬間に再開します。\n\nゲームのフレーム生成がオンになっていたのを確認した後、0.5 秒オフが続いたときのみ動作し、このメニューを開いている間は動作しません (メニュー自体がフレーム生成をオフにするため)。
+Downscaler (NR)	ダウンスケーラー (NR)
+Enlargement	拡大
+Classic	クラシック
+Matched residual	一致した残差
+How much of it lands	適用量
+Detail strength	ディテール強度
+Colour strength	カラー強度
+Reversible proxy (experimental)	可逆プロキシ (実験的)
+Off (soft knee)	オフ (ソフトニー)
+Neutwo proxy + composed	Neutwo プロキシ + 合成
+Neutwo proxy + replace	Neutwo プロキシ + 置換
+Hybrid proxy + composed	ハイブリッドプロキシ + 合成
+Hybrid proxy + replace	ハイブリッドプロキシ + 置換
+Model	モデル
+Read when the model is built, so a change rebuilds it after a moment.	モデルのビルド時に読み込まれるため、変更すると少し後にモデルが再ビルドされます。
+Default	デフォルト
+Preset 1	プリセット 1
+Preset 2	プリセット 2
+Preset 3	プリセット 3
+Model preset	モデル プリセット
+Model preset: this model has one weight set, so there is nothing to choose.	モデル プリセット: このモデルのウェイトセットは 1 つだけなので、選択肢はありません。
+Model A (Default)	モデル A (デフォルト)
+Model B (Natural)	モデル B (ナチュラル)
+Model C (Cinematic)	モデル C (シネマティック)
+Style	スタイル
+Intensity	強度
+Local structure	ローカル構造
+Local tone	ローカル トーン
+Skin structure	スキンの構造
+Auto skin mask	自動スキンマスク
+Colour	カラー
+Paper white only	ペーパーホワイトのみ
+The game's own exposure	ゲーム自体の露出
+A buffer the scan found	スキャンで見つかったバッファ
+White point from	ホワイトポイントの由来
+Waiting for a frame...	フレームを待機しています...
+Reading the exposure...	露出を読み取っています...
+Trim (x the scan)	トリム (x スキャン)
+Trim (x the game's exposure)	トリム (x ゲームの露出)
+Paper white	ペーパーホワイト
+Highlight guard	ハイライトガード
+Highlight recovery	ハイライト復元
+Show the light meter on screen	画面上に露出計を表示する
+Choose the buffer by matching it to the light	光との一致でバッファを選択
+Off: the buffer whose value travels widest drives the white point, as before.\nA counter or a timer travels widest of all, and then the picture drifts.\n\nOn: the buffer whose value follows the light of the game's own frame the\nway an exposure does -- a little behind it, as eyes adapt -- and nothing\nuntil that is sure, which takes about half a minute of walking between\nlight and shade. Timers, frozen values and the frame's own brightness\nare turned down. Paper white is used until then.\n\nAnchors set under one rule may need setting again under the other.\nCosts one small measuring pass a frame. Adapted from janblade's fork.	オフ: 値の変動幅が最も大きいバッファがホワイトポイントを決めます (従来どおり)。カウンターやタイマーは最も大きく変動するため、画像がずれていきます。\n\nオン: ゲーム自身のフレームの明るさに露出のように追従する (目が順応するように少し遅れて) バッファを選びます。確実になるまでは何も選ばず、それには光と影の間を 30 秒ほど歩く必要があります。タイマー、固定値、フレーム自体の明るさは除外されます。それまではペーパーホワイトが使用されます。\n\n一方のルールで設定したアンカーは、もう一方のルールで設定し直す必要がある場合があります。毎フレーム小さな測定パスを 1 回実行します。janblade のフォークを基にしています。
+Anchor here	ここにアンカーを打つ
+The number runs the other way	数値は逆方向に動きます
+Advanced	詳細
+Walk from shade into daylight. A real exposure moves.	日陰から日なたへ歩いてください。本物の露出なら値が変化します。
+One that only ever climbs is a counter, not an exposure.	常に上昇し続けるものはカウンターであり、露出ではありません。
+Compare	比較
+Hold frame	フレームの保持
+Off	オフ
+Side by side	サイドバイサイド
+Wipe	ワイプ
+Swap sides	左右を入れ替える
+Label the sides	両側にラベルを付ける
+Label size	ラベルサイズ
+Zoom	ズーム
+Split	分割
+Debug view	デバッグビュー
+Proxy (what the model sees)	プロキシ (モデルが見るもの)
+Model output (raw)	モデル出力 (未加工)
+Difference (amplified)	差分 (増幅)
+Save Settings	設定を保存
+Close	閉じる
+Menu Scale	メニューのスケール
+Keybinds	キー割り当て
+Logging	ログ記録
+Advanced Settings	詳細設定
+Menu Theme and Color	メニューのテーマと色
+FPS Overlay	FPSオーバーレイ
+Upscaler Inputs	アップスケーラー入力
+V-Sync Settings	V-Sync 設定
+Magnifier	拡大鏡
+Resource Barriers	リソースバリア
+Root Signatures	ルートシグネチャ
+Active Quirks	有効な Quirks
+Dx11 with Dx12 Settings	Dx11 with Dx12 設定
+Vulkan with Dx12 Settings	Vulkan with Dx12 設定
+XeSS Settings	XeSS設定
+Advanced FG Settings	高度なFG設定
+Before the upscaler: edited render-resolution color supplied	アップスケーラーの前: 編集済みのレンダー解像度カラーを供給中
+Waiting for a stable render resolution (500 ms); original color retained	安定したレンダー解像度を待機中 (500 ms)。元のカラーを維持
+Synthesises detail in the upscaler's output, before frame generation sees it.\n\nNeeds two similarly named files beside OptiScaler, one character apart:\n  nvngx_dlssnr.dll       NVIDIA's model (~165 MB) -- you supply it\n  nvngx.dll_dlssnr.dll   the forwarder (~115 KB) -- ships in this package\nUndocumented and driven directly, so none of this is officially supported.	フレーム生成に渡る前に、アップスケーラーの出力にディテールを合成します。\n\nOptiScaler の隣に、名前が 1 文字だけ違う 2 つのファイルが必要です:\n  nvngx_dlssnr.dll       NVIDIA のモデル (~165 MB) -- ご自身で用意\n  nvngx.dll_dlssnr.dll   フォワーダー (~115 KB) -- このパッケージに同梱\n非公開の仕組みを直接駆動しているため、いずれも公式にはサポートされていません。
+Whether the model's edit is applied. Off shows the clean upscaler frame while the\npass keeps running -- so with Hold frame (under Compare) you can freeze a\nframe and toggle this to see the same frozen frame with and without Neural\nRendering. Leave it on for normal use.	モデルの編集を適用するかどうか。オフにすると、パスは実行を続けたままクリーンなアップスケーラーのフレームを表示します。そのため「比較」の「フレームの保持」でフレームを固定し、これを切り替えると、同じ固定フレームを Neural Rendering ありとなしで見比べられます。通常はオンのままにしてください。
+Before: runs Neural Rendering on the game's render-resolution color, then\nupscales the edited copy. This may reduce GPU cost, but can introduce shimmer\nand unstable detail on moving edges. Compare the picture in motion.\n\nExperimental on D3D12 and the D3D12 bridges. Ray reconstruction, Hold frame,\nthe driver proxy, and unsupported inputs use the after-upscale path.\nChanging render dimensions pauses NR until they stay stable for 500 ms.\nThe original game color is used while the model is being built or skipped.	前: ゲームのレンダー解像度のカラーに Neural Rendering を実行し、編集したコピーをアップスケールします。GPU コストを削減できる場合がありますが、動くエッジでちらつきや不安定なディテールが生じることがあります。動きのある状態で画像を比較してください。\n\nD3D12 および D3D12 ブリッジでは実験的です。Ray Reconstruction、フレームの保持、ドライバープロキシ、非対応の入力ではアップスケール後の経路を使用します。レンダー解像度が変わると、500 ms 安定するまで NR は一時停止します。モデルのビルド中やスキップ時は元のゲームのカラーが使用されます。
+Default leaves the choice to the model.\n\nNot the same scale as the super resolution or ray reconstruction presets --\nthe same number means something different here.\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,\nPreset 2 the smaller October one, and Default (or any other number) falls back\nto Preset 2. The line below is what the model says it built.	「デフォルト」はモデルに選択を任せます。\n\nSuper Resolution や Ray Reconstruction のプリセットとは尺度が異なり、同じ番号でもここでは別の意味になります。\n\n310.9.16 には 2 つのウェイトセットがあります: プリセット 1 は 9 月の元のモデル、プリセット 2 は 10 月の小型モデルで、デフォルト (またはその他の番号) はプリセット 2 になります。下の行はモデルが報告したビルド内容です。
+Running:	実行中:
+Game profile:	ゲームプロファイル:
+Keys this game needs before Neural Rendering can run in it, applied when the game started,\nonly where OptiScaler.ini leaves them on auto, and never written back to it. A value\nyou set in the ini always wins. [DlssNr] GameProfiles=false turns this off.	このゲームで Neural Rendering を実行するために必要なキー。ゲーム起動時に、OptiScaler.ini で auto のままのものにのみ適用され、ini には書き戻されません。ini で設定した値が常に優先されます。[DlssNr] GameProfiles=false でこれを無効にできます。
+(preset %d)	(プリセット %d)
+September model (the original)	9 月のモデル (オリジナル)
+October model (smaller, faster)	10 月のモデル (小型・高速)
+The model's own report of the weight set it built. It carries:	モデル自身が報告する、ビルドしたウェイトセット。内容:
+The model's own strength control, applied inside it. Distinct from detail\nstrength above, which scales the result afterwards.	モデル自体の強度コントロールで、モデル内部で適用されます。上のディテール強度は結果を後からスケールするもので、これとは別です。
+-1 means follow local structure, and is the model's own default -- it is not a\nstrength of zero. 0 and above set skin independently of the rest of the frame.\n\nRead only with the auto skin mask on; with it off the model ignores this.	-1 はローカル構造に従うことを意味し、モデル自体のデフォルトです -- 強度ゼロではありません。0 以上では、フレームの他の部分とは独立して肌を設定します。\n\n自動スキンマスクがオンのときのみ読み込まれます。オフの場合、モデルはこれを無視します。
+Lets the model find skin itself rather than treating the frame uniformly.	フレームを均一に扱うのではなく、モデル自身に肌を検出させます。
+Freezes the frame the model works on. While held, change paper white, the\nstrengths, the reversible mode, the model preset -- anything below the\nupscaler -- and only that setting moves; the scene does not.\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream\n(the upscaler is not re-run on a held frame), and the game's own HUD and\npost-processing, which run after this pass and keep updating. The white\npoint stops being measured and holds its value while frozen, so it cannot\ndrift and confound the comparison.\n\nHide the menu and it stays held. Untoggle to resume.	モデルが処理するフレームを固定します。固定中にペーパーホワイト、各強度、可逆モード、モデル プリセットなど、アップスケーラーより後段の設定を変更すると、その設定だけが変化し、シーンは変化しません。\n\n表示できないもの: DLSS/FSR/XeSS のアップスケーラー プリセットやそれより前段のもの (固定したフレームではアップスケーラーは再実行されません)、およびこのパスの後に実行され更新され続けるゲーム自身の HUD とポストプロセス。固定中はホワイトポイントの測定も止まって値が保持されるため、値がずれて比較を乱すことはありません。\n\nメニューを隠しても固定は維持されます。オフにすると再開します。
+Where the wipe cuts. Left of it is the frame as the upscaler produced it,\nright of it is the frame the model edited.	ワイプの分割位置。左側はアップスケーラーが出力したフレーム、右側はモデルが編集したフレームです。
+Proxy is the picture handed to the model -- if that looks wrong, the white point\nis wrong and nothing downstream can be judged.\n\nDifference shows what the model actually changed, amplified twenty times and\ncentred on grey. A flat grey frame there means it is doing nothing.	プロキシはモデルに渡される画像です -- それが間違って見える場合、ホワイトポイント\nが間違っており、下流の何も判断できません。\n\n「差分」は、モデルが実際に変更した内容を20倍に増幅し、\nグレーを中心に示します。そこがフラットなグレーのフレームなら、何もしていないことを意味します。
+
+# Bounded pass editor. New interactive controls carry stable IDs.
+Sequential model passes	モデルの連続パス
+Requested passes	要求パス数
+Last evaluation: %u successful model passes	前回の評価: モデルパス %u 回成功
+Individual pass settings	個別のパス設定
+Edit pass	編集するパス
+Editing pass 1	パス 1 を編集中
+Uncheck Override to inherit the live master value.	ライブのマスター値を継承するには「オーバーライド」のチェックを外します。
+Override	オーバーライド
+Override auto skin mask	自動スキンマスクをオーバーライド
+Auto skin mask: inherit %s	自動スキンマスク: %s を継承
+Inherit all master settings	すべてのマスター設定を継承
+%s: inherit %.2f	%s: %.2f を継承
+%s: inherit %s	%s: %s を継承
+This backend uses one pass with master settings. Sequential passes and individual settings are unavailable.	このバックエンドはマスター設定で 1 パスのみ使用します。連続パスと個別設定は利用できません。
+Apply after Ray Reconstruction	Ray Reconstruction の後に適用
+RR Passes	RR パス数
+RR Working scale	RR 作業スケール
+Runs Neural Rendering over native Ray Reconstruction (DLSSD) output.\n\nDisabled by default: Ray Reconstruction already synthesizes denoised output.\nEnable if you want to run DLSS-NR over the final RR result at configured scale.	ネイティブ Ray Reconstruction (DLSSD) の出力に Neural Rendering を実行します。\n\nデフォルトでは無効: Ray Reconstruction はすでにノイズ除去済みの出力を合成します。設定したスケールで最終的な RR の結果に DLSS-NR を実行したい場合に有効にしてください。
+Output stabilizer	出力スタビライザー
+Stabilizer strength	スタビライザー強度
+Stabilizer tolerance	スタビライザー許容値
+
+# 2026-09-28: GPU timing, hook method and present options, the colour and exposure-scan help,
+# synthesized frame generation, section headers, and the status and failure reasons the NR panel shows.
+# Filter names stay in English; they are listed as themselves because every label needs an entry.
+Fence-confirmed GPU timing	フェンス確認済み GPU タイミング
+Confirmed timing is available on the D3D12 NR path and its bridges. This backend is not instrumented.	確認済みタイミングは D3D12 NR 経路とそのブリッジで利用できます。このバックエンドは計測に対応していません。
+Measure NR on the GPU	GPU で NR を計測
+Each published sample belongs to one NR evaluation and one observed queue submission. It is read only after that submission completes and the command-list recording is sealed against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded.\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.\n\nD3D12 Present and guide capture have independent samples at the same interval. The Present route includes its copies, guide preparation, Dispatch and HDR conversion; CPU waits are excluded. The native Vulkan and D3D11 Present hosts do not have this route bracket.	公開される各サンプルは、1 回の NR 評価と、観測された 1 回のキュー送信に対応します。その送信が完了し、コマンドリストの記録がリプレイに対して封印された後にのみ読み取られます。GPU の待機は発生しません。非対応または曖昧なサンプルは破棄されます。\n\n計測区間は NR Dispatch 内の GPU コマンド (コピー、モデル呼び出し、合成、リソースの復元を含む) をカバーします。呼び出し側のアップスケール前の準備、アップスケーラー、フレーム生成はこの区間に含まれません。キューの経過時間は純粋なカーネル稼働時間ではありません。\n\nD3D12 Present とガイドのキャプチャには、同じ間隔で独立したサンプルがあります。Present ルートにはそのコピー、ガイドの準備、Dispatch、HDR 変換が含まれ、CPU 待機は除外されます。ネイティブ Vulkan と D3D11 の Present ホストにはこのルート計測はありません。
+Measurement off. Pending samples may still be retained safely.	計測オフ。保留中のサンプルは引き続き安全に保持される場合があります。
+Sample every N eligible evaluations	N 回の対象評価ごとにサンプリング
+The first eligible evaluation is sampled, then every %u evaluations. An evaluation is not necessarily a presentation frame.	最初の対象評価がサンプリングされ、その後 %u 回の評価ごとにサンプリングされます。評価は必ずしも表示フレームとは限りません。
+Accepted %llu | discarded %llu | pending %u	受理 %llu | 破棄 %llu | 保留 %u
+No confirmed GPU sample yet.	確認済みの GPU サンプルはまだありません。
+Last confirmed sample: %.3f ms dispatch = %.3f ms model + %.3f ms outside model	最新の確認済みサンプル: dispatch %.3f ms = モデル %.3f ms + モデル外 %.3f ms
+Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u passes	履歴サンプル %llu、記録から %.1f 秒。%s、モデル %ux%u、%u パス
+Sample contract %llu, evaluation %llu, run %llu; interval was %u evaluations	サンプル契約 %llu、評価 %llu、実行 %llu。間隔は %u 評価
+This is one historical sample, not the current frame or an average. Use matching contracts in the INFO log for comparisons.	これは 1 つの履歴サンプルであり、現在のフレームや平均ではありません。比較には INFO ログ内の一致する契約を使用してください。
+Each extra pass processes the previous answer and has its own model history. Cost and VRAM grow. A failed extra pass keeps the last successful answer. Requested passes are not proof of completed work; check the last evaluation and INFO log.\n\nEnabling this after untracked NR has already run requires restarting the application. Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.	追加パスはそれぞれ前の結果を処理し、独自のモデル履歴を持ちます。コストと VRAM は増加します。追加パスが失敗した場合、最後に成功した結果が保持されます。要求パス数は作業完了の証明ではありません。前回の評価と INFO ログを確認してください。\n\n追跡されていない NR がすでに実行された後にこれを有効にするには、アプリケーションの再起動が必要です。「再試行」しても以前の GPU 処理は追跡されません。非対応の送信経路では追加パスは拒否されます。
+The Model controls above are the master settings. Unchecked overrides inherit their current values. Turning individual settings off or reducing the pass count keeps saved edits.	上の「モデル」コントロールがマスター設定です。チェックを外したオーバーライドは現在の値を継承します。個別設定をオフにしたりパス数を減らしたりしても、保存済みの編集は保持されます。
+on	オン
+off	オフ
+Running%s - legacy timer %.2f ms (unconfirmed)%s	実行中%s - レガシータイマー %.2f ms (未確認)%s
+The native Vulkan timer is legacy and is not fence-confirmed.\nFor D3D12, use the separate Fence-confirmed GPU timing panel.\nA historical sample is not the current frame's cost.	ネイティブ Vulkan タイマーはレガシーで、フェンス確認されていません。\nD3D12 では、別の「フェンス確認済み GPU タイミング」パネルを使用してください。\n履歴サンプルは現在のフレームのコストではありません。
+Source	ソース
+Auto	自動
+Upscaled	アップスケール後
+Present	Present
+Hook method	フック方式
+Where the pass runs, and what it runs on.\n\nAuto: the swapchain backbuffer, as soon as the game's upscaler has handed over its depth and motion; the upscaler's output until then.\n\nUpscaled: in place, immediately after the game's upscaler has written its output. That output is linear and un-tonemapped, so the Colour section below must map it into something the model recognises -- the paper white is where a game that moves its exposure makes itself felt.\n\nPresent: at the moment of present, on the swapchain's backbuffer -- the frame the game has finished and tone-mapped, which is exactly the kind of picture the model was trained on. There is nothing to divide and no white point to find, and with frame generation the base frame is enhanced before the generated frames are made from it. This is how the ReShade implementations run it, and the one a title like KCD2 wants.\n\nA native Vulkan game ignores this. When the upscaler runs through OptiScaler's D3D12 bridge (a Vulkan or D3D11 game) there is no D3D12 present hook: Auto stays on the upscaler's output and Present runs nothing, except on a D3D11 game, where Present hosts the pass on the bridge's swapchain and takes effect after a restart.	パスを実行する場所と対象。\n\n自動: ゲームのアップスケーラーがデプスとモーションを渡した時点からスワップチェーンのバックバッファ。それまではアップスケーラーの出力。\n\nアップスケール後: ゲームのアップスケーラーが出力を書き込んだ直後に、その場で実行します。この出力はリニアでトーンマップされていないため、下の「カラー」セクションでモデルが認識できる形に変換する必要があります -- 露出が変化するゲームでは、ペーパーホワイトにその影響が表れます。\n\nPresent: Present の瞬間にスワップチェーンのバックバッファ上で実行します -- ゲームが完成させトーンマップしたフレームで、まさにモデルが学習した種類の画像です。割る必要もホワイトポイントを探す必要もなく、フレーム生成使用時は生成フレームが作られる前にベースフレームが強化されます。ReShade の実装もこの方式で、KCD2 のようなタイトルに必要なのもこれです。\n\nネイティブ Vulkan ゲームではこの設定は無視されます。アップスケーラーが OptiScaler の D3D12 ブリッジ経由で動作する場合 (Vulkan または D3D11 ゲーム)、D3D12 の Present フックはありません: 自動はアップスケーラーの出力のままで、Present は何も実行しません。ただし D3D11 ゲームでは、Present がブリッジのスワップチェーン上でパスを実行し、再起動後に有効になります。
+Require DLSS temporal inputs	DLSS のテンポラル入力を必須にする
+Present needs the game's depth and motion to reproject its history, and uses them only on the frame they were captured for. With this on, a frame that has none -- none captured yet, or one that cannot be shown to be its own -- is shown as the game rendered it. With it off, the pass runs on dummy temporals -- constant depth, no motion -- and treats the scene as standing still, which is right for a title whose upscaler is not DLSS.	Present では、履歴を再投影するためにゲームのデプスとモーションが必要で、それらはキャプチャされたフレームでのみ使用されます。オンの場合、それらがないフレーム (まだキャプチャされていない、またはそのフレーム自身のものと確認できない) はゲームがレンダリングしたまま表示されます。オフの場合、パスはダミーのテンポラル (一定のデプス、モーションなし) で実行され、シーンを静止しているものとして扱います。これはアップスケーラーが DLSS でないタイトルに適しています。
+Synthesized motion	合成モーション
+Experimental. Only for frames with no motion from the game (no upscaler to take it from). Instead of telling the model nothing moved, the motion is estimated from this frame and the last, so its history follows a moving camera rather than ghosting behind it. The estimate is coarse at thin edges and text and costs a little GPU time; depth stays constant. "No history without motion" below no longer applies to a frame that has it.	実験的。ゲームからのモーションがないフレーム (取得元のアップスケーラーがない場合) のみ対象です。何も動いていないとモデルに伝える代わりに、このフレームと前のフレームからモーションを推定するため、履歴がカメラの動きに追従し、後ろにゴーストが残りません。推定は細いエッジや文字では粗く、GPU 時間を少し消費します。デプスは一定のままです。下の「モーションなしでは履歴なし」は、モーションがあるフレームには適用されなくなります。
+Protect the HUD	HUD を保護
+Experimental. Pixels that stay exactly the same while the scene around them moves are taken for interface and handed back untouched through the model's own UI correction, so text and HUD lines stay crisp. A HUD is only found once the camera has moved behind it, and it stays protected for about a second and a half after the scene stops. A still, detailed patch next to motion can be taken for HUD; it is then shown as the game drew it.	実験的。周囲のシーンが動いている間もまったく変化しないピクセルはインターフェースとみなされ、モデル自体の UI 補正によって手を加えずに戻されるため、テキストや HUD の線がシャープに保たれます。HUD はカメラがその背後で動いた後にのみ検出され、シーンが止まってから約 1.5 秒間保護されます。動きの隣にある静止した細かい部分が HUD とみなされることがあり、その場合はゲームが描画したまま表示されます。
+No history without motion	モーションなしでは履歴なし
+Only for frames that run on dummy temporals. The model is told nothing moved, so a moving camera leaves ghosts and doubled edges where things used to be. On, it starts its history over every frame: no ghosts, but none of its temporal smoothing either. Frames with the game's own depth and motion are not affected.	ダミーのテンポラルで実行されるフレームのみ対象です。モデルには何も動いていないと伝えられるため、カメラが動くと元の位置にゴーストや二重のエッジが残ります。オンにすると毎フレーム履歴をリセットします: ゴーストはなくなりますが、テンポラルなスムージングもなくなります。ゲーム自身のデプスとモーションを持つフレームには影響しません。
+Present sync	Present 同期
+Waits for the backbuffer write-back to finish before the flip. Frame generation needs it: without it a paced flip can show an unfinished picture. Left on auto it waits only when frame generation could be involved, because otherwise the wait just holds the game back. Ticking or unticking this box forces it either way.	フリップの前にバックバッファへの書き戻しの完了を待ちます。フレーム生成にはこれが必要です: これがないと、ペーシングされたフリップが未完成の画像を表示することがあります。自動のままにすると、フレーム生成が関与する可能性がある場合にのみ待機します。それ以外では待機はゲームを遅らせるだけだからです。このボックスのチェックを入れる/外すと、どちらかに強制されます。
+Stage: swapchain present (bypasses upscaler stages)	ステージ: スワップチェーンの Present (アップスケーラーのステージをバイパス)
+Not on this route right now: the game is not running Ray Reconstruction, so "Model resolution" below is what governs. These two take effect if it starts.	現在このルートではありません: ゲームは Ray Reconstruction を実行していないため、下の「モデル解像度」が適用されます。この 2 つは RR が開始されると有効になります。
+Above 1x the model supersamples: no new detail, and cost grows with the area. Ray Reconstruction already denoises this frame.	1x を超えるとモデルはスーパーサンプリングします: 新しいディテールは生まれず、コストは面積に比例して増えます。Ray Reconstruction がすでにこのフレームのノイズを除去しています。
+Model resolution: set by RR Working scale on this route	モデル解像度: このルートでは RR 作業スケールで設定
+Supersampling %.2fx: the model runs ABOVE native, then\nis sampled back down. Experimental, and costly -- time grows with the area.	スーパーサンプリング %.2fx: モデルはネイティブ以上の解像度で実行され、その後\nダウンサンプリングされます。実験的であり、コストがかかります -- 面積に比例して時間が増加します。
+The filter that averages the model's above-native answer back to display size --\nthis is what turns supersampling into LESS noise rather than more. Sharper\nfilters (Lanczos3, Kaiser3) keep the most detail; softer ones (Bicubic,\nCatmull-Rom) are gentler on ringing. Independent of the Output Scaling\ndownscaler, so the two can differ and run at the same time.	モデルのネイティブ以上の結果を表示サイズに平均化して戻すフィルター -- これにより、スーパーサンプリングでノイズが増えるのではなく「減る」ようになります。シャープなフィルター (Lanczos3, Kaiser3) はディテールを最も多く残し、ソフトなもの (Bicubic, Catmull-Rom) はリンギングが穏やかです。「出力スケーリング」のダウンスケーラーとは独立しているため、両者は異なっていても同時に動作できます。
+What fraction of the frame the model works at. Cost falls with the square of\nthis, so half resolution is roughly a quarter of the time.\n\nThe frame is never reduced. Only the model's contribution is computed small\nand enlarged, so the picture underneath is untouched whatever this says.\n\nWhat it trades: the shading the model adds is broad and survives enlargement;\nthe fine structure it synthesises does not, and softens. Worth having when the\npass costs more than you want to pay for the detail it returns.\n\nThe frame itself stays at full detail whatever this says -- only the\nmodel's own work is done small.\n\nauto is full size on RTX 40 and later and half size on RTX 20 and 30: an RTX 3060\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces\nit; Auto puts it back.	モデルが処理するフレームの割合。コストはこの値の 2 乗に比例して下がるため、半分の解像度ならおよそ 4 分の 1 の時間になります。\n\nフレーム自体が縮小されることはありません。モデルの寄与分だけを小さく計算して拡大するため、この値に関係なく下の画像はそのままです。\n\nトレードオフ: モデルが加えるシェーディングは大まかなので拡大しても残りますが、モデルが合成する細かな構造は残らず、ぼやけます。パスのコストが、それが返すディテールに見合わないと感じるときに有効です。\n\nこの値に関係なく、フレーム自体はフルディテールのままです -- 小さく処理されるのはモデル自身の作業だけです。\n\nauto は RTX 40 以降ではフルサイズ、RTX 20 と 30 では半分のサイズです: RTX 3060 のピクセルあたりのコストは RTX 4090 の 25 倍と計測されました。スライダーを動かすとこの値が置き換わり、「自動」で元に戻ります。
+Matched residual, sharp	一致した残差、シャープ
+Matched residual + DLSS	一致した残差 + DLSS
+How far the frame moves toward the model's picture.\n\nThe model's answer is not added to the frame -- it is a complete picture of its\nown, rescaled so its luminance sits where the original says it should. This\nblends between the two, so both ends are real pictures and everything between\nthem is one too.\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture.\n\nAbove 1 carries on past it in the same direction, which is not something the\nmodel asked for -- use it to see what it is doing, then come back down. This\nis the control to push if you want more effect: Intensity belongs to the model\nand it decides what to do with it.	フレームをモデルの画像にどこまで近づけるか。\n\nモデルの結果はフレームに加算されるのではありません -- それ自体が完全な画像であり、輝度が元の画像の示す位置に来るよう再スケールされます。この設定は 2 つをブレンドするため、両端はどちらも実際の画像で、その中間もすべて実際の画像です。\n\n0 はアップスケーラーが出力したものをそのまま返します。1 はモデルの画像です。\n\n1 を超えると同じ方向にさらに先へ進みますが、これはモデルが求めたものではありません -- モデルが何をしているかを確認するために使い、その後は戻してください。効果を強めたい場合はこのコントロールを上げてください: 「強度」はモデルに属し、それをどう使うかはモデルが決めます。
+Whether the model's colour arrives with its light.\n\n0 keeps the game's own hue exactly -- every pixel is the original colour with\nonly its brightness carrying the model's verdict. Game-accurate colour, with\nthe detail. 1 brings the model's colour as well, in its own hue, clamped into\nAP1 so nothing unreachable is asked for.\n\nThis cannot shift hue on its own: it interpolates between two finished\npictures rather than adding a colour difference to one, which is what used to\nlet a warm subject come back green.\n\nAbove 1 it OVER-SATURATES: the colour keeps its hue but grows more vivid,\nand rolls off at the edge of what the display can show rather than clipping\ninto a flat blown patch. 1 is the model's own colour; push past it for punch.	モデルの色をその光と一緒に適用するかどうか。\n\n0 はゲーム本来の色相を正確に保ちます -- 各ピクセルは元の色のままで、明るさだけがモデルの判断を反映します。ゲームに忠実な色で、ディテールは得られます。1 はモデルの色もその色相のまま適用し、到達できない色を求めないよう AP1 内にクランプします。\n\nこれ単独で色相がずれることはありません: 1 つの画像に色差を加えるのではなく、完成した 2 つの画像の間を補間するためです。以前は前者の方法のせいで、暖色の被写体が緑色になることがありました。\n\n1 を超えると「過飽和」になります: 色は色相を保ったまま鮮やかになり、クリップして平坦な白飛びになるのではなく、ディスプレイが表示できる限界でなだらかに収まります。1 はモデル自身の色です。より強い印象にしたい場合は 1 を超えてください。
+What the model is shown, and how its answer comes back.\n\nOff (soft knee): the default. It rolls highlights off so hard the model\ncannot resolve detail in them -- fine in soft-lit scenes, weak in bright ones.\n\nNeutwo composed: an unclipped curve so the model sees highlight detail, then\neverything above (Detail/Colour strength, highlight guard, palette). It wins in\nbright scenes, but the curve compresses MIDTONES too, so in soft-lit content it\ncan be worse than Off. It also shifts paper white -- re-check it when you switch.\n\nHybrid composed: the best of both, and the one to use. Identity in the\nmidtones -- as good as Off there -- and the unclipped roll only in the\nhighlights, so it recovers the detail Off crushes without giving up the\nmidtones Neutwo does. It barely shifts paper white.\n\nReplace: the raw model straight back through the exact inverse, none of the\ncomposition -- no guard, no palette, no strengths. Gorgeous where there are no\nbright lights, but they FLASH in motion. A reference, not a daily setting.\n\nHybrid replace: the raw model like Replace, but on the hybrid curve -- the\ndecode is identity in the midtones, so the flashing is confined to genuine\nbright highlights instead of everywhere. Most of Replace's detail, far more\nstable. If you love the Replace look but the flicker bothers you, use this.\n\nOff is byte-identical to before.	モデルに何を渡し、その結果をどう戻すか。\n\nオフ (ソフトニー): デフォルト。ハイライトを強く丸めるため、モデルはその中のディテールを解像できません -- 柔らかい光のシーンでは問題ありませんが、明るいシーンでは弱くなります。\n\nNeutwo プロキシ + 合成: クリップしないカーブでモデルにハイライトのディテールを見せ、その後に上の設定すべて (ディテール強度/カラー強度、ハイライトガード、パレット) を適用します。明るいシーンでは優れていますが、カーブは中間調も圧縮するため、柔らかい光のコンテンツではオフより悪くなることがあります。ペーパーホワイトもずれるため、切り替えたら確認し直してください。\n\nハイブリッドプロキシ + 合成: 両方の長所を持ち、推奨される設定です。中間調では恒等 (オフと同等) で、クリップしない丸めはハイライトにだけ適用されるため、Neutwo のように中間調を犠牲にすることなく、オフが潰すディテールを取り戻します。ペーパーホワイトはほとんどずれません。\n\n置換: 生のモデル出力を正確な逆変換でそのまま戻し、合成は一切行いません -- ガードもパレットも強度もなし。明るい光源がない場面では非常に美しいですが、動きの中で光源がちらつきます。日常用ではなく、リファレンス用です。\n\nハイブリッドプロキシ + 置換: 置換と同じく生のモデル出力ですが、ハイブリッドカーブ上で戻します -- デコードは中間調で恒等なので、ちらつきは全体ではなく本当に明るいハイライトだけに限られます。置換のディテールの大部分を保ちつつ、はるかに安定します。置換の見た目が好きでもちらつきが気になるなら、これを使ってください。\n\nオフは以前とバイト単位で同一です。
+Neural Rendering Model selection (DLSSNR.Style):\n\nModel A (Default): standard reference neural model with default local tone and structure.\n\nModel B (Natural): subtle contrast (-0.25) and saturation (-0.10) compensation. Preserves natural skin tones and softens harsh highlights.\n\nModel C (Cinematic): gentle saturation adjustment (-0.15) for filmic presentation.\n\nTuning changes apply instantly on the live frame with seamless temporal reset.	Neural Rendering モデルの選択 (DLSSNR.Style):\n\nモデル A (デフォルト): 標準のリファレンスニューラルモデル。ローカル トーンとローカル構造はデフォルト。\n\nモデル B (ナチュラル): コントラスト (-0.25) と彩度 (-0.10) を控えめに補正。自然な肌の色を保ち、強いハイライトを和らげます。\n\nモデル C (シネマティック): フィルム調の表現のための穏やかな彩度調整 (-0.15)。\n\n調整はライブフレームに即座に適用され、テンポラルリセットはシームレスに行われます。
+Holds still parts of the picture still. Where the frame the model was shown did not\nchange, keep what was shown last frame and let the model's new answer in slowly;\nwhere it changed, show the model's answer as it is. Aimed at the model re-deciding\nstill content -- a slope that brightens and darkens with nothing moving.\n\n0 is off and costs nothing. 1 holds a still pixel outright. It stands down on the\nbefore-upscale stage, where the frame is jittered and every pixel moves.	画像の静止部分を静止させたままにします。モデルに渡されたフレームが変化していない部分では、前のフレームで表示したものを保ち、モデルの新しい結果をゆっくり取り込みます。変化した部分では、モデルの結果をそのまま表示します。モデルが静止したコンテンツを判断し直す問題 -- 何も動いていないのに斜面が明るくなったり暗くなったりする -- を対象としています。\n\n0 はオフでコストはかかりません。1 は静止ピクセルを完全に保持します。フレームにジッターがかかりすべてのピクセルが動く、アップスケーラーの前のステージでは無効になります。
+How far the model's input may drift, relative to its brightness, before a pixel\ncounts as moved. Lower follows subtle lighting changes sooner; higher tolerates\nmore flicker in the input before letting go.	ピクセルが動いたとみなされるまでに、モデルの入力がその明るさに対してどこまで変動してよいか。低くすると微妙な照明の変化に早く追従し、高くすると入力のちらつきをより多く許容してから解放します。
+Hook method is set to Present: the swapchain backbuffer is already\ntone-mapped and display-referred sRGB. White point and exposure mapping\ncontrols are bypassed.	フック方式が Present に設定されています: スワップチェーンのバックバッファはすでにトーンマップ済みで、ディスプレイ基準の sRGB です。ホワイトポイントと露出マッピングのコントロールはバイパスされます。
+The model was trained on finished, sRGB-encoded frames. The upscaler's\noutput is not one: it is linear and open-ended. These decide how it is\nmapped into something the model recognises. A frame the game reports as\nalready tone-mapped is passed over untouched and none of this applies.	モデルは sRGB でエンコードされた完成フレームで学習されています。アップスケーラーの出力はそうではなく、リニアで上限がありません。これらの設定は、それをモデルが認識できる形にどうマッピングするかを決めます。ゲームがすでにトーンマップ済みと報告するフレームはそのまま渡され、これらは適用されません。
+Where the number that divides the frame comes from.\n\nPaper white only -- the slider below and nothing else. Right for a\ngame whose exposure never moves, wrong the moment it does: one\nconstant cannot serve a cave and a field.\n\nThe game's own exposure -- read from the texture the game hands\nthe upscaler. The best source there is, because it is decided\nupstream and nothing this pass does can move it. Not every game\nsupplies one.\n\nA buffer the scan found -- for games that compute an exposure and\nnever pass it on. A GUESS: candidates are matched by shape, and in\nGTA V the best one tracks the real exposure but at its own scale,\nwhich the anchor's ratio cancels. Needs anchoring once, and checking\nafterwards.	フレームを割る数値の取得元。\n\nペーパーホワイトのみ -- 下のスライダーだけを使用します。露出がまったく変化しないゲームには適していますが、変化した途端に合わなくなります: 1 つの定数で洞窟と野原の両方には対応できません。\n\nゲーム自体の露出 -- ゲームがアップスケーラーに渡すテクスチャから読み取ります。上流で決まり、このパスが何をしても動かないため、最良のソースです。すべてのゲームが提供しているわけではありません。\n\nスキャンで見つかったバッファ -- 露出を計算してもそれを渡さないゲーム用です。これは推測です: 候補は形状で照合されます。GTA V では最良の候補が実際の露出に追従しますが、独自のスケールであり、それはアンカーの比率で相殺されます。一度アンカーを設定し、その後確認する必要があります。
+This game supplies no exposure -- paper white is in use. Try the scan instead.	このゲームは露出を提供していません -- ペーパーホワイトが使用されています。代わりにスキャンを試してください。
+This game's exposure is not usable here; paper white is in use.	このゲームの露出はここでは使用できません。ペーパーホワイトが使用されています。
+This game supplies an exposure and it is being read.	このゲームは露出を提供しており、それを読み取っています。
+Game exposure %.4f  ->  white point %.2f%s	ゲームの露出 %.4f  ->  ホワイトポイント %.2f%s
+  (held: absent this frame)	  (保持中: このフレームにはなし)
+Nothing in this game is shaped like an exposure.	このゲームには露出のような形をしたものはありません。
+The exposure scan needs a restart: Neural Rendering was off when the game started.	露出スキャンには再起動が必要です: ゲーム起動時に Neural Rendering がオフでした。
+Watching %u, none moving yet -- go between light and shade.	%u 個を監視中。まだ変化しているものはありません -- 明るい場所と日陰の間を行き来してください。
+Found one. Set paper white below until the picture looks right, then press Anchor here.	1 つ見つかりました。画像が正しく見えるまで下のペーパーホワイトを調整し、「ここにアンカーを打つ」を押してください。
+This game supplies an exposure -- the option above would use it.	このゲームは露出を提供しています -- 上のオプションでそれを使用できます。
+Scan %.5f  ->  white point %.2f   (points: %u)	スキャン %.5f  ->  ホワイトポイント %.2f   (ポイント数: %u)
+Paper white (editing point %d)	ペーパーホワイト (編集ポイント %d)
+The white point for the selected calibration point, or -- with no row\nselected -- the value the next Anchor press captures.\n\nSet it until the picture looks right here, then Anchor. Move to very\ndifferent light and do it again: two points fix the buffer's real\nrelationship and the white point holds between them. Click a row below\nto come back and adjust that point; click it again to let go.	選択したキャリブレーションポイントのホワイトポイント、または -- 行が選択されていない場合 -- 次に「ここにアンカーを打つ」を押したときに記録される値。\n\nここで画像が正しく見えるまで調整し、アンカーを打ちます。まったく異なる明るさの場所に移動して同じことをもう一度行います: 2 つのポイントでバッファの実際の関係が決まり、その間ではホワイトポイントが保たれます。下の行をクリックするとそのポイントに戻って調整でき、もう一度クリックすると選択を解除します。
+A multiplier on the scan's white point, and the control you adjust between\nanchor points: dial it until the picture looks right in the current\nlight, then press Anchor here -- it captures the trimmed value as a new\npoint and resets the trim to 1.	スキャンのホワイトポイントに掛ける乗数で、アンカーポイントの間で調整するコントロールです: 現在の光で画像が正しく見えるまで調整し、「ここにアンカーを打つ」を押してください -- トリム後の値が新しいポイントとして記録され、トリムは 1 に戻ります。
+A multiplier on the exposure the game supplied. 1.00x takes its number\nexactly, and that is the right answer here.\n\nThis is not a fudge factor. If a game needs the trim far from 1 to look\nright, that is evidence the exposure being read is wrong for that game,\nnot that the game wants trimming. Somewhere around 0.8 to 1.25 is honest\ntuning; reaching for 4 means something upstream is broken and the trim is\nhiding it.\n\nYour manual paper white is kept separately and comes back untouched if\nyou switch the option above off.	ゲームが提供した露出に掛ける乗数。1.00x はその数値をそのまま使い、ここではそれが正解です。\n\nこれはごまかしのための係数ではありません。正しく見せるためにトリムを 1 から大きく離す必要があるなら、それはゲームがトリムを求めているのではなく、読み取っている露出がそのゲームに合っていない証拠です。0.8 ～ 1.25 程度が正当な調整で、4 に達するようなら上流の何かが壊れており、トリムがそれを隠しています。\n\n手動のペーパーホワイトは別に保存されており、上のオプションをオフにすればそのまま戻ります。
+What the frame is divided by before the model sees it. There is no other white\npoint; this is the whole of it.\n\nThe model was trained on finished frames where white sits at 1. The\nupscaler's output is linear and open-ended, so something has to say where\nwhite is -- and where the game's DLSS buffer is linear HDR, that number is\nrarely anywhere near 1. Measured in Monster Hunter Wilds it takes 16 or more\nbefore the model's detail reaches the frame at all, and the value that suits\na shaded camp is still too small for the same game out in daylight.\n\nToo low and almost every pixel trips the soft knee: the model is shown a\nflat near-white picture, its answer is scaled away, and only its hue\nsurvives -- which reads as a colour cast rather than as lost detail. Too\nhigh and it is shown an underexposed one, its answer degrades, and this same\nnumber multiplies that error on the way out.\n\nRaise it until the picture stops improving. Past that point it does not\nplateau, it gets worse in the other direction.\n\nThis was once a multiplier on a measured white point. The measurement is\ngone: it read scene brightness rather than where white belongs, handed the\nmodel a picture three times too dark, and left the highlight path nothing to\ngive back.\n\nAt strength zero the frame is still bit-identical whatever this says.	モデルに渡す前にフレームを割る値。ほかにホワイトポイントはなく、これがすべてです。\n\nモデルは、ホワイトが 1 に位置する完成フレームで学習されています。アップスケーラーの出力はリニアで上限がないため、何かがホワイトの位置を決める必要があります -- そしてゲームの DLSS バッファがリニア HDR の場合、その数値が 1 に近いことはめったにありません。Monster Hunter Wilds での計測では、モデルのディテールがフレームに届き始めるだけでも 16 以上が必要で、日陰のキャンプに合う値でも、同じゲームの日中の屋外では小さすぎます。\n\n低すぎると、ほぼすべてのピクセルがソフトニーにかかります: モデルには平坦でほぼ白い画像が渡され、その結果は縮小されて消え、色相だけが残ります -- これはディテールの欠落ではなく色かぶりとして見えます。高すぎると露出不足の画像が渡されて結果が劣化し、この同じ数値が出力時にその誤差を増幅します。\n\n画像の改善が止まるまで上げてください。その点を超えると頭打ちになるのではなく、逆方向に悪化します。\n\nこれはかつて、測定したホワイトポイントに掛ける乗数でした。その測定は廃止されました: ホワイトがあるべき位置ではなくシーンの明るさを読み取っており、モデルに 3 倍暗すぎる画像を渡し、ハイライトの経路に戻すものを何も残さなかったためです。\n\n強度ゼロでは、この値に関係なくフレームはビット単位で同一のままです。
+The most the pass may move any pixel, as a multiple of what it already was, in\nboth directions -- a pixel may not be brightened past this nor darkened past\nits reciprocal. Lights are where the model has least to say and rescaling its\nanswer does the most damage; 2x leaves detail intact while stopping a strip\nlight turning into a string of coloured cells. Raise it only if bright areas\nlook clipped.	パスが任意のピクセルを変化させられる最大量で、元の値に対する倍率として上下両方向に適用されます -- ピクセルはこの値を超えて明るくならず、その逆数を超えて暗くなりません。光源はモデルが最も寄与しにくく、その結果を再スケールすると最も大きな害が出る部分です: 2x ならディテールを保ったまま、棒状のライトが色付きのセルの列になるのを防げます。明るい部分がクリップして見える場合にのみ上げてください。
+NVIDIA's highlight recovery, from RTX Remix. The model is shown everything\nbrighter than paper white squeezed into the top of its range, so its\nverdict there -- above all its colour -- is made without knowing how\nbright the pixel really is. This hands pixels that were very bright (one\nto eight times paper white) back to the game's own frame, a little at\nfirst and wholly at the top, so a fire keeps its orange and a coloured\nlight keeps its brightness.\n\nIt costs some of the model's detail in bright areas. Shadows and\nmidtones are untouched. Off is the composition as it always was.\n\nOnly offered on a linear HDR buffer, the one case where the model was\nshown a compressed picture.	RTX Remix 由来の NVIDIA のハイライト復元。モデルには、ペーパーホワイトより明るいものがすべて範囲の上端に圧縮された状態で渡されるため、そこでの判断 -- とりわけ色 -- はピクセルが実際にどれだけ明るいかを知らずに下されます。この機能は、非常に明るかったピクセル (ペーパーホワイトの 1 ～ 8 倍) をゲーム自身のフレームに戻します。最初は少しずつ、上端では完全に戻すため、炎はオレンジ色を、色付きの光は明るさを保ちます。\n\n明るい部分ではモデルのディテールが一部失われます。シャドウと中間調は変わりません。オフにすると従来どおりの合成になります。\n\nリニア HDR バッファでのみ提供されます。モデルに圧縮された画像が渡されるのはこの場合だけです。
+A lamp in the corner: red for dark, green for full light, and the\nshades between, with the reading beside it.\n\nIt is how you see at a glance that the scan is TRACKING rather\nthan merely running. Walk into shade and it should slide toward\nred; step out and it should go green. If it moves the wrong way,\nthat is what the setting above is for.\n\nPurely a readout. It changes nothing.	隅のランプ: 暗いと赤、十分に明るいと緑、その間は中間の色で、横に読み取り値が表示されます。\n\nスキャンが単に動いているだけでなく、明るさに追従していることを一目で確認するためのものです。日陰に入ると赤に寄り、外に出ると緑になるはずです。逆に動く場合は、上の設定で切り替えます。\n\n表示のみで、何も変更しません。
+Make the picture look right, then press this -- it captures the current look\nas a point. For the first point use the Paper white slider above; for\nevery point after, move to different light and use the Trim, which the\nAnchor then bakes into a new point.\n\nThe first press calibrates one point -- the white point then\nfollows the scan by ratio from there, as before. Walk into very\ndifferent light, set paper white again, and press it again: the\nsecond point pins down the buffer's real curve and everything\nbetween the two is right, not just near one anchor. Up to eight.\n\nThe table is per game and shareable: one person calibrates a game\nand the numbers are the same for everyone who takes the profile.	画像が正しく見えるようにしてから押してください -- 現在の見た目をポイントとして記録します。最初のポイントには上のペーパーホワイトのスライダーを使い、それ以降のポイントでは別の明るさの場所に移動してトリムを使います。アンカーがそのトリムを新しいポイントに焼き込みます。\n\n最初に押すと 1 つのポイントが校正され、ホワイトポイントはそこから従来どおり比率でスキャンに追従します。まったく異なる明るさの場所に移動し、ペーパーホワイトを再設定してもう一度押すと、2 つ目のポイントでバッファの実際のカーブが決まり、1 つのアンカーの近くだけでなく 2 点間のすべてが正しくなります。最大 8 つまで。\n\nこの表はゲームごとで共有できます: 1 人がゲームを校正すれば、そのプロファイルを使う全員が同じ数値になります。
+(the scan is only watching -- the white point above comes from somewhere else)	(スキャンは監視しているだけです -- 上のホワイトポイントは別のソースから取得されています)
+%s scan %.4f  ->  white %.2f%s	%s スキャン %.4f  ->  ホワイト %.2f%s
+   [editing]	   [編集中]
+Click a row to edit it with the slider above; click it again to control the live point. > is the point in use now.	行をクリックして上のスライダーで編集します。もう一度クリックするとライブポイントを制御します。> が現在使用中のポイントです。
+Flip this if the picture gets worse in the direction it should be\ngetting better. Most engines store an exposure that falls as\nthe scene brightens; some store its reciprocal, and a buffer\nfound by shape does not say which. Add a second anchor point in\ndifferent light and this is decided for you, so it disappears.	画像が良くなるはずの方向で悪化する場合は、\nこれを反転させます。ほとんどのエンジンは、シーンが明るくなるにつれて\n下がる露出を保存しますが、逆数を保存するものもあります。\n形状から見つかったバッファはどちらであるかを示しません。\n異なる光で2番目のアンカーポイントを追加すると、これが\n自動的に決定され、この設定は消えます。
+nothing matched yet.	まだ一致するものがありません。
+%zu. %s -- not read yet	%zu. %s -- まだ読み取られていません
+%zu. %s = %.5f  (seen %.5f..%.5f) %s	%zu. %s = %.5f  (確認範囲 %.5f..%.5f) %s
+MOVES	変化あり
+flat so far	今のところ変化なし
+Shows the pass against itself, so the two can be seen at once rather than\ntoggled and remembered.\n\nSide by side puts the whole frame in each half, untouched on the left and\nedited on the right. Both halves are squeezed horizontally to fit, so it is\nfor looking at rather than playing in.\n\nWipe cuts a single frame at the split and resamples nothing, so the picture\nis the right shape and can be played normally. Drag the split below; it is a\nstored setting and stays put once the menu is closed.\n\nNeither needs the menu open to keep working. A hairline marks the join.	切り替えて記憶するのではなく、2つを同時に確認できるように、パスをそれ自身と比較して表示します。\n\n「サイドバイサイド」では、フレーム全体が左右の半分に配置され、左側に未編集、右側に編集済みが表示されます。両方の半分が画面に収まるように水平に縮小されるため、プレイするためというよりは観察するためのものです。\n\n「ワイプ」では、単一のフレームを分割線でカットし、リサンプリングを行わないため、画像は正しい形状になり、通常通りプレイできます。下で分割線をドラッグします。これは保存される設定であり、メニューを閉じてもそのまま維持されます。\n\nどちらも、機能し続けるためにメニューを開いておく必要はありません。結合部分には細い線が表示されます。
+Writes which side is which onto the frame itself, so a screenshot still\nsays so after it has left this machine. Drawn into the picture's own\nplane: in the wipe the split reveals and hides the label exactly as it\ndoes the images, and there is nothing to drag. Swap sides moves the\nlabels with their pictures.	どちらの側が何かをフレーム自体に書き込むため、スクリーンショットがこのマシンを離れた後でも区別できます。画像と同じ平面に描画されます: ワイプでは分割線が画像と同じようにラベルを表示・非表示にし、ドラッグするものはありません。「左右を入れ替える」ではラベルも画像と一緒に移動します。
+Puts the edited frame on the other side.\n\nWorth doing once you have decided which you prefer: the eye is not\neven-handed about left and right, and a difference can read as an\nimprovement purely from where it sits. If the same side still wins after\nswapping, it is the pass you are seeing and not the placement.	編集されたフレームを反対側に配置します。\n\nどちらが好みか決めたら試す価値があります: 目は\n左右に対して公平ではなく、単にその配置によって違いが\n改善として読み取られることがあります。入れ替えた後も\n同じ側が優れているなら、それは配置ではなく、あなたが見ているパスそのものです。
+How much of the frame each half shows.\n\nA half is half as wide as the frame and just as tall, so the frame\ncannot fill it and keep its shape.\n\nAt 1 the whole frame is there at its right proportions, with bars above\nand below. At 2 the half is filled and the sides are cropped away\ninstead. Anything between trades one for the other.	各半分がフレームのどのくらいを表示するか。\n\n半分はフレームの半分の幅で同じ高さであるため、フレームは\nその形状を保ったまま半分を埋めることはできません。\n\n1では、上下にバーがあり、フレーム全体が正しい比率で表示されます。\n2では半分が埋められ、代わりに側面が切り取られます。\nその間の値は、一方を他方とトレードオフします。
+FSR 3 Upscaler Manual Tuning	FSR 3アップスケーラーの手動調整
+Advanced FSR FG Settings	高度なFSR FG設定
+Extended XeFG Settings	拡張XeFG設定
+Advanced OptiFG Settings	高度なOptiFG設定
+Active DispatchFlags	アクティブなDispatchFlags
+FoV & Camera Values	視野とカメラの値
+VRR Frame Cap Calculator	VRRフレームキャップ計算機
+Advanced DA Parameters	高度なDAパラメーター
+Motion Adaptive Sharpness	モーション適応シャープネス
+Advanced Init Flags	高度な初期化フラグ
+Mipmap Bias	ミップマップバイアス
+Anisotropic Filtering	異方性フィルタリング
+Keyboard Input Fix	キーボード入力の修正
+Enable Input Fix	入力の修正を有効にする
+Hands frame generation a motion field estimated from the presented\nframes instead of zero motion; the same estimate DLSS-NR uses when\nboth are on	ゼロモーションの代わりに、表示されたフレームから推定したモーションフィールドをフレーム生成に渡します。両方がオンの場合に DLSS-NR が使うのと同じ推定です
+Incoherent motion	一貫性のないモーション
+Repeats frames instead of interpolating them where the motion breaks up:\nwhile more than this share of neighbouring motion samples disagree and the\nmedian motion exceeds 1%% of the image width (parallax, disocclusion, thin\nobjects over a far background). A uniform pan keeps interpolating at any\nspeed. 25%% is a starting point; lower repeats more. 0 is off	モーションが崩れる箇所では、補間せずにフレームを繰り返します: 隣接するモーションサンプルのうちこの割合を超えるものが一致せず、かつモーションの中央値が画像幅の 1%% を超える間 (視差、ディスオクルージョン、遠い背景の前の細いオブジェクト)。均一なパンはどの速度でも補間を続けます。25%% が出発点です。低くするほど繰り返しが増えます。0 でオフ
+Fast motion cap	高速モーションの上限
+Repeats frames whenever the median motion exceeds this many pixels per\nbase frame, however coherent, like AMD's Fast Motion Response. With\nFSR FG, every repeat restarts its optical flow for several frames, so\nkeep it above normal camera speed. 0 is no cap	一貫性に関係なく、モーションの中央値がベースフレームあたりこのピクセル数を超えるとフレームを繰り返します (AMD の Fast Motion Response と同様)。FSR FG では、繰り返しのたびにオプティカルフローが数フレームにわたって再始動するため、通常のカメラ速度より高く設定してください。0 で上限なし
+Minimum base fps	最小ベース fps
+HUD depth	HUD デプス
+Detects the HUD (pixels that stay still while the scene around\nthem moves) and hands it to frame generation as near depth, so the\nscene beside it is not blended with it and its own motion is kept.\nNeeds Synthesized motion	HUD (周囲のシーンが動いている間も静止しているピクセル) を検出し、近いデプスとしてフレーム生成に渡します。これにより隣のシーンと混ざらず、HUD 自身のモーションが保たれます。「合成モーション」が必要です
+HUD layer	HUD レイヤー
+Experimental, FSR FG output only. Composes the detected HUD over\ngenerated frames from the real frame, through FSR FG's own UI layer,\nso it is never warped; real frames are unchanged. Off while "Disable\nUI texture" is on	実験的。FSR FG 出力のみ。検出した HUD を実フレームから生成フレームの上に、FSR FG 自身の UI レイヤーを通して合成するため、HUD が歪むことはありません。実フレームは変更されません。"Disable UI texture" がオンの間はオフ
+HUD margin	HUD マージン
+How far around the detected HUD, in pixels, generated frames show\nthe real frame, to cover the smear beside each element; the outer\nhalf fades out. It covers the smear fully up to this many pixels of\nmotion per base frame. Around the HUD the background then moves at\nthe base frame rate. 0 is the detected HUD alone	検出した HUD の周囲何ピクセルまで、生成フレームに実フレームを表示して各要素の横のにじみを隠すか。外側の半分はフェードアウトします。ベースフレームあたりこのピクセル数までのモーションなら、にじみを完全に隠します。HUD の周囲では背景がベースフレームレートで動くようになります。0 は検出した HUD のみ
+How the model's work is brought back up when it ran below the frame's size.\n\nClassic composes the model's small picture directly against the full-size\nframe. Those two disagree by the shrink's blur as well as by the model's edit,\nand the composition cannot tell them apart -- it reads the blur as brightness\nthe frame has and the model never saw. The lower the model resolution the\nlarger that error, and it is the colour shift that shows up at half size.\n\nMatched residual carries up only the model's difference and lays it on the\nframe's own proxy, so both pictures being compared are full size and the only\nthing that came from the small raster is the edit itself.\n\nMatched residual, sharp is the same, with the model's difference enlarged by\na sharper filter (Catmull-Rom, held to its neighbours so it cannot ring), so\nmore of the fine structure the model drew at the small size survives.\n\nMatched residual + DLSS hands the model's difference to a private DLSS Super\nResolution, which builds it up over frames and so can return detail finer\nthan the small raster holds. D3D12 only, and it needs nvngx_dlss.dll. Where it\ncannot run -- native Vulkan, before the upscaler, no real depth and motion,\nwhile it starts -- Matched residual runs, and the line below says why.\n\nNo effect at full size or above: there is no residual to carry and all four are\nidentical (supersampling brings its answer down to frame size before this).\n\nFrom hhkbble's multi-pass work on this fork; the DLSS enlargement is wilsjo2's.	モデルがフレームサイズより小さく実行されたときに、その結果をどう拡大して戻すか。\n\nクラシックは、モデルの小さな画像をフルサイズのフレームに直接合成します。この 2 つは、モデルの編集だけでなく縮小によるぼけでも異なり、合成ではそれを区別できません -- ぼけを、フレームにはあってモデルが見ていない明るさとして読み取ってしまいます。モデル解像度が低いほどこの誤差は大きくなり、半分のサイズで現れる色ずれの原因になります。\n\n一致した残差は、モデルの差分だけを拡大してフレーム自身のプロキシに適用します。そのため比較される 2 つの画像はどちらもフルサイズで、小さなラスターから来るのは編集そのものだけです。\n\n一致した残差、シャープは同じ方式で、モデルの差分をよりシャープなフィルター (リンギングしないよう隣接ピクセルで制限した Catmull-Rom) で拡大するため、モデルが小さいサイズで描いた細かな構造がより多く残ります。\n\n一致した残差 + DLSS は、モデルの差分を専用の DLSS Super Resolution に渡します。これは複数フレームにわたって差分を積み上げるため、小さなラスターが持つよりも細かいディテールを返せます。D3D12 のみで、nvngx_dlss.dll が必要です。実行できない場合 -- ネイティブ Vulkan、アップスケーラーの前、実際のデプスとモーションがない、起動中 -- は一致した残差が実行され、下の行にその理由が表示されます。\n\nフルサイズ以上では効果がありません: 運ぶ残差がなく、4 つすべてが同一になります (スーパーサンプリングはこれより前に結果をフレームサイズまで縮小します)。\n\nこのフォークでの hhkbble のマルチパスの成果に基づきます。DLSS による拡大は wilsjo2 によるものです。
+# Transfer 2, Matched residual + DLSS: the status line under Enlargement (dlss-enlargement.md).
+Waiting for the first frame.	最初のフレームを待機しています。
+D3D12 only: native Vulkan runs Matched residual.	D3D12 のみ: ネイティブ Vulkan では一致した残差が実行されます。
+The model runs at full size or above: nothing to enlarge, Matched residual runs.	モデルがフルサイズ以上で実行されています: 拡大するものがないため、一致した残差が実行されます。
+Before the upscaler: Matched residual runs.	アップスケーラーの前: 一致した残差が実行されます。
+No real depth and motion here: Matched residual runs.	ここには実際のデプスとモーションがありません: 一致した残差が実行されます。
+The guides could not be brought to the model's size: Matched residual runs.	ガイドをモデルのサイズに合わせられませんでした: 一致した残差が実行されます。
+Debug view shows the model output: Matched residual runs.	デバッグビューがモデル出力を表示しています: 一致した残差が実行されます。
+Starting DLSS: Matched residual until it is ready.	DLSS を起動中: 準備ができるまで一致した残差を使用します。
+DLSS failed (see the log): Matched residual until Retry.	DLSS が失敗しました (ログを参照): 「再試行」まで一致した残差を使用します。
+Running: DLSS enlarges the model's edit.	実行中: DLSS がモデルの編集を拡大しています。
+The model is below a third of the frame, further than DLSS enlarges: Matched residual runs.	モデルがフレームの 3 分の 1 未満で、DLSS が拡大できる範囲を超えています: 一致した残差が実行されます。
+The driver proxy runs the model without the resolve: nothing is enlarged.	ドライバープロキシはリゾルブなしでモデルを実行します: 何も拡大されません。
+Stops generating frames while the base frame rate is below this,\nand resumes once it recovers. 0 is off. Not a frame rate target:\nabove the game's base frame rate, frame generation never runs	ベースフレームレートがこれを下回っている間はフレーム生成を停止し、回復すると再開します。0 でオフ。フレームレートの目標値ではありません: ゲームのベースフレームレートより上にすると、フレーム生成は実行されなくなります
+nvngx.dll_dlssnr.dll is missing	nvngx.dll_dlssnr.dll が見つかりません
+nvngx.dll_dlssnr.dll would not load	nvngx.dll_dlssnr.dll を読み込めませんでした
+the forwarder is missing its exports	フォワーダーにエクスポートがありません
+nvngx.dll_dlssnr.dll is from a different build	nvngx.dll_dlssnr.dll は別のビルドのものです
+the model faulted inside its own code; off for this session	モデルが自身のコード内でフォールトしました。このセッションではオフ
+the NGX core would not initialise	NGX コアを初期化できませんでした
+the NGX core has no capability parameters	NGX コアに機能パラメーターがありません
+the NGX core refused its capability parameters	NGX コアが機能パラメーターを拒否しました
+Single pass (master settings)	シングルパス (マスター設定)
+Restart required: existing NR work has no submission lifetime evidence; single/master retained	再起動が必要です: 既存の NR 処理には送信ライフタイムの証拠がありません。シングル/マスターを維持
+Another NR recording scope owns the resources; new recording refused	別の NR 記録スコープがリソースを所有しています。新しい記録は拒否されました
+Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may decrease)	前の NR 記録の Reset とすべての GPU フェンスを待機中。新しい記録はスキップされました (スループットが低下する場合があります)
+More than three earlier NR recordings still on the GPU; new recording skipped this frame	3 つを超える以前の NR 記録がまだ GPU 上にあります。このフレームでは新しい記録をスキップしました
+Earlier NR recordings still running on two GPU queues; new recording skipped until one finishes	以前の NR 記録がまだ 2 つの GPU キューで実行中です。いずれかが終わるまで新しい記録をスキップします
+This command list already holds an unsubmitted NR recording; new recording skipped	このコマンドリストには未送信の NR 記録がすでにあります。新しい記録をスキップしました
+An NR recording is still waiting for the game to submit it; new recordings skipped until it runs or is discarded	NR 記録がまだゲームによる送信を待っています。実行されるか破棄されるまで新しい記録をスキップします
+The GPU is eight NR recordings behind; new recording skipped this frame	GPU が NR 記録 8 つ分遅れています。このフレームでは新しい記録をスキップしました
+Waiting for the previous NR recording to finish on the GPU (one queue not yet established, or more than one in use)	前の NR 記録が GPU 上で完了するのを待機中 (単一のキューがまだ確定していないか、複数が使用中)
+Retired resource limit reached: pending/unknown GPU recordings retained; rebuild refused until completion or restart	破棄リソースの上限に達しました: 保留中/不明な GPU 記録を保持。完了または再起動まで再ビルドを拒否
+Driver proxy uses one pass and master settings; overrides are inactive	ドライバープロキシは 1 パスとマスター設定を使用します。オーバーライドは無効です
+chain generation refused: insufficient or unavailable adapter headroom (retry latched)	チェーン生成が拒否されました: アダプターの余裕が不足しているか利用できません (「再試行」待ち)
+Chain generation waits for the previous one to be freed (adapter headroom); NR resumes once it is	チェーン生成は前のチェーンの解放を待っています (アダプターの余裕)。解放され次第 NR が再開します
+chain generation waits for the previous one to be freed (adapter headroom)	チェーン生成は前のチェーンの解放を待っています (アダプターの余裕)
+chain scratch initialization failed; retry latched	チェーンのスクラッチ初期化に失敗しました。「再試行」待ち
+nvngx_dlssnr.dll was not found beside OptiScaler or the game	nvngx_dlssnr.dll が OptiScaler またはゲームの隣に見つかりませんでした
+the model would not initialise	モデルを初期化できませんでした
+Additional pass refused: adapter budget/headroom unavailable or insufficient (retry latched)	追加パスが拒否されました: アダプターの予算/余裕が利用できないか不足しています (「再試行」待ち)
+Additional pass initialization failed (retry latched); last successful answer retained	追加パスの初期化に失敗しました (「再試行」待ち)。最後に成功した結果を維持
+the colour codec would not compile	カラーコーデックをコンパイルできませんでした
+the game's depth or motion vectors could not be made readable	ゲームのデプスまたはモーションベクトルを読み取り可能にできませんでした
+the proxy path could not run the model	プロキシ経路でモデルを実行できませんでした
+All requested passes completed; one final composition	要求されたすべてのパスが完了しました。最終合成 1 回
+the model refused to run	モデルが実行を拒否しました
+the present hook's backbuffer copy could not be created	Present フックのバックバッファコピーを作成できませんでした
+the present hook's dummy temporals could not be created	Present フックのダミーテンポラルを作成できませんでした
+FSR1	FSR1
+Bicubic	Bicubic
+Catmull-Rom	Catmull-Rom
+Lanczos2	Lanczos2
+Lanczos3	Lanczos3
+Kaiser2	Kaiser2
+Kaiser3	Kaiser3
+MAGIC	MAGIC
+x	x
+# 2026-10-04: the redesigned menu's tabs, groups, card and section titles, and the Custom tab picker.
+MAIN	メイン
+SYSTEM	システム
+ADVANCED	詳細
+Custom	カスタム
+Upscaling	アップスケーリング
+Neural Rendering	Neural Rendering
+Frame Gen	フレーム生成
+Latency	レイテンシ
+Status	ステータス
+Textures	テクスチャ
+Compatibility	互換性
+# 2026-10-23: upstream 76219dd4/c220ad9e split the Compatibility tab into these cards; the technical names stay.
+Startup	起動
+Hooks	フック
+Spoofing	スプーフィング
+Shaders	シェーダー
+Menu	メニュー
+Help / Status	ヘルプ / ステータス
+Accent Colour	アクセントカラー
+Background Colour	背景色
+Custom Tab	カスタムタブ
+DLSSG Settings	DLSSG 設定
+Detected	検出済み
+FSR Common Settings	FSR共通設定
+FSR FG Settings	FSR FG設定
+FSR-FG Inputs	FSR-FG入力
+Frame Generation	フレーム生成
+Frame Generation (Enabler + FFX)	フレーム生成 (Enabler + FFX)
+Frame Generation (FSR-FG Inputs)	フレーム生成 (FSR-FG入力)
+Frame Generation (FSR3-FG via Nukem's DLSSG)	フレーム生成 (NukemのDLSSG経由のFSR3-FG)
+Frame Generation (FSR3-MFG via DLSS Enabler)	フレーム生成 (DLSS Enabler経由のFSR3-MFG)
+Frame Generation (FSRFG via FFX)	フレーム生成 (FFX経由のFSRFG)
+Frame Generation (Streamline FG Inputs)	フレーム生成 (Streamline FG入力)
+Framerate	フレームレート
+Hooks / Config	フック / 設定
+Init Flags	初期化フラグ
+Init Flags (active)	初期化フラグ (有効)
+Low Latency	低遅延
+Nvngx FG replacement	Nvngx FG の置き換え
+OptiFG Settings	OptiFG設定
+Output Scaling	出力スケーリング
+Per shader GPU times	シェーダーごとの GPU 時間
+Plugins / Startup	プラグイン / 起動
+Reprojection Settings	リプロジェクション設定
+Shaders / Limits	シェーダー / 制限
+Sharpness	シャープネス
+Spoofing / Hooking	スプーフィング / フック
+Streamline FG Inputs	Streamline FG入力
+System	システム
+Theme and Color	テーマと色
+Upscale Ratio Override	アップスケール比率のオーバーライド
+Upscalers	アップスケーラー
+V-Sync	V-Sync
+XeFG Settings	XeFG設定
+fakenvapi	fakenvapi
+
+# 2026-10-04: model cadence (docs/dlssnr/design/model-cadence.md): the control, its help, the GPU timing
+# kind line and the status line under the control (DlssNr::Cadence::Describe).
+Model cadence	モデルのケイデンス
+Every frame	毎フレーム
+Every 2nd frame	2 フレームごと
+Every 3rd frame	3 フレームごと
+Every 4th frame	4 フレームごと
+Allow with frame generation	フレーム生成時も許可
+Runs the model on one frame in N and carries its edit along the game's motion onto the frames in\nbetween. It buys frame rate and costs stability in motion: detail can pop each time the model\nruns again, and what a moving object uncovers can ghost, or show the plain frame, until then.\nFrame times alternate long and short. A still scene looks as it does with every frame.\n\nIt needs the game's own depth and motion, so it stands down before the upscaler, on frames\nwithout them, with Hold frame or a capture, and while frame generation is active unless allowed\nbelow. Off costs nothing.	N フレームに 1 回モデルを実行し、その編集をゲームのモーションに沿って間のフレームに引き継ぎます。フレームレートは上がりますが、動きの中での安定性は下がります: モデルが再実行されるたびにディテールが急に変わることがあり、動く物体の後ろに現れた部分はそれまでゴーストになったり、編集なしのフレームが見えたりします。フレームタイムは長短を交互に繰り返します。静止したシーンは「毎フレーム」と同じに見えます。\n\nゲーム自身のデプスとモーションが必要なため、アップスケーラーの前、それらがないフレーム、「フレームの保持」やキャプチャ中、そしてフレーム生成が有効な間 (下で許可しない限り) は無効になります。オフならコストはかかりません。
+Off by default. Frame generation interpolates between frames whose cost alternates, and DLSS-G\nwas measured unable to pace through that: stutter and flashes that grow with the multiplier and\nthe cadence. Turn it on to measure it, not to play.	デフォルトはオフ。フレーム生成はコストが交互に変わるフレームの間を補間しますが、DLSS-G はそれをうまくペーシングできないことが計測で確認されています: 倍率とケイデンスに応じてスタッターやフラッシュが増えます。プレイ用ではなく計測用にオンにしてください。
+A carried frame of model cadence %u: no model call, so no model time.	モデルのケイデンス %u の引き継ぎフレーム: モデル呼び出しがないため、モデル時間もありません。
+A model frame of model cadence %u. With an interval that is a multiple of the cadence, every sample is the same kind of frame.	モデルのケイデンス %u のモデルフレーム。ケイデンスの倍数の間隔なら、すべてのサンプルが同じ種類のフレームになります。
+Running the model every 4th frame; the frames between carry its last edit.	4 フレームごとにモデルを実行中。間のフレームは最後の編集を引き継ぎます。
+Running the model every 3rd frame; the frames between carry its last edit.	3 フレームごとにモデルを実行中。間のフレームは最後の編集を引き継ぎます。
+Running the model every 2nd frame; the frame between carries its last edit.	2 フレームごとにモデルを実行中。間のフレームは最後の編集を引き継ぎます。
+The model runs this frame: no edit is stored to carry.	このフレームでモデルを実行: 引き継ぐ編集が保存されていません。
+The model runs this frame: a history reset is pending.	このフレームでモデルを実行: 履歴のリセットが保留中です。
+The model runs this frame: its size, format, route or settings changed.	このフレームでモデルを実行: サイズ、フォーマット、ルート、または設定が変更されました。
+The model runs this frame: the pass did not run for a while.	このフレームでモデルを実行: パスがしばらく実行されていませんでした。
+The model runs every frame: the pass ran more than once in one present.	毎フレームモデルを実行: 1 回の Present でパスが複数回実行されました。
+Off: the model runs every frame.	オフ: 毎フレームモデルを実行します。
+The model runs every frame: model cadence is not available on native Vulkan.	毎フレームモデルを実行: ネイティブ Vulkan ではモデルのケイデンスを使用できません。
+The model runs every frame: model cadence does not run with the driver proxy.	毎フレームモデルを実行: モデルのケイデンスはドライバープロキシでは動作しません。
+The model runs every frame: this build has no model cadence shader.	毎フレームモデルを実行: このビルドにはモデルのケイデンス用シェーダーがありません。
+The model runs every frame: this route does not present through OptiScaler's swapchain, so model cadence cannot count frames.	毎フレームモデルを実行: このルートは OptiScaler のスワップチェーンを通じて Present しないため、モデルのケイデンスがフレームを数えられません。
+The model runs every frame: model cadence does not run before the upscaler.	毎フレームモデルを実行: モデルのケイデンスはアップスケーラーの前では動作しません。
+The model runs every frame: this frame has no game depth and motion to carry the edit with.	毎フレームモデルを実行: このフレームには編集を引き継ぐためのゲームのデプスとモーションがありません。
+The model runs every frame: frame generation is active (see Allow with frame generation).	毎フレームモデルを実行: フレーム生成が有効です (「フレーム生成時も許可」を参照)。
+The model runs every frame while Hold frame is on.	「フレームの保持」がオンの間は毎フレームモデルを実行します。
+The model runs every frame while a capture is running.	キャプチャ中は毎フレームモデルを実行します。
+The model runs every frame: the model cadence surfaces could not be allocated.	毎フレームモデルを実行: モデルのケイデンス用サーフェスを確保できませんでした。
+Waiting for the pass to run.	パスの実行を待機しています。
+
+# Peripheral compression (docs/dlssnr/design/peripheral-compression.md)
+Peripheral compression	周辺圧縮
+Centre band	中央帯
+Packed extent	パック範囲
+Packed model input	パック済みモデル入力
+Experimental. The model's input is packed denser in the centre than at the edges, so at the\nsame cost the centre keeps full detail and the edges give some up. Its answer is unpacked\nbefore it is composed; the frame itself is untouched.\n\nThe defaults, 80 and 90, cost what a Model resolution of 90 costs, so that is the\ncomparison to make, not 100. Matched residual is used at full model resolution too;\nClassic blurs colour at the edges here.\n\nD3D12, after the upscaler or at present. Not above Model resolution 100 and not with the\ndriver proxy. Moving a slider restarts the model's history; a new packed size rebuilds it\nafter a moment.	実験的。モデルの入力は端よりも中央で密にパックされるため、同じコストで中央はフルディテールを保ち、端は一部を犠牲にします。結果は合成前にアンパックされ、フレーム自体は変更されません。\n\nデフォルトの 80 と 90 は「モデル解像度」90 と同じコストなので、比較対象は 100 ではなくそれです。一致した残差はフルのモデル解像度でも使用されます。ここではクラシックは端の色をぼかします。\n\nD3D12、アップスケーラーの後または Present 時。「モデル解像度」100 を超える場合とドライバープロキシでは使用できません。スライダーを動かすとモデルの履歴がリセットされ、新しいパックサイズでは少し後にモデルが再ビルドされます。
+How much of each axis, around the middle, the model sees at full density.	中央の周りで、各軸のどれだけをモデルがフル密度で見るか。
+How much of each axis the model's input spans, before Model resolution. Everything past the\ncentre is squeezed into the rest, to no less than half its size: this has to be at least\nhalfway between the centre band and 100.	「モデル解像度」の適用前に、モデルの入力が各軸のどれだけをカバーするか。中央より外側はすべて残りの部分に圧縮され、その大きさは半分を下回りません: そのため、この値は中央帯と 100 の中間以上である必要があります。
+Active: the model works at %ux%u for a %ux%u frame, %.0f percent of the pixels it would work on without it.	有効: モデルは %ux%u で %ux%u のフレームを処理しています。これを使わない場合に処理するピクセル数の %.0f パーセントです。
+Not active: %s.	無効: %s。
+Peripheral compression is running, so this applies at full model resolution too.	周辺圧縮が動作中のため、これはフルのモデル解像度でも適用されます。
+Packed model input: what the model was handed, edges squeezed, stretched over the frame.	パック済みモデル入力: モデルに渡されたもの (端を圧縮) をフレーム全体に引き伸ばして表示。
+the frame is too small to lay out	フレームが小さすぎてレイアウトできません
+supersampling (Model resolution above 100) is not supported with peripheral compression	スーパーサンプリング (モデル解像度 100 超) は周辺圧縮と併用できません
+the centre band must be at least 10 and smaller than the packed extent, which must be below 100	中央帯は 10 以上かつパック範囲より小さく、パック範囲は 100 未満である必要があります
+the edges would be squeezed below half their size, which aliases: widen the packed extent or narrow the centre band (packed extent x 2 must be at least 100 + centre band)	端が半分未満のサイズに圧縮され、エイリアシングが発生します: パック範囲を広げるか中央帯を狭めてください (パック範囲 x 2 は 100 + 中央帯 以上である必要があります)
+the packed model would be under a quarter of the frame: raise Model resolution or the packed extent	パック後のモデルがフレームの 4 分の 1 未満になります: モデル解像度かパック範囲を上げてください
+less than one packed pixel would be left on a side of the centre band	中央帯の片側に残るパック済みピクセルが 1 未満になります
+not on the before-upscale stage	アップスケーラーの前のステージでは使用できません
+not with the driver proxy (UseProxy)	ドライバープロキシ (UseProxy) では使用できません
+this build has no pack/unpack shader	このビルドにはパック/アンパック用シェーダーがありません
+the pack/unpack pass could not be built or run on this device	このデバイスではパック/アンパックパスをビルドまたは実行できませんでした
+Peripheral compression is running: Matched residual runs.	周辺圧縮が動作中: 一致した残差が実行されます。
+The model runs every frame: model cadence does not run with replace curves.	毎フレームモデルを実行: モデルのケイデンスは置換カーブでは動作しません。
+
+# Measure detail
+Measure detail	ディテールを計測
+Measure detail: failed to initialize compute pass	ディテールを計測: コンピュートパスの初期化に失敗しました
+Cancel	キャンセル
+Measures NR's output on the scene on screen at the current settings for 60 evaluations, against the game's own frame (ideally with Hold frame on):\n  - Detail: fine band detail added (sigma ~1.2 px vs ~3 px)\n  - Flicker: frame-to-frame output change beyond input change\n  - Colour: saturation change and warmth shift\n  - Shadows: darkening and crushed share\nResults are compared against the previous measurement.	現在の設定で画面上のシーンに対する NR の出力を 60 回の評価にわたり計測し、ゲーム自身のフレームと比較します (「フレームの保持」をオンにするのが理想):\n  - ディテール: 追加された細帯域のディテール (sigma ~1.2 px vs ~3 px)\n  - ちらつき: 入力の変化を超えるフレーム間の出力変化\n  - カラー: 彩度の変化と色温度のシフト\n  - シャドウ: 暗化と黒つぶれの割合\n結果は前回の計測と比較されます。
+Measure detail stopped: this command list cannot be tracked (see the log).	ディテールの計測を停止: このコマンドリストは追跡できません (ログを参照)。
+Measure detail stopped: no sample completed (see the log).	ディテールの計測を停止: 完了したサンプルがありません (ログを参照)。
+Measure detail: the scene moved, too few still frames (turn on Hold frame).	ディテールを計測: シーンが動いたため静止フレームが不足しています (「フレームの保持」をオンにしてください)。
+# 2026-10-12: upstream's Quirks tab (b97dd476) and the Open Wiki button (899b9488), merged from optiscaler/master.
+Quirks	Quirks
+Quirks / ASI	Quirks / ASI
+Loaded ASI Plugins	読み込まれた ASI プラグイン
+Open Wiki	Wiki を開く
+Compatibility list, known issues and FG options explained	互換性リスト、既知の問題、FG オプションの説明
+# 2026-10-13: the session guard (docs/dlssnr/design/session-guard.md).
+Enable anyway	それでも有効にする
+Neural Rendering is off for this session. Your settings are unchanged.	このセッションでは Neural Rendering はオフです。設定は変更されていません。
+The last session ended without closing, soon after the model started.	前回のセッションは、モデルの起動直後に正常に終了しませんでした。
+The last two sessions ended without closing.	直近 2 回のセッションが正常に終了しませんでした。
+An earlier session ended without closing, and this has not been confirmed since.	以前のセッションが正常に終了せず、その後まだ確認されていません。
+# 2026-10-30: the NR minimum-driver gate (docs/dlssnr/design/driver-gate.md).
+Neural Rendering is off for this session: it needs NVIDIA driver %s or newer (%s or newer recommended), and this one is %s. Your settings are unchanged.	このセッションでは Neural Rendering はオフです: NVIDIA ドライバー %s 以降が必要で (%s 以降を推奨)、このドライバーは %s です。設定は変更されていません。
+this NVIDIA driver is too old for Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	この NVIDIA ドライバーは Neural Rendering には古すぎます。610.88 以降に更新してください (616.64 以降を推奨)
+NGX answered FAIL_OutOfDate: this NVIDIA driver cannot run Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	NGX が FAIL_OutOfDate を返しました: この NVIDIA ドライバーでは Neural Rendering を実行できません。610.88 以降に更新してください (616.64 以降を推奨)
+The last session ended without closing. If it was a crash, this one may too.	前回のセッションは正常に終了しませんでした。クラッシュだった場合、今回もクラッシュする可能性があります。
+# 2026-10-14: session guard v2: how the last session ended, and the numbers line.
+The last session ended with an error soon after the model started.	前回のセッションは、モデルの起動直後にエラーで終了しました。
+The last session ended with an error. If it was a crash, this one may too.	前回のセッションはエラーで終了しました。クラッシュだった場合、今回もクラッシュする可能性があります。
+The last session crashed while the model was running.	前回のセッションはモデルの実行中にクラッシュしました。
+The last session crashed, long after the model started. If the next one does too, Neural Rendering will be switched off.	前回のセッションは、モデルの起動からかなり後にクラッシュしました。次回もクラッシュした場合、Neural Rendering はオフになります。
+The graphics device was lost while the model was running in the last session.	前回のセッションで、モデルの実行中にグラフィックスデバイスが失われました。
+The graphics device was lost in the last session, long after the model started. If it happens again, Neural Rendering will be switched off.	前回のセッションで、モデルの起動からかなり後にグラフィックスデバイスが失われました。再び発生した場合、Neural Rendering はオフになります。
+Exception 0x%08X after the model had run for %lld s.	例外 0x%08X (モデルの実行開始から %lld 秒後)。
+Exit code %u after the model had run for %lld s.	終了コード %u (モデルの実行開始から %lld 秒後)。
+The model had run for %lld s.	モデルは %lld 秒実行されていました。
+# 2026-10-13: the pulse metric (docs/dlssnr/design/pulse-metric.md): the control under Compare and its help.
+Measure the light step	光のステップを計測
+How far the picture's light moves from one frame to the next because of the edit: the\nchange of log2(output light / frame light), in stops, averaged over two seconds.\nFrames where the model ran and frames where model cadence carried its edit are kept\napart, so the step on the model's frames against the carried ones is the cadence's\npulse as a number. A still scene reads cleanest; a pan adds its own changes.\n\nOne small measuring pass a frame while on. Also logged every 10 seconds.	編集によって画像の光がフレームごとにどれだけ動くか: log2(出力の光 / フレームの光) の変化を stop 単位で 2 秒間平均したものです。モデルが実行されたフレームと、モデルのケイデンスが編集を引き継いだフレームは区別されるため、モデルのフレームと引き継ぎフレームのステップの差が、ケイデンスの脈動を数値で表します。静止したシーンで最もきれいに読み取れます。パンすると、それ自体の変化が加わります。\n\nオンの間は毎フレーム小さな計測パスを 1 回実行します。10 秒ごとにログにも記録されます。
+Light step: the measuring pass could not be built.	光のステップ: 計測パスをビルドできませんでした。
+# 2026-10-13: model cadence smoothing (docs/dlssnr/design/cadence-smoothing.md): the control and its help.
+Smooth the model's frames	モデルのフレームをスムーズにする
+Without it, each new answer of the model replaces the carried one on the frame the model runs,\nand the picture's light steps there every N frames: the pulse. With it, the new answer is walked\nin from the carried one over the whole interval, in N equal steps, and the mean light of what the\ncadence shows may move by at most 1.5 stops a second while the frame's own light holds still.\n\nOnly what is shown changes: the stored edit and the model's own history stay as the model made\nthem. The previous answer stays on screen, fading, for up to N-1 frames longer, which can trail a\nlittle where things move fast. Measure it with "Measure the light step" under Compare.	これがオフの場合、モデルの新しい結果は、モデルが実行されるフレームで引き継ぎ中の結果を置き換えるため、画像の光は N フレームごとにそこで段差を生じます: これが脈動です。オンの場合、新しい結果は間隔全体にわたって N 段階の均等なステップで引き継ぎ中の結果から徐々に移行し、フレーム自体の光が静止している間、ケイデンスが表示するものの平均の光は毎秒最大 1.5 stop しか変化しません。\n\n変わるのは表示されるものだけです: 保存された編集とモデル自身の履歴は、モデルが作ったままです。前の結果は最大 N-1 フレーム長く画面上に残りながらフェードするため、速く動くものの周りで少し尾を引くことがあります。「比較」の「光のステップを計測」で計測してください。
+# 2026-10-13: the residual limit (docs/dlssnr/design/residual-limit.md): the control and its help.
+Residual limit	残差の上限
+The most the model may move any pixel's light, either way, in stops: 0.5 allows\nat most 1.41x brighter or darker, 1 at most 2x. Off at 0, the composition as\nit always was.\n\nAimed at blotches and flicker: a patch of wall the model brightens by a stop\none frame and not the next. It bounds the model's real corrections the same\nway, so start high and lower it until the blotches go. It sits inside the\nhighlight guard and can only narrow it.	モデルが任意のピクセルの光を動かせる最大量 (上下どちらにも、stop 単位)。0.5 では最大 1.41x まで明るくまたは暗く、1 では最大 2x まで。0 でオフ (従来どおりの合成)。\n\nしみやちらつきを対象としています: モデルがあるフレームでは 1 stop 明るくし、次のフレームではそうしない壁の一部などです。モデルの本来の補正も同じように制限されるため、高めから始めて、しみが消えるまで下げてください。これはハイライトガードの内側にあり、その範囲を狭めることしかできません。
+# 2026-10-13: HDR10 and scRGB at present (docs/dlssnr/design/hdr-present-conversion.md): the switch, its readout, its
+# Paper white, its timing line, and the reasons the conversion gives in the readout.
+HDR output (HDR10 and scRGB)	HDR 出力 (HDR10 と scRGB)
+The game presents in HDR: HDR10 (PQ, Rec.2020) or scRGB (linear light). Off, its\nframes are shown as the game rendered them and the pass does not run on them.\n\nOn, each frame is decoded to linear light, the pass runs on it as on any HDR\nframe, and it is encoded back with the game's own frame as the reference: every\npixel the pass leaves alone -- the interface, at strength zero -- keeps its exact\ncode. The model uses the display's Windows SDR white level times Paper white,\nor 203 nits when the display query is unavailable.\n\nExperimental: not yet measured on a real HDR display. HLG, studio-range or YCbCr\nPQ and other colour spaces stay declined.	ゲームが HDR で表示しています: HDR10 (PQ, Rec.2020) または scRGB (リニアライト)。オフの場合、フレームはゲームがレンダリングしたまま表示され、パスは実行されません。\n\nオンの場合、各フレームはリニアライトにデコードされ、他の HDR フレームと同様にパスが実行され、ゲーム自身のフレームを基準にエンコードし直されます: パスが手を加えないピクセル -- 強度ゼロのインターフェース -- はすべて正確なコード値を保ちます。モデルは、ディスプレイの Windows SDR ホワイトレベルにペーパーホワイトを掛けた値を使用し、ディスプレイの問い合わせが利用できない場合は 203 nits を使用します。\n\n実験的: 実際の HDR ディスプレイではまだ計測されていません。HLG、スタジオレンジまたは YCbCr の PQ、その他の色空間は引き続き対象外です。
+HDR10	HDR10
+scRGB	scRGB
+%s, SDR white %.0f nits x %.2f	%s、SDR ホワイト %.0f nits x %.2f
+Off: this %s swapchain is shown as the game rendered it.	オフ: この %s スワップチェーンはゲームがレンダリングしたまま表示されます。
+Paper white (x the display's SDR white)	ペーパーホワイト (x ディスプレイの SDR ホワイト)
+The same Paper white as on any other frame, measured here against the display's\nSDR white shown above: 1.00 uses that value. Raise it if the\ngame's own HDR paper white is set brighter, lower it if darker. It changes what\nthe model is shown, not the frame where the pass leaves it alone.	他のフレームと同じペーパーホワイトですが、ここでは上に表示されたディスプレイの SDR ホワイトを基準に計測されます: 1.00 でその値を使用します。ゲーム自身の HDR ペーパーホワイトがより明るく設定されている場合は上げ、暗い場合は下げてください。変わるのはモデルに渡されるものであり、パスが手を加えない部分のフレームは変わりません。
+HDR conversion, outside the dispatch: %.3f ms = %.3f ms decode + %.3f ms encode (sample %llu, %.1f s since recording)	HDR 変換 (dispatch 外): %.3f ms = デコード %.3f ms + エンコード %.3f ms (サンプル %llu、記録から %.1f 秒)
+the swapchain's format is typeless, which the HDR conversion does not take; the frame is shown as the game rendered it	スワップチェーンのフォーマットが typeless で、HDR 変換は対応していません。フレームはゲームがレンダリングしたまま表示されます
+nothing is known about this swapchain's colour space, and the HDR conversion does not guess; the frame is shown as the game rendered it	このスワップチェーンの色空間については何も分からず、HDR 変換は推測しません。フレームはゲームがレンダリングしたまま表示されます
+the swapchain changed format after its colour space was set, and the HDR conversion waits for it to be set again; the frame is shown as the game rendered it	色空間の設定後にスワップチェーンのフォーマットが変わったため、HDR 変換は再設定を待っています。フレームはゲームがレンダリングしたまま表示されます
+the swapchain's colour space was recorded for another format; the frame is shown as the game rendered it	スワップチェーンの色空間は別のフォーマット用に記録されたものです。フレームはゲームがレンダリングしたまま表示されます
+the swapchain is PQ in studio range or YCbCr, which the HDR conversion does not take; the frame is shown as the game rendered it	スワップチェーンがスタジオレンジの PQ または YCbCr で、HDR 変換は対応していません。フレームはゲームがレンダリングしたまま表示されます
+the swapchain is ten-bit with a linear (scRGB) colour space, which the HDR conversion does not take; the frame is shown as the game rendered it	スワップチェーンがリニア (scRGB) 色空間の 10 ビットで、HDR 変換は対応していません。フレームはゲームがレンダリングしたまま表示されます
+the swapchain is FP16 with a colour space other than scRGB, which the HDR conversion does not take; the frame is shown as the game rendered it	スワップチェーンが scRGB 以外の色空間の FP16 で、HDR 変換は対応していません。フレームはゲームがレンダリングしたまま表示されます
+the swapchain's colour space is HLG, Rec.2020 with a gamma curve or another the HDR conversion does not take; the frame is shown as the game rendered it	スワップチェーンの色空間が HLG、ガンマカーブ付きの Rec.2020、または HDR 変換が対応していないその他のものです。フレームはゲームがレンダリングしたまま表示されます
+this build carries no HDR conversion shader; the frame is shown as the game rendered it	このビルドには HDR 変換シェーダーが含まれていません。フレームはゲームがレンダリングしたまま表示されます
+the HDR conversion's pass could not be built; the frame is shown as the game rendered it	HDR 変換のパスをビルドできませんでした。フレームはゲームがレンダリングしたまま表示されます
+this GPU cannot read this swapchain's format in a shader or store to it from one (typed UAV store), so the HDR conversion cannot run; the frame is shown as the game rendered it	この GPU はこのスワップチェーンのフォーマットをシェーダーで読み取れないか、シェーダーから書き込めない (typed UAV store) ため、HDR 変換を実行できません。フレームはゲームがレンダリングしたまま表示されます
+the HDR conversion's textures could not be created; the frame is shown as the game rendered it	HDR 変換のテクスチャを作成できませんでした。フレームはゲームがレンダリングしたまま表示されます
+the HDR conversion was built for another D3D12 device; the frame is shown as the game rendered it	HDR 変換は別の D3D12 デバイス用にビルドされています。フレームはゲームがレンダリングしたまま表示されます
+the backbuffer's format is not the swapchain's, so the HDR conversion does not trust its colour space; the frame is shown as the game rendered it	バックバッファのフォーマットがスワップチェーンのものと異なるため、HDR 変換はその色空間を信頼しません。フレームはゲームがレンダリングしたまま表示されます
+# 2026-10-13: the comparison capture (docs/dlssnr/design/comparison-capture.md): the button, its help and its states.
+Capture original and processed	オリジナルと処理後をキャプチャ
+Saves the next frame twice, as the pass read it and as the pass wrote it, into the\nretoque-captures folder beside OptiScaler. Each file carries a record of the build, the route,\nthe model and every setting that shapes the picture, and a .json beside them says the same.\n\nA display-referred frame is saved as PNG, a linear HDR frame as PFM (32-bit float). On the\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the\nupscaler's output, before the game's own tonemapper, post-processing and interface.\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler\nasks for the same capture from outside the game on D3D12 routes.	次のフレームを、パスが読み取った状態と書き込んだ状態の 2 回、OptiScaler の隣の retoque-captures フォルダーに保存します。各ファイルにはビルド、ルート、モデル、画像に影響するすべての設定の記録が含まれ、隣の .json にも同じ内容が記載されます。\n\nディスプレイ基準のフレームは PNG、リニア HDR フレームは PFM (32 ビット float) で保存されます。Present ルートではメニュー描画前の完成フレーム、アップスケーラーの後ではアップスケーラーの出力 (ゲーム自身のトーンマッパー、ポストプロセス、インターフェースの前) です。\n\n最新の 64 ペアが保持されます。dlssnr-capture.trigger という名前のファイルを OptiScaler の隣に置くと、D3D12 ルートではゲーム外から同じキャプチャを要求できます。
+Saved %s (the pair and its .json)	%s を保存しました (ペアとその .json)
+Turn off Compare to capture the result.	結果をキャプチャするには「比較」をオフにしてください。
+Turn off the debug view to capture the result.	結果をキャプチャするにはデバッグビューをオフにしてください。
+Not with the driver proxy: it returns before the pass writes the frame.	ドライバープロキシでは使用できません: パスがフレームを書き込む前に戻るためです。
+Capture is unavailable on this route; native Vulkan requires the after-upscale pass.	このルートではキャプチャを使用できません。ネイティブ Vulkan ではアップスケール後のパスが必要です。
+The capture folder could not be created (see the log).	キャプチャフォルダーを作成できませんでした (ログを参照)。
+No frame reached the pass in time; nothing was captured.	時間内にパスに届いたフレームがありません。何もキャプチャされませんでした。
+Earlier captures are still held for the GPU; try again shortly.	以前のキャプチャがまだ GPU のために保持されています。しばらくしてから再試行してください。
+The readback buffers could not be created.	リードバックバッファを作成できませんでした。
+The GPU never confirmed the copies; nothing was written, and the capture is off for this session.	GPU がコピーを確認しませんでした。何も書き込まれず、このセッションではキャプチャがオフになります。
+The writer could not be started.	ライターを開始できませんでした。
+The files could not be written (see the log).	ファイルを書き込めませんでした (ログを参照)。
+This frame's format is not one the capture can write yet.	このフレームのフォーマットは、キャプチャがまだ書き込めないものです。
+The two surfaces differ in shape; nothing was captured.	2 つのサーフェスの形状が異なります。何もキャプチャされませんでした。
+Waiting for the next frame the pass writes...	パスが書き込む次のフレームを待機しています...
+Waiting for the GPU to finish the copies...	GPU がコピーを完了するのを待機しています...
+Writing the files...	ファイルを書き込んでいます...
+# 2026-10-15: the comparison capture's review fixes: a surface the copy cannot take, a failure while the frame was
+# recorded, and a request made while one is under way.
+This frame is not a single-sample 2D texture; nothing was captured.	このフレームはシングルサンプルの 2D テクスチャではありません。何もキャプチャされませんでした。
+The capture failed while the frame was being described or recorded; nothing was captured (see the log).	フレームの記述または記録中にキャプチャが失敗しました。何もキャプチャされませんでした (ログを参照)。
+A capture is already under way.	キャプチャはすでに進行中です。
+This route's commands cannot be followed to the GPU's completion; nothing was captured (see the log).	このルートのコマンドは GPU の完了まで追跡できません。何もキャプチャされませんでした (ログを参照)。
+# 2026-10-13: the LSFG panel under FSR FG Settings (study branch; tools/lsfg-study/MFG_PRESENTER.md): its controls, the
+# multiplier and what it says about the swapchain the game started with, and the status line.
+LSFG 3.1 Interpolator (Lossless Scaling)	LSFG 3.1 インターポレーター (Lossless Scaling)
+Replaces FSR-FG's internal optical flow interpolation with Lossless Scaling's LSFG 3.1.\nNeeds lsfg-vk.dll from Lossless Scaling (auto-detected or configured in [LSFG] DllPath).	FSR-FG 内部のオプティカルフロー補間を Lossless Scaling の LSFG 3.1 に置き換えます。\nLossless Scaling の lsfg-vk.dll が必要です (自動検出、または [LSFG] DllPath で設定)。
+Enable LSFG	LSFG を有効にする
+Enable LSFG 3.1 frame interpolation under FSR-FG.\nWhen disabled or building, FSR-FG uses standard FFX interpolation.	FSR-FG で LSFG 3.1 フレーム補間を有効にします。\n無効時またはビルド中は、FSR-FG は標準の FFX 補間を使用します。
+Flow Scale	フロースケール
+Internal optical flow pyramid resolution relative to display frame.\n1.00 = Native resolution (highest quality)\n0.85 = Balanced quality/performance\n0.50 = Half resolution (faster, lower VRAM)	表示フレームに対する内部オプティカルフローピラミッドの解像度。\n1.00 = ネイティブ解像度 (最高品質)\n0.85 = 品質とパフォーマンスのバランス\n0.50 = 半分の解像度 (高速、VRAM 削減)
+Performance Mode	パフォーマンスモード
+Halves feature channels across motion pyramids.\nCheaper on GPU with slightly softer motion edges.	モーションピラミッド全体で特徴チャンネルを半分にします。\nGPU 負荷が軽くなり、動きのエッジがわずかにソフトになります。
+Multiplier	倍率
+%dx (after a restart)	%dx (再起動後)
+Frames shown per real frame. 2x adds one generated frame; 3x and 4x add two or three,\npresented by OptiScaler's own frame-generation swapchain, a fork of FFX's.\n\nThe swapchain is chosen when the game creates it. Started at 3x or 4x, every choice\napplies at the next frame. Started at 2x, 3x and 4x are saved and need a restart.	実フレームあたりに表示されるフレーム数。2x は生成フレームを 1 枚追加し、3x と 4x は 2 枚または 3 枚を追加します。これらは OptiScaler 独自のフレーム生成スワップチェーン (FFX のもののフォーク) によって表示されます。\n\nスワップチェーンはゲームがそれを作成するときに選択されます。3x または 4x で開始した場合、どの選択も次のフレームから適用されます。2x で開始した場合、3x と 4x は保存され、再起動が必要です。
+Now %dx: the game started with FFX's swapchain, which shows one generated frame. Save Settings and restart the game for %dx.	現在 %dx: ゲームは生成フレームを 1 枚表示する FFX のスワップチェーンで起動しました。%dx にするには「設定を保存」してゲームを再起動してください。
+Now 2x, while FFX interpolates in LSFG's place (see Status).	現在 2x。FFX が LSFG の代わりに補間しています (「ステータス」を参照)。
+Status: Disabled (using FFX interpolation)	ステータス: 無効 (FFX 補間を使用)
+Status: Active at %ux%u (%.2f ms/frame)	ステータス: %ux%u で有効 (%.2f ms/フレーム)
+Status: Active at %ux%u	ステータス: %ux%u で有効
+Status: %s	ステータス: %s
+Status: Waiting for frames	ステータス: フレームを待機中
+
+HDR swapchain description unavailable; the frame stays original	HDR スワップチェーンの記述を取得できません。フレームはオリジナルのままです
+HDR conversion resource contract unavailable; the frame stays original	HDR 変換のリソース契約を利用できません。フレームはオリジナルのままです
+Windows SDR white	Windows の SDR ホワイト
+203-nit fallback	203 nit のフォールバック
+HDR conversion did not produce a submitted frame	HDR 変換が送信済みフレームを生成しませんでした
+
+HDR present conversion is inactive; the game's original frame is shown.	HDR Present 変換は非アクティブです。ゲームのオリジナルフレームが表示されます。
+
+Show all settings	すべての設定を表示
+Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Neural Rendering パネル全体を表示します。非表示の設定も有効なまま変更されません。
+
+Minimum brightness	最小輝度
+Final luminance relative to the original frame: 0.75 keeps at least 75 percent.\nApplied once, after composition, including replace curves. 0 is off.\nRestores darkened pixels toward the original; does not cap individual channels.\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB.\nLater game processing and temporal stabilization are outside this limit.	元のフレームに対する最終輝度: 0.75 で少なくとも 75 パーセントを維持します。\n合成後に 1 回適用され、置換カーブにも適用されます。0 でオフ。\n暗くなったピクセルを元に向けて戻します。個々のチャンネルは制限しません。\nHDR ではリニアバッファの輝度を、パススルーではトーンマップ済みの RGB を使用します。\n後段のゲーム処理やテンポラル安定化はこの制限の対象外です。
+Adapt cadence to motion	ケイデンスをモーションに適応
+Adaptive cadence: running the model every frame until feedback permits reuse.	適応ケイデンス: フィードバックで再利用が許可されるまで毎フレームモデルを実行中。
+Shortens the interval when motion or rejected carry coverage is high; lengthens after 300 ms of calm.\nCadence above is the maximum. Delayed GPU feedback cannot catch a cut on its first frame.\nRequires a restart when enabled after NR has already run. Missing feedback runs the model every frame.\nExperimental: measured in the moving fixture, not validated in games. Off adds no probe work.	モーションや引き継ぎカバレッジの棄却が多いときは間隔を短くし、300 ms 落ち着くと長くします。\n上のケイデンスが最大値です。遅延した GPU フィードバックはカットの最初のフレームを捉えられません。\nNR がすでに実行された後に有効にした場合は再起動が必要です。フィードバックがない場合は毎フレームモデルを実行します。\n実験的: 動くテスト環境で計測済みですが、ゲームでは検証されていません。オフならプローブ処理は追加されません。
+Record replay clip	リプレイクリップを記録
+Recording: %u frames, %u written	記録中: %u フレーム、%u 書き込み済み
+Clip of %u frames written to %s (%s)	%u フレームのクリップを %s に書き込みました (%s)
+Records about six seconds of what the pass receives -- the upscaler's colour, depth and motion\nvectors, and the game's parameters -- into the dlssnr-replay folder beside OptiScaler, for the\noffline replay harness (tests/dlssnr-loopback --replay-nr). Nothing is recorded until pressed.\n\nAbout 50-60 MB a frame at 3440x1440: a clip is 1-4 GB. Dropping a file named\ndlssnr-capture.trigger containing the word replay asks for the same clip from outside the game.	パスが受け取るもの -- アップスケーラーのカラー、デプス、モーションベクトル、ゲームのパラメーター -- を約 6 秒間、OptiScaler の隣の dlssnr-replay フォルダーに記録します。オフラインのリプレイハーネス (tests/dlssnr-loopback --replay-nr) 用です。押すまで何も記録されません。\n\n3440x1440 で 1 フレームあたり約 50-60 MB: クリップは 1-4 GB になります。replay という単語を含む dlssnr-capture.trigger という名前のファイルを置くと、ゲーム外から同じクリップを要求できます。
+# 2026-10-27: the FPS overlay's section titles from upstream's overlay rework (#1238, 5f6a2e69).
+Presets	プリセット
+Layout	レイアウト
+Text	テキスト
+Colors	色
+# 2026-10-30: the NR panel's "Copy NR diagnostics" button (docs/dlssnr/design/diagnostic-export.md). The report it copies stays English.
+Copy NR diagnostics	NR 診断情報をコピー
+Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths are replaced by <path>. Assembled only when pressed; the report itself is in English.	Neural Rendering が検出したものと使用したもの -- ビルド、プラットフォーム、ルート、ガイド、設定、最新の確認済み GPU サンプル、LSFG -- のプレーンテキストレポートをバグ報告用にコピーします。絶対パスは <path> に置き換えられます。押したときにのみ作成され、レポート自体は英語です。
+Copied to the clipboard.	クリップボードにコピーしました。
+# 2026-10-30: the NR panel's line while the game runs its own NR through Streamline (docs/dlssnr/design/streamline-native-nr.md).
+The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	ゲームが独自の NR (Streamline DLSS-NR) を実行しているため、NR を二重に適用しないようこのパスは停止します。ゲームの NR が停止してから 5 秒後に再び実行されます。
+# 2026-10-30: the model's own VRAM count beside the status line (docs/dlssnr/design/model-vram-stats.md).
+(model: %llu MiB)	(モデル: %llu MiB)
+
+# 2026-11-01: independent historical Present and guide-capture GPU samples.
+%s: no confirmed sample (pending %u, discarded %llu; %s)	%s: 確認済みサンプルなし (保留 %u、破棄 %llu。%s)
+%s: %.3f ms (historical sample %llu, %.1f s since recording)	%s: %.3f ms (履歴サンプル %llu、記録から %.1f 秒)
+Guides: %s; capture %llu; guide extent %ux%u, output %ux%u	ガイド: %s。キャプチャ %llu。ガイド範囲 %ux%u、出力 %ux%u
+Game capture %llu, age at selection %llu ms	ゲームキャプチャ %llu、選択時の経過 %llu ms
+Observed Present %llu; boundary %s, HDR %s, NR recorded %s	観測された Present %llu。境界 %s、HDR %s、NR 記録 %s
+GPU route includes Dispatch and HDR conversion. CPU waits and submission are excluded.	GPU ルートには Dispatch と HDR 変換が含まれます。CPU 待機と送信は除外されます。
+Guide capture uses a separate producer recording. Do not add it to a Present sample.	ガイドのキャプチャは別のプロデューサー記録を使用します。Present サンプルに加算しないでください。
+Present and guide capture each count their own eligible regions.	Present とガイドのキャプチャは、それぞれ自身の対象領域をカウントします。
+Present route GPU	Present ルート GPU
+Guide capture GPU	ガイドキャプチャ GPU
+Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)	Dispatch 呼び出し %.3f ms、Dispatch 外 %.3f ms (同一記録)
+No Dispatch call in this recording: total only	この記録には Dispatch 呼び出しがありません: 合計のみ
+game depth + motion	ゲームのデプス + モーション
+zero depth + synthesized motion	ゼロデプス + 合成モーション
+zero depth + motion	ゼロデプス + ゼロモーション
+unknown	不明
+no-sample	サンプルなし
+yes	はい
+no	いいえ
+
+The capture recording was discarded or invalidated; nothing was written.	キャプチャ記録が破棄または無効化されました。何も書き込まれませんでした。
+# Native Vulkan pre-upscale experiment
+Stage: before the upscaler requested (native Vulkan)	ステージ: アップスケーラーの前を要求 (ネイティブ Vulkan)
+Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;\nthere is no after-upscale NR fallback. One outstanding recording is admitted.\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation.\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.	実験的なネイティブ Vulkan の NGX 入力ルート。非対応の入力では元の Color を維持します。\nアップスケール後の NR へのフォールバックはありません。未完了の記録は 1 つだけ許可されます。\n起動時のオプトイン、検証済みのレイアウト/所有権、変更のない準備完了ジェネレーションが必要です。\n再ビルドや証拠の欠如がある場合は NR をスキップします。DOOM Eternal での検証はまだ保留中です。
+
+# Controls introduced with upstream 34d492d6. Vulkan API mode names are retained.
+Flip HUDless	HUDless を反転
+Present Mode	Present モード
+Upscaler Debug View	アップスケーラーのデバッグビュー
+Game's	ゲームの設定
+Game's present mode: %s	ゲームの Present モード: %s
+Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	HUDless テクスチャを反転します\nゲームは Opti.Hudless.Flip パラメーターでこれを要求することもできます
+Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	ゲームの Vulkan Present モードをオーバーライドします。ゲームは適用のためにスワップチェーンを再作成します。\n\nImmediate: V-Sync なし、ティアリングあり。\nMailbox: ティアリングなし、最新のフレームがキュー内のフレームを置き換えます。\nFIFO: V-Sync。\nFIFO Relaxed: V-Sync、リフレッシュレートを下回るとティアリングが発生します。\nFIFO Latest Ready: V-Sync、各リフレッシュで準備済みの最新フレームを表示します。\n\nMailbox と FIFO Latest Ready は、リフレッシュレートを超える生成フレームを破棄することがあります。\nディスプレイが対応するモードのみ表示されます。

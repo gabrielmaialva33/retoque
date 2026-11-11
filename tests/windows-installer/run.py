@@ -30,6 +30,9 @@ PACKAGER = REPO / 'tools' / 'package_release.ps1'
 IMAGE = ('mcr.microsoft.com/powershell:lts-7.4-ubuntu-22.04'
          '@sha256:663a172849444279d8e7b50e19977b6e42380eae6856bdc8931ca08e2e03e92a')
 
+# The optional menu text packs package_release.ps1 ships (retoque/translations/README.md).
+LANG_PACKS = ('pt-BR', 'de', 'es', 'fr', 'ja', 'ko', 'pl', 'ru', 'zh-CN')
+
 # What the cases need under one root, at the paths deploy-to-game.sh expects (it finds OptiScaler.ini at
 # its own ../OptiScaler.ini).
 STAGE = {
@@ -41,7 +44,8 @@ STAGE = {
     'tools/install-linux.sh': REPO / 'tools' / 'install-linux.sh',
     'tools/install-windows.cmd': CMD,
     'README.md': REPO / 'README.md',
-    'retoque/translations/optional/pt-BR.lang': REPO / 'retoque/translations/optional/pt-BR.lang',
+    **{f'retoque/translations/optional/{pack}.lang': REPO / f'retoque/translations/optional/{pack}.lang'
+       for pack in LANG_PACKS},
     'retoque/translations/README.md': REPO / 'retoque/translations/README.md',
 }
 

@@ -224,7 +224,16 @@ class Dictionary
     }
 
     size_t Size() const { return entries_.size(); }
+
+    template <typename Visit> void ForEachTranslation(Visit&& visit) const
+    {
+        for (const auto& entry : entries_)
+            visit(std::string_view(entry.second));
+    }
 };
+
+// The dictionary OptiScaler.lang beside the DLL gave this process (empty without one); loaded once.
+const Dictionary& Active();
 
 // Exact-source lookup for display text; Label also keeps each control's ImGui identity stable (see LabelValue).
 const char* Tr(const char* source);

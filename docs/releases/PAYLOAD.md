@@ -18,7 +18,9 @@ The archive contains only the files `retoque-core` and the app require to instal
 - `nvngx.dll_dlssnr.dll` (built x64 NR forwarder DLL; its PE `VERSIONINFO` fixed file version must match `OptiScaler.dll`, and it must export `dlssnr_call_create`, `dlssnr_call_evaluate`, `dlssnr_call_set_extras` and `dlssnr_abi_version`)
 - `OptiScaler.ini` (configured with release defaults matching `tools/package_release.ps1`: `LogToFile=true`, `LogLevel=2`, `ShortcutKey=0x24`, with no `Enabled=true` key switched on by default)
 - `Licenses/` (including `Licenses/RenoDX_ATTRIBUTION.txt`)
-- `translations/README.md` and `translations/optional/pt-BR.lang` (inactive optional dictionary; never an active `OptiScaler.lang` at the archive root)
+- `translations/README.md` and `translations/optional/<locale>.lang` for `pt-BR`, `de`, `es`, `fr`, `ja`, `ko`, `pl`,
+  `ru` and `zh-CN` (inactive optional menu dictionaries; never an active `OptiScaler.lang` at the archive root). The
+  app requires only `pt-BR.lang`, so payloads published before the other packs still import
 - `OptiScaler/` (optional support directory when present in the build output)
 - `SHA256SUMS` (member checksums inside the archive, in addition to the release-level `SHA256SUMS` asset)
 

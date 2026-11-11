@@ -1669,7 +1669,7 @@ void RenderMenu(Config* config, float menuResScale)
                    "\npass costs more than you want to pay for the detail it returns."
                    "\n\nThe frame itself stays at full detail whatever this says -- only the"
                    "\nmodel's own work is done small."
-                   "\n\nauto is 100% on RTX 40 and later and 50% on RTX 20 and 30: an RTX 3060"
+                   "\n\nauto is full size on RTX 40 and later and half size on RTX 20 and 30: an RTX 3060"
                    "\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces"
                    "\nit; Auto puts it back.");
 
@@ -1742,7 +1742,7 @@ void RenderMenu(Config* config, float menuResScale)
                        "\nthan the small raster holds. D3D12 only, and it needs nvngx_dlss.dll. Where it"
                        "\ncannot run -- native Vulkan, before the upscaler, no real depth and motion,"
                        "\nwhile it starts -- Matched residual runs, and the line below says why."
-                       "\n\nNo effect at 100% or above: there is no residual to carry and all four are"
+                       "\n\nNo effect at full size or above: there is no residual to carry and all four are"
                        "\nidentical (supersampling brings its answer down to frame size before this)."
                        "\n\nFrom hhkbble's multi-pass work on this fork; the DLSS enlargement is wilsjo2's.");
 
@@ -2227,8 +2227,8 @@ void RenderMenu(Config* config, float menuResScale)
                                 config->DlssNrScanTrim.value_or_default());
 
                             ImGui::TextColored(ImVec4(0.45f, 0.8f, 0.45f, 1.0f),
-                                               Localization::Tr("Scan %.5f  ->  white point %.2f   (%u point%s)"),
-                                               liveScan, w, (unsigned) anchors.size(), anchors.size() == 1 ? "" : "s");
+                                               Localization::Tr("Scan %.5f  ->  white point %.2f   (points: %u)"),
+                                               liveScan, w, (unsigned) anchors.size());
                         }
                     }
 

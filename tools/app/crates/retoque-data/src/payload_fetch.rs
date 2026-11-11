@@ -1559,6 +1559,20 @@ pub(crate) mod tests {
         let record = cache.import_archive(&release, &zip_bytes, &sums_bytes).unwrap();
         assert_eq!(record.file_version.as_deref(), Some("10.0.0.1"));
         assert!(record.payload_dir.join("OptiScaler/support.txt").is_file());
+        // Every optional menu text pack ships, byte for byte, and none is active at the archive root.
+        for pack in ["pt-BR", "de", "es", "fr", "ja", "ko", "pl", "ru", "zh-CN"] {
+            let rel = format!("translations/optional/{pack}.lang");
+            assert!(is_allowed_payload_path(&rel), "{rel} must be allowed");
+            assert!(record.files.contains_key(&rel), "{rel} missing from the payload record");
+            assert_eq!(
+                std::fs::read(record.payload_dir.join(&rel)).unwrap(),
+                std::fs::read(repo_root.join("retoque").join(&rel)).unwrap(),
+                "{rel} differs from the repository pack"
+            );
+        }
+        assert!(!record.payload_dir.join("OptiScaler.lang").exists());
+        assert!(!is_allowed_payload_path("translations/ja.lang"));
+        assert!(!is_allowed_payload_path("translations/optional/ja/ja.lang"));
 
         // Guard 1: Mismatched forwarder version must fail.
         let bad_fwd = versioned_pe(
