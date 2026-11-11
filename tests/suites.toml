@@ -86,6 +86,30 @@ tier = "host"
 timeout = 120
 summary = "Offline replay seam: logical clock, adapter gate/versions/outcome, decision clocks and exports."
 
+[nr-window-host]
+path = "nr-window-host"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "NR on any window, phase 1: the RetoqueWindow_* seam compiled against fakes is inert without RETOQUE_WINDOW_HOST=1 (every export, every order) and keeps its rules inside a session (exact value, one owner, refusals before the pass, wrapped swapchains refused, no nesting, one session); RunPresentPass's signature and production callers unchanged, exports outside Source.def."
+
+[nr-window-host-rules]
+path = "nr-window-host-rules"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "NR on any window, phase 2: the capture host's pure rules (client crop with Magpie's maximized case, candidates and display affinity, identity, pause/stop, adapter, frame pacing, source age, command line, JSON events, stdin commands) under sanitizers, and the Windows units' source contract (pch.h first, DLL loaded after the D3D objects)."
+
+[window-capture-probe]
+path = "window-capture-probe"
+domain = "nr"
+requires = ["python", "wine-toolchain"]
+tier = "wine"
+timeout = 900
+summary = "NR on any window, phase 0: builds the Windows capture probe (WGC support, own and target window frames, display affinity, DComp composition swapchain on D3D12, DXGI duplication) with the MSVC kit under the compiler lock. Build only: it is run by hand on Windows and parsed with --parse."
+
 [nr-zero-guides]
 path = "nr-zero-guides"
 domain = "nr"

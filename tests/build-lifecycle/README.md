@@ -35,8 +35,9 @@ inherited by compiler children. The runtime directory must already exist.
 Each invocation retains its own `x64/logs/<timestamp>-<pid>-<id>/` directory with
 one file per project that was started, including failures. Compiler stdout and
 stderr go directly to a regular file; Wine never receives a stdout pipe from
-this entry point. The files are replayed after each step. Both projects must
-succeed before the pair is prepared and published to `x64/out/`. Each file
+this entry point. The files are replayed after each step. All three projects (the
+forwarder, OptiScaler and the window host, `RetoqueWindowHost.exe`) must succeed before the
+files are prepared and published together to `x64/out/`. Each file
 replacement is atomic and ordinary promotion errors roll back earlier
 replacements. SIGINT/SIGTERM are blocked around each replacement plus its rollback record and while restoring prior files. The pair is **not** atomic for concurrent readers, and abrupt
 process/system failure between replacements can leave a mixed pair.

@@ -28,6 +28,7 @@ qualification. External DLL telemetry is documented in [ExternalDlssgTelemetry](
 | Module | Entry |
 |---|---|
 | Neural Rendering | [NR module](../retoque/dlssnr/README.md), [forwarder](../retoque/dlssnr/forwarder/README.md) |
+| NR on any window | [Capture host](../retoque/window_host/README.md), [design](dlssnr/design/nr-anything.md) |
 | Synthesized motion | [Estimator and provenance](../retoque/shaders/synth_motion/README.md) |
 | LSFG | [Runtime/presenter](../retoque/lsfg/README.md), [study tooling](../tools/lsfg-study/README.md) |
 | Optional translations | [Text packs](../retoque/translations/README.md) |

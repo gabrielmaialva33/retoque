@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    RetoqueWindowHost.exe: NR on any window, by capture (docs/dlssnr/design/nr-anything.md). A console program that
+    captures one window with Windows Graphics Capture and runs the production OptiScaler.dll's present pass on a
+    swapchain of its own through the RetoqueWindow_* exports. Windows only; built by tools/build-local.sh beside the
+    DLL and the forwarder.
+  -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{3E8A5C21-9B47-4D2E-8F31-6A0C5D7B9E14}</ProjectGuid>
+    <RootNamespace>window_host</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <TargetName>RetoqueWindowHost</TargetName>
+    <TargetExt>.exe</TargetExt>
+    <OutDir>$(SolutionDir)x64\$(Configuration)\window_host\</OutDir>
+    <IntDir>$(SolutionDir)x64\$(Configuration)\window_host\obj\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ConformanceMode>true</ConformanceMode>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>windowsapp.lib;d3d11.lib;d3d12.lib;dxgi.lib;dwmapi.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="Capture.cpp" />
+    <ClCompile Include="Devices.cpp" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="NrSeam.cpp" />
+    <ClCompile Include="Output.cpp" />
+    <ClCompile Include="Sources.cpp" />
+    <ClCompile Include="Transport.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\dlssnr\DlssNr_WindowHost.h" />
+    <ClInclude Include="Capture.h" />
+    <ClInclude Include="Devices.h" />
+    <ClInclude Include="Geometry.h" />
+    <ClInclude Include="NrSeam.h" />
+    <ClInclude Include="Output.h" />
+    <ClInclude Include="Pacing.h" />
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="Policy.h" />
+    <ClInclude Include="Protocol.h" />
+    <ClInclude Include="Sources.h" />
+    <ClInclude Include="Transport.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

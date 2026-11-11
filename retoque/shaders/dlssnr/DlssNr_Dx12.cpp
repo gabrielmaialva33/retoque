@@ -6306,6 +6306,8 @@ bool IsRunning() { return g_nr.feature != nullptr && !g_nr.failed; }
 
 const char* FailureReason() { return g_nr.failed ? g_nr.reason : ""; }
 
+unsigned long long PassesRecorded() { return g_passesRecorded.load(); }
+
 std::optional<unsigned long long> ModelVramBytes()
 {
     const uint64_t bytes = g_nr.modelVramBytes;

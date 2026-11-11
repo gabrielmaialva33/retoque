@@ -51,7 +51,8 @@ project = sys.argv[1]
 configuration = next(a.split('=', 1)[1] for a in sys.argv if a.startswith('/p:Configuration='))
 output = Path('x64')/configuration
 output.mkdir(parents=True, exist_ok=True)
-name = 'nvngx.dll_dlssnr.dll' if 'forwarder' in project else 'OptiScaler.dll'
+name = ('nvngx.dll_dlssnr.dll' if 'forwarder' in project else
+        'RetoqueWindowHost.exe' if 'window_host' in project else 'OptiScaler.dll')
 if os.environ.get('FAIL_STEP') == ('first' if 'forwarder' in project else 'second'):
     print('intentional compiler failure', flush=True)
     sys.exit(23)
@@ -99,18 +100,19 @@ print('compiled '+name, flush=True)
         code, output = self.invoke(('Debug', '/p:Custom=a b'))
         self.assertEqual(code, 0, output)
         calls = [json.loads(s) for s in (self.root/'calls.jsonl').read_text().splitlines()]
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         self.assertIn('forwarder', calls[0]['args'][0])
         self.assertIn('OptiScaler', calls[1]['args'][0])
+        self.assertIn('window_host', calls[2]['args'][0])
         for call in calls:
             for arg in ('/p:Configuration=Debug', '/p:Platform=x64', '/p:CL_MPCount=16',
                         '/p:PreBuildEventUseInBuild=false', '/p:PostBuildEventUseInBuild=false', '/p:Custom=a b'):
                 self.assertIn(arg, call['args'])
             self.assertEqual(call['prefix'], self.env['WINEPREFIX'])
             self.assertEqual(call['debug'], '-all')
-        for name in ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll'):
+        for name in ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'RetoqueWindowHost.exe'):
             self.assertEqual((self.root/'x64/out'/name).read_text(), 'new-'+name)
-        self.assertEqual(len(list((self.root/'x64/logs').glob('*/build-*.log'))), 2)
+        self.assertEqual(len(list((self.root/'x64/logs').glob('*/build-*.log'))), 3)
         with (self.root/'runtime/msvc-prefix.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX|fcntl.LOCK_NB)
 
@@ -196,7 +198,8 @@ for entry in Path('/proc/self/fd').iterdir():
     except FileNotFoundError:
         pass
 config=next(a.split('=',1)[1] for a in sys.argv if a.startswith('/p:Configuration='))
-name='nvngx.dll_dlssnr.dll' if 'forwarder' in sys.argv[1] else 'OptiScaler.dll'
+name=('nvngx.dll_dlssnr.dll' if 'forwarder' in sys.argv[1] else
+      'RetoqueWindowHost.exe' if 'window_host' in sys.argv[1] else 'OptiScaler.dll')
 p=Path('x64')/config/name
 p.parent.mkdir(parents=True,exist_ok=True)
 p.write_text('new')

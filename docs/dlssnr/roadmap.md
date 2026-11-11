@@ -46,6 +46,10 @@ Diagnostic export is implemented ([diagnostic-export](design/diagnostic-export.m
 in-game check of "Copy NR diagnostics": detected versus used inputs, pending/stale timing, NR off and redaction.
 Host coverage does not validate the clipboard result in a running game.
 
+## In progress
+
+NR on any window ([nr-anything](design/nr-anything.md)): NR on another program's window by capture, Windows only, approved by the owner on 2026-11-11 with version 1 scoped to no upscaling and no depth estimation. Phases 0-2 (probe, gated DLL export, capture host with a preview) are built and host-tested, not qualified. Next: the first native Windows run on the RTX 3060 and its probe table, then the overlay (phase 3) and the app screen "NR on any window" (phase 4).
+
 ## Parked or deliberately not promoted
 
 Real depth without an upscaler remains gated on the value experiment in
