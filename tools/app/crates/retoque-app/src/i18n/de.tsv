@@ -202,6 +202,7 @@ st.nr_on	NR an
 st.nr_off	NR aus
 inst.proxy	Name der Ladedatei
 inst.proxy_help	Nur ändern, wenn das Spiel mit dem Standardnamen nicht startet.
+inst.menu_language	Sprache des Menüs im Spiel
 inst.enable_nr	Neuronales Rendering (NR) einschalten
 inst.keep_reshade	ReShade behalten (über OptiScaler laden)
 inst.replace_foreign	Fremde Datei ersetzen (bleibt als Sicherungskopie)
@@ -257,10 +258,39 @@ prefs.open	Voreinstellungen…
 prefs.title	Voreinstellungen
 prefs.installs	Neue Installationen
 prefs.installs_help	Der Ausgangspunkt für ein Spiel ohne Retoque. Ein Spiel, das Retoque schon hat, behält seine eigenen Entscheidungen.
+prefs.menu_lang_same	Wie die App ({language})
+prefs.menu_lang_help	Gilt für jedes Spiel bei der nächsten Installation, Aktualisierung oder Optimierung. Eine eigene Sprachdatei bleibt unverändert. Die Übersetzungen sind maschinell erstellte Entwürfe.
 prefs.language	Sprache
 prefs.language_help	Der Text der App ändert sich, sobald du wählst.
 prefs.language_draft	Diese Übersetzung ist ein maschineller Entwurf, den noch kein Muttersprachler geprüft hat. Manche Formulierungen können holprig sein.
 prefs.language_no_font	{languages}: Auf diesem Computer fehlt eine Schrift mit chinesischen, japanischen und koreanischen Zeichen (etwa Noto Sans CJK). Installiere eine und öffne Retoque erneut.
+app_install.heading	Retoque-App
+app_install.install	Retoque auf diesem Computer installieren…
+app_install.install_title	Retoque auf diesem Computer installieren
+app_install.install_confirm	Retoque installieren
+app_install.install_body	Diesen Programmordner erstellen und die folgenden Dateien hineinkopieren:
+app_install.files	Dateien (einschließlich ihrer Ordner)
+app_install.shortcuts	Verknüpfungen im Startmenü und auf dem Desktop erstellen:
+app_install.registration	Retoque für diesen Benutzer unter Windows Apps und Features registrieren.
+app_install.preserve	Deine App-Daten und Retoque in deinen Spielen bleiben erhalten.
+app_install.installed	Retoque installiert. Starte neu, um die installierte Kopie zu verwenden.
+app_install.check	Nach App-Updates suchen…
+app_install.check_title	Nach App-Updates suchen
+app_install.check_body	Unsere offiziellen GitHub-Versionen nach einer neueren Windows-App durchsuchen? Beim Start wird nichts heruntergeladen.
+app_install.available	App-Version {version} ist verfügbar.
+app_install.update	App aktualisieren…
+app_install.update_title	App aktualisieren
+app_install.download_body	Die neue App und ihre Retoque-Dateien von GitHub herunterladen und prüfen. Vor dem Ersetzen der installierten Dateien bestätigst du den Neustart.
+app_install.current	Die App ist aktuell.
+app_install.no_release	Noch keine Windows-App-Version veröffentlicht.
+app_install.ready	App-Update heruntergeladen und geprüft. Starte neu, wenn du bereit bist.
+app_install.restart_offer	App neu starten…
+app_install.restart_title	App neu starten
+app_install.restart_confirm	App neu starten
+app_install.restart_body	Die App neu starten, um ihre installierten Dateien durch das geprüfte Update zu ersetzen. Die vorherige App bleibt erhalten, bis die neue Kopie startet.
+app_install.busy	App-Installation wird vorbereitet
+app_install.uninstall_body	Die Retoque-App, ihren Programmordner, Verknüpfungen und den Eintrag unter Apps und Features deinstallieren? Deine App-Daten und Retoque in deinen Spielen bleiben erhalten.
+app_install.failed	Die App konnte nicht installiert, aktualisiert oder deinstalliert werden. Schließe andere Retoque-Fenster und versuche es erneut. Details:
 prefs.data	App-Daten
 prefs.data_usage	{size} in diesem Ordner
 prefs.data_measuring	Ordner wird gemessen…
@@ -307,8 +337,22 @@ sess.steady	Stabile Sitzung: Nichts zu ändern.
 sess.fake_nvapi	Dieses Retoque hat dem Spiel ein Ersatz-NVAPI gegeben, daher kann die DLSS-Frame-Generierung aus dem Spielmenü verschwinden. Aktualisiere Retoque in diesem Spiel.
 sess.low_base	Die Frame-Generierung hat nur {base} echte Frames pro Sekunde vervielfacht. Unter etwa 40 fühlt es sich träge an und ruckelt: Wähle im Spiel DLSS Ausgewogen oder Leistung.
 sess.low_base_x4	x3 statt x4 fühlt sich bei niedriger Basis ebenfalls ruhiger an.
+sess.use_x3	x3 verwenden…
+sess.use_x3_done	Jetzt mit x3
 sess.drops_advice	Die echte Framerate fiel in {percent} % der Sitzung um mehr als 20 %. Meist lädt das Spiel neue Bereiche oder es ist zu wenig RAM frei: Schließe andere Programme und senke die Texturqualität.
 sess.nr_off	Neuronales Rendering (NR) wurde während der Sitzung ausgeschaltet (über seine Taste im Spiel).
+measure.title	Messung
+measure.intro	Wie viel jedes Frames NR auf deiner Grafikkarte beansprucht. Das Messen kostet ein wenig, solange es an ist.
+measure.start	Dieses Spiel messen…
+measure.started	Messung eingeschaltet
+measure.waiting	Die Messung ist an. Starte das Spiel, spiele eine Minute und schließe es: Das Ergebnis erscheint hier.
+measure.still_on	Die Messung ist noch an und kostet ein wenig. Schalte sie aus, wenn du fertig bist.
+measure.stop	Messung ausschalten…
+measure.stopped	Messung ausgeschaltet
+measure.per_frame	NR pro Frame (Median)
+measure.share	Anteil am Frame
+measure.detail	Nur das Modell: {model} · NR-Durchgänge: {passes} · Stichproben: {samples}
+measure.cadence	Das Modell läuft in einem von {n} Frames: Diese Zeiten stammen aus den Frames, in denen es läuft, daher gibt es keinen Anteil am Frame.
 card.launch	Letzter Schritt: Steam-Startoption
 card.launch_heroic	Letzter Schritt: Umgebungsvariable in Heroic
 card.launch_lutris	Letzter Schritt: Lutris-Option
@@ -395,6 +439,23 @@ shell.games_one	Spiel
 shell.games_other	Spiele
 shell.updates_one	Update verfügbar
 shell.updates_other	Updates verfügbar
+update_all.open	Alle aktualisieren…
+update_all.title	Alle aktualisieren
+update_all.note	Prüfe jedes Spiel. Deine Einstellungen bleiben erhalten. Spiele werden nacheinander aktualisiert.
+update_all.confirm_one	{count} Spiel aktualisieren
+update_all.confirm	{count} Spiele aktualisieren
+update_all.ready	Retoque wird aktualisiert
+update_all.skipped	Übersprungen
+update_all.running	Spiel läuft. Schließe es und prüfe erneut.
+update_all.partial	Unvollständige Installation. Öffne das Spiel und schließe zuerst die Bereinigung ab.
+update_all.foreign	Nicht registrierte oder fremde Installation. Prüfe sie zuerst auf der Spielseite.
+update_all.unknown	Status unbekannt. Aktualisiere den Spielstatus und prüfe erneut.
+update_all.current	Bereits aktuell.
+update_all.refused	Aktualisierung abgelehnt. Öffne die Details und prüfe dieses Spiel einzeln.
+update_all.overlap	Ein anderer Eintrag aktualisiert diesen Ordner. Prüfe doppelte oder überlappende Ordner einzeln.
+update_all.busy	Eine andere Änderung läuft. Warte und prüfe erneut.
+update_all.progress	Spiele werden aktualisiert · {done} von {total} abgeschlossen
+update_all.done	Aktualisierung beendet: {updated} aktualisiert · {skipped} übersprungen · {failed} fehlgeschlagen
 shell.home_help	Füge einen Spielordner hinzu oder durchsuche deine Launcher, um zu beginnen.
 shell.reinstall	Neu installieren…
 shell.resume	Aufräumen abschließen…
@@ -410,6 +471,8 @@ set.advanced	Erweiterte Einstellungen
 set.model_link	NR-Modell unter Komponenten wählen
 set.custom	Eigener Wert
 set.automatic	Automatisch
+set.passes_cost	Kosten: {n}× die GPU-Zeit des Modells und {n} Modellinstanzen im Videospeicher.
+set.passes_ampere	Auf einer RTX-30-Karte kann ihr Videospeicherbudget höhere Anzahlen ablehnen.
 tab.install_first	Installiere Retoque, um dieses Spiel einzurichten
 tab.review_install	Installation prüfen…
 tab.loading	Einstellungen des Spiels werden gelesen…
@@ -472,8 +535,18 @@ cmp.empty.run	Starte das Spiel mit Retoque und eingeschaltetem NR.
 cmp.empty.menu	Drücke {key}, um das Retoque-Menü im Spiel zu öffnen.
 cmp.empty.custom	Öffne das Retoque-Menü im Spiel mit deiner eingestellten Menütaste.
 cmp.empty.disabled	Das Menü im Spiel ist in der Konfiguration dieses Spiels deaktiviert. Aktiviere es vor der Aufnahme.
-cmp.empty.capture	Wähle unter Vergleichen „Original und bearbeitet aufnehmen“. Warte, bis beide Dateien fertig sind, und lade hier dann neu.
+cmp.empty.capture_now	Klicke auf Jetzt aufnehmen. Das Spiel speichert das Bild vor und nach NR, und beide erscheinen hier.
+cmp.empty.or_menu	Oder im Spiel:
+cmp.empty.capture	Wähle im Bereich DLSS Neural Rendering „Original und Ergebnis aufnehmen“.
 cmp.empty.refresh	Nach Aufnahmen suchen
+cmp.capture_now	Jetzt aufnehmen
+cmp.capture_now_help	Bittet das laufende Spiel um eine Aufnahme desselben Bildes vor und nach NR, ohne sein Menü zu öffnen.
+cmp.capture_waiting	Warte, bis das Spiel die Aufnahme speichert…
+cmp.capture_not_running	Starte zuerst das Spiel: Die Aufnahme macht das laufende Spiel.
+cmp.capture_ignored	Das Spiel hat die Anfrage nicht angenommen: NR ist vielleicht aus, oder der Weg dieses Spiels liest sie nicht (Vulkan, natives D3D11). Nutze das Menü im Spiel, siehe unten.
+cmp.capture_late	Das Spiel hat die Anfrage angenommen, aber es kam keine Aufnahme an. Das Menü im Spiel zeigt den Grund.
+cmp.capture_saved	Aufnahme gespeichert.
+cmp.capture_failed	Das Spiel konnte nicht um eine Aufnahme gebeten werden: {error}
 auto.gpu_reading	Grafikkarte wird erkannt…
 auto.gpu_unknown	Grafikkarte nicht erkannt
 shell.install_optimize	Installieren und optimieren…
@@ -891,6 +964,8 @@ setting.DlssNr.Stage	NR-Stufe
 setting.DlssNr.Stage.help	„Vor dem Upscaler“ ist experimentell. Unter Vulkan braucht eine Änderung einen Neustart des Spiels. Ist die gewählte Stufe nicht verfügbar, wechselt NR nicht von selbst.
 setting.DlssNr.WorkingScale	Modellskalierung
 setting.DlssNr.WorkingScale.help	Automatisch: passend zu deiner Grafikkarte gewählt. Von 0,25 bis 2,0; über 1 arbeitet das Modell mit höherer Auflösung. Routen ohne echte Bewegung bleiben bei 1 oder darunter.
+setting.DlssNr.Passes	Modell-Passes
+setting.DlssNr.Passes.help	Wie oft das Modell pro Frame läuft; jeder Pass verfeinert den vorherigen. Nur D3D12; native Vulkan-Spiele nutzen einen. Automatisch: 1.
 setting.DlssNr.ModelFile	Modelldatei
 setting.DlssNr.ModelFile.help	Automatisch: sucht nvngx_dlssnr.dll neben dem Spiel. Fehlt die gewählte Datei, schaltet sich NR aus. Starte das Spiel nach einer Änderung neu.
 setting.DlssNr.GameProfiles	Spielprofile

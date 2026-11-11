@@ -4,7 +4,19 @@ use crate::app::*;
 use crate::format::{short_path, size_text};
 use retoque_data::app_data::Cleaned;
 
-/// The install options a game without Retoque starts from. A game that has Retoque keeps its own.
+/// The in-game menu's language: the `OptiScaler.lang` every install, update and optimize puts beside OptiScaler.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) enum MenuLanguagePref {
+    /// The app's own language (English: no file).
+    #[default]
+    SameAsApp,
+    English,
+    /// One of `retoque_core::MENU_PACKS`.
+    Pack(String),
+}
+
+/// The install options a game without Retoque starts from. A game that has Retoque keeps its own, except the menu
+/// language, which follows this preference in every game.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(crate) struct InstallDefaults {
@@ -12,6 +24,7 @@ pub(crate) struct InstallDefaults {
     pub(crate) proxy: String,
     pub(crate) keep_reshade: bool,
     pub(crate) copy_nvngx: bool,
+    pub(crate) menu_language: MenuLanguagePref,
 }
 impl Default for InstallDefaults {
     fn default() -> Self {
@@ -20,6 +33,7 @@ impl Default for InstallDefaults {
             proxy: "dxgi.dll".into(),
             keep_reshade: false,
             copy_nvngx: cfg!(not(windows)),
+            menu_language: MenuLanguagePref::SameAsApp,
         }
     }
 }
@@ -32,6 +46,34 @@ impl InstallDefaults {
             copy_nvngx: self.copy_nvngx,
             ..Default::default()
         }
+    }
+    /// What the engine installs for the menu, with the app in `app`.
+    pub(crate) fn menu_language(&self, app: Lang) -> retoque_core::MenuLanguage {
+        let pack = |code: &str| {
+            if retoque_core::MENU_PACKS.contains(&code) {
+                retoque_core::MenuLanguage::Pack(code.to_owned())
+            } else {
+                retoque_core::MenuLanguage::English
+            }
+        };
+        match &self.menu_language {
+            MenuLanguagePref::SameAsApp if app == Lang::En => retoque_core::MenuLanguage::English,
+            MenuLanguagePref::SameAsApp => pack(app.code()),
+            MenuLanguagePref::English => retoque_core::MenuLanguage::English,
+            MenuLanguagePref::Pack(code) => pack(code),
+        }
+    }
+}
+
+/// The selector's text for a menu-language choice: every language by its own name.
+fn menu_language_name(lang: Lang, pref: &MenuLanguagePref) -> String {
+    match pref {
+        MenuLanguagePref::SameAsApp => t(lang, "prefs.menu_lang_same").replace("{language}", lang.native_name()),
+        MenuLanguagePref::English => Lang::En.native_name().to_owned(),
+        MenuLanguagePref::Pack(code) => Lang::ALL
+            .iter()
+            .find(|l| l.code() == code)
+            .map_or_else(|| code.clone(), |l| l.native_name().to_owned()),
     }
 }
 
@@ -152,6 +194,37 @@ impl RetoqueApp {
                         .labelled_by(label.id);
                 });
                 ui.label(RichText::new(t(lang, "inst.proxy_help")).small().color(theme::MUTED));
+                ui.horizontal(|ui| {
+                    let label = ui.label(t(lang, "inst.menu_language"));
+                    let mut choices = vec![MenuLanguagePref::SameAsApp, MenuLanguagePref::English];
+                    choices.extend(
+                        Lang::ALL
+                            .iter()
+                            .filter(|l| **l != Lang::En)
+                            .map(|l| MenuLanguagePref::Pack(l.code().to_owned())),
+                    );
+                    egui::ComboBox::from_id_salt("menu_language")
+                        .selected_text(menu_language_name(lang, &defaults.menu_language))
+                        .show_ui(ui, |ui| {
+                            for choice in choices {
+                                let text = menu_language_name(lang, &choice);
+                                ui.selectable_value(&mut defaults.menu_language, choice, text);
+                            }
+                        })
+                        .response
+                        .labelled_by(label.id);
+                });
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(t(lang, "prefs.menu_lang_help"))
+                            .small()
+                            .color(theme::MUTED),
+                    )
+                    .wrap(),
+                );
+
+                #[cfg(windows)]
+                self.app_install_controls(ui);
 
                 widgets::section_header(ui, t(lang, "prefs.data"));
                 let dir = retoque_data::lsfg_prepare::data_dir().ok();
@@ -204,25 +277,22 @@ impl RetoqueApp {
         let mut picked = None;
         let response = egui::ComboBox::from_id_salt(id_salt)
             .selected_text(lang.native_name())
-            .show_ui(ui, |ui| {
-                for option in Lang::ALL {
-                    if crate::fonts::can_show(option) {
-                        if ui.selectable_label(option == lang, option.native_name()).clicked() {
-                            picked = Some(option);
-                        }
-                    } else {
-                        ui.add_enabled(false, egui::Button::selectable(false, language_name(lang, option)))
-                            .on_disabled_hover_text(
-                                t(lang, "prefs.language_no_font").replace("{languages}", language_name(lang, option)),
-                            );
-                    }
-                }
-            })
+            .show_ui(ui, |ui| picked = language_options(ui, lang))
             .response;
         if let Some(option) = picked {
             self.set_lang(option);
         }
         response
+    }
+
+    /// The same list as a submenu, for the top bar's "More actions" when the window is too narrow for the drop-down.
+    pub(crate) fn language_menu(&mut self, ui: &mut egui::Ui) {
+        let lang = self.lang;
+        let mut picked = None;
+        ui.menu_button(t(lang, "prefs.language"), |ui| picked = language_options(ui, lang));
+        if let Some(option) = picked {
+            self.set_lang(option);
+        }
     }
 
     /// A game that has no Retoque yet follows the defaults as soon as they change.
@@ -236,6 +306,24 @@ impl RetoqueApp {
             self.view.options.game_dir = game_dir;
         }
     }
+}
+
+/// Every language by its own name, the current one selected; returns the one clicked.
+fn language_options(ui: &mut egui::Ui, lang: Lang) -> Option<Lang> {
+    let mut picked = None;
+    for option in Lang::ALL {
+        if crate::fonts::can_show(option) {
+            if ui.selectable_label(option == lang, option.native_name()).clicked() {
+                picked = Some(option);
+            }
+        } else {
+            ui.add_enabled(false, egui::Button::selectable(false, language_name(lang, option)))
+                .on_disabled_hover_text(
+                    t(lang, "prefs.language_no_font").replace("{languages}", language_name(lang, option)),
+                );
+        }
+    }
+    picked
 }
 
 /// A language's name in the reader's language, for a language whose own script cannot be drawn here.
@@ -273,6 +361,7 @@ mod tests {
             proxy: "winmm.dll".into(),
             keep_reshade: true,
             copy_nvngx: false,
+            menu_language: MenuLanguagePref::SameAsApp,
         };
         let game = tempfile::tempdir().unwrap();
         app.open_target(Some(game.path().to_path_buf()));
@@ -280,5 +369,44 @@ mod tests {
         assert_eq!(app.view.options.proxy, "winmm.dll");
         assert!(app.view.options.keep_reshade);
         assert_eq!(app.view.options.game_dir, game.path());
+    }
+
+    #[test]
+    fn the_menu_language_follows_the_preference_in_every_plan() {
+        use retoque_core::MenuLanguage;
+        let defaults = |menu_language| InstallDefaults {
+            menu_language,
+            ..InstallDefaults::default()
+        };
+        let same = defaults(MenuLanguagePref::SameAsApp);
+        assert_eq!(same.menu_language(Lang::Pt), MenuLanguage::Pack("pt-BR".into()));
+        assert_eq!(same.menu_language(Lang::ZhCn), MenuLanguage::Pack("zh-CN".into()));
+        assert_eq!(same.menu_language(Lang::En), MenuLanguage::English);
+        let de = defaults(MenuLanguagePref::Pack("de".into()));
+        assert_eq!(de.menu_language(Lang::Pt), MenuLanguage::Pack("de".into()));
+        assert_eq!(
+            defaults(MenuLanguagePref::English).menu_language(Lang::Pt),
+            MenuLanguage::English
+        );
+        // A code that is not a shipped pack (an edited settings file) means no file, never a path.
+        assert_eq!(
+            defaults(MenuLanguagePref::Pack("../x".into())).menu_language(Lang::Pt),
+            MenuLanguage::English
+        );
+        // Preferences saved before this setting load as "same as the app".
+        let old: InstallDefaults = serde_json::from_str(r#"{"enable_nr": true}"#).unwrap();
+        assert_eq!(old.menu_language, MenuLanguagePref::SameAsApp);
+
+        let mut app = crate::app_tests::shell_tests::app();
+        app.lang = Lang::Pt;
+        let game = tempfile::tempdir().unwrap();
+        app.open_target(Some(game.path().to_path_buf()));
+        app.payload = Some(game.path().to_path_buf());
+        assert_eq!(
+            app.install_inputs().unwrap().menu_language,
+            MenuLanguage::Pack("pt-BR".into())
+        );
+        app.saved.install_defaults.menu_language = MenuLanguagePref::English;
+        assert_eq!(app.install_inputs().unwrap().menu_language, MenuLanguage::English);
     }
 }

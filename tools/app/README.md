@@ -32,6 +32,15 @@ The payload, the files that go into a game folder, is found beside the executabl
 the app runs from a checkout, in `RETOQUE_SOURCE_DIR`, in the folder chosen in the window, or downloaded after
 confirmation from our official GitHub releases (`gabrielmaialva33/retoque`).
 
+## Install or update the Windows app
+
+Windows Preferences offers **Install Retoque on this computer…** for a portable copy with its complete payload
+beside the executable. Review the files, per-user program folder, Start Menu/Desktop shortcuts and Apps & features
+entry before installing. The installed app offers an explicitly confirmed update check, verified download and
+restart to apply a newer official app release. Uninstall through Apps & features preserves app data and all games.
+Linux has no app installation/update controls. Packaging, recovery limits and Windows validation requirements:
+[Windows app installation and updates](../../docs/releases/APP-UPDATE.md).
+
 ## Rules the app keeps
 
 - Every write is a plan first: the window shows it, and nothing is written while the plan has a refusal.
@@ -45,10 +54,10 @@ confirmation from our official GitHub releases (`gabrielmaialva33/retoque`).
 ## Languages
 
 The window speaks English and Brazilian Portuguese, plus German, Spanish, French, Japanese, Korean, Polish, Russian
-and Simplified Chinese. Preferences (and the top bar) list each language by its own name; a choice applies at once
-and is saved. On first run the app follows the system locale when it names one of these languages (any Portuguese
-locale gives pt-BR; Traditional Chinese does not match), else English. `RETOQUE_LANG=de` (any of the codes below)
-forces one for tests and screenshots.
+and Simplified Chinese. Preferences (and the top bar, or its “More actions” menu) list each language by its own
+name; a choice applies at once and is saved. On first run the app follows the system locale when it names one of
+these languages (any Portuguese locale gives pt-BR; Traditional Chinese does not match), else English.
+`RETOQUE_LANG=de` (any of the codes below) forces one for tests and screenshots.
 
 | Code | Language | Source |
 |---|---|---|
@@ -64,8 +73,8 @@ label in snake case>`) and, for languages with more plural forms (Polish, Russia
 counted word's `_one`. Tests reject an unknown or duplicate key, a lost or added `{placeholder}`, a final "…" that
 does not match the English (DESIGN.md: "…" means a dialog opens) and a missing draft header; they also draw every
 pack string with egui's fonts (Latin and Cyrillic) or the system CJK font, failing on a missing glyph, and draw the
-main views in every language in a 1024×768 window. To see what a pack still shows in English:
-`cargo test -p retoque-app untranslated_keys -- --ignored --nocapture`.
+main views in every language at 1024×768 and at the window's minimum width (820), with the app's theme. To see what
+a pack still shows in English: `cargo test -p retoque-app untranslated_keys -- --ignored --nocapture`.
 
 To add a language: add a `Lang` variant (never rename one; the saved choice is the variant name) with its native
 name and code, a `pack_source` arm with `include_str!("i18n/<code>.tsv")`, its decimal separator, date order and
@@ -209,13 +218,35 @@ Retoque loaded; it then stays under “Reinstall options”. ReShade stays folde
 groups the NR model, DLSS and frame generation (sm86 and LSFG side by side). The sm86 download is offered only
 inside “Install and optimize” or on its card, never at startup, and the home screen has no model offer of its own.
 
+“Before / after” compares the capture pairs in the game's `retoque-captures` folder. Its “Capture now” asks the
+running game for a pair without its menu: only while a process holds the game folder, it leaves the runtime's empty
+`dlssnr-capture.trigger` beside OptiScaler, waits for the game to take it and for the new pair to land, then shows
+it. A request the game does not take within a few seconds (NR off, or a route that never reads it: Vulkan, native
+D3D11, the proxy) is removed again, so it cannot fire at a later launch, and the page points to the in-game button,
+which is also in the Neural Rendering panel's simple view.
+
 “Last session” on the Overview tab reads the newest log the page already summarized (`retoque_data::session`,
 bounded memory): real and on-screen frame rates from the runtime's periodic status lines, measured from the
 time between them; the worst 5% of windows; how much of the session frame generation ran and what it multiplied;
 the share of drops below 80% of the median; and the real rate over time. Its advice covers a base too low for
 frame generation (under about 40 real fps), frequent drops (game streaming or too little free RAM), the
 fakenvapi stand-in that hides DLSS frame generation, and NR switched off mid-session. Without status lines in the
-log there is no card. Install options (proxy name, NR on, previews) sit closed at the end of the tab; the footer
+log there is no card.
+
+“Measurement” below it turns the runtime's GPU timing on (“Measure this game…”: `[DlssNr] GpuTiming=true` through
+the ordinary settings review, so it is refused while the game runs and Undo takes it back), asks the user to play a
+minute and close the game, and then reads the newest log's fence-confirmed evaluation samples
+(`retoque_data::measure`): NR GPU time per frame (`dispatch_ms`, the median and the worst 5%), the model calls' part
+of it, the pass count, the session's real frame rate and NR's share of the frame time. The runtime logs the passes'
+sum, never a time per pass; resets and captures are left out; with model cadence the carried frames are counted
+apart and no share is shown, because the samples cannot say how often the model ran. “Turn measurement off…” puts
+the key back to Automatic (off). There is no offer on native Vulkan, which the runtime does not time, or with NR off.
+
+The top bar measures its buttons from their laid-out text: when the full set does not fit, the language selector,
+Preferences, the game-list toggle and then Rescan library (least used first) move into one “More actions” menu (⋯)
+at its end, each under its own label; the brand, the way back to the library and Commands stay.
+
+Install options (proxy name, NR on, previews) sit closed at the end of the tab; the footer
 holds one button naming the Retoque files in use (with “New release available” beside it when there is one), which
 opens the “Retoque files” dialog with the payload sources and official releases.
 
@@ -226,8 +257,18 @@ review lists per folder what goes and what stays. `retoque_core::leftovers` remo
 sm86, ReShade or their caches put there, never follows links, keeps every other file (saves, store stamps) and
 its folder, refuses a folder with an executable, and refuses a folder that changed since the review.
 
+The app's icon is `crates/retoque-app/assets/retoque.svg` (a retouch stroke across coarse pixels): the window
+uses its 256 px PNG, and on Windows `build.rs` embeds `retoque.ico` (16-256 px) and the version into the executable
+with the MinGW `windres` (`WINDRES` overrides it; without one the build warns and the exe keeps the default icon).
+On Linux, `packaging/linux/retoque.desktop` with `Icon=retoque` and `StartupWMClass=retoque` (the window's app id)
+goes to `~/.local/share/applications/`, and the PNG to `~/.local/share/icons/hicolor/256x256/apps/retoque.png`.
+
 “Preferences…” in the top bar holds what a game without Retoque starts from (NR on, keep ReShade, the loader file
-name, and on Linux the driver's `_nvngx.dll`); a game that already has Retoque keeps its own. It also shows how much
+name, and on Linux the driver's `_nvngx.dll`); a game that already has Retoque keeps its own. “In-game menu language”
+(default: the app's own) applies to every game: each install, update and Optimize passes it to the engine as
+`InstallOptions::menu_language`, which copies `translations/optional/<code>.lang` beside OptiScaler as
+`OptiScaler.lang` (recorded in the receipt, so uninstall removes it), replaces or removes the one an install put there,
+and leaves a file of the user's own alone with a note. The CLI and the scripts keep the file as it is. It also shows how much
 the app's data folder takes. At startup `retoque_data::app_data` clears staging an interrupted import, download or
 unpack left there (`.import-…`, `.download-…`, `.unpack-…`, `.prepare-…`, `*.json.tmp`) once it is a day old, in the
 data folder and the folders directly inside it only, never following a link; catalogs, models and settings are never
@@ -312,6 +353,12 @@ digest, and only allowlisted paths are unpacked into app data (`payload-releases
 release has been published on GitHub yet, the app states so plainly and keeps the beside-app and chosen-folder
 sources. When a newer payload is active, an installed game's page offers “Update and optimize…” (or “Update Retoque…”
 under “More actions”), both through the normal reviewed install `Plan`.
+
+When the library reports an available update, “Update all…” reviews every installed game, showing its current
+and available build and explaining skipped games (running, incomplete, unregistered, unknown or already current).
+Confirmation updates games sequentially through their individual sealed install plans, preserving each game's
+loader, NR and ReShade choices rather than the installation defaults. No download is started by this action.
+The result stays open with each game's outcome; a refused or stale plan is never silently rebuilt or forced.
 
 ## ReShade and add-ons
 

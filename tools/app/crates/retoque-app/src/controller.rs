@@ -98,6 +98,8 @@ impl RetoqueApp {
         let mut options = self.view.options.clone();
         options.game_dir = target;
         options.source_dir = self.payload.clone()?;
+        // The in-game menu's language follows Preferences in every game, whatever that game was installed with.
+        options.menu_language = self.saved.install_defaults.menu_language(self.lang);
         Some(options)
     }
 
@@ -148,6 +150,10 @@ impl RetoqueApp {
         };
         self.review_open = false;
         self.restore_focus();
+        // A change from the "Last session" card is toasted with its own verb ("Now using x3").
+        if let Some(fix) = self.session_fix_for(self.view.request) {
+            self.tuning.writes.insert(target.clone(), fix.done);
+        }
         self.jobs.begin_write(&target);
         self.writing.insert(target.clone(), (0, plan.steps().len()));
         self.write_kinds.insert(target.clone(), kind);
@@ -181,6 +187,7 @@ impl RetoqueApp {
             let current = self.view.target.clone();
             let ours = |t: &Path| current.as_deref() == Some(t);
             match outcome {
+                Outcome::UpdateAll(event) => self.update_all_event(event),
                 Outcome::DropClassified { request, paths } => self.intuitive.drop.receive(request, paths),
                 Outcome::HistoryWritten(Err(error)) => {
                     self.toast(self.tr("undo.save_failed").into(), Some(error), true)
@@ -335,8 +342,14 @@ impl RetoqueApp {
                         PlanKind::Uninstall => "shell.review_remove",
                         PlanKind::Settings => "set.save",
                     });
+                    let measure = crate::tabs::measure::measure_request(self.view.inputs.as_ref())
+                        .filter(|_| kind == PlanKind::Settings);
                     let title = if self.intuitive.undo_request == Some(request) {
                         self.tr("undo.title")
+                    } else if let Some(fix) = self.session_fix_for(request) {
+                        self.tr(fix.label).trim_end_matches('…')
+                    } else if let Some(on) = measure {
+                        crate::tabs::measure::measure_verb(self.lang, on)
                     } else {
                         title
                     };
@@ -463,6 +476,7 @@ impl RetoqueApp {
                     // Every job that arms a busy flag must release it here too: a worker that could not start or
                     // stopped unexpectedly never sends its own completion, and the spinner would stay for good.
                     match job {
+                        "update-all-plan" | "update-all-apply" => self.update_all_failed(job, message.clone().into()),
                         "autotune-plan" | "plan" => self.review = Some(Err(message.clone().into())),
                         "payload-fetch" => self.payload_ui.busy = false,
                         "nr-model-fetch" => {
@@ -515,6 +529,9 @@ impl RetoqueApp {
     }
 
     pub(crate) fn shell_shortcuts(&mut self, ctx: &egui::Context) {
+        if self.library_state.update_all.open {
+            return;
+        }
         if self.intuitive_shortcuts(ctx) {
             return;
         }
@@ -662,6 +679,7 @@ impl RetoqueApp {
                         self.start_plan(kind, inputs);
                     }
                 }
+                AppCommand::SessionFix(target, fix) => self.start_session_fix(target, fix),
                 AppCommand::RescanLibrary => self.rescan(),
                 AppCommand::Remedy(remedy, target) => self.remediate(remedy, target),
                 AppCommand::SwitchTab(tab) => self.tab = tab,
@@ -749,6 +767,16 @@ impl RetoqueApp {
         let review = review.clone();
         match review.kind {
             ReviewKind::Standard(kind) => {
+                // Measurement's own toast ("Measurement turned on"), not the generic "Settings saved".
+                if kind == PlanKind::Settings
+                    && self.intuitive.undo_request != Some(request)
+                    && let Some(on) = crate::tabs::measure::measure_request(self.view.inputs.as_ref())
+                    && let Some(target) = self.view.target.clone()
+                {
+                    self.tuning
+                        .writes
+                        .insert(target, crate::tabs::measure::measure_keys(on).1);
+                }
                 self.apply_plan(kind, review.plans.into_iter().next().unwrap(), self.context.clone())
             }
             ReviewKind::Autotune(request) => {
@@ -800,7 +828,15 @@ impl RetoqueApp {
                             ReviewKind::Standard(PlanKind::Install) if installed => self.tr("inst.update"),
                             ReviewKind::Standard(PlanKind::Install) => self.tr("inst.install"),
                             ReviewKind::Standard(PlanKind::Uninstall) => self.tr("inst.uninstall"),
-                            ReviewKind::Standard(PlanKind::Settings) => self.tr("set.apply"),
+                            ReviewKind::Standard(PlanKind::Settings) => match self.session_fix_for(review.request_id) {
+                                Some(fix) => self.tr(fix.label).trim_end_matches('…'),
+                                None => match crate::tabs::measure::measure_request(self.view.inputs.as_ref()) {
+                                    Some(on) if self.intuitive.undo_request != Some(review.request_id) => {
+                                        crate::tabs::measure::measure_verb(self.lang, on)
+                                    }
+                                    _ => self.tr("set.apply"),
+                                },
+                            },
                         };
                         if self.intuitive.undo_request == Some(review.request_id) {
                             ui.label(self.tr("undo.auto_note"));

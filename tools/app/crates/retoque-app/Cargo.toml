@@ -44,3 +44,5 @@ eframe = { version = "0.37", default-features = false, features = ["glow", "wayl
 
 [target.'cfg(windows)'.dependencies]
 eframe = { version = "0.37", default-features = false, features = ["wgpu"] }
+winreg = "0.10"
+windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

@@ -106,6 +106,7 @@ bool SmallButton(const char* label)
 bool IsItemDeactivatedAfterEdit() { return edited; }
 bool IsItemActive() { return false; }
 void SameLine() {}
+void Spacing() {}
 std::vector<std::string> sections;
 void SeparatorText(const char* x) { sections.emplace_back(x); }
 int widths = 0;

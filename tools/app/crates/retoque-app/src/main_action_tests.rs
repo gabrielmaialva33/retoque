@@ -268,3 +268,45 @@ fn home_count_line_uses_singular_and_omits_zero_updates() {
     app.lang = Lang::En;
     assert_eq!(app.home_count_line(2, 0), "2 games · 2 with Retoque");
 }
+
+#[test]
+fn update_all_action_appears_only_when_library_has_updates() {
+    for lang in [Lang::En, Lang::Pt] {
+        for available in [false, true] {
+            let mut app = app();
+            app.lang = lang;
+            let path = PathBuf::from("/synthetic/update-all");
+            let mut game = game("Update candidate");
+            game.targets.push(retoque_discovery::TargetDir {
+                path: path.clone(),
+                executables: vec![],
+                score: 0,
+                dlss: vec![],
+                has_receipt: true,
+                proxies_present: vec![],
+                loaders: vec![],
+            });
+            app.library_state.games.push(game);
+            app.library_state.status.insert(
+                path,
+                retoque_core::Status {
+                    receipt: receipt(ReceiptStatus::Complete),
+                    build_sha256: Some("old".into()),
+                    ..Default::default()
+                },
+            );
+            app.payload_build = Some(Ok(if available { "new" } else { "old" }.into()));
+            app.payload = Some("/synthetic/payload".into());
+            let mut h = Harness::builder()
+                .with_size([1024., 768.])
+                .build_ui_state(|ui, app: &mut RetoqueApp| app.home_grid(ui), app);
+            h.run_steps(2);
+            let label = if lang == Lang::En {
+                "Update all…"
+            } else {
+                "Atualizar todos…"
+            };
+            assert_eq!(h.query_by_label(label).is_some(), available);
+        }
+    }
+}

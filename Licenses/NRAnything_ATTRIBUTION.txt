@@ -1,0 +1,38 @@
+NR on any window: window-capture provenance
+===========================================
+
+retoque/window_host/ (RetoqueWindowHost.exe) and tests/window-capture-probe/
+re-derive, without copying the files, the window-capture mechanics of:
+
+  NeuRotic, an OptiScaler/DLSS-NR fork (read at commit beae4eea,
+  "Release NeuRotic Alpha 0.9.9"), apps/NeuRoticWindowWorker/capture/
+  CaptureHost.cpp and InteractionPolicy.h.
+  Licensed under the GNU General Public License, version 3 (GPL-3.0).
+
+which itself adapted the capture code of:
+
+  Magpie, Copyright (C) Blinue/Magpie and contributors
+  https://github.com/Blinue/Magpie   (adapted from commit 69d6105d)
+  Licensed under the GNU General Public License, version 3 (GPL-3.0);
+  the licence text is Licenses/Magpie-LICENSE.txt.
+
+What is derived from them
+-------------------------
+
+  * Geometry.h ClientCrop -- the client area cropped out of a Windows
+    Graphics Capture frame against DWM's extended frame bounds, used only
+    when the frame's size confirms the bounds, with Magpie's correction
+    for maximized windows and the no-DWM-frame case.
+
+  * Policy.h CandidateRefusal and Identity -- which top-level windows may
+    be captured, and the HWND/PID/process-creation/class/executable
+    identity re-checked while capturing.
+
+  * Capture.cpp -- a free-threaded WGC frame pool whose FrameArrived only
+    signals a wake event, newest frame wins, pool recreation on a content
+    size change, and the cursor/border settings guarded by API presence.
+
+Nothing of NeuRotic's NR host, forwarder ABI, guidance, depth estimation or
+composition shader is used: NR runs through Retoque's own production
+OptiScaler.dll (docs/dlssnr/design/nr-anything.md). No Win32CaptureSample
+colour helper is used.

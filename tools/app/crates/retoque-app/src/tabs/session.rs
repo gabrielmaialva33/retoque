@@ -6,7 +6,7 @@ use egui::{Color32, Sense, Stroke, pos2, vec2};
 use retoque_data::session::{self, Advice, Level, Pacing};
 
 /// Decimal with the language's separator (pt-BR writes 4,0).
-fn decimal(lang: Lang, value: f64, places: usize) -> String {
+pub(crate) fn decimal(lang: Lang, value: f64, places: usize) -> String {
     let text = format!("{value:.places$}");
     if lang.decimal_comma() {
         text.replace('.', ",")
@@ -33,7 +33,64 @@ fn advice_text(lang: Lang, advice: &Advice) -> String {
     }
 }
 
+/// A change the card offers under an advice, through the same reviewed settings plan as the Settings tab (refused while
+/// the game runs, recorded for undo). `label` is the button ("Use x3…"); the review's title and confirm drop the "…",
+/// and `done` is the toast that repeats it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SessionFix {
+    pub edit: Edit,
+    pub label: &'static str,
+    pub done: &'static str,
+}
+
+/// The change an advice maps to, offered only while the game's OptiScaler.ini holds the value the advice is about.
+/// x4 -> x3 for frame generation: with LSFG on, its multiplier (4 -> 3, `recommend::lsfg_edits`); otherwise the DLSS-G
+/// count sent through sm86 or the game's own DLSS-G (`[DLSSG] OverrideInterpolationCount`, three generated frames ->
+/// two, as `recommend::SM86_MFG` asks). An automatic count is the game's own choice and gets no button, and advice
+/// about the game's DLSS mode stays text: the app does not change the game's settings.
+pub(crate) fn fix_for(advice: &Advice, ini: &Ini) -> Option<SessionFix> {
+    let Advice::LowBaseForFrameGeneration { x4: true, .. } = advice else {
+        return None;
+    };
+    let number = |section: &str, key: &str| ini.get(section, key).and_then(|v| v.trim().parse::<f64>().ok());
+    let lsfg = ini
+        .get("LSFG", "Enabled")
+        .is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "true" | "1"));
+    let (section, key, value) = if lsfg {
+        (number("LSFG", "Multiplier") == Some(4.0)).then_some(("LSFG", "Multiplier", "3"))?
+    } else {
+        (number("DLSSG", "OverrideInterpolationCount") == Some(3.0)).then_some((
+            "DLSSG",
+            "OverrideInterpolationCount",
+            "2",
+        ))?
+    };
+    Some(SessionFix {
+        edit: (section.into(), key.into(), value.into()),
+        label: "sess.use_x3",
+        done: "sess.use_x3_done",
+    })
+}
+
 impl RetoqueApp {
+    /// The session change the review with this request id was opened for, if any.
+    pub(crate) fn session_fix_for(&self, request: u64) -> Option<&SessionFix> {
+        self.view
+            .session_fix
+            .as_ref()
+            .filter(|(id, _)| *id == request)
+            .map(|(_, fix)| fix)
+    }
+
+    /// Opens the reviewed settings plan for a session change; the review and the toast then repeat its verb.
+    pub(crate) fn start_session_fix(&mut self, target: PathBuf, fix: SessionFix) {
+        if self.view.target.as_ref() != Some(&target) || self.busy() {
+            return;
+        }
+        self.start_plan(PlanKind::Settings, PlanInputs::Settings(vec![fix.edit.clone()]));
+        self.view.session_fix = Some((self.view.request, fix));
+    }
+
     pub(crate) fn session_card(&self, ui: &mut egui::Ui) {
         let Some(pacing) = self
             .view
@@ -45,6 +102,12 @@ impl RetoqueApp {
             return;
         };
         let lang = self.lang;
+        let ini = self
+            .view
+            .ini
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .and_then(Option::as_ref);
         widgets::card(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 widgets::card_title(ui, t(lang, "sess.title"));
@@ -106,6 +169,12 @@ impl RetoqueApp {
                     ui.label(RichText::new(mark).strong().color(color));
                     ui.add(egui::Label::new(advice_text(lang, &advice)).wrap());
                 });
+                if let (Some(fix), Some(target)) = (ini.and_then(|ini| fix_for(&advice, ini)), &self.view.target) {
+                    let button = ui.add_enabled(!self.busy(), egui::Button::new(t(lang, fix.label)));
+                    if button.clicked() {
+                        self.cmd_tx.send(AppCommand::SessionFix(target.clone(), fix));
+                    }
+                }
             }
         });
         ui.add_space(theme::CARD_GAP);
@@ -215,6 +284,157 @@ mod tests {
             .build_ui_state(|ui, app: &mut RetoqueApp| app.session_card(ui), app);
         assert!(h.query_by_label_contains(t(Lang::Pt, "sess.title")).is_none());
         assert!(h.query_by_label_contains(t(Lang::En, "sess.title")).is_none());
+    }
+
+    fn x4_pacing() -> session::Pacing {
+        let mut builder = retoque_data::session::PacingBuilder::default();
+        for i in 0..30 {
+            builder.observe(&format!(
+                "[15:46:{:02}.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: upscaled: active on the \
+                 upscaler's output | 184 presents : 46 renders = 4.00x on screen",
+                i * 2
+            ));
+        }
+        builder.finish().unwrap()
+    }
+
+    #[test]
+    fn x3_is_offered_only_for_x4_advice_and_the_x4_value_of_the_provider_in_use() {
+        let x4 = Advice::LowBaseForFrameGeneration { base: 23, x4: true };
+        let fix = |text: &str, advice: &Advice| fix_for(advice, &Ini::parse(text.as_bytes())).map(|f| f.edit);
+        let edit = |s: &str, k: &str, v: &str| Some((s.to_owned(), k.to_owned(), v.to_owned()));
+        // DLSS-G through sm86 or the game: three generated frames become two.
+        assert_eq!(
+            fix("[DLSSG]\nOverrideInterpolationCount=3\n", &x4),
+            edit("DLSSG", "OverrideInterpolationCount", "2")
+        );
+        // LSFG on: its multiplier, and the DLSS-G count is not touched.
+        assert_eq!(
+            fix(
+                "[LSFG]\nEnabled=true\nMultiplier=4\n[DLSSG]\nOverrideInterpolationCount=3\n",
+                &x4
+            ),
+            edit("LSFG", "Multiplier", "3")
+        );
+        for text in [
+            "[DLSSG]\nOverrideInterpolationCount=auto\n",
+            "[DLSSG]\nOverrideInterpolationCount=2\n",
+            "[DLSSG]\n",
+            "",
+            "[LSFG]\nEnabled=false\nMultiplier=4\n",
+            "[LSFG]\nEnabled=true\nMultiplier=3\n",
+            "[LSFG]\nEnabled=true\nMultiplier=auto\n[DLSSG]\nOverrideInterpolationCount=3\n",
+        ] {
+            assert_eq!(fix(text, &x4), None, "{text}");
+        }
+        let count3 = "[DLSSG]\nOverrideInterpolationCount=3\n";
+        for advice in [
+            Advice::LowBaseForFrameGeneration { base: 23, x4: false },
+            Advice::Drops { percent: 12 },
+            Advice::Steady,
+            Advice::Short,
+            Advice::FakeNvapi,
+            Advice::NrTurnedOff,
+        ] {
+            assert_eq!(fix(count3, &advice), None, "{advice:?}");
+        }
+    }
+
+    #[test]
+    fn use_x3_reviews_exactly_that_key_and_the_confirm_and_toast_repeat_it() {
+        for lang in [Lang::En, Lang::Pt] {
+            let temp = tempfile::tempdir().unwrap();
+            let game = temp.path().join("game");
+            std::fs::create_dir(&game).unwrap();
+            let before = "; keep\n[DLSSG]\nOverrideInterpolationCount=3\n[LSFG]\nEnabled=false\nMultiplier=4\n";
+            std::fs::write(game.join("OptiScaler.ini"), before).unwrap();
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.intuitive.history_root = Some(temp.path().join("history"));
+            app.view.target = Some(game.clone());
+            app.view.ini = Some(Ok(Some(Ini::parse(before.as_bytes()))));
+            app.view.intelligence.latest_log = Some(Summary {
+                pacing: Some(x4_pacing()),
+                ..Default::default()
+            });
+            let mut h = Harness::builder().with_size([1100., 800.]).build_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    app.context = ui.ctx().clone();
+                    app.receive();
+                    app.session_card(ui);
+                    app.review_sheet(ui.ctx());
+                    app.handle_commands();
+                },
+                app,
+            );
+            let label = t(lang, "sess.use_x3");
+            assert!(label.ends_with('…'));
+            h.get_by_role_and_label(egui::Role::Button, label).click();
+            for _ in 0..400 {
+                h.step();
+                if h.state().review.is_some() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            let verb = label.trim_end_matches('…');
+            {
+                let review = h.state().review.as_ref().unwrap().as_ref().unwrap();
+                assert!(review.title.starts_with(verb), "{}", review.title);
+                let steps: Vec<_> = review.plans.iter().flat_map(|p| p.steps()).collect();
+                assert_eq!(steps.len(), 1, "{steps:?}");
+                assert!(matches!(
+                    steps[0],
+                    Step::SetIni { section, key, old, value, .. }
+                        if section == "DLSSG" && key == "OverrideInterpolationCount"
+                            && old.as_deref() == Some("3") && value == "2"
+                ));
+            }
+            assert_eq!(std::fs::read_to_string(game.join("OptiScaler.ini")).unwrap(), before);
+            h.run_steps(2);
+            h.get_by_role_and_label(egui::Role::Button, verb).click();
+            for _ in 0..400 {
+                h.step();
+                if !h.state().toasts.is_empty() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            let toast = h.state().toasts.last().unwrap();
+            assert!(!toast.failed, "{}", toast.message);
+            assert!(
+                toast.message.starts_with(t(lang, "sess.use_x3_done")),
+                "{}",
+                toast.message
+            );
+            let after = std::fs::read_to_string(game.join("OptiScaler.ini")).unwrap();
+            assert_eq!(
+                after,
+                before.replace("OverrideInterpolationCount=3", "OverrideInterpolationCount=2")
+            );
+        }
+    }
+
+    #[test]
+    fn no_button_when_the_game_does_not_hold_the_x4_value() {
+        for text in [
+            "[DLSSG]\nOverrideInterpolationCount=auto\n",
+            "[DLSSG]\nOverrideInterpolationCount=2\n",
+        ] {
+            let mut app = crate::app_tests::shell_tests::app();
+            app.view.target = Some("/synthetic/game".into());
+            app.view.ini = Some(Ok(Some(Ini::parse(text.as_bytes()))));
+            app.view.intelligence.latest_log = Some(Summary {
+                pacing: Some(x4_pacing()),
+                ..Default::default()
+            });
+            let h = Harness::builder()
+                .with_size([1100., 700.])
+                .build_ui_state(|ui, app: &mut RetoqueApp| app.session_card(ui), app);
+            // The advice is still there, as text.
+            h.get_by_label_contains(t(Lang::En, "sess.low_base_x4"));
+            assert!(h.query_by_label(t(Lang::En, "sess.use_x3")).is_none(), "{text}");
+        }
     }
 
     #[test]

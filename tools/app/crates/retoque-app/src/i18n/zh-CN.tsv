@@ -202,6 +202,7 @@ st.nr_on	NR 已开启
 st.nr_off	NR 已关闭
 inst.proxy	加载器文件名
 inst.proxy_help	仅当游戏使用默认值无法启动时才更改。
+inst.menu_language	游戏内菜单语言
 inst.enable_nr	开启神经渲染（NR）
 inst.keep_reshade	保留 ReShade（通过 OptiScaler 加载）
 inst.replace_foreign	替换不属于我们的文件（保留备份）
@@ -257,10 +258,39 @@ prefs.open	偏好设置…
 prefs.title	偏好设置
 prefs.installs	新安装
 prefs.installs_help	未安装 Retoque 的游戏从这里开始。已安装 Retoque 的游戏保留自己的选择。
+prefs.menu_lang_same	与应用相同（{language}）
+prefs.menu_lang_help	在每个游戏下次安装、更新或优化时生效。你自己的语言文件会保持原样。译文为机器翻译草稿。
 prefs.language	语言
 prefs.language_help	选择后，应用的文字会立即切换。
 prefs.language_draft	此翻译是机器生成的草稿，尚未经过母语人士审阅。部分措辞可能不够准确。
 prefs.language_no_font	{languages}：此电脑没有包含中文、日文和韩文字符的字体（例如 Noto Sans CJK）。请安装一种字体，然后重新打开 Retoque。
+app_install.heading	Retoque 应用
+app_install.install	在此电脑上安装 Retoque…
+app_install.install_title	在此电脑上安装 Retoque
+app_install.install_confirm	安装 Retoque
+app_install.install_body	创建此程序文件夹并将以下文件复制到其中：
+app_install.files	文件（包括其文件夹）
+app_install.shortcuts	创建开始菜单和桌面快捷方式：
+app_install.registration	为此用户在 Windows 应用和功能中注册 Retoque。
+app_install.preserve	保留应用数据和游戏中的 Retoque。
+app_install.installed	Retoque 已安装。请重启以使用已安装的副本。
+app_install.check	检查应用更新…
+app_install.check_title	检查应用更新
+app_install.check_body	是否访问 GitHub 官方版本以检查新版 Windows 应用？启动时不会下载任何内容。
+app_install.available	应用版本 {version} 可用。
+app_install.update	更新应用…
+app_install.update_title	更新应用
+app_install.download_body	从 GitHub 下载并验证新版应用及其 Retoque 文件。在替换已安装的文件前，您将确认重启。
+app_install.current	应用已是最新版本。
+app_install.no_release	尚未发布 Windows 应用版本。
+app_install.ready	应用更新已下载并验证。请在准备好后重启。
+app_install.restart_offer	重启应用…
+app_install.restart_title	重启应用
+app_install.restart_confirm	重启应用
+app_install.restart_body	重启应用以使用已验证的更新替换已安装的文件。在新副本启动前保留旧版应用。
+app_install.busy	正在准备应用安装
+app_install.uninstall_body	是否卸载 Retoque 应用、程序文件夹、快捷方式及应用和功能条目？应用数据和游戏中的 Retoque 将被保留。
+app_install.failed	无法安装、更新或卸载应用。请关闭其他 Retoque 窗口后重试。详细信息：
 prefs.data	应用数据
 prefs.data_usage	此文件夹中共 {size}
 prefs.data_measuring	正在计算文件夹大小…
@@ -307,8 +337,22 @@ sess.steady	会话表现稳定：无需更改。
 sess.fake_nvapi	此版本的 Retoque 向游戏提供了替代的 NVAPI，因此 DLSS 帧生成可能会从游戏菜单中消失。请在此游戏中更新 Retoque。
 sess.low_base	帧生成仅倍增了每秒 {base} 个真实帧。低于约 40 时会感觉迟滞和卡顿：请在游戏中选择 DLSS“平衡”或“性能”。
 sess.low_base_x4	基础帧率较低时，用 x3 代替 x4 也会更流畅。
+sess.use_x3	使用 x3…
+sess.use_x3_done	已改用 x3
 sess.drops_advice	在 {percent}% 的会话时间里，真实帧率下降超过 20%。这通常是游戏在加载新区域或可用内存不足：请关闭其他程序并降低纹理质量。
 sess.nr_off	会话期间神经渲染（NR）被关闭了（通过游戏中的对应按键）。
+measure.title	测量
+measure.intro	NR 在你的显卡上占用每帧多少时间。测量开启期间会有少量开销。
+measure.start	测量这个游戏…
+measure.started	测量已开启
+measure.waiting	测量已开启。启动游戏，玩一分钟后关闭：结果会显示在这里。
+measure.still_on	测量仍处于开启状态，会有少量开销。完成后请关闭。
+measure.stop	关闭测量…
+measure.stopped	测量已关闭
+measure.per_frame	每帧 NR（中位数）
+measure.share	占帧比例
+measure.detail	仅模型：{model} · NR 处理次数：{passes} · 样本数：{samples}
+measure.cadence	模型每 {n} 帧运行一次：这些时间来自它运行的帧，因此不显示占帧比例。
 card.launch	最后一步：Steam 启动选项
 card.launch_heroic	最后一步：Heroic 中的环境变量
 card.launch_lutris	最后一步：Lutris 选项
@@ -395,6 +439,23 @@ shell.games_one	个游戏
 shell.games_other	个游戏
 shell.updates_one	个可用更新
 shell.updates_other	个可用更新
+update_all.open	全部更新…
+update_all.title	全部更新
+update_all.note	请检查每个游戏。保留当前设置，并逐个更新游戏。
+update_all.confirm_one	更新 {count} 个游戏
+update_all.confirm	更新 {count} 个游戏
+update_all.ready	将更新 Retoque
+update_all.skipped	已跳过
+update_all.running	游戏正在运行。请关闭游戏后重新检查。
+update_all.partial	安装不完整。请先打开游戏页面完成清理。
+update_all.foreign	未注册或第三方安装。请先在游戏页面检查。
+update_all.unknown	状态未知。请刷新游戏状态后重新检查。
+update_all.current	已是最新版本。
+update_all.refused	更新被拒绝。请打开详情并单独检查此游戏。
+update_all.overlap	其他条目将更新此文件夹。请单独检查重复或重叠的文件夹。
+update_all.busy	其他更改正在进行。请等待后重新检查。
+update_all.progress	正在更新游戏 · 已完成 {done}/{total}
+update_all.done	更新完成：已更新 {updated} · 已跳过 {skipped} · 失败 {failed}
 shell.home_help	添加游戏文件夹或扫描你的启动器即可开始。
 shell.reinstall	重新安装…
 shell.resume	完成清理…
@@ -410,6 +471,8 @@ set.advanced	高级设置
 set.model_link	在“组件”中选择 NR 模型
 set.custom	自定义值
 set.automatic	自动
+set.passes_cost	开销：模型 GPU 时间的 {n} 倍，显存中 {n} 个模型实例。
+set.passes_ampere	在 RTX 30 显卡上，较高的遍数可能因显存预算不足而被拒绝。
 tab.install_first	安装 Retoque 以设置此游戏
 tab.review_install	审阅安装…
 tab.loading	正在读取游戏设置…
@@ -472,8 +535,18 @@ cmp.empty.run	在启用 Retoque 和 NR 的情况下启动游戏。
 cmp.empty.menu	按 {key} 打开 Retoque 的游戏内菜单。
 cmp.empty.custom	使用你设置的菜单键打开 Retoque 的游戏内菜单。
 cmp.empty.disabled	此游戏的配置中禁用了游戏内菜单。截图前请先启用它。
-cmp.empty.capture	在“对比”中选择“截取原始与处理后图像”。等待两个文件都保存完成，然后在此处刷新。
+cmp.empty.capture_now	点击“立即截图”。游戏会保存 NR 前后的同一帧，两张都会显示在这里。
+cmp.empty.or_menu	或者在游戏内：
+cmp.empty.capture	在 DLSS 神经渲染面板中选择“捕获原始帧和处理后帧”。
 cmp.empty.refresh	查找截图
+cmp.capture_now	立即截图
+cmp.capture_now_help	无需打开游戏菜单，请正在运行的游戏截取同一帧 NR 前后的画面一次。
+cmp.capture_waiting	正在等待游戏保存截图…
+cmp.capture_not_running	请先打开游戏：截图由正在运行的游戏完成。
+cmp.capture_ignored	游戏没有接收请求：NR 可能已关闭，或此游戏的路径不读取请求（Vulkan、原生 D3D11）。请使用下方的游戏内菜单。
+cmp.capture_late	游戏已接收请求，但没有收到截图。游戏内菜单会显示原因。
+cmp.capture_saved	截图已保存。
+cmp.capture_failed	无法请求游戏截图：{error}
 auto.gpu_reading	正在检测显卡…
 auto.gpu_unknown	未检测到显卡
 shell.install_optimize	安装并优化…
@@ -891,6 +964,8 @@ setting.DlssNr.Stage	NR 阶段
 setting.DlssNr.Stage.help	“超分辨率之前”为实验性功能。在 Vulkan 上更改后需重新启动游戏。如果所选阶段不可用，NR 不会自行切换。
 setting.DlssNr.WorkingScale	模型缩放
 setting.DlssNr.WorkingScale.help	自动：根据你的显卡选择。范围 0.25 到 2.0；大于 1 时模型以更高分辨率工作。没有真实运动信息的路径保持在 1 或以下。
+setting.DlssNr.Passes	模型遍数
+setting.DlssNr.Passes.help	每帧运行模型的次数，每一遍都在上一遍的基础上细化。仅限 D3D12；原生 Vulkan 游戏只用一遍。自动：1。
 setting.DlssNr.ModelFile	模型文件
 setting.DlssNr.ModelFile.help	自动：在游戏旁边查找 nvngx_dlssnr.dll。如果所选文件不存在，NR 会关闭。更改后请重新启动游戏。
 setting.DlssNr.GameProfiles	游戏配置文件

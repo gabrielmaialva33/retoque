@@ -202,6 +202,7 @@ st.nr_on	NR オン
 st.nr_off	NR オフ
 inst.proxy	ローダーファイル名
 inst.proxy_help	既定の名前でゲームが起動しない場合にのみ変更してください。
+inst.menu_language	ゲーム内メニューの言語
 inst.enable_nr	ニューラルレンダリング (NR) をオンにする
 inst.keep_reshade	ReShade を保持（OptiScaler 経由で読み込む）
 inst.replace_foreign	Retoque のものではないファイルを置き換える（バックアップとして保持）
@@ -257,10 +258,39 @@ prefs.open	環境設定…
 prefs.title	環境設定
 prefs.installs	新規インストール
 prefs.installs_help	Retoque のないゲームの初期状態です。すでに Retoque があるゲームは、それぞれの選択を保持します。
+prefs.menu_lang_same	アプリと同じ ({language})
+prefs.menu_lang_help	各ゲームの次回のインストール、更新、または最適化で適用されます。ご自身の言語ファイルはそのまま残ります。翻訳は機械による草稿です。
 prefs.language	言語
 prefs.language_help	選択するとすぐにアプリの表示言語が変わります。
 prefs.language_draft	この翻訳は機械翻訳の下書きで、ネイティブスピーカーによる確認はまだ済んでいません。不自然な表現が含まれる場合があります。
 prefs.language_no_font	{languages}：このコンピューターには中国語・日本語・韓国語の文字を含むフォント（Noto Sans CJK など）がありません。フォントをインストールしてから Retoque を開き直してください。
+app_install.heading	Retoque アプリ
+app_install.install	このコンピューターに Retoque をインストール…
+app_install.install_title	このコンピューターに Retoque をインストール
+app_install.install_confirm	Retoque をインストール
+app_install.install_body	このプログラムフォルダーを作成し、以下のファイルをコピーします：
+app_install.files	ファイル（フォルダーを含む）
+app_install.shortcuts	スタートメニューとデスクトップにショートカットを作成：
+app_install.registration	このユーザーの Windows「アプリと機能」に Retoque を登録します。
+app_install.preserve	アプリのデータとゲーム内の Retoque は保持されます。
+app_install.installed	Retoque をインストールしました。再起動するとインストール済みのコピーを使用します。
+app_install.check	アプリの更新を確認…
+app_install.check_title	アプリの更新を確認
+app_install.check_body	GitHub の公式リリースで新しい Windows アプリを確認しますか？起動時にはダウンロードしません。
+app_install.available	アプリのバージョン {version} が利用可能です。
+app_install.update	アプリを更新…
+app_install.update_title	アプリを更新
+app_install.download_body	GitHub から新しいアプリと Retoque ファイルをダウンロードして検証します。インストール済みファイルの置換前に再起動を確認します。
+app_install.current	アプリは最新です。
+app_install.no_release	Windows アプリのリリースはまだ公開されていません。
+app_install.ready	アプリの更新をダウンロードして検証しました。準備ができたら再起動してください。
+app_install.restart_offer	アプリを再起動…
+app_install.restart_title	アプリを再起動
+app_install.restart_confirm	アプリを再起動
+app_install.restart_body	アプリを再起動し、インストール済みファイルを検証済みの更新に置き換えます。新しいコピーが起動するまで以前のアプリを保持します。
+app_install.busy	アプリのインストールを準備中
+app_install.uninstall_body	Retoque アプリ、プログラムフォルダー、ショートカット、「アプリと機能」の登録をアンインストールしますか？アプリのデータとゲーム内の Retoque は保持されます。
+app_install.failed	アプリをインストール、更新、またはアンインストールできませんでした。他の Retoque ウィンドウを閉じて再試行してください。詳細：
 prefs.data	アプリのデータ
 prefs.data_usage	このフォルダーで {size} 使用中
 prefs.data_measuring	フォルダーのサイズを計測しています…
@@ -307,8 +337,22 @@ sess.steady	安定したセッションです。変更は不要です。
 sess.fake_nvapi	この Retoque はゲームに代替の NVAPI を渡していたため、ゲームのメニューから DLSS フレーム生成が消えることがあります。このゲームの Retoque を更新してください。
 sess.low_base	フレーム生成が倍増させた実フレームは、1 秒あたり {base} だけでした。およそ 40 を下回ると重く、カクつきます。ゲーム内で DLSS のバランスまたはパフォーマンスを選んでください。
 sess.low_base_x4	ベースが低い場合は、x4 より x3 のほうが安定します。
+sess.use_x3	x3 を使う…
+sess.use_x3_done	x3 を使用中
 sess.drops_advice	セッションの {percent}% で、実フレームレートが 20% 以上落ち込みました。多くの場合、ゲームが新しいエリアを読み込んでいるか、空きメモリが不足しています。ほかのプログラムを閉じ、テクスチャ品質を下げてください。
 sess.nr_off	セッション中にニューラルレンダリング (NR) がオフにされました（ゲーム内のキー操作による）。
+measure.title	計測
+measure.intro	NR が GPU 上で各フレームのどれだけを使っているか。計測はオンの間、少し負荷がかかります。
+measure.start	このゲームを計測…
+measure.started	計測をオンにしました
+measure.waiting	計測はオンです。ゲームを起動して 1 分ほどプレイし、終了してください。結果はここに表示されます。
+measure.still_on	計測はまだオンで、少し負荷がかかります。終わったらオフにしてください。
+measure.stop	計測をオフにする…
+measure.stopped	計測をオフにしました
+measure.per_frame	フレームあたりの NR（中央値）
+measure.share	フレームに占める割合
+measure.detail	モデルのみ: {model} · NR パス数: {passes} · サンプル数: {samples}
+measure.cadence	モデルは {n} フレームに 1 回実行されます。これらの時間は実行されたフレームのものなので、フレームに占める割合は表示しません。
 card.launch	最後のステップ：Steam の起動オプション
 card.launch_heroic	最後のステップ：Heroic の環境変数
 card.launch_lutris	最後のステップ：Lutris のオプション
@@ -395,6 +439,23 @@ shell.games_one	ゲーム
 shell.games_other	ゲーム
 shell.updates_one	件の更新あり
 shell.updates_other	件の更新あり
+update_all.open	すべて更新…
+update_all.title	すべて更新
+update_all.note	各ゲームを確認してください。現在の設定を維持し、ゲームを1つずつ更新します。
+update_all.confirm_one	{count}個のゲームを更新
+update_all.confirm	{count}個のゲームを更新
+update_all.ready	Retoqueを更新します
+update_all.skipped	スキップ
+update_all.running	ゲームが起動中です。終了して再度確認してください。
+update_all.partial	インストールが不完全です。まずゲームのページでクリーンアップを完了してください。
+update_all.foreign	未登録または他のインストールです。まずゲームのページで確認してください。
+update_all.unknown	状態が不明です。ゲームの状態を再読み込みして確認してください。
+update_all.current	すでに最新です。
+update_all.refused	更新が拒否されました。詳細を開き、このゲームを個別に確認してください。
+update_all.overlap	別の項目がこのフォルダーを更新します。重複するフォルダーを個別に確認してください。
+update_all.busy	別の変更が進行中です。完了後に再度確認してください。
+update_all.progress	ゲームを更新中 · {total}件中{done}件完了
+update_all.done	更新完了：更新{updated}件 · スキップ{skipped}件 · 失敗{failed}件
 shell.home_help	ゲームのフォルダーを追加するか、ランチャーをスキャンして始めましょう。
 shell.reinstall	再インストール…
 shell.resume	クリーンアップを完了…
@@ -410,6 +471,8 @@ set.advanced	詳細設定
 set.model_link	NR モデルはコンポーネントで選択
 set.custom	カスタム値
 set.automatic	自動
+set.passes_cost	コスト: モデルの GPU 時間の {n} 倍、ビデオメモリ上のモデルインスタンス {n} 個。
+set.passes_ampere	RTX 30 カードでは、パス数を増やすとビデオメモリの予算により拒否されることがあります。
 tab.install_first	このゲームを設定するには Retoque をインストールしてください
 tab.review_install	インストールを確認…
 tab.loading	ゲームの設定を読み込んでいます…
@@ -472,8 +535,18 @@ cmp.empty.run	Retoque と NR を有効にしてゲームを起動してくださ
 cmp.empty.menu	{key} を押して Retoque のゲーム内メニューを開いてください。
 cmp.empty.custom	設定したメニューキーで Retoque のゲーム内メニューを開いてください。
 cmp.empty.disabled	このゲームの設定では、ゲーム内メニューが無効になっています。キャプチャーの前に有効にしてください。
-cmp.empty.capture	比較で「オリジナルと処理後をキャプチャー」を選びます。両方のファイルが完成するのを待ってから、ここで再読み込みしてください。
+cmp.empty.capture_now	「今すぐキャプチャー」をクリックします。ゲームが NR の前と後のフレームを保存し、両方がここに表示されます。
+cmp.empty.or_menu	またはゲーム内から:
+cmp.empty.capture	DLSS Neural Rendering パネルで「オリジナルと処理後をキャプチャ」を選びます。
 cmp.empty.refresh	キャプチャーを探す
+cmp.capture_now	今すぐキャプチャー
+cmp.capture_now_help	ゲームのメニューを開かずに、実行中のゲームに同じフレームの NR 前後のキャプチャーを 1 回依頼します。
+cmp.capture_waiting	ゲームがキャプチャーを保存するのを待っています…
+cmp.capture_not_running	先にゲームを起動してください。キャプチャーは実行中のゲームが行います。
+cmp.capture_ignored	ゲームが依頼を受け取りませんでした。NR がオフか、このゲームの経路が依頼を読みません (Vulkan、ネイティブ D3D11)。下のゲーム内メニューを使ってください。
+cmp.capture_late	ゲームは依頼を受け取りましたが、キャプチャーが届きませんでした。理由はゲーム内メニューに表示されます。
+cmp.capture_saved	キャプチャーを保存しました。
+cmp.capture_failed	ゲームにキャプチャーを依頼できませんでした: {error}
 auto.gpu_reading	GPU を検出しています…
 auto.gpu_unknown	GPU を検出できません
 shell.install_optimize	インストールして最適化…
@@ -891,6 +964,8 @@ setting.DlssNr.Stage	NR の段階
 setting.DlssNr.Stage.help	アップスケーラーの前は実験的です。Vulkan では変更にゲームの再起動が必要です。選択した段階が利用できない場合でも、NR が自動で切り替わることはありません。
 setting.DlssNr.WorkingScale	モデルのスケール
 setting.DlssNr.WorkingScale.help	自動：お使いの GPU に合わせて選択。0.25 から 2.0 まで。1 を超えるとモデルはより高い解像度で処理します。実際のモーションがない経路では 1 以下のままです。
+setting.DlssNr.Passes	モデルのパス数
+setting.DlssNr.Passes.help	各フレームでモデルを何回実行するか。各パスは前のパスの結果を磨きます。D3D12 のみ。ネイティブ Vulkan のゲームでは 1 回です。自動：1。
 setting.DlssNr.ModelFile	モデルファイル
 setting.DlssNr.ModelFile.help	自動：ゲームと同じフォルダーで nvngx_dlssnr.dll を探します。選択したファイルがない場合、NR はオフになります。変更後はゲームを再起動してください。
 setting.DlssNr.GameProfiles	ゲームプロファイル

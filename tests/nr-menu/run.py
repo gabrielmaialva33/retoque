@@ -36,6 +36,8 @@ for field in ('Preset', 'Style', 'Intensity', 'LocalStructure', 'LocalTone', 'Sk
     assert not re.search(r'config->DlssNr' + field + r'\s*=', source), field
     assert f'config->SetDlssNrMasterSetting(&Config::DlssNr{field},' in source, field
 assert 'RetryAfterFailure' not in actual
+# The before/after capture the app's comparison asks for is in the simple view, not only behind Show all settings.
+assert source.count('RenderPairCapture(config, nativeVulkan);') >= 2
 # Register the runtime translation units, once, in both project files.
 for name in ('OptiScaler.vcxproj', 'OptiScaler.vcxproj.filters'):
     tree = ET.parse(root / 'OptiScaler' / name)
@@ -44,8 +46,11 @@ for name in ('OptiScaler.vcxproj', 'OptiScaler.vcxproj.filters'):
         assert includes.count(path) == 1, (name, path)
 with tempfile.TemporaryDirectory(prefix='nr-menu-') as directory:
     generated = Path(directory) / 'menu.cpp'
+    # The comparison capture's own states are PairCapture::ButtonFor's (tests/nr-capture); here it only has to
+    # be reached from the simple view.
+    pair_capture = 'int pairCaptureCalls = 0;\nstatic void RenderPairCapture(Config*, bool) { ++pairCaptureCalls; }\n'
     generated.write_text((root / 'tests/nr-menu/fakes.h').read_text() + '\n' + gpu + '\nnamespace DlssNr {\n' +
-                         actual + '\n}\n' + (root / 'tests/nr-menu/cases.h').read_text())
+                         pair_capture + actual + '\n}\n' + (root / 'tests/nr-menu/cases.h').read_text())
     binary = Path(directory) / 'menu'
     subprocess.run(['g++', '-std=c++20', '-g', '-O1', '-fsanitize=address,undefined',
                     '-fno-omit-frame-pointer', '-I', str(root / 'retoque'), '-I', str(root / 'OptiScaler'), str(generated), '-o', str(binary)], check=True)

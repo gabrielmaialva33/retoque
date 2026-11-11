@@ -150,6 +150,15 @@ pub fn all() -> &'static [Setting] {
         ),
         setting!(
             "DlssNr",
+            "Passes",
+            Kind::Int { min: 1, max: 10 },
+            "Model passes",
+            "Passes do modelo",
+            "How many times the model runs on each frame, each pass refining the previous one. D3D12 only; native Vulkan games use one. Automatic: 1.",
+            "Quantas vezes o modelo roda em cada quadro, cada passe refinando o anterior. Só em D3D12; jogos em Vulkan nativo usam um. No automático: 1."
+        ),
+        setting!(
+            "DlssNr",
             "ModelFile",
             Kind::Text,
             "Model file",
@@ -416,6 +425,25 @@ mod tests {
     }
 
     #[test]
+    fn passes_round_trip_one_to_ten_and_reject_the_rest() {
+        let setting = all()
+            .iter()
+            .find(|s| s.section == "DlssNr" && s.key == "Passes")
+            .unwrap();
+        assert_eq!(setting.kind, Kind::Int { min: 1, max: 10 });
+        for invalid in ["0", "11", "-1", "100", "1.5", "2x", "abc", "", "99999999999999999999"] {
+            assert!(!setting.accepts(invalid), "accepted {invalid}");
+        }
+        for value in (1..=10).map(|n: i64| n.to_string()).chain(["auto".to_owned()]) {
+            assert!(setting.accepts(&value));
+            let mut ini = retoque_core::ini::Ini::parse(b"[DlssNr]\nPasses=auto\n");
+            ini.set(setting.section, setting.key, &value);
+            let round_trip = retoque_core::ini::Ini::parse(&ini.to_bytes());
+            assert_eq!(round_trip.get(setting.section, setting.key), Some(value.as_str()));
+        }
+    }
+
+    #[test]
     fn curated_keys_and_choice_defaults_match_shipped_ini() {
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../OptiScaler.ini");
         let text = std::fs::read_to_string(path).unwrap();
@@ -451,6 +479,6 @@ mod tests {
             assert!(!setting.label_en.is_empty() && !setting.label_pt.is_empty());
             assert!(!setting.help_en.is_empty() && !setting.help_pt.is_empty());
         }
-        assert_eq!(all().len(), 25);
+        assert_eq!(all().len(), 26);
     }
 }

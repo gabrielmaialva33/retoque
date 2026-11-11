@@ -202,6 +202,7 @@ st.nr_on	NR activado
 st.nr_off	NR desactivado
 inst.proxy	Nombre del archivo de carga
 inst.proxy_help	Cámbialo solo si el juego no se abre con el predeterminado.
+inst.menu_language	Idioma del menú en el juego
 inst.enable_nr	Activar el renderizado neuronal (NR)
 inst.keep_reshade	Conservar ReShade (cargado a través de OptiScaler)
 inst.replace_foreign	Reemplazar un archivo que no es nuestro (se guarda una copia de seguridad)
@@ -257,10 +258,39 @@ prefs.open	Preferencias…
 prefs.title	Preferencias
 prefs.installs	Instalaciones nuevas
 prefs.installs_help	El punto de partida para un juego sin Retoque. Un juego que ya lo tiene conserva sus propias elecciones.
+prefs.menu_lang_same	El mismo que la app ({language})
+prefs.menu_lang_help	Se aplica a cada juego en la próxima instalación, actualización u optimización. Un archivo de idioma tuyo se deja como está. Las traducciones son borradores hechos por máquina.
 prefs.language	Idioma
 prefs.language_help	El texto de la app cambia en cuanto eliges.
 prefs.language_draft	Esta traducción es un borrador automático que todavía no ha revisado un hablante nativo. Algunas frases pueden sonar raras.
 prefs.language_no_font	{languages}: este equipo no tiene una fuente con caracteres chinos, japoneses y coreanos (como Noto Sans CJK). Instala una y vuelve a abrir Retoque.
+app_install.heading	Aplicación Retoque
+app_install.install	Instalar Retoque en este equipo…
+app_install.install_title	Instalar Retoque en este equipo
+app_install.install_confirm	Instalar Retoque
+app_install.install_body	Crear esta carpeta del programa y copiar en ella estos archivos:
+app_install.files	Archivos (incluidas sus carpetas)
+app_install.shortcuts	Crear accesos directos en Inicio y en el escritorio:
+app_install.registration	Registrar Retoque en Aplicaciones y características de Windows para este usuario.
+app_install.preserve	Se conservan los datos de la aplicación y Retoque en tus juegos.
+app_install.installed	Retoque instalado. Reinicia para usar la copia instalada.
+app_install.check	Buscar actualizaciones de la aplicación…
+app_install.check_title	Buscar actualizaciones de la aplicación
+app_install.check_body	¿Consultar nuestras versiones oficiales de GitHub para buscar una aplicación de Windows más reciente? No se descarga nada al iniciar.
+app_install.available	La versión {version} de la aplicación está disponible.
+app_install.update	Actualizar la aplicación…
+app_install.update_title	Actualizar la aplicación
+app_install.download_body	Descargar y verificar la nueva aplicación y sus archivos de Retoque desde GitHub. Revisarás el reinicio antes de reemplazar los archivos instalados.
+app_install.current	La aplicación está actualizada.
+app_install.no_release	Aún no se ha publicado una versión de la aplicación para Windows.
+app_install.ready	Actualización descargada y verificada. Reinicia cuando quieras.
+app_install.restart_offer	Reiniciar la aplicación…
+app_install.restart_title	Reiniciar la aplicación
+app_install.restart_confirm	Reiniciar la aplicación
+app_install.restart_body	Reiniciar la aplicación para reemplazar sus archivos instalados por la actualización verificada. La aplicación anterior se conserva hasta que se inicie la nueva copia.
+app_install.busy	Preparando la instalación de la aplicación
+app_install.uninstall_body	¿Desinstalar la aplicación Retoque, su carpeta, accesos directos y entrada en Aplicaciones y características? Se conservarán los datos de la aplicación y Retoque en tus juegos.
+app_install.failed	No se pudo instalar, actualizar o desinstalar la aplicación. Cierra otras ventanas de Retoque e inténtalo de nuevo. Detalles:
 prefs.data	Datos de la app
 prefs.data_usage	{size} en esta carpeta
 prefs.data_measuring	Midiendo la carpeta…
@@ -307,8 +337,22 @@ sess.steady	Sesión estable: nada que cambiar.
 sess.fake_nvapi	Este Retoque le dio al juego un NVAPI sustituto, por lo que la generación de fotogramas de DLSS puede desaparecer del menú del juego. Actualiza Retoque en este juego.
 sess.low_base	La generación de fotogramas multiplicó solo {base} fotogramas reales por segundo. Por debajo de unos 40 se siente pesada y da tirones: elige DLSS Equilibrado o Rendimiento en el juego.
 sess.low_base_x4	x3 en lugar de x4 también se siente más estable con una base baja.
+sess.use_x3	Usar x3…
+sess.use_x3_done	Ahora con x3
 sess.drops_advice	Los fotogramas reales cayeron más de un 20% en el {percent}% de la sesión. Suele deberse a que el juego carga zonas nuevas o a poca RAM libre: cierra otros programas y baja la calidad de las texturas.
 sess.nr_off	El renderizado neuronal (NR) se desactivó durante la sesión (con su tecla en el juego).
+measure.title	Medición
+measure.intro	Cuánto de cada fotograma ocupa el NR en tu tarjeta gráfica. Medir cuesta un poco mientras está activado.
+measure.start	Medir este juego…
+measure.started	Medición activada
+measure.waiting	La medición está activada. Abre el juego, juega un minuto y ciérralo: el resultado aparece aquí.
+measure.still_on	La medición sigue activada y cuesta un poco. Desactívala cuando termines.
+measure.stop	Desactivar la medición…
+measure.stopped	Medición desactivada
+measure.per_frame	NR por fotograma (mediana)
+measure.share	Parte del fotograma
+measure.detail	Solo el modelo: {model} · Pasadas del NR: {passes} · Muestras: {samples}
+measure.cadence	El modelo se ejecuta en un fotograma de cada {n}: estos tiempos son de los fotogramas en que se ejecuta, por eso no hay parte del fotograma.
 card.launch	Último paso: opción de lanzamiento de Steam
 card.launch_heroic	Último paso: variable de entorno en Heroic
 card.launch_lutris	Último paso: opción de Lutris
@@ -395,6 +439,23 @@ shell.games_one	juego
 shell.games_other	juegos
 shell.updates_one	actualización disponible
 shell.updates_other	actualizaciones disponibles
+update_all.open	Actualizar todos…
+update_all.title	Actualizar todos
+update_all.note	Revisa cada juego. Se conservan tus ajustes actuales. Los juegos se actualizan uno por uno.
+update_all.confirm_one	Actualizar {count} juego
+update_all.confirm	Actualizar {count} juegos
+update_all.ready	Se actualizará Retoque
+update_all.skipped	Omitido
+update_all.running	Juego en ejecución. Ciérralo y vuelve a revisar.
+update_all.partial	Instalación incompleta. Abre este juego para terminar la limpieza primero.
+update_all.foreign	Instalación no registrada o de terceros. Revísala primero en la página del juego.
+update_all.unknown	Estado desconocido. Actualiza el estado del juego y vuelve a revisar.
+update_all.current	Ya está actualizado.
+update_all.refused	Actualización rechazada. Abre los detalles y revisa este juego por separado.
+update_all.overlap	Otra entrada actualiza esta carpeta. Revisa las carpetas duplicadas o superpuestas por separado.
+update_all.busy	Hay otro cambio en curso. Espera y vuelve a revisar.
+update_all.progress	Actualizando juegos · {done} de {total} completados
+update_all.done	Actualización finalizada: {updated} actualizados · {skipped} omitidos · {failed} fallidos
 shell.home_help	Agrega la carpeta de un juego o busca los juegos de tus lanzadores para empezar.
 shell.reinstall	Reinstalar…
 shell.resume	Terminar la limpieza…
@@ -410,6 +471,8 @@ set.advanced	Ajustes avanzados
 set.model_link	Elegir el modelo NR en Componentes
 set.custom	Valor personalizado
 set.automatic	Automático
+set.passes_cost	Coste: {n}× el tiempo de GPU del modelo y {n} instancias del modelo en la memoria de vídeo.
+set.passes_ampere	En una tarjeta RTX 30, su presupuesto de memoria de vídeo puede rechazar los números más altos.
 tab.install_first	Instala Retoque para configurar este juego
 tab.review_install	Revisar instalación…
 tab.loading	Leyendo los ajustes del juego…
@@ -472,8 +535,18 @@ cmp.empty.run	Abre el juego con Retoque y NR activado.
 cmp.empty.menu	Presiona {key} para abrir el menú de Retoque en el juego.
 cmp.empty.custom	Abre el menú de Retoque en el juego con la tecla de menú que configuraste.
 cmp.empty.disabled	El menú en el juego está desactivado en la configuración de este juego. Actívalo antes de capturar.
-cmp.empty.capture	En Comparar, elige “Capturar original y procesada”. Espera a que terminen de guardarse los dos archivos y luego recarga aquí.
+cmp.empty.capture_now	Haz clic en Capturar ahora. El juego guarda el fotograma antes y después del NR, y ambos aparecen aquí.
+cmp.empty.or_menu	O desde dentro del juego:
+cmp.empty.capture	En el panel Renderizado neuronal de DLSS, elige «Capturar original y procesado».
 cmp.empty.refresh	Buscar capturas
+cmp.capture_now	Capturar ahora
+cmp.capture_now_help	Pide al juego abierto una captura del mismo fotograma antes y después del NR, sin abrir su menú.
+cmp.capture_waiting	Esperando a que el juego guarde la captura…
+cmp.capture_not_running	Abre primero el juego: la captura la hace el juego abierto.
+cmp.capture_ignored	El juego no aceptó la petición: puede que el NR esté desactivado o que la ruta de este juego no la lea (Vulkan, D3D11 nativo). Usa el menú del juego, abajo.
+cmp.capture_late	El juego aceptó la petición, pero no llegó ninguna captura. El menú del juego muestra el motivo.
+cmp.capture_saved	Captura guardada.
+cmp.capture_failed	No se pudo pedir la captura al juego: {error}
 auto.gpu_reading	Detectando la tarjeta gráfica…
 auto.gpu_unknown	Tarjeta gráfica no detectada
 shell.install_optimize	Instalar y optimizar…
@@ -891,6 +964,8 @@ setting.DlssNr.Stage	Etapa de NR
 setting.DlssNr.Stage.help	Antes del reescalador es experimental. En Vulkan, un cambio requiere reiniciar el juego. Si la etapa elegida no está disponible, NR no cambia por sí solo.
 setting.DlssNr.WorkingScale	Escala del modelo
 setting.DlssNr.WorkingScale.help	Automático: elegida para tu tarjeta gráfica. De 0,25 a 2,0; por encima de 1 el modelo trabaja a una resolución mayor. Las rutas sin movimiento real se quedan en 1 o menos.
+setting.DlssNr.Passes	Pases del modelo
+setting.DlssNr.Passes.help	Cuántas veces se ejecuta el modelo en cada fotograma; cada pase refina el anterior. Solo D3D12; los juegos nativos de Vulkan usan uno. Automático: 1.
 setting.DlssNr.ModelFile	Archivo del modelo
 setting.DlssNr.ModelFile.help	Automático: busca nvngx_dlssnr.dll junto al juego. Si falta el archivo elegido, NR se desactiva. Reinicia el juego después de cambiarlo.
 setting.DlssNr.GameProfiles	Perfiles de juegos

@@ -3,6 +3,7 @@
 
 pub mod captures;
 pub mod logs;
+pub mod measure;
 pub mod models;
 pub mod session;
 pub mod settings;
@@ -27,3 +28,5 @@ pub mod sm86;
 pub mod dlss;
 mod fetch;
 pub mod reshade;
+
+pub mod app_release;

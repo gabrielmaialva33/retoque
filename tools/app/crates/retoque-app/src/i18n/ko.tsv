@@ -202,6 +202,7 @@ st.nr_on	NR 켜짐
 st.nr_off	NR 꺼짐
 inst.proxy	로더 파일 이름
 inst.proxy_help	기본값으로 게임이 시작되지 않을 때만 변경하세요.
+inst.menu_language	게임 내 메뉴 언어
 inst.enable_nr	뉴럴 렌더링(NR) 켜기
 inst.keep_reshade	ReShade 유지(OptiScaler를 통해 불러오기)
 inst.replace_foreign	Retoque가 두지 않은 파일 교체(백업으로 보관)
@@ -257,10 +258,39 @@ prefs.open	환경 설정…
 prefs.title	환경 설정
 prefs.installs	새 설치
 prefs.installs_help	Retoque가 없는 게임의 시작 설정입니다. 이미 Retoque가 있는 게임은 자체 선택을 유지합니다.
+prefs.menu_lang_same	앱과 같음 ({language})
+prefs.menu_lang_help	각 게임의 다음 설치, 업데이트 또는 최적화 때 적용됩니다. 직접 넣은 언어 파일은 그대로 둡니다. 번역은 기계 번역 초안입니다.
 prefs.language	언어
 prefs.language_help	선택하는 즉시 앱의 텍스트가 바뀝니다.
 prefs.language_draft	이 번역은 원어민이 아직 검토하지 않은 기계 번역 초안입니다. 일부 표현이 어색할 수 있습니다.
 prefs.language_no_font	{languages}: 이 컴퓨터에 한중일 문자를 지원하는 글꼴(예: Noto Sans CJK)이 없습니다. 글꼴을 설치한 뒤 Retoque를 다시 여세요.
+app_install.heading	Retoque 앱
+app_install.install	이 컴퓨터에 Retoque 설치…
+app_install.install_title	이 컴퓨터에 Retoque 설치
+app_install.install_confirm	Retoque 설치
+app_install.install_body	이 프로그램 폴더를 만들고 아래 파일을 복사합니다:
+app_install.files	파일(폴더 포함)
+app_install.shortcuts	시작 메뉴와 바탕 화면에 바로 가기 만들기:
+app_install.registration	이 사용자의 Windows 앱 및 기능에 Retoque를 등록합니다.
+app_install.preserve	앱 데이터와 게임의 Retoque는 유지됩니다.
+app_install.installed	Retoque가 설치되었습니다. 설치된 사본을 사용하려면 다시 시작하세요.
+app_install.check	앱 업데이트 확인…
+app_install.check_title	앱 업데이트 확인
+app_install.check_body	GitHub 공식 릴리스에서 새 Windows 앱을 확인할까요? 시작 시에는 다운로드하지 않습니다.
+app_install.available	앱 버전 {version}을 사용할 수 있습니다.
+app_install.update	앱 업데이트…
+app_install.update_title	앱 업데이트
+app_install.download_body	GitHub에서 새 앱과 Retoque 파일을 다운로드하고 확인합니다. 설치된 파일을 교체하기 전에 다시 시작을 검토합니다.
+app_install.current	앱이 최신 버전입니다.
+app_install.no_release	아직 게시된 Windows 앱 릴리스가 없습니다.
+app_install.ready	앱 업데이트를 다운로드하고 확인했습니다. 준비되면 다시 시작하세요.
+app_install.restart_offer	앱 다시 시작…
+app_install.restart_title	앱 다시 시작
+app_install.restart_confirm	앱 다시 시작
+app_install.restart_body	앱을 다시 시작하여 설치된 파일을 확인된 업데이트로 교체합니다. 새 사본이 시작될 때까지 이전 앱을 유지합니다.
+app_install.busy	앱 설치 준비 중
+app_install.uninstall_body	Retoque 앱, 프로그램 폴더, 바로 가기 및 앱 및 기능 항목을 제거할까요? 앱 데이터와 게임의 Retoque는 유지됩니다.
+app_install.failed	앱을 설치, 업데이트 또는 제거할 수 없습니다. 다른 Retoque 창을 닫고 다시 시도하세요. 세부 정보:
 prefs.data	앱 데이터
 prefs.data_usage	이 폴더에 {size}
 prefs.data_measuring	폴더 크기를 측정하는 중…
@@ -307,8 +337,22 @@ sess.steady	안정적인 세션입니다. 바꿀 것이 없습니다.
 sess.fake_nvapi	이 Retoque는 게임에 대체 NVAPI를 제공했기 때문에 게임 메뉴에서 DLSS 프레임 생성이 사라질 수 있습니다. 이 게임의 Retoque를 업데이트하세요.
 sess.low_base	프레임 생성이 초당 실제 프레임 {base}개만 늘렸습니다. 약 40 미만에서는 무겁고 끊기게 느껴집니다. 게임에서 DLSS 균형 또는 성능을 선택하세요.
 sess.low_base_x4	기본 프레임이 낮을 때는 x4 대신 x3이 더 안정적으로 느껴집니다.
+sess.use_x3	x3 사용…
+sess.use_x3_done	이제 x3 사용 중
 sess.drops_advice	세션의 {percent}% 동안 실제 프레임 속도가 20% 넘게 떨어졌습니다. 보통 게임이 새 지역을 불러오거나 여유 RAM이 부족해서입니다. 다른 프로그램을 닫고 텍스처 품질을 낮추세요.
 sess.nr_off	세션 중에 뉴럴 렌더링이 꺼졌습니다(게임 안에서 해당 키를 눌러).
+measure.title	측정
+measure.intro	NR이 그래픽 카드에서 각 프레임의 얼마를 차지하는지. 측정은 켜져 있는 동안 약간의 부하가 있습니다.
+measure.start	이 게임 측정…
+measure.started	측정 켜짐
+measure.waiting	측정이 켜져 있습니다. 게임을 시작해 1분 정도 플레이한 뒤 종료하세요. 결과가 여기에 표시됩니다.
+measure.still_on	측정이 아직 켜져 있어 약간의 부하가 있습니다. 끝나면 끄세요.
+measure.stop	측정 끄기…
+measure.stopped	측정 꺼짐
+measure.per_frame	프레임당 NR(중앙값)
+measure.share	프레임에서 차지하는 비율
+measure.detail	모델만: {model} · NR 패스: {passes} · 샘플: {samples}
+measure.cadence	모델은 {n}프레임마다 한 번 실행됩니다. 이 시간은 실행된 프레임의 것이므로 프레임에서 차지하는 비율은 없습니다.
 card.launch	마지막 단계: Steam 실행 옵션
 card.launch_heroic	마지막 단계: Heroic 환경 변수
 card.launch_lutris	마지막 단계: Lutris 옵션
@@ -395,6 +439,23 @@ shell.games_one	게임
 shell.games_other	게임
 shell.updates_one	업데이트 있음
 shell.updates_other	업데이트 있음
+update_all.open	모두 업데이트…
+update_all.title	모두 업데이트
+update_all.note	각 게임을 검토하세요. 현재 설정을 유지하며 게임을 하나씩 업데이트합니다.
+update_all.confirm_one	게임 {count}개 업데이트
+update_all.confirm	게임 {count}개 업데이트
+update_all.ready	Retoque 업데이트 예정
+update_all.skipped	건너뜀
+update_all.running	게임 실행 중입니다. 종료하고 다시 검토하세요.
+update_all.partial	불완전한 설치입니다. 먼저 게임 페이지에서 정리를 완료하세요.
+update_all.foreign	등록되지 않았거나 다른 설치입니다. 먼저 게임 페이지에서 검토하세요.
+update_all.unknown	상태를 알 수 없습니다. 게임 상태를 새로 고치고 다시 검토하세요.
+update_all.current	이미 최신 상태입니다.
+update_all.refused	업데이트가 거부되었습니다. 세부 정보를 열고 이 게임을 따로 검토하세요.
+update_all.overlap	다른 항목이 이 폴더를 업데이트합니다. 중복되거나 겹치는 폴더를 따로 검토하세요.
+update_all.busy	다른 변경이 진행 중입니다. 기다린 후 다시 검토하세요.
+update_all.progress	게임 업데이트 중 · {total}개 중 {done}개 완료
+update_all.done	업데이트 완료: 업데이트 {updated}개 · 건너뜀 {skipped}개 · 실패 {failed}개
 shell.home_help	시작하려면 게임 폴더를 추가하거나 런처를 검색하세요.
 shell.reinstall	재설치…
 shell.resume	정리 마치기…
@@ -410,6 +471,8 @@ set.advanced	고급 설정
 set.model_link	구성 요소에서 NR 모델 선택
 set.custom	사용자 지정 값
 set.automatic	자동
+set.passes_cost	비용: 모델 GPU 시간의 {n}배, 비디오 메모리의 모델 인스턴스 {n}개.
+set.passes_ampere	RTX 30 카드에서는 패스 수가 많으면 비디오 메모리 예산 때문에 거부될 수 있습니다.
 tab.install_first	이 게임을 설정하려면 Retoque를 설치하세요
 tab.review_install	설치 검토…
 tab.loading	게임 설정을 읽는 중…
@@ -472,8 +535,18 @@ cmp.empty.run	Retoque와 NR을 켠 상태로 게임을 여세요.
 cmp.empty.menu	{key}을(를) 눌러 Retoque의 게임 내 메뉴를 여세요.
 cmp.empty.custom	설정한 메뉴 키로 Retoque의 게임 내 메뉴를 여세요.
 cmp.empty.disabled	이 게임의 구성에서 게임 내 메뉴가 비활성화되어 있습니다. 캡처하기 전에 활성화하세요.
-cmp.empty.capture	Compare에서 “Capture original and processed”를 선택하세요. 두 파일이 모두 완료될 때까지 기다린 뒤 여기서 새로 고치세요.
+cmp.empty.capture_now	지금 캡처를 클릭하세요. 게임이 NR 전후의 프레임을 저장하고, 두 장 모두 여기에 표시됩니다.
+cmp.empty.or_menu	또는 게임 안에서:
+cmp.empty.capture	DLSS 뉴럴 렌더링 패널에서 “원본 및 처리본 캡처”를 선택하세요.
 cmp.empty.refresh	캡처 찾기
+cmp.capture_now	지금 캡처
+cmp.capture_now_help	게임 메뉴를 열지 않고, 실행 중인 게임에 같은 프레임의 NR 전후 캡처를 한 번 요청합니다.
+cmp.capture_waiting	게임이 캡처를 저장하기를 기다리는 중…
+cmp.capture_not_running	먼저 게임을 실행하세요. 캡처는 실행 중인 게임이 합니다.
+cmp.capture_ignored	게임이 요청을 받지 않았습니다. NR이 꺼져 있거나, 이 게임의 경로가 요청을 읽지 않습니다(Vulkan, 네이티브 D3D11). 아래의 게임 내 메뉴를 사용하세요.
+cmp.capture_late	게임이 요청을 받았지만 캡처가 도착하지 않았습니다. 이유는 게임 내 메뉴에 표시됩니다.
+cmp.capture_saved	캡처를 저장했습니다.
+cmp.capture_failed	게임에 캡처를 요청하지 못했습니다: {error}
 auto.gpu_reading	그래픽 카드 감지 중…
 auto.gpu_unknown	그래픽 카드를 감지하지 못함
 shell.install_optimize	설치 및 최적화…
@@ -891,6 +964,8 @@ setting.DlssNr.Stage	NR 단계
 setting.DlssNr.Stage.help	업스케일러 전은 실험적입니다. Vulkan에서는 변경하면 게임을 다시 시작해야 합니다. 선택한 단계를 사용할 수 없으면 NR이 스스로 단계를 바꾸지 않습니다.
 setting.DlssNr.WorkingScale	모델 배율
 setting.DlssNr.WorkingScale.help	자동: 그래픽 카드에 맞게 선택됩니다. 0.25부터 2.0까지이며, 1보다 크면 모델이 더 높은 해상도에서 작동합니다. 실제 모션이 없는 경로는 1 이하로 유지됩니다.
+setting.DlssNr.Passes	모델 패스 수
+setting.DlssNr.Passes.help	각 프레임에서 모델을 몇 번 실행할지 정합니다. 각 패스는 이전 결과를 다듬습니다. D3D12 전용이며, 네이티브 Vulkan 게임은 한 번만 사용합니다. 자동: 1.
 setting.DlssNr.ModelFile	모델 파일
 setting.DlssNr.ModelFile.help	자동: 게임 옆에서 nvngx_dlssnr.dll을 찾습니다. 선택한 파일이 없으면 NR이 꺼집니다. 변경한 뒤 게임을 다시 시작하세요.
 setting.DlssNr.GameProfiles	게임 프로필

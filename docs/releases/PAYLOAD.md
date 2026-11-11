@@ -7,6 +7,9 @@ Beside the full script-installer bundle (`Retoque-vX.Y.Z.zip` documented in [VAL
   `retoque-v` or `v` tag prefix, e.g. `retoque-payload-0.1.0-x64.zip` for tag `retoque-v0.1.0`)
 - `SHA256SUMS` (`sha256sum` line for `retoque-payload-<version>-x64.zip`)
 
+A release may also attach the [Windows app archive](APP-UPDATE.md), with its own line in the same release-level
+`SHA256SUMS`.
+
 Publication is always manual. The packaging script prints the `gh release create` command it would run and never
 executes it automatically.
 

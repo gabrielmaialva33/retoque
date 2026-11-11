@@ -4,6 +4,10 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 fn main() -> eframe::Result {
+    #[cfg(windows)]
+    if retoque_app::app_install::windows::startup() {
+        return Ok(());
+    }
     if let Ok(dir) = retoque_data::lsfg_prepare::data_dir() {
         retoque_data::model_facts::persist_in(&dir);
         retoque_core::memo::persist_in(&dir);
@@ -17,12 +21,16 @@ fn main() -> eframe::Result {
             default_hook(info);
         }));
     }
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("Retoque")
+        .with_app_id("retoque")
+        .with_inner_size([1180.0, 760.0])
+        .with_min_inner_size([820.0, 520.0]);
+    if let Some(icon) = window_icon() {
+        viewport = viewport.with_icon(icon);
+    }
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Retoque")
-            .with_app_id("retoque")
-            .with_inner_size([1180.0, 760.0])
-            .with_min_inner_size([820.0, 520.0]),
+        viewport,
         #[cfg(windows)]
         renderer: eframe::Renderer::Wgpu,
         #[cfg(not(windows))]
@@ -37,4 +45,29 @@ fn main() -> eframe::Result {
             Ok(Box::new(retoque_app::RetoqueApp::new(cc)))
         }),
     )
+}
+
+/// The window and taskbar icon (assets/retoque.svg rendered at 256 px). The Windows executable also carries
+/// assets/retoque.ico through build.rs, for Explorer and shortcuts.
+fn window_icon() -> Option<egui::IconData> {
+    let image =
+        image::load_from_memory_with_format(include_bytes!("../assets/retoque-256.png"), image::ImageFormat::Png)
+            .ok()?
+            .into_rgba8();
+    let (width, height) = image.dimensions();
+    Some(egui::IconData {
+        rgba: image.into_raw(),
+        width,
+        height,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_window_icon_decodes() {
+        let icon = super::window_icon().expect("assets/retoque-256.png decodes");
+        assert_eq!((icon.width, icon.height), (256, 256));
+        assert_eq!(icon.rgba.len(), 256 * 256 * 4);
+    }
 }

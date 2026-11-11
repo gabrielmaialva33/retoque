@@ -3,8 +3,43 @@ use crate::app::*;
 /// Below this page height the header scrolls with the tab (banner, tiles and tabs need ~480 points).
 const SHORT_PAGE: f32 = 900.0;
 
+/// The top bar's overflow button is a midline ellipsis ("⋯") named "More actions" for screen readers. It is drawn as
+/// three dots: neither egui's fonts nor the system font the theme loads have that glyph.
+const MORE_MARK: egui::Vec2 = egui::vec2(18.0, 14.0);
+
+fn more_mark<'a>() -> egui::Atom<'a> {
+    egui::Atom::paint(MORE_MARK, |ui, args| {
+        for dx in [-6.0, 0.0, 6.0] {
+            ui.painter()
+                .circle_filled(args.rect.center() + egui::vec2(dx, 0.0), 1.8, args.fallback_text_color);
+        }
+    })
+}
+
+/// The top bar's actions that can move into "More actions".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum BarItem {
+    Refresh,
+    Prefs,
+    Language,
+    GameList,
+}
+
+/// The order they go there in as the window narrows: the least used first. The language is also in Preferences;
+/// Rescan library is what a new game needs, so it stays longest.
+const OVERFLOW_ORDER: [BarItem; 4] = [BarItem::Language, BarItem::Prefs, BarItem::GameList, BarItem::Refresh];
+
+struct BarLayout {
+    overflow: Vec<BarItem>,
+    tagline: bool,
+}
+
 impl RetoqueApp {
     pub(crate) fn top_bar(&mut self, ui: &mut egui::Ui) {
+        let on_game = self.selected.is_some();
+        let busy = self.jobs.busy() || self.library_pending;
+        let layout = self.top_bar_layout(ui, on_game, busy);
+        let shown = |item: BarItem| !layout.overflow.contains(&item);
         ui.horizontal(|ui| {
             if ui
                 .add(
@@ -22,7 +57,7 @@ impl RetoqueApp {
                 self.selected = None;
                 self.open_target(None);
             }
-            if self.selected.is_some() {
+            if on_game {
                 // A visible way back to the library grid, beside the brand that also leads there.
                 if ui
                     .button(self.tr("shell.back_library"))
@@ -31,36 +66,31 @@ impl RetoqueApp {
                 {
                     self.selected = None;
                     self.open_target(None);
-                } else if ui
-                    .button(self.tr(if self.sidebar_visible {
-                        "shell.library_hide"
-                    } else {
-                        "shell.library_show"
-                    }))
-                    .clicked()
-                {
+                } else if shown(BarItem::GameList) && ui.button(self.tr(self.game_list_key())).clicked() {
                     self.sidebar_visible = !self.sidebar_visible;
                 }
             }
-            if ui.available_width() > 1000.0 {
+            if layout.tagline {
                 ui.label(RichText::new(self.tr("app.tagline")).color(theme::MUTED));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                self.language_combo(ui, "lang").widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "prefs.language"))
-                });
-                if ui.button(self.tr("prefs.open")).clicked() {
+                if !layout.overflow.is_empty() {
+                    self.top_bar_overflow(ui, &layout.overflow);
+                }
+                if shown(BarItem::Language) {
+                    self.language_combo(ui, "lang").widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "prefs.language"))
+                    });
+                }
+                if shown(BarItem::Prefs) && ui.button(self.tr("prefs.open")).clicked() {
                     self.prefs_open();
                 }
-                if ui
-                    .add_enabled(!self.scanning, egui::Button::new(self.tr("app.refresh")))
-                    .clicked()
+                if shown(BarItem::Refresh)
+                    && ui
+                        .add_enabled(!self.scanning, egui::Button::new(self.tr("app.refresh")))
+                        .clicked()
                 {
-                    self.cmd_tx.send(AppCommand::RescanLibrary);
-                    let t = self.view.target.clone();
-                    if let Some(t) = t {
-                        self.load_target(t);
-                    }
+                    self.rescan_library();
                 }
                 if ui
                     .button(self.tr("palette.title"))
@@ -69,12 +99,126 @@ impl RetoqueApp {
                 {
                     self.intuitive.palette.open(ui.ctx());
                 }
-                if self.jobs.busy() || self.library_pending {
+                if busy {
                     ui.spinner().on_hover_text(self.running_work());
                 }
             });
         });
         self.autotune_gpu(ui);
+    }
+
+    fn game_list_key(&self) -> &'static str {
+        if self.sidebar_visible {
+            "shell.library_hide"
+        } else {
+            "shell.library_show"
+        }
+    }
+
+    fn rescan_library(&mut self) {
+        self.cmd_tx.send(AppCommand::RescanLibrary);
+        let t = self.view.target.clone();
+        if let Some(t) = t {
+            self.load_target(t);
+        }
+    }
+
+    /// Which of the top bar's actions fit, measured from their laid-out text in the bar's own style: the full set when
+    /// it fits, else the least used go into "More actions" (`OVERFLOW_ORDER`) until the rest fits. The brand, the way
+    /// back to the library and Commands always stay. The tagline shows only with room to spare.
+    fn top_bar_layout(&self, ui: &egui::Ui, on_game: bool, busy: bool) -> BarLayout {
+        let spacing = ui.spacing();
+        let gap = spacing.item_spacing.x;
+        let pad = 2.0 * spacing.button_padding.x;
+        let text = |text: &str, font: egui::FontId| {
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), font, Color32::PLACEHOLDER)
+                .size()
+                .x
+        };
+        let body = egui::TextStyle::Body.resolve(ui.style());
+        let button = |key: &'static str| text(self.tr(key), egui::TextStyle::Button.resolve(ui.style())) + pad;
+        let item = |item: BarItem| match item {
+            BarItem::GameList => button(self.game_list_key()),
+            BarItem::Prefs => button("prefs.open"),
+            BarItem::Refresh => button("app.refresh"),
+            // As egui draws a ComboBox: the text, the arrow and the button padding, at least `combo_width`.
+            BarItem::Language => (text(self.lang.native_name(), egui::TextStyle::Button.resolve(ui.style()))
+                + spacing.icon_spacing
+                + spacing.icon_width
+                + pad)
+                .max(spacing.combo_width),
+        };
+        let mut fixed = vec![
+            text(self.tr("brand"), egui::FontId::proportional(theme::DISPLAY)),
+            button("palette.title"),
+        ];
+        if on_game {
+            fixed.push(button("shell.back_library"));
+        }
+        if busy {
+            fixed.push(spacing.interact_size.y);
+        }
+        let optional: Vec<BarItem> = OVERFLOW_ORDER
+            .into_iter()
+            .filter(|i| on_game || *i != BarItem::GameList)
+            .collect();
+        let more = MORE_MARK.x + pad;
+        // Every item and one gap after each but the last; one point of slack against rounding.
+        let needed = |overflow: &[BarItem]| {
+            let mut widths = fixed.clone();
+            widths.extend(optional.iter().filter(|i| !overflow.contains(i)).map(|i| item(*i)));
+            if !overflow.is_empty() {
+                widths.push(more);
+            }
+            widths.iter().sum::<f32>() + gap * (widths.len() as f32 - 1.0) + 1.0
+        };
+        let available = ui.available_width();
+        let mut overflow = Vec::new();
+        for candidate in &optional {
+            if needed(&overflow) <= available {
+                break;
+            }
+            overflow.push(*candidate);
+        }
+        let tagline = overflow.is_empty() && needed(&[]) + gap + text(self.tr("app.tagline"), body) <= available;
+        BarLayout { overflow, tagline }
+    }
+
+    /// "More actions" at the top bar's end: the actions the window has no room for, each under its own label.
+    fn top_bar_overflow(&mut self, ui: &mut egui::Ui, overflow: &[BarItem]) {
+        let more = self.tr("shell.more");
+        ui.menu_button(more_mark(), |ui| {
+            for item in overflow {
+                match item {
+                    BarItem::Refresh => {
+                        if ui
+                            .add_enabled(!self.scanning, egui::Button::new(self.tr("app.refresh")))
+                            .clicked()
+                        {
+                            self.rescan_library();
+                            ui.close();
+                        }
+                    }
+                    BarItem::Prefs => {
+                        if ui.button(self.tr("prefs.open")).clicked() {
+                            self.prefs_open();
+                            ui.close();
+                        }
+                    }
+                    BarItem::Language => self.language_menu(ui),
+                    BarItem::GameList => {
+                        if ui.button(self.tr(self.game_list_key())).clicked() {
+                            self.sidebar_visible = !self.sidebar_visible;
+                            ui.close();
+                        }
+                    }
+                }
+            }
+        })
+        .response
+        .on_hover_text(more)
+        .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, more));
     }
 
     /// What the background work is, in the user's words, for the top bar's spinner.
@@ -492,6 +636,7 @@ impl RetoqueApp {
         let installed = self.library_state.derived.installed_count;
         let updates = self.library_state.derived.updates;
         ui.label(RichText::new(self.home_count_line(installed, updates)).color(theme::MUTED));
+        self.update_all_button(ui);
         if self.library_pending {
             ui.label(
                 RichText::new(self.tr("shell.library_checking"))

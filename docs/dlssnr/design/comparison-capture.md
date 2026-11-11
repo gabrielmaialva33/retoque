@@ -289,6 +289,8 @@ as good as public too.
   a session can be asked for one from outside the game (the Linux workflow in CLAUDE.md, a test script). A
   file whose content is the word `burst` requests the old eight-frame raw burst, so that research use is
   not lost.
+  Since 2026-11-11 the desktop app's “Capture now” (tools/app README, “Before / after”) leaves the same empty file
+  while the game runs and takes it back when no route reads it; the menu button is also in the panel's simple view.
 - **No keybinding in v1.** `ToggleKey` shows the pattern (`Config.h:309`); a `CaptureKey` is a four-point
   config change and the Hold frame keybind it would sit beside is itself still a follow-up
   (frame-hold.md, "Config / persistence"). Open question 3.

@@ -1,5 +1,7 @@
 //! A read-only comparison panel. One worker does disk I/O, decode, tonemapping and metrics; generations
-//! discard stale results when the target or selected capture changes. No app settings or game writes.
+//! discard stale results when the target or selected capture changes. No app settings change here, and the only
+//! write to the game folder is "Capture now"'s request file, left only while the game runs and taken back when the
+//! game does not take it.
 use crate::i18n::{Lang, t};
 use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 use retoque_data::captures::{self, Pair, Stats};
@@ -223,7 +225,32 @@ impl Worker {
     }
 }
 
+/// "Capture now": the app asks the running game for one capture through the runtime's trigger file
+/// (retoque_data::captures::request_capture) and waits for the pair to land, so nobody has to find the button in the
+/// in-game menu.
+#[derive(Default)]
+enum CaptureNow {
+    #[default]
+    Idle,
+    /// Checking that the game runs, then leaving the request; the reply carries the newest stem before it.
+    Asking(mpsc::Receiver<Result<Option<Option<String>>, String>>),
+    Waiting {
+        since: Instant,
+        checked: Instant,
+        taken: bool,
+        before: Option<String>,
+    },
+    /// The outcome, as an i18n key.
+    Said(&'static str),
+    Failed(String),
+}
+/// The runtime looks for the request about once a second of NR frames; slow frame rates take longer.
+const CAPTURE_TAKE_WITHIN: Duration = Duration::from_secs(8);
+/// After the game took it, the two files and the sidecar are written within a few frames.
+const CAPTURE_SAVE_WITHIN: Duration = Duration::from_secs(12);
+
 pub struct CompareView {
+    capture_now: CaptureNow,
     target: Option<PathBuf>,
     worker: Option<Worker>,
     epoch: u64,
@@ -249,6 +276,7 @@ pub struct CompareView {
 impl Default for CompareView {
     fn default() -> Self {
         Self {
+            capture_now: CaptureNow::Idle,
             target: None,
             worker: None,
             epoch: 0,
@@ -452,6 +480,7 @@ impl CompareView {
             self.scan(target);
         }
         self.receive(ui.ctx());
+        self.poll_capture(ui.ctx(), target);
         if self.expanded && !self.pairs.is_empty() {
             let ctx = ui.ctx().clone();
             let size = (ctx.content_rect().size() - Vec2::splat(48.0)).max(Vec2::new(280.0, 240.0));
@@ -516,6 +545,7 @@ impl CompareView {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.toggle_value(&mut self.details_open, t(lang, "cmp.details"));
+                self.capture_controls(ui, lang, target, false);
             });
         });
         if self.details_open {
@@ -548,7 +578,7 @@ impl CompareView {
         } else {
             t(lang, "cmp.empty.custom").to_owned()
         };
-        for (index, text) in [t(lang, "cmp.empty.run"), menu.as_str(), t(lang, "cmp.empty.capture")]
+        for (index, text) in [t(lang, "cmp.empty.run"), t(lang, "cmp.empty.capture_now")]
             .into_iter()
             .enumerate()
         {
@@ -562,8 +592,124 @@ impl CompareView {
             });
             ui.add_space(8.0);
         }
+        ui.horizontal_wrapped(|ui| self.capture_controls(ui, lang, target, true));
+        ui.add_space(16.0);
+        // The same capture from inside the game, for the routes the request file does not reach.
+        ui.label(egui::RichText::new(t(lang, "cmp.empty.or_menu")).color(crate::theme::MUTED));
+        for text in [menu.as_str(), t(lang, "cmp.empty.capture")] {
+            ui.add(egui::Label::new(egui::RichText::new(text).color(crate::theme::MUTED)).wrap());
+        }
+        ui.add_space(8.0);
         if ui.button(t(lang, "cmp.empty.refresh")).clicked() {
             self.scan(target);
+        }
+    }
+    fn capture_busy(&self) -> bool {
+        matches!(self.capture_now, CaptureNow::Asking(_) | CaptureNow::Waiting { .. })
+    }
+    /// Leaves the request only when a process holds the game folder: one left while the game is closed would fire at
+    /// its next launch. The check and the write run off the UI thread.
+    fn request_capture(&mut self, target: &Path) {
+        let (tx, rx) = mpsc::channel();
+        let target = target.to_owned();
+        std::thread::spawn(move || {
+            let result = if retoque_core::running_processes(&target).is_empty() {
+                Ok(None)
+            } else {
+                let before = captures::newest_stem(&target);
+                captures::request_capture(&target)
+                    .map(|_| Some(before))
+                    .map_err(|e| e.to_string())
+            };
+            let _ = tx.send(result);
+        });
+        self.capture_now = CaptureNow::Asking(rx);
+    }
+    fn poll_capture(&mut self, ctx: &egui::Context, target: &Path) {
+        let now = Instant::now();
+        match &mut self.capture_now {
+            CaptureNow::Asking(rx) => match rx.try_recv() {
+                Ok(Ok(Some(before))) => {
+                    self.capture_now = CaptureNow::Waiting {
+                        since: now,
+                        checked: now,
+                        taken: false,
+                        before,
+                    }
+                }
+                Ok(Ok(None)) => self.capture_now = CaptureNow::Said("cmp.capture_not_running"),
+                Ok(Err(e)) => self.capture_now = CaptureNow::Failed(e),
+                Err(mpsc::TryRecvError::Disconnected) => self.capture_now = CaptureNow::Idle,
+                Err(mpsc::TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(100)),
+            },
+            CaptureNow::Waiting {
+                since,
+                checked,
+                taken,
+                before,
+            } => {
+                ctx.request_repaint_after(Duration::from_millis(500));
+                if now.duration_since(*checked) < Duration::from_millis(500) {
+                    return;
+                }
+                *checked = now;
+                if !*taken {
+                    if !captures::capture_pending(target) {
+                        *taken = true;
+                        *since = now;
+                    } else if now.duration_since(*since) > CAPTURE_TAKE_WITHIN {
+                        // Not taken: NR is off, or this route reads no request (Vulkan, D3D11 native, the proxy).
+                        let _ = captures::withdraw_capture(target);
+                        self.capture_now = CaptureNow::Said("cmp.capture_ignored");
+                    }
+                    return;
+                }
+                if captures::newest_stem(target) != *before {
+                    self.capture_now = CaptureNow::Said("cmp.capture_saved");
+                    self.scan(target);
+                } else if now.duration_since(*since) > CAPTURE_SAVE_WITHIN {
+                    self.capture_now = CaptureNow::Said("cmp.capture_late");
+                }
+            }
+            CaptureNow::Idle | CaptureNow::Said(_) | CaptureNow::Failed(_) => {}
+        }
+    }
+    /// The button and what became of the last press. `primary` only where it is the view's one main action.
+    fn capture_controls(&mut self, ui: &mut egui::Ui, lang: Lang, target: &Path, primary: bool) {
+        let busy = self.capture_busy();
+        let label = t(lang, "cmp.capture_now");
+        let button = if primary {
+            crate::theme::primary(label)
+        } else {
+            egui::Button::new(label)
+        };
+        if ui
+            .add_enabled(!busy, button)
+            .on_hover_text(t(lang, "cmp.capture_now_help"))
+            .clicked()
+        {
+            self.request_capture(target);
+        }
+        match &self.capture_now {
+            CaptureNow::Asking(_) | CaptureNow::Waiting { .. } => {
+                ui.spinner();
+                ui.label(t(lang, "cmp.capture_waiting"));
+            }
+            CaptureNow::Said(key) => {
+                let color = if *key == "cmp.capture_saved" {
+                    crate::theme::GOOD
+                } else {
+                    crate::theme::MUTED
+                };
+                ui.add(egui::Label::new(egui::RichText::new(t(lang, key)).color(color)).wrap());
+            }
+            CaptureNow::Failed(error) => {
+                ui.colored_label(
+                    crate::theme::BAD,
+                    t(lang, "cmp.capture_failed").replace("{error}", error),
+                );
+            }
+            CaptureNow::Idle => {}
         }
     }
     fn toolbar(&mut self, ui: &mut egui::Ui, lang: Lang, target: &Path) -> bool {
@@ -1445,6 +1591,76 @@ mod tests {
         assert!(harness.get_by_label(&label).rect().right() <= 566.0);
         assert!(harness.get_by_label("Buscar capturas").rect().is_positive());
         assert!(harness.query_by_label("Comparison image").is_none());
+    }
+    fn ago(seconds: u64) -> Instant {
+        Instant::now().checked_sub(Duration::from_secs(seconds)).unwrap()
+    }
+    fn said(view: &CompareView) -> Option<&'static str> {
+        match view.capture_now {
+            CaptureNow::Said(key) => Some(key),
+            _ => None,
+        }
+    }
+    #[test]
+    fn capture_now_leaves_no_request_while_the_game_is_closed() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        let mut view = CompareView::new();
+        view.request_capture(dir.path());
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while view.capture_busy() && Instant::now() < deadline {
+            view.poll_capture(&ctx, dir.path());
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(said(&view), Some("cmp.capture_not_running"));
+        assert!(
+            !captures::capture_pending(dir.path()),
+            "a request left now would fire at the next launch"
+        );
+    }
+    #[test]
+    fn a_request_the_game_never_takes_is_taken_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        captures::request_capture(dir.path()).unwrap();
+        let mut view = CompareView::new();
+        view.capture_now = CaptureNow::Waiting {
+            since: ago(30),
+            checked: ago(1),
+            taken: false,
+            before: None,
+        };
+        view.poll_capture(&ctx, dir.path());
+        assert_eq!(said(&view), Some("cmp.capture_ignored"));
+        assert!(!captures::capture_pending(dir.path()));
+    }
+    #[test]
+    fn a_taken_request_ends_when_the_new_pair_lands() {
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = egui::Context::default();
+        let mut view = CompareView::new();
+        // The game removed the request: taken.
+        view.capture_now = CaptureNow::Waiting {
+            since: ago(2),
+            checked: ago(1),
+            taken: false,
+            before: None,
+        };
+        view.poll_capture(&ctx, dir.path());
+        assert!(matches!(view.capture_now, CaptureNow::Waiting { taken: true, .. }));
+        let captures_dir = dir.path().join("retoque-captures");
+        std::fs::create_dir(&captures_dir).unwrap();
+        for half in ["original", "processed"] {
+            captures::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255]))
+                .save(captures_dir.join(format!("20261111T190000Z-x.{half}.png")))
+                .unwrap();
+        }
+        if let CaptureNow::Waiting { checked, .. } = &mut view.capture_now {
+            *checked = ago(1);
+        }
+        view.poll_capture(&ctx, dir.path());
+        assert_eq!(said(&view), Some("cmp.capture_saved"));
+        assert!(view.scanning, "the new pair is loaded right away");
     }
     #[test]
     fn thumbnail_cache_is_small_and_invalidates_on_source_change() {

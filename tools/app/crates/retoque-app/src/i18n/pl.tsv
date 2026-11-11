@@ -202,6 +202,7 @@ st.nr_on	NR włączone
 st.nr_off	NR wyłączone
 inst.proxy	Nazwa pliku ładującego
 inst.proxy_help	Zmieniaj tylko wtedy, gdy gra nie uruchamia się z domyślną.
+inst.menu_language	Język menu w grze
 inst.enable_nr	Włącz renderowanie neuronowe (NR)
 inst.keep_reshade	Zachowaj ReShade (ładuj go przez OptiScaler)
 inst.replace_foreign	Zastąp plik, który nie jest nasz (zostanie zachowany jako kopia zapasowa)
@@ -257,10 +258,39 @@ prefs.open	Preferencje…
 prefs.title	Preferencje
 prefs.installs	Nowe instalacje
 prefs.installs_help	Od czego zaczyna gra bez Retoque. Gra, która już go ma, zachowuje własne wybory.
+prefs.menu_lang_same	Taki jak w aplikacji ({language})
+prefs.menu_lang_help	Obowiązuje w każdej grze przy następnej instalacji, aktualizacji lub optymalizacji. Twój własny plik języka zostaje bez zmian. Tłumaczenia to robocze wersje maszynowe.
 prefs.language	Język
 prefs.language_help	Tekst aplikacji zmienia się od razu po wyborze.
 prefs.language_draft	To tłumaczenie jest wersją roboczą przygotowaną maszynowo i nie zostało jeszcze sprawdzone przez rodzimego użytkownika języka. Niektóre sformułowania mogą być nietrafne.
 prefs.language_no_font	{languages}: ten komputer nie ma czcionki ze znakami chińskimi, japońskimi i koreańskimi (np. Noto Sans CJK). Zainstaluj ją i otwórz Retoque ponownie.
+app_install.heading	Aplikacja Retoque
+app_install.install	Zainstaluj Retoque na tym komputerze…
+app_install.install_title	Zainstaluj Retoque na tym komputerze
+app_install.install_confirm	Zainstaluj Retoque
+app_install.install_body	Utwórz ten folder programu i skopiuj do niego poniższe pliki:
+app_install.files	Pliki (wraz z folderami)
+app_install.shortcuts	Utwórz skróty w menu Start i na pulpicie:
+app_install.registration	Zarejestruj Retoque w aplikacjach i funkcjach systemu Windows dla tego użytkownika.
+app_install.preserve	Dane aplikacji i Retoque w grach zostaną zachowane.
+app_install.installed	Zainstalowano Retoque. Uruchom ponownie, aby użyć zainstalowanej kopii.
+app_install.check	Sprawdź aktualizacje aplikacji…
+app_install.check_title	Sprawdź aktualizacje aplikacji
+app_install.check_body	Sprawdzić nowszą aplikację Windows w naszych oficjalnych wydaniach na GitHub? Nic nie jest pobierane przy uruchomieniu.
+app_install.available	Dostępna jest wersja aplikacji {version}.
+app_install.update	Zaktualizuj aplikację…
+app_install.update_title	Zaktualizuj aplikację
+app_install.download_body	Pobierz i sprawdź nową aplikację i jej pliki Retoque z GitHub. Przed zastąpieniem zainstalowanych plików zatwierdzisz ponowne uruchomienie.
+app_install.current	Aplikacja jest aktualna.
+app_install.no_release	Nie opublikowano jeszcze wersji aplikacji Windows.
+app_install.ready	Aktualizacja pobrana i sprawdzona. Uruchom ponownie, gdy będziesz gotowy.
+app_install.restart_offer	Uruchom aplikację ponownie…
+app_install.restart_title	Uruchom aplikację ponownie
+app_install.restart_confirm	Uruchom aplikację ponownie
+app_install.restart_body	Uruchom aplikację ponownie, aby zastąpić zainstalowane pliki sprawdzoną aktualizacją. Poprzednia aplikacja pozostanie do uruchomienia nowej kopii.
+app_install.busy	Przygotowywanie instalacji aplikacji
+app_install.uninstall_body	Odinstalować aplikację Retoque, folder programu, skróty i wpis w aplikacjach i funkcjach? Dane aplikacji i Retoque w grach zostaną zachowane.
+app_install.failed	Nie można zainstalować, zaktualizować lub odinstalować aplikacji. Zamknij inne okna Retoque i spróbuj ponownie. Szczegóły:
 prefs.data	Dane aplikacji
 prefs.data_usage	{size} w tym folderze
 prefs.data_measuring	Mierzenie folderu…
@@ -307,8 +337,22 @@ sess.steady	Stabilna sesja: nic do zmiany.
 sess.fake_nvapi	Ten Retoque dał grze zastępcze NVAPI, więc generowanie klatek DLSS może zniknąć z menu gry. Zaktualizuj Retoque w tej grze.
 sess.low_base	Generowanie klatek mnożyło tylko {base} prawdziwych klatek na sekundę. Poniżej około 40 gra wydaje się ociężała i się zacina: wybierz w grze DLSS Zrównoważony lub Wydajność.
 sess.low_base_x4	Przy niskiej bazie x3 zamiast x4 też działa stabilniej.
+sess.use_x3	Użyj x3…
+sess.use_x3_done	Teraz x3
 sess.drops_advice	Prawdziwa liczba klatek spadła o ponad 20% przez {percent}% sesji. Zwykle to gra wczytuje nowe obszary albo brakuje wolnej pamięci RAM: zamknij inne programy i obniż jakość tekstur.
 sess.nr_off	Renderowanie neuronowe zostało wyłączone w trakcie sesji (jego klawiszem w grze).
+measure.title	Pomiar
+measure.intro	Ile każdej klatki zajmuje NR na twojej karcie graficznej. Pomiar trochę kosztuje, dopóki jest włączony.
+measure.start	Zmierz tę grę…
+measure.started	Pomiar włączony
+measure.waiting	Pomiar jest włączony. Uruchom grę, graj przez minutę i zamknij ją: wynik pojawi się tutaj.
+measure.still_on	Pomiar jest nadal włączony i trochę kosztuje. Wyłącz go, gdy skończysz.
+measure.stop	Wyłącz pomiar…
+measure.stopped	Pomiar wyłączony
+measure.per_frame	NR na klatkę (mediana)
+measure.share	Udział w klatce
+measure.detail	Sam model: {model} · Przebiegi NR: {passes} · Próbki: {samples}
+measure.cadence	Model działa w jednej klatce na {n}: te czasy pochodzą z klatek, w których działa, więc nie ma udziału w klatce.
 card.launch	Ostatni krok: opcja uruchamiania w Steam
 card.launch_heroic	Ostatni krok: zmienna środowiskowa w Heroic
 card.launch_lutris	Ostatni krok: opcja w Lutris
@@ -397,6 +441,23 @@ shell.games_few	gry
 shell.games_many	gier
 shell.updates_one	dostępna aktualizacja
 shell.updates_other	dostępnych aktualizacji
+update_all.open	Aktualizuj wszystkie…
+update_all.title	Aktualizuj wszystkie
+update_all.note	Sprawdź każdą grę. Twoje ustawienia zostaną zachowane. Gry są aktualizowane pojedynczo.
+update_all.confirm_one	Aktualizuj {count} grę
+update_all.confirm	Aktualizuj gry: {count}
+update_all.ready	Retoque zostanie zaktualizowane
+update_all.skipped	Pominięto
+update_all.running	Gra jest uruchomiona. Zamknij ją i sprawdź ponownie.
+update_all.partial	Niekompletna instalacja. Otwórz grę, aby najpierw zakończyć czyszczenie.
+update_all.foreign	Niezarejestrowana lub obca instalacja. Sprawdź ją najpierw na stronie gry.
+update_all.unknown	Nieznany stan. Odśwież stan gry i sprawdź ponownie.
+update_all.current	Już aktualne.
+update_all.refused	Aktualizacja odrzucona. Otwórz szczegóły i sprawdź tę grę osobno.
+update_all.overlap	Inny wpis aktualizuje ten folder. Sprawdź osobno zduplikowane lub nakładające się foldery.
+update_all.busy	Trwa inna zmiana. Poczekaj i sprawdź ponownie.
+update_all.progress	Aktualizowanie gier · ukończono {done} z {total}
+update_all.done	Aktualizacja zakończona: zaktualizowano {updated} · pominięto {skipped} · błędy {failed}
 shell.updates_few	dostępne aktualizacje
 shell.updates_many	dostępnych aktualizacji
 shell.home_help	Aby zacząć, dodaj folder gry lub przeskanuj swoje launchery.
@@ -414,6 +475,8 @@ set.advanced	Ustawienia zaawansowane
 set.model_link	Wybierz model NR w zakładce Komponenty
 set.custom	Własna wartość
 set.automatic	Automatycznie
+set.passes_cost	Koszt: {n}× czas GPU modelu i {n} instancji modelu w pamięci wideo.
+set.passes_ampere	Na karcie RTX 30 wyższe liczby mogą zostać odrzucone przez jej budżet pamięci wideo.
 tab.install_first	Zainstaluj Retoque, aby skonfigurować tę grę
 tab.review_install	Przejrzyj instalację…
 tab.loading	Odczytywanie ustawień gry…
@@ -480,8 +543,18 @@ cmp.empty.run	Uruchom grę z Retoque i włączonym NR.
 cmp.empty.menu	Naciśnij {key}, aby otworzyć menu Retoque w grze.
 cmp.empty.custom	Otwórz menu Retoque w grze ustawionym klawiszem menu.
 cmp.empty.disabled	Menu w grze jest wyłączone w konfiguracji tej gry. Włącz je przed wykonaniem zrzutów.
-cmp.empty.capture	W Porównaniu wybierz „Zrzuć oryginał i przetworzony”. Poczekaj, aż oba pliki się zapiszą, a potem odśwież tutaj.
+cmp.empty.capture_now	Kliknij Zrób zrzut teraz. Gra zapisze klatkę przed NR i po nim, a oba obrazy pojawią się tutaj.
+cmp.empty.or_menu	Albo z poziomu gry:
+cmp.empty.capture	W panelu DLSS Neural Rendering wybierz „Przechwyć oryginał i wynik”.
 cmp.empty.refresh	Szukaj zrzutów
+cmp.capture_now	Zrób zrzut teraz
+cmp.capture_now_help	Prosi uruchomioną grę o jeden zrzut tej samej klatki przed NR i po nim, bez otwierania jej menu.
+cmp.capture_waiting	Czekam, aż gra zapisze zrzut…
+cmp.capture_not_running	Najpierw uruchom grę: zrzut wykonuje uruchomiona gra.
+cmp.capture_ignored	Gra nie przyjęła prośby: NR może być wyłączony albo ścieżka tej gry jej nie odczytuje (Vulkan, natywny D3D11). Użyj menu w grze, poniżej.
+cmp.capture_late	Gra przyjęła prośbę, ale żaden zrzut nie dotarł. Menu w grze pokazuje przyczynę.
+cmp.capture_saved	Zrzut zapisany.
+cmp.capture_failed	Nie udało się poprosić gry o zrzut: {error}
 auto.gpu_reading	Wykrywanie karty graficznej…
 auto.gpu_unknown	Nie wykryto karty graficznej
 shell.install_optimize	Zainstaluj i zoptymalizuj…
@@ -899,6 +972,8 @@ setting.DlssNr.Stage	Etap NR
 setting.DlssNr.Stage.help	Przed skalerem to tryb eksperymentalny. W Vulkan zmiana wymaga ponownego uruchomienia gry. Jeśli wybrany etap jest niedostępny, NR nie przełącza się samo.
 setting.DlssNr.WorkingScale	Skala modelu
 setting.DlssNr.WorkingScale.help	Automatycznie: dobierana do twojej karty graficznej. Od 0.25 do 2.0; powyżej 1 model działa w wyższej rozdzielczości. Ścieżki bez prawdziwego ruchu pozostają na 1 lub niżej.
+setting.DlssNr.Passes	Przebiegi modelu
+setting.DlssNr.Passes.help	Ile razy model działa na każdej klatce; każdy przebieg poprawia poprzedni. Tylko D3D12; natywne gry Vulkan używają jednego. Automatycznie: 1.
 setting.DlssNr.ModelFile	Plik modelu
 setting.DlssNr.ModelFile.help	Automatycznie: szuka nvngx_dlssnr.dll obok gry. Jeśli wybranego pliku brakuje, NR się wyłącza. Po zmianie uruchom grę ponownie.
 setting.DlssNr.GameProfiles	Profile gier

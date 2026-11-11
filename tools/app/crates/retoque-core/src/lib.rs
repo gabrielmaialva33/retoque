@@ -31,6 +31,22 @@ pub const FORWARDER_NAME: &str = "nvngx.dll_dlssnr.dll";
 pub const INI_NAME: &str = "OptiScaler.ini";
 pub const MODEL_NAME: &str = "nvngx_dlssnr.dll";
 pub const STATE_DIR: &str = ".retoque";
+/// The in-game menu's language file beside OptiScaler (retoque/translations/README.md); without it the menu is English.
+pub const MENU_LANG_NAME: &str = "OptiScaler.lang";
+/// The optional menu packs Retoque ships under `translations/optional/<code>.lang`.
+pub const MENU_PACKS: [&str; 9] = ["pt-BR", "de", "es", "fr", "ja", "ko", "pl", "ru", "zh-CN"];
+
+/// What an install does with the in-game menu's language file.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum MenuLanguage {
+    /// Leave `OptiScaler.lang` as it is (the scripts' and the CLI's behaviour).
+    #[default]
+    Keep,
+    /// English: remove the `OptiScaler.lang` an earlier install put there; a file of the user's stays.
+    English,
+    /// Install `translations/optional/<code>.lang` as `OptiScaler.lang`; one of `MENU_PACKS`.
+    Pack(String),
+}
 
 /// What an install is asked to do. Field-for-field the scripts' flags.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,6 +62,8 @@ pub struct InstallOptions {
     pub allow_second_proxy: bool,
     /// Linux only: copy the driver's Wine `_nvngx.dll` (the scripts' default; `--no-nvngx` turns it off).
     pub copy_nvngx: bool,
+    /// The in-game menu's language; `Keep` leaves `OptiScaler.lang` alone.
+    pub menu_language: MenuLanguage,
 }
 
 impl Default for InstallOptions {
@@ -59,6 +77,7 @@ impl Default for InstallOptions {
             replace_foreign: false,
             allow_second_proxy: false,
             copy_nvngx: cfg!(target_os = "linux"),
+            menu_language: MenuLanguage::Keep,
         }
     }
 }

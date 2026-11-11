@@ -386,6 +386,10 @@ bool IsRunning();
 // Why it is not, if it is not. Empty while it is running or has not been tried yet.
 const char* FailureReason();
 
+// NR passes recorded in this process by any route, counting up from zero; for the window host's outcome
+// (DlssNr_WindowHost.cpp), which compares it across one present. Reads a counter, changes nothing.
+unsigned long long PassesRecorded();
+
 // The model's own count of the VRAM its features held at the last D3D12 build (its stats callback, read once after the
 // build; docs/dlssnr/design/model-vram-stats.md), while that feature runs. Empty when the model gave none, on native
 // Vulkan, and with the pass off or failed.

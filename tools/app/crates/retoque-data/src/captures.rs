@@ -103,6 +103,59 @@ pub fn capture_help(target: &Path) -> CaptureHelp {
     }
 }
 
+/// The file the runtime looks for beside OptiScaler about once a second while its D3D12 pass runs: present, it asks
+/// for one comparison capture and is removed (retoque/shaders/dlssnr/DlssNr_Dx12_Diagnostics.cpp, CheckCaptureTrigger).
+pub const CAPTURE_TRIGGER: &str = "dlssnr-capture.trigger";
+
+/// Asks the running game for one comparison capture by leaving the trigger file in `target`, the folder that holds
+/// OptiScaler. An empty file means the comparison pair (a word inside would ask for something else). A trigger already
+/// waiting is left as it is. Only the caller knows whether the game runs: one left behind fires at the next launch.
+pub fn request_capture(target: &Path) -> io::Result<()> {
+    let trigger = target.join(CAPTURE_TRIGGER);
+    match fs::OpenOptions::new().write(true).create_new(true).open(&trigger) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Whether a capture request is still waiting for the game to take it.
+pub fn capture_pending(target: &Path) -> bool {
+    fs::symlink_metadata(target.join(CAPTURE_TRIGGER)).is_ok_and(|m| m.is_file())
+}
+
+/// Takes back a request the game never took, so it cannot fire at a later launch. Only an empty regular file is
+/// removed: anything else under that name was not left by `request_capture`.
+pub fn withdraw_capture(target: &Path) -> io::Result<()> {
+    let trigger = target.join(CAPTURE_TRIGGER);
+    match fs::symlink_metadata(&trigger) {
+        Ok(meta) if meta.is_file() && meta.len() == 0 => fs::remove_file(&trigger),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+/// The newest complete pair's stem, from file names only (stems start with a UTC timestamp), so it can be asked often
+/// while a capture is awaited without reading any image or sidecar.
+pub fn newest_stem(target: &Path) -> Option<String> {
+    let dir = target.join("retoque-captures");
+    fs::read_dir(&dir)
+        .ok()?
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().into_string().ok()?;
+            let (stem, ext) = name
+                .strip_suffix(".original.png")
+                .map(|s| (s, "png"))
+                .or_else(|| name.strip_suffix(".original.pfm").map(|s| (s, "pfm")))?;
+            dir.join(format!("{stem}.processed.{ext}"))
+                .is_file()
+                .then(|| stem.to_owned())
+        })
+        .max()
+}
+
 /// Find complete pairs under `<target>/retoque-captures` (or in that directory itself).
 /// Capture stems begin with a UTC timestamp, so descending names give newest captures first.
 /// Use `scan` when a missing directory must be distinguished from a permission/I/O failure.
@@ -543,6 +596,45 @@ mod tests {
     use super::*;
     use image::Rgba;
     use std::{fs, io::Write};
+
+    #[test]
+    fn a_capture_request_is_an_empty_trigger_the_app_can_take_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let game = dir.path();
+        assert!(!capture_pending(game));
+        request_capture(game).unwrap();
+        assert!(capture_pending(game));
+        assert_eq!(fs::read(game.join(CAPTURE_TRIGGER)).unwrap(), b"");
+        // A second press while one waits changes nothing.
+        request_capture(game).unwrap();
+        withdraw_capture(game).unwrap();
+        assert!(!capture_pending(game));
+        // Taken by the game (gone) is not an error.
+        withdraw_capture(game).unwrap();
+        // A trigger someone wrote a word into (burst, replay) is theirs: left alone.
+        fs::write(game.join(CAPTURE_TRIGGER), b"replay").unwrap();
+        withdraw_capture(game).unwrap();
+        assert!(capture_pending(game));
+    }
+
+    #[test]
+    fn the_newest_stem_needs_both_halves() {
+        let dir = tempfile::tempdir().unwrap();
+        let captures = dir.path().join("retoque-captures");
+        assert_eq!(newest_stem(dir.path()), None);
+        fs::create_dir(&captures).unwrap();
+        for name in [
+            "20261111T100000Z-a.original.png",
+            "20261111T100000Z-a.processed.png",
+            "20261111T110000Z-b.original.pfm",
+            "20261111T110000Z-b.processed.pfm",
+            // Newer, but its processed half is not written yet.
+            "20261111T120000Z-c.original.png",
+        ] {
+            fs::write(captures.join(name), b"").unwrap();
+        }
+        assert_eq!(newest_stem(dir.path()).as_deref(), Some("20261111T110000Z-b"));
+    }
     fn pfm(path: &Path, width: u32, height: u32, scale: f32, values: &[f32]) {
         let mut f = fs::File::create(path).unwrap();
         write!(f, "PF\n{width} {height}\n{scale}\n").unwrap();

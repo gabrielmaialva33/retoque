@@ -162,6 +162,14 @@ pub fn compare_versions(a: &str, b: &str) -> Option<Ordering> {
     })
 }
 
+pub(crate) fn asset_name(version: &str, app: bool) -> String {
+    if app {
+        format!("retoque-app-{version}-windows-x64.zip")
+    } else {
+        format!("retoque-payload-{version}-x64.zip")
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Release {
     pub tag: String,
@@ -178,11 +186,15 @@ pub struct Release {
 
 impl Release {
     pub fn validate(&self) -> io::Result<()> {
+        self.validate_kind(false)
+    }
+
+    pub(crate) fn validate_kind(&self, app: bool) -> io::Result<()> {
         let Some(norm) = normalize_version(&self.tag) else {
             return Err(invalid("invalid payload release tag"));
         };
         if self.version != norm
-            || self.asset != format!("retoque-payload-{}-x64.zip", self.version)
+            || self.asset != asset_name(&self.version, app)
             || self.url != format!("{ASSET_PREFIX}{}/{}", self.tag, self.asset)
             || self.sums_url != format!("{ASSET_PREFIX}{}/SHA256SUMS", self.tag)
             || self.size == 0
@@ -250,7 +262,7 @@ pub fn allowed_url(value: &str, redirected_asset: bool) -> bool {
         if let Some((tag, asset)) = rest.split_once('/')
             && let Some(ver) = normalize_version(tag)
         {
-            return asset == "SHA256SUMS" || asset == format!("retoque-payload-{ver}-x64.zip");
+            return asset == "SHA256SUMS" || asset == asset_name(&ver, false) || asset == asset_name(&ver, true);
         }
     }
     redirected_asset
@@ -358,7 +370,7 @@ fn parse_digest_field(digest: Option<String>) -> io::Result<Option<String>> {
         .transpose()
 }
 
-fn convert_api_release(api: ApiRelease) -> io::Result<Option<Release>> {
+fn convert_api_release(api: ApiRelease, app: bool) -> io::Result<Option<Release>> {
     if api.draft || api.prerelease {
         return Ok(None);
     }
@@ -366,7 +378,13 @@ fn convert_api_release(api: ApiRelease) -> io::Result<Option<Release>> {
     let published_at = api
         .published_at
         .ok_or_else(|| invalid("missing release publication timestamp"))?;
-    let wanted_zip = format!("retoque-payload-{version}-x64.zip");
+    let wanted_zip = asset_name(&version, app);
+    // Older releases may only carry a payload; newer app-only releases must not break payload discovery.
+    if !api.assets.iter().any(|a| a.name == wanted_zip)
+        && (app || api.assets.iter().any(|a| a.name == asset_name(&version, true)))
+    {
+        return Ok(None);
+    }
 
     let mut matching_zip = api.assets.iter().filter(|a| a.name == wanted_zip);
     let zip_asset = matching_zip
@@ -400,13 +418,17 @@ fn convert_api_release(api: ApiRelease) -> io::Result<Option<Release>> {
         sums_size: sums_asset.size,
         sums_digest,
     };
-    release.validate()?;
+    release.validate_kind(app)?;
     Ok(Some(release))
 }
 
 /// Parse GitHub release JSON (either a `/releases` array or a `/releases/latest` object).
 /// Returns `Ok(None)` when no published non-draft release exists yet.
 pub fn parse_releases_json(bytes: &[u8]) -> io::Result<Option<Release>> {
+    parse_releases_kind(bytes, false)
+}
+
+pub(crate) fn parse_releases_kind(bytes: &[u8], app: bool) -> io::Result<Option<Release>> {
     if bytes.len() as u64 > MAX_API_BYTES {
         return Err(invalid("release metadata exceeds size limit"));
     }
@@ -419,7 +441,7 @@ pub fn parse_releases_json(bytes: &[u8]) -> io::Result<Option<Release>> {
             let mut candidates = Vec::new();
             for item in items {
                 let api: ApiRelease = serde_json::from_value(item).map_err(|_| invalid("invalid release item"))?;
-                if let Some(release) = convert_api_release(api)? {
+                if let Some(release) = convert_api_release(api, app)? {
                     candidates.push(release);
                 }
             }
@@ -437,7 +459,7 @@ pub fn parse_releases_json(bytes: &[u8]) -> io::Result<Option<Release>> {
             }
             let api: ApiRelease = serde_json::from_value(serde_json::Value::Object(map))
                 .map_err(|_| invalid("invalid release object"))?;
-            convert_api_release(api)
+            convert_api_release(api, app)
         }
         _ => Err(invalid("unexpected release JSON root")),
     }
@@ -556,7 +578,9 @@ pub fn parse_sha256sums(text: &str) -> io::Result<BTreeMap<String, String>> {
         if line.len() < 66 {
             return Err(invalid("malformed line in SHA256SUMS"));
         }
-        let (hash, rest) = line.split_at(64);
+        let (hash, rest) = line
+            .split_at_checked(64)
+            .ok_or_else(|| invalid("invalid UTF-8 checksum boundary"))?;
         if !hash_ok(hash) {
             return Err(invalid("invalid SHA-256 hex in SHA256SUMS"));
         }
@@ -618,14 +642,18 @@ fn write_new(dir: &Dir, name: &str, bytes: &[u8]) -> io::Result<()> {
     f.sync_all()
 }
 
-struct UnpackedPayload {
-    files: BTreeMap<String, FileRecord>,
+pub(crate) struct UnpackedPayload {
+    pub(crate) files: BTreeMap<String, FileRecord>,
     optiscaler_sha256: String,
     forwarder_sha256: String,
     file_version: Option<String>,
 }
 
 fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
+    unpack_kind(bytes, stage, false)
+}
+
+pub(crate) fn unpack_kind(bytes: &[u8], stage: &Dir, app: bool) -> io::Result<UnpackedPayload> {
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).map_err(io::Error::other)?;
     if zip.len() > MAX_ENTRIES {
         return Err(invalid("too many payload archive entries"));
@@ -657,7 +685,7 @@ fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
             }
             continue;
         }
-        if path != "SHA256SUMS" && !is_allowed_payload_path(path) {
+        if path != "SHA256SUMS" && !(is_allowed_payload_path(path) || app && path == "retoque-app.exe") {
             return Err(invalid("unexpected extra file in payload archive"));
         }
         total = total
@@ -668,7 +696,9 @@ fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
         }
         present_files.insert(path.to_owned());
     }
-    if REQUIRED_FILES.iter().any(|req| !present_files.contains(*req)) {
+    if REQUIRED_FILES.iter().any(|req| !present_files.contains(*req))
+        || app && !present_files.contains("retoque-app.exe")
+    {
         return Err(invalid("incomplete payload release archive"));
     }
 
@@ -678,6 +708,7 @@ fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
     let mut opti_bytes = Vec::new();
     let mut fwd_bytes = Vec::new();
     let mut ini_bytes = Vec::new();
+    let mut app_header = Vec::new();
 
     for i in 0..zip.len() {
         let mut file = zip.by_index(i).map_err(io::Error::other)?;
@@ -722,6 +753,9 @@ fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
                 "OptiScaler.dll" => opti_bytes.extend_from_slice(&buf[..n]),
                 "nvngx.dll_dlssnr.dll" => fwd_bytes.extend_from_slice(&buf[..n]),
                 "OptiScaler.ini" => ini_bytes.extend_from_slice(&buf[..n]),
+                "retoque-app.exe" if app_header.len() < 4096 => {
+                    app_header.extend_from_slice(&buf[..n.min(4096 - app_header.len())]);
+                }
                 _ => {}
             }
         }
@@ -765,6 +799,9 @@ fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
     {
         return Err(invalid("nvngx.dll_dlssnr.dll is missing required exports"));
     }
+    if app && !crate::app_release::is_x64_exe(&app_header) {
+        return Err(invalid("app is not a Windows x64 executable"));
+    }
     if has_enabled_true(&ini_bytes) {
         return Err(invalid("packaged OptiScaler.ini has Enabled=true by default"));
     }
@@ -786,6 +823,36 @@ fn unpack(bytes: &[u8], stage: &Dir) -> io::Result<UnpackedPayload> {
         forwarder_sha256,
         file_version: opti_ver,
     })
+}
+
+pub(crate) fn verify_archive(release: &Release, zip_bytes: &[u8], sums_bytes: &[u8], app: bool) -> io::Result<String> {
+    release.validate_kind(app)?;
+    if zip_bytes.len() as u64 != release.size || zip_bytes.len() as u64 > MAX_DOWNLOAD {
+        return Err(invalid("payload archive size mismatch"));
+    }
+    if sums_bytes.len() as u64 != release.sums_size || sums_bytes.len() as u64 > MAX_SUMS_BYTES {
+        return Err(invalid("SHA256SUMS size mismatch"));
+    }
+    if let Some(sums_digest) = &release.sums_digest {
+        let actual_sums_hash = sha(sums_bytes);
+        if !sums_digest.eq_ignore_ascii_case(&actual_sums_hash) {
+            return Err(invalid("SHA256SUMS digest mismatch"));
+        }
+    }
+    let zip_hash = sha(zip_bytes);
+    if !release.digest.eq_ignore_ascii_case(&zip_hash) {
+        return Err(invalid("payload SHA-256 does not match GitHub asset digest"));
+    }
+    let sums_text = std::str::from_utf8(sums_bytes).map_err(|_| invalid("SHA256SUMS is not UTF-8"))?;
+    let sums = parse_sha256sums(sums_text)?;
+    let Some(expected_from_sums) = sums.get(&release.asset) else {
+        return Err(invalid("SHA256SUMS does not list payload archive"));
+    };
+    if !expected_from_sums.eq_ignore_ascii_case(&zip_hash) {
+        return Err(invalid("payload SHA-256 does not match SHA256SUMS"));
+    }
+
+    Ok(zip_hash)
 }
 
 pub fn default_cache() -> io::Result<PathBuf> {
@@ -907,30 +974,7 @@ impl Cache {
     pub fn import_archive(&self, release: &Release, zip_bytes: &[u8], sums_bytes: &[u8]) -> io::Result<Record> {
         release.validate()?;
         self.held.current()?;
-        if zip_bytes.len() as u64 != release.size || zip_bytes.len() as u64 > MAX_DOWNLOAD {
-            return Err(invalid("payload archive size mismatch"));
-        }
-        if sums_bytes.len() as u64 != release.sums_size || sums_bytes.len() as u64 > MAX_SUMS_BYTES {
-            return Err(invalid("SHA256SUMS size mismatch"));
-        }
-        if let Some(sums_digest) = &release.sums_digest {
-            let actual_sums_hash = sha(sums_bytes);
-            if !sums_digest.eq_ignore_ascii_case(&actual_sums_hash) {
-                return Err(invalid("SHA256SUMS digest mismatch"));
-            }
-        }
-        let zip_hash = sha(zip_bytes);
-        if !release.digest.eq_ignore_ascii_case(&zip_hash) {
-            return Err(invalid("payload SHA-256 does not match GitHub asset digest"));
-        }
-        let sums_text = std::str::from_utf8(sums_bytes).map_err(|_| invalid("SHA256SUMS is not UTF-8"))?;
-        let sums = parse_sha256sums(sums_text)?;
-        let Some(expected_from_sums) = sums.get(&release.asset) else {
-            return Err(invalid("SHA256SUMS does not list payload archive"));
-        };
-        if !expected_from_sums.eq_ignore_ascii_case(&zip_hash) {
-            return Err(invalid("payload SHA-256 does not match SHA256SUMS"));
-        }
+        let zip_hash = verify_archive(release, zip_bytes, sums_bytes, false)?;
 
         let existing = self
             .records()?
