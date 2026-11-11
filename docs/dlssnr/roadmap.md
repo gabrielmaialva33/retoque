@@ -55,8 +55,11 @@ The tested adaptive cadence and half-rate look model were not promoted; preserve
 The guide-fidelity probe is designed and parked, not implemented. Its temporal pairing, ordering, source continuity
 and recording/readback lifetime contracts must close before implementation; see
 [guide-fidelity-probe](design/guide-fidelity-probe.md). It supplies no current guide-quality verdict.
-Ten-pass chains, unrelated capture/character-inspector features and closed reference DLLs are not adopted simply
-because another project advertises them.
+Unrelated capture/character-inspector features and closed reference DLLs are not adopted simply because another
+project advertises them. Ten-pass chains were parked on that ground until the owner asked for them on 2026-11-11:
+`Passes` now goes to ten (default one, RR route still three), with the cost said under the control and in
+[bounded-chain](design/bounded-chain.md) ("Ten passes"); its memory and time at ten on an RTX 3060 and a 4090 are
+not measured yet.
 
 ## Updating priorities
 

@@ -32,3 +32,24 @@ for name in ('g_nr.feature', 'g_nr.passFeature', 'g_nr.output', 'g_nr.passPing',
     assert name in room, name
 assert '!r.stuck' in room
 print('PASS: a refused chain generation parks the current one and waits; latches only with nothing left to free')
+
+# Ten passes (bounded-chain.md, "Ten passes"): every per-pass array is sized by the setting's bound, every loop over
+# them stops at that bound or at the requested count, and nothing still assumes three.
+internal = (Path(__file__).resolve().parents[2] / 'retoque/shaders/dlssnr/DlssNr_Dx12_Internal.h').read_text()
+state = internal[internal.index('struct NrState'):internal.index('extern NrState g_nr;')]
+assert 'static constexpr uint32_t kMaxPasses = DlssNr::PassConfig::MaxPasses;' in state
+for field in ('void* passFeature[kMaxPasses]', 'DlssNrResolvedPassSettings passBuilt[kMaxPasses]',
+              'std::array<bool, kMaxPasses> passReset', 'bool passFailed[kMaxPasses]',
+              'DlssNr::Submission::Usage creation[kMaxPasses]', 'uint64_t creationFrame[kMaxPasses]'):
+    assert field in state, field
+assert 'all.fill(true);' in state[state.index('passReset'):state.index('bool passFailed')]
+import re  # noqa: E402
+assert not re.search(r'pass\w*\[3\]', state)
+loops = re.findall(r'for \(unsigned (?:i|downstream) = [^;]+; ([^;]+);', source)
+assert len(loops) >= 8, loops  # the pass loops of Dispatch and the timing contract, not an empty match
+for loop in loops:
+    assert '< 3' not in loop and '<= 3' not in loop, loop
+    assert 'kMaxPasses' in loop or 'Count' in loop, loop
+timing = (Path(__file__).resolve().parents[2] / 'retoque/dlssnr/DlssNr_GpuTimingModel.h').read_text()
+assert 'constexpr size_t MaxModels = PassConfig::MaxPasses;' in timing
+print('PASS: per-pass state, loops and GPU timing pairs follow the ten-pass bound')

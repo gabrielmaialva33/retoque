@@ -71,7 +71,13 @@ template <class T> bool Input(const char* label, T* value)
 }
 bool Checkbox(const char* label, bool* x) { return Input(label, x); }
 bool SliderFloat(const char* label, float* x, float, float, const char*) { return Input(label, x); }
-bool SliderInt(const char* label, int* x, int, int) { return Input(label, x); }
+// The range each integer slider was drawn with, by its full key.
+std::map<std::string, std::pair<int, int>> sliderRanges;
+bool SliderInt(const char* label, int* x, int lo, int hi)
+{
+    sliderRanges[Key(label)] = { lo, hi };
+    return Input(label, x);
+}
 bool Combo(const char* label, int* x, const char* const*, int) { return Input(label, x); }
 // Combos (the Look selector): BeginCombo records "label=preview" as shown; a scripted action on "label/item" picks it.
 std::string comboOpen;
@@ -134,6 +140,7 @@ void Reset()
     shownDisabled.clear();
     actions.clear();
     texts.clear();
+    sliderRanges.clear();
     edited = false;
 }
 bool Saw(const std::string& id) { return std::find(shown.begin(), shown.end(), id) != shown.end(); }

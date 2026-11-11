@@ -21,10 +21,13 @@ Submission::Detail::Model submission;
 std::array<uint64_t, Submission::Detail::MaxQueues> completed {};
 auto completedValue = [](size_t q) { return completed[q]; };
 std::array<uint64_t, Submission::Detail::MaxQueues> frequencies { 1000000, 1000000 };
+// A slot holds total begin/end and one model pair per pass: 22 timestamps at ten passes.
+constexpr size_t kQueries = GpuTiming::Detail::MaxQueries;
+static_assert(kQueries == 2 + 2 * PassConfig::MaxPasses);
 struct Heap : ID3D12QueryHeap
 {
-    std::array<uint64_t, 8> ticks {};
-    std::array<bool, 8> initialized {};
+    std::array<uint64_t, kQueries> ticks {};
+    std::array<bool, kQueries> initialized {};
     void Release() override
     {
         ++heapFrees;
@@ -33,7 +36,7 @@ struct Heap : ID3D12QueryHeap
 };
 struct Buffer : ID3D12Resource
 {
-    std::array<uint64_t, 8> ticks {};
+    std::array<uint64_t, kQueries> ticks {};
     void Release() override
     {
         ++bufferFrees;
@@ -63,7 +66,7 @@ struct Device : ID3D12Device
     HRESULT CreateQueryHeap(const D3D12_QUERY_HEAP_DESC* desc, void** output) override
     {
         ++heaps;
-        assert(desc->Type == D3D12_QUERY_HEAP_TYPE_TIMESTAMP && desc->Count == 8);
+        assert(desc->Type == D3D12_QUERY_HEAP_TYPE_TIMESTAMP && desc->Count == kQueries);
         if (failHeap)
             return E_FAIL;
         *output = new Heap;
@@ -73,7 +76,7 @@ struct Device : ID3D12Device
                                     const void*, void** output) override
     {
         ++buffers;
-        assert(heap->Type == D3D12_HEAP_TYPE_READBACK && desc->Width == 64 && state == D3D12_RESOURCE_STATE_COPY_DEST);
+        assert(heap->Type == D3D12_HEAP_TYPE_READBACK && desc->Width == kQueries * sizeof(uint64_t) && state == D3D12_RESOURCE_STATE_COPY_DEST);
         if (failBuffer)
             return E_FAIL;
         *output = new Buffer;
@@ -94,7 +97,7 @@ struct List : ID3D12GraphicsCommandList
     void EndQuery(ID3D12QueryHeap* h, int, UINT query) override
     {
         ++queries;
-        assert(query < 8);
+        assert(query < kQueries);
         uint64_t step = 10;
         if (tickCursor < tickSteps.size())
             step = tickSteps[tickCursor++];
@@ -110,7 +113,7 @@ struct List : ID3D12GraphicsCommandList
                           uint64_t offset) override
     {
         ++resolves;
-        assert(begin == 0 && count > 0 && count <= 8 && offset == 0);
+        assert(begin == 0 && count > 0 && count <= kQueries && offset == 0);
         for (UINT i = 0; i < count; ++i)
         {
             assert(static_cast<Heap*>(h)->initialized[i]); // Must belong to this recording, not stale heap contents.
@@ -386,11 +389,12 @@ int main(int argc, char** argv)
     GpuTiming::Poll();
     assert(maps == 2);
     ++cases;
-    Record(device, lists[2], 3);
+    // The most passes the chain runs (ten since 2026-11-11; three before): every model pair fits one slot.
+    Record(device, lists[2], PassConfig::MaxPasses);
     Execute(lists[2]);
     Seal(lists[2]);
     GpuTiming::Poll();
-    assert(GpuTiming::GetSnapshot().actualPasses == 3 && maps == 3);
+    assert(GpuTiming::GetSnapshot().actualPasses == PassConfig::MaxPasses && maps == 3);
     ++cases;
 
     Record(device, lists[3], 1, false);

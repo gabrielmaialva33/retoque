@@ -182,7 +182,7 @@ class FormatTests(unittest.TestCase):
             {"skip": " "},
             {"skip": 12},
             {"completed_passes": 1},
-            {"requested_passes": 4},
+            {"requested_passes": 11},  # past the ten-pass bound (bounded-chain.md, "Ten passes"); four before
             {"interval": 5},
             {"completion": "pending"},
             {"gpu_ms": None},
@@ -191,6 +191,10 @@ class FormatTests(unittest.TestCase):
             change(self.result, lambda r: r["frames"][0].update(changes))
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 self.wire.load_run(self.result, c)
+        # A skip decided at ten requested passes is a valid record.
+        self.result.write_bytes(accepted)
+        change(self.result, lambda r: r["frames"][0].update(requested_passes=10))
+        self.wire.load_run(self.result, c)
         self.result.write_bytes(accepted)
         change(
             self.result,

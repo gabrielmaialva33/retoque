@@ -106,6 +106,49 @@ int main()
     ImGui::actions["3/Inherit all master settings###nrClearPass"] = true;
     run();
     assert(c.overrides.empty());
+    // Ten passes (bounded-chain.md, "Ten passes"): the count goes to ten, one pass selector edits any of them, and
+    // the cost is said under the count from two passes up.
+    const std::string cost = "Cost: %ux the model's GPU time and %u model instances in video memory.";
+    assert(ImGui::sliderRanges.at("Requested passes###nrPassCount") == std::pair(1, 10));
+    assert(std::count(ImGui::texts.begin(), ImGui::texts.end(), cost + "|3|3") == 1);
+    ImGui::Reset();
+    ImGui::actions["Requested passes###nrPassCount"] = 10;
+    ImGui::actions["Edit pass###nrEditPass"] = 10;
+    run();
+    assert(c.snapshot.Count == 10);
+    assert(ImGui::sliderRanges.at("Edit pass###nrEditPass") == std::pair(1, 10));
+    assert(std::count(ImGui::texts.begin(), ImGui::texts.end(), cost + "|10|10") == 1);
+    ImGui::Reset();
+    ImGui::actions["10/Intensity/Override###override"] = true;
+    ImGui::actions["10/Style/Override###override"] = true;
+    ImGui::actions["10/Style/Style"] = 2;
+    run();
+    assert(c.overrides.size() == 1 && c.overrides.at(9).Intensity == c.master.Intensity && c.overrides.at(9).Style == 2u);
+    assert(!ImGui::Saw("9/Intensity/Override###override") && !ImGui::Saw("1/Intensity/Override###override"));
+    ImGui::Reset();
+    ImGui::actions["Requested passes###nrPassCount"] = 11;
+    run();
+    assert(c.snapshot.Count == 10);
+    ImGui::Reset();
+    ImGui::actions["Requested passes###nrPassCount"] = -4;
+    run();
+    assert(c.snapshot.Count == 1);
+    assert(std::none_of(ImGui::texts.begin(), ImGui::texts.end(),
+                        [&](const std::string& t) { return t.starts_with(cost); }));
+    assert(c.overrides.at(9).Style == 2u); // reducing the count keeps the tenth pass's edits
+    ImGui::Reset();
+    ImGui::actions["Requested passes###nrPassCount"] = 10;
+    ImGui::actions["Edit pass###nrEditPass"] = 10;
+    run();
+    ImGui::Reset();
+    ImGui::actions["10/Inherit all master settings###nrClearPass"] = true;
+    run();
+    assert(c.overrides.empty());
+    ImGui::Reset();
+    ImGui::actions["Requested passes###nrPassCount"] = 3;
+    ImGui::actions["Edit pass###nrEditPass"] = 3;
+    run();
+    assert(c.snapshot.Count == 3);
     // One weight set: the per-pass preset override is not drawn at all (DEVELOPMENT.md rule 2).
     DlssNr::ModelLog::configCount = 1;
     ImGui::Reset();
