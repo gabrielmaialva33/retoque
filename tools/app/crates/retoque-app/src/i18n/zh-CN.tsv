@@ -472,8 +472,18 @@ cmp.empty.run	在启用 Retoque 和 NR 的情况下启动游戏。
 cmp.empty.menu	按 {key} 打开 Retoque 的游戏内菜单。
 cmp.empty.custom	使用你设置的菜单键打开 Retoque 的游戏内菜单。
 cmp.empty.disabled	此游戏的配置中禁用了游戏内菜单。截图前请先启用它。
-cmp.empty.capture	在“对比”中选择“截取原始与处理后图像”。等待两个文件都保存完成，然后在此处刷新。
+cmp.empty.capture_now	点击“立即截图”。游戏会保存 NR 前后的同一帧，两张都会显示在这里。
+cmp.empty.or_menu	或者在游戏内：
+cmp.empty.capture	在 DLSS 神经渲染面板中选择“捕获原始帧和处理后帧”。
 cmp.empty.refresh	查找截图
+cmp.capture_now	立即截图
+cmp.capture_now_help	无需打开游戏菜单，请正在运行的游戏截取同一帧 NR 前后的画面一次。
+cmp.capture_waiting	正在等待游戏保存截图…
+cmp.capture_not_running	请先打开游戏：截图由正在运行的游戏完成。
+cmp.capture_ignored	游戏没有接收请求：NR 可能已关闭，或此游戏的路径不读取请求（Vulkan、原生 D3D11）。请使用下方的游戏内菜单。
+cmp.capture_late	游戏已接收请求，但没有收到截图。游戏内菜单会显示原因。
+cmp.capture_saved	截图已保存。
+cmp.capture_failed	无法请求游戏截图：{error}
 auto.gpu_reading	正在检测显卡…
 auto.gpu_unknown	未检测到显卡
 shell.install_optimize	安装并优化…

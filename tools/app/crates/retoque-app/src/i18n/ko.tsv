@@ -472,8 +472,18 @@ cmp.empty.run	Retoque와 NR을 켠 상태로 게임을 여세요.
 cmp.empty.menu	{key}을(를) 눌러 Retoque의 게임 내 메뉴를 여세요.
 cmp.empty.custom	설정한 메뉴 키로 Retoque의 게임 내 메뉴를 여세요.
 cmp.empty.disabled	이 게임의 구성에서 게임 내 메뉴가 비활성화되어 있습니다. 캡처하기 전에 활성화하세요.
-cmp.empty.capture	Compare에서 “Capture original and processed”를 선택하세요. 두 파일이 모두 완료될 때까지 기다린 뒤 여기서 새로 고치세요.
+cmp.empty.capture_now	지금 캡처를 클릭하세요. 게임이 NR 전후의 프레임을 저장하고, 두 장 모두 여기에 표시됩니다.
+cmp.empty.or_menu	또는 게임 안에서:
+cmp.empty.capture	DLSS 뉴럴 렌더링 패널에서 “원본 및 처리본 캡처”를 선택하세요.
 cmp.empty.refresh	캡처 찾기
+cmp.capture_now	지금 캡처
+cmp.capture_now_help	게임 메뉴를 열지 않고, 실행 중인 게임에 같은 프레임의 NR 전후 캡처를 한 번 요청합니다.
+cmp.capture_waiting	게임이 캡처를 저장하기를 기다리는 중…
+cmp.capture_not_running	먼저 게임을 실행하세요. 캡처는 실행 중인 게임이 합니다.
+cmp.capture_ignored	게임이 요청을 받지 않았습니다. NR이 꺼져 있거나, 이 게임의 경로가 요청을 읽지 않습니다(Vulkan, 네이티브 D3D11). 아래의 게임 내 메뉴를 사용하세요.
+cmp.capture_late	게임이 요청을 받았지만 캡처가 도착하지 않았습니다. 이유는 게임 내 메뉴에 표시됩니다.
+cmp.capture_saved	캡처를 저장했습니다.
+cmp.capture_failed	게임에 캡처를 요청하지 못했습니다: {error}
 auto.gpu_reading	그래픽 카드 감지 중…
 auto.gpu_unknown	그래픽 카드를 감지하지 못함
 shell.install_optimize	설치 및 최적화…

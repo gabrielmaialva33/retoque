@@ -1112,6 +1112,9 @@ static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResSca
         RenderGpuTimingReadout();
     }
     ImGui::PopItemWidth();
+    // The before/after capture is the first thing the app's comparison asks for: it must not need the full panel.
+    ImGui::Spacing();
+    RenderPairCapture(config, nativeVulkan);
     return true;
 }
 

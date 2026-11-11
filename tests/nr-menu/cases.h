@@ -265,6 +265,7 @@ int main()
     assert(!ImGui::Saw("Individual pass settings###nrIndividualPassSettings"));
     assert(!ImGui::Saw("Measure NR on the GPU###nrGpuTiming"));
     assert(said("Running:") && DlssNr::GpuTiming::reads == 0);
+    assert(DlssNr::pairCaptureCalls == 1);
     assert(simple.writes == 0 && !simple.DlssNrShowAllSettings.value);
     assert(ImGui::sections == std::vector<std::string> { "Sequential model passes" });
     ImGui::Reset();

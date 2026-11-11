@@ -209,6 +209,13 @@ Retoque loaded; it then stays under “Reinstall options”. ReShade stays folde
 groups the NR model, DLSS and frame generation (sm86 and LSFG side by side). The sm86 download is offered only
 inside “Install and optimize” or on its card, never at startup, and the home screen has no model offer of its own.
 
+“Before / after” compares the capture pairs in the game's `retoque-captures` folder. Its “Capture now” asks the
+running game for a pair without its menu: only while a process holds the game folder, it leaves the runtime's empty
+`dlssnr-capture.trigger` beside OptiScaler, waits for the game to take it and for the new pair to land, then shows
+it. A request the game does not take within a few seconds (NR off, or a route that never reads it: Vulkan, native
+D3D11, the proxy) is removed again, so it cannot fire at a later launch, and the page points to the in-game button,
+which is also in the Neural Rendering panel's simple view.
+
 “Last session” on the Overview tab reads the newest log the page already summarized (`retoque_data::session`,
 bounded memory): real and on-screen frame rates from the runtime's periodic status lines, measured from the
 time between them; the worst 5% of windows; how much of the session frame generation ran and what it multiplied;

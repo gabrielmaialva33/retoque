@@ -480,8 +480,18 @@ cmp.empty.run	Uruchom grę z Retoque i włączonym NR.
 cmp.empty.menu	Naciśnij {key}, aby otworzyć menu Retoque w grze.
 cmp.empty.custom	Otwórz menu Retoque w grze ustawionym klawiszem menu.
 cmp.empty.disabled	Menu w grze jest wyłączone w konfiguracji tej gry. Włącz je przed wykonaniem zrzutów.
-cmp.empty.capture	W Porównaniu wybierz „Zrzuć oryginał i przetworzony”. Poczekaj, aż oba pliki się zapiszą, a potem odśwież tutaj.
+cmp.empty.capture_now	Kliknij Zrób zrzut teraz. Gra zapisze klatkę przed NR i po nim, a oba obrazy pojawią się tutaj.
+cmp.empty.or_menu	Albo z poziomu gry:
+cmp.empty.capture	W panelu DLSS Neural Rendering wybierz „Przechwyć oryginał i wynik”.
 cmp.empty.refresh	Szukaj zrzutów
+cmp.capture_now	Zrób zrzut teraz
+cmp.capture_now_help	Prosi uruchomioną grę o jeden zrzut tej samej klatki przed NR i po nim, bez otwierania jej menu.
+cmp.capture_waiting	Czekam, aż gra zapisze zrzut…
+cmp.capture_not_running	Najpierw uruchom grę: zrzut wykonuje uruchomiona gra.
+cmp.capture_ignored	Gra nie przyjęła prośby: NR może być wyłączony albo ścieżka tej gry jej nie odczytuje (Vulkan, natywny D3D11). Użyj menu w grze, poniżej.
+cmp.capture_late	Gra przyjęła prośbę, ale żaden zrzut nie dotarł. Menu w grze pokazuje przyczynę.
+cmp.capture_saved	Zrzut zapisany.
+cmp.capture_failed	Nie udało się poprosić gry o zrzut: {error}
 auto.gpu_reading	Wykrywanie karty graficznej…
 auto.gpu_unknown	Nie wykryto karty graficznej
 shell.install_optimize	Zainstaluj i zoptymalizuj…

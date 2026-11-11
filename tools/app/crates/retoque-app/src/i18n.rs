@@ -1577,11 +1577,49 @@ const TEXT: &[(&str, &str, &str)] = &[
         "O menu no jogo está desativado na configuração deste jogo. Ative-o antes de capturar.",
     ),
     (
+        "cmp.empty.capture_now",
+        "Click Capture now. The game saves the frame before and after NR, and both show up here.",
+        "Clique em Capturar agora. O jogo salva o quadro antes e depois do NR, e os dois aparecem aqui.",
+    ),
+    ("cmp.empty.or_menu", "Or from inside the game:", "Ou de dentro do jogo:"),
+    (
         "cmp.empty.capture",
-        "In Compare, choose “Capture original and processed”. Wait for both files to finish, then refresh here.",
-        "Em Comparar, escolha “Capturar original e processado”. Aguarde as duas imagens terminarem de salvar e atualize aqui.",
+        "In the DLSS Neural Rendering panel, choose “Capture original and processed”.",
+        "No painel Renderização neural DLSS, escolha “Capturar original e processado”.",
     ),
     ("cmp.empty.refresh", "Look for captures", "Buscar capturas"),
+    ("cmp.capture_now", "Capture now", "Capturar agora"),
+    (
+        "cmp.capture_now_help",
+        "Asks the running game for one capture of the same frame before and after NR, without opening its menu.",
+        "Pede ao jogo aberto uma captura do mesmo quadro antes e depois do NR, sem abrir o menu dele.",
+    ),
+    (
+        "cmp.capture_waiting",
+        "Waiting for the game to save the capture…",
+        "Aguardando o jogo salvar a captura…",
+    ),
+    (
+        "cmp.capture_not_running",
+        "Open the game first: the running game takes the capture.",
+        "Abra o jogo antes: quem faz a captura é o jogo aberto.",
+    ),
+    (
+        "cmp.capture_ignored",
+        "The game did not take the request: NR may be off, or this game's route does not read it (Vulkan, native D3D11). Use the in-game menu below.",
+        "O jogo não pegou o pedido: o NR pode estar desligado, ou a rota deste jogo não lê o pedido (Vulkan, D3D11 nativo). Use o menu do jogo, abaixo.",
+    ),
+    (
+        "cmp.capture_late",
+        "The game took the request, but no capture arrived. The in-game menu shows why.",
+        "O jogo pegou o pedido, mas nenhuma captura chegou. O menu do jogo mostra o motivo.",
+    ),
+    ("cmp.capture_saved", "Capture saved.", "Captura salva."),
+    (
+        "cmp.capture_failed",
+        "Could not ask the game for a capture: {error}",
+        "Não deu para pedir a captura ao jogo: {error}",
+    ),
     // Autotune / worker F
     ("auto.gpu_reading", "Detecting GPU…", "Detectando a placa de vídeo…"),
     ("auto.gpu_unknown", "GPU not detected", "Placa de vídeo não detectada"),

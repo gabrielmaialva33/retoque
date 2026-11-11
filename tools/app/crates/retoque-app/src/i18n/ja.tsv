@@ -472,8 +472,18 @@ cmp.empty.run	Retoque と NR を有効にしてゲームを起動してくださ
 cmp.empty.menu	{key} を押して Retoque のゲーム内メニューを開いてください。
 cmp.empty.custom	設定したメニューキーで Retoque のゲーム内メニューを開いてください。
 cmp.empty.disabled	このゲームの設定では、ゲーム内メニューが無効になっています。キャプチャーの前に有効にしてください。
-cmp.empty.capture	比較で「オリジナルと処理後をキャプチャー」を選びます。両方のファイルが完成するのを待ってから、ここで再読み込みしてください。
+cmp.empty.capture_now	「今すぐキャプチャー」をクリックします。ゲームが NR の前と後のフレームを保存し、両方がここに表示されます。
+cmp.empty.or_menu	またはゲーム内から:
+cmp.empty.capture	DLSS Neural Rendering パネルで「オリジナルと処理後をキャプチャ」を選びます。
 cmp.empty.refresh	キャプチャーを探す
+cmp.capture_now	今すぐキャプチャー
+cmp.capture_now_help	ゲームのメニューを開かずに、実行中のゲームに同じフレームの NR 前後のキャプチャーを 1 回依頼します。
+cmp.capture_waiting	ゲームがキャプチャーを保存するのを待っています…
+cmp.capture_not_running	先にゲームを起動してください。キャプチャーは実行中のゲームが行います。
+cmp.capture_ignored	ゲームが依頼を受け取りませんでした。NR がオフか、このゲームの経路が依頼を読みません (Vulkan、ネイティブ D3D11)。下のゲーム内メニューを使ってください。
+cmp.capture_late	ゲームは依頼を受け取りましたが、キャプチャーが届きませんでした。理由はゲーム内メニューに表示されます。
+cmp.capture_saved	キャプチャーを保存しました。
+cmp.capture_failed	ゲームにキャプチャーを依頼できませんでした: {error}
 auto.gpu_reading	GPU を検出しています…
 auto.gpu_unknown	GPU を検出できません
 shell.install_optimize	インストールして最適化…

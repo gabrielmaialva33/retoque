@@ -472,8 +472,18 @@ cmp.empty.run	Starte das Spiel mit Retoque und eingeschaltetem NR.
 cmp.empty.menu	Drücke {key}, um das Retoque-Menü im Spiel zu öffnen.
 cmp.empty.custom	Öffne das Retoque-Menü im Spiel mit deiner eingestellten Menütaste.
 cmp.empty.disabled	Das Menü im Spiel ist in der Konfiguration dieses Spiels deaktiviert. Aktiviere es vor der Aufnahme.
-cmp.empty.capture	Wähle unter Vergleichen „Original und bearbeitet aufnehmen“. Warte, bis beide Dateien fertig sind, und lade hier dann neu.
+cmp.empty.capture_now	Klicke auf Jetzt aufnehmen. Das Spiel speichert das Bild vor und nach NR, und beide erscheinen hier.
+cmp.empty.or_menu	Oder im Spiel:
+cmp.empty.capture	Wähle im Bereich DLSS Neural Rendering „Original und Ergebnis aufnehmen“.
 cmp.empty.refresh	Nach Aufnahmen suchen
+cmp.capture_now	Jetzt aufnehmen
+cmp.capture_now_help	Bittet das laufende Spiel um eine Aufnahme desselben Bildes vor und nach NR, ohne sein Menü zu öffnen.
+cmp.capture_waiting	Warte, bis das Spiel die Aufnahme speichert…
+cmp.capture_not_running	Starte zuerst das Spiel: Die Aufnahme macht das laufende Spiel.
+cmp.capture_ignored	Das Spiel hat die Anfrage nicht angenommen: NR ist vielleicht aus, oder der Weg dieses Spiels liest sie nicht (Vulkan, natives D3D11). Nutze das Menü im Spiel, siehe unten.
+cmp.capture_late	Das Spiel hat die Anfrage angenommen, aber es kam keine Aufnahme an. Das Menü im Spiel zeigt den Grund.
+cmp.capture_saved	Aufnahme gespeichert.
+cmp.capture_failed	Das Spiel konnte nicht um eine Aufnahme gebeten werden: {error}
 auto.gpu_reading	Grafikkarte wird erkannt…
 auto.gpu_unknown	Grafikkarte nicht erkannt
 shell.install_optimize	Installieren und optimieren…

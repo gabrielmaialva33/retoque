@@ -472,8 +472,18 @@ cmp.empty.run	Abre el juego con Retoque y NR activado.
 cmp.empty.menu	Presiona {key} para abrir el menú de Retoque en el juego.
 cmp.empty.custom	Abre el menú de Retoque en el juego con la tecla de menú que configuraste.
 cmp.empty.disabled	El menú en el juego está desactivado en la configuración de este juego. Actívalo antes de capturar.
-cmp.empty.capture	En Comparar, elige “Capturar original y procesada”. Espera a que terminen de guardarse los dos archivos y luego recarga aquí.
+cmp.empty.capture_now	Haz clic en Capturar ahora. El juego guarda el fotograma antes y después del NR, y ambos aparecen aquí.
+cmp.empty.or_menu	O desde dentro del juego:
+cmp.empty.capture	En el panel Renderizado neuronal de DLSS, elige «Capturar original y procesado».
 cmp.empty.refresh	Buscar capturas
+cmp.capture_now	Capturar ahora
+cmp.capture_now_help	Pide al juego abierto una captura del mismo fotograma antes y después del NR, sin abrir su menú.
+cmp.capture_waiting	Esperando a que el juego guarde la captura…
+cmp.capture_not_running	Abre primero el juego: la captura la hace el juego abierto.
+cmp.capture_ignored	El juego no aceptó la petición: puede que el NR esté desactivado o que la ruta de este juego no la lea (Vulkan, D3D11 nativo). Usa el menú del juego, abajo.
+cmp.capture_late	El juego aceptó la petición, pero no llegó ninguna captura. El menú del juego muestra el motivo.
+cmp.capture_saved	Captura guardada.
+cmp.capture_failed	No se pudo pedir la captura al juego: {error}
 auto.gpu_reading	Detectando la tarjeta gráfica…
 auto.gpu_unknown	Tarjeta gráfica no detectada
 shell.install_optimize	Instalar y optimizar…
