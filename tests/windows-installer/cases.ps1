@@ -290,6 +290,11 @@ Add-Case 'release_package_and_refusals' {
     foreach ($rel in @('install-linux.sh', 'deploy-to-game.sh')) {
         Expect (-not [IO.File]::ReadAllText((Join-Path $extract $rel)).Contains("`r")) "$rel keeps LF"
     }
+    foreach ($pack in @('pt-BR', 'de', 'es', 'fr', 'ja', 'ko', 'pl', 'ru', 'zh-CN')) {
+        $rel = "translations/optional/$pack.lang"
+        Expect ((Get-Sha (Join-Path $extract $rel)) -eq (Get-Sha (Join-Path $Root "retoque/$rel"))) "$rel in zip, unchanged"
+    }
+    Expect (-not [IO.File]::Exists((Join-Path $extract 'OptiScaler.lang'))) 'no active OptiScaler.lang in zip'
     $ini = [IO.File]::ReadAllText((Join-Path $extract 'OptiScaler.ini'))
     Expect ($ini.Contains('Enabled=auto') -and $ini.Contains('ShortcutKey=0x24')) 'NR off and menu Home in package'
     Expect (-not [IO.File]::Exists((Join-Path $extract 'nvngx_dlssnr.dll'))) 'no model in zip'

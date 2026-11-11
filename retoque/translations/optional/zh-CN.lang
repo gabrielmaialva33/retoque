@@ -1,0 +1,640 @@
+# OptiScaler optional Simplified Chinese (zh-CN) dictionary. See translations/README.md.
+# Not loaded from this directory. Activation requires OptiScaler.lang beside the DLL.
+# Machine-translated draft, pending native review: corrections from native speakers are welcome.
+# 101 entries come from NeuRotic's machine-translated drafts (localization/machine-drafts/zh-CN.nrlang,
+# GPL-3.0, commit beae4eea), matched by identical English text; the rest were translated for this pack.
+DLSS Neural Rendering	DLSS 神经渲染
+Enable Neural Rendering	启用神经渲染
+Apply the model	应用模型
+Reset	重置
+Retry	重试
+Can be toggled with a key -- bind it under Keybinds, "Neural Rendering".	可用按键切换：在“快捷键”中绑定 "Neural Rendering"。
+Off. The model stays loaded, so turning this back on is immediate.	已关闭。模型仍保持加载，因此重新开启会立即生效。
+Off for this session: %s.	本次会话已关闭：%s。
+Waiting for the upscaler to run.	正在等待放大器运行。
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), inside the driver on the game's own device, where the pass cannot run after it. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which carries the pass: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	此游戏的 DLSS 原生运行在 D3D11 上（Dx11Upscaler dlss），位于驱动内部、游戏自己的设备上，本通道无法在其之后运行。DLSS w/Dx12（dlss_12）在 OptiScaler 的 D3D12 桥接上运行同一个 DLSS，可以承载本通道：在“放大器”中选择它，或设置 Dx11Upscaler=dlss_12.
+This game's DLSS runs natively on D3D11 (Dx11Upscaler dlss), and its depth and motion are not reaching the pass at present, so it runs without them; the log's 'native D3D11 guides' line says why. DLSS w/Dx12 (dlss_12) runs the same DLSS on OptiScaler's D3D12 bridge, which hands them over: pick it under Upscalers, or set Dx11Upscaler=dlss_12.	此游戏的 DLSS 原生运行在 D3D11 上（Dx11Upscaler dlss），而游戏的深度和运动信息目前未能在 Present 时到达本通道，因此本通道在没有它们的情况下运行；日志中的 'native D3D11 guides' 一行说明了原因。DLSS w/Dx12（dlss_12）在 OptiScaler 的 D3D12 桥接上运行同一个 DLSS，会将它们传递过来：在“放大器”中选择它，或设置 Dx11Upscaler=dlss_12.
+Running natively on Vulkan - %llu frames%s	在 Vulkan 上原生运行 - %llu 帧%s
+Running.%s	正在运行。%s
+  (model running, edit hidden)	  （模型运行中，结果已隐藏）
+ natively on Vulkan	 在 Vulkan 上原生运行
+Stage	阶段
+After the upscaler	放大器之后
+Before the upscaler (experimental)	放大器之前（实验性）
+Stage: after the upscaler (native Vulkan)	阶段：放大器之后（原生 Vulkan）
+Model resolution	模型分辨率
+Pause when the game turns frame generation off	游戏关闭帧生成时暂停
+Look	外观
+Natural	自然
+Cinematic	电影级
+Subtle	细微
+Gentle	柔和
+Game colour	游戏原色
+The model's own defaults: style A, everything at 1.	模型自身的默认值：样式 A，各项均为 1。
+NVIDIA's style B: softer contrast and saturation, kinder to skin.	NVIDIA 的样式 B：对比度和饱和度更柔和，对肤色更友好。
+NVIDIA's style C: a gentler, filmic saturation.	NVIDIA 的样式 C：更柔和的电影感饱和度。
+What NVIDIA's RTX Remix ships: structure 0.7, tone 0.3, no skin mask -- closer to the game.	NVIDIA RTX Remix 采用的设置：结构 0.7，色调 0.3，无皮肤遮罩——更接近游戏原貌。
+A conservative community recipe: intensity 0.5, structure 0.7, tone 0.3, colour 0.5, detail 0.85.	一套保守的社区配方：强度 0.5，结构 0.7，色调 0.3，颜色 0.5，细节 0.85。
+Keeps the game's own hue (colour strength 0); only the light changes.	保留游戏自身的色相（颜色强度 0）；只改变光照。
+A starting point for how NR looks, in one click: it sets the model's style and\nstrengths and the colour and detail strength, and every control still shows and\nedits what it set. Custom means the current values are not one of these.\n\nPerformance settings (resolution, passes, cadence) and exposure are left alone.\nWith individual pass settings on, a pass's own overrides still win for that pass.	一键设定 NR 外观的起点：它会设置模型的样式与各项强度，以及颜色强度和细节强度，每个控件仍会显示并可编辑它所设定的值。“自定义”表示当前值不属于其中任何一个。\n\n性能设置（分辨率、遍数、节奏）和曝光不受影响。开启“每遍单独设置”时，各遍自己的覆盖值仍对该遍优先。
+Many games turn their own DLSS frame generation off in menus, dialogue and\ncutscenes, and lift the frame cap with it, so NR runs at the full uncapped rate.\nThis skips NR there and resumes the moment frame generation comes back.\n\nOnly after the game's frame generation was seen on, after half a second off,\nand never while this menu is open (the menu turns frame generation off itself).	许多游戏会在菜单、对话和过场动画中关闭自己的 DLSS 帧生成，并同时解除帧率上限，于是 NR 会以不受限的满速率运行。此选项会在这些时候跳过 NR，帧生成一恢复就立即继续。\n\n仅在曾检测到游戏的帧生成开启、且其关闭超过半秒之后生效；此菜单打开时永不生效（菜单本身会关闭帧生成）。
+Downscaler (NR)	缩小器 (NR)
+Enlargement	放大
+Classic	经典
+Matched residual	匹配残差
+How much of it lands	作用程度
+Detail strength	细节强度
+Colour strength	颜色强度
+Reversible proxy (experimental)	可逆代理（实验性）
+Off (soft knee)	关闭（软拐点）
+Neutwo proxy + composed	Neutwo 代理 + 合成
+Neutwo proxy + replace	Neutwo 代理 + 替换
+Hybrid proxy + composed	混合代理 + 合成
+Hybrid proxy + replace	混合代理 + 替换
+Model	模型
+Read when the model is built, so a change rebuilds it after a moment.	在构建模型时读取，因此更改后片刻会重建模型。
+Default	默认
+Preset 1	预设 1
+Preset 2	预设 2
+Preset 3	预设 3
+Model preset	模型预设
+Model preset: this model has one weight set, so there is nothing to choose.	模型预设：此模型只有一组权重，因此无可选择。
+Model A (Default)	模型 A（默认）
+Model B (Natural)	模型 B（自然）
+Model C (Cinematic)	模型 C（电影级）
+Style	样式
+Intensity	强度
+Local structure	局部结构
+Local tone	局部色调
+Skin structure	皮肤结构
+Auto skin mask	自动皮肤遮罩
+Colour	颜色
+Paper white only	仅纸白
+The game's own exposure	游戏自身的曝光值
+A buffer the scan found	扫描找到的缓冲区
+White point from	白点来源
+Waiting for a frame...	正在等待一帧...
+Reading the exposure...	正在读取曝光...
+Trim (x the scan)	微调（x 扫描值）
+Trim (x the game's exposure)	微调（x 游戏的曝光值）
+Paper white	纸白
+Highlight guard	高光保护
+Highlight recovery	高光恢复
+Show the light meter on screen	在屏幕上显示测光表
+Choose the buffer by matching it to the light	通过与光照匹配来选择缓冲区
+Off: the buffer whose value travels widest drives the white point, as before.\nA counter or a timer travels widest of all, and then the picture drifts.\n\nOn: the buffer whose value follows the light of the game's own frame the\nway an exposure does -- a little behind it, as eyes adapt -- and nothing\nuntil that is sure, which takes about half a minute of walking between\nlight and shade. Timers, frozen values and the frame's own brightness\nare turned down. Paper white is used until then.\n\nAnchors set under one rule may need setting again under the other.\nCosts one small measuring pass a frame. Adapted from janblade's fork.	关：取值变化范围最大的缓冲区驱动白点，与以前相同。计数器或计时器的变化范围最大，画面随之漂移。\n\n开：选择取值像曝光那样跟随游戏自身画面光照的缓冲区——稍有滞后，如同眼睛适应——在确定之前不选任何缓冲区，这大约需要在明暗之间走动半分钟。计时器、冻结的值以及画面自身的亮度会被排除。在此之前使用纸白。\n\n在一种规则下设置的锚点，在另一种规则下可能需要重新设置。每帧额外花费一次小型测量通道。改编自 janblade 的分支。
+Anchor here	在此处锚定
+The number runs the other way	数值方向相反
+Advanced	高级
+Walk from shade into daylight. A real exposure moves.	从阴影处走到日光下。真实的曝光值是动态变化的。
+One that only ever climbs is a counter, not an exposure.	只增不减的是计数器，而不是曝光值。
+Compare	比较
+Hold frame	保持帧
+Off	关
+Side by side	并排
+Wipe	滑动对比
+Swap sides	交换两侧
+Label the sides	标记两侧
+Label size	标签大小
+Zoom	缩放
+Split	分割线
+Debug view	调试视图
+Proxy (what the model sees)	代理（模型看到的内容）
+Model output (raw)	模型输出（原始）
+Difference (amplified)	差异（放大）
+Save Settings	保存设置
+Close	关闭
+Menu Scale	菜单缩放
+Keybinds	快捷键
+Logging	日志记录
+Advanced Settings	高级设置
+Menu Theme and Color	菜单主题与颜色
+FPS Overlay	帧率叠加层
+Upscaler Inputs	放大器输入
+V-Sync Settings	V-Sync 设置
+Magnifier	放大镜
+Resource Barriers	资源屏障
+Root Signatures	根签名
+Active Quirks	生效的 Quirks
+Dx11 with Dx12 Settings	Dx11 搭配 Dx12 设置
+Vulkan with Dx12 Settings	Vulkan 搭配 Dx12 设置
+XeSS Settings	XeSS 设置
+Advanced FG Settings	高级 FG 设置
+Before the upscaler: edited render-resolution color supplied	放大器之前：已提供编辑后的渲染分辨率颜色
+Waiting for a stable render resolution (500 ms); original color retained	正在等待稳定的渲染分辨率（500 ms）；保留原始颜色
+Synthesises detail in the upscaler's output, before frame generation sees it.\n\nNeeds two similarly named files beside OptiScaler, one character apart:\n  nvngx_dlssnr.dll       NVIDIA's model (~165 MB) -- you supply it\n  nvngx.dll_dlssnr.dll   the forwarder (~115 KB) -- ships in this package\nUndocumented and driven directly, so none of this is officially supported.	在帧生成接收之前，为放大器的输出合成细节。\n\n需要在 OptiScaler 旁边放置两个名称相近、只差一个字符的文件：\n  nvngx_dlssnr.dll       NVIDIA 的模型（约 165 MB）——需自行提供\n  nvngx.dll_dlssnr.dll   转发器（约 115 KB）——随本包提供\n未公开文档且被直接驱动，因此以上均无官方支持。
+Whether the model's edit is applied. Off shows the clean upscaler frame while the\npass keeps running -- so with Hold frame (under Compare) you can freeze a\nframe and toggle this to see the same frozen frame with and without Neural\nRendering. Leave it on for normal use.	是否应用模型的编辑。关闭时显示干净的放大器画面，但本通道保持运行——因此配合“保持帧”（位于“比较”下）可以冻结一帧，并切换此项来对比同一冻结帧在有无神经渲染时的效果。正常使用时请保持开启。
+Before: runs Neural Rendering on the game's render-resolution color, then\nupscales the edited copy. This may reduce GPU cost, but can introduce shimmer\nand unstable detail on moving edges. Compare the picture in motion.\n\nExperimental on D3D12 and the D3D12 bridges. Ray reconstruction, Hold frame,\nthe driver proxy, and unsupported inputs use the after-upscale path.\nChanging render dimensions pauses NR until they stay stable for 500 ms.\nThe original game color is used while the model is being built or skipped.	之前：先在游戏的渲染分辨率颜色上运行神经渲染，再放大编辑后的副本。这可能降低 GPU 开销，但可能在移动的边缘带来闪烁和不稳定的细节。请在运动中对比画面。\n\n在 D3D12 和 D3D12 桥接上为实验性功能。Ray Reconstruction、保持帧、驱动代理以及不支持的输入会使用放大后路径。渲染尺寸改变时 NR 会暂停，直到尺寸稳定 500 ms。模型构建中或被跳过时使用游戏原始颜色。
+Default leaves the choice to the model.\n\nNot the same scale as the super resolution or ray reconstruction presets --\nthe same number means something different here.\n\n310.9.16 carries two weight sets: Preset 1 is the original September model,\nPreset 2 the smaller October one, and Default (or any other number) falls back\nto Preset 2. The line below is what the model says it built.	“默认”将选择权交给模型。\n\n与 Super Resolution 或 Ray Reconstruction 预设的编号体系不同——同一个数字在这里含义不同。\n\n310.9.16 带有两组权重：预设 1 是最初的九月模型，预设 2 是较小的十月模型，“默认”（或任何其他数字）会回退到预设 2。下方一行是模型报告的实际构建结果。
+Running:	运行中：
+Game profile:	游戏配置文件：
+Keys this game needs before Neural Rendering can run in it, applied when the game started,\nonly where OptiScaler.ini leaves them on auto, and never written back to it. A value\nyou set in the ini always wins. [DlssNr] GameProfiles=false turns this off.	此游戏运行神经渲染所需的键值，在游戏启动时应用，仅作用于 OptiScaler.ini 中设为 auto 的项，且绝不会写回该文件。你在 ini 中设置的值始终优先。[DlssNr] GameProfiles=false 可关闭此功能。
+(preset %d)	（预设 %d）
+September model (the original)	九月模型（原始版本）
+October model (smaller, faster)	十月模型（更小、更快）
+The model's own report of the weight set it built. It carries:	模型自身报告的已构建权重集。它包含：
+The model's own strength control, applied inside it. Distinct from detail\nstrength above, which scales the result afterwards.	模型自身的强度控制，在模型内部应用。与上方的细节强度不同，后者是在之后缩放结果。
+-1 means follow local structure, and is the model's own default -- it is not a\nstrength of zero. 0 and above set skin independently of the rest of the frame.\n\nRead only with the auto skin mask on; with it off the model ignores this.	-1 表示跟随局部结构，这是模型自身的默认值——并不是强度为零。0 及以上会独立于画面其余部分单独设置皮肤。\n\n仅在开启自动皮肤遮罩时读取；关闭时模型会忽略此项。
+Lets the model find skin itself rather than treating the frame uniformly.	让模型自行识别皮肤，而不是对整个画面一视同仁。
+Freezes the frame the model works on. While held, change paper white, the\nstrengths, the reversible mode, the model preset -- anything below the\nupscaler -- and only that setting moves; the scene does not.\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream\n(the upscaler is not re-run on a held frame), and the game's own HUD and\npost-processing, which run after this pass and keep updating. The white\npoint stops being measured and holds its value while frozen, so it cannot\ndrift and confound the comparison.\n\nHide the menu and it stays held. Untoggle to resume.	冻结模型处理的帧。保持期间，更改纸白、各项强度、可逆模式、模型预设——放大器之后的任何设置——只有该设置会变化，场景不变。\n\n它无法展示的内容：DLSS/FSR/XeSS 放大器预设或任何更上游的设置（放大器不会对保持的帧重新运行），以及游戏自身的 HUD 和后处理，它们在本通道之后运行并会持续更新。冻结期间白点停止测量并保持当前值，因此不会漂移而干扰对比。\n\n隐藏菜单后仍保持冻结。取消勾选即可恢复。
+Where the wipe cuts. Left of it is the frame as the upscaler produced it,\nright of it is the frame the model edited.	滑动对比的分割位置。左侧是放大器生成的帧，右侧是模型编辑后的帧。
+Proxy is the picture handed to the model -- if that looks wrong, the white point\nis wrong and nothing downstream can be judged.\n\nDifference shows what the model actually changed, amplified twenty times and\ncentred on grey. A flat grey frame there means it is doing nothing.	代理是交给模型的画面——如果它看起来不对，说明白点不对，下游的一切都无法评判。\n\n差异显示模型实际改变了什么，放大二十倍并以灰色为中心。若画面是一片均匀的灰色，说明模型什么也没做。
+
+# Bounded pass editor. New interactive controls carry stable IDs.
+Sequential model passes	模型多遍顺序处理
+Requested passes	请求遍数
+Last evaluation: %u successful model passes	上次评估：成功完成 %u 遍模型处理
+Individual pass settings	每遍单独设置
+Edit pass	编辑遍
+Editing pass 1	正在编辑第 1 遍
+Uncheck Override to inherit the live master value.	取消勾选“覆盖”即可继承当前主设置的值。
+Override	覆盖
+Override auto skin mask	覆盖自动皮肤遮罩
+Auto skin mask: inherit %s	自动皮肤遮罩：继承 %s
+Inherit all master settings	继承全部主设置
+%s: inherit %.2f	%s：继承 %.2f
+%s: inherit %s	%s：继承 %s
+This backend uses one pass with master settings. Sequential passes and individual settings are unavailable.	此后端使用单遍和主设置。多遍顺序处理和单独设置不可用。
+Apply after Ray Reconstruction	在 Ray Reconstruction 之后应用
+RR Passes	RR 遍数
+RR Working scale	RR 工作比例
+Runs Neural Rendering over native Ray Reconstruction (DLSSD) output.\n\nDisabled by default: Ray Reconstruction already synthesizes denoised output.\nEnable if you want to run DLSS-NR over the final RR result at configured scale.	在原生 Ray Reconstruction (DLSSD) 输出上运行神经渲染。\n\n默认关闭：Ray Reconstruction 已经合成了降噪后的输出。如果你想以设定的比例在最终 RR 结果上运行 DLSS-NR，请启用。
+Output stabilizer	输出稳定器
+Stabilizer strength	稳定器强度
+Stabilizer tolerance	稳定器容差
+
+# 2026-09-28: GPU timing, hook method and present options, the colour and exposure-scan help,
+# synthesized frame generation, section headers, and the status and failure reasons the NR panel shows.
+# Filter names stay in English; they are listed as themselves because every label needs an entry.
+Fence-confirmed GPU timing	经 fence 确认的 GPU 计时
+Confirmed timing is available on the D3D12 NR path and its bridges. This backend is not instrumented.	确认计时可用于 D3D12 NR 路径及其桥接。此后端未加插桩。
+Measure NR on the GPU	在 GPU 上测量 NR
+Each published sample belongs to one NR evaluation and one observed queue submission. It is read only after that submission completes and the command-list recording is sealed against replay. No GPU wait is introduced. Unsupported or ambiguous samples are discarded.\n\nThe interval covers GPU commands inside the NR Dispatch, including copies, model calls, composition and resource restoration. Caller-side pre-upscale preparation, the upscaler, and frame generation are outside this interval. Queue elapsed time is not pure kernel busy time.\n\nD3D12 Present and guide capture have independent samples at the same interval. The Present route includes its copies, guide preparation, Dispatch and HDR conversion; CPU waits are excluded. The native Vulkan and D3D11 Present hosts do not have this route bracket.	每个发布的样本对应一次 NR 评估和一次观测到的队列提交。只有在该提交完成、且命令列表录制已封存以防重放后才会读取。不会引入任何 GPU 等待。不受支持或有歧义的样本会被丢弃。\n\n该区间涵盖 NR Dispatch 内的 GPU 命令，包括复制、模型调用、合成和资源恢复。调用方在放大前的准备、放大器本身以及帧生成都不在此区间内。队列耗时并非纯粹的内核忙碌时间。\n\nD3D12 Present 和引导数据捕获在相同间隔下有各自独立的样本。Present 路线包括其复制、引导数据准备、Dispatch 和 HDR 转换；不含 CPU 等待。原生 Vulkan 和 D3D11 的 Present 宿主没有此路线计时区间。
+Measurement off. Pending samples may still be retained safely.	测量已关闭。待处理的样本仍可能被安全保留。
+Sample every N eligible evaluations	每 N 次符合条件的评估采样一次
+The first eligible evaluation is sampled, then every %u evaluations. An evaluation is not necessarily a presentation frame.	采样第一次符合条件的评估，之后每 %u 次评估采样一次。一次评估不一定对应一个呈现帧。
+Accepted %llu | discarded %llu | pending %u	已接受 %llu | 已丢弃 %llu | 待处理 %u
+No confirmed GPU sample yet.	尚无已确认的 GPU 样本。
+Last confirmed sample: %.3f ms dispatch = %.3f ms model + %.3f ms outside model	最近确认样本：%.3f ms dispatch = %.3f ms 模型 + %.3f ms 模型外
+Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u passes	历史样本 %llu，录制后 %.1f s；%s，模型 %ux%u，%u 遍
+Sample contract %llu, evaluation %llu, run %llu; interval was %u evaluations	样本契约 %llu，评估 %llu，运行 %llu；间隔为 %u 次评估
+This is one historical sample, not the current frame or an average. Use matching contracts in the INFO log for comparisons.	这是一个历史样本，不是当前帧也不是平均值。比较时请使用 INFO 日志中相匹配的契约。
+Each extra pass processes the previous answer and has its own model history. Cost and VRAM grow. A failed extra pass keeps the last successful answer. Requested passes are not proof of completed work; check the last evaluation and INFO log.\n\nEnabling this after untracked NR has already run requires restarting the application. Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.	每增加一遍都会处理上一遍的结果，并拥有自己的模型历史。开销和 VRAM 占用随之增加。额外一遍失败时会保留上一次成功的结果。请求遍数并不能证明工作已完成；请查看上次评估和 INFO 日志。\n\n若在 NR 已经以未跟踪方式运行后再启用此项，需要重启应用程序。“重试”无法让之前的 GPU 工作变为已跟踪。不受支持的提交路径会拒绝额外的遍。
+The Model controls above are the master settings. Unchecked overrides inherit their current values. Turning individual settings off or reducing the pass count keeps saved edits.	上方的“模型”控件即为主设置。未勾选的覆盖项会继承其当前值。关闭单独设置或减少遍数会保留已保存的编辑。
+on	开启
+off	关闭
+Running%s - legacy timer %.2f ms (unconfirmed)%s	运行中%s - 旧版计时器 %.2f ms（未确认）%s
+The native Vulkan timer is legacy and is not fence-confirmed.\nFor D3D12, use the separate Fence-confirmed GPU timing panel.\nA historical sample is not the current frame's cost.	原生 Vulkan 计时器为旧版，未经 fence 确认。\n对于 D3D12，请使用单独的“经 fence 确认的 GPU 计时”面板。\n历史样本并不代表当前帧的开销。
+Source	源
+Auto	自动
+Upscaled	放大后
+Present	Present
+Hook method	挂钩方式
+Where the pass runs, and what it runs on.\n\nAuto: the swapchain backbuffer, as soon as the game's upscaler has handed over its depth and motion; the upscaler's output until then.\n\nUpscaled: in place, immediately after the game's upscaler has written its output. That output is linear and un-tonemapped, so the Colour section below must map it into something the model recognises -- the paper white is where a game that moves its exposure makes itself felt.\n\nPresent: at the moment of present, on the swapchain's backbuffer -- the frame the game has finished and tone-mapped, which is exactly the kind of picture the model was trained on. There is nothing to divide and no white point to find, and with frame generation the base frame is enhanced before the generated frames are made from it. This is how the ReShade implementations run it, and the one a title like KCD2 wants.\n\nA native Vulkan game ignores this. When the upscaler runs through OptiScaler's D3D12 bridge (a Vulkan or D3D11 game) there is no D3D12 present hook: Auto stays on the upscaler's output and Present runs nothing, except on a D3D11 game, where Present hosts the pass on the bridge's swapchain and takes effect after a restart.	本通道在何处运行、作用于什么。\n\n自动：一旦游戏的放大器交出了深度和运动信息，就在交换链后台缓冲区上运行；在此之前作用于放大器的输出。\n\n放大后：在游戏的放大器写入输出后立即原地运行。该输出是线性的、未经色调映射的，因此下方的“颜色”部分必须将其映射为模型能识别的内容——对于会改变曝光的游戏，纸白正是体现其影响的地方。\n\nPresent：在呈现时，作用于交换链的后台缓冲区——即游戏已完成并经过色调映射的画面，这正是模型训练时所用的那类画面。没有需要除以的数值，也无需寻找白点；启用帧生成时，基础帧会先被增强，再从中生成插帧。ReShade 的实现就是这样运行的，像 KCD2 这样的游戏也需要这种方式。\n\n原生 Vulkan 游戏会忽略此项。当放大器通过 OptiScaler 的 D3D12 桥接运行时（Vulkan 或 D3D11 游戏），不存在 D3D12 Present 挂钩：“自动”停留在放大器的输出上，“Present”不运行任何内容；D3D11 游戏例外，此时“Present”会在桥接的交换链上承载本通道，并在重启后生效。
+Require DLSS temporal inputs	要求 DLSS 时间性输入
+Present needs the game's depth and motion to reproject its history, and uses them only on the frame they were captured for. With this on, a frame that has none -- none captured yet, or one that cannot be shown to be its own -- is shown as the game rendered it. With it off, the pass runs on dummy temporals -- constant depth, no motion -- and treats the scene as standing still, which is right for a title whose upscaler is not DLSS.	Present 需要游戏的深度和运动信息来重投影其历史，且只在它们所捕获的那一帧上使用。开启时，没有这些数据的帧——尚未捕获，或无法证明属于该帧——会按游戏原本渲染的样子显示。关闭时，本通道使用虚拟时间性数据运行——恒定深度、无运动——并将场景视为静止，这适合放大器不是 DLSS 的游戏。
+Synthesized motion	合成运动
+Experimental. Only for frames with no motion from the game (no upscaler to take it from). Instead of telling the model nothing moved, the motion is estimated from this frame and the last, so its history follows a moving camera rather than ghosting behind it. The estimate is coarse at thin edges and text and costs a little GPU time; depth stays constant. "No history without motion" below no longer applies to a frame that has it.	实验性。仅用于没有来自游戏的运动信息的帧（没有可提供运动信息的放大器）。不再告诉模型画面没有运动，而是根据当前帧和上一帧估算运动，使其历史跟随移动的镜头，而不是在后面拖出残影。估算在细边缘和文字处较粗糙，并占用少量 GPU 时间；深度保持恒定。对于具有估算运动的帧，下方的“无运动时舍弃历史”不再适用。
+Protect the HUD	保护 HUD
+Experimental. Pixels that stay exactly the same while the scene around them moves are taken for interface and handed back untouched through the model's own UI correction, so text and HUD lines stay crisp. A HUD is only found once the camera has moved behind it, and it stays protected for about a second and a half after the scene stops. A still, detailed patch next to motion can be taken for HUD; it is then shown as the game drew it.	实验性。周围场景移动时保持完全不变的像素会被视为界面，通过模型自身的 UI 校正原样交还，使文字和 HUD 线条保持清晰。只有镜头在 HUD 后方移动过之后才能识别出 HUD，并且在场景停止后约一秒半内仍受保护。紧邻运动区域的静止且细节丰富的区块可能被误认为 HUD；此时它会按游戏原本绘制的样子显示。
+No history without motion	无运动时舍弃历史
+Only for frames that run on dummy temporals. The model is told nothing moved, so a moving camera leaves ghosts and doubled edges where things used to be. On, it starts its history over every frame: no ghosts, but none of its temporal smoothing either. Frames with the game's own depth and motion are not affected.	仅用于使用虚拟时间性数据运行的帧。模型会被告知没有任何运动，因此移动的镜头会在物体原来的位置留下残影和重影边缘。开启后，每帧都重新开始历史：没有残影，但也没有时间性平滑。带有游戏自身深度和运动信息的帧不受影响。
+Present sync	Present 同步
+Waits for the backbuffer write-back to finish before the flip. Frame generation needs it: without it a paced flip can show an unfinished picture. Left on auto it waits only when frame generation could be involved, because otherwise the wait just holds the game back. Ticking or unticking this box forces it either way.	在翻转前等待写回后台缓冲区的操作完成。帧生成需要它：否则按节奏进行的翻转可能显示未完成的画面。设为自动时，仅在可能涉及帧生成时才等待，因为其他情况下等待只会拖慢游戏。勾选或取消勾选此框会强制开启或关闭。
+Stage: swapchain present (bypasses upscaler stages)	阶段：交换链 Present（绕过放大器阶段）
+Not on this route right now: the game is not running Ray Reconstruction, so "Model resolution" below is what governs. These two take effect if it starts.	当前不在此路线上：游戏未运行 Ray Reconstruction，因此由下方的“模型分辨率”决定。若其开始运行，这两项才会生效。
+Above 1x the model supersamples: no new detail, and cost grows with the area. Ray Reconstruction already denoises this frame.	高于 1x 时模型进行超级采样：不会带来新细节，开销随面积增长。Ray Reconstruction 已经对此帧降噪。
+Model resolution: set by RR Working scale on this route	模型分辨率：在此路线上由“RR 工作比例”设定
+Supersampling %.2fx: the model runs ABOVE native, then\nis sampled back down. Experimental, and costly -- time grows with the area.	超级采样 %.2fx：模型在高于原生的分辨率下运行，然后再采样缩小。实验性功能，开销很高——耗时随面积增长。
+The filter that averages the model's above-native answer back to display size --\nthis is what turns supersampling into LESS noise rather than more. Sharper\nfilters (Lanczos3, Kaiser3) keep the most detail; softer ones (Bicubic,\nCatmull-Rom) are gentler on ringing. Independent of the Output Scaling\ndownscaler, so the two can differ and run at the same time.	将模型高于原生分辨率的结果平均缩回显示尺寸的滤波器——正是它让超级采样带来更少而不是更多的噪点。较锐利的滤波器（Lanczos3、Kaiser3）保留最多细节；较柔和的（Bicubic、Catmull-Rom）振铃更轻。它独立于“输出缩放”的缩小器，因此两者可以不同并同时运行。
+What fraction of the frame the model works at. Cost falls with the square of\nthis, so half resolution is roughly a quarter of the time.\n\nThe frame is never reduced. Only the model's contribution is computed small\nand enlarged, so the picture underneath is untouched whatever this says.\n\nWhat it trades: the shading the model adds is broad and survives enlargement;\nthe fine structure it synthesises does not, and softens. Worth having when the\npass costs more than you want to pay for the detail it returns.\n\nThe frame itself stays at full detail whatever this says -- only the\nmodel's own work is done small.\n\nauto is full size on RTX 40 and later and half size on RTX 20 and 30: an RTX 3060\nmeasured 25 times an RTX 4090's per-pixel cost. Moving the slider replaces\nit; Auto puts it back.	模型以帧的多大比例进行处理。开销随其平方下降，因此一半分辨率大约只需四分之一的时间。\n\n帧本身从不会被缩小。只有模型的贡献以小尺寸计算再放大，因此无论此值为何，底层画面都不受影响。\n\n代价：模型添加的明暗变化较宽泛，放大后仍能保留；而它合成的精细结构则不能，会变得柔和。当本通道的开销超过你愿意为其返回的细节付出的代价时，值得使用。\n\n无论此值为何，帧本身都保持完整细节——只有模型自己的工作以小尺寸完成。\n\n自动值在 RTX 40 及更新型号上为全尺寸，在 RTX 20 和 30 上为一半尺寸：实测 RTX 3060 的每像素开销是 RTX 4090 的 25 倍。拖动滑块会替换该值；“自动”可将其恢复。
+Matched residual, sharp	匹配残差（锐利）
+Matched residual + DLSS	匹配残差 + DLSS
+How far the frame moves toward the model's picture.\n\nThe model's answer is not added to the frame -- it is a complete picture of its\nown, rescaled so its luminance sits where the original says it should. This\nblends between the two, so both ends are real pictures and everything between\nthem is one too.\n\n0 gives back exactly what the upscaler produced. 1 is the model's picture.\n\nAbove 1 carries on past it in the same direction, which is not something the\nmodel asked for -- use it to see what it is doing, then come back down. This\nis the control to push if you want more effect: Intensity belongs to the model\nand it decides what to do with it.	帧向模型画面靠拢的程度。\n\n模型的结果并不是叠加到帧上——它本身就是一幅完整的画面，经过缩放，使其亮度落在原画面所指示的位置。此项在两者之间混合，因此两端都是真实的画面，中间的每个值也是。\n\n0 原样返回放大器生成的画面。1 即模型的画面。\n\n高于 1 会沿同一方向继续越过它，这并非模型所要求的——用它来观察模型在做什么，然后再调回来。想要更强效果时应调高的是这个控件：“强度”属于模型，由模型决定如何使用。
+Whether the model's colour arrives with its light.\n\n0 keeps the game's own hue exactly -- every pixel is the original colour with\nonly its brightness carrying the model's verdict. Game-accurate colour, with\nthe detail. 1 brings the model's colour as well, in its own hue, clamped into\nAP1 so nothing unreachable is asked for.\n\nThis cannot shift hue on its own: it interpolates between two finished\npictures rather than adding a colour difference to one, which is what used to\nlet a warm subject come back green.\n\nAbove 1 it OVER-SATURATES: the colour keeps its hue but grows more vivid,\nand rolls off at the edge of what the display can show rather than clipping\ninto a flat blown patch. 1 is the model's own colour; push past it for punch.	模型的颜色是否随其光照一同带来。\n\n0 完全保留游戏自身的色相——每个像素都是原始颜色，只有亮度承载模型的判断。颜色忠于游戏，同时保留细节。1 也会带来模型的颜色，使用模型自身的色相，并限制在 AP1 内，以免要求无法达到的颜色。\n\n此项本身不会造成色相偏移：它在两幅完成的画面之间插值，而不是给其中一幅加上颜色差值——以前正是那种做法让暖色物体变绿。\n\n高于 1 会过饱和：颜色保持色相但更鲜艳，并在显示器能显示的边缘平滑衰减，而不是截断成一块平涂的过曝区域。1 是模型自身的颜色；超过它可获得更强冲击力。
+What the model is shown, and how its answer comes back.\n\nOff (soft knee): the default. It rolls highlights off so hard the model\ncannot resolve detail in them -- fine in soft-lit scenes, weak in bright ones.\n\nNeutwo composed: an unclipped curve so the model sees highlight detail, then\neverything above (Detail/Colour strength, highlight guard, palette). It wins in\nbright scenes, but the curve compresses MIDTONES too, so in soft-lit content it\ncan be worse than Off. It also shifts paper white -- re-check it when you switch.\n\nHybrid composed: the best of both, and the one to use. Identity in the\nmidtones -- as good as Off there -- and the unclipped roll only in the\nhighlights, so it recovers the detail Off crushes without giving up the\nmidtones Neutwo does. It barely shifts paper white.\n\nReplace: the raw model straight back through the exact inverse, none of the\ncomposition -- no guard, no palette, no strengths. Gorgeous where there are no\nbright lights, but they FLASH in motion. A reference, not a daily setting.\n\nHybrid replace: the raw model like Replace, but on the hybrid curve -- the\ndecode is identity in the midtones, so the flashing is confined to genuine\nbright highlights instead of everywhere. Most of Replace's detail, far more\nstable. If you love the Replace look but the flicker bothers you, use this.\n\nOff is byte-identical to before.	模型看到的是什么，以及它的结果如何返回。\n\n关闭（软拐点）：默认值。它对高光的压缩非常强，以致模型无法解析其中的细节——在柔和光照的场景中表现不错，在明亮场景中较弱。\n\nNeutwo 代理 + 合成：一条不截断的曲线，让模型能看到高光细节，然后应用上方的所有处理（细节/颜色强度、高光保护、调色板）。它在明亮场景中胜出，但该曲线也会压缩中间调，因此在柔和光照的内容中可能不如“关闭”。它还会改变纸白——切换时请重新检查。\n\n混合代理 + 合成：两者之长，推荐使用。中间调保持恒等——在那里与“关闭”一样好——仅在高光部分使用不截断的压缩，因此能恢复“关闭”压掉的细节，又不像 Neutwo 那样牺牲中间调。它几乎不改变纸白。\n\n替换：模型的原始结果直接经由精确逆变换返回，不做任何合成——没有保护、没有调色板、没有强度。在没有明亮光源的地方效果极佳，但这些光源在运动中会闪烁。仅作参考，不适合日常使用。\n\n混合代理 + 替换：与“替换”一样使用模型的原始结果，但基于混合曲线——解码在中间调保持恒等，因此闪烁只限于真正明亮的高光，而不是到处都有。保留了“替换”的大部分细节，稳定得多。如果你喜欢“替换”的效果但受不了闪烁，请用这个。\n\n“关闭”与以前逐字节完全相同。
+Neural Rendering Model selection (DLSSNR.Style):\n\nModel A (Default): standard reference neural model with default local tone and structure.\n\nModel B (Natural): subtle contrast (-0.25) and saturation (-0.10) compensation. Preserves natural skin tones and softens harsh highlights.\n\nModel C (Cinematic): gentle saturation adjustment (-0.15) for filmic presentation.\n\nTuning changes apply instantly on the live frame with seamless temporal reset.	神经渲染模型选择 (DLSSNR.Style)：\n\n模型 A（默认）：标准参考神经模型，使用默认的局部色调和结构。\n\n模型 B（自然）：轻微的对比度 (-0.25) 和饱和度 (-0.10) 补偿。保留自然肤色并柔化刺眼的高光。\n\n模型 C（电影级）：温和的饱和度调整 (-0.15)，呈现电影感画面。\n\n调整会立即在实时画面上生效，并无缝重置时间性历史。
+Holds still parts of the picture still. Where the frame the model was shown did not\nchange, keep what was shown last frame and let the model's new answer in slowly;\nwhere it changed, show the model's answer as it is. Aimed at the model re-deciding\nstill content -- a slope that brightens and darkens with nothing moving.\n\n0 is off and costs nothing. 1 holds a still pixel outright. It stands down on the\nbefore-upscale stage, where the frame is jittered and every pixel moves.	让画面中静止的部分保持静止。在模型看到的画面没有变化的地方，保留上一帧显示的内容，并让模型的新结果缓慢进入；在有变化的地方，按原样显示模型的结果。针对的是模型对静止内容反复重新判断——例如没有任何移动、却忽明忽暗的斜坡。\n\n0 为关闭，没有开销。1 会完全锁定静止像素。在放大前阶段自动停用，因为那里的帧带有抖动，每个像素都在移动。
+How far the model's input may drift, relative to its brightness, before a pixel\ncounts as moved. Lower follows subtle lighting changes sooner; higher tolerates\nmore flicker in the input before letting go.	模型输入相对于其亮度可以漂移多少，像素才被视为已移动。较低值会更早跟随细微的光照变化；较高值在放手前容忍输入中更多的闪烁。
+Hook method is set to Present: the swapchain backbuffer is already\ntone-mapped and display-referred sRGB. White point and exposure mapping\ncontrols are bypassed.	挂钩方式设为 Present：交换链后台缓冲区已经过色调映射，并且是面向显示的 sRGB。白点和曝光映射控件将被绕过。
+The model was trained on finished, sRGB-encoded frames. The upscaler's\noutput is not one: it is linear and open-ended. These decide how it is\nmapped into something the model recognises. A frame the game reports as\nalready tone-mapped is passed over untouched and none of this applies.	模型是在完成的、sRGB 编码的帧上训练的。放大器的输出并非如此：它是线性且无上限的。这些控件决定如何将其映射为模型能识别的内容。游戏报告为已经色调映射的帧会原样跳过，这里的一切都不适用。
+Where the number that divides the frame comes from.\n\nPaper white only -- the slider below and nothing else. Right for a\ngame whose exposure never moves, wrong the moment it does: one\nconstant cannot serve a cave and a field.\n\nThe game's own exposure -- read from the texture the game hands\nthe upscaler. The best source there is, because it is decided\nupstream and nothing this pass does can move it. Not every game\nsupplies one.\n\nA buffer the scan found -- for games that compute an exposure and\nnever pass it on. A GUESS: candidates are matched by shape, and in\nGTA V the best one tracks the real exposure but at its own scale,\nwhich the anchor's ratio cancels. Needs anchoring once, and checking\nafterwards.	用于除以帧的数值从何而来。\n\n仅纸白——只用下方的滑块，别无其他。适合曝光从不变化的游戏，一旦曝光变化就会出错：一个常量无法同时适用于洞穴和原野。\n\n游戏自身的曝光值——从游戏交给放大器的纹理中读取。这是最好的来源，因为它在上游就已确定，本通道的任何操作都无法改变它。并非每个游戏都提供。\n\n扫描找到的缓冲区——适用于计算了曝光却从不传递出去的游戏。这只是猜测：候选项按形状匹配，在 GTA V 中最佳的一个能跟踪真实曝光，但有自己的比例，锚点的比值会将其抵消。需要锚定一次，之后再检查。
+This game supplies no exposure -- paper white is in use. Try the scan instead.	此游戏不提供曝光值——正在使用纸白。请改用扫描。
+This game's exposure is not usable here; paper white is in use.	此游戏的曝光值在这里无法使用；正在使用纸白。
+This game supplies an exposure and it is being read.	此游戏提供曝光值，正在读取。
+Game exposure %.4f  ->  white point %.2f%s	游戏曝光 %.4f  ->  白点 %.2f%s
+  (held: absent this frame)	  （保持：本帧缺失）
+Nothing in this game is shaped like an exposure.	这款游戏中没有任何类似曝光的内容。
+The exposure scan needs a restart: Neural Rendering was off when the game started.	曝光扫描需要重启：游戏启动时神经渲染处于关闭状态。
+Watching %u, none moving yet -- go between light and shade.	正在观察 %u 个，目前均未发生变化——请在光照和阴影之间移动。
+Found one. Set paper white below until the picture looks right, then press Anchor here.	找到了一个。在下方调整纸白直到画面看起来正常，然后点击“在此处锚定”。
+This game supplies an exposure -- the option above would use it.	此游戏提供曝光值——上面的选项会使用它。
+Scan %.5f  ->  white point %.2f   (points: %u)	扫描 %.5f  ->  白点 %.2f   (点数: %u)
+Paper white (editing point %d)	纸白（编辑点 %d）
+The white point for the selected calibration point, or -- with no row\nselected -- the value the next Anchor press captures.\n\nSet it until the picture looks right here, then Anchor. Move to very\ndifferent light and do it again: two points fix the buffer's real\nrelationship and the white point holds between them. Click a row below\nto come back and adjust that point; click it again to let go.	所选校准点的白点，或者——未选中任何行时——下次点击“在此处锚定”所捕获的值。\n\n调整它直到此处画面看起来正常，然后锚定。走到光照差异很大的地方再做一次：两个点可确定缓冲区的真实关系，白点会在两点之间保持正确。点击下方某行可返回调整该点；再次点击则取消选择。
+A multiplier on the scan's white point, and the control you adjust between\nanchor points: dial it until the picture looks right in the current\nlight, then press Anchor here -- it captures the trimmed value as a new\npoint and resets the trim to 1.	扫描白点的乘数，也是在锚点之间调整的控件：调到当前光照下画面看起来正常，然后点击“在此处锚定”——它会把微调后的值捕获为一个新点，并将微调重置为 1。
+A multiplier on the exposure the game supplied. 1.00x takes its number\nexactly, and that is the right answer here.\n\nThis is not a fudge factor. If a game needs the trim far from 1 to look\nright, that is evidence the exposure being read is wrong for that game,\nnot that the game wants trimming. Somewhere around 0.8 to 1.25 is honest\ntuning; reaching for 4 means something upstream is broken and the trim is\nhiding it.\n\nYour manual paper white is kept separately and comes back untouched if\nyou switch the option above off.	游戏所提供曝光值的乘数。1.00x 即原样采用该数值，这里这就是正确答案。\n\n这不是用来凑效果的系数。如果某个游戏需要远离 1 的微调才能看起来正常，说明读取的曝光值对该游戏是错的，而不是该游戏需要微调。0.8 到 1.25 左右是正常的调整；需要调到 4 则意味着上游有问题，而微调在掩盖它。\n\n你手动设置的纸白会单独保存，关闭上方的选项后会原样恢复。
+What the frame is divided by before the model sees it. There is no other white\npoint; this is the whole of it.\n\nThe model was trained on finished frames where white sits at 1. The\nupscaler's output is linear and open-ended, so something has to say where\nwhite is -- and where the game's DLSS buffer is linear HDR, that number is\nrarely anywhere near 1. Measured in Monster Hunter Wilds it takes 16 or more\nbefore the model's detail reaches the frame at all, and the value that suits\na shaded camp is still too small for the same game out in daylight.\n\nToo low and almost every pixel trips the soft knee: the model is shown a\nflat near-white picture, its answer is scaled away, and only its hue\nsurvives -- which reads as a colour cast rather than as lost detail. Too\nhigh and it is shown an underexposed one, its answer degrades, and this same\nnumber multiplies that error on the way out.\n\nRaise it until the picture stops improving. Past that point it does not\nplateau, it gets worse in the other direction.\n\nThis was once a multiplier on a measured white point. The measurement is\ngone: it read scene brightness rather than where white belongs, handed the\nmodel a picture three times too dark, and left the highlight path nothing to\ngive back.\n\nAt strength zero the frame is still bit-identical whatever this says.	帧在交给模型之前所除以的数值。没有别的白点；这就是全部。\n\n模型是在已完成的画面上训练的，其中白色位于 1。放大器的输出是线性且无上限的，所以必须有东西指明白色在哪里——而当游戏的 DLSS 缓冲区是线性 HDR 时，这个数值很少接近 1。在《怪物猎人：荒野》中实测，需要 16 或更高，模型的细节才会真正体现在画面上；而适合阴影中营地的值，对于同一游戏的日光场景仍然太小。\n\n设得太低，几乎每个像素都会触发软拐点：模型看到的是一幅平淡、接近全白的画面，它的结果被缩放掉，只剩色相——看起来像偏色，而不像丢失了细节。设得太高，模型看到的是曝光不足的画面，结果变差，而且这个数值会在输出时把误差同样放大。\n\n逐步调高，直到画面不再改善。超过这个点后不会保持平稳，而是朝另一个方向变差。\n\n这里曾经是作用于测量白点的乘数。该测量已被移除：它读取的是场景亮度而不是白色应在的位置，交给模型的画面暗了三倍，让高光路径无从恢复。\n\n强度为零时，无论此值为何，帧仍保持逐位一致。
+The most the pass may move any pixel, as a multiple of what it already was, in\nboth directions -- a pixel may not be brightened past this nor darkened past\nits reciprocal. Lights are where the model has least to say and rescaling its\nanswer does the most damage; 2x leaves detail intact while stopping a strip\nlight turning into a string of coloured cells. Raise it only if bright areas\nlook clipped.	本通道对任意像素改变的最大幅度，以其原值的倍数表示，双向生效——像素的提亮不能超过此值，压暗不能超过其倒数。光源是模型最没有发言权的地方，缩放其结果造成的损害也最大；2x 能保持细节完好，同时防止条形灯变成一串彩色方块。仅当明亮区域看起来被截断时才调高。
+NVIDIA's highlight recovery, from RTX Remix. The model is shown everything\nbrighter than paper white squeezed into the top of its range, so its\nverdict there -- above all its colour -- is made without knowing how\nbright the pixel really is. This hands pixels that were very bright (one\nto eight times paper white) back to the game's own frame, a little at\nfirst and wholly at the top, so a fire keeps its orange and a coloured\nlight keeps its brightness.\n\nIt costs some of the model's detail in bright areas. Shadows and\nmidtones are untouched. Off is the composition as it always was.\n\nOnly offered on a linear HDR buffer, the one case where the model was\nshown a compressed picture.	NVIDIA 的高光恢复，来自 RTX Remix。比纸白更亮的所有内容都会被压缩到模型输入范围的顶部，因此模型在那里的判断——尤其是颜色——是在不知道像素实际有多亮的情况下做出的。此项会将非常亮的像素（纸白的一到八倍）交还给游戏自身的画面，开始时只交还一点，到顶部时完全交还，从而让火焰保持橙色，彩色灯光保持亮度。\n\n它会损失亮部区域的一部分模型细节。阴影和中间调不受影响。关闭时即为一贯的合成方式。\n\n仅在线性 HDR 缓冲区上提供，这是模型看到压缩画面的唯一情况。
+A lamp in the corner: red for dark, green for full light, and the\nshades between, with the reading beside it.\n\nIt is how you see at a glance that the scan is TRACKING rather\nthan merely running. Walk into shade and it should slide toward\nred; step out and it should go green. If it moves the wrong way,\nthat is what the setting above is for.\n\nPurely a readout. It changes nothing.	角落里的一盏指示灯：红色表示暗，绿色表示全亮，中间为过渡色，旁边显示读数。\n\n通过它可以一眼看出扫描是在跟踪，而不只是在运行。走进阴影时它应滑向红色；走出来时应变绿。如果方向相反，就用上方的那个设置。\n\n纯粹是读数显示，不改变任何内容。
+Make the picture look right, then press this -- it captures the current look\nas a point. For the first point use the Paper white slider above; for\nevery point after, move to different light and use the Trim, which the\nAnchor then bakes into a new point.\n\nThe first press calibrates one point -- the white point then\nfollows the scan by ratio from there, as before. Walk into very\ndifferent light, set paper white again, and press it again: the\nsecond point pins down the buffer's real curve and everything\nbetween the two is right, not just near one anchor. Up to eight.\n\nThe table is per game and shareable: one person calibrates a game\nand the numbers are the same for everyone who takes the profile.	让画面看起来正常，然后点击此按钮——它会把当前效果捕获为一个点。第一个点用上方的纸白滑块调整；之后的每个点，走到不同光照下用微调调整，再由锚定将其固化为一个新点。\n\n第一次点击校准一个点——之后白点会像以前一样按比例跟随扫描。走到光照差异很大的地方，再次调整纸白并再次点击：第二个点会确定缓冲区的真实曲线，两点之间的一切都会正确，而不仅仅是一个锚点附近。最多八个点。\n\n该表按游戏保存且可分享：一个人校准某个游戏后，使用该配置文件的每个人得到的数值都相同。
+(the scan is only watching -- the white point above comes from somewhere else)	（扫描仅用于观察——上方的白点来自其他地方）
+%s scan %.4f  ->  white %.2f%s	%s 扫描 %.4f  ->  白点 %.2f%s
+   [editing]	   [编辑中]
+Click a row to edit it with the slider above; click it again to control the live point. > is the point in use now.	单击某行以使用上方滑块进行编辑；再次单击以控制活动点。> 是当前使用的点。
+Flip this if the picture gets worse in the direction it should be\ngetting better. Most engines store an exposure that falls as\nthe scene brightens; some store its reciprocal, and a buffer\nfound by shape does not say which. Add a second anchor point in\ndifferent light and this is decided for you, so it disappears.	如果画面在本应变好的方向上反而变差，请勾选此项。大多数引擎存储的曝光值随场景变亮而下降；有些存储的是其倒数，而按形状找到的缓冲区无法说明是哪一种。在不同光照下添加第二个锚点后会自动判断，此选项随之消失。
+nothing matched yet.	目前还没有任何匹配项。
+%zu. %s -- not read yet	%zu. %s —— 尚未读取
+%zu. %s = %.5f  (seen %.5f..%.5f) %s	%zu. %s = %.5f  （范围 %.5f..%.5f）%s
+MOVES	在变化
+flat so far	目前无变化
+Shows the pass against itself, so the two can be seen at once rather than\ntoggled and remembered.\n\nSide by side puts the whole frame in each half, untouched on the left and\nedited on the right. Both halves are squeezed horizontally to fit, so it is\nfor looking at rather than playing in.\n\nWipe cuts a single frame at the split and resamples nothing, so the picture\nis the right shape and can be played normally. Drag the split below; it is a\nstored setting and stays put once the menu is closed.\n\nNeither needs the menu open to keep working. A hairline marks the join.	将经过本通道和未经本通道的画面同时显示，无需来回切换、凭记忆比较。\n\n并排：每一半都显示完整的帧，左侧未处理，右侧已编辑。两半都被水平压缩以适应屏幕，因此只适合观看，不适合游玩。\n\n滑动对比：在分割线处切开同一帧，不做任何重采样，因此画面比例正确，可以正常游玩。拖动下方的分割线；它是保存的设置，关闭菜单后保持不变。\n\n两种方式都不需要菜单保持打开。接缝处有一条细线标记。
+Writes which side is which onto the frame itself, so a screenshot still\nsays so after it has left this machine. Drawn into the picture's own\nplane: in the wipe the split reveals and hides the label exactly as it\ndoes the images, and there is nothing to drag. Swap sides moves the\nlabels with their pictures.	将哪一侧是哪一侧写在画面上，这样截图离开这台机器后仍能看出。标签绘制在画面本身的平面上：在滑动对比中，分割线会像显示和隐藏图像一样显示和隐藏标签，也没有需要拖动的东西。“交换两侧”会让标签随画面一起移动。
+Puts the edited frame on the other side.\n\nWorth doing once you have decided which you prefer: the eye is not\neven-handed about left and right, and a difference can read as an\nimprovement purely from where it sits. If the same side still wins after\nswapping, it is the pass you are seeing and not the placement.	将编辑后的帧放到另一侧。\n\n在决定更喜欢哪一侧之后值得这样做：眼睛对左右并非一视同仁，差异可能仅仅因为所在位置而被看成改进。如果交换后仍是同一侧胜出，那么你看到的是本通道的效果，而不是位置的影响。
+How much of the frame each half shows.\n\nA half is half as wide as the frame and just as tall, so the frame\ncannot fill it and keep its shape.\n\nAt 1 the whole frame is there at its right proportions, with bars above\nand below. At 2 the half is filled and the sides are cropped away\ninstead. Anything between trades one for the other.	每一半显示帧的多少。\n\n每一半的宽度是帧的一半、高度相同，因此帧无法既填满它又保持比例。\n\n为 1 时显示完整的帧且比例正确，上下有黑边。为 2 时填满这一半，改为裁掉两侧。介于两者之间则在二者间折中。
+FSR 3 Upscaler Manual Tuning	FSR 3 放大器手动微调
+Advanced FSR FG Settings	高级 FSR FG 设置
+Extended XeFG Settings	扩展 XeFG 设置
+Advanced OptiFG Settings	高级 OptiFG 设置
+Active DispatchFlags	生效的 DispatchFlags
+FoV & Camera Values	视野与相机参数
+VRR Frame Cap Calculator	VRR 帧上限计算器
+Advanced DA Parameters	高级 DA 参数
+Motion Adaptive Sharpness	运动自适应锐化
+Advanced Init Flags	高级初始化标志
+Mipmap Bias	Mipmap 偏移
+Anisotropic Filtering	各向异性过滤
+Keyboard Input Fix	键盘输入修复
+Enable Input Fix	启用输入修复
+Hands frame generation a motion field estimated from the presented\nframes instead of zero motion; the same estimate DLSS-NR uses when\nboth are on	根据已呈现的帧估算运动场并交给帧生成，而不是零运动；与两者同时开启时 DLSS-NR 所用的估算相同
+Incoherent motion	不连贯运动
+Repeats frames instead of interpolating them where the motion breaks up:\nwhile more than this share of neighbouring motion samples disagree and the\nmedian motion exceeds 1%% of the image width (parallax, disocclusion, thin\nobjects over a far background). A uniform pan keeps interpolating at any\nspeed. 25%% is a starting point; lower repeats more. 0 is off	在运动破碎处重复帧而不是插值：当相邻运动样本中不一致的比例超过此值，且运动中位数超过图像宽度的 1%% 时（视差、去遮挡、远处背景前的细小物体）。匀速平移在任何速度下都会继续插值。25%% 是一个起点；数值越低重复越多。0 为关闭
+Fast motion cap	快速运动上限
+Repeats frames whenever the median motion exceeds this many pixels per\nbase frame, however coherent, like AMD's Fast Motion Response. With\nFSR FG, every repeat restarts its optical flow for several frames, so\nkeep it above normal camera speed. 0 is no cap	只要运动中位数超过每基础帧这么多像素，无论多连贯都会重复帧，类似 AMD 的 Fast Motion Response。使用 FSR FG 时，每次重复都会让其光流重新开始若干帧，因此请将其设在正常镜头速度之上。0 为无上限
+Minimum base fps	最低基础帧率
+HUD depth	HUD 深度
+Detects the HUD (pixels that stay still while the scene around\nthem moves) and hands it to frame generation as near depth, so the\nscene beside it is not blended with it and its own motion is kept.\nNeeds Synthesized motion	检测 HUD（周围场景移动时保持静止的像素），并将其作为近处深度交给帧生成，使旁边的场景不会与之混合，并保留其自身的运动。需要“合成运动”
+HUD layer	HUD 图层
+Experimental, FSR FG output only. Composes the detected HUD over\ngenerated frames from the real frame, through FSR FG's own UI layer,\nso it is never warped; real frames are unchanged. Off while "Disable\nUI texture" is on	实验性，仅限 FSR FG 输出。通过 FSR FG 自身的 UI 图层，将真实帧中检测到的 HUD 合成到生成帧之上，使其永不变形；真实帧不变。启用 "Disable UI texture" 时此项关闭
+HUD margin	HUD 边距
+How far around the detected HUD, in pixels, generated frames show\nthe real frame, to cover the smear beside each element; the outer\nhalf fades out. It covers the smear fully up to this many pixels of\nmotion per base frame. Around the HUD the background then moves at\nthe base frame rate. 0 is the detected HUD alone	在检测到的 HUD 周围多少像素范围内，生成帧显示真实帧，以覆盖每个元素旁的拖影；外侧一半逐渐淡出。每基础帧运动不超过这么多像素时可完全覆盖拖影。此时 HUD 周围的背景会以基础帧率移动。0 表示仅检测到的 HUD 本身
+How the model's work is brought back up when it ran below the frame's size.\n\nClassic composes the model's small picture directly against the full-size\nframe. Those two disagree by the shrink's blur as well as by the model's edit,\nand the composition cannot tell them apart -- it reads the blur as brightness\nthe frame has and the model never saw. The lower the model resolution the\nlarger that error, and it is the colour shift that shows up at half size.\n\nMatched residual carries up only the model's difference and lays it on the\nframe's own proxy, so both pictures being compared are full size and the only\nthing that came from the small raster is the edit itself.\n\nMatched residual, sharp is the same, with the model's difference enlarged by\na sharper filter (Catmull-Rom, held to its neighbours so it cannot ring), so\nmore of the fine structure the model drew at the small size survives.\n\nMatched residual + DLSS hands the model's difference to a private DLSS Super\nResolution, which builds it up over frames and so can return detail finer\nthan the small raster holds. D3D12 only, and it needs nvngx_dlss.dll. Where it\ncannot run -- native Vulkan, before the upscaler, no real depth and motion,\nwhile it starts -- Matched residual runs, and the line below says why.\n\nNo effect at full size or above: there is no residual to carry and all four are\nidentical (supersampling brings its answer down to frame size before this).\n\nFrom hhkbble's multi-pass work on this fork; the DLSS enlargement is wilsjo2's.	模型以低于帧尺寸运行时，如何把它的工作放大回来。\n\n经典：将模型的小画面直接与全尺寸帧进行合成。两者的差异既来自缩小造成的模糊，也来自模型的编辑，而合成无法区分二者——它会把模糊当作帧具有而模型从未见过的亮度。模型分辨率越低，误差越大，这就是在一半尺寸下出现的偏色。\n\n匹配残差：只把模型的差值放大上来，并叠加到帧自身的代理上，因此进行比较的两幅画面都是全尺寸的，唯一来自小尺寸栅格的只有编辑本身。\n\n匹配残差（锐利）：同上，但模型的差值用更锐利的滤波器放大（Catmull-Rom，并受相邻像素约束，不会产生振铃），因此模型在小尺寸下绘制的精细结构能保留更多。\n\n匹配残差 + DLSS：把模型的差值交给一个私有的 DLSS Super Resolution，它跨帧累积，因此可以还原比小尺寸栅格所含更精细的细节。仅限 D3D12，并需要 nvngx_dlss.dll。在它无法运行的情况下——原生 Vulkan、放大器之前、没有真实的深度和运动信息、启动期间——会改用匹配残差，下方一行会说明原因。\n\n模型以全尺寸或更高运行时无效：没有残差可放大，四种方式完全相同（超级采样会在此之前把结果缩回帧尺寸）。\n\n源自 hhkbble 在本分支上的多遍处理工作；DLSS 放大来自 wilsjo2。
+# Transfer 2, Matched residual + DLSS: the status line under Enlargement (dlss-enlargement.md).
+Waiting for the first frame.	正在等待第一帧。
+D3D12 only: native Vulkan runs Matched residual.	仅限 D3D12：原生 Vulkan 使用匹配残差。
+The model runs at full size or above: nothing to enlarge, Matched residual runs.	模型以全尺寸或更高运行：无需放大，使用匹配残差。
+Before the upscaler: Matched residual runs.	放大器之前：使用匹配残差。
+No real depth and motion here: Matched residual runs.	此处没有真实的深度和运动信息：使用匹配残差。
+The guides could not be brought to the model's size: Matched residual runs.	无法将引导数据调整到模型尺寸：使用匹配残差。
+Debug view shows the model output: Matched residual runs.	调试视图正在显示模型输出：使用匹配残差。
+Starting DLSS: Matched residual until it is ready.	正在启动 DLSS：就绪前使用匹配残差。
+DLSS failed (see the log): Matched residual until Retry.	DLSS 失败（见日志）：点击“重试”前使用匹配残差。
+Running: DLSS enlarges the model's edit.	运行中：DLSS 正在放大模型的编辑。
+The model is below a third of the frame, further than DLSS enlarges: Matched residual runs.	模型低于帧的三分之一，超出 DLSS 的放大范围：使用匹配残差。
+The driver proxy runs the model without the resolve: nothing is enlarged.	驱动代理运行模型时不经过 resolve：不放大任何内容。
+Stops generating frames while the base frame rate is below this,\nand resumes once it recovers. 0 is off. Not a frame rate target:\nabove the game's base frame rate, frame generation never runs	基础帧率低于此值时停止生成帧，恢复后继续。0 为关闭。这不是帧率目标：高于游戏的基础帧率时，帧生成永远不会运行
+nvngx.dll_dlssnr.dll is missing	缺少 nvngx.dll_dlssnr.dll
+nvngx.dll_dlssnr.dll would not load	nvngx.dll_dlssnr.dll 无法加载
+the forwarder is missing its exports	转发器缺少导出项
+nvngx.dll_dlssnr.dll is from a different build	nvngx.dll_dlssnr.dll 来自不同的构建
+the model faulted inside its own code; off for this session	模型在其自身代码内发生故障；本次会话关闭
+the NGX core would not initialise	NGX 核心无法初始化
+the NGX core has no capability parameters	NGX 核心没有能力参数
+the NGX core refused its capability parameters	NGX 核心拒绝了其能力参数
+Single pass (master settings)	单遍（主设置）
+Restart required: existing NR work has no submission lifetime evidence; single/master retained	需要重启：现有 NR 工作没有提交生命周期的证据；保留单遍/主设置
+Another NR recording scope owns the resources; new recording refused	另一个 NR 录制作用域占用了资源；拒绝新录制
+Waiting for previous NR recording Reset and all GPU fences; new recording skipped (throughput may decrease)	正在等待上一次 NR 录制的 Reset 及所有 GPU fence；跳过新录制（吞吐量可能下降）
+More than three earlier NR recordings still on the GPU; new recording skipped this frame	仍有超过三个较早的 NR 录制在 GPU 上；本帧跳过新录制
+Earlier NR recordings still running on two GPU queues; new recording skipped until one finishes	较早的 NR 录制仍在两个 GPU 队列上运行；跳过新录制，直到其中一个完成
+This command list already holds an unsubmitted NR recording; new recording skipped	此命令列表已持有一个未提交的 NR 录制；跳过新录制
+An NR recording is still waiting for the game to submit it; new recordings skipped until it runs or is discarded	一个 NR 录制仍在等待游戏提交；跳过新录制，直到它运行或被丢弃
+The GPU is eight NR recordings behind; new recording skipped this frame	GPU 落后了八个 NR 录制；本帧跳过新录制
+Waiting for the previous NR recording to finish on the GPU (one queue not yet established, or more than one in use)	正在等待上一个 NR 录制在 GPU 上完成（单一队列尚未确定，或正在使用多个队列）
+Retired resource limit reached: pending/unknown GPU recordings retained; rebuild refused until completion or restart	已达到退役资源上限：保留待处理/未知的 GPU 录制；在完成或重启前拒绝重建
+Driver proxy uses one pass and master settings; overrides are inactive	驱动代理使用单遍和主设置；覆盖项不生效
+chain generation refused: insufficient or unavailable adapter headroom (retry latched)	链生成被拒绝：适配器余量不足或不可用（等待“重试”）
+Chain generation waits for the previous one to be freed (adapter headroom); NR resumes once it is	链生成正在等待上一个链被释放（适配器余量）；释放后 NR 恢复
+chain generation waits for the previous one to be freed (adapter headroom)	链生成正在等待上一个链被释放（适配器余量）
+chain scratch initialization failed; retry latched	链暂存区初始化失败；等待“重试”
+nvngx_dlssnr.dll was not found beside OptiScaler or the game	在 OptiScaler 或游戏旁边未找到 nvngx_dlssnr.dll
+the model would not initialise	模型无法初始化
+Additional pass refused: adapter budget/headroom unavailable or insufficient (retry latched)	额外遍被拒绝：适配器预算/余量不可用或不足（等待“重试”）
+Additional pass initialization failed (retry latched); last successful answer retained	额外遍初始化失败（等待“重试”）；保留上次成功的结果
+the colour codec would not compile	颜色编解码器无法编译
+the game's depth or motion vectors could not be made readable	无法使游戏的深度或运动矢量变为可读
+the proxy path could not run the model	代理路径无法运行模型
+All requested passes completed; one final composition	所有请求的遍均已完成；进行一次最终合成
+the model refused to run	模型拒绝运行
+the present hook's backbuffer copy could not be created	无法创建 Present 挂钩的后台缓冲区副本
+the present hook's dummy temporals could not be created	无法创建 Present 挂钩的虚拟时间性数据
+FSR1	FSR1
+Bicubic	Bicubic
+Catmull-Rom	Catmull-Rom
+Lanczos2	Lanczos2
+Lanczos3	Lanczos3
+Kaiser2	Kaiser2
+Kaiser3	Kaiser3
+MAGIC	MAGIC
+x	x
+# 2026-10-04: the redesigned menu's tabs, groups, card and section titles, and the Custom tab picker.
+MAIN	主要
+SYSTEM	系统
+ADVANCED	高级
+Custom	自定义
+Upscaling	画面放大
+Neural Rendering	神经渲染
+Frame Gen	帧生成
+Latency	延迟
+Status	状态
+Textures	纹理
+Compatibility	兼容性
+# 2026-10-23: upstream 76219dd4/c220ad9e split the Compatibility tab into these cards; the technical names stay.
+Startup	启动
+Hooks	挂钩
+Spoofing	伪装
+Shaders	着色器
+Menu	菜单
+Help / Status	帮助 / 状态
+Accent Colour	强调色
+Background Colour	背景色
+Custom Tab	自定义标签页
+DLSSG Settings	DLSSG 设置
+Detected	已检测到
+FSR Common Settings	FSR 通用设置
+FSR FG Settings	FSR FG 设置
+FSR-FG Inputs	FSR-FG 输入
+Frame Generation	帧生成
+Frame Generation (Enabler + FFX)	帧生成 (Enabler + FFX)
+Frame Generation (FSR-FG Inputs)	帧生成 (FSR-FG 输入)
+Frame Generation (FSR3-FG via Nukem's DLSSG)	帧生成 (通过 Nukem 的 DLSSG 使用 FSR3-FG)
+Frame Generation (FSR3-MFG via DLSS Enabler)	帧生成 (通过 DLSS Enabler 使用 FSR3-MFG)
+Frame Generation (FSRFG via FFX)	帧生成 (通过 FFX 使用 FSRFG)
+Frame Generation (Streamline FG Inputs)	帧生成 (Streamline FG 输入)
+Framerate	帧率
+Hooks / Config	挂钩 / 配置
+Init Flags	初始化标志
+Init Flags (active)	初始化标志（生效中）
+Low Latency	低延迟
+Nvngx FG replacement	Nvngx FG 替换
+OptiFG Settings	OptiFG 设置
+Output Scaling	输出缩放
+Per shader GPU times	各着色器的 GPU 耗时
+Plugins / Startup	插件 / 启动
+Reprojection Settings	重投影设置
+Shaders / Limits	着色器 / 限制
+Sharpness	锐度
+Spoofing / Hooking	伪装 / 挂钩
+Streamline FG Inputs	Streamline FG 输入
+System	系统
+Theme and Color	主题与颜色
+Upscale Ratio Override	放大比例覆盖
+Upscalers	放大器
+V-Sync	V-Sync
+XeFG Settings	XeFG 设置
+fakenvapi	fakenvapi
+
+# 2026-10-04: model cadence (docs/dlssnr/design/model-cadence.md): the control, its help, the GPU timing
+# kind line and the status line under the control (DlssNr::Cadence::Describe).
+Model cadence	模型节奏
+Every frame	每帧
+Every 2nd frame	每 2 帧
+Every 3rd frame	每 3 帧
+Every 4th frame	每 4 帧
+Allow with frame generation	帧生成时也允许
+Runs the model on one frame in N and carries its edit along the game's motion onto the frames in\nbetween. It buys frame rate and costs stability in motion: detail can pop each time the model\nruns again, and what a moving object uncovers can ghost, or show the plain frame, until then.\nFrame times alternate long and short. A still scene looks as it does with every frame.\n\nIt needs the game's own depth and motion, so it stands down before the upscaler, on frames\nwithout them, with Hold frame or a capture, and while frame generation is active unless allowed\nbelow. Off costs nothing.	每 N 帧中只在一帧上运行模型，并沿游戏的运动把其编辑带到中间的帧上。它以运动中的稳定性换取帧率：每次模型重新运行时细节可能跳变，而运动物体新露出的区域在此之前可能出现残影或显示未编辑的画面。帧时间会长短交替。静止场景看起来与“每帧”时完全相同。\n\n它需要游戏自身的深度和运动信息，因此在以下情况下停用：放大器之前、没有这些信息的帧、启用“保持帧”或捕获时，以及帧生成处于活动状态时（除非在下方允许）。关闭时没有开销。
+Off by default. Frame generation interpolates between frames whose cost alternates, and DLSS-G\nwas measured unable to pace through that: stutter and flashes that grow with the multiplier and\nthe cadence. Turn it on to measure it, not to play.	默认关闭。帧生成会在开销交替的帧之间插值，经实测 DLSS-G 无法在这种情况下保持节奏：卡顿和闪烁会随倍数和节奏增大。开启它是为了测量，而不是用来游戏。
+A carried frame of model cadence %u: no model call, so no model time.	模型节奏 %u 的沿用帧：没有模型调用，因此没有模型耗时。
+A model frame of model cadence %u. With an interval that is a multiple of the cadence, every sample is the same kind of frame.	模型节奏 %u 的模型帧。当间隔是节奏的倍数时，每个样本都是同一类帧。
+Running the model every 4th frame; the frames between carry its last edit.	每 4 帧运行一次模型；中间的帧沿用其上次的编辑。
+Running the model every 3rd frame; the frames between carry its last edit.	每 3 帧运行一次模型；中间的帧沿用其上次的编辑。
+Running the model every 2nd frame; the frame between carries its last edit.	每 2 帧运行一次模型；中间的帧沿用其上次的编辑。
+The model runs this frame: no edit is stored to carry.	本帧运行模型：没有已保存的编辑可沿用。
+The model runs this frame: a history reset is pending.	本帧运行模型：有待处理的历史重置。
+The model runs this frame: its size, format, route or settings changed.	本帧运行模型：其尺寸、格式、路线或设置已更改。
+The model runs this frame: the pass did not run for a while.	本帧运行模型：本通道有一段时间没有运行。
+The model runs every frame: the pass ran more than once in one present.	每帧运行模型：本通道在一次 Present 中运行了不止一次。
+Off: the model runs every frame.	关：每帧运行模型。
+The model runs every frame: model cadence is not available on native Vulkan.	每帧运行模型：原生 Vulkan 不支持模型节奏。
+The model runs every frame: model cadence does not run with the driver proxy.	每帧运行模型：模型节奏不能与驱动代理一起运行。
+The model runs every frame: this build has no model cadence shader.	每帧运行模型：此构建没有模型节奏着色器。
+The model runs every frame: this route does not present through OptiScaler's swapchain, so model cadence cannot count frames.	每帧运行模型：此路线不通过 OptiScaler 的交换链呈现，因此模型节奏无法计数帧。
+The model runs every frame: model cadence does not run before the upscaler.	每帧运行模型：模型节奏不在放大器之前运行。
+The model runs every frame: this frame has no game depth and motion to carry the edit with.	每帧运行模型：此帧没有可用于沿用编辑的游戏深度和运动信息。
+The model runs every frame: frame generation is active (see Allow with frame generation).	每帧运行模型：帧生成处于活动状态（见“帧生成时也允许”）。
+The model runs every frame while Hold frame is on.	启用“保持帧”时每帧运行模型。
+The model runs every frame while a capture is running.	捕获进行中时每帧运行模型。
+The model runs every frame: the model cadence surfaces could not be allocated.	每帧运行模型：无法分配模型节奏所需的表面。
+Waiting for the pass to run.	正在等待本通道运行。
+
+# Peripheral compression (docs/dlssnr/design/peripheral-compression.md)
+Peripheral compression	边缘压缩
+Centre band	中心带
+Packed extent	打包范围
+Packed model input	打包的模型输入
+Experimental. The model's input is packed denser in the centre than at the edges, so at the\nsame cost the centre keeps full detail and the edges give some up. Its answer is unpacked\nbefore it is composed; the frame itself is untouched.\n\nThe defaults, 80 and 90, cost what a Model resolution of 90 costs, so that is the\ncomparison to make, not 100. Matched residual is used at full model resolution too;\nClassic blurs colour at the edges here.\n\nD3D12, after the upscaler or at present. Not above Model resolution 100 and not with the\ndriver proxy. Moving a slider restarts the model's history; a new packed size rebuilds it\nafter a moment.	实验性。模型的输入在中心打包得比边缘更密，因此在相同开销下，中心保留全部细节，边缘则牺牲一些。其结果在合成前会被解包；帧本身不受影响。\n\n默认值 80 和 90 的开销相当于模型分辨率 90，因此应与之比较，而不是与 100 比较。在模型全分辨率下也会使用匹配残差；此处“经典”会使边缘颜色变模糊。\n\n仅限 D3D12，在放大器之后或 Present 时。模型分辨率高于 100 时不可用，也不能与驱动代理一起使用。移动滑块会重新开始模型的历史；新的打包尺寸会在片刻后重建模型。
+How much of each axis, around the middle, the model sees at full density.	每个轴上围绕中心、模型以全密度看到的比例。
+How much of each axis the model's input spans, before Model resolution. Everything past the\ncentre is squeezed into the rest, to no less than half its size: this has to be at least\nhalfway between the centre band and 100.	在应用模型分辨率之前，模型输入在每个轴上覆盖的比例。中心以外的部分会被压缩到剩余空间中，但不低于其一半尺寸：因此该值至少要达到中心带与 100 的中点。
+Active: the model works at %ux%u for a %ux%u frame, %.0f percent of the pixels it would work on without it.	已启用：模型以 %ux%u 处理 %ux%u 的帧，所处理像素为不启用时的百分之 %.0f。
+Not active: %s.	未启用：%s。
+Peripheral compression is running, so this applies at full model resolution too.	边缘压缩正在运行，因此在模型全分辨率下也会应用此项。
+Packed model input: what the model was handed, edges squeezed, stretched over the frame.	打包的模型输入：模型实际收到的画面，边缘被压缩，拉伸铺满整帧。
+the frame is too small to lay out	帧太小，无法布局
+supersampling (Model resolution above 100) is not supported with peripheral compression	超级采样（模型分辨率高于 100）不支持边缘压缩
+the centre band must be at least 10 and smaller than the packed extent, which must be below 100	中心带至少为 10，且必须小于打包范围，而打包范围必须低于 100
+the edges would be squeezed below half their size, which aliases: widen the packed extent or narrow the centre band (packed extent x 2 must be at least 100 + centre band)	边缘会被压缩到其一半尺寸以下，这会产生混叠：请扩大打包范围或缩小中心带（打包范围 x 2 必须至少为 100 + 中心带）
+the packed model would be under a quarter of the frame: raise Model resolution or the packed extent	打包后的模型将小于帧的四分之一：请提高模型分辨率或打包范围
+less than one packed pixel would be left on a side of the centre band	中心带的一侧将剩下不到一个打包像素
+not on the before-upscale stage	不能在放大前阶段使用
+not with the driver proxy (UseProxy)	不能与驱动代理一起使用 (UseProxy)
+this build has no pack/unpack shader	此构建没有打包/解包着色器
+the pack/unpack pass could not be built or run on this device	打包/解包通道无法在此设备上构建或运行
+Peripheral compression is running: Matched residual runs.	边缘压缩正在运行：使用匹配残差。
+The model runs every frame: model cadence does not run with replace curves.	每帧运行模型：模型节奏不能与替换曲线一起运行。
+
+# Measure detail
+Measure detail	测量细节
+Measure detail: failed to initialize compute pass	测量细节：计算通道初始化失败
+Cancel	取消
+Measures NR's output on the scene on screen at the current settings for 60 evaluations, against the game's own frame (ideally with Hold frame on):\n  - Detail: fine band detail added (sigma ~1.2 px vs ~3 px)\n  - Flicker: frame-to-frame output change beyond input change\n  - Colour: saturation change and warmth shift\n  - Shadows: darkening and crushed share\nResults are compared against the previous measurement.	在当前设置下，对屏幕上的场景测量 NR 的输出，共 60 次评估，并与游戏自身的画面对比（最好开启“保持帧”）：\n  - 细节：增加的精细频段细节（sigma ~1.2 px 对比 ~3 px）\n  - 闪烁：超出输入变化的逐帧输出变化\n  - 颜色：饱和度变化与冷暖偏移\n  - 阴影：变暗程度与死黑比例\n结果会与上一次测量进行比较。
+Measure detail stopped: this command list cannot be tracked (see the log).	测量细节已停止：无法跟踪此命令列表（见日志）。
+Measure detail stopped: no sample completed (see the log).	测量细节已停止：没有完成任何样本（见日志）。
+Measure detail: the scene moved, too few still frames (turn on Hold frame).	测量细节：场景在移动，静止帧太少（请开启“保持帧”）。
+# 2026-10-12: upstream's Quirks tab (b97dd476) and the Open Wiki button (899b9488), merged from optiscaler/master.
+Quirks	Quirks
+Quirks / ASI	Quirks / ASI
+Loaded ASI Plugins	已加载的 ASI 插件
+Open Wiki	打开 Wiki
+Compatibility list, known issues and FG options explained	兼容性列表、已知问题及 FG 选项说明
+# 2026-10-13: the session guard (docs/dlssnr/design/session-guard.md).
+Enable anyway	仍然启用
+Neural Rendering is off for this session. Your settings are unchanged.	本次会话已关闭神经渲染。你的设置未改变。
+The last session ended without closing, soon after the model started.	上次会话未正常关闭就结束了，发生在模型启动后不久。
+The last two sessions ended without closing.	最近两次会话均未正常关闭就结束了。
+An earlier session ended without closing, and this has not been confirmed since.	较早的一次会话未正常关闭就结束了，此后尚未得到确认。
+# 2026-10-30: the NR minimum-driver gate (docs/dlssnr/design/driver-gate.md).
+Neural Rendering is off for this session: it needs NVIDIA driver %s or newer (%s or newer recommended), and this one is %s. Your settings are unchanged.	本次会话已关闭神经渲染：它需要 NVIDIA 驱动 %s 或更新版本（推荐 %s 或更新版本），而当前驱动为 %s。你的设置未改变。
+this NVIDIA driver is too old for Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	此 NVIDIA 驱动对神经渲染来说太旧；请更新到 610.88 或更新版本（推荐 616.64 或更新版本）
+NGX answered FAIL_OutOfDate: this NVIDIA driver cannot run Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	NGX 返回 FAIL_OutOfDate：此 NVIDIA 驱动无法运行神经渲染；请更新到 610.88 或更新版本（推荐 616.64 或更新版本）
+The last session ended without closing. If it was a crash, this one may too.	上次会话未正常关闭就结束了。如果那是崩溃，这次也可能崩溃。
+# 2026-10-14: session guard v2: how the last session ended, and the numbers line.
+The last session ended with an error soon after the model started.	上次会话在模型启动后不久因错误结束。
+The last session ended with an error. If it was a crash, this one may too.	上次会话因错误结束。如果那是崩溃，这次也可能崩溃。
+The last session crashed while the model was running.	上次会话在模型运行时崩溃。
+The last session crashed, long after the model started. If the next one does too, Neural Rendering will be switched off.	上次会话崩溃，发生在模型启动很久之后。如果下次也崩溃，将关闭神经渲染。
+The graphics device was lost while the model was running in the last session.	上次会话中，模型运行时图形设备丢失。
+The graphics device was lost in the last session, long after the model started. If it happens again, Neural Rendering will be switched off.	上次会话中图形设备丢失，发生在模型启动很久之后。如果再次发生，将关闭神经渲染。
+Exception 0x%08X after the model had run for %lld s.	异常 0x%08X，发生在模型运行 %lld s 之后。
+Exit code %u after the model had run for %lld s.	退出代码 %u，发生在模型运行 %lld s 之后。
+The model had run for %lld s.	模型已运行 %lld s。
+# 2026-10-13: the pulse metric (docs/dlssnr/design/pulse-metric.md): the control under Compare and its help.
+Measure the light step	测量亮度阶跃
+How far the picture's light moves from one frame to the next because of the edit: the\nchange of log2(output light / frame light), in stops, averaged over two seconds.\nFrames where the model ran and frames where model cadence carried its edit are kept\napart, so the step on the model's frames against the carried ones is the cadence's\npulse as a number. A still scene reads cleanest; a pan adds its own changes.\n\nOne small measuring pass a frame while on. Also logged every 10 seconds.	由于编辑，画面亮度从一帧到下一帧变化了多少：log2(输出亮度 / 帧亮度) 的变化量，以档 (stop) 为单位，取两秒平均。模型运行的帧与由模型节奏沿用编辑的帧分开统计，因此模型帧相对于沿用帧的阶跃就是节奏脉动的数值。静止场景读数最干净；平移镜头会叠加其自身的变化。\n\n开启时每帧额外一次小型测量通道。也会每 10 秒写入日志。
+Light step: the measuring pass could not be built.	亮度阶跃：无法构建测量通道。
+# 2026-10-13: model cadence smoothing (docs/dlssnr/design/cadence-smoothing.md): the control and its help.
+Smooth the model's frames	平滑模型帧
+Without it, each new answer of the model replaces the carried one on the frame the model runs,\nand the picture's light steps there every N frames: the pulse. With it, the new answer is walked\nin from the carried one over the whole interval, in N equal steps, and the mean light of what the\ncadence shows may move by at most 1.5 stops a second while the frame's own light holds still.\n\nOnly what is shown changes: the stored edit and the model's own history stay as the model made\nthem. The previous answer stays on screen, fading, for up to N-1 frames longer, which can trail a\nlittle where things move fast. Measure it with "Measure the light step" under Compare.	不开启时，模型的每个新结果会在模型运行的那一帧替换沿用的结果，画面亮度会在那里每 N 帧跳变一次：即脉动。开启后，新结果会在整个间隔内以 N 个相等步长从沿用结果逐步过渡，并且在帧自身亮度不变时，节奏所显示内容的平均亮度每秒最多变化 1.5 档。\n\n只改变显示的内容：保存的编辑和模型自身的历史保持模型生成时的样子。上一个结果会在屏幕上逐渐淡出，最多多停留 N-1 帧，在快速移动处可能留下轻微拖尾。可用“比较”下的“测量亮度阶跃”来测量。
+# 2026-10-13: the residual limit (docs/dlssnr/design/residual-limit.md): the control and its help.
+Residual limit	残差限制
+The most the model may move any pixel's light, either way, in stops: 0.5 allows\nat most 1.41x brighter or darker, 1 at most 2x. Off at 0, the composition as\nit always was.\n\nAimed at blotches and flicker: a patch of wall the model brightens by a stop\none frame and not the next. It bounds the model's real corrections the same\nway, so start high and lower it until the blotches go. It sits inside the\nhighlight guard and can only narrow it.	模型可以使任意像素亮度向上或向下改变的最大幅度，以档为单位：0.5 最多允许变亮或变暗 1.41x，1 最多 2x。设为 0 时关闭，即一贯的合成方式。\n\n针对斑块和闪烁：例如模型在某一帧把一片墙面提亮一档，下一帧却不提亮。它也会同样限制模型的真实校正，因此请从高值开始，逐步降低直到斑块消失。它位于高光保护之内，只能使其更窄。
+# 2026-10-13: HDR10 and scRGB at present (docs/dlssnr/design/hdr-present-conversion.md): the switch, its readout, its
+# Paper white, its timing line, and the reasons the conversion gives in the readout.
+HDR output (HDR10 and scRGB)	HDR 输出（HDR10 和 scRGB）
+The game presents in HDR: HDR10 (PQ, Rec.2020) or scRGB (linear light). Off, its\nframes are shown as the game rendered them and the pass does not run on them.\n\nOn, each frame is decoded to linear light, the pass runs on it as on any HDR\nframe, and it is encoded back with the game's own frame as the reference: every\npixel the pass leaves alone -- the interface, at strength zero -- keeps its exact\ncode. The model uses the display's Windows SDR white level times Paper white,\nor 203 nits when the display query is unavailable.\n\nExperimental: not yet measured on a real HDR display. HLG, studio-range or YCbCr\nPQ and other colour spaces stay declined.	游戏以 HDR 呈现：HDR10（PQ、Rec.2020）或 scRGB（线性光）。关闭时，其帧按游戏原本渲染的样子显示，本通道不会在其上运行。\n\n开启时，每一帧被解码为线性光，本通道像处理任何 HDR 帧一样在其上运行，然后以游戏自身的帧为参考重新编码：本通道未改动的每个像素——界面，以及强度为零时——都保持完全相同的编码值。模型使用显示器在 Windows 中的 SDR 白色亮度乘以纸白，若无法查询显示器则使用 203 尼特。\n\n实验性：尚未在真实 HDR 显示器上测量。HLG、演播室范围或 YCbCr 的 PQ 以及其他色彩空间仍不受支持。
+HDR10	HDR10
+scRGB	scRGB
+%s, SDR white %.0f nits x %.2f	%s，SDR 白色 %.0f 尼特 x %.2f
+Off: this %s swapchain is shown as the game rendered it.	关：此 %s 交换链按游戏原本渲染的样子显示。
+Paper white (x the display's SDR white)	纸白（x 显示器的 SDR 白色）
+The same Paper white as on any other frame, measured here against the display's\nSDR white shown above: 1.00 uses that value. Raise it if the\ngame's own HDR paper white is set brighter, lower it if darker. It changes what\nthe model is shown, not the frame where the pass leaves it alone.	与其他任何帧上相同的纸白，此处相对于上方显示的显示器 SDR 白色来衡量：1.00 即使用该值。如果游戏自身的 HDR 纸白设置得更亮就调高，更暗就调低。它改变的是模型看到的内容，而不是本通道未改动的帧。
+HDR conversion, outside the dispatch: %.3f ms = %.3f ms decode + %.3f ms encode (sample %llu, %.1f s since recording)	HDR 转换，在 dispatch 之外：%.3f ms = %.3f ms 解码 + %.3f ms 编码（样本 %llu，录制后 %.1f s）
+the swapchain's format is typeless, which the HDR conversion does not take; the frame is shown as the game rendered it	交换链格式为 typeless，HDR 转换不接受；该帧按游戏原本渲染的样子显示
+nothing is known about this swapchain's colour space, and the HDR conversion does not guess; the frame is shown as the game rendered it	对此交换链的色彩空间一无所知，HDR 转换不会去猜测；该帧按游戏原本渲染的样子显示
+the swapchain changed format after its colour space was set, and the HDR conversion waits for it to be set again; the frame is shown as the game rendered it	交换链在设置色彩空间后更改了格式，HDR 转换会等待其重新设置；该帧按游戏原本渲染的样子显示
+the swapchain's colour space was recorded for another format; the frame is shown as the game rendered it	交换链的色彩空间是为另一种格式记录的；该帧按游戏原本渲染的样子显示
+the swapchain is PQ in studio range or YCbCr, which the HDR conversion does not take; the frame is shown as the game rendered it	交换链为演播室范围的 PQ 或 YCbCr，HDR 转换不接受；该帧按游戏原本渲染的样子显示
+the swapchain is ten-bit with a linear (scRGB) colour space, which the HDR conversion does not take; the frame is shown as the game rendered it	交换链为 10 位且使用线性 (scRGB) 色彩空间，HDR 转换不接受；该帧按游戏原本渲染的样子显示
+the swapchain is FP16 with a colour space other than scRGB, which the HDR conversion does not take; the frame is shown as the game rendered it	交换链为 FP16 但色彩空间不是 scRGB，HDR 转换不接受；该帧按游戏原本渲染的样子显示
+the swapchain's colour space is HLG, Rec.2020 with a gamma curve or another the HDR conversion does not take; the frame is shown as the game rendered it	交换链的色彩空间为 HLG、带伽马曲线的 Rec.2020 或其他 HDR 转换不接受的空间；该帧按游戏原本渲染的样子显示
+this build carries no HDR conversion shader; the frame is shown as the game rendered it	此构建不包含 HDR 转换着色器；该帧按游戏原本渲染的样子显示
+the HDR conversion's pass could not be built; the frame is shown as the game rendered it	无法构建 HDR 转换通道；该帧按游戏原本渲染的样子显示
+this GPU cannot read this swapchain's format in a shader or store to it from one (typed UAV store), so the HDR conversion cannot run; the frame is shown as the game rendered it	此 GPU 无法在着色器中读取此交换链的格式，或无法从着色器写入该格式（typed UAV store），因此 HDR 转换无法运行；该帧按游戏原本渲染的样子显示
+the HDR conversion's textures could not be created; the frame is shown as the game rendered it	无法创建 HDR 转换的纹理；该帧按游戏原本渲染的样子显示
+the HDR conversion was built for another D3D12 device; the frame is shown as the game rendered it	HDR 转换是为另一个 D3D12 设备构建的；该帧按游戏原本渲染的样子显示
+the backbuffer's format is not the swapchain's, so the HDR conversion does not trust its colour space; the frame is shown as the game rendered it	后台缓冲区的格式与交换链不同，因此 HDR 转换不信任其色彩空间；该帧按游戏原本渲染的样子显示
+# 2026-10-13: the comparison capture (docs/dlssnr/design/comparison-capture.md): the button, its help and its states.
+Capture original and processed	捕获原始帧和处理后帧
+Saves the next frame twice, as the pass read it and as the pass wrote it, into the\nretoque-captures folder beside OptiScaler. Each file carries a record of the build, the route,\nthe model and every setting that shapes the picture, and a .json beside them says the same.\n\nA display-referred frame is saved as PNG, a linear HDR frame as PFM (32-bit float). On the\npresent routes it is the finished frame before the menu is drawn; after the upscaler it is the\nupscaler's output, before the game's own tonemapper, post-processing and interface.\n\nThe newest 64 pairs are kept. Dropping a file named dlssnr-capture.trigger beside OptiScaler\nasks for the same capture from outside the game on D3D12 routes.	将下一帧保存两次：本通道读取时的样子和写入后的样子，保存到 OptiScaler 旁边的 retoque-captures 文件夹中。每个文件都附带构建、路线、模型以及影响画面的每项设置的记录，旁边的 .json 文件也记录相同内容。\n\n面向显示的帧保存为 PNG，线性 HDR 帧保存为 PFM（32 位浮点）。在 Present 路线上，它是绘制菜单之前的最终画面；在放大器之后，它是放大器的输出，位于游戏自身的色调映射、后处理和界面之前。\n\n保留最新的 64 对。在 OptiScaler 旁边放入名为 dlssnr-capture.trigger 的文件，可在 D3D12 路线上从游戏外部请求同样的捕获。
+Saved %s (the pair and its .json)	已保存 %s（这一对及其 .json）
+Turn off Compare to capture the result.	关闭“比较”以捕获结果。
+Turn off the debug view to capture the result.	关闭调试视图以捕获结果。
+Not with the driver proxy: it returns before the pass writes the frame.	不能与驱动代理一起使用：它会在本通道写入帧之前返回。
+Capture is unavailable on this route; native Vulkan requires the after-upscale pass.	此路线不支持捕获；原生 Vulkan 需要放大后通道。
+The capture folder could not be created (see the log).	无法创建捕获文件夹（见日志）。
+No frame reached the pass in time; nothing was captured.	没有帧及时到达本通道；未捕获任何内容。
+Earlier captures are still held for the GPU; try again shortly.	之前的捕获仍为 GPU 保留中；请稍后再试。
+The readback buffers could not be created.	无法创建回读缓冲区。
+The GPU never confirmed the copies; nothing was written, and the capture is off for this session.	GPU 始终未确认复制；未写入任何内容，本次会话的捕获已关闭。
+The writer could not be started.	无法启动写入程序。
+The files could not be written (see the log).	无法写入文件（见日志）。
+This frame's format is not one the capture can write yet.	捕获尚不支持写入此帧的格式。
+The two surfaces differ in shape; nothing was captured.	两个表面的形状不同；未捕获任何内容。
+Waiting for the next frame the pass writes...	正在等待本通道写入的下一帧...
+Waiting for the GPU to finish the copies...	正在等待 GPU 完成复制...
+Writing the files...	正在写入文件...
+# 2026-10-15: the comparison capture's review fixes: a surface the copy cannot take, a failure while the frame was
+# recorded, and a request made while one is under way.
+This frame is not a single-sample 2D texture; nothing was captured.	此帧不是单采样 2D 纹理；未捕获任何内容。
+The capture failed while the frame was being described or recorded; nothing was captured (see the log).	描述或录制帧时捕获失败；未捕获任何内容（见日志）。
+A capture is already under way.	已有一个捕获正在进行。
+This route's commands cannot be followed to the GPU's completion; nothing was captured (see the log).	无法跟踪此路线的命令直到 GPU 完成；未捕获任何内容（见日志）。
+# 2026-10-13: the LSFG panel under FSR FG Settings (study branch; tools/lsfg-study/MFG_PRESENTER.md): its controls, the
+# multiplier and what it says about the swapchain the game started with, and the status line.
+LSFG 3.1 Interpolator (Lossless Scaling)	LSFG 3.1 插帧器 (Lossless Scaling)
+Replaces FSR-FG's internal optical flow interpolation with Lossless Scaling's LSFG 3.1.\nNeeds lsfg-vk.dll from Lossless Scaling (auto-detected or configured in [LSFG] DllPath).	用 Lossless Scaling 的 LSFG 3.1 替换 FSR-FG 内部的光流插值。\n需要 Lossless Scaling 的 lsfg-vk.dll（自动检测或在 [LSFG] DllPath 中配置）。
+Enable LSFG	启用 LSFG
+Enable LSFG 3.1 frame interpolation under FSR-FG.\nWhen disabled or building, FSR-FG uses standard FFX interpolation.	在 FSR-FG 下启用 LSFG 3.1 帧插值。\n禁用或构建中时，FSR-FG 使用标准 FFX 插值。
+Flow Scale	光流缩放
+Internal optical flow pyramid resolution relative to display frame.\n1.00 = Native resolution (highest quality)\n0.85 = Balanced quality/performance\n0.50 = Half resolution (faster, lower VRAM)	内部光流金字塔相对于显示帧的分辨率。\n1.00 = 原生分辨率（最高画质）\n0.85 = 画质与性能平衡\n0.50 = 一半分辨率（更快，VRAM 占用更低）
+Performance Mode	性能模式
+Halves feature channels across motion pyramids.\nCheaper on GPU with slightly softer motion edges.	将运动金字塔中的特征通道减半。\nGPU 开销更低，运动边缘略微变软。
+Multiplier	倍数
+%dx (after a restart)	%dx（重启后）
+Frames shown per real frame. 2x adds one generated frame; 3x and 4x add two or three,\npresented by OptiScaler's own frame-generation swapchain, a fork of FFX's.\n\nThe swapchain is chosen when the game creates it. Started at 3x or 4x, every choice\napplies at the next frame. Started at 2x, 3x and 4x are saved and need a restart.	每个真实帧显示的帧数。2x 添加一个生成帧；3x 和 4x 添加两个或三个，由 OptiScaler 自己的帧生成交换链呈现，该交换链派生自 FFX 的交换链。\n\n交换链在游戏创建它时选定。以 3x 或 4x 启动时，每次选择都在下一帧生效。以 2x 启动时，3x 和 4x 会被保存，需要重启。
+Now %dx: the game started with FFX's swapchain, which shows one generated frame. Save Settings and restart the game for %dx.	当前为 %dx：游戏启动时使用的是 FFX 的交换链，只显示一个生成帧。请保存设置并重启游戏以使用 %dx。
+Now 2x, while FFX interpolates in LSFG's place (see Status).	当前为 2x，FFX 正在代替 LSFG 进行插值（见“状态”）。
+Status: Disabled (using FFX interpolation)	状态：已禁用（使用 FFX 插值）
+Status: Active at %ux%u (%.2f ms/frame)	状态：已在 %ux%u 运行（%.2f ms/帧）
+Status: Active at %ux%u	状态：已在 %ux%u 运行
+Status: %s	状态：%s
+Status: Waiting for frames	状态：等待帧
+
+HDR swapchain description unavailable; the frame stays original	HDR 交换链描述不可用；帧保持原样
+HDR conversion resource contract unavailable; the frame stays original	HDR 转换资源约定不可用；帧保持原样
+Windows SDR white	Windows SDR 白色
+203-nit fallback	203 尼特回退值
+HDR conversion did not produce a submitted frame	HDR 转换未生成已提交的帧
+
+HDR present conversion is inactive; the game's original frame is shown.	HDR Present 转换未启用；显示游戏的原始帧。
+
+Show all settings	显示全部设置
+Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	显示完整的神经渲染面板。隐藏的设置仍保持生效且不变。
+
+Minimum brightness	最低亮度
+Final luminance relative to the original frame: 0.75 keeps at least 75 percent.\nApplied once, after composition, including replace curves. 0 is off.\nRestores darkened pixels toward the original; does not cap individual channels.\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB.\nLater game processing and temporal stabilization are outside this limit.	相对于原始帧的最终亮度：0.75 表示至少保留百分之 75。\n在合成后应用一次，包括替换曲线。0 为关闭。\n将变暗的像素向原始值恢复；不会单独限制各个通道。\nHDR 使用线性缓冲区亮度；直通模式使用已色调映射的 RGB。\n游戏后续的处理和时间性稳定不受此限制。
+Adapt cadence to motion	根据运动调整节奏
+Adaptive cadence: running the model every frame until feedback permits reuse.	自适应节奏：在反馈允许复用之前每帧运行模型。
+Shortens the interval when motion or rejected carry coverage is high; lengthens after 300 ms of calm.\nCadence above is the maximum. Delayed GPU feedback cannot catch a cut on its first frame.\nRequires a restart when enabled after NR has already run. Missing feedback runs the model every frame.\nExperimental: measured in the moving fixture, not validated in games. Off adds no probe work.	运动较多或沿用内容被拒绝的覆盖率较高时缩短间隔；平静 300 ms 后延长间隔。\n上方的节奏为最大值。延迟的 GPU 反馈无法在镜头切换的第一帧就捕捉到。\n若在 NR 已运行后启用，需要重启。缺少反馈时每帧运行模型。\n实验性：在运动测试场景中测量过，未在游戏中验证。关闭时不增加探测工作。
+Record replay clip	录制回放片段
+Recording: %u frames, %u written	录制中：%u 帧，已写入 %u
+Clip of %u frames written to %s (%s)	%u 帧的片段已写入 %s (%s)
+Records about six seconds of what the pass receives -- the upscaler's colour, depth and motion\nvectors, and the game's parameters -- into the dlssnr-replay folder beside OptiScaler, for the\noffline replay harness (tests/dlssnr-loopback --replay-nr). Nothing is recorded until pressed.\n\nAbout 50-60 MB a frame at 3440x1440: a clip is 1-4 GB. Dropping a file named\ndlssnr-capture.trigger containing the word replay asks for the same clip from outside the game.	将本通道接收到的约六秒内容——放大器的颜色、深度和运动矢量，以及游戏的参数——录制到 OptiScaler 旁边的 dlssnr-replay 文件夹，供离线回放工具 (tests/dlssnr-loopback --replay-nr) 使用。按下之前不会录制任何内容。\n\n在 3440x1440 下每帧约 50-60 MB：一个片段为 1-4 GB。放入一个名为 dlssnr-capture.trigger 且内容包含单词 replay 的文件，可从游戏外部请求同样的片段。
+# 2026-10-27: the FPS overlay's section titles from upstream's overlay rework (#1238, 5f6a2e69).
+Presets	预设
+Layout	布局
+Text	文本
+Colors	颜色
+# 2026-10-30: the NR panel's "Copy NR diagnostics" button (docs/dlssnr/design/diagnostic-export.md). The report it copies stays English.
+Copy NR diagnostics	复制 NR 诊断信息
+Copies a plain-text report of what Neural Rendering detected and what it used -- build, platform, route, guides, settings, the last confirmed GPU sample and LSFG -- for a bug report. Absolute paths are replaced by <path>. Assembled only when pressed; the report itself is in English.	复制一份纯文本报告，内容包括神经渲染检测到了什么、使用了什么——构建、平台、路线、引导数据、设置、最近确认的 GPU 样本以及 LSFG——用于提交错误报告。绝对路径会替换为 <path>。仅在按下时生成；报告本身为英文。
+Copied to the clipboard.	已复制到剪贴板。
+# 2026-10-30: the NR panel's line while the game runs its own NR through Streamline (docs/dlssnr/design/streamline-native-nr.md).
+The game runs its own NR (Streamline DLSS-NR), so this pass stands down rather than apply NR twice. It runs again 5 s after the game's NR stops.	游戏运行着自己的 NR (Streamline DLSS-NR)，因此本通道会停用，以免重复应用 NR。游戏的 NR 停止 5 s 后会重新运行。
+# 2026-10-30: the model's own VRAM count beside the status line (docs/dlssnr/design/model-vram-stats.md).
+(model: %llu MiB)	（模型：%llu MiB）
+
+# 2026-11-01: independent historical Present and guide-capture GPU samples.
+%s: no confirmed sample (pending %u, discarded %llu; %s)	%s：无已确认样本（待处理 %u，已丢弃 %llu；%s）
+%s: %.3f ms (historical sample %llu, %.1f s since recording)	%s：%.3f ms（历史样本 %llu，录制后 %.1f s）
+Guides: %s; capture %llu; guide extent %ux%u, output %ux%u	引导数据：%s；捕获 %llu；引导尺寸 %ux%u，输出 %ux%u
+Game capture %llu, age at selection %llu ms	游戏捕获 %llu，选择时的时长 %llu ms
+Observed Present %llu; boundary %s, HDR %s, NR recorded %s	已观测 Present %llu；边界 %s，HDR %s，NR 已录制 %s
+GPU route includes Dispatch and HDR conversion. CPU waits and submission are excluded.	GPU 路线包括 Dispatch 和 HDR 转换。不含 CPU 等待和提交。
+Guide capture uses a separate producer recording. Do not add it to a Present sample.	引导数据捕获使用单独的生产者录制。不要将其加到 Present 样本中。
+Present and guide capture each count their own eligible regions.	Present 和引导数据捕获各自统计其符合条件的区域。
+Present route GPU	Present 路线 GPU
+Guide capture GPU	引导数据捕获 GPU
+Dispatch call %.3f ms, outside Dispatch %.3f ms (same recording)	Dispatch 调用 %.3f ms，Dispatch 之外 %.3f ms（同一录制）
+No Dispatch call in this recording: total only	此录制中没有 Dispatch 调用：仅有总计
+game depth + motion	游戏深度 + 运动
+zero depth + synthesized motion	零深度 + 合成运动
+zero depth + motion	深度和运动均为零
+unknown	未知
+no-sample	无样本
+yes	是
+no	否
+
+The capture recording was discarded or invalidated; nothing was written.	捕获录制已被丢弃或失效；未写入任何内容。
+# Native Vulkan pre-upscale experiment
+Stage: before the upscaler requested (native Vulkan)	阶段：已请求放大器之前（原生 Vulkan）
+Experimental native Vulkan NGX input route. Unsupported inputs keep the original Color;\nthere is no after-upscale NR fallback. One outstanding recording is admitted.\nRequires startup opt-in, proven layouts/ownership and an unchanged ready generation.\nRebuilds and missing evidence skip NR. DOOM Eternal validation is still pending.	实验性的原生 Vulkan NGX 输入路线。不支持的输入保留原始 Color；没有放大后 NR 回退。只允许一个未完成的录制。需要在启动时选择启用、已证实的布局/所有权以及未改变的就绪代次。重建和缺少证据时会跳过 NR。DOOM Eternal 的验证仍在进行中。
+
+# Controls introduced with upstream 34d492d6. Vulkan API mode names are retained.
+Flip HUDless	翻转无 HUD 纹理
+Present Mode	呈现模式
+Upscaler Debug View	放大器调试视图
+Game's	游戏自身
+Game's present mode: %s	游戏的呈现模式：%s
+Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	翻转无 HUD 纹理\n游戏也可以通过 Opti.Hudless.Flip 参数请求此操作
+Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	覆盖游戏的 Vulkan 呈现模式，游戏会重建其交换链以应用。\n\nImmediate：无 V-Sync，有画面撕裂。\nMailbox：无撕裂，最新帧替换队列中的帧。\nFIFO：V-Sync。\nFIFO Relaxed：V-Sync，低于刷新率时会撕裂。\nFIFO Latest Ready：V-Sync，每次刷新时显示最新就绪的帧。\n\n高于刷新率时，Mailbox 和 FIFO Latest Ready 可能丢弃生成的帧。\n仅列出显示器支持的模式。

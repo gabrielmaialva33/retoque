@@ -236,7 +236,7 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 600
-summary = "The real portable .lang parser and the repository ImGui hash."
+summary = "The real portable .lang parser and the repository ImGui hash; every shipped pack's keys, printf directives and glyphs; the menu CJK font decision."
 
 [nr-menu]
 path = "nr-menu"

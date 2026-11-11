@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <misc/Localization.h>
+#include <misc/MenuFonts.h>
 #include "menu_common.h"
 #include <menu/DlssgExternalTelemetry.h>
 #include <dlssnr/DlssNr_ExposureScan.h>
@@ -11383,6 +11384,9 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP, bool nativeVulkan)
                                                                          fontSize, &fontConfig);
         }
     }
+
+    // A Japanese, Korean or Chinese OptiScaler.lang gets a system CJK face merged into the menu font
+    MenuFonts::AddTranslationFallback(io);
 
     if (!Config::Instance()->OverlayMenu.value_or_default())
     {

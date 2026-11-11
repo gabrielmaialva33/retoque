@@ -125,7 +125,10 @@ if (Get-ChildItem $stage -Recurse -File | Where-Object {
 # the loader only reads OptiScaler.lang immediately beside the DLL, never this subdirectory.
 $translationStage = "$stage/translations/optional"
 New-Item -ItemType Directory -Force -Path $translationStage | Out-Null
-Copy-Item "$root/retoque/translations/optional/pt-BR.lang" "$translationStage/pt-BR.lang" -Force
+# A fixed list of packs, so a stray .lang in the source tree never ships.
+foreach ($pack in @('pt-BR', 'de', 'es', 'fr', 'ja', 'ko', 'pl', 'ru', 'zh-CN')) {
+    Copy-Item "$root/retoque/translations/optional/$pack.lang" "$translationStage/$pack.lang" -Force
+}
 Copy-Item "$root/retoque/translations/README.md" "$stage/translations/README.md" -Force
 if (Test-Path "$stage/OptiScaler.lang") {
     throw "REFUSING: an active localization dictionary must not ship beside the DLL"
