@@ -374,7 +374,15 @@ fn explicit_exposure(pair: &Pair) -> Option<f32> {
 }
 fn auto_exposure(image: &LinearImage) -> f32 {
     // Sample the whole original with bounded scratch. P70 is less sensitive to large dark areas
-    // than a geometric mean. ACES(0.13) is about 0.18 linear display grey (0.46 sRGB), not ACES(0.18).
+    // than a geometric mean.
+    //
+    // Never brightens. Captures are the upscaler's input or output, which the game has already
+    // exposed: at 1x a night scene keeps its darkness, and normalising its key to display grey lifted
+    // a Cyberpunk interior (P70 0.0195) by 6.7x, about 2.7 EV, into a washed-out picture (2026-11-17).
+    // Only a frame whose key is clearly above the display range (a renderer working in nits, say)
+    // is darkened, continuously from 1x at a key of KEY_MAX, so P70 lands at KEY_MAX. The EV slider
+    // brightens a dark capture on request.
+    const KEY_MAX: f32 = 0.5;
     let pixels = image.rgb.len() / 3;
     let count = pixels.min(65536);
     let mut luminance = Vec::with_capacity(count);
@@ -391,7 +399,7 @@ fn auto_exposure(image: &LinearImage) -> f32 {
     }
     let rank = ((luminance.len() - 1) as f64 * 0.70) as usize;
     let (_, key, _) = luminance.select_nth_unstable_by(rank, f32::total_cmp);
-    (0.13 / *key).clamp(1e-6, 1e6)
+    (KEY_MAX / *key).clamp(1e-6, 1.0)
 }
 
 fn display_byte(value: f32, exposure: f32) -> u8 {
@@ -741,7 +749,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut p = pair(dir.path(), 0.01, 0.02);
         let loaded = load_pair(&p).unwrap();
-        assert!(loaded.display.exposure > 1.0);
+        // A dark pair keeps the game's exposure: auto exposure never brightens.
+        assert_eq!(loaded.display.exposure, 1.0);
         assert!(loaded.processed.get_pixel(0, 0)[0] > loaded.original.get_pixel(0, 0)[0]);
         assert_eq!(loaded.processed, load(&p.processed, loaded.display).unwrap());
         p.provenance.push(("exposure".into(), "2".into()));
@@ -825,17 +834,25 @@ mod tests {
         assert!(load_pair(&pair).is_err());
     }
     #[test]
-    fn percentile_key_resists_large_dark_areas_and_maps_to_display_midgrey() {
-        let mut rgb = vec![0.0001; 60 * 3];
-        rgb.extend_from_slice(&[0.1; 40 * 3]);
-        let image = LinearImage {
-            width: 100,
-            height: 1,
-            rgb,
+    fn auto_exposure_never_brightens_and_darkens_only_above_display_range() {
+        let image = |dark: f32, lit: f32| {
+            let mut rgb = vec![dark; 60 * 3];
+            rgb.extend_from_slice(&[lit; 40 * 3]);
+            LinearImage {
+                width: 100,
+                height: 1,
+                rgb,
+            }
         };
-        let exposure = auto_exposure(&image);
-        assert!((exposure - 1.3).abs() < 0.001, "exposure was {exposure}");
-        assert!((i32::from(display_byte(0.1, exposure)) - 118).abs() <= 2);
+        // The P70 key is the lit part, not the large dark area; a key in display range keeps 1x.
+        assert_eq!(auto_exposure(&image(0.0001, 0.1)), 1.0);
+        // A dark scene the game exposed that way stays dark (the Cyberpunk interior: P70 0.0195).
+        assert_eq!(auto_exposure(&image(0.001, 0.0195)), 1.0);
+        assert!((i32::from(display_byte(0.0195, 1.0)) - 26).abs() <= 2);
+        // At the threshold still 1x, above it continuous: a key of 100 (nits) lands at 0.5.
+        assert_eq!(auto_exposure(&image(0.01, 0.5)), 1.0);
+        let nits = auto_exposure(&image(1.0, 100.0));
+        assert!((nits - 0.005).abs() < 1e-6, "exposure was {nits}");
     }
 
     #[test]
