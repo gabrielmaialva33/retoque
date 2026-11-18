@@ -290,6 +290,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   inputs, bound to the evaluated handle), its retirement after DRS or malformed dimensions, poisoned margins, and
   display-resolution motion before the upscaler, from the production resolver, Dispatch's geometry block and
   GatherGuideFrame against fake NGX parameters. No GPU.
+- `nr-untracked-retire` — the default (untracked) D3D12 NR retirement's present-queue fence gate
+  (`DlssNr_UntrackedRetire.h`) and verbatim `ParkNr*` / `TickNrRetired` slices under ASan/UBSan: the 32-tick count
+  gate plus `completedValue >= parkedSerial + 1`, `UINT64_MAX` and device-removed retention, `uint64_t` saturation,
+  live-device count-only fallback logged once at `INFO`, unchanged shutdown countdown, and source guards on the four
+  D3D12 `Present` sites. No GPU.
 - `nr-geometry-metamorphic` — the NR input geometry under equivalent representations of one analytic scene (Codex
   N-03): render size through Width/Height, subrect or creation; guides at non-zero bases in padded allocations with
   sentinel margins; MV units with a compensating scale; MVLowRes against display vectors; BGRA colour. Pushed through

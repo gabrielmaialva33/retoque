@@ -92,6 +92,8 @@
 #include <dlssnr/DlssNr_PresentGuideRing.h>
 #include <menu/menu_overlay_base.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
+#include <dlssnr/DlssNr_UntrackedRetire.h>
+#include <resource_tracking/ResTrack_dx12.h>
 
 namespace DlssNr::Dx12Internal
 {
@@ -4284,6 +4286,321 @@ const char* HookStatus()
     }
 
     return "upscaled: active on the upscaler's output";
+}
+
+namespace
+{
+struct PresentFenceSlot
+{
+    uintptr_t deviceIdentity = 0;
+    LUID adapterLuid {};
+    uintptr_t queueIdentity = 0;
+    ID3D12Fence* fence = nullptr; // process-lifetime reference, matching DlssNr_Submission.cpp
+    uint64_t lastSignaled = 0;
+    bool usable = false;
+    bool deviceRemoved = false;
+    DlssNr::UntrackedRetire::UnavailableReason unavailable =
+        DlssNr::UntrackedRetire::UnavailableReason::NoSwapchainPresent;
+};
+
+constexpr size_t kMaxPresentFenceDevices = 8;
+std::array<PresentFenceSlot, kMaxPresentFenceDevices> s_presentFenceSlots {};
+bool s_presentFenceSlotsFull = false;
+std::mutex s_presentSignalMutex; // held only in NoteSwapchainPresented across CreateFence / Signal
+std::mutex s_presentFenceMutex;  // pure-CPU leaf lock over s_presentFenceSlots / s_presentFenceSlotsFull
+
+uintptr_t PresentComIdentity(IUnknown* object)
+{
+    auto* real = ResTrack_Dx12::NrRealObject(object);
+    IUnknown* identity = nullptr;
+    if (real != nullptr && SUCCEEDED(real->QueryInterface(IID_PPV_ARGS(&identity))) && identity != nullptr)
+    {
+        const auto key = reinterpret_cast<uintptr_t>(identity);
+        identity->Release();
+        return key;
+    }
+    return reinterpret_cast<uintptr_t>(real != nullptr ? real : object);
+}
+
+bool HasNonZeroLuid(LUID luid) { return luid.LowPart != 0 || luid.HighPart != 0; }
+
+bool SameAdapterLuid(LUID a, LUID b)
+{
+    return HasNonZeroLuid(a) && HasNonZeroLuid(b) && a.LowPart == b.LowPart && a.HighPart == b.HighPart;
+}
+
+bool SlotMatchesDevice(const PresentFenceSlot& slot, uintptr_t deviceIdentity, LUID adapterLuid)
+{
+    if (slot.deviceIdentity == 0)
+        return false;
+    if (deviceIdentity != 0 && slot.deviceIdentity == deviceIdentity)
+        return true;
+    return SameAdapterLuid(slot.adapterLuid, adapterLuid);
+}
+
+bool ResolveNrRetireDevice(uintptr_t* outIdentity, LUID* outLuid)
+{
+    ID3D12Device* device =
+        g_nrDeviceOwner.device != nullptr ? g_nrDeviceOwner.device : State::Instance().currentD3D12Device;
+    if (device == nullptr)
+        return false;
+    *outIdentity = PresentComIdentity(device);
+    *outLuid = device->GetAdapterLuid();
+    return true;
+}
+} // namespace
+
+uint64_t Dx12Internal::SnapshotUntrackedPresentSerial()
+{
+    uintptr_t deviceIdentity = 0;
+    LUID adapterLuid {};
+    if (!ResolveNrRetireDevice(&deviceIdentity, &adapterLuid))
+        return DlssNr::UntrackedRetire::NextSignalValue(0);
+
+    std::lock_guard<std::mutex> lock(s_presentFenceMutex);
+    for (const auto& slot : s_presentFenceSlots)
+    {
+        if (SlotMatchesDevice(slot, deviceIdentity, adapterLuid))
+            return DlssNr::UntrackedRetire::NextSignalValue(slot.lastSignaled);
+    }
+    return DlssNr::UntrackedRetire::NextSignalValue(0);
+}
+
+void Dx12Internal::QueryUntrackedPresentFence(bool* hasFence, bool* deviceRemoved, uint8_t* unavailableReason,
+                                              uint64_t* completedValue)
+{
+    using DlssNr::UntrackedRetire::UnavailableReason;
+
+    *hasFence = false;
+    *deviceRemoved = false;
+    *unavailableReason = static_cast<uint8_t>(UnavailableReason::NoSwapchainPresent);
+    *completedValue = 0;
+
+    uintptr_t deviceIdentity = 0;
+    LUID adapterLuid {};
+    if (!ResolveNrRetireDevice(&deviceIdentity, &adapterLuid))
+        return;
+
+    ID3D12Fence* fence = nullptr;
+    size_t matchedIndex = kMaxPresentFenceDevices;
+    {
+        std::lock_guard<std::mutex> lock(s_presentFenceMutex);
+        for (size_t i = 0; i < s_presentFenceSlots.size(); ++i)
+        {
+            const auto& slot = s_presentFenceSlots[i];
+            if (!SlotMatchesDevice(slot, deviceIdentity, adapterLuid))
+                continue;
+            matchedIndex = i;
+            if (slot.deviceRemoved)
+            {
+                *deviceRemoved = true;
+                *unavailableReason = static_cast<uint8_t>(UnavailableReason::None);
+                return;
+            }
+            if (!slot.usable || slot.fence == nullptr)
+            {
+                *unavailableReason = static_cast<uint8_t>(slot.unavailable);
+                return;
+            }
+            fence = slot.fence;
+            break;
+        }
+        if (matchedIndex == kMaxPresentFenceDevices)
+        {
+            *unavailableReason = static_cast<uint8_t>(s_presentFenceSlotsFull ? UnavailableReason::SlotLimitReached
+                                                                              : UnavailableReason::NoSwapchainPresent);
+            return;
+        }
+    }
+
+    const uint64_t completed = fence->GetCompletedValue();
+    if (completed == UINT64_MAX)
+    {
+        {
+            std::lock_guard<std::mutex> lock(s_presentFenceMutex);
+            s_presentFenceSlots[matchedIndex].deviceRemoved = true;
+            s_presentFenceSlots[matchedIndex].usable = false;
+        }
+        *hasFence = true;
+        *deviceRemoved = true;
+        *completedValue = UINT64_MAX;
+        *unavailableReason = static_cast<uint8_t>(UnavailableReason::None);
+        return;
+    }
+
+    *hasFence = true;
+    *completedValue = completed;
+    *unavailableReason = static_cast<uint8_t>(UnavailableReason::None);
+}
+
+void Dx12Internal::LogUntrackedPresentFenceUnavailableOnce(uint8_t unavailableReason)
+{
+    static std::atomic<bool> s_logged { false };
+    if (!s_logged.exchange(true))
+    {
+        const auto reason = static_cast<DlssNr::UntrackedRetire::UnavailableReason>(unavailableReason);
+        LOG_INFO("DLSS-NR retirement: untracked D3D12 GPU-completion fence unavailable ({}); using evaluation-count "
+                 "retirement only",
+                 DlssNr::UntrackedRetire::DescribeUnavailable(reason));
+    }
+}
+
+void NoteSwapchainPresented(ID3D12CommandQueue* queue, PresentSignalSource source)
+{
+    using DlssNr::UntrackedRetire::UnavailableReason;
+
+    if (queue == nullptr || State::Instance().isShuttingDown)
+        return;
+
+    const Config& cfg = *Config::Instance();
+    if (!cfg.DlssNrEnabled.value_or_default())
+        return;
+
+    if (DlssNr::Consumers::HandOverIfCompeting())
+        return;
+
+    switch (source)
+    {
+    case PresentSignalSource::Boundary:
+    case PresentSignalSource::Dx11Bridge:
+        break;
+    case PresentSignalSource::FgSwapchain:
+        if (BoundaryLive() || DlssNr::SlBoundaryProbe::PresentingNow() ||
+            State::Instance().swapchainInteropApi == SwapchainInteropApi::Dx11wDx12)
+        {
+            return;
+        }
+        break;
+    case PresentSignalSource::WrappedSwapchain:
+        if (BoundaryLive() || DlssNr::SlBoundaryProbe::PresentingNow() ||
+            State::Instance().swapchainInteropApi == SwapchainInteropApi::Dx11wDx12 ||
+            State::Instance().currentFGSwapchain != nullptr)
+        {
+            return;
+        }
+        break;
+    }
+
+    ID3D12CommandQueue* signalQueue = queue;
+    if (IUnknown* real = ResTrack_Dx12::NrRealObject(queue); real != nullptr && real != queue)
+    {
+        ID3D12CommandQueue* unwrapped = nullptr;
+        if (SUCCEEDED(real->QueryInterface(IID_PPV_ARGS(&unwrapped))) && unwrapped != nullptr)
+        {
+            signalQueue = unwrapped;
+            unwrapped->Release();
+        }
+    }
+
+    ID3D12Device* device = nullptr;
+    if (FAILED(signalQueue->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+        return;
+
+    const uintptr_t queueIdentity = PresentComIdentity(signalQueue);
+    const uintptr_t deviceIdentity = PresentComIdentity(device);
+    const LUID adapterLuid = device->GetAdapterLuid();
+
+    {
+        std::lock_guard<std::mutex> signalLock(s_presentSignalMutex);
+
+        size_t slotIndex = kMaxPresentFenceDevices;
+        bool needCreate = false;
+        ID3D12Fence* fence = nullptr;
+        uint64_t nextValue = 0;
+
+        {
+            std::lock_guard<std::mutex> fenceLock(s_presentFenceMutex);
+            for (size_t i = 0; i < s_presentFenceSlots.size(); ++i)
+            {
+                auto& slot = s_presentFenceSlots[i];
+                if (!SlotMatchesDevice(slot, deviceIdentity, adapterLuid))
+                    continue;
+                slotIndex = i;
+                if (slot.deviceRemoved || slot.unavailable != UnavailableReason::None)
+                    break;
+                if (slot.queueIdentity != queueIdentity)
+                {
+                    slot.usable = false;
+                    slot.unavailable = UnavailableReason::MultiplePresentQueues;
+                    break;
+                }
+                if (slot.usable && slot.fence != nullptr)
+                {
+                    fence = slot.fence;
+                    nextValue = DlssNr::UntrackedRetire::NextSignalValue(slot.lastSignaled);
+                }
+                break;
+            }
+
+            if (slotIndex == kMaxPresentFenceDevices)
+            {
+                for (size_t i = 0; i < s_presentFenceSlots.size(); ++i)
+                {
+                    if (s_presentFenceSlots[i].deviceIdentity == 0)
+                    {
+                        slotIndex = i;
+                        needCreate = true;
+                        break;
+                    }
+                }
+                if (!needCreate)
+                    s_presentFenceSlotsFull = true;
+            }
+        }
+
+        if (needCreate)
+        {
+            ID3D12Fence* createdFence = nullptr;
+            const HRESULT createHr = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&createdFence));
+            const bool removedOnCreate = FAILED(createHr) && device->GetDeviceRemovedReason() != S_OK;
+
+            std::lock_guard<std::mutex> fenceLock(s_presentFenceMutex);
+            auto& slot = s_presentFenceSlots[slotIndex];
+            slot.deviceIdentity = deviceIdentity;
+            slot.adapterLuid = adapterLuid;
+            slot.queueIdentity = queueIdentity;
+            if (FAILED(createHr) || createdFence == nullptr)
+            {
+                if (createdFence != nullptr)
+                    createdFence->Release();
+                slot.usable = false;
+                slot.deviceRemoved = removedOnCreate;
+                slot.unavailable = removedOnCreate ? UnavailableReason::None : UnavailableReason::CreateFenceFailed;
+            }
+            else
+            {
+                slot.fence = createdFence;
+                slot.usable = true;
+                slot.unavailable = UnavailableReason::None;
+                fence = createdFence;
+                nextValue = DlssNr::UntrackedRetire::NextSignalValue(0);
+            }
+        }
+
+        if (fence != nullptr)
+        {
+            const HRESULT signalHr = signalQueue->Signal(fence, nextValue);
+            if (FAILED(signalHr))
+            {
+                const bool removed =
+                    device->GetDeviceRemovedReason() != S_OK || fence->GetCompletedValue() == UINT64_MAX;
+                std::lock_guard<std::mutex> fenceLock(s_presentFenceMutex);
+                auto& slot = s_presentFenceSlots[slotIndex];
+                slot.usable = false;
+                if (removed)
+                    slot.deviceRemoved = true;
+                else
+                    slot.unavailable = UnavailableReason::SignalFailed;
+            }
+            else
+            {
+                std::lock_guard<std::mutex> fenceLock(s_presentFenceMutex);
+                s_presentFenceSlots[slotIndex].lastSignaled = nextValue;
+            }
+        }
+    }
+
+    device->Release();
 }
 
 void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool fgHook, bool boundary)

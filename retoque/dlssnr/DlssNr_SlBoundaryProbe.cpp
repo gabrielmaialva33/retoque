@@ -90,6 +90,7 @@ std::atomic<ID3D12CommandQueue*> g_wrappedQueue { nullptr };
 std::atomic<ID3D12Resource*> g_gameBackbuffer { nullptr };
 std::atomic<ID3D12CommandList*> g_pendingDlssgList { nullptr };
 std::atomic<long long> g_windowStartMs { 0 };
+std::atomic<long long> g_lastPresentMs { 0 };
 
 // The queue the game passed may be the interposer's proxy. Streamline answers this IID with the native object behind a
 // proxy, as ResTrack_Dx12::CheckForRealObject uses it; every comparison below is between native queues, since that is
@@ -382,6 +383,8 @@ void Enter(IUnknown* swapchain, UINT flags)
     }
 
     ++g_appPresents;
+    if (g_gameQueueNative.load() != nullptr)
+        g_lastPresentMs = NowMs();
 
     IDXGISwapChain3* sc3 = nullptr;
     if (SUCCEEDED(swapchain->QueryInterface(IID_PPV_ARGS(&sc3))) && sc3 != nullptr)
@@ -404,10 +407,17 @@ void Enter(IUnknown* swapchain, UINT flags)
     }
 }
 
-void Leave()
+void Leave(UINT flags, HRESULT result)
 {
     if (--t_depth == 0)
+    {
+        if ((flags & DXGI_PRESENT_TEST) == 0 && SUCCEEDED(result))
+        {
+            if (auto* queue = g_gameQueueNative.load(); queue != nullptr)
+                DlssNr::NoteSwapchainPresented(queue, DlssNr::PresentSignalSource::Boundary);
+        }
         Report();
+    }
 }
 
 HRESULT STDMETHODCALLTYPE hkQueueSignal(ID3D12CommandQueue* queue, ID3D12Fence* fence, UINT64 value)
@@ -482,7 +492,7 @@ HRESULT STDMETHODCALLTYPE hkPresent(IDXGISwapChain* swapchain, UINT syncInterval
 
     Enter(swapchain, flags);
     const HRESULT result = o_Present(swapchain, syncInterval, flags);
-    Leave();
+    Leave(flags, result);
     return result;
 }
 
@@ -494,7 +504,7 @@ HRESULT STDMETHODCALLTYPE hkPresent1(IDXGISwapChain1* swapchain, UINT syncInterv
 
     Enter(swapchain, flags);
     const HRESULT result = o_Present1(swapchain, syncInterval, flags, parameters);
-    Leave();
+    Leave(flags, result);
     return result;
 }
 
@@ -584,6 +594,7 @@ void DlssNr::SlBoundaryProbe::Uninstall()
 
     g_module = nullptr;
     g_moduleBegin = g_moduleEnd = 0;
+    g_lastPresentMs = 0;
 }
 
 void DlssNr::SlBoundaryProbe::NoteWrappedPresent(ID3D12CommandQueue* queue, bool fgHook)
@@ -652,4 +663,14 @@ void DlssNr::SlBoundaryProbe::NoteExecute(ID3D12CommandQueue* queue, unsigned co
 
         return;
     }
+}
+
+bool DlssNr::SlBoundaryProbe::PresentingNow()
+{
+    if (!g_installed.load() || g_gameQueueNative.load() == nullptr)
+        return false;
+    if (t_depth > 0)
+        return true;
+    const long long at = g_lastPresentMs.load();
+    return at != 0 && NowMs() - at < 500;
 }

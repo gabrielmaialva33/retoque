@@ -1736,6 +1736,12 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         }
     }
 
+    if (willPresent && state.swapchainInteropApi == SwapchainInteropApi::None && nrQueue != nullptr &&
+        SUCCEEDED(result))
+    {
+        DlssNr::NoteSwapchainPresented(nrQueue, DlssNr::PresentSignalSource::FgSwapchain);
+    }
+
     if (result == S_OK)
     {
         LOG_DEBUG("Result: {:X}", result);

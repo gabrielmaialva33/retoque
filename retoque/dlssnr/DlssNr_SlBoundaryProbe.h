@@ -45,4 +45,7 @@ void NoteDlssgEvaluate(ID3D12GraphicsCommandList* list, NVSDK_NGX_Parameter* par
 
 // From ResTrack_Dx12::hkExecuteCommandLists, before the original.
 void NoteExecute(ID3D12CommandQueue* queue, unsigned count, ID3D12CommandList* const* lists);
+
+// True while the game's Streamline swapchain has a known native queue and is inside or within 500 ms of a game Present.
+bool PresentingNow();
 } // namespace DlssNr::SlBoundaryProbe

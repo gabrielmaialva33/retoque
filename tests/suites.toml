@@ -1049,6 +1049,14 @@ tier = "host"
 timeout = 300
 summary = "A game with several live DLSS features: NR follows one main picture and leaves the others as they are. The rule and its glue on fake parameters under ASan/UBSan (30 rule and glue mutants must fail, including picture epochs), and source guards on the four NR seams, the epoch consumers under their locks and the release hook (21 mutants). No D3D12, Vulkan, NGX or game."
 
+[nr-untracked-retire]
+path = "nr-untracked-retire"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Untracked D3D12 NR retirement's present-queue fence gate (DlssNr_UntrackedRetire.h) and verbatim ParkNr*/TickNrRetired slices under ASan/UBSan: 32-tick count gate plus completed >= parkedSerial + 1, UINT64_MAX/device-removed retention, saturation, live-device count-only fallback logged once, and Present call-site guards. No GPU."
+
 [mfg-provider-capacity]
 path = "mfg-provider-capacity"
 domain = "fg"

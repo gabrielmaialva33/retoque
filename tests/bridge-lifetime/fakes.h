@@ -558,6 +558,22 @@ struct DeathCounter
 // actually does needs a GPU; what it is owed by its caller does not.
 namespace DlssNr
 {
+enum class PresentSignalSource : uint8_t
+{
+    WrappedSwapchain,
+    FgSwapchain,
+    Boundary,
+    Dx11Bridge,
+};
+inline unsigned presentSignals = 0;
+inline ID3D12CommandQueue* lastPresentedQueue = nullptr;
+inline void NoteSwapchainPresented(ID3D12CommandQueue* queue,
+                                   PresentSignalSource = PresentSignalSource::WrappedSwapchain)
+{
+    ++presentSignals;
+    lastPresentedQueue = queue;
+}
+
 struct PresentHost
 {
     // Destroyed with the wrapper, or with its presenter when it gives its window up.

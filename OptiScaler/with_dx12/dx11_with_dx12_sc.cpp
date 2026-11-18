@@ -12,6 +12,7 @@
 #include <hudfix/Hudfix_Dx11.h>
 #include <resource_tracking/ResTrack_dx11.h>
 #include <shaders/synth_motion/SynthMotion_Handoff.h>
+#include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_Dred.h>
 
 #include <Util.h>
@@ -1128,6 +1129,8 @@ HRESULT STDMETHODCALLTYPE Dx11wDx12SC::Present(UINT SyncInterval, UINT Flags)
 
     if (SUCCEEDED(result))
     {
+        DlssNr::NoteSwapchainPresented(presentQueue, DlssNr::PresentSignalSource::Dx11Bridge);
+
         if (frameCopied)
             _AdvanceFakeBackBufferIndex();
     }

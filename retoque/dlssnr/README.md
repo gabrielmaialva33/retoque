@@ -102,6 +102,7 @@ experiment.
 | `DlssNr_GpuTiming.h/.cpp`, `DlssNr_PresentCpuTiming.h` | `[DlssNr] GpuTiming`: independent fence-confirmed GPU sample regions (Dispatch/model, Present and its Dispatch split, guide capture, HDR conversion), each with its own pool and sampling phase, and a separate steady-clock CPU stream of the Present route's recording, submission and existing waits; never sum nested/overlapping regions or add CPU waits to GPU time; `../../docs/dlssnr/design/gpu-timing.md`, tested by `tests/nr-gpu-timing` and `tests/nr-timing-boundary` |
 | `DlssNr_MultiView.h` | several views in one colour allocation within a frame (multi-monitor, split screen): detected, and every evaluate stood down, counted; janblade's `1105908f` detector only (GPL-3.0), no view pick or per-view model; `../../docs/dlssnr/design/dx12-robustness.md`, tested by `tests/nr-multi-view` |
 | `DlssNr_Pictures.h`, `DlssNr_PictureGate.h` | several live DLSS features in a game (a menu preview next to the world): NR follows one main picture, by first, clearly larger, release or quiet, and every other feature is left as it is before any NR state sees it; views on main's colour allocation go on to the multi-view rule; idea from janblade #285 (GPL-3.0), no code taken; `../../docs/dlssnr/design/main-picture.md`, tested by `tests/nr-main-picture` |
+| `DlssNr_UntrackedRetire.h` | the default (untracked) D3D12 retirement path's GPU-completion decision rule: the 32-tick evaluation countdown plus a per-device `ID3D12Fence` signaled after each successful D3D12 `Present` (`completedValue >= parkedSerial + 1`), `UINT64_MAX`/device-removed retention, and live-device count-only fallback logged once at `INFO`; `../../docs/dlssnr/design/chain-in-flight.md`, tested by `tests/nr-untracked-retire` (host-tested only, unvalidated on GPU) |
 | `DlssNr_PrivateSr.h/.cpp` | Transfer 2's private DLSS Super Resolution, the NGX half: its own parameter table and handle through `NVNGXProxy`, created and evaluated with wilsjo2's parameters |
 | `shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp` | D3D12 present guide capture, identity and bridge consumption; shared state remains in the core renderer |
 | `shaders/dlssnr/DlssNr_Dx12.h/.cpp` | the pass: forwarder loading, feature lifetime, the evaluate path, encode/resolve orchestration, capture |
@@ -238,10 +239,15 @@ model file at startup; it does not select the caller module.
   a feature creation on each; hhkbble's `f55d655a`). History is reset on the flip.
 - **Never free under the GPU.** Retirement retains each generation and its recorded uses. The tracked
   D3D12 path requires Submission settlement in addition to its minimum retention; cancellation,
-  completed orphans and bounded replay aging have distinct rules. The legacy untracked path still
-  uses an evaluation-delay heuristic, not a completion certificate. Internal feature creation uses
-  its existing queue/fence discipline. See [chain-in-flight](../../docs/dlssnr/design/chain-in-flight.md)
-  and [submission tracking](../../docs/dlssnr/design/submission-tracking.md); elapsed frames alone
+  completed orphans and bounded replay aging have distinct rules. Since 2026-11-17 (host-tested only,
+  unvalidated on GPU), the default untracked D3D12 path (`DlssNr_UntrackedRetire.h`) keeps its 32-tick
+  evaluation countdown and also requires a per-device `ID3D12Fence` signaled on the swapchain's present
+  queue after each successful `Present` to reach `parkedSerial + 1` (`UINT64_MAX` and device removal
+  retain; live devices with no single present-queue fence log once at `INFO` and fall back to the
+  evaluation count, which still does not cover unpresented recordings or command-list replay). Internal
+  feature creation uses its existing queue/fence discipline. See
+  [chain-in-flight](../../docs/dlssnr/design/chain-in-flight.md) and
+  [submission tracking](../../docs/dlssnr/design/submission-tracking.md); elapsed frames alone
   must not be treated as proof that tracked GPU work is done.
 - **One lock.** Every caller is on the game's render thread now, but the D3D11-on-D3D12 bridge
   enters from its own call site, and the lock is CPU-side on a path that already records command
