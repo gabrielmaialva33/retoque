@@ -983,6 +983,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
 
     LOG_DEBUG("for ({0})", (int) FeatureDiscoveryInfo->FeatureID);
 
+    if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction)
+        State::Instance().rrRequested = true;
+
     if (auto customRR = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction
                             ? Nvngx_RR::Selected(API::DX12)
                             : nullptr;
@@ -993,6 +996,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
 
         return Nvngx_RR::ReportSupported(OutSupported);
     }
+
+    // A regular upscaler picked for ray reconstruction
+    if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction && Nvngx_RR::Offered(API::DX12))
+        return Nvngx_RR::ReportSupported(OutSupported);
 
     const bool isUpscaling = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling;
     const bool isFG = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_FrameGeneration;
@@ -1105,7 +1112,7 @@ static NVSDK_NGX_Result TryEvaluateOptiFeature(ID3D12GraphicsCommandList* InCmdL
         const bool isFSR31OrLater = isFFX && feature->Version() >= feature_version { 3, 1, 0 };
 
         // FSR 3.1 supports upscaleSize that doesn't need reinit to change output resolution
-        if (!isFSR31OrLater && feature->UpdateOutputResolution(InParameters))
+        if (!isFSR31OrLater && !feature->PadsToMaxUpscaleSize() && feature->UpdateOutputResolution(InParameters))
             state.changeBackend[handleId] = true;
     }
 
@@ -1250,7 +1257,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
 
         int frameCount = 0;
         InParameters->Get("DLSSG.MultiFrameCount", &frameCount);
-        State::Instance().dlssgDetectedInterpolationCount = frameCount;
+        State::Instance().SetDlssgDetectedInterpolationCount(frameCount);
+
+        // MFG can evaluate once per generated frame, only the first one is a new game frame
+        uint32_t frameIndex = 1;
+        InParameters->Get("DLSSG.MultiFrameIndex", &frameIndex);
+
+        if (state.activeFgInput == FGInput::NvngxFG && frameIndex <= 1)
+            State::Instance().gameFrameRate.Present(Util::MillisecondsNow());
         ReflexHooks::setDlssgFrameCount(frameCount);
         DlssNr::SlBoundaryProbe::NoteDlssgEvaluate(InCmdList, InParameters);
 
@@ -1270,7 +1284,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
         if (evalWithoutFG == 6)
         {
             // Report FG as disabled
-            State::Instance().dlssgDetectedInterpolationCount = 0;
+            State::Instance().SetDlssgDetectedInterpolationCount(0);
             ReflexHooks::setDlssgFrameCount(0);
         }
     }

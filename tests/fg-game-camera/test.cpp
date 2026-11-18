@@ -82,7 +82,7 @@ struct Backend
 };
 struct IFGFeature
 {
-    uint64_t _frameCount = 0, _lastDispatchedFrame = 0, _lastFGFrame = 0, _targetFrame = 0;
+    uint64_t _frameCount = 0, _lastDispatchedFrame = 0, _lastFGFrame = 0, _targetFrame = 0, _presentFrame = 0;
     bool _isActive = true, _waitingNewFrameData = false;
     std::map<int, bool> _resourceReady[4];
     std::map<int, bool> resources[4];
@@ -98,6 +98,7 @@ struct IFGFeature
     int GetIndex();
     int GetDispatchIndex(uint64_t& frame);
     void SetFrameCount(uint64_t frame);
+    void SetPresentFrame(uint64_t frame);
     bool HasResource(int type, int index = -1) { return resources[index < 0 ? GetIndex() : index].contains(type); }
     void NewFrame() {}
 };

@@ -44,7 +44,7 @@ types = between('typedef NVSDK_NGX_Result (*PFN_D3D12_Shutdown)',
                 'typedef NVSDK_NGX_Result (*PFN_D3D12_GetParameters)')
 adapter = between('    static NVSDK_NGX_Result ShutdownDx12Device(', '    inline static void LogCallback(')
 custom = between('struct CustomNgxModule', 'class NVNGXProxy')
-custom_shutdown = between('    static void ShutdownCustomDx12(', '    static void SetDx12Inited(')
+custom_shutdown = definition(source, '    static void ShutdownCustomDx12(')
 getter = between('    static PFN_D3D12_Shutdown1 D3D12_Shutdown1()', '    // Vulkan')
 vk_types = between('typedef NVSDK_NGX_Result (*PFN_VULKAN_Shutdown)',
                    'typedef NVSDK_NGX_Result (*PFN_VULKAN_GetParameters)')

@@ -449,6 +449,9 @@
     <ClInclude Include="inputs\XeSS_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="inputs\XeSS_UE_Dx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="inputs\XeSS_Proxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -803,10 +806,25 @@
     <ClInclude Include="shaders\depth_transfer\DT_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shaders\resource_copy\RC_Common.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\resource_copy\RC_Dx11.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\resource_copy\RC_Dx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\resource_copy\precompile\rc_offset_Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\resource_copy\precompile\rc_offset_Shader_Dx11.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="shaders\resource_copy\RC_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="shaders\resource_copy\precompile\rc_Shader_Vk.h">
+    <ClInclude Include="shaders\resource_copy\precompile\rc_offset_Shader_Vk.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\velocity_convert\VC_Vk.h">
@@ -1001,6 +1019,9 @@
     <ClInclude Include="shaders\hudless_compare_compute\HCC_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="hooks\AmdExtFlipMeter.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="hooks\Amdxc64_Hooks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1050,6 +1071,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\rcas\precompile\RCAS_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\rcas\shaders\BABA_NEURAL_Shader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\rcas\shaders\DA_DAS_Shader.h">
@@ -1194,6 +1218,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\magnifier\precompile\Magnifier_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="framegen\flipmeter\FlipMeterFG_Dx12.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="framegen\flipmeter\FlipMeterSwapChain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="framegen\reprojection\Reprojection_Dx12.h">
@@ -1422,6 +1452,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="inputs\XeSS_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="inputs\XeSS_UE_Dx12.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="hooks\Vulkan_Hooks.cpp">
@@ -1733,6 +1766,12 @@
     <ClCompile Include="shaders\depth_transfer\DT_Vk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="shaders\resource_copy\RC_Dx11.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="shaders\resource_copy\RC_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="shaders\resource_copy\RC_Vk.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -1986,6 +2025,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="shaders\magnifier\Magnifier_Vk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="framegen\flipmeter\FlipMeterFG_Dx12.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="framegen\flipmeter\FlipMeterSwapChain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="framegen\reprojection\Reprojection_Dx12.cpp">

@@ -177,7 +177,8 @@ dispatch = code(function(depth_transfer, 'bool DepthTransfer_Dx11::Dispatch('))
 assert sorted(set(re.findall(r'InContext->(\w+)\(', dispatch))) == \
     ['CSSetShader', 'CSSetShaderResources', 'CSSetUnorderedAccessViews', 'Dispatch'], 'DepthTransfer_Dx11 changed'
 assert set(re.findall(r'Dx11DeviceContext->(\w+)\(', code(upstream_bridge))) <= \
-    {'Signal', 'Wait', 'CopyResource', 'Flush'}, 'upstream\'s D3D11 transport calls more on the context'
+    {'Signal', 'Wait', 'CopyResource', 'CopySubresourceRegion', 'Flush'}, \
+    'upstream\'s D3D11 transport calls more on the context'
 
 # --- The capture core both producers share ---------------------------------------------------------------------
 bridged = function(renderer, 'bool CaptureBridgedGuides(')

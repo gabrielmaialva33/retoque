@@ -90,8 +90,8 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-bridge-lifetime-') as direct
     binary = Path(directory) / 'bridge'
     cpp.write_text(unit)
     subprocess.run(['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
-                    '-Wno-unused-parameter', '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-                    '-I', str(root / 'retoque'), str(cpp), '-o', str(binary)], check=True)
+                    '-Wno-unused-parameter', '-Wno-unused-variable', '-fsanitize=address,undefined',
+                    '-fno-omit-frame-pointer', '-I', str(root / 'retoque'), str(cpp), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
 
 # The D3D12 overlay's render-target lifetime, which the bridge's resize contract leans on: the production

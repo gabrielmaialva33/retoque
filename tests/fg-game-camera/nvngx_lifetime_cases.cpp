@@ -21,6 +21,24 @@ struct NVSDK_NGX_Parameter
 using NVSDK_NGX_Feature = int;
 using VkDevice = void*;
 using VkCommandBuffer = void*;
+using BOOLEAN = unsigned char;
+constexpr BOOLEAN FALSE = 0;
+#define NTAPI
+struct State
+{
+    bool isShuttingDown = false;
+    static State& Instance()
+    {
+        static State s;
+        return s;
+    }
+};
+struct KernelBaseProxy
+{
+    using HMODULE = void*;
+    static auto GetModuleHandleW_() { return +[](const wchar_t*) -> HMODULE { return nullptr; }; }
+    static auto GetProcAddress_() { return +[](HMODULE, const char*) -> void* { return nullptr; }; }
+};
 static int held = 0, living = 0;
 struct InspectMutex
 {

@@ -158,6 +158,7 @@ static ID3D12Fence* g_menuFence = nullptr;
 static ID3D12CommandQueue* g_menuSubmitQueue = nullptr;
 static UINT64 g_menuFenceValue = 0;
 static UINT64 g_allocatorFenceValues[NUM_BACK_BUFFERS] = {};
+static UINT g_menuSlot = 0;
 static bool g_menuFenceUnproven = false;
 static bool _dx12Device = false;
 static bool _isInited = false;

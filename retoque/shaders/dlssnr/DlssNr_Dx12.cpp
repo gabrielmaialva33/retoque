@@ -3724,7 +3724,7 @@ static DlssNr::PresentBoundary::Inputs BoundaryInputs(uint32_t hookMethod, bool 
     in.fgHook = fgHook;
     in.ownFgActive = state.currentFG != nullptr && state.currentFG->IsActive() && !state.currentFG->IsPaused();
     in.gameDlssgSet = state.dlssgLastSetMode != sl::DLSSGMode::eOff;
-    in.gameDlssgCount = state.dlssgDetectedInterpolationCount;
+    in.gameDlssgCount = state.DlssgDetectedInterpolationCount();
     in.boundaryLive = boundary || BoundaryLive();
 
     if (DlssNr::PresentBoundary::NoteGameDlssg(in) && hookMethod == 0)
@@ -5009,7 +5009,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     DlssNr::PresentSyncInputs syncInputs;
     syncInputs.fgHook = fgHook;
     syncInputs.fgOutput = state.activeFgOutput != FGOutput::NoFG;
-    syncInputs.dlssgSeen = state.dlssgDetectedInterpolationCount > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
+    syncInputs.dlssgSeen = state.DlssgDetectedInterpolationCount() > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
     syncInputs.dlssgLoaded = dlssgLoaded;
     syncInputs.boundary = boundary;
     const bool presentSync = DlssNr::PresentSyncWanted(cfg.DlssNrPresentSync, syncInputs);

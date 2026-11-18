@@ -589,6 +589,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureRequirements(
 
     LOG_DEBUG("for FeatureID: {0}", (int) FeatureDiscoveryInfo->FeatureID);
 
+    if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction)
+        State::Instance().rrRequested = true;
+
     if (auto customRR = FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction
                             ? Nvngx_RR::Selected(API::Vulkan)
                             : nullptr;
@@ -600,6 +603,10 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_GetFeatureRequirements(
 
         return Nvngx_RR::ReportSupported(OutSupported);
     }
+
+    // A regular upscaler picked for ray reconstruction
+    if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_RayReconstruction && Nvngx_RR::Offered(API::Vulkan))
+        return Nvngx_RR::ReportSupported(OutSupported);
 
     if (FeatureDiscoveryInfo->FeatureID == NVSDK_NGX_Feature_SuperSampling ||
         (State::Instance().activeFgInput == FGInput::NvngxFG && Nvngx_FG::isVulkanAvailable() &&
@@ -727,7 +734,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature1(VkDevice InDevice
     if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature1(InDevice, InCmdList, InFeatureID, InParameters, OutHandle);
-        LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        // A failed create gives no handle
+        if (result == NVSDK_NGX_Result_Success && OutHandle != nullptr && *OutHandle != nullptr)
+            LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        else
+            LOG_ERROR("Creating modded DLSSG feature failed: {:X}", (UINT) result);
+
         DlssNr::VkPre::RememberNgxFeature(InDevice, InFeatureID, OutHandle, result);
         return result;
     }
@@ -841,7 +853,12 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_CreateFeature(VkCommandBuffer In
     if (Nvngx_FG::isVulkanAvailable() && InFeatureID == NVSDK_NGX_Feature_FrameGeneration)
     {
         auto result = Nvngx_FG::VULKAN_CreateFeature(InCmdBuffer, InFeatureID, InParameters, OutHandle);
-        LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        // A failed create gives no handle
+        if (result == NVSDK_NGX_Result_Success && OutHandle != nullptr && *OutHandle != nullptr)
+            LOG_INFO("Creating new modded DLSSG feature with HandleId: {0}", (*OutHandle)->Id);
+        else
+            LOG_ERROR("Creating modded DLSSG feature failed: {:X}", (UINT) result);
+
         DlssNr::VkPre::RememberNgxFeature(vkDevice, InFeatureID, OutHandle, result);
         return result;
     }
@@ -959,14 +976,22 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_EvaluateFeature(VkCommandBuffer 
         {
             frameCount = 1;
         }
-        state.dlssgDetectedInterpolationCount = frameCount;
+        state.SetDlssgDetectedInterpolationCount(frameCount);
         evalWithoutFG = 0;
+
+        // MFG can evaluate once per generated frame, only the first one is a new game frame
+        uint32_t frameIndex = 1;
+        if (InParameters != nullptr)
+            InParameters->Get("DLSSG.MultiFrameIndex", &frameIndex);
+
+        if (state.activeFgInput == FGInput::NvngxFG && frameIndex <= 1)
+            state.gameFrameRate.Present(Util::MillisecondsNow());
         fgEvalSeen = true;
     }
     else if (fgEvalSeen && ++evalWithoutFG == 6)
     {
         // Game stopped evaluating FG, report it as disabled
-        state.dlssgDetectedInterpolationCount = 0;
+        state.SetDlssgDetectedInterpolationCount(0);
     }
 
     if (VkContexts[handleId].feature == nullptr) // prevent source api name flicker when dlssg is active

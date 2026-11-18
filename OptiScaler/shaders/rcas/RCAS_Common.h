@@ -2,9 +2,12 @@
 
 #include "SysUtils.h"
 
+#include "shaders/BABA_NEURAL_Shader.h"
 #include "shaders/DA_DAS_Shader.h"
 #include "shaders/DA_RCAS_Shader.h"
 #include "shaders/RCAS_Shader.h"
+
+#include <atomic>
 
 struct RcasConstants
 {
@@ -24,7 +27,14 @@ struct RcasConstants
 
 class RCAS_Common
 {
+  public:
+    // The sharpening shader that ran last, its GPU time is shown under this name
+    const char* TimedShaderName() const { return _timedShaderName; }
+
   protected:
+    // Called by Dispatch with the shader it runs, after the fallbacks
+    void SetTimedShader(SharpenShader InShader);
+
     struct alignas(256) InternalConstants
     {
         float Sharpness;
@@ -38,7 +48,6 @@ class RCAS_Common
         int MotionHeight;
 
         float MotionSharpness;
-        float MotionTextureScale;
         float MvScaleX;
         float MvScaleY;
         float Threshold;
@@ -67,7 +76,6 @@ class RCAS_Common
         int Debug;
 
         float MotionSharpness;
-        float MotionTextureScale;
         float MvScaleX;
         float MvScaleY;
         float MotionThreshold;
@@ -85,6 +93,42 @@ class RCAS_Common
         int DepthHeight;
     };
 
+    // Same order as the cbuffer of BABA_NEURAL_Shader.h / baba_neural_sharpen.hlsl
+    struct alignas(256) InternalConstantsBaba
+    {
+        float Sharpness;
+        float EdgeResponse;
+        int Model;
+        int ViewMode;
+
+        int ClampOutput;
+        int DynamicSharpenEnabled;
+        int DisplaySizeMV;
+        int Debug;
+
+        float MotionSharpness;
+        float MvScaleX;
+        float MvScaleY;
+
+        float MotionThreshold;
+        float MotionScaleLimit;
+        int OutputWidth;
+        int OutputHeight;
+
+        int MotionWidth;
+        int MotionHeight;
+        int IsHdr;
+    };
+
+    // Dx11 and Vulkan reuse the constant buffers of the other shaders
+    static_assert(sizeof(InternalConstantsBaba) <= sizeof(InternalConstants));
+    static_assert(sizeof(InternalConstantsBaba) <= sizeof(InternalConstantsDA));
+
     void FillMotionConstants(InternalConstants& OutConstants, const RcasConstants& InConstants);
     void FillMotionConstants(InternalConstantsDA& OutConstants, const RcasConstants& InConstants);
+    void FillMotionConstants(InternalConstantsBaba& OutConstants, const RcasConstants& InConstants);
+
+  private:
+    // Written by Dispatch, read by the present hooks
+    std::atomic<const char*> _timedShaderName { "RCAS" };
 };

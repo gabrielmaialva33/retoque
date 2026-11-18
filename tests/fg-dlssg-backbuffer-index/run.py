@@ -9,7 +9,7 @@ ROOT = HERE.parents[1]
 source = (ROOT / "OptiScaler/hooks/FG_Hooks.cpp").read_text()
 present = source.index("HRESULT FGHooks::FGPresent(")
 start = source.index("    if (willPresent && fgFeatureActive && state.activeFgOutput == FGOutput::DLSSG)\n", present)
-end = source.index("    if (willPresent && fgFeatureActive)\n    {", start)
+end = source.index("    const bool fsrFgUi =", start)
 # FGPresent's locals the block reads, then the block itself
 wrapper = ("void DlssgPresentStart(IDXGISwapChain* This, bool willPresent, bool fgFeatureActive, "
            "sl::FrameToken*& localToken, sl::Result& tokenResult)\n{\n"

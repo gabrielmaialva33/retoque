@@ -738,7 +738,7 @@ assert re.search(r'for \(const Prepared::Polled& polled : prep\.polledElsewhere\
 assert ('fgCarry == FgCarry::TransportOnly ? NrDecision { NrSkip::FrameGeneration, FgUnsupportedText(prep.fg, true) } '
         ': DecideNr(*dev, sc, route.workFamily)') in prepare_flat
 facts_fn = code(function(host, 'FgFacts FgFactsFor(VkQueue queue, VkSwapchainKHR swapchain)'))
-for needed in ('state.dlssgLastSetMode != sl::DLSSGMode::eOff', 'state.dlssgDetectedInterpolationCount',
+for needed in ('state.dlssgLastSetMode != sl::DLSSGMode::eOff', 'state.DlssgDetectedInterpolationCount()',
                'fg->IsActive() && !fg->IsPaused()', 'vk->OwnsQueue(queue)', 'vk->OwnsSwapchain(swapchain)'):
     assert needed in facts_fn, needed
 # Inert when off: the trace in the present, destroy-swapchain and destroy-device hooks only under the key, Streamline's

@@ -36,7 +36,8 @@ frame_slices = ''
 for signature in ('int IFGFeature::GetIndex()', 'UINT64 IFGFeature::StartNewFrame()',
                   'UINT64 IFGFeature::NextDispatchFrame()', 'int IFGFeature::GetDispatchIndex(', 'bool IFGFeature::IsActive()',
                   'bool IFGFeature::IsPaused()', 'bool IFGFeature::IsDispatched()',
-                  'void IFGFeature::SetFrameCount(', 'UINT64 IFGFeature::FrameCount()'):
+                  'void IFGFeature::SetFrameCount(', 'void IFGFeature::SetPresentFrame(',
+                  'UINT64 IFGFeature::FrameCount()'):
     frame_slices += function(signature, frame_source) + '\n'
 harness = harness.replace('// @frame-counter@', frame_slices)
 inputs = (repo / 'OptiScaler/inputs/FG/Streamline_Inputs.cpp').read_text()

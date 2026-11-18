@@ -204,6 +204,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="gpu_time\GpuTime_Dx11.h" />
     <ClInclude Include="gpu_time\GpuTime_Dx12.h" />
     <ClInclude Include="gpu_time\GpuTime_Vk.h" />
+    <ClInclude Include="hooks\AmdExtFlipMeter.h" />
     <ClInclude Include="hooks\Amdxc64_Hooks.h" />
     <ClInclude Include="DllNames.h" />
     <ClInclude Include="BuildInfo.h" />
@@ -246,6 +247,9 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="shaders\hudless_compare_compute\precompile\HCC_Shader_Vk.h" />
     <ClInclude Include="shaders\magnifier\precompile\Magnifier_Shader.h" />
     <ClInclude Include="shaders\magnifier\precompile\Magnifier_Shader_Dx11.h" />
+    <ClInclude Include="shaders\rcas\precompile\baba_neural_sharpen_Shader.h" />
+    <ClInclude Include="shaders\rcas\precompile\baba_neural_sharpen_Shader_Dx11.h" />
+    <ClInclude Include="shaders\rcas\precompile\baba_neural_sharpen_Shader_Vk.h" />
     <ClInclude Include="shaders\reproject\mouseInputs\InputCollection.h" />
     <ClInclude Include="shaders\hud_copy\HudCopy_Vk.h" />
     <ClInclude Include="shaders\hudless_compare_compute\HCC_Vk.h" />
@@ -272,6 +276,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="low_latency\input\input_xell.h" />
     <ClInclude Include="low_latency\input\input_antilag2.h" />
     <ClInclude Include="framegen\reprojection\Reprojection_Dx12.h" />
+    <ClInclude Include="framegen\flipmeter\FlipMeterFG_Dx12.h" />
+    <ClInclude Include="framegen\flipmeter\FlipMeterSwapChain.h" />
     <ClInclude Include="shaders\reproject\mouseInputs\RawInputHook.h" />
     <ClInclude Include="shaders\hud_copy\precompile\HudCopy_Shader_Vk.h" />
     <ClInclude Include="shaders\magnifier\Magnifier_Dx11.h" />
@@ -318,6 +324,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="shaders\rcas\precompile\RCAS_Shader.h" />
     <ClInclude Include="shaders\rcas\precompile\RCAS_Shader_Dx11.h" />
     <ClInclude Include="shaders\rcas\precompile\RCAS_Shader_Vk.h" />
+    <ClInclude Include="shaders\rcas\shaders\BABA_NEURAL_Shader.h" />
     <ClInclude Include="shaders\rcas\shaders\DA_DAS_Shader.h" />
     <ClInclude Include="shaders\rcas\shaders\DA_RCAS_Shader.h" />
     <ClInclude Include="shaders\rcas\shaders\RCAS_Shader.h" />
@@ -438,7 +445,12 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="shaders\render_ui\precompile\render_ui_VShader.h" />
     <ClInclude Include="shaders\render_ui\RUI_Common.h" />
     <ClInclude Include="shaders\render_ui\RUI_Dx12.h" />
-    <ClInclude Include="shaders\resource_copy\precompile\rc_Shader_Vk.h" />
+    <ClInclude Include="shaders\resource_copy\precompile\rc_offset_Shader_Vk.h" />
+    <ClInclude Include="shaders\resource_copy\precompile\rc_offset_Shader.h" />
+    <ClInclude Include="shaders\resource_copy\precompile\rc_offset_Shader_Dx11.h" />
+    <ClInclude Include="shaders\resource_copy\RC_Common.h" />
+    <ClInclude Include="shaders\resource_copy\RC_Dx11.h" />
+    <ClInclude Include="shaders\resource_copy\RC_Dx12.h" />
     <ClInclude Include="shaders\resource_copy\RC_Vk.h" />
     <ClInclude Include="shaders\velocity_convert\precompile\vc_Shader_Vk.h" />
     <ClInclude Include="shaders\velocity_convert\VC_Vk.h" />
@@ -495,6 +507,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="inputs\XeSS_Common.h" />
     <ClInclude Include="inputs\XeSS_Dbg.h" />
     <ClInclude Include="inputs\XeSS_Dx12.h" />
+    <ClInclude Include="inputs\XeSS_UE_Dx12.h" />
     <ClInclude Include="inputs\XeSS_Proxy.h" />
     <ClInclude Include="inputs\XeSS_Vulkan.h" />
     <ClInclude Include="menu\font\Hack_Compressed.h" />
@@ -688,6 +701,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="low_latency\input\input_xell.cpp" />
     <ClCompile Include="low_latency\input\input_antilag2.cpp" />
     <ClCompile Include="framegen\reprojection\Reprojection_Dx12.cpp" />
+    <ClCompile Include="framegen\flipmeter\FlipMeterFG_Dx12.cpp" />
+    <ClCompile Include="framegen\flipmeter\FlipMeterSwapChain.cpp" />
     <ClCompile Include="shaders\reproject\mouseInputs\RawInputHook.cpp" />
     <ClCompile Include="shaders\magnifier\Magnifier_Dx11.cpp" />
     <ClCompile Include="menu\input\input_system.cpp" />
@@ -748,6 +763,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="shaders\reproject\Reproject_Dx12.cpp" />
     <ClCompile Include="shaders\Shader_Common.cpp" />
     <ClCompile Include="shaders\render_ui\RUI_Dx12.cpp" />
+    <ClCompile Include="shaders\resource_copy\RC_Dx11.cpp" />
+    <ClCompile Include="shaders\resource_copy\RC_Dx12.cpp" />
     <ClCompile Include="shaders\resource_copy\RC_Vk.cpp" />
     <ClCompile Include="shaders\velocity_convert\VC_Vk.cpp" />
     <ClCompile Include="shaders\Shader_Dx12.cpp" />
@@ -978,6 +995,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="version_check.cpp" />
     <ClCompile Include="inputs\XeSS_Debug.cpp" />
     <ClCompile Include="inputs\XeSS_Dx12.cpp" />
+    <ClCompile Include="inputs\XeSS_UE_Dx12.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="OptiScaler.rc">
