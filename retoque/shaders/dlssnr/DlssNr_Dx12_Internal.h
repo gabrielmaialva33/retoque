@@ -453,6 +453,8 @@ struct NrRetired
     // Tracked objects (chain-in-flight.md): freed once every epoch in usage is finished AND framesLeft ticks
     // passed, which covers work NGX may keep on queues of its own that no fence of ours sees.
     uint64_t parkedAt = DlssNr::Submission::Clock();
+    // Untracked objects (DlssNr_UntrackedRetire.h): the present-queue fence value to be signaled at the next Present.
+    uint64_t presentSerial = 1;
     // Waiting only on epochs no fence will ever answer: retained for good unless they finish, and out of the cap.
     bool stuck = false;
     OS_Dx12* scaler = nullptr;
@@ -859,6 +861,10 @@ bool AltSurfacesFit(DXGI_FORMAT format, unsigned int width, unsigned int height,
 void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsigned int height, unsigned int workWidth,
                                     unsigned int workHeight, const DlssNr::FormatTwin::Transfer& transfer);
 void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, bool tracked);
+uint64_t SnapshotUntrackedPresentSerial();
+void QueryUntrackedPresentFence(bool* hasFence, bool* deviceRemoved, uint8_t* unavailableReason,
+                                uint64_t* completedValue);
+void LogUntrackedPresentFenceUnavailableOnce(uint8_t unavailableReason);
 // One present's question to the identity rules, and the facts it was asked with, which the record needs again.
 struct GuideAsk
 {

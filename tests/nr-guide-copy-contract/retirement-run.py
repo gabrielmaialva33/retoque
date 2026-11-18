@@ -32,8 +32,10 @@ def unit(guides):
     text = '#include "pch.h"\n' + (HERE / 'fakes.h').read_text()
     text += '''
 #include <mutex>
+#include <optional>
 #include "retoque/dlssnr/DlssNr_PresentGuideIdentity.h"
 #include "retoque/dlssnr/DlssNr_SubmissionModel.h"
+#include "retoque/dlssnr/DlssNr_UntrackedRetire.h"
 namespace DlssNr::Submission {
 using Usage = Detail::Usage;
 uint64_t Clock() { return 0; }
@@ -54,6 +56,14 @@ struct DlssNr_Pulse_Dx12 {}; struct DlssNr_MotionProbe_Dx12 {};
 std::vector<NrRetired> g_nrRetired;
 std::mutex g_nrMutex;
 struct { bool failed=false; void (*release)(void*)=nullptr; } g_nr;
+uint64_t SnapshotUntrackedPresentSerial() { return 1; }
+void QueryUntrackedPresentFence(bool* hasFence, bool* deviceRemoved, uint8_t* unavailableReason, uint64_t* completedValue) {
+    *hasFence = false;
+    *deviceRemoved = false;
+    *unavailableReason = static_cast<uint8_t>(DlssNr::UntrackedRetire::UnavailableReason::NoSwapchainPresent);
+    *completedValue = 0;
+}
+void LogUntrackedPresentFenceUnavailableOnce(uint8_t) {}
 void TickNrRetired(bool shutdown=false);
 '''
     text += function(LIFETIME, 'void TickNrRetired(bool shutdown)')

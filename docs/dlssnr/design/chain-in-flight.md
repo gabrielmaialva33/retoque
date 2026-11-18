@@ -44,7 +44,14 @@ Mapped from the source on 2026-10-19 (file:line references are in the review not
 - **`Ready(g_usage)` gates exactly one decision:** whether a new recording may start. Retirement uses
   per-object snapshots; creation spacing uses `Completed`.
 - **The single path has no completion evidence at all.** It frees after 32 evaluations, and its rings
-  assume the GPU is less than about ten frames behind.
+  assume the GPU is less than about ten frames behind. (Amended 2026-11-17, unvalidated on GPU:
+  `DlssNr_UntrackedRetire.h` keeps the 32-evaluation countdown on the untracked D3D12 path and adds a
+  per-device `ID3D12Fence` signaled on the swapchain's present queue after each successful `Present`,
+  freeing only once `GetCompletedValue() >= parkedSerial + 1` as well; `UINT64_MAX` and device removal
+  retain, while a live device with no single present-queue fence falls back to the 32-evaluation count
+  and logs once at `INFO`. Descriptor/constant rings still have no fence of their own, and off-screen
+  recordings never presented, replayed lists or un-synchronized queues remain outside a present-fence
+  argument.)
 
 So the Reset requirement did not protect any state that the chain adds. Its one benefit was replay
 protection, and the cost was the throughput loss and the permanent stall shown above.

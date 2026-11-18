@@ -15,7 +15,9 @@
 #include "DlssNr_UiMask_Dx12.h"
 #include "DlssNr_Cadence_Dx12.h"
 #include "DlssNr_MotionProbe_Dx12.h"
+#include <dlssnr/DlssNr_UntrackedRetire.h>
 #include <algorithm>
+#include <optional>
 
 namespace DlssNr::Dx12Internal
 {
@@ -243,6 +245,8 @@ void ParkNrFeature(void*& feature)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.feature = feature;
     feature = nullptr;
     g_nrRetired.push_back(r);
@@ -257,6 +261,8 @@ void ParkNrResource(ID3D12Resource*& res)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.resource = res;
     res = nullptr;
     g_nrRetired.push_back(r);
@@ -274,6 +280,8 @@ void ParkNrScaler(OS_Dx12*& scaler)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.scaler = scaler;
     scaler = nullptr;
     g_nrRetired.push_back(r);
@@ -290,6 +298,8 @@ void ParkNrStabilizer(DlssNr_Stabilizer_Dx12*& stabilizer)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.stabilizer = stabilizer;
     stabilizer = nullptr;
     g_nrRetired.push_back(r);
@@ -306,6 +316,8 @@ void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.uiMask = uiMask;
     uiMask = nullptr;
     g_nrRetired.push_back(r);
@@ -322,6 +334,8 @@ void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.cadence = cadence;
     cadence = nullptr;
     g_nrRetired.push_back(r);
@@ -337,6 +351,8 @@ void ParkNrEnlarger(NrEnlarger*& enlarger)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.enlarger = enlarger;
     enlarger = nullptr;
     g_nrRetired.push_back(r);
@@ -346,6 +362,7 @@ void ParkNrEnlarger(NrEnlarger*& enlarger)
 void TickNrRetired(bool shutdown)
 {
     std::vector<NrEnlarger*> enlargers;
+    std::optional<DlssNr::UntrackedRetire::Query> untrackedQuery;
 
     for (size_t i = 0; i < g_nrRetired.size();)
     {
@@ -373,8 +390,32 @@ void TickNrRetired(bool shutdown)
             }
             retired.stuck = stuck;
         }
-        else
+        else if (shutdown)
+        {
             keep = --retired.framesLeft > 0;
+        }
+        else
+        {
+            retired.framesLeft = DlssNr::UntrackedRetire::StepCountdown(retired.framesLeft);
+            if (retired.framesLeft > 0)
+            {
+                keep = true;
+            }
+            else
+            {
+                if (!untrackedQuery.has_value())
+                {
+                    DlssNr::UntrackedRetire::Query q {};
+                    uint8_t reason = 0;
+                    QueryUntrackedPresentFence(&q.hasFence, &q.deviceRemoved, &reason, &q.completedValue);
+                    q.unavailable = static_cast<DlssNr::UntrackedRetire::UnavailableReason>(reason);
+                    if (!q.hasFence && !q.deviceRemoved)
+                        LogUntrackedPresentFenceUnavailableOnce(reason);
+                    untrackedQuery = q;
+                }
+                keep = !DlssNr::UntrackedRetire::CanFree(retired.framesLeft, retired.presentSerial, *untrackedQuery);
+            }
+        }
         if (keep)
         {
             ++i;
@@ -450,6 +491,8 @@ void ParkNrDetailStats(DlssNr_DetailStats_Dx12*& detailStats)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.detailStats = detailStats;
     detailStats = nullptr;
     g_nrRetired.push_back(r);
@@ -465,6 +508,8 @@ void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.pulse = pulse;
     pulse = nullptr;
     g_nrRetired.push_back(r);
@@ -480,6 +525,8 @@ void ParkNrMotionProbe(DlssNr_MotionProbe_Dx12*& probe)
     r.tracked = g_tracked;
     if (g_tracked)
         r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.motionProbe = probe;
     probe = nullptr;
     g_nrRetired.push_back(r);
@@ -650,6 +697,8 @@ void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, b
     r.tracked = tracked;
     if (tracked)
         r.usage = usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
     r.resource = res;
     r.cloneBytes = bytes;
     res = nullptr;

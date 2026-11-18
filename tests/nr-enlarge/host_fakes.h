@@ -7,6 +7,7 @@
 
 #include <dlssnr/DlssNr_Chain.h>
 #include <dlssnr/DlssNr_Enlarge.h>
+#include <dlssnr/DlssNr_UntrackedRetire.h>
 #include <shaders/dlssnr/DlssNr_Common.h>
 
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include <cmath>
 #include <format>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 #include <dlssnr/DlssNr_ReplayClock.h> // the real facade: inactive, it is the steady clock
@@ -145,6 +147,17 @@ constexpr uint64_t AgeOutTicks = 128;
 
 bool g_tracked = false;
 DlssNr::Submission::Usage g_usage;
+
+inline uint64_t SnapshotUntrackedPresentSerial() { return 1; }
+inline void QueryUntrackedPresentFence(bool* hasFence, bool* deviceRemoved, uint8_t* unavailableReason,
+                                       uint64_t* completedValue)
+{
+    *hasFence = false;
+    *deviceRemoved = false;
+    *unavailableReason = static_cast<uint8_t>(DlssNr::UntrackedRetire::UnavailableReason::NoSwapchainPresent);
+    *completedValue = 0;
+}
+inline void LogUntrackedPresentFenceUnavailableOnce(uint8_t) {}
 
 struct OS_Dx12
 {

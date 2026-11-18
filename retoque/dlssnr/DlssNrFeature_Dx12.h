@@ -571,6 +571,19 @@ PairCaptureStatus GetPairCaptureStatus();
 // before the forward is ordered ahead of DLSS-G's read. While that entry is live the two below it stand down.
 void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool fgHook, bool boundary = false);
 
+enum class PresentSignalSource : uint8_t
+{
+    WrappedSwapchain,
+    FgSwapchain,
+    Boundary,
+    Dx11Bridge,
+};
+
+// Post-Present notification on the swapchain's D3D12 present queue, used to advance the untracked retirement
+// fence once [DlssNr] Enabled is on. Inert when NR is disabled or shutting down.
+void NoteSwapchainPresented(ID3D12CommandQueue* queue,
+                            PresentSignalSource source = PresentSignalSource::WrappedSwapchain);
+
 // The source the pass is running from, for the overlay: the upscaler's output or the swapchain, and on a present
 // route the guides its presents ran on over the last second. Empty while nothing has run yet.
 const char* HookStatus();

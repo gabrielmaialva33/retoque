@@ -625,6 +625,9 @@ static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     // DXGI_STATUS_OCCLUDED etc. are not errors
     if (SUCCEEDED(presentResult))
     {
+        if (willPresent && !isD3D11 && cq != nullptr)
+            DlssNr::NoteSwapchainPresented(cq, DlssNr::PresentSignalSource::WrappedSwapchain);
+
         LOG_DEBUG("Original present result: {:X}", (UINT) presentResult);
     }
     else
