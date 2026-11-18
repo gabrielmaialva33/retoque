@@ -11,6 +11,7 @@ use retoque_core::{
     Error, Foreign, InstallOptions, Refusal, Step, apply, plan_install, plan_settings, plan_uninstall, status,
 };
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn usage() {
     println!(
@@ -87,6 +88,8 @@ fn describe(step: &Step, uninstall: bool) -> String {
         Step::Keep { path, why } => format!("{path}: {why}"),
     }
 }
+// Which command a refusal came from; main() prints refusals after run() returns.
+static COMPONENT_COMMAND: AtomicBool = AtomicBool::new(false);
 fn refusal(r: &Refusal) -> String {
     match r {
         Refusal::Usage(s) | Refusal::Receipt(s) => s.clone(),
@@ -101,6 +104,12 @@ fn refusal(r: &Refusal) -> String {
                 })
                 .collect::<Vec<_>>()
                 .join("\n")
+        ),
+        // `component` takes neither flag: an sm86 runtime file it did not install is never overwritten.
+        Refusal::Foreign { path, .. } if COMPONENT_COMMAND.load(Ordering::Relaxed) => format!(
+            "{path} is not ours. Retoque replaces sm86 runtime files only when it installed them. For an sm86 \
+             copied by hand, move the dlssg_sm86 folder out of the game folder and run this again: version.dll and \
+             dlssg_sm86.ini are then backed up before they are replaced, and uninstall restores them."
         ),
         Refusal::Foreign { path, what } => match what {
             Foreign::ReShade => format!("{path} is ReShade. Pass --keep-reshade or --replace-foreign."),
@@ -182,6 +191,7 @@ fn run() -> Result<(), Error> {
     if command == "reshade" || command == "addon" {
         return reshade::run(&command, args).map_err(reshade::localized);
     }
+    COMPONENT_COMMAND.store(command == "component", Ordering::Relaxed);
     let component_action = if command == "component" {
         let action = args
             .next()
