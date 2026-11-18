@@ -199,7 +199,9 @@ struct State
     FakeFG* currentFG = nullptr;
     FakeFG* currentVkFG = nullptr;
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
-    int dlssgDetectedInterpolationCount = 0;
+    int _dlssgDetectedCount = 0;
+    int DlssgDetectedInterpolationCount() const { return _dlssgDetectedCount; }
+    void SetDlssgDetectedInterpolationCount(int count) { _dlssgDetectedCount = count; }
     std::atomic<bool> dlssgGameRequestsFg { false };
     bool fsrfgInputActive = false, dlssgInputGameEnabled = false;
     FGInput activeFgInput = FGInput::NoFG;
@@ -379,7 +381,7 @@ int main(int argc, char** argv)
         else if (test == "fg-mode")
             state.dlssgLastSetMode = sl::DLSSGMode::eOn;
         else if (test == "fg-count")
-            state.dlssgDetectedInterpolationCount = 1;
+            state.SetDlssgDetectedInterpolationCount(1);
         else if (test == "fg-request")
             state.dlssgGameRequestsFg = true;
         else if (test == "fg-fsr")
@@ -441,11 +443,11 @@ int main(int argc, char** argv)
     }
     else if (test == "fg-gap")
     {
-        State::Instance().dlssgDetectedInterpolationCount = 1;
+        State::Instance().SetDlssgDetectedInterpolationCount(1);
         Evaluate(key1, main);
         assert(T::runs == 1);
         AssertReason("Dx11SceneStage: FrameGenerationUnsupported");
-        State::Instance().dlssgDetectedInterpolationCount = 0;
+        State::Instance().SetDlssgDetectedInterpolationCount(0);
         Evaluate(key1, main);
         assert(T::runs == 2 && frames.back().Reset && frames.back().PictureEpoch == epoch);
     }

@@ -267,7 +267,7 @@ FgFacts FgFactsFor(VkQueue queue, VkSwapchainKHR swapchain)
     auto& state = State::Instance();
     FgFacts facts;
     facts.gameDlssgSet = state.dlssgLastSetMode != sl::DLSSGMode::eOff;
-    facts.gameDlssgCount = state.dlssgDetectedInterpolationCount;
+    facts.gameDlssgCount = state.DlssgDetectedInterpolationCount();
     if (auto* fg = state.currentFG; fg != nullptr && fg->IsActive() && !fg->IsPaused())
         facts.ownD3d12Fg = true;
     if (auto* vk = state.currentVkFG; vk != nullptr)

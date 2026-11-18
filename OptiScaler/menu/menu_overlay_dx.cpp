@@ -110,6 +110,9 @@ static bool SubmitMenuDraw(ID3D12CommandQueue* queue, UINT slot, ID3D12CommandLi
         LOG_ERROR("Menu fence Signal failed: {:X}; retaining submitted resources", (unsigned long) result);
     return SUCCEEDED(result);
 }
+// Allocators are used in draw order, not per back buffer. Keyed to the back buffer index the CPU would wait for the
+// menu draw only BufferCount presents back, behind whatever else is queued on the present queue
+static UINT g_menuSlot = 0;
 
 // current command queue for dx12 swapchain
 static IUnknown* currentSCCommandQueue = nullptr;
@@ -252,6 +255,7 @@ static bool CleanupRenderTargetDx12(bool clearQueue)
         g_menuFenceValue = 0;
         g_menuFenceUnproven = false;
         std::fill(std::begin(g_allocatorFenceValues), std::end(g_allocatorFenceValues), 0);
+        g_menuSlot = 0;
 
         if (g_pd3dCommandQueue != nullptr)
             g_pd3dCommandQueue = nullptr;
@@ -635,9 +639,9 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain)
                 ImGui::Render();
 
                 const bool blurMenu = blurReady && MenuCommon::BackgroundBlurUsed();
-                ID3D12CommandAllocator* commandAllocator = g_commandAllocators[backBufferIdx];
+                ID3D12CommandAllocator* commandAllocator = g_commandAllocators[g_menuSlot];
 
-                if (!PrepareMenuAllocator(backBufferIdx))
+                if (!PrepareMenuAllocator(g_menuSlot))
                 {
                     MenuOverlayBase::HideMenu();
                     pSwapChain->Release();
@@ -666,7 +670,8 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain)
                     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
                     g_pd3dCommandList->ResourceBarrier(1, &barrier);
 
-                    g_menuBlur->Dispatch(g_pd3dCommandList, g_mainRenderTargetResource[backBufferIdx], backBufferIdx);
+                    // The blur's descriptor slot follows the allocator, it is fenced the same way
+                    g_menuBlur->Dispatch(g_pd3dCommandList, g_mainRenderTargetResource[backBufferIdx], g_menuSlot);
 
                     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
                     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -693,9 +698,12 @@ static void RenderImGui_DX12(IDXGISwapChain* pSwapChainPlain)
 
                 ID3D12CommandList* ppCommandLists[] = { g_pd3dCommandList };
                 // The ticket is recorded before submission, so a failed Signal cannot mark this allocator idle.
-                if (!SubmitMenuDraw(static_cast<ID3D12CommandQueue*>(currentSCCommandQueue), backBufferIdx,
+                if (!SubmitMenuDraw(static_cast<ID3D12CommandQueue*>(currentSCCommandQueue), g_menuSlot,
                                     ppCommandLists))
                     MenuOverlayBase::HideMenu();
+
+                // The submitted list still uses this allocator, never reset it on the next draw
+                g_menuSlot = (g_menuSlot + 1) % NUM_BACK_BUFFERS;
             }
         }
         else
@@ -768,8 +776,9 @@ void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
         if (!_dx12Device)
             LOG_DEBUG("D3D12CommandQueue captured");
 
-        if (!CheckForRealObject(__FUNCTION__, pDevice, &currentSCCommandQueue))
-            currentSCCommandQueue = pDevice;
+        // pDevice isn't always the queue interface (seen on Optimus), only the queried pointer is
+        if (!CheckForRealObject(__FUNCTION__, cq, &currentSCCommandQueue))
+            currentSCCommandQueue = cq;
 
         if (((ID3D12CommandQueue*) currentSCCommandQueue)->GetDevice(IID_PPV_ARGS(&device12)) == S_OK)
         {

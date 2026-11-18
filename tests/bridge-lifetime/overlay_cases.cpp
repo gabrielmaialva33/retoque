@@ -19,6 +19,7 @@ struct OverlayFixture
         g_menuFence = nullptr;
         g_menuSubmitQueue = nullptr;
         g_menuFenceValue = 0;
+        g_menuSlot = 0;
         g_menuFenceUnproven = false;
         std::fill(std::begin(g_allocatorFenceValues), std::end(g_allocatorFenceValues), 0);
         duringImGuiShutdown = nullptr;

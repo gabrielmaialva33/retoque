@@ -70,7 +70,7 @@ void PublishCadence(const DlssNr::Cadence::Decision& decision, const DlssNr::Cad
 
 // Whether any frame generation is turning this pass's frames into more than one present: OptiScaler's own
 // (FSR-FG, XeFG, reprojection, synthesized) running and not paused, the game's DLSS-G through NGX (the
-// multi-frame count its evaluate reports, cleared after six evaluates without one), or a DLSS-G mode set
+// multi-frame count its evaluate reports, which expires 500 ms after the last one), or a DLSS-G mode set
 // through Streamline. Model cadence stands down for all of them unless the user opts in: frame times then
 // alternate long and short, and DLSS-G was measured unable to pace through that.
 bool FrameGenerationActive()
@@ -78,7 +78,7 @@ bool FrameGenerationActive()
     auto& state = State::Instance();
     if (auto* fg = state.currentFG; fg != nullptr && fg->IsActive() && !fg->IsPaused())
         return true;
-    return state.dlssgDetectedInterpolationCount > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
+    return state.DlssgDetectedInterpolationCount() > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
 }
 
 // docs/dlssnr/design/pause-without-frame-gen.md. Whether to skip the pass because the game turned its own DLSS-G off.

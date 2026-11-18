@@ -57,7 +57,7 @@ bool FrameGenerationActive()
     // None of these extra FG queues participates in the three-queue alias proof. Treat selected
     // FG routes and paused-but-active providers conservatively too; their queues may still exist.
     return (state.currentFG && state.currentFG->IsActive()) || (state.currentVkFG && state.currentVkFG->IsActive()) ||
-           state.dlssgLastSetMode != sl::DLSSGMode::eOff || state.dlssgDetectedInterpolationCount > 0 ||
+           state.dlssgLastSetMode != sl::DLSSGMode::eOff || state.DlssgDetectedInterpolationCount() > 0 ||
            state.dlssgGameRequestsFg.load() || state.fsrfgInputActive || state.dlssgInputGameEnabled ||
            state.activeFgOutput != FGOutput::NoFG ||
            (state.activeFgInput != FGInput::NoFG && state.activeFgInput != FGInput::ForceXeLL);

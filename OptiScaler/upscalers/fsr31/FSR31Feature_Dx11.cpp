@@ -155,6 +155,8 @@ bool FSR31FeatureDx11::EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSD
     if (InParameters->Get(NVSDK_NGX_Parameter_Color, &paramColor) != NVSDK_NGX_Result_Success)
         InParameters->Get(NVSDK_NGX_Parameter_Color, (void**) &paramColor);
 
+    paramColor = SubrectInput(DeviceContext, paramColor, SubrectSlot::Color);
+
     if (paramColor)
     {
         LOG_DEBUG("Color exist..");
@@ -181,6 +183,8 @@ bool FSR31FeatureDx11::EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSD
     ID3D11Resource* paramVelocity = nullptr;
     if (InParameters->Get(NVSDK_NGX_Parameter_MotionVectors, &paramVelocity) != NVSDK_NGX_Result_Success)
         InParameters->Get(NVSDK_NGX_Parameter_MotionVectors, (void**) &paramVelocity);
+
+    paramVelocity = SubrectInput(DeviceContext, paramVelocity, SubrectSlot::MV);
 
     if (paramVelocity)
     {
@@ -212,6 +216,8 @@ bool FSR31FeatureDx11::EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSD
     ID3D11Resource* paramDepth = nullptr;
     if (InParameters->Get(NVSDK_NGX_Parameter_Depth, &paramDepth) != NVSDK_NGX_Result_Success)
         InParameters->Get(NVSDK_NGX_Parameter_Depth, (void**) &paramDepth);
+
+    paramDepth = SubrectInput(DeviceContext, paramDepth, SubrectSlot::Depth);
 
     if (paramDepth)
     {
@@ -255,6 +261,8 @@ bool FSR31FeatureDx11::EvaluateInternal(ID3D11DeviceContext* DeviceContext, NVSD
     if (InParameters->Get(NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask, &paramReactiveMask) !=
         NVSDK_NGX_Result_Success)
         InParameters->Get(NVSDK_NGX_Parameter_DLSS_Input_Bias_Current_Color_Mask, (void**) &paramReactiveMask);
+
+    paramReactiveMask = SubrectInput(DeviceContext, MaskInput(paramReactiveMask), SubrectSlot::Mask);
 
     if (!Config::Instance()->DisableReactiveMask.value_or(paramReactiveMask == nullptr))
     {
@@ -529,32 +537,6 @@ bool FSR31FeatureDx11::InitFSR3(const NVSDK_NGX_Parameter* InParameters)
                 TargetHeight() > DisplayHeight() ? TargetHeight() : DisplayHeight();
             _upscalerContextDesc.maxUpscaleSize.width = TargetWidth();
             _upscalerContextDesc.maxUpscaleSize.height = TargetHeight();
-        }
-
-        // Set stability values as default if not set by user
-        {
-            auto config = Config::Instance();
-            auto const scaleRatioX = (float) TargetWidth() / (float) RenderWidth();
-            auto const scaleRatioY = (float) TargetHeight() / (float) RenderHeight();
-            auto const scaleRatio = std::max(scaleRatioX, scaleRatioY);
-
-            if (scaleRatio > 0.0f && !std::isinf(scaleRatio))
-            {
-                if (config->FsrVelocity.value_for_config() == std::nullopt)
-                    config->FsrVelocity.set_volatile_value(0.5f);
-
-                if (config->FsrReactiveScale.value_for_config() == std::nullopt)
-                    config->FsrReactiveScale.set_volatile_value(0.25f);
-
-                if (config->FsrShadingScale.value_for_config() == std::nullopt)
-                    config->FsrShadingScale.set_volatile_value(0.5f / scaleRatio);
-
-                if (config->FsrAccAddPerFrame.value_for_config() == std::nullopt)
-                    config->FsrAccAddPerFrame.set_volatile_value(scaleRatio / 10.0f);
-
-                if (config->FsrMinDisOccAcc.value_for_config() == std::nullopt)
-                    config->FsrMinDisOccAcc.set_volatile_value(scaleRatio / 20.0f);
-            }
         }
 
         LOG_DEBUG("_createContext!");

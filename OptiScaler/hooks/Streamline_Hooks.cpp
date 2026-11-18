@@ -40,6 +40,7 @@ static std::mutex g_detoursTransactionMutex;
 #include <shaders/reproject/mouseInputs/InputCollection.h>
 
 #include <intrin.h>
+#include <psapi.h>
 #pragma intrinsic(_ReturnAddress)
 
 static std::wstring GetModulePath(HMODULE module)
@@ -50,6 +51,41 @@ static std::wstring GetModulePath(HMODULE module)
     wchar_t buffer[MAX_PATH * 2] {};
     const auto len = GetModuleFileNameW(module, buffer, static_cast<DWORD>(std::size(buffer)));
     return std::wstring(buffer, len);
+}
+
+// Threads holding the loader lock wait for the plugin mutexes (LoadLibraryCheckW of a nested load), so code holding
+// one must not take the loader lock. GetModuleFileNameW and GetProcAddress can (always under Wine), these two don't.
+
+// NT path of the file mapped at address, empty if nothing is mapped there
+static std::wstring GetMappedPath(const void* address)
+{
+    wchar_t buffer[MAX_PATH * 2] {};
+    const auto len = K32GetMappedFileNameW(GetCurrentProcess(), const_cast<void*>(address), buffer,
+                                           static_cast<DWORD>(std::size(buffer)));
+    return std::wstring(buffer, len);
+}
+
+// Reads the export table directly
+static void* FindExport(HMODULE module, const char* name)
+{
+    struct Context
+    {
+        const char* name;
+        void* code;
+    } context { name, nullptr };
+
+    DetourEnumerateExports(module, &context,
+                           [](PVOID ctx, ULONG, LPCSTR exportName, PVOID code) -> BOOL
+                           {
+                               auto c = static_cast<Context*>(ctx);
+                               if (exportName == nullptr || strcmp(exportName, c->name) != 0)
+                                   return TRUE;
+
+                               c->code = code;
+                               return FALSE;
+                           });
+
+    return context.code;
 }
 
 // Plugin may fail (denylist etc.) and leave pluginJSON empty
@@ -1073,10 +1109,10 @@ void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature, Syste
             return setArch(maxArch, altSystemCaps);
     }
 
-    // Only spoof DLSSD for a custom one, NVIDIA's needs turing and above
+    // Only spoof DLSSD for a custom one or a regular upscaler, NVIDIA's needs turing and above
     else if (feature == sl::kFeatureDLSS_RR)
     {
-        if (Nvngx_RR::Selected(API::DX12) == nullptr && Nvngx_RR::Selected(API::Vulkan) == nullptr)
+        if (!Nvngx_RR::OfferedAny())
             return;
 
         if (currentArch < NV_GPU_ARCHITECTURE_TU100)
@@ -1159,7 +1195,7 @@ bool StreamlineHooks::hkdlss_slOnPluginLoad(sl::param::IParameters* params, cons
     return result;
 }
 
-// Only hooked when ray reconstruction runs on a custom DLSSD
+// Only hooked when Opti reports ray reconstruction, for a custom DLSSD or a regular upscaler
 bool StreamlineHooks::hkdlssd_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
                                              const char** pluginJSON)
 {
@@ -1967,8 +2003,9 @@ void* StreamlineHooks::hkdlssd_slGetPluginFunction(PFN_slGetPluginFunction origi
 {
     LOG_DEBUG("{}", functionName);
 
-    if (strcmp(functionName, "slOnPluginLoad") == 0 &&
-        (Nvngx_RR::Selected(API::DX12) != nullptr || Nvngx_RR::Selected(API::Vulkan) != nullptr))
+    State::Instance().rrRequested = true;
+
+    if (strcmp(functionName, "slOnPluginLoad") == 0 && Nvngx_RR::OfferedAny())
     {
         o_dlssd_slOnPluginLoad = (PFN_slOnPluginLoad) original(functionName);
         return &hkdlssd_slOnPluginLoad;
@@ -1992,6 +2029,9 @@ void* StreamlineHooks::hkdlssg_slGetPluginFunction(PFN_slGetPluginFunction origi
     {
         o_slDLSSGSetOptions = (decltype(&slDLSSGSetOptions)) original(functionName);
 
+        // Keep the pair from the plugin in use, the fallback below can hold a superseded one (MSFS 2020)
+        o_slDLSSGGetState = (decltype(&slDLSSGGetState)) original("slDLSSGGetState");
+
         // Give steam overlay the original as it seems to be hooking it
         auto steamOverlay = KernelBaseProxy::GetModuleHandleA_()("gameoverlayrenderer64.dll");
         if (steamOverlay != nullptr)
@@ -2006,6 +2046,7 @@ void* StreamlineHooks::hkdlssg_slGetPluginFunction(PFN_slGetPluginFunction origi
     if (strcmp(functionName, "slDLSSGGetState") == 0)
     {
         o_slDLSSGGetState = (decltype(&slDLSSGGetState)) original(functionName);
+        o_slDLSSGSetOptions = (decltype(&slDLSSGSetOptions)) original("slDLSSGSetOptions");
 
         // Give steam overlay the original as it seems to be hooking it
         auto steamOverlay = KernelBaseProxy::GetModuleHandleA_()("gameoverlayrenderer64.dll");
@@ -2891,7 +2932,7 @@ bool StreamlineHooks::isSlotAlive(const PluginHookSlot& slot)
     if (slot.module == nullptr || slot.target == nullptr || slot.path.empty())
         return false;
 
-    const auto current = GetModulePath(slot.module);
+    const auto current = GetMappedPath(slot.module);
     if (current.empty() || _wcsicmp(current.c_str(), slot.path.c_str()) != 0)
         return false;
 
@@ -3038,8 +3079,7 @@ void StreamlineHooks::hookPlugin(SlPlugin plugin, HMODULE module)
         }
     }
 
-    auto target =
-        reinterpret_cast<PFN_slGetPluginFunction>(KernelBaseProxy::GetProcAddress_()(module, "slGetPluginFunction"));
+    auto target = reinterpret_cast<PFN_slGetPluginFunction>(FindExport(module, "slGetPluginFunction"));
 
     if (target == nullptr)
     {
@@ -3096,7 +3136,7 @@ void StreamlineHooks::hookPlugin(SlPlugin plugin, HMODULE module)
     slot.target = reinterpret_cast<void*>(target);
     slot.module = module;
     slot.imageSize = imageSize;
-    slot.path = GetModulePath(module);
+    slot.path = GetMappedPath(module);
     memcpy(slot.patchBytes, slot.target, kPatchBytes);
 
     activePluginModule(plugin) = module;

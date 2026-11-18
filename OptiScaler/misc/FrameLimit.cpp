@@ -86,8 +86,8 @@ void FrameLimit::sleep(bool fgActive)
             else
             {
                 int multiplier = 2;
-                if (State::Instance().dlssgDetectedInterpolationCount > 0)
-                    multiplier = State::Instance().dlssgDetectedInterpolationCount + 1;
+                if (State::Instance().DlssgDetectedInterpolationCount() > 0)
+                    multiplier = State::Instance().DlssgDetectedInterpolationCount() + 1;
                 else if (Config::Instance()->FGDLSSGOverrideInterpolationCount.has_value())
                     multiplier = Config::Instance()->FGDLSSGOverrideInterpolationCount.value() + 1;
                 else if (Config::Instance()->FGXeFGInterpolationCount.value_or_default() > 1)

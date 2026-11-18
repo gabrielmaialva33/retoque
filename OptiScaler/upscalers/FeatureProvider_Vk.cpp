@@ -26,7 +26,7 @@ bool FeatureProvider_Vk::GetFeature(Upscaler upscaler, UINT handleId, NVSDK_NGX_
     Config& cfg = *Config::Instance();
     auto primaryGpu = IdentifyGpu::getPrimaryGpu();
 
-    const auto custom = cfg.CustomUpscalerVk.value_or("");
+    const auto custom = CustomProviders::Selected(API::Vulkan, upscaler);
 
     switch (upscaler)
     {
@@ -47,17 +47,18 @@ bool FeatureProvider_Vk::GetFeature(Upscaler upscaler, UINT handleId, NVSDK_NGX_
         break;
 
     case Upscaler::FFX:
-        *feature = std::make_unique<FFXFeatureVk>(handleId, parameters, CustomProviders::IsFfxVk(custom) ? custom : "");
+        *feature = std::make_unique<FFXFeatureVk>(handleId, parameters, custom);
         break;
 
     case Upscaler::FFX_on12:
-        *feature = std::make_unique<FFXFeatureVkOn12>(handleId, parameters);
+        *feature = std::make_unique<FFXFeatureVkOn12>(handleId, parameters, custom);
         break;
 
     case Upscaler::DLSS:
-        if (primaryGpu.dlssCapable && state.NVNGX_DLSS_Path.has_value())
+        // A custom DLSS doesn't need a DLSS capable GPU
+        if (!custom.empty() || (primaryGpu.dlssCapable && state.NVNGX_DLSS_Path.has_value()))
         {
-            *feature = std::make_unique<DLSSFeatureVk>(handleId, parameters);
+            *feature = std::make_unique<DLSSFeatureVk>(handleId, parameters, custom);
             break;
         }
         else
@@ -119,10 +120,10 @@ bool FeatureProvider_Vk::GetFeature(Upscaler upscaler, UINT handleId, NVSDK_NGX_
         loaded = true; // Assuming the fallback always loads successfully
     }
 
-    // Ray reconstruction's DLSSD isn't one of the upscalers
+    // Ray reconstruction's DLSSD isn't one of the upscalers, nor is a regular one picked for it
     if (rayReconstruction)
     {
-        if (upscaler != Upscaler::DLSSD)
+        if (upscaler != Upscaler::DLSSD && !Nvngx_RR::Regular().has_value())
             Nvngx_RR::Fallback();
 
         return loaded;
@@ -146,8 +147,9 @@ bool FeatureProvider_Vk::ChangeFeature(Upscaler upscaler, VkInstance instance, V
     Upscaler rrBackend = Nvngx_RR::Backend(API::Vulkan);
     Upscaler& backend = rayReconstruction ? rrBackend : state.newBackend;
 
-    const bool dlssOnNonCapable =
-        !IdentifyGpu::getPrimaryGpu().dlssCapable && (backend == Upscaler::DLSS || backend == Upscaler::DLSS_on12);
+    const bool dlssOnNonCapable = !IdentifyGpu::getPrimaryGpu().dlssCapable &&
+                                  (backend == Upscaler::DLSS || backend == Upscaler::DLSS_on12) &&
+                                  CustomProviders::Selected(API::Vulkan, backend).empty();
     if (backend == Upscaler::Reset || dlssOnNonCapable)
         backend = cfg.VulkanUpscaler.value_or_default();
 

@@ -307,7 +307,8 @@ void FSRFG_Dx12::ConfigureFramePaceTuning()
 feature_version FSRFG_Dx12::Version()
 {
 
-    if (_fgContext == nullptr && _version.major == 0)
+    // A custom FG's version is known once its context is made
+    if (_fgContext == nullptr && _version.major == 0 && _custom == nullptr)
     {
         if (!FfxApiProxy::IsFGReady())
             FfxApiProxy::InitFfxDx12();
@@ -1177,9 +1178,13 @@ bool FSRFG_Dx12::CreateSwapchainInternal(IDXGIFactory* factory, ID3D12CommandQue
 
     createSwapChainDesc.header.pNext = &versionDesc.header;
 
-    // LSFG study (retoque/lsfg/presenter): at x3 and x4 our frame-generation swapchain replaces FFX's
+    // LSFG study (retoque/lsfg/presenter): at x3 and x4 our frame-generation swapchain replaces FFX's.
+    // Otherwise a custom FG makes its own swapchain
     auto result = Lsfg::Presenter::Wanted()
                       ? Lsfg::Presenter::CreateSwapChain(realFactory, realQueue, desc, swapChain, &_swapChainContext)
+                  : _custom != nullptr
+                      ? FfxApiProxy::D3D12_CreateContext(&_custom->module, &_swapChainContext,
+                                                         &createSwapChainDesc.header, nullptr)
                       : FfxApiProxy::D3D12_CreateContext(&_swapChainContext, &createSwapChainDesc.header, nullptr);
 
     if (result == FFX_API_RETURN_OK)
@@ -1224,10 +1229,14 @@ bool FSRFG_Dx12::CreateSwapchain1Internal(IDXGIFactory* factory, ID3D12CommandQu
 
     createSwapChainDesc.header.pNext = &versionDesc.header;
 
-    // LSFG study (retoque/lsfg/presenter): at x3 and x4 our frame-generation swapchain replaces FFX's
+    // LSFG study (retoque/lsfg/presenter): at x3 and x4 our frame-generation swapchain replaces FFX's.
+    // Otherwise a custom FG makes its own swapchain
     auto result = Lsfg::Presenter::Wanted()
                       ? Lsfg::Presenter::CreateSwapChain1(realFactory, realQueue, hwnd, desc, pFullscreenDesc,
                                                           swapChain, &_swapChainContext)
+                  : _custom != nullptr
+                      ? FfxApiProxy::D3D12_CreateContext(&_custom->module, &_swapChainContext,
+                                                         &createSwapChainDesc.header, nullptr)
                       : FfxApiProxy::D3D12_CreateContext(&_swapChainContext, &createSwapChainDesc.header, nullptr);
 
     if (result == FFX_API_RETURN_OK)
@@ -1332,7 +1341,8 @@ void FSRFG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
         return;
     }
 
-    FfxApiProxy::D3D12_QueryFgVersions(device, State::Instance().ffxFGVersionIds, State::Instance().ffxFGVersionNames);
+    FfxApiProxy::D3D12_QueryFgVersions(device, State::Instance().ffxFGVersionIds, State::Instance().ffxFGVersionNames,
+                                       _custom != nullptr ? &_custom->module : nullptr);
 
     if (State::Instance().ffxFGVersionIds.empty())
     {
@@ -1450,7 +1460,10 @@ void FSRFG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
 
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
         ScopedSkipHeapCapture skipHeapCapture {};
-        ffxReturnCode_t retCode = FfxApiProxy::D3D12_CreateContext(&_fgContext, &createFg.header, nullptr);
+        ffxReturnCode_t retCode =
+            _custom != nullptr
+                ? FfxApiProxy::D3D12_CreateContext(&_custom->module, &_fgContext, &createFg.header, nullptr)
+                : FfxApiProxy::D3D12_CreateContext(&_fgContext, &createFg.header, nullptr);
 
         LOG_INFO("D3D12_CreateContext result: {:X}", retCode);
         _isActive = (retCode == FFX_API_RETURN_OK);
@@ -1544,11 +1557,11 @@ void FSRFG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
 
     _constants = fgConstants;
 
-    if (!FfxApiProxy::IsFGReady())
+    if (!FfxApiProxy::IsFsrFgReady())
         FfxApiProxy::InitFfxDx12();
 
     // If needed hooks are missing or XeFG proxy is not inited or FG swapchain is not created
-    if (!FfxApiProxy::IsFGReady() || State::Instance().currentFGSwapchain == nullptr)
+    if (!FfxApiProxy::IsFsrFgReady() || State::Instance().currentFGSwapchain == nullptr)
         return;
 
     if (State::Instance().isShuttingDown)

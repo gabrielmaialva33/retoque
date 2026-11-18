@@ -6,6 +6,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <vector>
 // The window takeover's registry, gate and sequence: production's own header (run.py adds retoque/ to the path).
@@ -32,6 +33,7 @@ inline bool GetClientRect(HWND, RECT* out)
 }
 using HANDLE = void*;
 using DXGI_FORMAT = int;
+using DXGI_COLOR_SPACE_TYPE = int;
 constexpr DXGI_FORMAT DXGI_FORMAT_UNKNOWN = 0;
 constexpr DXGI_FORMAT DXGI_FORMAT_R8G8B8A8_UNORM = 28;
 constexpr DXGI_FORMAT DXGI_FORMAT_R8G8B8A8_UNORM_SRGB = 29;
@@ -305,6 +307,14 @@ struct Swapchain : Ref
     HRESULT ResizeTarget(const DXGI_MODE_DESC*)
     {
         ++targetResizes;
+        return S_OK;
+    }
+    int colorSpaceSets = 0;
+    DXGI_COLOR_SPACE_TYPE lastColorSpace = 0;
+    HRESULT SetColorSpace1(DXGI_COLOR_SPACE_TYPE space)
+    {
+        ++colorSpaceSets;
+        lastColorSpace = space;
         return S_OK;
     }
     HRESULT GetBuffer(UINT, ID3D12Resource** out)
@@ -776,6 +786,8 @@ class Dx11wDx12SC
     void _RefreshCachedSwapchainDesc() { ++refreshes; }
     Swapchain *_real = nullptr, *_real1 = nullptr, *_real2 = nullptr, *_real3 = nullptr, *_real4 = nullptr;
     Swapchain* _fgSwapChain = nullptr;
+    std::optional<DXGI_COLOR_SPACE_TYPE> _gameColorSpace;
+    bool _fgColorSpaceDirty = false;
     ID3D12Device *_dx11Device = nullptr, *_dx12Device = nullptr;
     Ref* _dx11Device5 = nullptr;
     Dx11Context *_dx11Context = nullptr, *_dx11Context4 = nullptr;

@@ -21,10 +21,11 @@ methods = [function('NVSDK_NGX_Result Nvngx_FG::' + name + '(') for name in
            ('D3D12_CreateFeature', 'VULKAN_CreateFeature', 'VULKAN_CreateFeature1',
             'D3D12_ReleaseFeature', 'VULKAN_ReleaseFeature')]
 declarations = '\n'.join('    static ' + m[:m.index('{')].replace('Nvngx_FG::', '').strip() + ';' for m in methods)
+helpers = function('static bool IsProcessExiting()')
 a = header.index('    struct Nvngx_FG_Handle'); b = header.index('    static inline', a)
 handle = header[a:b].replace('std::shared_mutex', 'InspectMutex')
 harness = (here / 'nvngx_lifetime_cases.cpp').read_text().replace('// @handle@', handle).replace(
-    '// @declarations@', declarations).replace('// @implementations@', '\n'.join(methods))
+    '// @declarations@', declarations).replace('// @implementations@', helpers + '\n' + '\n'.join(methods))
 with tempfile.TemporaryDirectory(prefix='retoque-fg-handle-') as tmp:
     cpp, binary = Path(tmp) / 'case.cpp', Path(tmp) / 'case'
     cpp.write_text(harness)
