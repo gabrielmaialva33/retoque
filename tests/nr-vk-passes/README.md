@@ -64,3 +64,13 @@ The creation fixture also proves that A can be Ready on one queue while a later 
 primary ONE_TIME_SUBMIT recording B is forwarded on another queue, without a completion marker
 for B. A's creation evidence therefore does not establish B's ordering or queue-family ownership.
 This is a boundary witness, not a failure of the creation observer or an executed GPU hazard.
+
+## Narrow queue admission prerequisite
+
+`queue_cases.cpp` exercises requested graphics/compute queue counting (transfer-only excluded),
+invalid/protected/multiple shapes, missing retrieval, exact recording-to-pool identity, unknown or
+mismatched pool families, retirement/reuse and 128-slot saturation. The production pool-create and
+forget callbacks are executed by the submit fixture. Passes=1 forwards the original pool call once
+and takes no additional observer mutex or heap allocation; the public admission preflight is also
+checked with heap allocation forbidden. An unsupported chain retains the one/master route. This
+does not test an operational multipass generation or its transition back to the legacy state.

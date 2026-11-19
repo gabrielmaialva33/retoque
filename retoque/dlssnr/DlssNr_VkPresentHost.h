@@ -49,6 +49,7 @@ void Install(HMODULE vulkan1);
 
 // No allocation or lock. False after partial/missing installation or device retirement.
 bool ChainCoverageReady(VkDevice device);
+bool ChainRecordingAllowed(VkDevice device, const VkRecording::Ticket& ticket);
 uint64_t WatchCreation(VkDevice device, const VkRecording::Ticket& ticket, uint64_t present);
 bool CreationReady(VkDevice device, uint64_t serial, uint64_t present);
 void CancelCreation(VkDevice device, uint64_t serial);

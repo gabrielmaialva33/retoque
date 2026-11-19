@@ -111,9 +111,11 @@ void Extra1() {}
 void Extra2() {}
 void Extra3() {}
 void Extra4() {}
-constexpr std::array<const char*, 6> extraNames { "vkDestroyDevice", "vkGetDeviceQueue", "vkGetDeviceQueue2",
-                                                  "vkQueueSubmit",   "vkQueueSubmit2",   "vkQueueSubmit2KHR" };
-const std::array<PFN_vkVoidFunction, 6> extraAddresses { Extra0, Extra1, Extra2, Extra3, Extra4, Extra4 };
+void Extra5() {}
+constexpr std::array<const char*, 7> extraNames { "vkDestroyDevice",    "vkGetDeviceQueue", "vkGetDeviceQueue2",
+                                                  "vkQueueSubmit",      "vkQueueSubmit2",   "vkQueueSubmit2KHR",
+                                                  "vkCreateCommandPool" };
+const std::array<PFN_vkVoidFunction, 7> extraAddresses { Extra0, Extra1, Extra2, Extra3, Extra4, Extra4, Extra5 };
 bool InOwnModule(const void* address) { return address == reinterpret_cast<const void*>(&OwnBegin); }
 PFN_vkVoidFunction Lookup(const char* name, int kind)
 {
@@ -433,7 +435,9 @@ void CoverageCertificates()
 {
     coverQueues = true;
     const auto legacy = HookDevice(device);
-    Check(legacy.Complete() && !g_chainCoverage.Contains(1), "one pass must not publish any new device certificate");
+    Check(!legacy.Complete() && !(legacy.installed & DlssNr::VkChain::HookCoverage::CreatePool) &&
+              !g_chainCoverage.Contains(1),
+          "one pass must neither install the chain pool hook nor publish a new certificate");
     Config::Instance()->DlssNrPasses.value = 2;
     const auto complete = HookDevice(device);
     Check(complete.Complete() && g_chainCoverage.Ready(1), "complete required hooks must certify this device");

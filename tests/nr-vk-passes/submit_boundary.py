@@ -15,12 +15,16 @@ source = (ROOT / 'retoque/dlssnr/DlssNr_VkPresentHost.cpp').read_text()
 production = 'thread_local unsigned g_creationSubmitDepth = 0;\nthread_local VkQueue g_creationSubmitQueue = VK_NULL_HANDLE;\n' + '\n\n'.join(function(source, signature) for signature in (
     'CreationObserver* CreationObserverFor(',
     'void RegisterCreationObserver(',
+    'template <size_t S>\nVkResult VKAPI_CALL hkChainCreateCommandPool(',
+    'void ForgetChainPool(',
     'template <typename Pfn, typename... Args>\nVkResult LockedQueueCall(',
     'template <typename Pfn, typename Info>\nVkResult ObservedQueueSubmit(',
     'template <size_t S>\nVkResult VKAPI_CALL hkQueueSubmit(',
     'template <size_t S>\nVkResult VKAPI_CALL hkQueueSubmit2(',
 ))
 for signature, qualified, local in (
+    ('bool DlssNr::VkPresentHost::ChainRecordingAllowed(',
+     'DlssNr::VkPresentHost::ChainRecordingAllowed', 'ChainRecordingAllowed'),
     ('DlssNr::VkChain::BudgetDecision\nDlssNr::VkPresentHost::AdmitChainBudget(',
      'DlssNr::VkPresentHost::AdmitChainBudget', 'AdmitChainBudget'),
     ('DlssNr::VkChain::BudgetSample DlssNr::VkPresentHost::SampleChainBudget(',

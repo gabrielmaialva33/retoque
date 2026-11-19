@@ -53,6 +53,8 @@ assert after.count('g_fwd.create(') == 1
 assert after.count('g_fwd.evaluate(') == 1
 assert 'cfg.DlssNrIntensity.value_or_default()' in after
 assert 'DlssNr_VkChain.h' not in source
+assert 'VkPresentHost::ChainRecordingAllowed(device, *recording)' in after
+assert '&& !VkPresentHost::ChainCoverageReady(device)' not in after
 menu = (ROOT / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
 controls = menu[menu.index('static void RenderPassControls('):menu.index('static void RenderCadenceControls(')]
 assert 'if (vulkan || config->DlssNrUseProxy.value_or_default())' in controls

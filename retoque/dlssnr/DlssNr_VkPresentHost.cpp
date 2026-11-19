@@ -81,6 +81,7 @@ Registry g_registry;
 DlssNr::VkChain::CoverageRegistry g_chainCoverage;
 using CreationObserver = DlssNr::VkChain::CreationObserver<>;
 std::array<CreationObserver, 16> g_creationObservers;
+std::array<std::atomic<VkDevice>, 16> g_chainRefusalDevices {};
 CreationObserver* CreationObserverFor(VkDevice device)
 {
     if (device)
@@ -141,6 +142,7 @@ Targets<PFN_vkResetCommandBuffer> g_recordingReset;
 Targets<PFN_vkFreeCommandBuffers> g_recordingFree;
 Targets<PFN_vkResetCommandPool> g_recordingResetPool;
 Targets<PFN_vkDestroyCommandPool> g_recordingDestroyPool;
+Targets<PFN_vkCreateCommandPool> g_chainCreatePool;
 
 template <typename T> Handle H(T handle) { return static_cast<Handle>(reinterpret_cast<uintptr_t>(handle)); }
 template <typename T> T As(Handle handle) { return reinterpret_cast<T>(static_cast<uintptr_t>(handle)); }
@@ -379,6 +381,8 @@ void AddQueueLock(VkDevice device, VkQueue queue, uint32_t family, uint32_t inde
         entry.locks->index = index;
     }
     entry.creation = unprotected ? CreationObserverFor(device) : nullptr;
+    if (entry.creation)
+        entry.creation->Order().Queue(queue, family, index);
 }
 
 void EraseQueueLocks(VkDevice device)
@@ -3446,6 +3450,28 @@ template <size_t S> VkResult VKAPI_CALL hkQueueWaitIdle(VkQueue queue)
     return LockedQueueCall("vkQueueWaitIdle", g_waitIdle.next[S], queue);
 }
 
+template <size_t S>
+VkResult VKAPI_CALL hkChainCreateCommandPool(VkDevice device, const VkCommandPoolCreateInfo* info,
+                                             const VkAllocationCallbacks* allocator, VkCommandPool* pool)
+{
+    const auto result = g_chainCreatePool.next[S](device, info, allocator, pool);
+    if (result == VK_SUCCESS && info && pool)
+        if (auto* observer = CreationObserverFor(device))
+        {
+            if (Config::Instance()->DlssNrEnabled.value_or_default() &&
+                Config::Instance()->DlssNrPasses.value_or_default() > 1)
+                observer->Order().Remember(*pool, info->queueFamilyIndex);
+            else
+                observer->Order().Forget(*pool); // off: no lock, allocation or driver call
+        }
+    return result;
+}
+void ForgetChainPool(VkDevice device, VkCommandPool pool)
+{
+    if (auto* observer = CreationObserverFor(device))
+        observer->Order().Forget(pool);
+}
+
 // Forward first: failed lifecycle operations leave the prior recording and all its pins intact. These
 // observers perform no function lookup, queue synchronization or w/Dx12 virtual-command-buffer handling.
 template <size_t S>
@@ -3525,6 +3551,7 @@ void VKAPI_CALL hkRecordingDestroyCommandPool(VkDevice device, VkCommandPool poo
 {
     g_recordingDestroyPool.next[S](device, pool, allocator);
     DlssNr::VkRecording::Recordings().DestroyPool(H(device), H(pool));
+    ForgetChainPool(device, pool);
 }
 
 static_assert(kTargets == 4, "the slot tables below list four instantiations");
@@ -3552,6 +3579,8 @@ const std::array<void*, kTargets> kRecordingResetHooks = DLSSNR_VK_SLOTS(hkRecor
 const std::array<void*, kTargets> kRecordingFreeHooks = DLSSNR_VK_SLOTS(hkRecordingFreeCommandBuffers);
 const std::array<void*, kTargets> kRecordingResetPoolHooks = DLSSNR_VK_SLOTS(hkRecordingResetCommandPool);
 const std::array<void*, kTargets> kRecordingDestroyPoolHooks = DLSSNR_VK_SLOTS(hkRecordingDestroyCommandPool);
+
+const std::array<void*, kTargets> kChainCreatePoolHooks = DLSSNR_VK_SLOTS(hkChainCreateCommandPool);
 
 #undef DLSSNR_VK_SLOTS
 
@@ -3630,6 +3659,7 @@ DlssNr::VkChain::HookCoverage HookDevice(VkDevice device)
     const auto chainDestroy = chainRequested ? QueueCall(device, "vkDestroyDevice") : QueueCallTargets {};
     const auto chainQueue = chainRequested ? QueueCall(device, "vkGetDeviceQueue") : QueueCallTargets {};
     const auto chainQueue2 = chainRequested ? QueueCall(device, "vkGetDeviceQueue2") : QueueCallTargets {};
+    const auto chainCreatePool = chainRequested ? QueueCall(device, "vkCreateCommandPool") : QueueCallTargets {};
     using DlssNr::VkChain::HookCoverage;
     HookCoverage coverage;
     std::lock_guard lock(g_installMutex);
@@ -3670,6 +3700,8 @@ DlssNr::VkChain::HookCoverage HookDevice(VkDevice device)
     // No new record, lookup, mutex or log when no chain was requested at device creation.
     if (chainRequested)
     {
+        if (AttachQueueCall(chainCreatePool, g_chainCreatePool, kChainCreatePoolHooks, "vkCreateCommandPool"))
+            coverage.installed |= HookCoverage::CreatePool;
         if (!AttachQueueCall(chainDestroy, g_destroyDevice, kDestroyDeviceHooks, "vkDestroyDevice"))
             coverage.installed &= ~HookCoverage::Destroy;
         if (!AttachQueueCall(chainQueue, g_getQueue, kGetQueueHooks, "vkGetDeviceQueue"))
@@ -4051,6 +4083,18 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
     desc.physical = H(physical);
     desc.internal = internal;
     desc.families = QueueFamilies(physical);
+    DlssNr::VkChain::QueueTopology chainQueues;
+    const bool chainRequested = !internal && Config::Instance()->DlssNrEnabled.value_or_default() &&
+                                Config::Instance()->DlssNrPasses.value_or_default() > 1;
+    if (chainRequested)
+        chainQueues = DlssNr::VkChain::DescribeQueues(info,
+                                                      [&](uint32_t family)
+                                                      {
+                                                          return family < desc.families.size()
+                                                                     ? std::pair { desc.families[family].flags,
+                                                                                   desc.families[family].count }
+                                                                     : std::pair<uint32_t, uint32_t> { 0, 0 };
+                                                      });
 
     if (info != nullptr && info->pQueueCreateInfos != nullptr)
     {
@@ -4122,6 +4166,10 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
         }
 
         RegisterCreationObserver(*device, info, below);
+        if (chainRequested)
+            LOG_INFO("DLSS-NR Vulkan chain queues: device {} eligible {} family {} shape {}", H(*device),
+                     chainQueues.eligible, chainQueues.family,
+                     chainQueues.valid ? "single compute-capable queue" : "refused");
         if (auto* observer = CreationObserverFor(*device))
         {
             PFN_vkGetPhysicalDeviceMemoryProperties2 query = nullptr;
@@ -4135,6 +4183,7 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
                                                          : "vkGetPhysicalDeviceMemoryProperties2KHR"));
             }
             observer->ConfigureBudget(physical, chainBudgetEnabled, query);
+            observer->Order().Configure(chainQueues);
         }
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(*device); dev != nullptr && below != nullptr)
@@ -4347,6 +4396,9 @@ void DlssNr::VkPresentHost::Install(HMODULE vulkan1)
 
 std::optional<bool> DlssNr::VkPresentHost::PrepareForDeviceDestroy(VkDevice device)
 {
+    for (auto& said : g_chainRefusalDevices)
+        if (said.load() == device)
+            said.store(VK_NULL_HANDLE);
     g_chainCoverage.Forget(H(device));
     const auto drained = PrepareDeviceDestroy(device);
     if (auto* observer = CreationObserverFor(device))
@@ -4412,4 +4464,42 @@ DlssNr::VkChain::BudgetSample DlssNr::VkPresentHost::SampleChainBudget(VkDevice 
         return {};
     const auto* observer = CreationObserverFor(device);
     return observer ? observer->Budget().Read() : VkChain::BudgetSample {};
+}
+
+bool DlssNr::VkPresentHost::ChainRecordingAllowed(VkDevice device, const VkRecording::Ticket& ticket)
+{
+    if (!Config::Instance()->DlssNrEnabled.value_or_default() ||
+        Config::Instance()->DlssNrPasses.value_or_default() <= 1)
+        return false;
+    auto* observer = CreationObserverFor(device);
+    if (!observer || !g_chainCoverage.Ready(H(device)))
+    {
+        for (auto& slot : g_chainRefusalDevices)
+        {
+            auto previous = slot.load();
+            if (previous == device)
+                return false;
+            if (!previous && slot.compare_exchange_strong(previous, device))
+            {
+                LOG_INFO("DLSS-NR Vulkan chain refused on device {}: device hooks/queue creation not certified; "
+                         "one/master retained",
+                         H(device));
+                return false;
+            }
+        }
+        static std::atomic<bool> overflow { false };
+        if (!overflow.exchange(true))
+            LOG_INFO("DLSS-NR Vulkan chain refused: uncertified-device report capacity exhausted; one/master retained");
+        return false;
+    }
+    bool accepted = false;
+    if (observer->Order().Reason() == VkChain::QueueRefusal::None)
+    {
+        const auto pool = ticket.device == H(device) ? VkRecording::Recordings().PoolOf(ticket) : std::nullopt;
+        accepted = observer->Order().Accept(pool ? As<VkCommandPool>(*pool) : VK_NULL_HANDLE);
+    }
+    if (observer->Order().Report())
+        LOG_INFO("DLSS-NR Vulkan chain refused on device {}: {}; one/master retained", H(device),
+                 VkChain::QueueText(observer->Order().Reason()));
+    return accepted;
 }

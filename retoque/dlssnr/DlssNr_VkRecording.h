@@ -309,6 +309,18 @@ class Registry
         return Ticket { device, buffer, it->second.epoch, it->second.reuse, it->second.level, it->second.oneTime };
     }
 
+    std::optional<Handle> PoolOf(const Ticket& ticket) const
+    {
+        std::lock_guard lock(_mutex);
+        if (_closing || !_records)
+            return std::nullopt;
+        const auto it = _records->find(ticket.buffer);
+        if (it == _records->end() || it->second.device != ticket.device || it->second.epoch != ticket.epoch ||
+            !it->second.recording)
+            return std::nullopt;
+        return it->second.pool;
+    }
+
     bool Pin(const Ticket& ticket, const std::vector<std::shared_ptr<void>>& pins)
     {
         std::unique_ptr<PinBatch> incoming;

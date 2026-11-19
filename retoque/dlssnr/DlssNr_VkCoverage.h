@@ -24,7 +24,8 @@ struct HookCoverage
         Free = 1u << 10,
         ResetPool = 1u << 11,
         DestroyPool = 1u << 12,
-        Required = (1u << 13) - 1,
+        CreatePool = 1u << 13,
+        Required = (1u << 14) - 1,
     };
     uint32_t installed = 0;
     bool Complete() const { return installed == Required; }

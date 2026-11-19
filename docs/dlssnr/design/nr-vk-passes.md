@@ -93,7 +93,7 @@ Step 1a now publishes a bounded, allocation-free per-device hook certificate. Ev
 lifecycle, queue retrieval and submit/submit2/KHR entrypoint must attach successfully; failures,
 missing pointers and target saturation deny chain admission. Repeating installation cannot upgrade
 a partial certificate on a live device. `Passes=1` does not publish or consult it; the submit
-wrappers preserve their inactive forwarding boundary. A request above one without coverage now stands down before NR recording.
+wrappers preserve their inactive forwarding boundary. The initial certificate-only revision stood down above one without coverage; the later step-3 admission now keeps the existing one/master route when chain admission refuses.
 Step 1b now retains allocation level in the recording ticket (including the independent observer,
 w/Dx12 and host-owned allocation paths). Creation evidence refuses secondary and unknown levels.
 Step 1c now provides `DlssNr_VkCreation.h`: ten recording slots and private fences per observed
@@ -174,7 +174,51 @@ fixture, and that unchanged refusals do not query/allocate each frame. Compare a
 with the intentional over-estimate; do not call the aggregate model statistic a per-pass delta.
 No GPU run was performed here.
 
-## Step-3 admission review: stopped before the runtime loop, 2026-11-19
+## Step 3 admission implemented; generation integration still pending, 2026-11-19
+
+The lead selected the narrow queue case. `DlssNr_VkQueueProof.h` counts the graphics/compute
+queues requested at device creation using the physical family's advertised flags/counts. Exactly
+one is required, with compute support and no protected queues. Transfer-only queues do not count
+as evaluation queues. Multiple evaluation queues, invalid/unobserved shape, missing queue retrieval,
+unknown pool family, a different pool family or observation saturation refuse the device permanently.
+The refusal logs once; refused requests retain the existing one/master renderer. Passes=1 never
+calls the admission preflight.
+
+The certificate now also requires export/device coverage of `vkCreateCommandPool`, installed only
+for a requested chain. Successful creation records pool family in 128 fixed slots per observer;
+forgotten/destroyed pools cannot authorize reuse. Default/off callbacks forward once with identical
+arguments and only forget stale metadata atomically, with no allocation or new mutex. The existing
+allocation registry supplies a pool only for the exact current ticket. The observed evaluation
+queue must match family/index zero after certified device creation. Devices predating the hooks
+have no certificate and retain one/master. The pre-stage and w/Dx12 private maps are not borrowed.
+
+This restriction may exclude engines using several graphics/compute queues. **The first line a
+DOOM Eternal run must inspect is `DLSS-NR Vulkan chain queues: ... eligible ... family ... shape ...`.**
+Record it with the DLL/model hashes; do not expect a chain on an ineligible shape. This worker did
+not run DOOM or inspect its queue count.
+
+The runtime calls this gate only as a preflight: eligibility does not advertise an available chain.
+The first remaining safety boundary is the resource generation and transition back to one/master.
+The existing route owns one `g_vk` state: feature, images, parameter block, descriptor passes,
+readbacks, history and recording generation. Merely inserting an array of features would let
+pending chain state survive into the legacy resize/hand-back/free paths, or require new work on
+the Passes=1 path. I have not established a complete independent owner and teardown proof for all
+of these objects; no multipass loop or menu control is enabled. The queue admission is a safe
+prerequisite, **not completion of step 3**.
+
+The next integration must keep pending chain features/resources separate from the legacy state,
+reserve the bounded generation before allocation, prove all actual texture reservations, and
+extend live release and lost/unproved abandon together. Its tests must cover switching to Passes=1
+while creation/evaluation is pending, then resize, stage change, present-owner hand-back and device
+loss: legacy forwarding/recording cannot wait, allocate or lock on behalf of the chain. An elapsed
+frame, a reset pin or an already-complete creation cannot authorize premature release.
+
+Multi-queue support is deferred. It needs command-pool family provenance, exact evaluation
+recording/submission identity, completion distinct from creation A, queue-family ownership transfers
+where required, and execution/memory dependencies or isolated resource generations across queues.
+The one-queue gate is not a fallback implementation of that handoff.
+
+## Historical step-3 queue admission review (queue shape resolved above), 2026-11-19
 
 The next unproved premise is `Prerequisites::orderedQueue`, before recording an evaluation.
 The after-upscale `VkRecording::Ticket` carries identity, level and reuse flags, but not its pool's
@@ -326,7 +370,7 @@ above substitutes for that missing fixture.
 
 For the current revision, DOOM Eternal is only a one/master regression run: native Vulkan
 DLSS, Stage 0, NR enabled at device creation, record DLL/model hashes, Proton/driver and exact
-INI. Passes 2/3/10 still have unavailable chain controls and cannot run a chain; uncertified devices refuse NR, while certified devices retain the one/master route;
+INI. Passes 2/3/10 still have unavailable chain controls and cannot run a chain; admitted and refused devices retain the one/master route;
 there are no creation-completion or chain-budget logs to assert. This worker ran no game.
 
 Only **after steps 1 through 4 and the missing fixture pass**, run the chain procedure in

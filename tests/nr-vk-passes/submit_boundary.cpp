@@ -42,6 +42,7 @@ struct ObserverMutex
 using CreationObserver = VkChain::CreationObserver<ObserverMutex>;
 CreationObserver* queueObserver = nullptr;
 std::array<CreationObserver, 16> g_creationObservers;
+std::array<std::atomic<VkDevice>, 16> g_chainRefusalDevices {};
 VkChain::CoverageRegistry g_chainCoverage;
 ObserverMutex g_installMutex;
 unsigned resolves = 0;
@@ -60,6 +61,7 @@ struct Config
     }
 };
 template <class T> uint64_t H(T value) { return (uint64_t) value; }
+template <class T> T As(uint64_t value) { return (T) value; }
 template <class T> T Handle(uint64_t value) { return (T) value; }
 struct QueueMutex
 {
@@ -125,6 +127,20 @@ template <class Pfn> struct Targets
 };
 Targets<PFN_vkQueueSubmit> g_submit { { Submit, Submit } };
 Targets<PFN_vkQueueSubmit2> g_submit2 { { Submit2, Submit2 } };
+
+unsigned poolCalls = 0;
+const VkCommandPoolCreateInfo* expectedPoolInfo = nullptr;
+VkCommandPool* expectedPoolOut = nullptr;
+VkResult VKAPI_CALL PoolCreate(VkDevice device, const VkCommandPoolCreateInfo* info, const VkAllocationCallbacks* alloc,
+                               VkCommandPool* pool)
+{
+    assert(device == Handle<VkDevice>(20) && info == expectedPoolInfo && pool == expectedPoolOut &&
+           info->queueFamilyIndex == 3 && !alloc);
+    ++poolCalls;
+    *pool = Handle<VkCommandPool>(200);
+    return VK_SUCCESS;
+}
+Targets<PFN_vkCreateCommandPool> g_chainCreatePool { { PoolCreate } };
 
 unsigned ownCreates = 0, ownSubmits = 0, ownPolls = 0, ownDestroys = 0;
 VkResult VKAPI_CALL OwnCreate(VkDevice, const VkFenceCreateInfo*, const VkAllocationCallbacks*, VkFence* fence)
@@ -206,6 +222,43 @@ int main()
     assert(resolves == 3 && CreationObserverFor(device));
     RegisterCreationObserver(device, &deviceInfo, OwnSubmit);
     assert(resolves == 3); // duplicate notification cannot allocate another observer slot
+    auto& order = CreationObserverFor(device)->Order();
+    order.Configure({ 1, 3, true });
+    order.Queue(Handle<VkQueue>(1), 3, 0);
+    VkCommandPoolCreateInfo poolInfo {};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.queueFamilyIndex = 3;
+    VkCommandPool pool;
+    expectedPoolInfo = &poolInfo;
+    expectedPoolOut = &pool;
+    Config::Instance()->DlssNrPasses.value = 1;
+    auto poolLocks = ObserverMutex::calls;
+    forbidHeap = true;
+    assert(hkChainCreateCommandPool<0>(device, &poolInfo, nullptr, &pool) == VK_SUCCESS);
+    assert(poolCalls == 1 && ObserverMutex::calls == poolLocks);
+    forbidHeap = false;
+    assert(!order.Accept(pool));
+    order.Configure({ 1, 3, true });
+    order.Queue(Handle<VkQueue>(1), 3, 0);
+    Config::Instance()->DlssNrPasses.value = 2;
+    assert(hkChainCreateCommandPool<0>(device, &poolInfo, nullptr, &pool) == VK_SUCCESS && poolCalls == 2);
+    assert(order.Accept(pool));
+    auto& poolRegistry = VkRecording::Recordings();
+    poolRegistry.Allocate(20, 200, { 50 }, VkRecording::Level::Primary);
+    poolRegistry.Begin(50, VkRecording::Reuse::Serial, true);
+    const auto poolTicket = *poolRegistry.Current(20, 50);
+    assert(ChainRecordingAllowed(device, poolTicket));
+    auto stalePoolTicket = poolTicket;
+    ++stalePoolTicket.epoch;
+    assert(!poolRegistry.PoolOf(stalePoolTicket));
+    poolRegistry.ForgetDevice(20);
+    poolLocks = ObserverMutex::calls;
+    Config::Instance()->DlssNrPasses.value = 1;
+    forbidHeap = true;
+    ForgetChainPool(device, pool);
+    assert(ObserverMutex::calls == poolLocks);
+    forbidHeap = false;
+    assert(!order.Accept(pool));
     VkChain::BudgetGate budgetGate;
     VkChain::BudgetKey budgetKey;
     budgetKey.count = 2;
@@ -213,6 +266,7 @@ int main()
     const auto beforeBudget = ObserverMutex::calls;
     forbidHeap = true;
     assert(AdmitChainBudget(device, budgetGate, budgetKey, 0, {}).legacy);
+    assert(!ChainRecordingAllowed(device, {}));
     assert(SampleChainBudget(device).reason == VkChain::BudgetReason::Query);
     assert(ObserverMutex::calls == beforeBudget && budgetLogs == 0);
     std::vector<std::string> extensionNames;

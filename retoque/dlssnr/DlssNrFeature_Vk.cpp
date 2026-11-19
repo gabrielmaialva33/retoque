@@ -1582,10 +1582,6 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         physicalDevice == VK_NULL_HANDLE)
         return;
 
-    // Chain admission is fail-closed. The one-pass body does not consult the new observer.
-    if (cfg.DlssNrPasses.value_or_default() > 1 && !VkPresentHost::ChainCoverageReady(device))
-        return;
-
     // Another of the game's DLSS pictures (DlssNr_PictureGate.h): left as it is before the recordings, the meter or the
     // model see it. Without this a preview's refused evaluate could reset the world's history on every frame.
     const auto pictureColour = [params]
@@ -1611,6 +1607,11 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         }
         return;
     }
+
+    // Admission preflight only until the independent chain generation is integrated. A refused
+    // device keeps the existing one/master route; Passes=1 never calls this observer.
+    if (cfg.DlssNrPasses.value_or_default() > 1)
+        VkPresentHost::ChainRecordingAllowed(device, *recording);
 
     if (g_vk.failed)
         return;

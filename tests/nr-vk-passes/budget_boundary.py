@@ -30,3 +30,11 @@ with tempfile.TemporaryDirectory(prefix='nr-vk-budget-boundary-') as temporary:
                     '-I', str(ROOT / 'external/vulkan/include'), str(HERE / 'budget_cases.cpp'),
                     '-o', str(policy)], check=True)
     subprocess.run([str(policy)], check=True, timeout=30)
+
+    queues = directory / 'queues'
+    subprocess.run(['g++', '-std=c++20', '-Wall', '-Wextra', '-Werror',
+                    '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-fno-pie', '-no-pie', '-g',
+                    '-I', str(HERE), '-I', str(ROOT / 'retoque/dlssnr'),
+                    '-I', str(ROOT / 'external/vulkan/include'), str(HERE / 'queue_cases.cpp'),
+                    '-o', str(queues)], check=True)
+    subprocess.run([str(queues)], check=True, timeout=30)
