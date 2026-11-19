@@ -16,6 +16,39 @@ fn more_mark<'a>() -> egui::Atom<'a> {
     })
 }
 
+/// The mark from assets/retoque.svg, drawn at UI scale so it stays crisp without an image loader.
+const BRAND_MARK: f32 = 28.0;
+fn brand_mark<'a>() -> egui::Atom<'a> {
+    egui::Atom::paint(egui::Vec2::splat(BRAND_MARK), |ui, args| {
+        let p = ui.painter();
+        let point = |x: f32, y: f32| args.rect.min + egui::vec2(x, y) * (BRAND_MARK / 256.0);
+        p.rect_filled(args.rect, 6, theme::CANVAS);
+        for (x, y) in [(24., 24.), (68., 24.), (112., 24.), (24., 68.), (68., 68.), (24., 112.)] {
+            p.rect_filled(
+                egui::Rect::from_min_max(point(x, y), point(x + 38., y + 38.)),
+                1,
+                theme::MUTED.gamma_multiply(0.5),
+            );
+        }
+        p.add(egui::epaint::CubicBezierShape::from_points_stroke(
+            [point(30., 226.), point(92., 178.), point(150., 116.), point(226., 30.)],
+            false,
+            Color32::TRANSPARENT,
+            egui::Stroke::new(3.7, theme::ACCENT),
+        ));
+        for points in [
+            [(162., 178.), (190., 171.), (218., 178.), (190., 185.)],
+            [(190., 150.), (197., 178.), (190., 206.), (183., 178.)],
+        ] {
+            p.add(egui::Shape::convex_polygon(
+                points.map(|(x, y)| point(x, y)).to_vec(),
+                theme::ACCENT,
+                egui::Stroke::NONE,
+            ));
+        }
+    })
+}
+
 /// The top bar's actions that can move into "More actions".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BarItem {
@@ -43,12 +76,13 @@ impl RetoqueApp {
         ui.horizontal(|ui| {
             if ui
                 .add(
-                    egui::Button::new(
+                    egui::Button::new((
+                        brand_mark(),
                         RichText::new(self.tr("brand"))
                             .size(theme::DISPLAY)
                             .strong()
                             .color(theme::ACCENT),
-                    )
+                    ))
                     .frame(false),
                 )
                 .on_hover_text(self.tr("shell.home"))
@@ -150,7 +184,7 @@ impl RetoqueApp {
                 .max(spacing.combo_width),
         };
         let mut fixed = vec![
-            text(self.tr("brand"), egui::FontId::proportional(theme::DISPLAY)),
+            text(self.tr("brand"), egui::FontId::proportional(theme::DISPLAY)) + BRAND_MARK + gap + pad,
             button("palette.title"),
         ];
         if on_game {

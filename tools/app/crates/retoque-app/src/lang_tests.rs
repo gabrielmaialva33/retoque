@@ -593,3 +593,40 @@ fn audited_sidebar_keeps_the_game_banner_inside_the_zoomed_window() {
         }
     }
 }
+
+#[test]
+fn audited_brand_mark_is_inside_the_named_home_button() {
+    let dir = tempfile::tempdir().unwrap();
+    for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+        for lang in Lang::ALL {
+            let mut h = window(lang, dir.path(), true, Some(Tab::Install), size);
+            let button = h.get_by_role_and_label(Role::Button, t(lang, "brand")).rect();
+            let mark = h
+                .output()
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Rect(r) if r.fill == theme::CANVAS && (r.rect.width() - 28.).abs() < 0.5 => {
+                        Some(r.rect)
+                    }
+                    _ => None,
+                })
+                .expect("Retoque mark is painted");
+            assert!(button.contains_rect(mark));
+            let text = h
+                .output()
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Text(t) if t.galley.job.text == "Retoque" && t.pos.y < 60. => Some(t.pos),
+                    _ => None,
+                })
+                .unwrap();
+            assert!(mark.right() < text.x, "mark stays beside the word");
+            top_bar_fits(&mut h, lang, true, size);
+            h.get_by_role_and_label(Role::Button, t(lang, "brand")).click();
+            h.run_steps(2);
+            assert!(h.state().selected.is_none(), "whole brand remains the way home");
+        }
+    }
+}

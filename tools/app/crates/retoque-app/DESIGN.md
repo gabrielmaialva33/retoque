@@ -107,3 +107,6 @@ raw identifier belong in game details. Before installation, the card explaining 
 informational health-check notes; a failed change still comes first.
 The five status tiles fill one row when there is room, otherwise two full-width rows of three and two. An extremely
 narrow page uses a readable vertical stack instead of leaving a single orphan below a two-column grid.
+
+The top bar keeps the Retoque mark at 28 points beside the word, in the same named home button. Reserve its
+width when choosing which actions move into the overflow menu; the brand itself never goes into that menu.
