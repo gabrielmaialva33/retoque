@@ -113,7 +113,10 @@ impl RetoqueApp {
         options.game_dir = target;
         options.source_dir = self.payload.clone()?;
         // The in-game menu's language follows Preferences in every game, whatever that game was installed with.
-        options.menu_language = self.saved.install_defaults.menu_language(self.lang);
+        options.menu_language = self
+            .prefs
+            .languages
+            .menu_language(self.saved.install_defaults.menu_language(self.lang));
         Some(options)
     }
 

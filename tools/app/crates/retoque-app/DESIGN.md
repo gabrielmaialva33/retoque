@@ -77,6 +77,11 @@ translated packs (`src/i18n/*.tsv`, see the app README), each of which renders e
 | Delete the app's stored copy | Apagar do app… | Delete from app… | "Remover do catálogo" |
 | Put original files back | Restaurar | Restore | |
 | Open a change list | Revisar… | Review… | "Ver o que … faz" |
+| Language correction workspace | Idiomas… | Languages… | “Editor de arquivos” |
+| Text not yet applied | Rascunho | Draft | “Texto ativo” |
+| Sample replacement of text variables | Prévia com valores de exemplo | Preview with sample values | Executing imported format strings |
+| Keep only rows still in the source language | Só sem tradução | Only untranslated | “Incompletas” |
+| Restore embedded language text | Redefinir chave… / Redefinir idioma… | Reset key… / Reset pack… | Deleting without confirmation |
 | Pending edits | alterações | changes | "mudanças" |
 | Per-game options | Ajustes | Settings | "INI" in UI text |
 | Default value | Automático | Automatic | "auto", "Padrão do jogo" |

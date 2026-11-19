@@ -217,7 +217,7 @@ impl RetoqueApp {
             process_notice: None,
             tuning: crate::autotune::UiState::default(),
             lsfg: crate::lsfg_ui::State::default(),
-            prefs: crate::prefs_ui::State::default(),
+            prefs: crate::prefs_ui::State::load(),
             #[cfg(windows)]
             app_installer: crate::app_install_ui::State::default(),
             #[cfg(windows)]

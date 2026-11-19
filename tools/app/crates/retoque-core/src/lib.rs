@@ -12,6 +12,7 @@ pub use engine::reshade;
 pub mod ini;
 pub mod leftovers;
 pub mod memo;
+pub mod menu_pack;
 pub mod pe_version;
 mod process;
 pub mod receipt;
@@ -47,6 +48,8 @@ pub enum MenuLanguage {
     English,
     /// Install `translations/optional/<code>.lang` as `OptiScaler.lang`; one of `MENU_PACKS`.
     Pack(String),
+    /// Validated user dictionary, copied through the ordinary sealed plan and receipt.
+    UserPack(PathBuf),
 }
 
 /// What an install is asked to do. Field-for-field the scripts' flags.

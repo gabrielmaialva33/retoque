@@ -80,11 +80,21 @@ fn menu_language_name(lang: Lang, pref: &MenuLanguagePref) -> String {
 #[derive(Default)]
 pub(crate) struct State {
     pub(crate) open: bool,
+    pub(crate) languages: crate::language_editor_ui::State,
     focus: widgets::FocusRestore,
     /// Bytes in the data folder, measured when the dialog opens.
     usage: Option<u64>,
     /// What the startup cleanup removed this session.
     cleaned: Option<Cleaned>,
+}
+
+impl State {
+    pub(crate) fn load() -> Self {
+        Self {
+            languages: crate::language_editor_ui::State::load(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Staging older than this belongs to nobody: no import or download takes a day.
@@ -130,6 +140,10 @@ impl RetoqueApp {
     }
 
     pub(crate) fn prefs_dialog(&mut self, ctx: &egui::Context) {
+        if self.prefs.languages.open {
+            self.languages_dialog(ctx);
+            return;
+        }
         self.prefs.focus.sync(ctx, self.prefs.open);
         if !self.prefs.open {
             return;
@@ -185,6 +199,9 @@ impl RetoqueApp {
                 )
                 .wrap(),
             );
+        }
+        if ui.button(t(lang, "languages.open")).clicked() {
+            self.prefs.languages.open = true;
         }
         let missing = crate::fonts::unavailable();
         if !missing.is_empty() {
@@ -369,7 +386,7 @@ fn language_options(ui: &mut egui::Ui, lang: Lang) -> Option<Lang> {
 }
 
 /// A language's name in the reader's language, for a language whose own script cannot be drawn here.
-fn language_name(reader: Lang, lang: Lang) -> &'static str {
+pub(crate) fn language_name(reader: Lang, lang: Lang) -> &'static str {
     match lang {
         Lang::Ja => t(reader, "lang.ja"),
         Lang::Ko => t(reader, "lang.ko"),

@@ -117,6 +117,38 @@ pack string with egui's fonts (Latin and Cyrillic) or the system CJK font, faili
 main views in every language at 1024×768 and at the window's minimum width (820), with the app's theme. To see what
 a pack still shows in English: `cargo test -p retoque-app untranslated_keys -- --ignored --nocapture`.
 
+### Send a language correction
+
+Open **Preferences › Languages…** (**Preferências › Idiomas…**). Choose **App** or **In-game menu** and the
+language, search by key/source/translation, or filter to untranslated or changed entries. Select a row to compare
+English, current text and your editable draft. The preview fills placeholders with sample values; it does not
+execute format strings. App editing covers the eight TSV packs; menu editing also includes the reviewed pt-BR pack.
+The English and Portuguese app tables remain built in.
+
+Drafts save in the app data folder under `languages/`, separate from applied corrections. Invalid drafts remain
+editable but cannot be applied or exported: keep the placeholders, final dialog ellipsis and, for menu text,
+exact percent directives in order. **Apply** activates valid app corrections immediately, with embedded and English
+fallbacks for missing keys. For the menu, it selects that language for the next reviewed install/update/Optimize
+(including Update all); no game changes in the editor. The installer retains its running-game, stale-source,
+foreign-file and receipt safeguards. Restart the game after that installation.
+
+**Export…** saves `<code>.tsv` or `<code>.lang` with the original comments, attribution and row order. Only your
+changed rows replace shipped translations; newly translated app fallback keys are appended in stable order.
+Send that one file to a Retoque maintainer for review. **Import…** merges valid rows as drafts, leaving omitted rows
+alone; select Only changed to review them before applying. Import rejects the entire file on any error (UTF-8,
+unknown/repeated keys, controls, malformed formats), with a 1 MiB file / 16 KiB row limit. Imported data never
+names a source or destination path. Reset key/pack asks before deleting drafts and applied corrections; games
+already installed stay unchanged.
+
+Local JSON stores pending and applied rows separately, with atomic replacement. Menu revisions use immutable,
+content-addressed app files so a new Apply cannot change a previously reviewed plan. Prior revisions are retained
+for those plans. The borrowed-string translation API interns only validated applied strings, deduplicated with a
+16 MiB session ceiling; if reached, save drafts and restart. Native file pickers, Windows operation and in-game
+font/layout behavior require platform qualification beyond the synthetic host tests.
+
+The correction workflow idea came from the NeuRotic Hub screenshot; no editor code, data or translations were
+copied. Existing shipped pack attribution remains intact.
+
 To add a language: add a `Lang` variant (never rename one; the saved choice is the variant name) with its native
 name and code, a `pack_source` arm with `include_str!("i18n/<code>.tsv")`, its decimal separator, date order and
 plural rule (`plural_category`), and the pack itself, starting from DESIGN.md's glossary so that each idea keeps

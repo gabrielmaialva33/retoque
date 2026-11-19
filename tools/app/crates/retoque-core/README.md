@@ -209,3 +209,12 @@ product under the stable `Anti-cheat evidence:` prefix. No matches never prove a
 only the GUI owns per-game acknowledgment. CLI/scripts have no override or consent flag. The GUI scans the known
 installation root; folder-only entrypoints scan the supplied folder. Status, settings and uninstall remain usable.
 See the [app contract](../../README.md#executable-architecture-and-anti-cheat-evidence) for semantics and limits.
+
+## User language corrections
+
+`MenuLanguage::UserPack(path)` uses the ordinary `OptiScaler.lang` plan/copy/receipt path and keeps foreign
+dictionaries untouched. The bounded Rust parser in `menu_pack` mirrors the runtime escaped-TSV/printf contract
+(`retoque/misc/Localization.h`), with additional rejection of control/bidi characters. The plan binds validated
+bytes to the sealed source hash and rechecks that source at apply. This API does not write a game during planning
+or bypass running-process checks. The app supplies a generated revision in its data folder; edited dictionaries
+remain data, never executable format strings in the editor preview. Native Windows and in-game use are unqualified.
