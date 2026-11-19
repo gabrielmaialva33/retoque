@@ -42,18 +42,19 @@ If a mod already occupies the proxy name, the installer explains the conflict be
 ## Table of Contents
 
 **1.** [**About**](#about)  
-**2.** [**How it works**](#how-it-works)  
-**3.** [**Where the pass runs**](#where-the-pass-runs)  
-**4.** [**Inside the pass**](#inside-the-pass)  
-**5.** [**Status**](#status)  
-**6.** [**Requirements**](#requirements)  
-**7.** [**Installation**](#installation)  
-**8.** [**Using it**](#using-it)  
-**9.** [**Known issues**](#known-issues)  
-**10.** [**Building and tests**](#building-and-tests)  
-**11.** [**Repository layout**](#repository-layout)  
-**12.** [**Credits**](#credits)  
-**13.** [**License**](#license)
+**2.** [**The Retoque app**](#the-retoque-app)  
+**3.** [**How it works**](#how-it-works)  
+**4.** [**Where the pass runs**](#where-the-pass-runs)  
+**5.** [**Inside the pass**](#inside-the-pass)  
+**6.** [**Status**](#status)  
+**7.** [**Requirements**](#requirements)  
+**8.** [**Installation**](#installation)  
+**9.** [**Using it**](#using-it)  
+**10.** [**Known issues**](#known-issues)  
+**11.** [**Building and tests**](#building-and-tests)  
+**12.** [**Repository layout**](#repository-layout)  
+**13.** [**Credits**](#credits)  
+**14.** [**License**](#license)
 
 ## About
 
@@ -74,7 +75,8 @@ Everything OptiScaler does (swapping upscalers, frame generation, spoofing) is s
 
 > [!CAUTION]
 > * **Do not use it with online games.** Like any proxy DLL, it can trip anti-cheat software and get an account banned.
-> * Retoque is **free**. This GitHub repository is its only home: there is no website, app or paid build of it.
+> * Retoque is **free**. This GitHub repository is its only home: there is no website, store page or
+>   paid build of it, and its [desktop app](#the-retoque-app) is built from this repository.
 
 **Key aspects of Retoque:**
 - Runs the model on four routes: after the game's upscaler on **D3D12**, after the upscaler on
@@ -91,6 +93,31 @@ Everything OptiScaler does (swapping upscalers, frame generation, spoofing) is s
 - **Frame generation aware**: the pass runs before frame generation sees the frame, and frame
   generation can be synthesized for games that give no motion vectors.
 - An in-game menu with side-by-side and wipe comparison, and a host test suite that runs without a GPU.
+- A **desktop app** that finds your games and installs, updates and removes Retoque in each, with every
+  change shown before it is written: see [The Retoque app](#the-retoque-app).
+
+## The Retoque app
+
+<div align="center">
+  <img src="docs/images/retoque-app-library.png" alt="The Retoque app's library: a grid of the game covers found on this computer, each marked 'Retoque up to date', under a search box and the 'Installed only', 'Add folder…' and 'Your folders' controls." width="100%" />
+</div>
+
+One installer and manager, in a window, for Linux and Windows. It finds your games (Steam, Heroic, Lutris,
+Epic, GOG and folders you add), installs, updates and removes Retoque in each, changes a game's settings,
+chooses its NR model and reads its logs. Every write is shown as a plan first, and a running game is never
+written to.
+
+<div align="center">
+  <img src="docs/images/retoque-app-game.png" alt="A game's page in the Retoque app, Cyberpunk 2077: tiles for the graphics card, Retoque (up to date), Neural Rendering (on, model 310.9.16.0), frame generation (DLSS-G) and the game's DLSS files, above the Overview, Settings, Components, Before / after and Logs tabs." width="100%" />
+</div>
+
+A game's page says what the game has (graphics card, Retoque, Neural Rendering, frame generation, its DLSS
+files) above five tabs: Overview, Settings, Components, Before / after and Logs.
+
+> [!NOTE]
+> Both pictures are the real window on Linux, not mock-ups. No published release carries the app yet: run it
+> from a checkout with `cd tools/app && cargo run -p retoque-app`. [`tools/app/README.md`](tools/app/README.md)
+> has the build, the rules the app keeps and what its tests do not prove.
 
 ## How it works
 
@@ -332,7 +359,8 @@ retoque/          everything this fork adds: the Neural Rendering module (dlssnr
                   synthesized frame generation (shaders/synth_motion/, inputs/FG/Synth_*), the menu's
                   translations, and smaller pieces, at the same relative paths as in OptiScaler/
 docs/             design notes (indexed by topic), Linux/Proton notes, guides, history
-tools/            build, deploy (Linux), Windows installer, release and log-summary scripts
+tools/            build, deploy (Linux), Windows installer, release and log-summary scripts; the desktop
+                  app (app/)
 tests/            the test suites and their runner
 OptiScaler/       OptiScaler's own tree with our changes, at upstream's paths so merges stay easy
 Config.md         every INI key
@@ -401,7 +429,8 @@ affiliated with, endorsed by or supported by NVIDIA. Other names belong to their
 O Retoque aplica o modelo DLSS 5 Neural Rendering da NVIDIA na imagem de qualquer jogo, no Linux
 (Proton) e no Windows, usando o OptiScaler como base. Ele roda depois do upscaler do jogo (D3D12 ou
 Vulkan), em jogos D3D11 por uma ponte D3D11-para-D3D12 e, na hora do present, em jogos sem upscaler (como
-emuladores). O arquivo do modelo (`nvngx_dlssnr.dll`) **não** vem junto: você precisa fornecê-lo. É um
-projeto experimental, sem vínculo com a NVIDIA, sob GPL-3.0.
+emuladores). O app de desktop (`tools/app`) encontra seus jogos e instala, atualiza e remove o Retoque em
+cada um, mostrando cada alteração antes de gravar. O arquivo do modelo (`nvngx_dlssnr.dll`) **não** vem
+junto: você precisa fornecê-lo. É um projeto experimental, sem vínculo com a NVIDIA, sob GPL-3.0.
 
 </details>
