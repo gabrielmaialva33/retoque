@@ -188,7 +188,8 @@ inline PairCaptureStatus GetPairCaptureStatus() { return {}; }
 inline bool RequestPairCapture(const char**, bool) { return false; }
 inline Dx11Route::Report Dx11RouteReport() { return Dx11Route::Report::None; }
 inline const char* NativeDx11SceneStatus() { return nullptr; }
-inline SessionGuard::Verdict SessionGuardNotice() { return {}; }
+inline SessionGuard::Verdict guardNotice;
+inline SessionGuard::Verdict SessionGuardNotice() { return guardNotice; }
 inline void SessionGuardEnableAnyway() {}
 inline const char* SessionGuardReasonText(const SessionGuard::Verdict&) { return ""; }
 namespace GpuTiming

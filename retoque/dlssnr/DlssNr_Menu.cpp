@@ -887,10 +887,11 @@ static void RenderAdvisor(Config* config, bool nativeVulkan)
     const bool running = trial.Active();
     if (running)
     {
-        ImGui::Text("%s: %u / %u (%u)",
-                    Localization::Tr(trial.Status() == Advisor::State::Settling ? "Settling history"
-                                                                                : "Collecting confirmed samples"),
-                    static_cast<unsigned>(trial.Index() + 1), static_cast<unsigned>(trial.Total()),
+        ImGui::TextWrapped(Localization::Tr("Option %u of %u"), static_cast<unsigned>(trial.Index() + 1),
+                           static_cast<unsigned>(trial.Total()));
+        const bool preparing = trial.Status() == Advisor::State::Settling;
+        ImGui::TextUnformatted(Localization::Tr(preparing ? "Preparing the image" : "Measuring frame times"));
+        ImGui::Text(preparing ? Localization::Tr("Frames prepared: %u") : Localization::Tr("Samples collected: %u"),
                     static_cast<unsigned>(trial.Count()));
         if (ImGui::Button(Localization::Label("Cancel trial###nrAdvisorCancel")))
             AdvisorRuntime::Cancel(Abort::Cancelled);
@@ -907,12 +908,11 @@ static void RenderAdvisor(Config* config, bool nativeVulkan)
         ImGui::TextWrapped("%s", Localization::Tr("Stage and pass count stay unchanged during the trial."));
     }
     else
-        ImGui::TextWrapped("%s",
-                           Localization::Tr("Waiting for a fresh, uncaptured NR timing sample at the current scale."));
+        ImGui::TextWrapped(
+            "%s", Localization::Tr("Waiting for a recent measurement. Keep the game running at the current settings."));
 
     if (trial.Status() == Advisor::State::Aborted)
-        ImGui::TextWrapped(
-            "%s", Localization::Tr("Trial aborted; temporary overrides removed. Player settings are unchanged."));
+        ImGui::TextWrapped("%s", Localization::Tr("Test stopped. Your saved settings are unchanged."));
     if (trial.Results().empty())
         return;
     const auto& context = trial.BoundContext();
@@ -937,24 +937,33 @@ static void RenderAdvisor(Config* config, bool nativeVulkan)
     report << Localization::Tr("Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame "
                                "share | model / carried | reason")
            << "\n";
-    if (ImGui::BeginTable("nrAdvisorResults", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+    if (trial.Status() == Advisor::State::Done)
+        ImGui::TextUnformatted(Localization::Tr("Measurements complete."));
+    ImGui::TextWrapped("%s", Localization::Tr("Option = scale / cadence. GPU is NR time; Base is frame time before "
+                                              "generated frames. Share is NR's part of base time."));
+    if (ImGui::BeginTable("nrAdvisorResults", 5,
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame))
     {
-        ImGui::TableSetupColumn(Localization::Tr("Scale / cadence"));
-        ImGui::TableSetupColumn(Localization::Tr("Clock"));
-        ImGui::TableSetupColumn(Localization::Tr("Median ms"));
-        ImGui::TableSetupColumn(Localization::Tr("Mean ms"));
-        ImGui::TableSetupColumn(Localization::Tr("Slow tail ms"));
-        ImGui::TableSetupColumn(Localization::Tr("Share"));
-        ImGui::TableHeadersRow();
+        const char* headings[] = { Localization::Tr("Option"), Localization::Tr("Median (ms)"),
+                                   Localization::Tr("Mean (ms)"), Localization::Tr("Slowest (ms)"),
+                                   Localization::Tr("Share") };
+        for (const char* heading : headings)
+            ImGui::TableSetupColumn(heading);
+        ImGui::TableNextRow();
+        for (const char* heading : headings)
+        {
+            ImGui::TableNextColumn();
+            ImGui::TextWrapped("%s", heading);
+        }
         for (const auto& result : trial.Results())
         {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::Text("%.0f%% / %u", result.settings.scale * 100, result.settings.cadence);
-            ImGui::TableNextColumn();
+            ImGui::TextWrapped("%.0f%% / %u", result.settings.scale * 100, result.settings.cadence);
             if (!result.reason.empty())
             {
-                ImGui::TextUnformatted(Localization::Tr("Refused"));
+                ImGui::TableNextColumn();
+                ImGui::TextWrapped("%s", Localization::Tr("Refused"));
                 continue;
             }
             ImGui::TextUnformatted(Localization::Tr("GPU"));
@@ -968,9 +977,6 @@ static void RenderAdvisor(Config* config, bool nativeVulkan)
             ImGui::Text("%.1f%%", result.share);
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
-            ImGui::Text("%u / %u", static_cast<unsigned>(result.modelCount),
-                        static_cast<unsigned>(result.carriedCount));
-            ImGui::TableNextColumn();
             ImGui::TextUnformatted(Localization::Tr("Base"));
             ImGui::TableNextColumn();
             ImGui::Text("%.2f", result.frameMs);
@@ -981,7 +987,11 @@ static void RenderAdvisor(Config* config, bool nativeVulkan)
         }
         ImGui::EndTable();
     }
-    ImGui::TextWrapped("%s", Localization::Tr("Second line: model / carried evaluations."));
+    for (const auto& result : trial.Results())
+        if (result.reason.empty())
+            ImGui::TextWrapped(Localization::Tr("%.0f%% / %u: %u model evaluations, %u reused"),
+                               result.settings.scale * 100, result.settings.cadence,
+                               static_cast<unsigned>(result.modelCount), static_cast<unsigned>(result.carriedCount));
     for (const auto& result : trial.Results())
         if (!result.reason.empty())
             ImGui::TextWrapped("%.0f%% / %u: %s", result.settings.scale * 100, result.settings.cadence,
@@ -1535,22 +1545,26 @@ void RenderMenu(Config* config, float menuResScale)
 
             // The numbers behind it, dimmed: how the session ended and how long the model had run. A standing block
             // carries none.
-            switch (guard.end)
+            if (config->DlssNrShowAllSettings.value_or_default())
             {
-            case SessionGuard::End::Crashed:
-                ImGui::TextDisabled(Localization::Tr("Exception 0x%08X after the model had run for %lld s."),
-                                    guard.code, (long long) guard.ranSeconds);
-                break;
-            case SessionGuard::End::ExitCode:
-                ImGui::TextDisabled(Localization::Tr("Exit code %u after the model had run for %lld s."), guard.code,
-                                    (long long) guard.ranSeconds);
-                break;
-            case SessionGuard::End::Vanished:
-            case SessionGuard::End::DeviceRemoved:
-                ImGui::TextDisabled(Localization::Tr("The model had run for %lld s."), (long long) guard.ranSeconds);
-                break;
-            default:
-                break;
+                switch (guard.end)
+                {
+                case SessionGuard::End::Crashed:
+                    ImGui::TextDisabled(Localization::Tr("Exception 0x%08X after the model had run for %lld s."),
+                                        guard.code, (long long) guard.ranSeconds);
+                    break;
+                case SessionGuard::End::ExitCode:
+                    ImGui::TextDisabled(Localization::Tr("Exit code %u after the model had run for %lld s."),
+                                        guard.code, (long long) guard.ranSeconds);
+                    break;
+                case SessionGuard::End::Vanished:
+                case SessionGuard::End::DeviceRemoved:
+                    ImGui::TextDisabled(Localization::Tr("The model had run for %lld s."),
+                                        (long long) guard.ranSeconds);
+                    break;
+                default:
+                    break;
+                }
             }
 
             if (guard.action == SessionGuard::Action::Disable && !driverBlocked &&
@@ -1582,7 +1596,9 @@ void RenderMenu(Config* config, float menuResScale)
         {
             if (!driverBlocked)
                 ImGui::TextDisabled(
-                    Localization::Tr("Off. The model stays loaded, so turning this back on is immediate."));
+                    "%s", config->DlssNrShowAllSettings.value_or_default()
+                              ? Localization::Tr("Off. The model stays loaded, so turning this back on is immediate.")
+                              : Localization::Tr("Off"));
         }
         else if (!DlssNr::IsRunning() && !vulkan)
         {

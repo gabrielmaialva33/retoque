@@ -208,7 +208,8 @@ never a begin/end popup pair. Real ImGui assertions verify the original item ID 
 | State | Visible/reachable controls |
 |---|---|
 | Simple, normal | Enable, short status, Look, Detail strength, grouped comparison (Apply, Hold, Compare, capture under section 2.3), Show all settings last |
-| Simple, failure/guard/unsupported route | Same actionable notices and recovery gates as sections 2.2, 2.5, 2.6; never hide a refusal |
+| Simple, NR off | Short Off status; model-retention note belongs to full view |
+| Simple, failure/guard/unsupported route | Same actionable notices and recovery gates as sections 2.2, 2.5, 2.6; never hide a refusal; raw crash codes and elapsed time are full-view diagnostics |
 | Full | All existing settings, diagnostics, profile, model statistics, rebuild notes and advisor |
 | Trial active | Advisor progress and cancellation remain reachable; other edits stay hidden as before |
 | View toggle clicked | Same ShowAllSettings key; next frame shows the chosen view; hidden saved values are untouched |
@@ -237,6 +238,19 @@ Model setters, deferred release, sparse overrides and all range limits are uncha
 | Count = 0 or greater than 1 | Plural passes / passes; no change to the numeric value |
 | Residual limit = 0 / greater than 0 | Localized Off / unchanged value in stops (EV in pt-BR) |
 | Preset, style, intensity, detail and colour | Terms follow the translations README glossary; IDs and Config values unchanged |
+
+### 2.11 Advisor presentation
+
+| State | Display and action |
+|---|---|
+| Ineligible/hidden route | Existing gate and recovery action; no new control or eligibility rule |
+| Settling / sampling | Option N of total; Preparing the image + prepared frames / Measuring frame times + collected samples; Cancel |
+| Aborted | Test stopped; saved settings unchanged; existing retry/start eligibility |
+| Results | Five wrapped columns: option, median ms, mean ms, slowest 5% ms, NR share; GPU/Base rows are distinct |
+| Per-option counts/refusals | Model/reused counts and refusal reasons below the table; also retained in copied report |
+| Completed / stale context | Existing recommendation and explicit Apply only under the same context guard; no automatic settings write |
+
+Table layout and words do not change candidate order, sampling, statistics, thresholds, cancellation or apply policy.
 
 ## 3. Per-change-type review (run BEFORE deploy)
 

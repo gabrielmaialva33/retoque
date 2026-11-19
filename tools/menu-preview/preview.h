@@ -1,6 +1,7 @@
 // Included after the unchanged production menu body in the generated translation unit.
 #include <menu/font/Hack_Compressed.h>
 #include "raster.h"
+#include "layout_test.h"
 #include <imgui/imgui_internal.h>
 
 namespace Preview
@@ -66,6 +67,19 @@ void SimpleCompare()
 {
     Compare();
     Config::Instance()->DlssNrShowAllSettings = false;
+}
+void GuardSimple()
+{
+    Off();
+    DlssNr::guardNotice.action = DlssNr::SessionGuard::Action::Disable;
+    DlssNr::guardNotice.end = DlssNr::SessionGuard::End::Crashed;
+    DlssNr::guardNotice.code = 0xC0000005;
+    DlssNr::guardNotice.ranSeconds = 3;
+}
+void GuardFull()
+{
+    GuardSimple();
+    Config::Instance()->DlssNrShowAllSettings = true;
 }
 void AdvisorEligible()
 {
@@ -134,6 +148,11 @@ void AdvisorResults(bool rr = false)
     s.Restored();
     DlssNr::AdvisorRuntime::Publish();
 }
+void AdvisorAborted()
+{
+    AdvisorRunning();
+    DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::Cancelled);
+}
 void AdvisorDone() { AdvisorResults(); }
 void AdvisorRRDone() { AdvisorResults(true); }
 struct Scene
@@ -165,12 +184,27 @@ const Scene scenes[] = { { "nr-off", Off, false, 900 },
                          { "present-hdr-pt-BR-narrow", Hdr, true, 4200, 420 },
                          { "native-vulkan-narrow", Vulkan, false, 4200, 480 },
                          { "individual-passes-pt-BR-narrow", Passes, true, 4200, 420 },
-                         { "simple-comparison-pt-BR", SimpleCompare, true, 1400, 420 } };
+                         { "simple-comparison-pt-BR", SimpleCompare, true, 1400, 420 },
+                         { "advisor-eligible-en-narrow", AdvisorEligible, false, 5200, 420 },
+                         { "advisor-running-en-narrow", AdvisorRunning, false, 1200, 420 },
+                         { "advisor-done-en-narrow", AdvisorDone, false, 5200, 420 },
+                         { "advisor-done-pt-BR-narrow", AdvisorDone, true, 5200, 420 },
+                         { "advisor-rr-done-pt-BR-narrow", AdvisorRRDone, true, 5200, 420 },
+                         { "advisor-running-pt-BR-narrow", AdvisorRunning, true, 1200, 420 },
+                         { "advisor-aborted-pt-BR", AdvisorAborted, true, 5200, 420 },
+                         { "guard-simple-pt-BR", GuardSimple, true, 1200, 420 },
+                         { "guard-full-pt-BR", GuardFull, true, 4200, 420 } };
 } // namespace Preview
 int main(int argc, char** argv)
 {
     try
     {
+        if (argc == 2 && std::string(argv[1]) == "--layout-test")
+        {
+            Preview::VerifyLayoutInput();
+            std::cout << "PASS: wrapped checkbox box/caption clicks, disabled refusal and original active IDs\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--list")
         {
             for (const auto& s : Preview::scenes)
@@ -249,6 +283,21 @@ int main(int argc, char** argv)
             ImGui::End();
             DlssNr::RenderMenu(Config::Instance(), 1.0f);
             contentBottom = ImGui::GetCursorPosY();
+            if (frame == 4 && (std::string(scene->name).find("advisor-done") == 0 ||
+                               std::string(scene->name).find("advisor-rr-done") == 0))
+            {
+                bool found = false;
+                for (const auto& table : GImGui->Tables.Buf)
+                    if (table.ColumnsCount == 5)
+                    {
+                        found = true;
+                        for (int column = 0; column < table.ColumnsCount; ++column)
+                            if (table.Columns[column].WorkMaxX - table.Columns[column].WorkMinX < 50.0f)
+                                throw std::runtime_error("Advisor column collapsed below readable width");
+                    }
+                if (!found)
+                    throw std::runtime_error("Advisor result table was not rendered");
+            }
             if (frame == 4)
             {
                 text = GImGui->LogBuffer.c_str();

@@ -713,3 +713,17 @@ after	after
 after-rr	after-rr
 before	before
 present	present
+Option %u of %u	Option %u of %u
+Preparing the image	Preparing the image
+Measuring frame times	Measuring frame times
+Frames prepared: %u	Frames prepared: %u
+Samples collected: %u	Samples collected: %u
+Waiting for a recent measurement. Keep the game running at the current settings.	Waiting for a recent measurement. Keep the game running at the current settings.
+Test stopped. Your saved settings are unchanged.	Test stopped. Your saved settings are unchanged.
+Measurements complete.	Measurements complete.
+Option = scale / cadence. GPU is NR time; Base is frame time before generated frames. Share is NR's part of base time.	Option = scale / cadence. GPU is NR time; Base is frame time before generated frames. Share is NR's part of base time.
+Option	Option
+Median (ms)	Median (ms)
+Mean (ms)	Mean (ms)
+Slowest (ms)	Slowest (ms)
+%.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused

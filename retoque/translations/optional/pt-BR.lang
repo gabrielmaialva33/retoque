@@ -223,7 +223,7 @@ This game supplies an exposure and it is being read.	Este jogo fornece uma expos
 Game exposure %.4f  ->  white point %.2f%s	Exposição do jogo %.4f  ->  ponto branco %.2f%s
   (held: absent this frame)	  (mantido: ausente neste quadro)
 Nothing in this game is shaped like an exposure.	Nada neste jogo tem o formato de uma exposição.
-The exposure scan needs a restart: Neural Rendering was off when the game started.	A busca de exposição precisa de reinicialização: o Neural Rendering estava desligado quando o jogo começou.
+The exposure scan needs a restart: Neural Rendering was off when the game started.	A busca de exposição precisa de reinicialização: a renderização neural estava desligada quando o jogo começou.
 Watching %u, none moving yet -- go between light and shade.	Observando %u, nenhum variando ainda -- alterne entre luz e sombra.
 Found one. Set paper white below until the picture looks right, then press Anchor here.	Um candidato encontrado. Ajuste o branco de referência abaixo até a imagem ficar certa e pressione "Criar ponto aqui".
 This game supplies an exposure -- the option above would use it.	Este jogo fornece uma exposição -- a opção acima a usaria.
@@ -468,22 +468,22 @@ Open Wiki	Abrir Wiki
 Compatibility list, known issues and FG options explained	Lista de compatibilidade, problemas conhecidos e opções de FG explicadas
 # 2026-10-13: the session guard (docs/dlssnr/design/session-guard.md).
 Enable anyway	Ativar mesmo assim
-Neural Rendering is off for this session. Your settings are unchanged.	O Neural Rendering está desligado nesta sessão. Suas configurações não foram alteradas.
+Neural Rendering is off for this session. Your settings are unchanged.	A renderização neural está desligada nesta sessão. Suas configurações não foram alteradas.
 The last session ended without closing, soon after the model started.	A última sessão terminou sem fechar, logo depois de o modelo iniciar.
 The last two sessions ended without closing.	As duas últimas sessões terminaram sem fechar.
 An earlier session ended without closing, and this has not been confirmed since.	Uma sessão anterior terminou sem fechar, e isso não foi confirmado desde então.
 # 2026-10-30: the NR minimum-driver gate (docs/dlssnr/design/driver-gate.md).
-Neural Rendering is off for this session: it needs NVIDIA driver %s or newer (%s or newer recommended), and this one is %s. Your settings are unchanged.	O Neural Rendering está desligado nesta sessão: ele precisa do driver NVIDIA %s ou mais recente (%s ou mais recente recomendado), e este é o %s. Suas configurações não foram alteradas.
-this NVIDIA driver is too old for Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	este driver NVIDIA é antigo demais para o Neural Rendering; atualize para o 610.88 ou mais recente (616.64 ou mais recente recomendado)
-NGX answered FAIL_OutOfDate: this NVIDIA driver cannot run Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	O NGX respondeu FAIL_OutOfDate: este driver NVIDIA não consegue executar o Neural Rendering; atualize para o 610.88 ou mais recente (616.64 ou mais recente recomendado)
+Neural Rendering is off for this session: it needs NVIDIA driver %s or newer (%s or newer recommended), and this one is %s. Your settings are unchanged.	A renderização neural está desligada nesta sessão: ela precisa do driver NVIDIA %s ou mais recente (%s ou mais recente recomendado), e este é o %s. Suas configurações não foram alteradas.
+this NVIDIA driver is too old for Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	este driver NVIDIA é antigo demais para a renderização neural; atualize para o 610.88 ou mais recente (616.64 ou mais recente recomendado)
+NGX answered FAIL_OutOfDate: this NVIDIA driver cannot run Neural Rendering; update to 610.88 or newer (616.64 or newer recommended)	O NGX respondeu FAIL_OutOfDate: este driver NVIDIA não consegue executar a renderização neural; atualize para o 610.88 ou mais recente (616.64 ou mais recente recomendado)
 The last session ended without closing. If it was a crash, this one may too.	A última sessão terminou sem fechar. Se foi uma falha, esta também pode falhar.
 # 2026-10-14: session guard v2: how the last session ended, and the numbers line.
 The last session ended with an error soon after the model started.	A última sessão terminou com um erro logo depois de o modelo iniciar.
 The last session ended with an error. If it was a crash, this one may too.	A última sessão terminou com um erro. Se foi uma falha, esta também pode falhar.
 The last session crashed while the model was running.	A última sessão falhou enquanto o modelo rodava.
-The last session crashed, long after the model started. If the next one does too, Neural Rendering will be switched off.	A última sessão falhou, muito depois de o modelo iniciar. Se a próxima também falhar, o Neural Rendering será desligado.
+The last session crashed, long after the model started. If the next one does too, Neural Rendering will be switched off.	A última sessão falhou, muito depois de o modelo iniciar. Se a próxima também falhar, a renderização neural será desligada.
 The graphics device was lost while the model was running in the last session.	O dispositivo gráfico foi perdido enquanto o modelo rodava na última sessão.
-The graphics device was lost in the last session, long after the model started. If it happens again, Neural Rendering will be switched off.	O dispositivo gráfico foi perdido na última sessão, muito depois de o modelo iniciar. Se acontecer de novo, o Neural Rendering será desligado.
+The graphics device was lost in the last session, long after the model started. If it happens again, Neural Rendering will be switched off.	O dispositivo gráfico foi perdido na última sessão, muito depois de o modelo iniciar. Se acontecer de novo, a renderização neural será desligada.
 Exception 0x%08X after the model had run for %lld s.	Exceção 0x%08X depois de o modelo rodar por %lld s.
 Exit code %u after the model had run for %lld s.	Código de saída %u depois de o modelo rodar por %lld s.
 The model had run for %lld s.	O modelo tinha rodado por %lld s.
@@ -578,7 +578,7 @@ HDR conversion did not produce a submitted frame	A conversão HDR não produziu 
 HDR present conversion is inactive; the game's original frame is shown.	A conversão HDR no Present está inativa; o quadro original do jogo é exibido.
 
 Show all settings	Mostrar todas as configurações
-Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Mostrar o painel completo de Neural Rendering. As configurações ocultas continuam ativas e inalteradas.
+Show the full Neural Rendering panel. Hidden settings stay active and unchanged.	Mostrar o painel completo de renderização neural. As configurações ocultas continuam ativas e inalteradas.
 
 Minimum brightness	Brilho mínimo
 Final luminance relative to the original frame: 0.75 keeps at least 75 percent.\nApplied once, after composition, including replace curves. 0 is off.\nRestores darkened pixels toward the original; does not cap individual channels.\nHDR uses linear buffer luminance; passthrough uses already-tone-mapped RGB.\nLater game processing and temporal stabilization are outside this limit.	Luminância final relativa ao quadro original: 0,75 mantém pelo menos 75 por cento.\nAplicado uma vez, após a composição, inclusive nas curvas de substituição. 0 desativa.\nRestaura pixels escurecidos em direção ao original; não limita canais individuais.\nHDR usa luminância linear do buffer; passthrough usa RGB já mapeado em tons.\nO processamento posterior do jogo e a estabilização temporal ficam fora deste limite.
@@ -687,7 +687,7 @@ Slow tail ms	Cauda ms
 GPU	GPU
 Base	Base
 %u model / %u carried	%u modelo / %u reaproveitados
-Share	Parte
+Share	Parcela
 Refused	Recusado
 Second line: model / carried evaluations.	Segunda linha: avaliações do modelo / reaproveitadas.
 Measurements and diagnostics	Medições e diagnóstico
@@ -710,3 +710,17 @@ after	pós-upscaler
 after-rr	pós-RR
 before	pré-upscaler
 present	apresentação
+Option %u of %u	Opção %u de %u
+Preparing the image	Preparando a imagem
+Measuring frame times	Medindo o tempo dos quadros
+Frames prepared: %u	Quadros preparados: %u
+Samples collected: %u	Amostras coletadas: %u
+Waiting for a recent measurement. Keep the game running at the current settings.	Aguardando uma medição recente. Mantenha o jogo rodando com os ajustes atuais.
+Test stopped. Your saved settings are unchanged.	Teste interrompido. Seus ajustes salvos não foram alterados.
+Measurements complete.	Medições concluídas.
+Option = scale / cadence. GPU is NR time; Base is frame time before generated frames. Share is NR's part of base time.	Opção = escala / cadência. GPU é o tempo do NR; Base é o tempo do quadro sem geração de quadros. Parcela é a parte do tempo base usada pelo NR.
+Option	Opção
+Median (ms)	Mediana (ms)
+Mean (ms)	Média (ms)
+Slowest (ms)	Lentos (ms)
+%.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u avaliações do modelo, %u reutilizadas

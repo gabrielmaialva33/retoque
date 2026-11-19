@@ -16,7 +16,11 @@ SIMPLE = {'nr-off', 'd3d12-simple', 'model-missing', 'd3d12-simple-pt-BR'}
 ADVISOR_HEIGHTS = {'advisor-eligible-pt-BR': 4200, 'advisor-running-pt-BR': 4200,
                    'advisor-done-pt-BR': 4200, 'advisor-rr-done-pt-BR': 4200,
                    'advisor-timing-off-pt-BR': 4200, 'advisor-hidden-off': 900}
-NARROW = {'individual-passes-pt-BR-narrow': (420,4200), 'simple-comparison-pt-BR': (420,1400), 'model-missing-pt-BR-narrow': (420,1100), 'model-missing-narrow': (420,1100), 'present-hdr-pt-BR-narrow': (420,4200), 'native-vulkan-narrow': (480,4200)}
+ADVISOR_NARROW = {'advisor-eligible-en-narrow': (420,5200), 'advisor-running-en-narrow': (420,1200),
+                  'advisor-done-en-narrow': (420,5200), 'advisor-done-pt-BR-narrow': (420,5200),
+                  'advisor-rr-done-pt-BR-narrow': (420,5200), 'advisor-running-pt-BR-narrow': (420,1200),
+                  'advisor-aborted-pt-BR': (420,5200)}
+NARROW = {**ADVISOR_NARROW, "guard-simple-pt-BR": (420,1200), "guard-full-pt-BR": (420,4200), 'individual-passes-pt-BR-narrow': (420,4200), 'simple-comparison-pt-BR': (420,1400), 'model-missing-pt-BR-narrow': (420,1100), 'model-missing-narrow': (420,1100), 'present-hdr-pt-BR-narrow': (420,4200), 'native-vulkan-narrow': (480,4200)}
 STATES = set(NARROW) | set(ADVISOR_HEIGHTS) | SIMPLE | {'d3d12-full', 'individual-passes', 'present-hdr', 'native-vulkan', 'comparison', 'present-hdr-pt-BR'}
 
 
@@ -66,6 +70,7 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
                     str(ROOT/'tests/menu-preview/raster.cpp'),'-o',str(raster)],check=True)
     subprocess.run([str(raster)],check=True)
     binary = build(temp)
+    subprocess.run([str(binary), "--layout-test"], check=True)
     states = subprocess.check_output([str(binary),'--list'],text=True).splitlines()
     assert set(states)==STATES and len(states)==len(STATES)
     for output in (temp/'first',temp/'second'):
@@ -82,7 +87,7 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
         text=one.with_suffix('.txt').read_text()
         assert len(text)>200
         assert 'DLSS Neural Rendering' in text or 'Renderização neural DLSS' in text
-        if state not in SIMPLE and state not in ADVISOR_HEIGHTS and not state.startswith('model-missing') and state != 'simple-comparison-pt-BR':
+        if state not in SIMPLE and state not in ADVISOR_HEIGHTS and not state.startswith('model-missing') and state != 'simple-comparison-pt-BR' and not state.startswith('advisor-') and state != 'guard-simple-pt-BR':
             assert 'Debug view' in text or 'Visualização de diagnóstico' in text
         if state in SIMPLE and not state.startswith('model-missing'):
             assert 'Requested passes' not in text and 'Passes solicitados' not in text
@@ -96,6 +101,9 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
             assert 'Força dos detalhes' in text and 'Apresentação' in text
         if state == 'individual-passes':
             assert '3 successful model passes' in text
+        if state.startswith('guard-'):
+            assert 'Ativar mesmo assim' in text
+            assert ('C0000005' in text) == (state == 'guard-full-pt-BR')
         if state == 'advisor-hidden-off':
             assert 'Assistente de custo do NR' not in text
         elif state in ADVISOR_HEIGHTS:
@@ -103,15 +111,20 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
         if state == 'advisor-eligible-pt-BR':
             assert 'Medir opções do NR' in text
         elif state == 'advisor-running-pt-BR':
-            assert 'Estabilizando o histórico' in text and 'Cancelar teste' in text
+            assert 'Preparando a imagem' in text and 'Quadros preparados:' in text and 'Cancelar teste' in text
         elif state in {'advisor-done-pt-BR', 'advisor-rr-done-pt-BR'}:
-            assert 'Média ms' in text and 'Cauda ms' in text and 'Aplicar opção medida' in text
+            assert 'Média (ms)' in text and 'Lentos (ms)' in text and 'Aplicar opção medida' in text
             assert ('RRWorkingScale' in text) == (state == 'advisor-rr-done-pt-BR')
-        elif state == 'advisor-timing-off-pt-BR':
+        if state == 'advisor-aborted-pt-BR':
+            assert 'Teste interrompido.' in text
+        if state in {'advisor-done-en-narrow','advisor-done-pt-BR-narrow','advisor-rr-done-pt-BR-narrow'}:
+            assert '6.00' in text and '24.00' in text and '16.00' in text
+            assert 'Measurements complete.' in text or 'Medições concluídas.' in text
+        if state == 'advisor-timing-off-pt-BR':
             assert 'Ativar medição da GPU' in text and 'Medir opções do NR' not in text
     for left,right in [('d3d12-simple','d3d12-simple-pt-BR'),('present-hdr','present-hdr-pt-BR'),
                        ('nr-off','d3d12-simple'),('d3d12-full','individual-passes'),('d3d12-full','comparison')]:
         assert images[left]!=images[right], f'{left}/{right}: fixtures unexpectedly identical'
     assert subprocess.run([str(binary),'not-a-state',str(temp/'bad'),str(ROOT)],capture_output=True).returncode != 0
     assert not (temp/'bad').exists()
-print('PASS: 22 named states, advisor visibility and results, actual ImGui glyph pixels, valid PNGs, complete panel height and byte-identical reruns')
+print('PASS: 31 named states, advisor visibility and results, actual ImGui glyph pixels, valid PNGs, complete panel height and byte-identical reruns')

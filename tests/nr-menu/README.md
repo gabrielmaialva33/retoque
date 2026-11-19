@@ -27,8 +27,8 @@ not render pixels or exercise the actual Windows Config, renderer, NGX or GPU.
 | D3D12, individual off | Requested count 1..10 (1..3 before 2026-11-11), from two passes a cost line ("Cost: Nx the model's GPU time and N model instances in video memory."), last-evaluation count/status, individual toggle; no per-pass editor |
 | D3D12, individual on, one requested pass | Pass 1 fields; no meaningless pass-selection slider |
 | D3D12, individual on, multiple requested passes | One selector limited to requested passes (up to ten), not one block per pass; seven optional overrides |
-| Field inherited | Readout of current master; Override can create an explicit value |
-| Field explicit | Its editor; unchecking Override clears the sparse value |
+| Field inherited | One attribute row with Inherited state and current master value; checkbox creates an explicit value |
+| Field explicit | Same row with Explicit state and editor; unchecking clears the sparse value |
 | No explicit fields | No clear-pass button |
 | At least one explicit field | Inherit-all button removes only the selected pass's overrides |
 | Lowered count or individual off | Inactive overrides retained, never silently deleted |
@@ -47,12 +47,9 @@ trim; source 2 with anchors has scan trim, with paper white only while editing a
 the direction checkbox remains limited to exactly one anchor. The added controls change
 neither the white-point settings nor exposure availability conditions.
 
-Translation remains partial: new stable-ID count, selection, override and clear controls
-can use the optional Portuguese pack. Legacy model labels and per-field value labels
-remain English to preserve their original identity; supported status and explanatory text
-translate, unknown diagnostic reasons fall back to English. No complete-menu translation
-or in-game layout validation is claimed. Neither optional dictionary activation nor game
-installation is performed by these tests.
+The optional Portuguese pack translates visible attribute names and inherited/explicit states. The row layout
+adds no ID scope: the underlying editors retain their original IDs, including the legacy per-pass choice IDs.
+Unknown dynamic diagnostic reasons still fall back to English. No in-game layout qualification is claimed.
 
 Backend visibility additionally checks the known input API and whether the current
 feature uses the D3D12 bridge, because `IsRunningVk()` alone is false before the first
@@ -62,12 +59,10 @@ backend flag rather than constructing the real State/feature graph.
 
 ## Simple view
 
-The harness also compiles the production simple-view gate, shared preset/strength controls, the active weight-set
-report and the timing readout. Scripted frames check the default simple view, toggling and retaining ShowAllSettings,
-equivalent Config writes through the shared full-view controls, hidden individual overrides remaining active,
-preset visibility with one or unknown weight sets, native Vulkan/proxy pass refusal, read-only timing when enabled,
-and balanced item widths. Source guards place the early return after the profile/status block and before Source;
-the full RenderMenu body is not compiled against these fakes. Full UI appearance still requires a game run.
+The harness compiles the production simple-view gate, shared appearance and comparison controls, the active
+weight-set report and timing readout. Scripted frames check retained hidden presets/passes/overrides, one view
+per frame, look recipes, detail strength, comparison mode/zoom/split writes and balanced item widths.
+Source guards put the simple return before Processing route and require a single shared comparison body.
 
 The simple player view now keeps Look, Detail strength and capture, then Show all settings.
 Preset, passes and timing are full-view controls. Scripted frames assert retained hidden
