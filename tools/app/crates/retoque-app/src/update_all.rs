@@ -304,7 +304,10 @@ impl RetoqueApp {
             focus: self.context.memory(|m| m.focused()),
             ..Default::default()
         };
-        let menu_language = self.saved.install_defaults.menu_language(self.lang);
+        let menu_language = self
+            .prefs
+            .languages
+            .menu_language(self.saved.install_defaults.menu_language(self.lang));
         self.jobs.spawn("update-all-plan", None, move |_| {
             Outcome::UpdateAll(Event::Prepared(prepare(games, &source, menu_language)))
         });
