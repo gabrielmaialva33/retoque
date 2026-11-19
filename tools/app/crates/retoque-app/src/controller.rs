@@ -552,13 +552,7 @@ impl RetoqueApp {
     }
 
     pub(crate) fn shell_shortcuts(&mut self, ctx: &egui::Context) {
-        if self.library_state.update_all.open {
-            return;
-        }
         if self.intuitive_shortcuts(ctx) {
-            return;
-        }
-        if self.review_open || self.folder_dialog.is_some() {
             return;
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
@@ -1011,6 +1005,8 @@ impl RetoqueApp {
         }
     }
     pub(crate) fn show_process_notice(&mut self, ctx: &egui::Context) {
+        let focus_id = egui::Id::unique("running_processes_focus");
+        widgets::sync_modal_focus(ctx, focus_id, self.process_notice.is_some());
         let Some(processes) = &self.process_notice else { return };
         // An information dialog: the program names (a game often runs several processes of one name), "Close",
         // and "Try again" for when the user has closed them.
@@ -1020,14 +1016,15 @@ impl RetoqueApp {
         let response = egui::Modal::new(egui::Id::unique("running_processes"))
             .frame(widgets::modal_frame())
             .show(ctx, |ui| {
+                ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 480.0));
                 ui.heading(self.tr("remedy.close_processes"));
                 for name in &names {
                     ui.label(*name);
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    let retry = ui.button(self.tr("remedy.retry")).clicked();
                     let close = ui.button(self.tr("close")).clicked();
+                    let retry = ui.button(self.tr("remedy.retry")).clicked();
                     (retry, close)
                 })
                 .inner
@@ -1035,6 +1032,7 @@ impl RetoqueApp {
         let (retry, close) = response.inner;
         if retry || close || response.should_close() {
             self.process_notice = None;
+            widgets::close_modal_focus(ctx, focus_id);
         }
         if retry {
             self.cmd_tx

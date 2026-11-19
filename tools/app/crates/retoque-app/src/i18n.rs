@@ -462,7 +462,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "note.sm86_install",
         "Install catalogued dlssg-sm86; record its identity and files in .retoque/components.txt. The game installer makes no network requests.",
-        "Instalar dlssg-sm86 do catálogo e registrar sua identidade e arquivos em .retoque/components.txt. O instalador do jogo não faz requisições de rede.",
+        "Instalar dlssg-sm86 dos seus componentes e registrar sua identidade e arquivos em .retoque/components.txt. O instalador do jogo não faz requisições de rede.",
     ),
     (
         "sm86.consent_title",
@@ -519,13 +519,13 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "sm86.current",
-        "This release is available in your catalog.",
-        "Esta versão está disponível no seu catálogo.",
+        "This release is available in your components.",
+        "Esta versão está disponível nos seus componentes.",
     ),
     (
         "sm86.new",
-        "This release is not yet available in your catalog.",
-        "Esta versão ainda não está disponível no seu catálogo.",
+        "This release is not yet available in your components.",
+        "Esta versão ainda não está disponível nos seus componentes.",
     ),
     (
         "sm86.ignored",
@@ -585,8 +585,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "remedy.processes",
-        "Show running processes",
-        "Ver processos em execução",
+        "Show running processes…",
+        "Ver processos em execução…",
     ),
     (
         "remedy.close_processes",
@@ -597,8 +597,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("remedy.replan", "Prepare a fresh review", "Preparar uma nova revisão"),
     (
         "remedy.foreign",
-        "Choose keep or replace…",
-        "Escolher manter ou substituir…",
+        "Choose keep or replace",
+        "Escolher manter ou substituir",
     ),
     (
         "mdl.incompatible",
@@ -837,6 +837,16 @@ const TEXT: &[(&str, &str, &str)] = &[
         "No games found. Add a game folder by hand.",
         "Nenhum jogo encontrado. Adicione a pasta de um jogo à mão.",
     ),
+    (
+        "lib.no_match",
+        "No games match your search.",
+        "Nenhum jogo corresponde à busca.",
+    ),
+    (
+        "lib.no_installed",
+        "No games have Retoque installed yet.",
+        "Nenhum jogo tem o Retoque instalado ainda.",
+    ),
     ("lib.skipped", "Could not read", "Não foi possível ler"),
     ("game.root", "game folder", "pasta do jogo"),
     ("game.target", "Executable folder", "Pasta do executável"),
@@ -914,8 +924,8 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Copy the driver's _nvngx.dll for Wine",
         "Copiar o _nvngx.dll do driver para o Wine",
     ),
-    ("inst.preview", "Preview install", "Ver o que a instalação faz"),
-    ("inst.preview_uninstall", "Preview uninstall", "Ver o que a remoção faz"),
+    ("inst.preview", "Review installation…", "Revisar instalação…"),
+    ("inst.preview_uninstall", "Review uninstall…", "Revisar desinstalação…"),
     ("inst.install", "Install", "Instalar"),
     ("inst.update", "Update", "Atualizar"),
     ("inst.uninstall", "Uninstall", "Desinstalar"),
@@ -1537,7 +1547,7 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     ("shell.progress_install", "Installing…", "Instalando…"),
     ("shell.progress_update", "Updating…", "Atualizando…"),
-    ("shell.progress_remove", "Removing…", "Removendo…"),
+    ("shell.progress_remove", "Uninstalling…", "Desinstalando…"),
     ("shell.progress_save", "Saving…", "Salvando…"),
     // UX shell / worker A
     ("shell.home", "Back to the library", "Voltar à biblioteca"),
@@ -1553,8 +1563,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "shell.catalog_changed",
-        "Model catalog updated",
-        "Catálogo de modelos atualizado",
+        "Your models updated",
+        "Seus modelos foram atualizados",
     ),
     ("shell.checking", "Checking installation…", "Verificando instalação…"),
     (
@@ -2044,8 +2054,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.no_component",
-        "No sm86 component in your catalog",
-        "Nenhum componente sm86 no catálogo",
+        "No sm86 component in your components",
+        "Nenhum componente sm86 nos seus componentes",
     ),
     (
         "auto.component_installed",
@@ -2059,8 +2069,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "auto.component_remove",
-        "Review component removal",
-        "Revisar remoção do componente",
+        "Review component removal…",
+        "Revisar remoção do componente…",
     ),
     (
         "auto.catalog_remove",
@@ -2145,8 +2155,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "rec.sm86_update.why",
-        "This game has an older dlssg_for_sm86 (0.3.x). The version in your catalog replaces it; the old files are kept as a backup.",
-        "Este jogo tem um dlssg_for_sm86 antigo (0.3.x). A versão do seu catálogo o substitui; os arquivos antigos ficam guardados como cópia.",
+        "This game has an older dlssg_for_sm86 (0.3.x). The version in your components replaces it; the old files are kept as a backup.",
+        "Este jogo tem um dlssg_for_sm86 antigo (0.3.x). A versão dos seus componentes o substitui; os arquivos antigos ficam guardados como cópia.",
     ),
     // Discovery folders / worker t117
     ("store.xbox", "Xbox", "Xbox"),
@@ -2316,8 +2326,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "drop.component",
-        "Import this sm86 component into the app catalog? Installation requires a separate review.",
-        "Importar este componente sm86 para o catálogo? A instalação exige outra revisão.",
+        "Import this sm86 component into your components? Installation requires a separate review.",
+        "Importar este componente sm86 para seus componentes? A instalação exige outra revisão.",
     ),
     (
         "drop.game",
@@ -2370,7 +2380,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Also update DLSS (optional)",
         "Atualizar DLSS também (opcional)",
     ),
-    ("dlss.download", "Get DLSS 310.9.16…", "Obter DLSS 310.9.16…"),
+    ("dlss.download", "Download DLSS 310.9.16…", "Baixar DLSS 310.9.16…"),
     (
         "dlss.all_current",
         "Every DLSS file in this game is already this version or newer.",
@@ -2551,7 +2561,7 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Use downloaded release",
         "Usar versão baixada",
     ),
-    ("payload.download", "Get release…", "Baixar versão…"),
+    ("payload.download", "Download release…", "Baixar versão…"),
     ("payload.download_now", "Download update…", "Baixar atualização…"),
     ("payload.check", "Check for updates…", "Verificar atualizações…"),
     (
@@ -2664,8 +2674,8 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "nr_fetch.get_compatible",
-        "Get a compatible model…",
-        "Obter um modelo compatível…",
+        "Download a compatible model…",
+        "Baixar um modelo compatível…",
     ),
     (
         "nr_fetch.consent_title",
@@ -2867,7 +2877,59 @@ mod tests {
         // cannot depend on the language.
         for (key, en, pt) in TEXT.iter().chain(retoque_data::messages::TEXT) {
             assert_eq!(en.ends_with('…'), pt.ends_with('…'), "{key}: \"{en}\" / \"{pt}\"");
+            assert!(!en.contains("...") && !pt.contains("..."), "{key}: ASCII '...'");
         }
+    }
+
+    #[test]
+    fn design_glossary_and_dialog_ellipsis_rules_hold() {
+        let banned = [
+            "Get ",
+            "Obter",
+            "Ver o que ",
+            "Remover do catálogo",
+            "Tirar da lista",
+            "Catálogo do aplicativo",
+            "catalogue",
+            "Retoque Doctor",
+            "Carregar como",
+            "Padrão do jogo",
+            "precisa de limpeza",
+            "DLL do modelo",
+            "alvo CUDA corresponde",
+            "in your catalog",
+            "no seu catálogo",
+            "app catalog",
+        ];
+        for (key, en, pt) in TEXT {
+            let engine_en = *key == "note.sm86_install";
+            for phrase in banned {
+                if !engine_en {
+                    assert!(
+                        !en.contains(phrase),
+                        "{key} en uses banned glossary phrase {phrase:?}: {en:?}"
+                    );
+                }
+                assert!(
+                    !pt.contains(phrase),
+                    "{key} pt uses banned glossary phrase {phrase:?}: {pt:?}"
+                );
+            }
+        }
+        for dialog_key in [
+            "remedy.processes",
+            "auto.component_remove",
+            "inst.preview",
+            "inst.preview_uninstall",
+            "dlss.download",
+            "payload.download",
+            "nr_fetch.get_compatible",
+        ] {
+            assert!(t(Lang::En, dialog_key).ends_with('…'), "{dialog_key}");
+            assert!(t(Lang::Pt, dialog_key).ends_with('…'), "{dialog_key}");
+        }
+        assert!(!t(Lang::En, "remedy.foreign").ends_with('…'));
+        assert!(!t(Lang::Pt, "remedy.foreign").ends_with('…'));
     }
 }
 

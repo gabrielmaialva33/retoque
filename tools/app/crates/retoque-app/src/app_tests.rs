@@ -247,6 +247,86 @@ pub(crate) mod shell_tests {
     }
 
     #[test]
+    pub(crate) fn filtered_library_and_home_grid_explain_empty_search_and_installed_filter() {
+        let make = |lang: Lang, search: &str, installed_only: bool| {
+            let mut a = app();
+            a.lang = lang;
+            a.library_state.search = search.into();
+            a.library_state.installed_only = installed_only;
+            a.library_state.games.push(Game {
+                id: "one".into(),
+                name: "Cyberpunk 2077".into(),
+                store: Store::Steam,
+                install_dir: "/synthetic/cp77".into(),
+                runtime: Runtime::Unknown,
+                targets: vec![],
+                dlss_anywhere: vec![],
+                registered: true,
+            });
+            a
+        };
+        for lang in [Lang::En, Lang::Pt] {
+            for home in [false, true] {
+                let by_search = make(lang, "zzz-no-match", false);
+                let h_search = Harness::new_ui_state(
+                    move |ui, a: &mut RetoqueApp| {
+                        if home {
+                            a.home_grid(ui);
+                        } else {
+                            a.library(ui);
+                        }
+                    },
+                    by_search,
+                );
+                h_search.get_by_label(t(lang, "lib.no_match"));
+
+                let by_installed = make(lang, "", true);
+                let h_inst = Harness::new_ui_state(
+                    move |ui, a: &mut RetoqueApp| {
+                        if home {
+                            a.home_grid(ui);
+                        } else {
+                            a.library(ui);
+                        }
+                    },
+                    by_installed,
+                );
+                h_inst.get_by_label(t(lang, "lib.no_installed"));
+            }
+        }
+    }
+
+    #[test]
+    pub(crate) fn components_tab_folds_hashes_under_technical_details() {
+        for lang in [Lang::En, Lang::Pt] {
+            let mut a = app();
+            a.lang = lang;
+            let sha = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+            a.catalog = Some(Ok(vec![Model {
+                sha256: sha.into(),
+                size: 120 * 1024 * 1024,
+                label: "Model 310.3.0".into(),
+                version: Some("310.3.0".into()),
+                path: "/synthetic/models/nvngx_dlssnr.dll".into(),
+                compatibility: retoque_data::model_compat::ModelCompatibility::default(),
+            }]));
+            a.view.target = Some("/synthetic/cp77".into());
+            a.view.ini = Some(Ok(Some(Ini::parse(b"[DlssNr]\nModelFile=auto\n"))));
+            let mut h = Harness::new_ui_state(
+                |ui, app: &mut RetoqueApp| {
+                    let tx = app.cmd_tx.clone();
+                    app.model_tab(ui, &tx);
+                },
+                a,
+            );
+            assert!(h.query_by_label_contains(&sha[..12]).is_none());
+            h.get_by_label(t(lang, "technical.details")).click();
+            h.run_steps(2);
+            h.get_by_label_contains(sha);
+        }
+    }
+
+    #[test]
     pub(crate) fn gpu_header_names_architecture_memory_and_driver() {
         use crate::autotune::gpu::{Arch, Gpu, Vendor};
         let mut app = app();

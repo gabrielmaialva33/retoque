@@ -74,11 +74,11 @@ optimize.up_to_date	В {game} уже заданы рекомендуемые н�
 optimize.install_first	Установите Retoque или зарегистрируйте старую установку перед оптимизацией.
 optimize.identity_missing	Идентификатор установленного компонента недоступен. Обновите сведения об игре перед просмотром.
 optimize.conflict	Предложенные настройки конфликтуют. Изменения не применены.
-remedy.processes	Показать запущенные процессы
+remedy.processes	Показать запущенные процессы…
 remedy.close_processes	Закройте эти программы и попробуйте ещё раз
 remedy.retry	Попробовать ещё раз
 remedy.replan	Подготовить новый просмотр
-remedy.foreign	Оставить или заменить…
+remedy.foreign	Оставить или заменить
 mdl.incompatible	Не работает на этой видеокарте
 mdl.arch_match	Совместимо с вашей видеокартой
 mdl.compat_unknown	Совместимость не подтверждена
@@ -172,6 +172,8 @@ lib.installed_only	Только установленные
 lib.add_folder	Добавить папку…
 lib.scanning	Ищем игры…
 lib.empty	Игры не найдены. Добавьте папку игры вручную.
+lib.no_match	Нет игр, подходящих под поиск.
+lib.no_installed	Retoque ещё не установлен ни в одной игре.
 lib.skipped	Не удалось прочитать
 game.root	папка игры
 game.target	Папка исполняемого файла
@@ -208,8 +210,8 @@ inst.keep_reshade	Оставить ReShade (загружать через OptiSc
 inst.replace_foreign	Заменить чужой файл (сохранится резервная копия)
 inst.second_proxy	Разрешить второй файл загрузчика OptiScaler
 inst.copy_nvngx	Скопировать _nvngx.dll драйвера для Wine
-inst.preview	Предпросмотр установки
-inst.preview_uninstall	Предпросмотр удаления
+inst.preview	Просмотреть установку…
+inst.preview_uninstall	Просмотр удаления…
 inst.install	Установить
 inst.update	Обновить
 inst.uninstall	Удалить
@@ -617,7 +619,7 @@ auto.components	Компоненты генерации кадров
 auto.no_component	В вашем каталоге нет компонента sm86
 auto.component_installed	Компонент установлен в этой игре
 auto.component_install	Просмотреть установку компонента…
-auto.component_remove	Просмотр удаления компонента
+auto.component_remove	Просмотр удаления компонента…
 auto.catalog_remove	Стереть компонент из приложения…
 auto.catalog_remove_title	Стереть этот компонент из приложения?
 auto.catalog_remove_help	Стирает копию, которую хранит приложение. Игры, в которых он уже есть, сохраняют свои файлы; чтобы установить его снова, импортируйте или скачайте его заново.

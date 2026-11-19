@@ -17,7 +17,7 @@ pub(crate) struct State {
     running: bool,
     download_consent: bool,
     /// The compiler download is being asked for (consent dialog open).
-    asking: bool,
+    pub(crate) asking: bool,
     cancel: Arc<AtomicBool>,
     progress: Option<prepare::Progress>,
     result: Option<prepare::Result<prepare::PreparedCache>>,

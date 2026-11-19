@@ -84,6 +84,7 @@ pub(crate) struct LibraryState {
     pub leftovers: Vec<retoque_core::leftovers::Leftover>,
     pub leftovers_review: bool,
     pub leftovers_busy: bool,
+    pub leftovers_focus: crate::widgets::FocusRestore,
     /// Set by each completed scan: the home grid opens at its top.
     pub scroll_to_top: bool,
     generation: u64,

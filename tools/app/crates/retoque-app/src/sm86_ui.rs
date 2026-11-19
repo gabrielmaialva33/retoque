@@ -203,15 +203,18 @@ impl RetoqueApp {
             }));
         }
         if let Some(record) = &self.tuning.sm86.record {
-            ui.label(format!("SHA-256: {}", record.sha256));
             widgets::collapsible(
                 ui,
-                "sm86_ignored",
-                self.tr("sm86.ignored"),
+                "sm86_details",
+                self.tr("technical.details"),
                 widgets::Fold::Details,
                 |ui| {
-                    for name in &record.ignored {
-                        ui.label(name);
+                    ui.label(RichText::new(format!("SHA-256: {}", record.sha256)).small().monospace());
+                    if !record.ignored.is_empty() {
+                        ui.label(RichText::new(self.tr("sm86.ignored")).small().color(theme::MUTED));
+                        for name in &record.ignored {
+                            ui.label(RichText::new(name).small().monospace());
+                        }
                     }
                 },
             );

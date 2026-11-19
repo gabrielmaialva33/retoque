@@ -12,10 +12,7 @@ impl RetoqueApp {
         }
         match &self.view.ini {
             None => {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(self.tr("tab.loading"));
-                });
+                widgets::busy(ui, self.lang, self.tr("tab.loading"), None, None);
                 return;
             }
             Some(Err(e)) => {

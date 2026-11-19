@@ -74,11 +74,11 @@ optimize.up_to_date	{game} hat bereits die empfohlenen Einstellungen für deine 
 optimize.install_first	Installiere oder übernimm Retoque, bevor du optimierst.
 optimize.identity_missing	Die Identität der installierten Komponente ist nicht verfügbar. Lies das Spiel neu ein, bevor du prüfst.
 optimize.conflict	Die vorgeschlagenen Einstellungen widersprechen sich. Es wurden keine Änderungen angewendet.
-remedy.processes	Laufende Prozesse anzeigen
+remedy.processes	Laufende Prozesse anzeigen…
 remedy.close_processes	Schließe diese Programme und versuche es erneut
 remedy.retry	Erneut versuchen
 remedy.replan	Neue Prüfung vorbereiten
-remedy.foreign	Behalten oder ersetzen…
+remedy.foreign	Behalten oder ersetzen
 mdl.incompatible	Funktioniert nicht mit dieser Grafikkarte
 mdl.arch_match	Kompatibel mit deiner Grafikkarte
 mdl.compat_unknown	Kompatibilität nicht bestätigt
@@ -172,6 +172,8 @@ lib.installed_only	Nur installierte
 lib.add_folder	Ordner hinzufügen…
 lib.scanning	Suche nach Spielen…
 lib.empty	Keine Spiele gefunden. Füge einen Spielordner manuell hinzu.
+lib.no_match	Keine Spiele passen zu deiner Suche.
+lib.no_installed	Retoque ist noch in keinem Spiel installiert.
 lib.skipped	Nicht lesbar
 game.root	Spielordner
 game.target	Ordner der ausführbaren Datei
@@ -208,8 +210,8 @@ inst.keep_reshade	ReShade behalten (über OptiScaler laden)
 inst.replace_foreign	Fremde Datei ersetzen (bleibt als Sicherungskopie)
 inst.second_proxy	Zweite OptiScaler-Ladedatei erlauben
 inst.copy_nvngx	_nvngx.dll des Treibers für Wine kopieren
-inst.preview	Vorschau der Installation
-inst.preview_uninstall	Vorschau der Deinstallation
+inst.preview	Installation prüfen…
+inst.preview_uninstall	Deinstallation prüfen…
 inst.install	Installieren
 inst.update	Aktualisieren
 inst.uninstall	Deinstallieren
@@ -609,7 +611,7 @@ auto.components	Komponenten für Frame-Generierung
 auto.no_component	Keine sm86-Komponente in deinen Komponenten
 auto.component_installed	Komponente in diesem Spiel installiert
 auto.component_install	Installation der Komponente prüfen…
-auto.component_remove	Entfernen der Komponente prüfen
+auto.component_remove	Entfernen der Komponente prüfen…
 auto.catalog_remove	Komponente aus der App löschen…
 auto.catalog_remove_title	Diese Komponente aus der App löschen?
 auto.catalog_remove_help	Löscht die Kopie, die die App aufbewahrt. Spiele, die sie haben, behalten ihre Dateien; um sie wieder zu installieren, importiere sie oder lade sie erneut herunter.
