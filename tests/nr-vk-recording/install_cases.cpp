@@ -40,7 +40,7 @@ LONG commitResult = NO_ERROR;
 LONG beginResult = NO_ERROR, updateResult = NO_ERROR, attachResult = NO_ERROR;
 int aborts = 0;
 bool coverQueues = false;
-DlssNr::VkChain::CoverageRegistry g_chainCoverage;
+
 int rejectedOperation = -1;
 int lookups = 0;
 int exportKind = 0;
@@ -207,8 +207,8 @@ template <class Pfn> Pfn Through(size_t operation, int kind)
 void FreshInstall()
 {
     Fresh();
-    for (uint64_t d = 1; d <= 32; ++d)
-        g_chainCoverage.Forget(d);
+    g_chainState.store(nullptr);
+    g_chainOwner.reset();
     coverQueues = false;
     beginResult = updateResult = attachResult = NO_ERROR;
     aborts = 0;
@@ -251,7 +251,7 @@ Ticket BeginThrough(VkDevice d, VkCommandBuffer buffer, int kind)
 
 void InstallCoversExportAndProcedure()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     for (size_t operation = 0; operation < names.size(); ++operation)
         for (int kind : { 0, 1 })
             Check(installed.count(reinterpret_cast<void*>(addresses[operation][kind])) == 1,
@@ -273,12 +273,12 @@ void InstallCoversExportAndProcedure()
 void MultipleTargetsAndAliases()
 {
     exportKind = 1;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.size() == 7, "identical export and device addresses must be attached once");
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.size() == 7, "repeat installation must not stack another detour");
     auto second = H<VkDevice>(2);
-    HookDevice(second);
+    HookDevice(second, false);
     Check(installed.size() == 14, "another ICD address must receive its own target slot");
     auto buffer = AllocateThrough(second, 2);
     auto ticket = BeginThrough(second, buffer, 2);
@@ -291,7 +291,7 @@ void MultipleTargetsAndAliases()
 
 void ObserverSuccessBoundaries()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     auto buffer = AllocateThrough(device, 1);
     auto old = BeginThrough(device, buffer, 0);
     auto resource = Pin(old);
@@ -332,7 +332,7 @@ void ObserverSuccessBoundaries()
 // The independent observers pass Begin's flags on as the wDx12 wrapper does: the zero-motion probe reads them.
 void ObserverBeginFlagsReachTheTicket()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     auto buffer = AllocateThrough(device, 0);
     VkCommandBufferBeginInfo begin {};
     Check(Through<PFN_vkBeginCommandBuffer>(1, 0)(buffer, &begin) == VK_SUCCESS, "Begin must pass");
@@ -367,20 +367,20 @@ void InstallRemainsOptIn()
 void FailedDetourAndOwnAddresses()
 {
     commitResult = 42;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.empty() && g_attached.empty(), "failed transactions must not publish targets");
     auto buffer = AllocateThrough(device, 1);
     VkCommandBufferBeginInfo begin {};
     Through<PFN_vkBeginCommandBuffer>(1, 1)(buffer, &begin);
     Check(!R().Current(1, Key(buffer)), "unobserved allocation must stay inadmissible after detour failure");
     commitResult = NO_ERROR;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     buffer = AllocateThrough(device, 1);
     BeginThrough(device, buffer, 1);
     Check(installed.size() == 14, "later successful installation must recover all target slots");
     FreshInstall();
     ownBeginAddress = true;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.count(reinterpret_cast<void*>(&OwnBegin)) == 0,
           "function lookup returning our module must not recursively detour its own observer");
     Check(installed.size() == 12, "other lifecycle functions must still install when Begin is unavailable");
@@ -393,8 +393,8 @@ void PartialInstallCannotCertifyRecordingLifetime()
 {
     Config::Instance()->DlssNrPasses.value = 2;
     rejectedOperation = 3; // both ResetCommandBuffer addresses fail; all other hooks install
-    const auto coverage = HookDevice(device);
-    Check(!coverage.Complete() && !g_chainCoverage.Ready(Key(device)),
+    const auto coverage = HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    Check(!coverage.Complete() && !g_chainState.load()->coverage.Ready(Key(device)),
           "partial installation must deny chain admission");
     Check(installed.size() == 12, "partial install must leave only reset unwatched in this witness");
     auto buffer = AllocateThrough(device, 1);
@@ -411,7 +411,7 @@ void PartialInstallCannotCertifyRecordingLifetime()
 
 void AllocationLevelReachesTicket()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     for (int level : { 0, 1, 42 }) // unknown must never default to primary
     {
         VkCommandBufferAllocateInfo info {};
@@ -431,28 +431,51 @@ void AllocationLevelReachesTicket()
     }
 }
 
+void DefaultInstallationMatchesBase()
+{
+    coverQueues = true;
+    BaselineHookDevice(device);
+    const auto baselineTargets = installed;
+    const auto baselineLookups = lookups;
+    FreshInstall();
+    coverQueues = true;
+    // Request is captured before the real create call. A concurrent config edit cannot change it.
+    Config::Instance()->DlssNrPasses.value = 2;
+    HookDevice(device, false);
+    Check(installed == baselineTargets && lookups == baselineLookups,
+          "unrequested device must install exactly the baseline detours and perform the same lookups");
+    Check(!g_chainState.load() && !g_chainOwner,
+          "unrequested device must not construct chain tables or observer mutexes");
+    failAllocation.store(true);
+    const auto refused = EnsureChainState();
+    failAllocation.store(false);
+    Check(!refused && !g_chainState.load(), "failed chain-state allocation must remain absent");
+}
+
 void CoverageCertificates()
 {
     coverQueues = true;
-    const auto legacy = HookDevice(device);
-    Check(!legacy.Complete() && !(legacy.installed & DlssNr::VkChain::HookCoverage::CreatePool) &&
-              !g_chainCoverage.Contains(1),
+    const auto legacy = HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    Check(!legacy.Complete() && !(legacy.installed & DlssNr::VkChain::HookCoverage::CreatePool) && !g_chainState.load(),
           "one pass must neither install the chain pool hook nor publish a new certificate");
     Config::Instance()->DlssNrPasses.value = 2;
-    const auto complete = HookDevice(device);
-    Check(complete.Complete() && g_chainCoverage.Ready(1), "complete required hooks must certify this device");
-    Check(!g_chainCoverage.Ready(2), "coverage must not cross devices");
+    const auto complete = HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    Check(complete.Complete() && g_chainState.load()->coverage.Ready(1),
+          "complete required hooks must certify this device");
+    Check(!g_chainState.load()->coverage.Ready(2), "coverage must not cross devices");
     failAllocation.store(true);
-    const bool readyWithoutHeap = g_chainCoverage.Ready(1);
+    const bool readyWithoutHeap = g_chainState.load()->coverage.Ready(1);
     failAllocation.store(false);
     Check(readyWithoutHeap, "certificate admission must not allocate");
-    g_chainCoverage.Forget(1);
-    Check(!g_chainCoverage.Ready(1), "device retirement revokes its certificate");
-    Check(g_chainCoverage.Publish(1, {}) && !g_chainCoverage.Publish(1, complete) && !g_chainCoverage.Ready(1),
+    g_chainState.load()->coverage.Forget(1);
+    Check(!g_chainState.load()->coverage.Ready(1), "device retirement revokes its certificate");
+    Check(g_chainState.load()->coverage.Publish(1, {}) && !g_chainState.load()->coverage.Publish(1, complete) &&
+              !g_chainState.load()->coverage.Ready(1),
           "a partial live-device certificate cannot be upgraded after observation was lost");
     for (uint64_t d = 2; d <= 16; ++d)
-        Check(g_chainCoverage.Publish(d, complete), "bounded certificate slots must admit within capacity");
-    Check(!g_chainCoverage.Publish(17, complete) && !g_chainCoverage.Ready(17),
+        Check(g_chainState.load()->coverage.Publish(d, complete),
+              "bounded certificate slots must admit within capacity");
+    Check(!g_chainState.load()->coverage.Publish(17, complete) && !g_chainState.load()->coverage.Ready(17),
           "capacity exhaustion must deny admission");
 }
 
@@ -464,7 +487,8 @@ void TransactionFailuresCannotCertify()
         coverQueues = true;
         Config::Instance()->DlssNrPasses.value = 2;
         *failed = 42;
-        Check(!HookDevice(device).Complete() && !g_chainCoverage.Ready(1) && installed.empty(),
+        Check(!HookDevice(device, Config::Instance()->DlssNrPasses.value > 1).Complete() &&
+                  !g_chainState.load()->coverage.Ready(1) && installed.empty(),
               "every transaction phase must succeed before coverage is certified");
     }
 }
@@ -482,7 +506,7 @@ void TargetSaturationCannotCertify()
 
 void ObserverAllocationFailure()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     VkCommandBufferAllocateInfo info {};
     info.commandPool = pool;
     info.commandBufferCount = 1;
@@ -523,7 +547,7 @@ void ObserverAllocationFailure()
 
 void ObserverHandleReuseAfterOutOfMemory()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     auto buffer = AllocateThrough(device, 1);
     const auto old = BeginThrough(device, buffer, 1);
     auto resource = Pin(old);
@@ -577,7 +601,7 @@ void ObserverHandleReuseAfterOutOfMemory()
 
 void ObserverBulkFreePreservesReentrantAllocation()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     const std::array<VkCommandBuffer, 2> buffers { AllocateThrough(device, 1), AllocateThrough(device, 1) };
     const auto firstTicket = BeginThrough(device, buffers[0], 1);
     auto oldSecond = Pin(BeginThrough(device, buffers[1], 1));
@@ -620,6 +644,7 @@ int main()
         { "detour-failure-own-address", FailedDetourAndOwnAddresses },
         { "partial-install-is-not-lifetime-proof", PartialInstallCannotCertifyRecordingLifetime },
         { "allocation-level-reaches-ticket", AllocationLevelReachesTicket },
+        { "default-installation-matches-base", DefaultInstallationMatchesBase },
         { "per-device-coverage-certificates", CoverageCertificates },
         { "transaction-phase-failures", TransactionFailuresCannotCertify },
         { "target-capacity-refusal", TargetSaturationCannotCertify },

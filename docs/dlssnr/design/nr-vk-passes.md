@@ -3,6 +3,95 @@
 Design and implementation slices, 2026-11-19, initially based on `6972e2d7`. **The portable decisions
 and creation-observation adapter are implemented; the runtime chain is not. Native Vulkan still executes one pass with master settings.** No GPU run.
 
+## Branch closure: no generation loop enabled, 2026-11-19
+
+The lead stopped this branch before step 3's resource owner/loop. Steps 1–2 are adapter code
+with host evidence; step 3 supplies only admission for one eligible queue and an observed
+command-pool family. There is no chain feature creation, evaluation, ping-pong or menu control.
+All requested counts still render one/master. No merge or activation is qualified before the
+GPU fixture and game run below. The lead reported that the workstation driver needs a reboot;
+this worker did not probe, reset or repair it, and ran no GPU commands.
+
+**Startup/off boundary.** `hkCreateDevice` captures NR enabled and Passes above one once, before
+the real create. That same boolean controls the budget-extension request, extra detour targets,
+coverage publication and observer registration. Changing Passes after creation cannot retrofit
+coverage. `ChainState` (coverage, 16 observer slots with their mutexes/budget/pool tables, refusal
+slots and the create-pool target slots) is allocated under the existing installation mutex only
+on that startup request. Allocation failure leaves it absent and the chain refused. In an
+all-Passes=1 process these objects are never constructed; submit wrappers take the existing
+`LockedQueueCall` path. The baseline already installed submit/submit2/KHR and allocation,
+Begin/End/reset/free/pool-destruction hooks; they are not new chain detours.
+
+The installation fixture executes the production function against a frozen `44ac22cb`
+installation body and compares installed target/callback maps and lookup counts. It also changes
+live config to two after a false startup request: still no new detour or chain state. The submit
+fixture executes 54 original-argument/result/call-count comparisons with heap allocation forbidden
+and no chain state, plus armed-off cases counting observer locks and private Vulkan calls.
+These are host fakes, not evidence of native Detours patching or a compiled Windows DLL.
+Detours patches addresses process-wide: if another logical device explicitly requested a chain
+and shares an export/ICD address, an unrequested device can traverse that existing detour. Its
+callback forwards unchanged without observer registration. Thus this proves no new detour in a
+game that never requested a chain; it does **not** claim physical per-device patch isolation in
+a mixed-device process. That stronger interpretation remains unproved and must not be merged
+as an accepted guarantee.
+
+**Removed guard.** Commit `8f05795a` added `Passes > 1 && !ChainCoverageReady(device)` followed by
+`return` at the beginning of native `EvaluateAfterUpscaleVk`. It suppressed the entire one/master
+NR evaluation for uncertified chain requests. It was absent in `44ac22cb` and was removed in
+`542f9339` so refusal keeps the established renderer. Its condition was false for a game that
+never requested a chain; removal changes no such game's rendering path. The replacement
+Count>1 preflight reports refusal and does not return before one/master.
+
+### Step-3 owner required before implementation
+
+Use an independent `ChainGeneration` owner, never an alias of `g_vk.feature`, `g_vk.output`, its
+parameter block or its route-release pin. It must own each feature/history and mutable NGX
+parameter block, both ping-pong allocations and their memory-type/size receipts, every auxiliary
+image/view/descriptor/pass/readback used by a recording, immutable effective settings, and the
+bounded generation reservation. Imported game/proxy handles remain borrowed and must not be
+freed or used after their exact recording lifetime. Creation tickets and **each** evaluation's
+recording pins refer to this owner. Creation A's fence establishes initialization of A only;
+it cannot retire or prove completion of later recording B.
+
+Reserve a retained-generation slot before allocating. Publish only a fully accounted generation;
+a partial create/evaluate failure retains all referenced objects and selects only the last good
+output. Remove an old owner from admission immediately, keep it alive while recordings can be
+submitted/replayed, and release only after all exact recording pins retire AND a successful live
+device drain covers submitted work. Neither an elapsed frame nor a signalled creation fence is
+release permission. Device loss or an unproved drain must abandon handles without Vulkan/NGX
+destructors, including parameter destruction that could call the driver. The eventual owner must
+implement live release and abandon together, preserving existing lock order.
+
+| Transition to exercise | Required owner behavior |
+|---|---|
+| Back to one pass or NR off while create/evaluate is pending | Detach chain admission; keep pending owner separate. Legacy rendering cannot allocate, lock, wait or submit for the chain. A bounded retirement mechanism must be established outside that path before enabling it. |
+| Resize/format/settings change | New owner/reservation, no overwrite or reuse of old pending images/parameters; saturation refuses new work. |
+| Stage change and present-owner hand-back | Remove route access, keep exact recording pins alive, and never transfer an incomplete chain feature to the present/legacy owner. |
+| Reset/free/reuse/replay/discard and failed submit | Invalidate readiness for that recording; a retired unsubmitted recording proves no initialization. Failed work remains owned until proven retirement/drain or abandonment. |
+| Device destruction/loss, failed drain | Quiesce metadata readers first; drain only a live device with retired recordings; otherwise abandon every generation and completion primitive without GPU destructors. |
+
+The current two-slot retention policy and creation observer are **not** that resource owner.
+There is deliberately no implementation of the transitions above in this branch.
+
+### Required GPU evidence before enabling the loop or merging this branch
+
+Add the missing after-upscale fixture with validation and synchronization validation demonstrably
+active. Exercise actual export/device/KHR detours (including shared-address mixed devices), the
+startup-one baseline installation/forwarding trace, delayed creation A and evaluation B, discard,
+reset/free/reuse/replay, failed game/marker submits, partial pass failures, three recordings in
+flight, bounded-generation exhaustion and every transition in the table. Capture destruction
+ordering and assert zero destruction on abandoned/lost devices; a signalled A must never retire B.
+Verify private image barriers, non-aliasing, last-good composition, and unchanged one-pass commands
+and pixels. Run bundle-on and independent-observer modes; refuse several eligible queues.
+
+Then run DOOM Eternal on RTX 4090 with exact source/DLL/model hashes, driver/Proton versions and
+INI recorded. The **first log to read is the eligible queue count**; this conservative gate may
+exclude engines using several graphics/compute queues. If admitted, use the chain procedure at
+this note's end and the same transition matrix. Record the unique heap's budget and usage before
+and after **each** created pass. Charging the entire estimated model bytes and every chain texture
+to the sole local heap deliberately over-estimates; no multi-heap or stale-query exception exists.
+No fixture or DOOM result is claimed here, and native Windows requires separate qualification.
+
 ## Why the existing route has one pass
 
 This is a renderer integration gap, not a demonstrated restriction of the model. The
@@ -46,14 +135,14 @@ viable follow-up design choice, not evidence that today's after-upscale feature 
 | Off path | `Passes=1` takes exactly today's `EvaluateAfterUpscaleVk` body, even with saved individual settings. No new tracker, heap query, allocation or model arguments. Disabled NR remains unchanged. |
 | Route | First version is native after-upscale only: Stage 0, no proxy. Before-upscale, present, bridge, RR and cadence integration are out. Their existing paths remain as they are. |
 | Settings | Snapshot through `Config::GetDlssNrPassSnapshot`; existing `Passes`, `IndividualPassSettings` and `[DlssNr.PassN]`, no new key. Counts bound to 1..10; one resolved tuning record per feature. Shared working size/filter and composition settings. |
-| Histories | Chain generation in `VkState` owns one NGX feature per requested pass. Rebuild only changed instances after safe retirement; rebuild of an upstream feature resets all downstream histories. A reset from the game, picture epoch, stage switch or NR re-enable resets all active histories. |
+| Histories | An independent chain generation owns one NGX feature per requested pass. Rebuild only changed instances after safe retirement; rebuild of an upstream feature resets all downstream histories. A reset from the game, picture epoch, stage switch or NR re-enable resets all active histories. |
 | Outputs | Keep the original proxy immutable. Two distinct working outputs alternate using `Chain::Routing`; pass N reads the last successful output and writes the other. Neither may alias the proxy. Encode, meter and compose run once. |
 | Barriers | Both model inputs/outputs use GENERAL as the forwarder expects. Before each extra evaluate, record compute shader write-to-read and prior-read-to-write dependencies, including when the layout stays GENERAL. Do not infer execution order from an `OwnedImage.layout` value. Restore intermediates and the final resolve's layouts as the existing route does. |
 | Partial failure | Stop on the first failed create/evaluate or admission. Never select its output. Compose the last successful answer, or leave the game output untouched if no pass succeeded. Retain failed features until safe retirement; a fault/device-loss must not dispatch composition on the lost device. |
 | Creation | Record at most one create per observed present, at least 500 ms apart, after settings and dimensions/format have settled 500 ms (`Chain::Schedule`). New feature evaluation requires a later present AND successful submission and completion of its exact creation recording. Discard/failure/unknown completion cannot become success with time or Retry. |
 | Ordering | First version requires ONE_TIME_SUBMIT for creation and refuses simultaneous-use or unknown recording flags, duplicate evaluation per present and unproved queue order. New generations require old recording pins retired plus a successful live-device drain. This is conservative and can pause NR; skipped work must not be reported as speedup. |
 | Budget | Before each generation/extra model, query the relevant device-local heap with enabled/supported `VK_EXT_memory_budget`. Refuse unknown/mixed heap attribution. Reserve max(512 MiB, 20% budget) plus 150% of max(measured model bytes, 256 MiB) and conservative allocated texture storage. Refuse overflow. Model stats are only an estimate; allocation can still fail after admission. |
-| Lifetime | Include every feature and ping image in the existing route generation pin. Never release at failure or settings change while recorded work can reference it. Live-device drain follows recording quiescence; failed drain/device loss abandons handles, with no Vulkan or NGX destructor. Extend `FreeRouteObjects`, `ShutdownVk(false)` and present-owner hand-back together. Preserve NR/owner/queue lock order. |
+| Lifetime | Pin every feature, parameter block and ping image through the independent chain owner, separate from the legacy route generation. Never release at failure or settings change while recorded work can reference it. Live-device drain follows recording quiescence; failed drain/device loss abandons handles, with no Vulkan or NGX destructor. Extend `FreeRouteObjects`, `ShutdownVk(false)` and present-owner hand-back together. Preserve NR/owner/queue lock order. |
 
 No shader or cbuffer change is needed for sequential model evaluation. Supersampling downsamples only
 the selected final answer, exactly once, and resolves it against the matching native proxy.

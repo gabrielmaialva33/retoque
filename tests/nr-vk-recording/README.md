@@ -200,3 +200,8 @@ Detours phase and target/certificate saturation deny chain admission. Certificat
 nothing, and Passes=1 publishes no certificate. Allocation level is now retained in the ticket;
 `allocation-level-reaches-ticket` covers primary, secondary and unknown instead of the original
 missing-level witness. Legacy pin admission is unchanged; only chain creation requires Primary.
+
+The chain-closure installation test compares the production target/callback set and lookup count
+against `baseline_hook_device.inc` (the frozen `44ac22cb` body). A false startup request remains
+false after a live config change: no chain state, observer mutex or added detour is installed.
+This host fake does not prove native patch isolation between logical devices sharing an address.

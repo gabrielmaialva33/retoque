@@ -12,7 +12,9 @@ sys.path.insert(0, str(ROOT / 'tests/nr-vk-recording'))
 from hooks_test import function
 
 source = (ROOT / 'retoque/dlssnr/DlssNr_VkPresentHost.cpp').read_text()
-production = 'thread_local unsigned g_creationSubmitDepth = 0;\nthread_local VkQueue g_creationSubmitQueue = VK_NULL_HANDLE;\n' + '\n\n'.join(function(source, signature) for signature in (
+production = function(source, 'struct ChainState') + ';\nstd::unique_ptr<ChainState> g_chainOwner;\nstd::atomic<ChainState*> g_chainState { nullptr };\n'
+production += 'thread_local unsigned g_creationSubmitDepth = 0;\nthread_local VkQueue g_creationSubmitQueue = VK_NULL_HANDLE;\n' + '\n\n'.join(function(source, signature) for signature in (
+    'ChainState* EnsureChainState()',
     'CreationObserver* CreationObserverFor(',
     'void RegisterCreationObserver(',
     'template <size_t S>\nVkResult VKAPI_CALL hkChainCreateCommandPool(',
@@ -31,6 +33,16 @@ for signature, qualified, local in (
      'DlssNr::VkPresentHost::SampleChainBudget', 'SampleChainBudget'),
 ):
     production += '\n' + function(source, signature).replace(qualified, local, 1)
+# One frozen decision precedes the real creation call and feeds every new startup action.
+create = function(source, 'VkResult VKAPI_CALL hkCreateDevice(')
+assert create.index('const bool chainRequested') < create.index('o_CreateDevice(')
+assert create.count('DlssNrPasses.value_or_default()') == 1
+assert 'EnableBudgetExtension(chainRequested,' in create
+assert 'HookDevice(*device, chainRequested)' in create
+assert 'if (chainRequested)\n            RegisterCreationObserver' in create
+hook = function(source, 'DlssNr::VkChain::HookCoverage HookDevice(')
+assert 'Config::Instance()' not in hook
+assert 'chainRequested ? EnsureChainState() : nullptr' in hook
 # The shared callback is tested via both slots; real Detours alias installation is NOT exercised here.
 assert 'AttachQueueCall(submit2Khr, g_submit2, kSubmit2Hooks, "vkQueueSubmit2KHR")' in source
 with tempfile.TemporaryDirectory(prefix='nr-vk-submit-boundary-') as temporary:

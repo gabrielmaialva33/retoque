@@ -23,7 +23,7 @@ def main():
     common_fakes = common.split('// @production@', 1)[0]
     common_helpers = '\n\n'.join(function(common, signature) for signature in
                                     ('Ticket DirectRecording(', 'std::weak_ptr<int> Pin(', 'void Fresh()'))
-    hook_device = function(host, 'DlssNr::VkChain::HookCoverage HookDevice(VkDevice device)')
+    hook_device = function(host, 'DlssNr::VkChain::HookCoverage HookDevice(VkDevice device, bool chainRequested)')
     declarations = re.findall(r'^Targets<(PFN_\w+)> (g_\w+);', host, re.MULTILINE)
     real_types = {'PFN_vkAllocateCommandBuffers', 'PFN_vkBeginCommandBuffer', 'PFN_vkEndCommandBuffer',
                   'PFN_vkResetCommandBuffer', 'PFN_vkFreeCommandBuffers', 'PFN_vkResetCommandPool',
@@ -32,6 +32,16 @@ def main():
     production = extra_types + '\n' + re.search(r'constexpr size_t kTargets = \d+;', host).group(0)
     production += '\n' + function(host, 'template <typename Pfn> struct Targets') + ';\n'
     production += '\n'.join(f'Targets<{pfn}> {name};' for pfn, name in declarations)
+    production += '''
+using PFN_vkCreateCommandPool = PFN_vkVoidFunction;
+struct ChainState {
+    DlssNr::VkChain::CoverageRegistry coverage;
+    Targets<PFN_vkCreateCommandPool> createPool;
+};
+std::unique_ptr<ChainState> g_chainOwner;
+std::atomic<ChainState*> g_chainState { nullptr };
+'''
+    production += function(host, 'ChainState* EnsureChainState()') + '\n'
     production += '\n' + re.search(r'template <typename T> Handle H\(T handle\)[^\n]+', host).group(0) + '\n'
     production += function(host, 'template <typename Pfn>\nbool AttachTarget(') + '\n'
 
@@ -56,6 +66,7 @@ def main():
     production += function(host, 'struct QueueCallTargets') + ';\n'
     production += function(host, 'QueueCallTargets QueueCall(') + '\n'
     production += function(host, 'bool AttachQueueCall(') + '\n' + hook_device + '\n'
+    production += (HERE / 'baseline_hook_device.inc').read_text() + '\n'
     production += 'void ResetTargetSets()\n{\n'
     production += '\n'.join(f'    {name} = {{}};' for _, name in declarations) + '\n}\n'
     install = function(host, 'void DlssNr::VkPresentHost::Install(')

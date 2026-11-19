@@ -27,7 +27,8 @@ void operator delete(void* value, std::size_t) noexcept { std::free(value); }
 using namespace DlssNr;
 struct ObserverMutex
 {
-    inline static unsigned calls = 0, expectedDepth = 1;
+    inline static unsigned calls = 0, expectedDepth = 1, constructed = 0;
+    ObserverMutex() { ++constructed; }
     PFN_vkQueueSubmit2 nestedCallback = nullptr;
     bool inNestedCallback = false;
     bool held = false;
@@ -41,9 +42,7 @@ struct ObserverMutex
 };
 using CreationObserver = VkChain::CreationObserver<ObserverMutex>;
 CreationObserver* queueObserver = nullptr;
-std::array<CreationObserver, 16> g_creationObservers;
-std::array<std::atomic<VkDevice>, 16> g_chainRefusalDevices {};
-VkChain::CoverageRegistry g_chainCoverage;
+
 ObserverMutex g_installMutex;
 unsigned resolves = 0;
 struct Config
@@ -140,7 +139,6 @@ VkResult VKAPI_CALL PoolCreate(VkDevice device, const VkCommandPoolCreateInfo* i
     *pool = Handle<VkCommandPool>(200);
     return VK_SUCCESS;
 }
-Targets<PFN_vkCreateCommandPool> g_chainCreatePool { { PoolCreate } };
 
 unsigned ownCreates = 0, ownSubmits = 0, ownPolls = 0, ownDestroys = 0;
 VkResult VKAPI_CALL OwnCreate(VkDevice, const VkFenceCreateInfo*, const VkAllocationCallbacks*, VkFence* fence)
@@ -201,9 +199,16 @@ int main()
     deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     auto device = Handle<VkDevice>(20);
     const auto beforeRegistration = ObserverMutex::calls;
+    assert(ObserverMutex::constructed == 1); // existing install mutex only; no chain mutex constructed
+    forbidHeap = true;
     RegisterCreationObserver(device, &deviceInfo, OwnSubmit);
     assert(!resolves && ObserverMutex::calls == beforeRegistration && !CreationObserverFor(device));
-    assert(g_chainCoverage.Publish(20, { VkChain::HookCoverage::Required }));
+    assert(ObserverMutex::constructed == 1);
+    forbidHeap = false;
+    assert(EnsureChainState());
+    assert(ObserverMutex::constructed > 1); // constructed only on an explicit startup request
+    g_chainState.load()->createPool.next[0] = PoolCreate;
+    assert(g_chainState.load()->coverage.Publish(20, { VkChain::HookCoverage::Required }));
     VkDeviceQueueCreateInfo protectedQueue {};
     protectedQueue.flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
     deviceInfo.queueCreateInfoCount = 1;
@@ -281,7 +286,8 @@ int main()
     assert(AdmitChainBudget(device, budgetGate, budgetKey, 0, {}).reason == VkChain::BudgetReason::Extension);
     assert(budgetLogs == 2);
     CreationObserverFor(device)->Destroy(true);
-    g_chainCoverage.Forget(20);
+    g_chainState.store(nullptr);
+    g_chainOwner.reset();
 
     auto& registry = VkRecording::Recordings();
     registry.Allocate(9, 8, { 7 }, VkRecording::Level::Primary);
@@ -326,6 +332,8 @@ int main()
                     assert(!creation.Ready(100)); // neither success nor a fence handle feeds the creation proof
                 }
     }
+    assert(!g_chainState.load()); // all 54 default forwards ran without chain tables or mutexes
+    assert(EnsureChainState());
     // An already armed device with Passes=1 still adds zero observer locks and zero Vulkan calls.
     for (uint32_t passes : { 1, 2 })
         for (unsigned api = 0; api < 3; ++api)
