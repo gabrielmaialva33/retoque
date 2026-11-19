@@ -390,6 +390,14 @@ tier = "host"
 timeout = 300
 summary = "The Vulkan route's guides below the frame's size (reduced-scale-guides-vk.md): DlssNr_GuideMatch.h's plan (matched, the game's regions, or the frame refused) against the D3D12 route's arithmetic, and DlssNr_GuideMatch_Vk.h's rules for the game's views, the outputs, the push block and dispatch, compiled against the real Vulkan headers under ASan/UBSan; source guards on the route (decided before any recording, the evaluate handed the plan, frees after a drain, abandon with a lost device), the pass, the shader and the project. No Vulkan device."
 
+[nr-vk-passes]
+path = "nr-vk-passes"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Vulkan chain first safe slice: portable prerequisites, creation evidence, budget and failure decisions, real recording retirement, shared routing/settling and eight mutants. No runtime chain or GPU."
+
 [nr-vk-present-host]
 path = "nr-vk-present-host"
 domain = "nr"
