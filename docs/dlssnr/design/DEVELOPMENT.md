@@ -203,6 +203,16 @@ The CPU fixtures include 420- and 480-pixel canvases as width pressure, in addit
 they are isolated panels, not a shell/game qualification. `FieldLabel` is only for single-call fields,
 never a begin/end popup pair. Real ImGui assertions verify the original item ID in both layout modes.
 
+### 2.8 Simple and full views
+
+| State | Visible/reachable controls |
+|---|---|
+| Simple, normal | Enable, short status, Apply the model, Look, Detail strength, capture under section 2.3, Show all settings last |
+| Simple, failure/guard/unsupported route | Same actionable notices and recovery gates as sections 2.2, 2.5, 2.6; never hide a refusal |
+| Full | All existing settings, diagnostics, profile, model statistics, rebuild notes and advisor |
+| Trial active | Advisor progress and cancellation remain reachable; other edits stay hidden as before |
+| View toggle clicked | Same ShowAllSettings key; next frame shows the chosen view; hidden saved values are untouched |
+
 ## 3. Per-change-type review (run BEFORE deploy)
 
 Match the change to its type and run that review — as an adversarial pass (a subagent given the diff

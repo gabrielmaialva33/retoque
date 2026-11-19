@@ -68,3 +68,7 @@ equivalent Config writes through the shared full-view controls, hidden individua
 preset visibility with one or unknown weight sets, native Vulkan/proxy pass refusal, read-only timing when enabled,
 and balanced item widths. Source guards place the early return after the profile/status block and before Source;
 the full RenderMenu body is not compiled against these fakes. Full UI appearance still requires a game run.
+
+The simple player view now keeps Look, Detail strength and capture, then Show all settings.
+Preset, passes and timing are full-view controls. Scripted frames assert retained hidden
+settings and that a toggle never draws both views in one frame.

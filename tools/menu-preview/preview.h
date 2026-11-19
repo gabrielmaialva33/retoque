@@ -64,7 +64,7 @@ void Compare()
 }
 void AdvisorEligible()
 {
-    Simple();
+    Full();
     auto* c = Config::Instance();
     c->DlssNrWorkingScale = 1.0f;
     c->DlssNrCadence = 1;
@@ -149,11 +149,11 @@ const Scene scenes[] = { { "nr-off", Off, false, 900 },
                          { "comparison", Compare, false, 4200 },
                          { "d3d12-simple-pt-BR", Simple, true, 900 },
                          { "present-hdr-pt-BR", Hdr, true, 4200 },
-                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 1600 },
-                         { "advisor-running-pt-BR", AdvisorRunning, true, 1600 },
-                         { "advisor-done-pt-BR", AdvisorDone, true, 1900 },
-                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 1900 },
-                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 1600 },
+                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 4200 },
+                         { "advisor-running-pt-BR", AdvisorRunning, true, 4200 },
+                         { "advisor-done-pt-BR", AdvisorDone, true, 4200 },
+                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 4200 },
+                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 4200 },
                          { "advisor-hidden-off", Off, true, 900 },
                          { "model-missing-pt-BR-narrow", Missing, true, 1100, 420 },
                          { "model-missing-narrow", Missing, false, 1100, 420 },

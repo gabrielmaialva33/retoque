@@ -1329,27 +1329,24 @@ static void RenderLooks(Config* config)
 static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResScale)
 {
     bool showAll = config->DlssNrShowAllSettings.value_or_default();
+    if (showAll)
+    {
+        if (MenuLayout::Checkbox(Localization::Label("Show all settings"), &showAll))
+            config->DlssNrShowAllSettings = showAll;
+        return !showAll;
+    }
+
+    ImGui::PushItemWidth(220.0f * menuResScale);
+    RenderLooks(config);
+    RenderDetailStrength(config);
+    ImGui::PopItemWidth();
+    ImGui::Spacing();
+    RenderPairCapture(config, nativeVulkan);
+    ImGui::Spacing();
     if (MenuLayout::Checkbox(Localization::Label("Show all settings"), &showAll))
         config->DlssNrShowAllSettings = showAll;
     HelpMarker("Show the full Neural Rendering panel. Hidden settings stay active and unchanged.");
-    if (showAll)
-        return false;
-
-    ImGui::PushItemWidth(220.0f * menuResScale);
-    RenderModelPreset(config);
-    RenderLooks(config);
-    if (!nativeVulkan && !config->DlssNrUseProxy.value_or_default())
-        RenderPassControls(config, nativeVulkan, false);
-    RenderDetailStrength(config);
-    if (!nativeVulkan && !config->DlssNrUseProxy.value_or_default() && config->GetDlssNrGpuTimingSettings().Enabled)
-    {
-        ImGui::SeparatorText(Localization::Tr("Fence-confirmed GPU timing"));
-        RenderGpuTimingReadout();
-    }
-    ImGui::PopItemWidth();
-    // The before/after capture is the first thing the app's comparison asks for: it must not need the full panel.
-    ImGui::Spacing();
-    RenderPairCapture(config, nativeVulkan);
+    // A view change takes effect next frame: never draw both sets of controls in this frame.
     return true;
 }
 
@@ -1442,11 +1439,6 @@ void RenderMenu(Config* config, float menuResScale)
             }
         }
 
-        // The toggle can be bound to a key, and nobody would think to look for it under Keybinds
-        // unless told. Dimmed, because it is a note rather than a setting.
-        ImGui::TextDisabled(
-            Localization::Tr("Can be toggled with a key -- bind it under Keybinds, \"Neural Rendering\"."));
-
         bool applyModel = config->DlssNrApplyModel.value_or_default();
         if (MenuLayout::Checkbox(Localization::Label("Apply the model"), &applyModel))
             config->DlssNrApplyModel = applyModel;
@@ -1509,7 +1501,9 @@ void RenderMenu(Config* config, float menuResScale)
             const char* runSuffix =
                 !config->DlssNrApplyModel.value_or_default() ? Localization::Tr("  (model running, edit hidden)") : "";
 
-            if (ms.has_value())
+            if (!config->DlssNrShowAllSettings.value_or_default())
+                ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), Localization::Tr("Running.%s"), runSuffix);
+            else if (ms.has_value())
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f),
                                    Localization::Tr("Running%s - legacy timer %.2f ms (unconfirmed)%s"),
                                    vulkan ? Localization::Tr(" natively on Vulkan") : "", ms.value(), runSuffix);
@@ -1521,20 +1515,23 @@ void RenderMenu(Config* config, float menuResScale)
             else
                 ImGui::TextColored(ImVec4(0.4f, 0.9f, 0.5f, 1.0f), Localization::Tr("Running.%s"), runSuffix);
 
-            // The model's own count of what this path's build holds (model-vram-stats.md); a statement, shown only
-            // when the model gave one.
-            if (const auto vram = vulkan ? DlssNr::ModelVramBytesVk() : DlssNr::ModelVramBytes(); vram.has_value())
+            if (config->DlssNrShowAllSettings.value_or_default())
             {
-                ImGui::SameLine();
-                ImGui::TextDisabled(Localization::Tr("(model: %llu MiB)"), DlssNr::ModelStats::RoundedMiB(*vram));
-            }
+                // The model's own count of what this path's build holds (model-vram-stats.md); a statement, shown only
+                // when the model gave one.
+                if (const auto vram = vulkan ? DlssNr::ModelVramBytesVk() : DlssNr::ModelVramBytes(); vram.has_value())
+                {
+                    ImGui::SameLine();
+                    ImGui::TextDisabled(Localization::Tr("(model: %llu MiB)"), DlssNr::ModelStats::RoundedMiB(*vram));
+                }
 
-            ImGui::SameLine();
-            ImGui::TextDisabled(Localization::Tr("(?)"));
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                ImGui::SetTooltip(Localization::Tr("The native Vulkan timer is legacy and is not fence-confirmed."
-                                                   "\nFor D3D12, use the separate Fence-confirmed GPU timing panel."
-                                                   "\nA historical sample is not the current frame's cost."));
+                ImGui::SameLine();
+                ImGui::TextDisabled(Localization::Tr("(?)"));
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip(Localization::Tr("The native Vulkan timer is legacy and is not fence-confirmed."
+                                                       "\nFor D3D12, use the separate Fence-confirmed GPU timing panel."
+                                                       "\nA historical sample is not the current frame's cost."));
+            }
         }
 
         if (routeNotice != nullptr)
@@ -1554,7 +1551,8 @@ void RenderMenu(Config* config, float menuResScale)
         }
 
         // What the game profile set at start-up, so a key the ini does not show is not a mystery.
-        if (const std::string profile = DlssNr::GameProfiles::Summary(); !profile.empty())
+        if (const std::string profile = DlssNr::GameProfiles::Summary();
+            config->DlssNrShowAllSettings.value_or_default() && !profile.empty())
         {
             ImGui::TextWrapped("%s %s", Localization::Tr("Game profile:"), profile.c_str());
             HelpMarker("Keys this game needs before Neural Rendering can run in it, applied when the game started,"
@@ -1567,14 +1565,23 @@ void RenderMenu(Config* config, float menuResScale)
         const bool nativeVulkan =
             vulkan || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
 
-        // In both views, under the status lines it copies.
-        RenderDiagnosticExport(config);
-
-        RenderAdvisor(config, nativeVulkan);
+        // Keep cancellation reachable even if a saved view preference changes during a trial.
         if (AdvisorRuntime::Active())
+        {
+            RenderAdvisor(config, nativeVulkan);
+            return;
+        }
+        if (RenderSimpleView(config, nativeVulkan, menuResScale))
             return;
 
-        if (RenderSimpleView(config, nativeVulkan, menuResScale))
+        // The toggle can be bound to a key, and nobody would think to look for it under Keybinds
+        // unless told. Dimmed, because it is a note rather than a setting.
+        ImGui::TextDisabled(
+            Localization::Tr("Can be toggled with a key -- bind it under Keybinds, \"Neural Rendering\"."));
+
+        RenderDiagnosticExport(config);
+        RenderAdvisor(config, nativeVulkan);
+        if (AdvisorRuntime::Active())
             return;
 
         ImGui::Spacing();
