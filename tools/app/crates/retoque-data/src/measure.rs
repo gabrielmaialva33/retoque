@@ -54,7 +54,7 @@ struct Sample {
     passes: u32,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct TimingBuilder {
     samples: VecDeque<Sample>,
     cadence: u32,

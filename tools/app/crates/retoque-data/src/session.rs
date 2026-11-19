@@ -51,7 +51,7 @@ pub struct Pacing {
     pub driver: Option<String>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct PacingBuilder {
     previous: Option<f64>,
     day_offset: f64,

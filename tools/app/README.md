@@ -242,6 +242,14 @@ sum, never a time per pass; resets and captures are left out; with model cadence
 apart and no share is shown, because the samples cannot say how often the model ran. “Turn measurement off…” puts
 the key back to Automatic (off). There is no offer on native Vulkan, which the runtime does not time, or with NR off.
 
+The page reads a log through `retoque_data::logs::Follower`: a log that did not change is not read again, one that
+only grew is read from where the last read stopped, and one that was replaced (a new session) from its start; the
+answer is always what `logs::summarize` gives for the file as it is. The summary skips, in one pass per line, the
+per-frame debug and trace lines that name nothing it reads. While a game runs and keeps writing its log, the page
+reads what was added at most every two seconds, one read at a time; an older session chosen in the Logs tab stays
+on screen meanwhile. The library's install states come from what the scan and status jobs saw in each folder, so
+drawing the window reads no game file.
+
 The top bar measures its buttons from their laid-out text: when the full set does not fit, the language selector,
 Preferences, the game-list toggle and then Rescan library (least used first) move into one “More actions” menu (⋯)
 at its end, each under its own label; the brand, the way back to the library and Commands stay.
@@ -249,6 +257,10 @@ at its end, each under its own label; the brand, the way back to the library and
 Install options (proxy name, NR on, previews) sit closed at the end of the tab; the footer
 holds one button naming the Retoque files in use (with “New release available” beside it when there is one), which
 opens the “Retoque files” dialog with the payload sources and official releases.
+
+A Wine or Proton prefix inside a scanned folder (a portable emulator kept with its own prefix), or added as a
+folder itself, contributes the games installed in it but never its `drive_c/windows` tree (Wine's programs, DXVK's
+and vkd3d's `dxgi.dll` / `d3d12.dll`) nor Steam's client stub as a folder to install into.
 
 A store's uninstall removes only the files it installed, so a game folder can outlive its game with Retoque's
 files in it. Discovery reports unregistered Steam folders with no executable and a Retoque marker

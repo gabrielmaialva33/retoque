@@ -291,8 +291,7 @@ impl RetoqueApp {
                     self.autotune_refresh(target.clone());
                 }
                 if changes.logs || changes.ini {
-                    let t = target.clone();
-                    self.jobs.spawn("logs", None, move |_| model::logs(t));
+                    self.jobs.log_changed(target.clone());
                 }
                 if changes.captures {
                     self.compare.invalidate_captures(&target);

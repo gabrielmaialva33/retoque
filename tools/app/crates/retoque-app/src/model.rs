@@ -149,6 +149,7 @@ pub fn discover(manual: Vec<PathBuf>, libraries: Vec<PathBuf>) -> Outcome {
             game.install_dir = real;
         }
     }
+    crate::state::library::remember_scan(&games);
     let home = dirs::home_dir();
     let art = games
         .iter()
@@ -182,6 +183,7 @@ pub fn remove_leftovers(reviewed: Vec<retoque_core::leftovers::Leftover>) -> Out
 
 pub fn status(target: PathBuf) -> Outcome {
     let result = retoque_core::status(&target).map_err(|e| AppError::from(e).for_target(target.clone()));
+    crate::state::library::remember_folder(&target);
     Outcome::Status { target, result }
 }
 
@@ -246,10 +248,32 @@ pub fn apply(
     }
 }
 
+/// A log's summary. The few logs read last are remembered (`retoque_data::logs::Follower`): one that did not change
+/// is not read again, and one that only grew is read from where the last read stopped. A running game's log, tens
+/// or hundreds of MB and still growing, then costs what the game added, not the whole file at every look.
+pub fn read_log(log: &Path) -> std::io::Result<Summary> {
+    use retoque_data::logs::Follower;
+    static FOLLOWED: std::sync::Mutex<Vec<Follower>> = std::sync::Mutex::new(Vec::new());
+    const KEPT: usize = 4;
+    let mut followed = FOLLOWED.lock().unwrap_or_else(|e| e.into_inner());
+    let mut follower = match followed.iter().position(|f| f.path() == log) {
+        Some(index) => followed.remove(index),
+        None => Follower::new(log),
+    };
+    let result = follower.refresh();
+    if result.is_ok() {
+        if followed.len() == KEPT {
+            followed.remove(0);
+        }
+        followed.push(follower);
+    }
+    result
+}
+
 pub fn logs(target: PathBuf) -> Outcome {
     let files = retoque_data::logs::find(&target);
     let result = match files.first() {
-        Some(newest) => retoque_data::logs::summarize(newest)
+        Some(newest) => read_log(newest)
             .map(Some)
             .map_err(|e| AppError::io(newest.clone(), e).for_target(target.clone())),
         None => Ok(None),
