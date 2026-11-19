@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""First safe slice only: portable Vulkan chain decisions, no runtime adapter or GPU."""
+"""Portable Vulkan chain decisions and owned creation adapter; no GPU."""
 from pathlib import Path
 import resource
 import subprocess
@@ -57,6 +57,6 @@ menu = (ROOT / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
 controls = menu[menu.index('static void RenderPassControls('):menu.index('static void RenderCadenceControls(')]
 assert 'if (vulkan || config->DlssNrUseProxy.value_or_default())' in controls
 assert controls.index('return;') < controls.index('GetDlssNrPassSnapshot()')
-print('PASS: runtime and menu remain one/master until completion/budget adapters are implemented')
+print('PASS: runtime and menu retain the single-pass boundary until budget and generation integration')
 
 subprocess.run([sys.executable, str(HERE / 'submit_boundary.py')], check=True)

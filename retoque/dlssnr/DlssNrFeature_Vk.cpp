@@ -4165,6 +4165,7 @@ void ShutdownVk(bool deviceAlive)
 {
     if (!deviceAlive)
     {
+        VkPresentHost::AbandonCreationObserver(g_vk.device);
         PairCapture::DeviceGoneVkLocked(g_vk.device, false);
         ForgetMeterReadback();
         ForgetMotionProbe();
@@ -4305,6 +4306,8 @@ void CancelAfterUpscaleHandBack(VkDevice device)
 
 void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::string>& lines)
 {
+    if (forgetOnly)
+        VkPresentHost::AbandonCreationObserver(device);
     // The route's lock may be waited for here: the route never takes the host's transport lock or a queue's present
     // lock, and vkDestroyDevice holds no queue's submit lock.
     {

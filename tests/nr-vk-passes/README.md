@@ -30,3 +30,16 @@ it must become adapter refusal/success coverage when step 1 is implemented.
 The suite now needs the repository's `external/vulkan` headers in addition to GCC. It still
 loads no Vulkan driver. For lifecycle coverage/primary-identity witnesses also run
 `python3 tests/nr-vk-recording/install_test.py`; those are documented in that suite's README.
+
+## Owned completion adapter (step 1c)
+
+The production submit fixture now exercises 54 inactive combinations, plus registered devices
+with Passes=1 and active submit/submit2/shared-KHR callbacks, including nested dispatch. Inactive
+forwarding preserves arguments/counts and adds zero observer locks or Vulkan calls. The real
+registration helper refuses absent certificates, protected queues and multiple physical devices.
+`creation_cases.cpp` executes the real bounded observer under sanitizers with a counted driver:
+exact epochs/serials, primary ONE_TIME_SUBMIT admission, reverse completion on two queues, pending
+and completed replay, failed app/marker submits, reset/free/pool/reuse, lost-device polling and
+abandonment, off intervals and ten-slot exhaustion. Unknown marker completion is retained until
+a proven drain. These are host proofs of the adapter, not GPU/Detours or renderer-chain execution.
+The prior characterization paragraphs describe the initial boundary before steps 1a-1c.

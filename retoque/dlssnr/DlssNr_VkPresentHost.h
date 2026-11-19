@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DlssNr_VkRecording.h"
 #include <windows.h>
 #include <optional>
 #include <vulkan/vulkan.h>
@@ -47,6 +48,10 @@ void Install(HMODULE vulkan1);
 
 // No allocation or lock. False after partial/missing installation or device retirement.
 bool ChainCoverageReady(VkDevice device);
+uint64_t WatchCreation(VkDevice device, const VkRecording::Ticket& ticket, uint64_t present);
+bool CreationReady(VkDevice device, uint64_t serial, uint64_t present);
+void CancelCreation(VkDevice device, uint64_t serial);
+void AbandonCreationObserver(VkDevice device);
 
 // Called once by VulkanHooks::DestroyDevice, shared by both detour layers. Stops/drains NR,
 // or drains an untracked device under the host's transport/known-queue locks. False requires

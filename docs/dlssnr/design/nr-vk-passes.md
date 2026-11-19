@@ -1,7 +1,7 @@
 # Native Vulkan sequential model passes
 
-Design and first safe slice, 2026-11-19, based on `6972e2d7`. **The portable decisions are implemented;
-the runtime chain is not. Native Vulkan still executes one pass with master settings.** No GPU run.
+Design and implementation slices, 2026-11-19, initially based on `6972e2d7`. **The portable decisions
+and creation-observation adapter are implemented; the runtime chain is not. Native Vulkan still executes one pass with master settings.** No GPU run.
 
 ## Why the existing route has one pass
 
@@ -51,7 +51,7 @@ viable follow-up design choice, not evidence that today's after-upscale feature 
 | Barriers | Both model inputs/outputs use GENERAL as the forwarder expects. Before each extra evaluate, record compute shader write-to-read and prior-read-to-write dependencies, including when the layout stays GENERAL. Do not infer execution order from an `OwnedImage.layout` value. Restore intermediates and the final resolve's layouts as the existing route does. |
 | Partial failure | Stop on the first failed create/evaluate or admission. Never select its output. Compose the last successful answer, or leave the game output untouched if no pass succeeded. Retain failed features until safe retirement; a fault/device-loss must not dispatch composition on the lost device. |
 | Creation | Record at most one create per observed present, at least 500 ms apart, after settings and dimensions/format have settled 500 ms (`Chain::Schedule`). New feature evaluation requires a later present AND successful submission and completion of its exact creation recording. Discard/failure/unknown completion cannot become success with time or Retry. |
-| Ordering | First version refuses simultaneous-use or unknown recording flags, duplicate evaluation per present and unproved queue order. New generations require old recording pins retired plus a successful live-device drain. This is conservative and can pause NR; skipped work must not be reported as speedup. |
+| Ordering | First version requires ONE_TIME_SUBMIT for creation and refuses simultaneous-use or unknown recording flags, duplicate evaluation per present and unproved queue order. New generations require old recording pins retired plus a successful live-device drain. This is conservative and can pause NR; skipped work must not be reported as speedup. |
 | Budget | Before each generation/extra model, query the relevant device-local heap with enabled/supported `VK_EXT_memory_budget`. Refuse unknown/mixed heap attribution. Reserve max(512 MiB, 20% budget) plus 150% of max(measured model bytes, 256 MiB) and conservative allocated texture storage. Refuse overflow. Model stats are only an estimate; allocation can still fail after admission. |
 | Lifetime | Include every feature and ping image in the existing route generation pin. Never release at failure or settings change while recorded work can reference it. Live-device drain follows recording quiescence; failed drain/device loss abandons handles, with no Vulkan or NGX destructor. Extend `FreeRouteObjects`, `ShutdownVk(false)` and present-owner hand-back together. Preserve NR/owner/queue lock order. |
 
@@ -73,7 +73,7 @@ budget, all ten output positions and settings retry. The real recording registry
 both submitted-unknown and never-submitted recordings can drop their pins on Reset. Source guards
 hold the current renderer and menu to one pass while this slice is the only implementation.
 
-Remaining implementation, in dependency order:
+Implementation sequence (step 1 is implemented below; steps 2–4 remain):
 
 1. Observe successful submit/submit2/KHR of the exact primary creation buffer, with an owned completion
    primitive and identity protected against fence reuse. Cover entrypoint aliases, failed submits,
@@ -93,11 +93,38 @@ Step 1a now publishes a bounded, allocation-free per-device hook certificate. Ev
 lifecycle, queue retrieval and submit/submit2/KHR entrypoint must attach successfully; failures,
 missing pointers and target saturation deny chain admission. Repeating installation cannot upgrade
 a partial certificate on a live device. `Passes=1` does not publish or consult it; the submit
-wrappers are unchanged. A request above one without coverage now stands down before NR recording.
+wrappers preserve their inactive forwarding boundary. A request above one without coverage now stands down before NR recording.
 Step 1b now retains allocation level in the recording ticket (including the independent observer,
 w/Dx12 and host-owned allocation paths). Creation evidence refuses secondary and unknown levels.
-The certificate and level do not prove submission or completion; the owned-completion adapter
-remains pending and no multipass feature is available.
+Step 1c now provides `DlssNr_VkCreation.h`: ten recording slots and private fences per observed
+device, with bounded device slots. It captures exact recording matches before forwarding the
+application submit and preserves its result. A successful submit gets a non-null, empty marker
+submission with an owned fence on the same locked queue. Polling its signal supplies the matching
+epoch/serial to `VkChain::Creation`; a borrowed application fence is never read or reset.
+[The Vulkan fence scope](https://docs.vulkan.org/spec/latest/chapters/synchronization.html) includes
+earlier commands on that queue. Other queues do not share this proof.
+
+The adapter is ready for the chain generation to arm; the single-feature renderer is **not**
+converted into a pending-feature holder in this slice. That belongs to step 3: publishing an
+uncompleted feature into the legacy `g_vk.feature` would let a switch to Passes=1 evaluate it
+without its completion gate. The generation must retain pending features separately and cannot
+lend them to the legacy path. No multipass feature or menu control is available yet.
+
+Creation now requires a primary, serial [ONE_TIME_SUBMIT recording](https://docs.vulkan.org/refpages/latest/refpages/source/VkCommandBufferUsageFlagBits.html). Completion of an ordinary
+replayable recording alone cannot prevent its later creation commands racing already-recorded
+evaluations. Such recordings are conservatively refused. Reset/free/pool retirement/reuse,
+replay (even after completion), failed submits, cancellation and off intervals invalidate proof.
+Failed marker submits retain their fence until signal or a proven live drain; unknown completion
+never becomes readiness. Device loss makes all later polling refuse and device teardown abandons
+without any Vulkan destructor. Successful live-device drain allows final fence destruction.
+All pins contain CPU metadata only, and a completed fence never authorizes releasing the feature.
+
+Nested callbacks on the same queue are one observation; nesting on another queue invalidates the
+unobserved interval. Protected queues and multi-device groups are not admitted. No observer is
+registered without its device certificate. The inactive wrappers use the same queue lock and
+forward the same arguments once; they take **no observer lock**, allocate nothing and submit no
+marker. An already armed device switched to Passes=1 only invalidates old evidence atomically.
+Its pending objects remain bounded until active polling or externally synchronized destruction.
 
 The certificate has 16 process-wide slots, no map or lazy heap initialization. It is published
 under the existing installation lock, read with atomics, and cleared at device destruction.
@@ -107,7 +134,7 @@ own-module wrapper are conservatively uncertified. The existing host install opt
 
 ## Initial step-1 safety review (superseded by the follow-up above), 2026-11-19
 
-The follow-up starts at `44ac22cb` and stops **before completing step 1**. No submission
+The initial review at `bbdda337` started at `44ac22cb` and stopped **before completing step 1**. No submission
 observer, owned completion primitive, heap adapter, runtime chain or menu control was added.
 The stop is a missing proof in this integration, not a claim that Vulkan cannot implement it.
 The following executable witnesses make the prerequisites more specific than the first slice:
@@ -192,7 +219,7 @@ above substitutes for that missing fixture.
 
 For the current revision, DOOM Eternal is only a one/master regression run: native Vulkan
 DLSS, Stage 0, NR enabled at device creation, record DLL/model hashes, Proton/driver and exact
-INI. Passes 2/3/10 must still have the same one/master behavior and unavailable chain controls;
+INI. Passes 2/3/10 still have unavailable chain controls and cannot run a chain; uncertified devices refuse NR, while certified devices retain the one/master route;
 there are no creation-completion or chain-budget logs to assert. This worker ran no game.
 
 Only **after steps 1 through 4 and the missing fixture pass**, run the chain procedure in
@@ -206,4 +233,4 @@ answer must compose, failed output must never reach the game, and unchanged sett
 Check validation, image A/B, requested versus actual model work, GPU timings, VRAM and teardown;
 counting frames or seeing `feature up` alone is insufficient. One-pass off-path commands/pixels must
 match the baseline. Present/stage-1 controls stay unavailable. Native Windows remains unqualified
-until separately tested. In this revision DOOM must still run exactly one/master; no multipass claim.
+until separately tested. In this revision only Passes=1 is the unchanged one/master path; no multipass claim.

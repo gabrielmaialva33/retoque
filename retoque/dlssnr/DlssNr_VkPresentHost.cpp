@@ -12,6 +12,7 @@
 #include "DlssNr_DriverInitGate.h"
 #include "DlssNr_VkRecording.h"
 #include "DlssNr_VkCoverage.h"
+#include "DlssNr_VkCreation.h"
 #include "DlssNr_VkPreRuntime.h"
 
 #include <Config.h>
@@ -78,6 +79,16 @@ std::mutex g_installMutex;  // the detour bookkeeping; held across Detours, neve
 std::mutex g_registryMutex; // the records; never held across a call into Vulkan or the log
 Registry g_registry;
 DlssNr::VkChain::CoverageRegistry g_chainCoverage;
+using CreationObserver = DlssNr::VkChain::CreationObserver<>;
+std::array<CreationObserver, 16> g_creationObservers;
+CreationObserver* CreationObserverFor(VkDevice device)
+{
+    if (device)
+        for (auto& observer : g_creationObservers)
+            if (observer.Device() == device)
+                return &observer;
+    return nullptr;
+}
 std::atomic<bool> g_installed { false }; // published after installation; writes under g_installMutex
 HMODULE g_module = nullptr;
 std::unordered_set<void*> g_attached; // every address detoured here, whatever function it was taken for
@@ -338,6 +349,7 @@ std::optional<uint64_t> PresentIdOf(const VkPresentInfoKHR& info)
 
 struct QueueLockEntry
 {
+    CreationObserver* creation = nullptr;
     VkDevice device = VK_NULL_HANDLE;
     std::shared_ptr<QueueLocks>
         locks; // shared: the model's builder may hold them while vkDestroyDevice erases the entry
@@ -346,14 +358,16 @@ struct QueueLockEntry
 std::shared_mutex g_queueLocksMutex;
 std::unordered_map<VkQueue, QueueLockEntry> g_queueLocks;
 
-QueueLocks* QueueLocksFor(VkQueue queue)
+QueueLocks* QueueLocksFor(VkQueue queue, CreationObserver** creation = nullptr)
 {
     std::shared_lock lock(g_queueLocksMutex);
     const auto found = g_queueLocks.find(queue);
+    if (creation != nullptr)
+        *creation = found != g_queueLocks.end() ? found->second.creation : nullptr;
     return found != g_queueLocks.end() ? found->second.locks.get() : nullptr;
 }
 
-void AddQueueLock(VkDevice device, VkQueue queue, uint32_t family, uint32_t index)
+void AddQueueLock(VkDevice device, VkQueue queue, uint32_t family, uint32_t index, bool unprotected = true)
 {
     std::unique_lock lock(g_queueLocksMutex);
     auto& entry = g_queueLocks[queue];
@@ -364,6 +378,7 @@ void AddQueueLock(VkDevice device, VkQueue queue, uint32_t family, uint32_t inde
         entry.locks->family = family;
         entry.locks->index = index;
     }
+    entry.creation = unprotected ? CreationObserverFor(device) : nullptr;
 }
 
 void EraseQueueLocks(VkDevice device)
@@ -389,6 +404,80 @@ VkResult LockedQueueCall(const char* entry, Pfn next, VkQueue queue, Args... arg
     }
 
     return next(queue, args...);
+}
+
+// Same lock/forwarding shape as LockedQueueCall. A nonparticipating device or Passes=1
+// never enters the observer mutex and never allocates or submits additional work.
+thread_local unsigned g_creationSubmitDepth = 0;
+thread_local VkQueue g_creationSubmitQueue = VK_NULL_HANDLE;
+template <typename Pfn, typename Info>
+VkResult ObservedQueueSubmit(const char* entry, Pfn next, VkQueue queue, uint32_t count, const Info* submits,
+                             VkFence fence)
+{
+    CreationObserver* observer = nullptr;
+    if (QueueLocks* locks = QueueLocksFor(queue, &observer))
+    {
+        HostActivity activity(entry, H(queue));
+        activity.scope.Stage("waiting for the queue's submit lock", kLockSubmit, locks->submit.Owner());
+        std::lock_guard lock(locks->submit);
+        activity.scope.Hold(kLockSubmit, true);
+        activity.scope.Stage("calling down");
+        const auto call = [&] { return next(queue, count, submits, fence); };
+        VkResult result;
+        if (observer == nullptr || g_creationSubmitDepth != 0)
+        {
+            if (observer && queue != g_creationSubmitQueue)
+                observer->Off(); // cross-queue nesting is not an alias: invalidate the unobserved interval
+            result = call();
+        }
+        else if (!Config::Instance()->DlssNrEnabled.value_or_default() ||
+                 Config::Instance()->DlssNrPasses.value_or_default() <= 1)
+        {
+            observer->Off(); // atomic invalidation only; retain any pending fence until active polling/teardown
+            result = call();
+        }
+        else
+        {
+            struct Depth
+            {
+                explicit Depth(VkQueue queue)
+                {
+                    g_creationSubmitQueue = queue;
+                    ++g_creationSubmitDepth;
+                }
+                ~Depth()
+                {
+                    --g_creationSubmitDepth;
+                    g_creationSubmitQueue = VK_NULL_HANDLE;
+                }
+            } depth(queue);
+            result = observer->Submit(
+                queue,
+                [&](auto visit)
+                {
+                    for (uint32_t i = 0; submits && i < count; ++i)
+                    {
+                        if constexpr (std::is_same_v<Info, VkSubmitInfo>)
+                        {
+                            for (uint32_t j = 0; submits[i].pCommandBuffers && j < submits[i].commandBufferCount; ++j)
+                                visit(submits[i].pCommandBuffers[j]);
+                        }
+                        else
+                        {
+                            for (uint32_t j = 0;
+                                 submits[i].pCommandBufferInfos && j < submits[i].commandBufferInfoCount; ++j)
+                                visit(submits[i].pCommandBufferInfos[j].commandBuffer);
+                        }
+                    }
+                },
+                call);
+        }
+        if (observer && result == VK_ERROR_DEVICE_LOST)
+            observer->Lost();
+        activity.scope.Hold(kLockSubmit, false);
+        return result;
+    }
+    return next(queue, count, submits, fence);
 }
 
 // --- The transport's objects --------------------------------------------------------------------------------------
@@ -627,6 +716,8 @@ void MarkLost(DeviceTransport& dev)
     if (!dev.lost)
     {
         dev.lost = true;
+        if (auto* observer = CreationObserverFor(dev.device))
+            observer->Lost();
         dev.off = "the device was lost";
         DlssNr::SessionGuardDeviceRemoved(); // evidence for the next launch, whatever the game does now
     }
@@ -1005,7 +1096,8 @@ bool Begin(DeviceTransport& dev, VkCommandBuffer buffer)
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (dev.fn.beginCommandBuffer(buffer, &begin) != VK_SUCCESS)
         return false;
-    DlssNr::VkRecording::Recordings().Begin((uint64_t) buffer, DlssNr::VkRecording::ReuseOf(true, begin.flags));
+    DlssNr::VkRecording::Recordings().Begin((uint64_t) buffer, DlssNr::VkRecording::ReuseOf(true, begin.flags),
+                                            (begin.flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);
     return true;
 }
 
@@ -2805,7 +2897,7 @@ void OnGetQueue2(PFN_vkGetDeviceQueue2 next, VkDevice device, const VkDeviceQueu
             g_registry.OnQueue(H(device), info->queueFamilyIndex, info->queueIndex, info->flags, H(*queue));
         }
 
-        AddQueueLock(device, *queue, info->queueFamilyIndex, info->queueIndex);
+        AddQueueLock(device, *queue, info->queueFamilyIndex, info->queueIndex, info->flags == 0);
     }
 }
 
@@ -3334,13 +3426,13 @@ template <size_t S> VkResult VKAPI_CALL hkQueuePresentKHR(VkQueue queue, const V
 template <size_t S>
 VkResult VKAPI_CALL hkQueueSubmit(VkQueue queue, uint32_t count, const VkSubmitInfo* submits, VkFence fence)
 {
-    return LockedQueueCall("vkQueueSubmit", g_submit.next[S], queue, count, submits, fence);
+    return ObservedQueueSubmit("vkQueueSubmit", g_submit.next[S], queue, count, submits, fence);
 }
 
 template <size_t S>
 VkResult VKAPI_CALL hkQueueSubmit2(VkQueue queue, uint32_t count, const VkSubmitInfo2* submits, VkFence fence)
 {
-    return LockedQueueCall("vkQueueSubmit2", g_submit2.next[S], queue, count, submits, fence);
+    return ObservedQueueSubmit("vkQueueSubmit2", g_submit2.next[S], queue, count, submits, fence);
 }
 
 template <size_t S>
@@ -3386,7 +3478,8 @@ VkResult VKAPI_CALL hkRecordingBeginCommandBuffer(VkCommandBuffer buffer, const 
     const VkResult result = g_recordingBegin.next[S](buffer, info);
     if (result == VK_SUCCESS)
         DlssNr::VkRecording::Recordings().Begin(
-            H(buffer), DlssNr::VkRecording::ReuseOf(info != nullptr, info != nullptr ? info->flags : 0));
+            H(buffer), DlssNr::VkRecording::ReuseOf(info != nullptr, info != nullptr ? info->flags : 0),
+            info != nullptr && (info->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);
     return result;
 }
 
@@ -3610,6 +3703,39 @@ void HookPresent(VkDevice device)
 
     std::lock_guard lock(g_installMutex);
     AttachTarget(g_present, kPresentHooks, present, "vkQueuePresentKHR");
+}
+
+void RegisterCreationObserver(VkDevice device, const VkDeviceCreateInfo* info, PFN_vkQueueSubmit below)
+{
+    if (!g_chainCoverage.Ready(H(device)) || CreationObserverFor(device))
+        return;
+    // Registration is opt-in at device creation. Multi-device groups are not qualified: a
+    // default-device marker is not proof for an arbitrary deviceMask in the game's submission.
+    bool singleDevice = info != nullptr;
+    for (auto node = info ? static_cast<const VkBaseInStructure*>(info->pNext) : nullptr; node; node = node->pNext)
+        if (node->sType == VK_STRUCTURE_TYPE_DEVICE_GROUP_DEVICE_CREATE_INFO)
+            singleDevice = reinterpret_cast<const VkDeviceGroupDeviceCreateInfo*>(node)->physicalDeviceCount == 1;
+    for (uint32_t i = 0; info && info->pQueueCreateInfos && i < info->queueCreateInfoCount; ++i)
+        if (info->pQueueCreateInfos[i].flags != 0)
+            singleDevice = false; // protected queues are not an admitted creation route
+    if (singleDevice && below != nullptr)
+    {
+        DlssNr::VkChain::CompletionFunctions functions;
+        functions.marker = below;
+        const bool resolved = Resolve(device, "vkCreateFence", functions.create) &&
+                              Resolve(device, "vkDestroyFence", functions.destroy) &&
+                              Resolve(device, "vkGetFenceStatus", functions.status);
+        if (resolved)
+        {
+            std::lock_guard install(g_installMutex);
+            for (auto& observer : g_creationObservers)
+                if (!observer.Device())
+                {
+                    observer.Initialize(device, functions);
+                    break;
+                }
+        }
+    }
 }
 
 // --- Instance-level hooks, on vulkan-1.dll's exports ------------------------------------------------------------
@@ -3989,6 +4115,7 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
             }
         }
 
+        RegisterCreationObserver(*device, info, below);
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(*device); dev != nullptr && below != nullptr)
             dev->fn.queueSubmit = below;
@@ -4201,7 +4328,35 @@ void DlssNr::VkPresentHost::Install(HMODULE vulkan1)
 std::optional<bool> DlssNr::VkPresentHost::PrepareForDeviceDestroy(VkDevice device)
 {
     g_chainCoverage.Forget(H(device));
-    return PrepareDeviceDestroy(device);
+    const auto drained = PrepareDeviceDestroy(device);
+    if (auto* observer = CreationObserverFor(device))
+        observer->Destroy(drained.value_or(false));
+    return drained;
 }
 
 bool DlssNr::VkPresentHost::ChainCoverageReady(VkDevice device) { return g_chainCoverage.Ready(H(device)); }
+
+uint64_t DlssNr::VkPresentHost::WatchCreation(VkDevice device, const VkRecording::Ticket& ticket, uint64_t present)
+{
+    auto* observer = CreationObserverFor(device);
+    const auto serial = observer ? observer->Watch(ticket, present, VkRecording::Recordings()) : 0;
+    if (serial)
+        LOG_INFO("DLSS-NR Vulkan chain creation: recorded epoch {} serial {} present {}", ticket.epoch, serial,
+                 present);
+    return serial;
+}
+bool DlssNr::VkPresentHost::CreationReady(VkDevice device, uint64_t serial, uint64_t present)
+{
+    auto* observer = CreationObserverFor(device);
+    return observer && observer->Ready(serial, present);
+}
+void DlssNr::VkPresentHost::CancelCreation(VkDevice device, uint64_t serial)
+{
+    if (auto* observer = CreationObserverFor(device))
+        observer->Cancel(serial);
+}
+void DlssNr::VkPresentHost::AbandonCreationObserver(VkDevice device)
+{
+    if (auto* observer = CreationObserverFor(device))
+        observer->Lost();
+}

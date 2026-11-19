@@ -12,8 +12,11 @@ sys.path.insert(0, str(ROOT / 'tests/nr-vk-recording'))
 from hooks_test import function
 
 source = (ROOT / 'retoque/dlssnr/DlssNr_VkPresentHost.cpp').read_text()
-production = '\n\n'.join(function(source, signature) for signature in (
+production = 'thread_local unsigned g_creationSubmitDepth = 0;\nthread_local VkQueue g_creationSubmitQueue = VK_NULL_HANDLE;\n' + '\n\n'.join(function(source, signature) for signature in (
+    'CreationObserver* CreationObserverFor(',
+    'void RegisterCreationObserver(',
     'template <typename Pfn, typename... Args>\nVkResult LockedQueueCall(',
+    'template <typename Pfn, typename Info>\nVkResult ObservedQueueSubmit(',
     'template <size_t S>\nVkResult VKAPI_CALL hkQueueSubmit(',
     'template <size_t S>\nVkResult VKAPI_CALL hkQueueSubmit2(',
 ))
@@ -32,3 +35,11 @@ with tempfile.TemporaryDirectory(prefix='nr-vk-submit-boundary-') as temporary:
     env.setdefault('ASAN_OPTIONS', 'detect_leaks=1:abort_on_error=1')
     env.setdefault('UBSAN_OPTIONS', 'halt_on_error=1:print_stacktrace=1')
     subprocess.run([str(binary)], env=env, check=True, timeout=30)
+
+    creation = directory / 'creation'
+    subprocess.run(['g++', '-std=c++20', '-Wall', '-Wextra', '-Werror', '-pthread',
+                    '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-fno-pie', '-no-pie', '-g',
+                    '-I', str(HERE), '-I', str(ROOT / 'retoque/dlssnr'),
+                    '-I', str(ROOT / 'external/vulkan/include'), str(HERE / 'creation_cases.cpp'),
+                    '-o', str(creation)], check=True)
+    subprocess.run([str(creation)], env=env, check=True, timeout=30)
