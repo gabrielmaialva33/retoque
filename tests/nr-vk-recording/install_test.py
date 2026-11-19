@@ -73,7 +73,7 @@ def main():
         compiler = shlex.split(os.environ.get('CXX', 'g++'))
         subprocess.run(compiler + ['-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-pthread',
                                    '-fsanitize=address,undefined', '-fno-omit-frame-pointer', '-fno-pie', '-no-pie',
-                                   '-I' + str(root / 'retoque'), str(source), '-o', str(executable)], check=True)
+                                   '-I' + str(root / 'retoque'), '-I' + str(HERE), str(source), '-o', str(executable)], check=True)
         env = dict(os.environ)
         env.setdefault('ASAN_OPTIONS', 'detect_leaks=1:abort_on_error=1')
         env.setdefault('UBSAN_OPTIONS', 'halt_on_error=1:print_stacktrace=1')

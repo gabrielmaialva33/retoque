@@ -3,6 +3,7 @@
 from pathlib import Path
 import resource
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -55,3 +56,5 @@ controls = menu[menu.index('static void RenderPassControls('):menu.index('static
 assert 'if (vulkan || config->DlssNrUseProxy.value_or_default())' in controls
 assert controls.index('return;') < controls.index('GetDlssNrPassSnapshot()')
 print('PASS: runtime and menu remain one/master until completion/budget adapters are implemented')
+
+subprocess.run([sys.executable, str(HERE / 'submit_boundary.py')], check=True)

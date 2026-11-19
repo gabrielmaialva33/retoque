@@ -1,3 +1,4 @@
+#include "pch.h"
 // @common-fakes@
 
 #include <string_view>
@@ -34,6 +35,7 @@ std::unordered_map<void*, void*> installed;
 void* pendingTarget = nullptr;
 void* pendingHook = nullptr;
 LONG commitResult = NO_ERROR;
+int rejectedOperation = -1;
 int lookups = 0;
 int exportKind = 0;
 int admissions = 0;
@@ -131,10 +133,13 @@ void DetourAttach(void** next, void* hook)
 }
 LONG DetourTransactionCommit()
 {
-    if (commitResult == NO_ERROR && pendingTarget != nullptr)
+    const bool rejected = rejectedOperation >= 0 &&
+                          std::any_of(addresses[rejectedOperation].begin(), addresses[rejectedOperation].end(),
+                                      [](auto address) { return reinterpret_cast<void*>(address) == pendingTarget; });
+    if (commitResult == NO_ERROR && !rejected && pendingTarget != nullptr)
         installed[pendingTarget] = pendingHook;
     pendingTarget = pendingHook = nullptr;
-    return commitResult;
+    return rejected ? 42 : commitResult;
 }
 
 struct Config
@@ -177,6 +182,7 @@ void FreshInstall()
     deviceKinds = { 0, 1, 2, 3 };
     ownBeginAddress = false;
     commitResult = NO_ERROR;
+    rejectedOperation = -1;
     g_module = reinterpret_cast<HMODULE>(1);
     g_getDeviceProcAddr = DeviceLookup;
     Config::Instance()->DlssNrEnabled.value = true;
@@ -334,6 +340,47 @@ void FailedDetourAndOwnAddresses()
     Check(installed.size() == 12, "other lifecycle functions must still install when Begin is unavailable");
 }
 
+// Characterization of the step-1 blocker, not a safe completion adapter. Successful Begin does
+// not certify that all retirement entrypoints installed. Keep this witness until admission has
+// a per-device coverage result, then replace it with an assertion that such admission is refused.
+void PartialInstallCannotCertifyRecordingLifetime()
+{
+    rejectedOperation = 3; // both ResetCommandBuffer addresses fail; all other hooks install
+    HookDevice(device);
+    Check(installed.size() == 12, "partial install must leave only reset unwatched in this witness");
+    auto buffer = AllocateThrough(device, 1);
+    auto ticket = BeginThrough(device, buffer, 1);
+    auto resource = Pin(ticket);
+    Check(Through<PFN_vkEndCommandBuffer>(2, 1)(buffer) == VK_SUCCESS, "End must succeed");
+    Check(Through<PFN_vkResetCommandBuffer>(3, 1)(buffer, 0) == VK_SUCCESS, "driver reset must succeed");
+    Check(calls[3][1] == 1 && !resource.expired(),
+          "a successful unobserved reset leaves a pin behind: pin presence is not coverage proof");
+    auto replacement = BeginThrough(device, buffer, 1);
+    Check(replacement.epoch != ticket.epoch && resource.expired(),
+          "the next observed Begin eventually retires it, but cannot retroactively certify coverage");
+}
+
+void SerialSecondaryIsNotPrimaryEvidence()
+{
+    HookDevice(device);
+    for (int level : { 0, 1 }) // primary and secondary have the same serial Begin flags
+    {
+        VkCommandBufferAllocateInfo info {};
+        info.commandPool = pool;
+        info.commandBufferCount = 1;
+        info.level = level;
+        VkCommandBuffer buffer = nullptr;
+        Check(Through<PFN_vkAllocateCommandBuffers>(0, 1)(device, &info, &buffer) == VK_SUCCESS,
+              "primary/secondary allocation must succeed");
+        auto ticket = BeginThrough(device, buffer, 1);
+        Check(ticket.reuse == Reuse::Serial, "serial reuse alone cannot distinguish primary from secondary");
+        auto resource = Pin(ticket);
+        Check(!resource.expired(), "existing registry accepts both levels, so it cannot certify primary creation");
+        Through<PFN_vkFreeCommandBuffers>(4, 1)(device, pool, 1, &buffer);
+        Check(resource.expired(), "witness cleanup must retire the observed recording");
+    }
+}
+
 void ObserverAllocationFailure()
 {
     HookDevice(device);
@@ -472,6 +519,8 @@ int main()
         { "observer-begin-flags-reach-ticket", ObserverBeginFlagsReachTheTicket },
         { "host-install-opt-in", InstallRemainsOptIn },
         { "detour-failure-own-address", FailedDetourAndOwnAddresses },
+        { "partial-install-is-not-lifetime-proof", PartialInstallCannotCertifyRecordingLifetime },
+        { "serial-secondary-is-not-primary-proof", SerialSecondaryIsNotPrimaryEvidence },
         { "observer-allocation-failure", ObserverAllocationFailure },
         { "observer-handle-reuse-after-oom", ObserverHandleReuseAfterOutOfMemory },
         { "observer-bulk-free-reentrant-reuse", ObserverBulkFreePreservesReentrantAllocation },

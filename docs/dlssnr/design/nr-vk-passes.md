@@ -87,6 +87,61 @@ Remaining implementation, in dependency order:
 4. Only then expose the after-upscale Vulkan controls. Keep the one/master message on present,
    before-upscale and proxy routes; update locale packs and executed menu states at the same time.
 
+## Step-1 safety review, 2026-11-19
+
+The follow-up starts at `44ac22cb` and stops **before completing step 1**. No submission
+observer, owned completion primitive, heap adapter, runtime chain or menu control was added.
+The stop is a missing proof in this integration, not a claim that Vulkan cannot implement it.
+The following executable witnesses make the prerequisites more specific than the first slice:
+
+- `tests/nr-vk-recording/install_test.py` executes the production `HookDevice`, `AttachTarget`
+  and lifecycle callbacks. `partial-install-is-not-lifetime-proof` rejects just both
+  `vkResetCommandBuffer` detours while allocation, Begin and End still succeed. The real
+  registry admits the recording, and a successful driver Reset leaves its pin alive. Only
+  the next observed Begin retires it. Therefore neither a ticket nor a live pin certifies
+  complete lifecycle coverage. `AttachTarget` currently returns `void`; its failures and
+  four-address limit produce logs, not per-device admission evidence.
+- `serial-secondary-is-not-primary-proof` executes allocation and Begin for both levels.
+  Both yield `Reuse::Serial` and accept pins. `Ticket` does not retain allocation level:
+  serial use proves neither primary level nor that a submitted primary is this recording.
+  A future observer must refuse secondary/unknown creation before recording it; matching
+  a secondary's numeric handle against the top-level submit list is not an alternative.
+- `tests/nr-vk-passes/submit_boundary.py` compiles the production `LockedQueueCall`,
+  `hkQueueSubmit` and `hkQueueSubmit2` bodies with fake driver boundaries. Its 27 cases
+  cover two known queues and an unknown queue, three result classes and legacy/modern
+  callbacks (two modern slots). They preserve the exact arguments/result and call down
+  once; no result feeds `VkChain::Creation`. The KHR-to-shared-callback attachment is a
+  source guard only. This does not exercise real Detours or prove native alias coverage.
+
+These are **characterization tests of the blockers**, not tests accepting a completion
+adapter. Replace their missing-capability assertions with refusal/success assertions when
+that adapter is implemented. The existing policy mutants still test only portable decisions.
+No runtime source was changed, so the one-pass/off behavior has no new tracker or allocation.
+
+The first implementation commit still needs one coherent ownership boundary:
+
+1. Publish per-device coverage of allocation level, Begin/End, reset/free/pool/device
+   retirement, queue identity and all submit entrypoints. A failed/missing/overflowed hook
+   must deny chain admission; preserve the legacy one-pass path. Scope nested export/ICD
+   callbacks so one native submission is not mistaken for a replay. Resolve the interaction
+   with w/Dx12's own lifecycle notifications explicitly.
+2. Arm an exact primary serial recording while it is open, before feature creation can
+   record GPU work. Invalidate on observed discard/reuse/failure and on any coverage loss.
+   Capture submission identity before forwarding; a borrowed application fence may be
+   reset/reused and cannot be the owned proof. Multiple queues must not share a "last
+   completed" fact. Keep the registry mutex out of Vulkan calls and NR-lock acquisition.
+3. Give the adapter its own bounded completion objects and device lifetime. Specify creation,
+   submission failure, marker failure, pending cancellation, polling, successful retirement
+   and device-loss abandonment together. A future fence-only marker needs ordering on the
+   actual submitting queue under that queue's lock; use a non-null submit structure for
+   compatibility with the bundle. A signalled marker proves execution, not retirement of
+   a replayable recording. Do not wire the creation gate until all these paths are exercised.
+
+The host does have private present fences and a drain/abandon path. Those objects cover its
+own work, and their existence does not give ownership or completion to an after-upscale
+creation buffer. No resource was added speculatively to that teardown in this review.
+Steps 2, 3 and 4 remain unstarted, in their original dependency order.
+
 NeuRotic's `VulkanNrPassPlan.h` and `VulkanNrPassRecorder.cpp` were read for the idea of an explicit
 preparation/completion boundary and ordered delivery. No source, tables, strings or data were copied.
 Its layer-specific scales/composition and all-or-nothing routes are deliberately not adopted here.
@@ -105,13 +160,26 @@ python3 tests/vulkan-overlay/run.py --ref HEAD
 
 The guide fixture proves resampling and barriers, the present fixture protects ownership hand-back,
 and overlay protects adjacent queue/teardown behavior. Their own prerequisites and SKIP rules apply.
-An after-upscale chain fixture still has to be added: real NGX, validation and synchronization
-validation demonstrably enabled, delayed/failed submit, discard, retained command-buffer replay,
-three in flight, count/settings/size changes, partial failure and device loss. No existing command
+An after-upscale chain fixture still has to be added. Its first phase must test the step-1
+adapter independently: distinct and aliased export/device/KHR targets, nested dispatch, one
+failed lifecycle detour, hook-slot exhaustion, secondary/unknown/simultaneous refusal, two
+queues completing in reverse order, a delayed/failed application submit, a failed private
+marker submit, borrowed-fence reuse, command-buffer/pool reset/free/reallocation and device
+loss while a private completion is pending. Assert the exact creation epoch and submit serial,
+no readiness from another queue and no GPU destructor on abandonment. Test both bundle-on
+and independent-observer modes. Then add real NGX, validation and synchronization validation
+demonstrably enabled, discard, retained command-buffer replay, three in flight,
+count/settings/size changes and partial failure. No existing command
 above substitutes for that missing fixture.
 
-Then DOOM Eternal under Proton on RTX 4090, native Vulkan DLSS and Stage 0, NR enabled at device
-creation: record DLL/model hashes, Proton/driver and exact INI, first at Passes 1, then 2, 3, 10 and 1.
+For the current revision, DOOM Eternal is only a one/master regression run: native Vulkan
+DLSS, Stage 0, NR enabled at device creation, record DLL/model hashes, Proton/driver and exact
+INI. Passes 2/3/10 must still have the same one/master behavior and unavailable chain controls;
+there are no creation-completion or chain-budget logs to assert. This worker ran no game.
+
+Only **after steps 1 through 4 and the missing fixture pass**, run the chain procedure in
+DOOM Eternal under Proton on RTX 4090 with the same recorded environment and hashes:
+first Passes 1, then 2, 3, 10 and 1.
 Keep a moving scene and HUD visible; change pass 2's preset/intensity independently, return to master,
 change working scale 1/0.5/1.5, resize/alt-tab and disable/re-enable NR. Expect one create each 500 ms
 at most, each first evaluate after its logged creation completion, completed <= requested and a
