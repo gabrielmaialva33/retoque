@@ -430,17 +430,17 @@ pub(crate) mod shell_tests {
     pub(crate) fn every_install_state_has_one_wording_and_colour() {
         use InstallState::*;
         let expected = [
-            (Missing, "Sem Retoque", "Sem Retoque", theme::MUTED),
-            (Current, "Retoque atualizado", "Atualizado", theme::GOOD),
-            (Installed, "Retoque instalado", "Instalado", theme::GOOD),
-            (Update, "Atualização disponível", "Atualizar", theme::ACCENT),
-            (Partial, "Instalação incompleta", "Incompleta", theme::BAD),
-            (Untracked, "Instalação antiga", "Antiga", theme::WARN),
+            (Missing, "Sem Retoque", "Sem Retoque", theme::DARK.MUTED),
+            (Current, "Retoque atualizado", "Atualizado", theme::DARK.GOOD),
+            (Installed, "Retoque instalado", "Instalado", theme::DARK.GOOD),
+            (Update, "Atualização disponível", "Atualizar", theme::DARK.ACCENT),
+            (Partial, "Instalação incompleta", "Incompleta", theme::DARK.BAD),
+            (Untracked, "Instalação antiga", "Antiga", theme::DARK.WARN),
         ];
         for (state, long, short, color) in expected {
             assert_eq!(t(Lang::Pt, state.label()), long);
             assert_eq!(t(Lang::Pt, state.short_label()), short);
-            assert_eq!(state.color(), color);
+            assert_eq!(state.color(&theme::DARK), color);
             assert_ne!(
                 t(Lang::En, state.label()),
                 state.label(),
@@ -458,7 +458,7 @@ pub(crate) mod shell_tests {
                 ui,
                 "Synthetic game",
                 "Steam",
-                ("Instalação antiga", theme::WARN),
+                ("Instalação antiga", theme::DARK.WARN),
                 None,
                 false,
                 None,
@@ -470,7 +470,7 @@ pub(crate) mod shell_tests {
                 ui,
                 "Healthy game",
                 "Steam",
-                ("Atualizado", theme::GOOD),
+                ("Atualizado", theme::DARK.GOOD),
                 None,
                 false,
                 None,

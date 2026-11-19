@@ -198,9 +198,12 @@ impl RetoqueApp {
                     let reason = reason.clone();
                     crate::applog::shown_error(&reason);
                     let mut retry = false;
-                    widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
+                    widgets::tinted_card(ui, theme::palette(ui).ERROR_CARD, |ui| {
                         ui.add(
-                            egui::Label::new(RichText::new(self.tr("lsfg.failed")).color(theme::TEXT_STRONG)).wrap(),
+                            egui::Label::new(
+                                RichText::new(self.tr("lsfg.failed")).color(theme::palette(ui).TEXT_STRONG),
+                            )
+                            .wrap(),
                         );
                         retry = ui.button(self.tr("lsfg.retry")).clicked();
                         widgets::collapsible(
@@ -217,9 +220,9 @@ impl RetoqueApp {
                 }
             }
         } else if self.autotune_ready() {
-            ui.colored_label(theme::GOOD, self.tr("auto.ls_ready"));
+            ui.colored_label(theme::palette(ui).GOOD, self.tr("auto.ls_ready"));
         } else if self.lsfg.source.is_none() {
-            ui.colored_label(theme::WARN, self.tr("auto.ls_missing"));
+            ui.colored_label(theme::palette(ui).WARN, self.tr("auto.ls_missing"));
         } else {
             ui.label(self.tr("lsfg.found"));
         }
@@ -344,7 +347,7 @@ impl RetoqueApp {
                 ui.add(egui::Label::new(self.tr("auto.need_install")).wrap());
             }
             if facts.sm86_installed {
-                ui.colored_label(theme::WARN, self.tr("auto.ls_conflict"));
+                ui.colored_label(theme::palette(ui).WARN, self.tr("auto.ls_conflict"));
             }
             self.autotune_readiness(ui);
         });

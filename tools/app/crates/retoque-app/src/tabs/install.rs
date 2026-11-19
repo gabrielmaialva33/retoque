@@ -71,7 +71,7 @@ impl RetoqueApp {
         // A failed change: what did not finish, why in plain words, what to do, and the details folded. First, so a
         // first install that failed shows it too.
         if let Some((kind, error)) = failed {
-            widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
+            widgets::tinted_card(ui, theme::palette(ui).ERROR_CARD, |ui| {
                 widgets::card_title(ui, t(self.lang, failed_key(kind)));
                 crate::error::body(ui, error, self.lang, &self.cmd_tx);
             });
@@ -164,7 +164,9 @@ impl RetoqueApp {
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("inst.plan_title"));
             if checking {
-                ui.add(egui::Label::new(RichText::new(self.tr("auto.checking")).color(theme::MUTED)).wrap());
+                ui.add(
+                    egui::Label::new(RichText::new(self.tr("auto.checking")).color(theme::palette(ui).MUTED)).wrap(),
+                );
             }
             for rec in recs.iter() {
                 // The same filter the one-click review uses: ReShade is always the user's own step, and experimental
@@ -186,9 +188,9 @@ impl RetoqueApp {
                     .on_hover_text(t(self.lang, rec.why_key));
             }
             ui.add_space(4.0);
-            ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::MUTED)).wrap());
+            ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::palette(ui).MUTED)).wrap());
             if let Some(error) = &self.tuning.sm86.error {
-                ui.colored_label(theme::BAD, crate::i18n::diagnostic(self.lang, error));
+                ui.colored_label(theme::palette(ui).BAD, crate::i18n::diagnostic(self.lang, error));
             }
             ui.add_space(4.0);
             widgets::collapsible(
@@ -224,9 +226,9 @@ impl RetoqueApp {
     /// loaded Retoque once. Its words follow the store, because each one keeps the setting somewhere else.
     fn launch_card(&mut self, ui: &mut egui::Ui, option: &str, store: Store) {
         let (title, help) = launch_keys(store);
-        widgets::tinted_card(ui, theme::ACCENT.gamma_multiply(0.12), |ui| {
+        widgets::tinted_card(ui, theme::palette(ui).ACCENT.gamma_multiply(theme::NOTICE_TINT), |ui| {
             widgets::card_title(ui, self.tr(title));
-            ui.add(egui::Label::new(RichText::new(self.tr(help)).color(theme::TEXT)).wrap());
+            ui.add(egui::Label::new(RichText::new(self.tr(help)).color(theme::palette(ui).TEXT)).wrap());
             ui.add_space(4.0);
             self.launch_value(ui, option, store);
         });
@@ -241,7 +243,7 @@ impl RetoqueApp {
         .to_owned();
         ui.horizontal_wrapped(|ui| {
             ui.add(egui::Label::new(
-                RichText::new(&value).monospace().color(theme::TEXT_STRONG),
+                RichText::new(&value).monospace().color(theme::palette(ui).TEXT_STRONG),
             ));
             let label = if self.view.copied {
                 t(self.lang, "inst.copied")
@@ -280,7 +282,11 @@ impl RetoqueApp {
                             .labelled_by(label.id);
                         ui.end_row();
                     });
-                ui.label(RichText::new(self.tr("inst.proxy_help")).small().color(theme::MUTED));
+                ui.label(
+                    RichText::new(self.tr("inst.proxy_help"))
+                        .small()
+                        .color(theme::palette(ui).MUTED),
+                );
                 ui.checkbox(&mut self.view.options.keep_reshade, t(self.lang, "inst.keep_reshade"));
                 ui.checkbox(
                     &mut self.view.options.replace_foreign,
@@ -350,18 +356,23 @@ impl RetoqueApp {
                 ),
                 None => (self.tr("tile.unknown").to_owned(), String::new()),
             };
-            tiles.push((self.tr("tile.gpu").into(), value, detail, theme::ACCENT));
+            tiles.push((self.tr("tile.gpu").into(), value, detail, theme::palette(ui).ACCENT));
             // Retoque itself.
             let detail = match &status.build_sha256 {
                 Some(hash) => self.build_text(hash),
                 None => String::new(),
             };
             let value = self.tr(state.short_label());
-            tiles.push((self.tr("brand").into(), value.into(), detail, state.color()));
+            tiles.push((
+                self.tr("brand").into(),
+                value.into(),
+                detail,
+                state.color(theme::palette(ui)),
+            ));
             // Neural Rendering.
             let model = self.view.inspection.as_ref();
             let (value, detail, color) = match status.nr_enabled {
-                _ if state == InstallState::Missing => (self.tr("tile.off"), String::new(), theme::MUTED),
+                _ if state == InstallState::Missing => (self.tr("tile.off"), String::new(), theme::palette(ui).MUTED),
                 Some(true) => match model {
                     Some(m) if m.present => (
                         self.tr("tile.on"),
@@ -369,40 +380,48 @@ impl RetoqueApp {
                             .as_ref()
                             .map(|v| format!("{} {v}", self.tr("shell.model_version")))
                             .unwrap_or_else(|| self.tr("shell.model_unknown").into()),
-                        theme::GOOD,
+                        theme::palette(ui).GOOD,
                     ),
                     Some(_) => (
                         self.tr("tile.on"),
                         self.tr("tile.model_missing").to_owned(),
-                        theme::WARN,
+                        theme::palette(ui).WARN,
                     ),
-                    None => (self.tr("tile.on"), String::new(), theme::GOOD),
+                    None => (self.tr("tile.on"), String::new(), theme::palette(ui).GOOD),
                 },
-                Some(false) => (self.tr("tile.off"), String::new(), theme::MUTED),
-                None => (self.tr("tile.unknown"), String::new(), theme::MUTED),
+                Some(false) => (self.tr("tile.off"), String::new(), theme::palette(ui).MUTED),
+                None => (self.tr("tile.unknown"), String::new(), theme::palette(ui).MUTED),
             };
             tiles.push((self.tr("tile.nr").into(), value.into(), detail, color));
             // Frame generation: ours (LSFG, sm86) first, then the game's own DLSS-G where this card can run it.
             let lsfg_multiplier = ini.and_then(|i| i.get("LSFG", "Multiplier")).map(str::trim);
             let older = gpu.is_some_and(|g| matches!(g.arch, Arch::Turing | Arch::Ampere));
             let (value, detail, color) = if facts.sm86_installed {
-                ("DLSS-G".to_owned(), self.tr("tile.fg_sm86").to_owned(), theme::GOOD)
+                (
+                    "DLSS-G".to_owned(),
+                    self.tr("tile.fg_sm86").to_owned(),
+                    theme::palette(ui).GOOD,
+                )
             } else if facts.lsfg_enabled == Some(true) {
                 (
                     format!("LSFG x{}", lsfg_multiplier.unwrap_or("2")),
                     "Lossless Scaling".to_owned(),
-                    theme::GOOD,
+                    theme::palette(ui).GOOD,
                 )
             } else if facts.has_dlssg && older {
                 (
                     self.tr("tile.fg_available").to_owned(),
                     self.tr("tile.fg_needs_sm86").to_owned(),
-                    theme::WARN,
+                    theme::palette(ui).WARN,
                 )
             } else if facts.has_dlssg {
-                ("DLSS-G".to_owned(), self.tr("tile.fg_game").to_owned(), theme::GOOD)
+                (
+                    "DLSS-G".to_owned(),
+                    self.tr("tile.fg_game").to_owned(),
+                    theme::palette(ui).GOOD,
+                )
             } else {
-                (self.tr("tile.off").to_owned(), String::new(), theme::MUTED)
+                (self.tr("tile.off").to_owned(), String::new(), theme::palette(ui).MUTED)
             };
             tiles.push((self.tr("tile.fg").into(), value, detail, color));
             // The game's DLSS files.
@@ -425,9 +444,9 @@ impl RetoqueApp {
                 }
             }
             let (value, color) = if parts.is_empty() {
-                (self.tr("tile.dlss_none").to_owned(), theme::MUTED)
+                (self.tr("tile.dlss_none").to_owned(), theme::palette(ui).MUTED)
             } else {
-                (parts.join(" · "), theme::GOOD)
+                (parts.join(" · "), theme::palette(ui).GOOD)
             };
             tiles.push((
                 self.tr("tile.dlss").into(),
@@ -483,7 +502,7 @@ impl RetoqueApp {
                 );
                 if technical_only {
                     if status.version_mismatch() {
-                        ui.colored_label(theme::WARN, self.tr("ver.mismatch"));
+                        ui.colored_label(theme::palette(ui).WARN, self.tr("ver.mismatch"));
                     }
                     if !status.optiscaler_proxies.is_empty() {
                         let proxy = status.proxy_version.as_deref().unwrap_or(self.tr("ver.unknown"));
@@ -491,7 +510,7 @@ impl RetoqueApp {
                         if let Some(forwarder) = &status.forwarder_version {
                             line.push_str(&format!(" · {}", self.tr("ver.forwarder").replace("{v}", forwarder)));
                         }
-                        ui.label(RichText::new(line).small().color(theme::TEXT));
+                        ui.label(RichText::new(line).small().color(theme::palette(ui).TEXT));
                     }
                     return;
                 }
@@ -508,7 +527,7 @@ impl RetoqueApp {
                     }
                 }
                 if status.version_mismatch() {
-                    ui.colored_label(theme::WARN, self.tr("ver.mismatch"));
+                    ui.colored_label(theme::palette(ui).WARN, self.tr("ver.mismatch"));
                 }
                 if let Some(nr) = status.nr_enabled {
                     parts.push(self.tr(if nr { "st.nr_on" } else { "st.nr_off" }).into());
@@ -524,7 +543,7 @@ impl RetoqueApp {
                             .unwrap_or_else(|| self.tr("shell.model_unknown").into()),
                     );
                 }
-                let response = ui.label(RichText::new(parts.join(" · ")).color(theme::TEXT_STRONG));
+                let response = ui.label(RichText::new(parts.join(" · ")).color(theme::palette(ui).TEXT_STRONG));
                 // The build's hash and the model's path are technical detail: hover only.
                 let hover: Vec<String> = status
                     .build_sha256

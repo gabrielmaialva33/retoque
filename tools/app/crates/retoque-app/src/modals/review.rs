@@ -60,7 +60,11 @@ pub(crate) fn show(
 ) {
     ui.heading(&session.title);
     widgets::card_title(ui, t(lang, "inst.plan"));
-    ui.label(RichText::new(t(lang, "shell.review_note")).small().color(theme::MUTED));
+    ui.label(
+        RichText::new(t(lang, "shell.review_note"))
+            .small()
+            .color(theme::palette(ui).MUTED),
+    );
     egui::ScrollArea::vertical()
         .id_salt("review_steps")
         .max_height((ui.ctx().content_rect().height() - 290.0).max(160.0))
@@ -86,14 +90,14 @@ pub(crate) fn show(
                     ui.label(
                         RichText::new(crate::format::display_path(&dir))
                             .small()
-                            .color(theme::MUTED),
+                            .color(theme::palette(ui).MUTED),
                     );
                     shown_dir = Some(dir);
                 }
                 for refusal in plan.refusals() {
                     let (key, detail) = refusal_text(lang, refusal);
                     crate::applog::shown_error(&format!("refusal in {}: {refusal:?}", plan.game_dir().display()));
-                    ui.colored_label(theme::BAD, format!("{} {detail}", t(lang, key)));
+                    ui.colored_label(theme::palette(ui).BAD, format!("{} {detail}", t(lang, key)));
                     for remedy in crate::error::remedies_for_refusal(refusal) {
                         crate::error::button(ui, remedy, Some(plan.game_dir().to_owned()), lang, commands);
                     }
@@ -163,14 +167,14 @@ pub(crate) fn show(
                         .filter(|(s, g)| **g == group && !internal(s))
                     {
                         // The verb tells a backup, a rename and a restore apart without relying on their colour.
-                        let (verb, text, color) = step_text(lang, step);
+                        let (verb, text, color) = step_text(theme::palette(ui), lang, step);
                         ui.add(egui::Label::new(RichText::new(format!("{verb}: {text}")).color(color)).wrap());
                     }
                     for file in records {
                         ui.label(
                             RichText::new(format!("{} ({file})", t(lang, "shell.undo_record")))
                                 .small()
-                                .color(theme::MUTED),
+                                .color(theme::palette(ui).MUTED),
                         );
                     }
                 }
@@ -185,14 +189,18 @@ pub(crate) fn show(
                     ui.add_space(12.0);
                     ui.label(RichText::new(t(lang, "inst.notes()")).strong());
                     for note in notes {
-                        ui.label(RichText::new(diagnostic(lang, note)).small().color(theme::MUTED));
+                        ui.label(
+                            RichText::new(diagnostic(lang, note))
+                                .small()
+                                .color(theme::palette(ui).MUTED),
+                        );
                     }
                 }
             }
         });
     ui.separator();
     if stale {
-        ui.colored_label(theme::WARN, t(lang, "inst.stale"));
+        ui.colored_label(theme::palette(ui).WARN, t(lang, "inst.stale"));
     }
     ui.horizontal_wrapped(|ui| {
         if ui.button(t(lang, "cancel")).clicked() {
@@ -202,9 +210,9 @@ pub(crate) fn show(
         // keeps it in place, disabled, with the reason on hover.
         if !stale {
             let button = if session.removes() {
-                theme::danger(confirm_label)
+                theme::danger(ui, confirm_label)
             } else {
-                theme::primary(confirm_label)
+                theme::primary(ui, confirm_label)
             };
             let allowed = session.allowed();
             let refused = session.plans.iter().any(|p| !p.refusals().is_empty());

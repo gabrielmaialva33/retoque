@@ -29,7 +29,16 @@ Use these instead of building a look by hand.
 
 Sizes and colours come from `theme`: `TITLE` (17), `SECTION` (20) and `DISPLAY` (22) beside the Body (14.5) and
 Small (13) text styles, and `CARD_GAP` (12) between cards. Colours are `ACCENT`, `GOOD`, `WARN`, `BAD`, `MUTED`,
-`TEXT`, `TEXT_STRONG`, `ON_ACCENT`, `ON_IMAGE` and `CANVAS`; no raw `Color32::from_rgb` outside `theme.rs`.
+`TEXT`, `TEXT_STRONG`, `ON_ACCENT`, `ON_IMAGE` and `CANVAS`. Resolve these from `theme::palette(ui)`;
+its dark and light palettes own every UI surface, widget fill and stroke. No raw colours outside `theme.rs`.
+Use the local UI, not a process-global theme: art-backed headers have a dark local scope in both appearances.
+Texture tint and image overlay ink/scrims are explicit image roles, independent of appearance; never tint the
+actual comparison pixels. Text/surface pairs meet 4.5:1, control edges and focus rings 3:1 in both palettes.
+Selected rows use strong text; image labels have a scrim and image focus/wipe rules have opposite outlines.
+
+Preferences offers **Appearance / Aparência**: System, Dark, Light, applied immediately and saved. Dark remains
+the default for new and pre-existing preferences; System follows OS theme events without reinstalling fonts.
+The light theme idea came from the NeuRotic Hub comparison; palettes, text and implementation are independent.
 
 ## Rules
 
@@ -102,7 +111,7 @@ The existing More actions menu holds game folder, settings file and captures fol
 ## Responsive game header
 
 The banner grows with its content at every zoom: its art and shade enclose the wrapped actions. Keep the game
-name or logo, installation state, primary action, Play and store/runtime here. Component versions and the store's
+name (a logo is decorative), installation state, primary action, Play and store/runtime here. Component versions and the store's
 raw identifier belong in game details. Before installation, the card explaining the primary action comes before
 informational health-check notes; a failed change still comes first.
 The five status tiles fill one row when there is room, otherwise two full-width rows of three and two. An extremely

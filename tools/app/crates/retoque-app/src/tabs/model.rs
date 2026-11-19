@@ -132,7 +132,7 @@ impl RetoqueApp {
                     } else {
                         "mdl.from_path"
                     };
-                    ui.label(RichText::new(self.tr(origin)).color(theme::GOOD));
+                    ui.label(RichText::new(self.tr(origin)).color(theme::palette(ui).GOOD));
                     ui.add(
                         egui::Label::new(
                             RichText::new(path.file_name().unwrap_or_default().to_string_lossy()).monospace(),
@@ -151,9 +151,9 @@ impl RetoqueApp {
                     };
                     ui.colored_label(
                         if is_auto || info.path.is_none() {
-                            theme::WARN
+                            theme::palette(ui).WARN
                         } else {
-                            theme::BAD
+                            theme::palette(ui).BAD
                         },
                         self.tr(key),
                     );
@@ -161,7 +161,11 @@ impl RetoqueApp {
             }
             self.nr_compatibility_notice(ui);
             ui.add_space(6.0);
-            ui.label(RichText::new(self.tr("mdl.next_start")).small().color(theme::MUTED));
+            ui.label(
+                RichText::new(self.tr("mdl.next_start"))
+                    .small()
+                    .color(theme::palette(ui).MUTED),
+            );
             ui.horizontal_wrapped(|ui| {
                 if !is_auto
                     && ui
@@ -198,7 +202,7 @@ impl RetoqueApp {
                 } else {
                     "mdl.empty"
                 };
-                ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
+                ui.label(RichText::new(self.tr(key)).color(theme::palette(ui).MUTED));
             });
         }
         for m in &models {
@@ -215,20 +219,26 @@ impl RetoqueApp {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new(&m.label).size(theme::TITLE).strong());
                     if in_use {
-                        widgets::chip(ui, self.tr("mdl.in_use"), theme::GOOD);
+                        widgets::chip(ui, self.tr("mdl.in_use"), theme::palette(ui).GOOD);
                     }
                 });
                 ui.horizontal_wrapped(|ui| {
                     let version = m.version.as_deref().unwrap_or(self.tr("unknown"));
-                    ui.label(RichText::new(format!("{} {version}", self.tr("mdl.version"))).color(theme::MUTED));
-                    ui.label(RichText::new(size_text(self.lang, m.size)).small().color(theme::MUTED));
+                    ui.label(
+                        RichText::new(format!("{} {version}", self.tr("mdl.version"))).color(theme::palette(ui).MUTED),
+                    );
+                    ui.label(
+                        RichText::new(size_text(self.lang, m.size))
+                            .small()
+                            .color(theme::palette(ui).MUTED),
+                    );
                 });
                 self.model_compatibility_label(ui, &m.compatibility);
                 if let Some(count) = used {
                     ui.label(
                         RichText::new(used_games_text(self.lang, count))
                             .small()
-                            .color(theme::MUTED),
+                            .color(theme::palette(ui).MUTED),
                     );
                 }
                 widgets::collapsible(
@@ -289,7 +299,7 @@ impl RetoqueApp {
     pub(crate) fn model_import_area(&self, ui: &mut egui::Ui) {
         let pending_id = egui::Id::unique("model-import-pending");
         let area = widgets::card(ui, |ui| {
-            ui.label(RichText::new(self.tr("mdl.drop")).color(theme::MUTED));
+            ui.label(RichText::new(self.tr("mdl.drop")).color(theme::palette(ui).MUTED));
             if ui.button(self.tr("mdl.import")).clicked()
                 && let Some(path) = rfd::FileDialog::new()
                     .add_filter(self.tr("mdl.dll_filter"), &["dll"])
@@ -314,7 +324,7 @@ impl RetoqueApp {
             ui.add(egui::Label::new(path.file_name().unwrap_or_default().to_string_lossy()).truncate());
             ui.horizontal(|ui| {
                 if ui
-                    .add_enabled(!self.busy(), theme::primary(self.tr("mdl.confirm_import")))
+                    .add_enabled(!self.busy(), theme::primary(ui, self.tr("mdl.confirm_import")))
                     .clicked()
                 {
                     ui.ctx().data_mut(|data| data.remove::<PathBuf>(pending_id));
@@ -336,9 +346,9 @@ impl RetoqueApp {
         use retoque_data::model_compat::Compatibility;
         let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
         let (key, color) = match info.for_gpu(gpu) {
-            Compatibility::Incompatible => ("mdl.incompatible", theme::BAD),
-            Compatibility::Compatible => ("mdl.arch_match", theme::GOOD),
-            Compatibility::Unknown => ("mdl.compat_unknown", theme::WARN),
+            Compatibility::Incompatible => ("mdl.incompatible", theme::palette(ui).BAD),
+            Compatibility::Compatible => ("mdl.arch_match", theme::palette(ui).GOOD),
+            Compatibility::Unknown => ("mdl.compat_unknown", theme::palette(ui).WARN),
         };
         // A chip in words; the CUDA targets the file was built for are technical detail, kept in the hover.
         let chip = ui.horizontal(|ui| widgets::chip(ui, self.tr(key), color)).response;
@@ -426,14 +436,16 @@ impl RetoqueApp {
         let compatible = model_fetch::pick_for_gpu(&self.nr_fetch.entries, gpu);
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("nr_fetch.title"));
-            ui.add(egui::Label::new(RichText::new(self.tr("nr_fetch.source_note")).color(theme::MUTED)).wrap());
+            ui.add(
+                egui::Label::new(RichText::new(self.tr("nr_fetch.source_note")).color(theme::palette(ui).MUTED)).wrap(),
+            );
             ui.add_space(6.0);
             if let Some(entry) = compatible {
                 ui.label(RichText::new(format!("{} · {}", entry.label, size_text(self.lang, entry.size))).strong())
                     .on_hover_text(format!("SHA-256 {}", entry.sha256));
                 self.model_compatibility_label(ui, &entry.compatibility);
             } else {
-                ui.colored_label(theme::WARN, self.tr("nr_fetch.no_compatible_gpu"));
+                ui.colored_label(theme::palette(ui).WARN, self.tr("nr_fetch.no_compatible_gpu"));
             }
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {

@@ -284,7 +284,7 @@ impl RetoqueApp {
                     },
                 ));
                 if !snapshot.addons.is_empty() && snapshot.build != Some(core::Build::Full) {
-                    ui.colored_label(theme::WARN, t(lang, "rs.recommend_why"));
+                    ui.colored_label(theme::palette(ui).WARN, t(lang, "rs.recommend_why"));
                 }
                 for (index, addon) in snapshot.addons.iter().enumerate() {
                     ui.push_id(&addon.file, |ui| {
@@ -365,7 +365,7 @@ impl RetoqueApp {
                 ui.label(
                     RichText::new(format!("{} {}", t(lang, "rs.ready"), self.tuning.reshade.cached_label))
                         .small()
-                        .color(theme::MUTED),
+                        .color(theme::palette(ui).MUTED),
                 );
             }
             ui.horizontal_wrapped(|ui| {
@@ -388,7 +388,11 @@ impl RetoqueApp {
             if let Some(error) = &self.tuning.reshade.error {
                 crate::error::card(ui, error, lang, &self.cmd_tx);
             }
-            ui.label(RichText::new(t(lang, "rs.static")).small().color(theme::MUTED));
+            ui.label(
+                RichText::new(t(lang, "rs.static"))
+                    .small()
+                    .color(theme::palette(ui).MUTED),
+            );
         });
         if self.tuning.reshade.consent {
             let details = |ui: &mut egui::Ui| {

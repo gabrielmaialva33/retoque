@@ -50,8 +50,20 @@ fn window(
     tab: Option<Tab>,
     size: [f32; 2],
 ) -> Harness<'static, RetoqueApp> {
+    window_with_appearance(lang, target, installed, tab, size, theme::Appearance::Dark)
+}
+
+fn window_with_appearance(
+    lang: Lang,
+    target: &Path,
+    installed: bool,
+    tab: Option<Tab>,
+    size: [f32; 2],
+    appearance: theme::Appearance,
+) -> Harness<'static, RetoqueApp> {
     let mut app = app();
     app.lang = lang;
+    app.saved.appearance = appearance;
     app.payload = Some("/synthetic/payload".into());
     app.payload_build = Some(Ok("old".into()));
     app.library_state.games.push(game(target));
@@ -73,10 +85,17 @@ fn window(
         }));
     }
     // As RetoqueApp::new does: the theme, and CJK text from a system font (the harness panics on a missing glyph).
+    let expected_theme = if appearance == theme::Appearance::Light {
+        egui::Theme::Light
+    } else {
+        egui::Theme::Dark
+    };
     let mut h = Harness::builder()
         .with_size(size)
+        .with_theme(expected_theme)
         .with_context_setup(move |ctx| {
             crate::theme::apply(ctx);
+            appearance.apply(ctx);
             crate::fonts::apply(ctx, lang);
         })
         .build_ui_state(
@@ -87,6 +106,14 @@ fn window(
             app,
         );
     h.run_steps(4);
+    assert_eq!(h.state().context.theme(), expected_theme);
+    assert!(
+        h.output()
+            .shapes
+            .iter()
+            .any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == theme::for_theme(expected_theme).BG)),
+        "main view uses the chosen palette"
+    );
     h
 }
 
@@ -190,97 +217,102 @@ fn top_bar_fits(h: &mut Harness<'_, RetoqueApp>, lang: Lang, on_game: bool, size
 #[test]
 fn every_language_fits_the_main_views_in_a_small_window() {
     let dir = tempfile::tempdir().unwrap();
-    for size in [SIZE, NARROW] {
-        for lang in Lang::ALL.into_iter().filter(|l| crate::fonts::can_show(*l)) {
-            let mut home = window(lang, dir.path(), false, None, size);
-            let folded = top_bar_fits(&mut home, lang, false, size);
-            assert!(
-                home.query_by_label(t(lang, "welcome.title")).is_some(),
-                "{lang:?}: home grid"
-            );
-            let home_what = format!("{lang:?} {size:?} home");
-            let search = inside(&home, size, Role::TextInput, t(lang, "lib.search"), &home_what);
-            assert!(search.width() >= 180.0, "{home_what}: search width {}", search.width());
-            let home_controls = [
-                search,
-                inside(&home, size, Role::CheckBox, t(lang, "lib.installed_only"), &home_what),
-                inside(&home, size, Role::CheckBox, t(lang, "lib.attention_only"), &home_what),
-                inside(&home, size, Role::Button, t(lang, "lib.add_folder"), &home_what),
-                inside(&home, size, Role::Button, t(lang, "folders.title"), &home_what),
-            ];
-            for (i, a) in home_controls.iter().enumerate() {
-                for b in &home_controls[i + 1..] {
-                    assert!(
-                        !a.shrink(0.5).intersects(b.shrink(0.5)),
-                        "{home_what}: filter row overlap {a:?} {b:?}"
-                    );
+    for appearance in [theme::Appearance::Dark, theme::Appearance::Light] {
+        for size in [SIZE, NARROW] {
+            for lang in Lang::ALL.into_iter().filter(|l| crate::fonts::can_show(*l)) {
+                if appearance == theme::Appearance::Light && !matches!(lang, Lang::En | Lang::Pt) {
+                    continue;
                 }
-            }
-            if size == SIZE && matches!(lang, Lang::En | Lang::Pt) {
-                assert!(folded.is_empty(), "{lang:?}: the whole bar fits at 1024: {folded:?}");
-            }
-
-            for installed in [false, true] {
-                let primary = t(
-                    lang,
-                    if installed {
-                        "shell.optimize"
-                    } else {
-                        "shell.install_optimize"
-                    },
+                let mut home = window_with_appearance(lang, dir.path(), false, None, size, appearance);
+                let folded = top_bar_fits(&mut home, lang, false, size);
+                assert!(
+                    home.query_by_label(t(lang, "welcome.title")).is_some(),
+                    "{lang:?}: home grid"
                 );
-                for tab in [Tab::Install, Tab::Settings, Tab::Model, Tab::Compare, Tab::Logs] {
-                    let mut h = window(lang, dir.path(), installed, Some(tab), size);
-                    let what = format!("{lang:?} {size:?} {tab:?} installed={installed}");
-                    if tab == Tab::Install {
-                        let only = inside(&h, size, Role::CheckBox, t(lang, "lib.installed_only"), &what);
-                        let folders = inside(&h, size, Role::Button, t(lang, "folders.title"), &what);
+                let home_what = format!("{lang:?} {size:?} home");
+                let search = inside(&home, size, Role::TextInput, t(lang, "lib.search"), &home_what);
+                assert!(search.width() >= 180.0, "{home_what}: search width {}", search.width());
+                let home_controls = [
+                    search,
+                    inside(&home, size, Role::CheckBox, t(lang, "lib.installed_only"), &home_what),
+                    inside(&home, size, Role::CheckBox, t(lang, "lib.attention_only"), &home_what),
+                    inside(&home, size, Role::Button, t(lang, "lib.add_folder"), &home_what),
+                    inside(&home, size, Role::Button, t(lang, "folders.title"), &home_what),
+                ];
+                for (i, a) in home_controls.iter().enumerate() {
+                    for b in &home_controls[i + 1..] {
                         assert!(
-                            !only.shrink(0.5).intersects(folders.shrink(0.5)),
-                            "{what}: sidebar filter overlap {only:?} {folders:?}"
+                            !a.shrink(0.5).intersects(b.shrink(0.5)),
+                            "{home_what}: filter row overlap {a:?} {b:?}"
                         );
                     }
-                    if tab != Tab::Compare {
-                        let main = inside(&h, size, Role::Button, primary, &what);
-                        let play = inside(&h, size, Role::Button, t(lang, "play.action"), &what);
-                        assert!(
-                            !main.shrink(0.5).intersects(play.shrink(0.5)),
-                            "{what}: Play overlaps primary"
-                        );
-                        for tab in h.query_all_by_role(Role::Tab) {
-                            assert!(play.bottom() <= tab.rect().top(), "{what}: Play overlaps tab content");
-                        }
-                    }
-                    for tab_node in h.query_all_by_role(Role::Tab) {
-                        let rect = tab_node.rect();
-                        assert!(
-                            window_rect(size).expand(0.5).contains_rect(rect),
-                            "{what}: tab strip at {rect:?}"
-                        );
-                    }
-                    top_bar_fits(&mut h, lang, true, size);
                 }
-            }
+                if size == SIZE && matches!(lang, Lang::En | Lang::Pt) {
+                    assert!(folded.is_empty(), "{lang:?}: the whole bar fits at 1024: {folded:?}");
+                }
 
-            // Preferences, opened over the home grid: the language selector is labelled and the dialog fits.
-            home.state_mut().prefs_open();
-            home.run_steps(3);
-            let labelled = home
-                .query_all_by_role_and_label(Role::ComboBox, t(lang, "prefs.language"))
-                .count();
-            let in_bar = usize::from(!folded.contains(&t(lang, "prefs.language")));
-            assert_eq!(
-                labelled,
-                1 + in_bar,
-                "{lang:?}: the top bar's and the dialog's selectors are both named"
-            );
-            inside(
-                &home,
-                size,
-                Role::Button,
-                t(lang, "close"),
-                &format!("{lang:?} {size:?} preferences"),
-            );
+                for installed in [false, true] {
+                    let primary = t(
+                        lang,
+                        if installed {
+                            "shell.optimize"
+                        } else {
+                            "shell.install_optimize"
+                        },
+                    );
+                    for tab in [Tab::Install, Tab::Settings, Tab::Model, Tab::Compare, Tab::Logs] {
+                        let mut h = window_with_appearance(lang, dir.path(), installed, Some(tab), size, appearance);
+                        let what = format!("{lang:?} {size:?} {tab:?} installed={installed}");
+                        if tab == Tab::Install {
+                            let only = inside(&h, size, Role::CheckBox, t(lang, "lib.installed_only"), &what);
+                            let folders = inside(&h, size, Role::Button, t(lang, "folders.title"), &what);
+                            assert!(
+                                !only.shrink(0.5).intersects(folders.shrink(0.5)),
+                                "{what}: sidebar filter overlap {only:?} {folders:?}"
+                            );
+                        }
+                        if tab != Tab::Compare {
+                            let main = inside(&h, size, Role::Button, primary, &what);
+                            let play = inside(&h, size, Role::Button, t(lang, "play.action"), &what);
+                            assert!(
+                                !main.shrink(0.5).intersects(play.shrink(0.5)),
+                                "{what}: Play overlaps primary"
+                            );
+                            for tab in h.query_all_by_role(Role::Tab) {
+                                assert!(play.bottom() <= tab.rect().top(), "{what}: Play overlaps tab content");
+                            }
+                        }
+                        for tab_node in h.query_all_by_role(Role::Tab) {
+                            let rect = tab_node.rect();
+                            assert!(
+                                window_rect(size).expand(0.5).contains_rect(rect),
+                                "{what}: tab strip at {rect:?}"
+                            );
+                        }
+                        top_bar_fits(&mut h, lang, true, size);
+                    }
+                }
+
+                // Preferences, opened over the home grid: the language selector is labelled and the dialog fits.
+                home.state_mut().prefs_open();
+                home.run_steps(3);
+                let labelled = home
+                    .query_all_by_role_and_label(Role::ComboBox, t(lang, "prefs.language"))
+                    .count();
+                let in_bar = usize::from(!folded.contains(&t(lang, "prefs.language")));
+                assert_eq!(
+                    labelled,
+                    1 + in_bar,
+                    "{lang:?}: the top bar's and the dialog's selectors are both named"
+                );
+                inside(
+                    &home,
+                    size,
+                    Role::Button,
+                    t(lang, "close"),
+                    &format!("{lang:?} {size:?} preferences"),
+                );
+            }
         }
     }
 }
@@ -290,7 +322,7 @@ fn choosing_a_language_applies_at_once_and_is_saved() {
     let dir = tempfile::tempdir().unwrap();
     let mut h = window(Lang::En, dir.path(), false, None, SIZE);
     h.state_mut().prefs_open();
-    h.run_steps(3);
+    h.run_steps(8);
     let combos: Vec<_> = h
         .query_all_by_role_and_label(Role::ComboBox, t(Lang::En, "prefs.language"))
         .map(|n| n.rect())
@@ -316,6 +348,52 @@ fn choosing_a_language_applies_at_once_and_is_saved() {
     assert_eq!(h.state().saved.lang, Some(Lang::De));
     h.get_by_label(t(Lang::De, "prefs.title"));
     assert_ne!(t(Lang::De, "prefs.title"), t(Lang::En, "prefs.title"));
+}
+
+#[test]
+fn appearance_changes_immediately_and_survives_restart_in_both_languages() {
+    for lang in [Lang::En, Lang::Pt] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut h = window(lang, dir.path(), false, None, SIZE);
+        h.state_mut().prefs.open = true;
+        h.run_steps(8);
+        for choice in [
+            theme::Appearance::Light,
+            theme::Appearance::Dark,
+            theme::Appearance::System,
+        ] {
+            h.get_by_role_and_label(Role::ComboBox, t(lang, "prefs.appearance"))
+                .click();
+            h.run_steps(2);
+            h.get_by_label(t(lang, choice.label())).click();
+            h.run_steps(3);
+            assert_eq!(h.state().saved.appearance, choice);
+            let ctx = &h.state().context;
+            let expected = match choice {
+                theme::Appearance::Light => egui::Theme::Light,
+                theme::Appearance::Dark => egui::Theme::Dark,
+                theme::Appearance::System => ctx.system_theme().unwrap_or(egui::Theme::Dark),
+            };
+            assert_eq!(ctx.theme(), expected);
+            assert!(
+                h.output()
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.fill == theme::for_theme(expected).BG))
+            );
+            let saved: Saved = serde_json::from_value(serde_json::to_value(&h.state().saved).unwrap()).unwrap();
+            let restored = egui::Context::default();
+            theme::apply(&restored);
+            saved.appearance.apply(&restored);
+            assert_eq!(restored.theme(), expected);
+        }
+        let mut old = serde_json::to_value(&h.state().saved).unwrap();
+        old.as_object_mut().unwrap().remove("appearance");
+        assert_eq!(
+            serde_json::from_value::<Saved>(old).unwrap().appearance,
+            theme::Appearance::Dark
+        );
+    }
 }
 
 /// Physical window sizes divided by zoom give egui's logical viewport. Exercise all translations, including
@@ -371,7 +449,7 @@ fn audited_banner_and_tiles_fit_at_every_zoom_and_language() {
                         .iter()
                         .find_map(|s| match &s.shape {
                             egui::Shape::Rect(r)
-                                if r.fill == theme::CARD && r.rect.width() > 400. && r.rect.top() < 20. =>
+                                if r.fill == theme::DARK.CARD && r.rect.width() > 400. && r.rect.top() < 20. =>
                             {
                                 Some(r.rect)
                             }
@@ -427,6 +505,18 @@ fn audited_banner_and_tiles_fit_at_every_zoom_and_language() {
 #[test]
 #[ignore = "manual read-only library render; requires RETOQUE_LOOK_SHOTS"]
 fn render_audited_library() {
+    render_library_appearance(theme::Appearance::Dark);
+}
+
+#[cfg(feature = "visual-tests")]
+#[test]
+#[ignore = "manual read-only light theme render; requires RETOQUE_LOOK_SHOTS"]
+fn render_light_theme() {
+    render_library_appearance(theme::Appearance::Light);
+}
+
+#[cfg(feature = "visual-tests")]
+fn render_library_appearance(appearance: theme::Appearance) {
     let out = PathBuf::from(std::env::var("RETOQUE_LOOK_SHOTS").expect("scratch output folder"));
     let phase = std::env::var("RETOQUE_LOOK_PHASE").unwrap_or_else(|_| "after".into());
     let (games, _) = retoque_discovery::discover(&retoque_discovery::Config::default());
@@ -436,17 +526,32 @@ fn render_audited_library() {
         .flat_map(|g| &g.targets)
         .filter_map(|t| retoque_core::status(&t.path).ok().map(|s| (t.path.clone(), s)))
         .collect();
-    for zoom in [1.0, 1.2] {
-        for (group, tab) in [
+    let light = appearance == theme::Appearance::Light;
+    let review_dir = tempfile::tempdir().unwrap();
+    std::fs::write(review_dir.path().join("OptiScaler.ini"), "[DlssNr]\nEnabled=false\n").unwrap();
+    let groups = if light {
+        vec![
+            ("library", None),
+            ("game", Some(Tab::Install)),
+            ("settings", Some(Tab::Settings)),
+            ("review", Some(Tab::Install)),
+            ("preferences", None),
+        ]
+    } else {
+        vec![
             ("defects", Some(Tab::Install)),
             ("identity", Some(Tab::Install)),
             ("library", None),
             ("attention-synthetic", None),
             ("chrome", Some(Tab::Settings)),
             ("minimum", Some(Tab::Install)),
-        ] {
+        ]
+    };
+    for zoom in [1.0, 1.2] {
+        for &(group, tab) in &groups {
             let mut state = app();
             state.lang = Lang::Pt;
+            state.saved.appearance = appearance;
             state.tuning.gpus = Some(vec![]);
             state.payload = std::env::var_os("RETOQUE_SOURCE_DIR").map(PathBuf::from);
             state.library_state.games = games.clone();
@@ -496,14 +601,41 @@ fn render_audited_library() {
                     state.view.ini = Some(Ok(Some(ini)));
                 }
             }
+            if group == "preferences" {
+                state.prefs.open = true;
+            }
+            if group == "review" {
+                let plan = retoque_core::plan_settings(
+                    review_dir.path(),
+                    &[("DlssNr".into(), "Enabled".into(), "true".into())],
+                )
+                .unwrap();
+                state.review_open = true;
+                state.review = Some(Ok(ReviewSession {
+                    title: t(Lang::Pt, "set.save").trim_end_matches('…').into(),
+                    kind: ReviewKind::Standard(PlanKind::Settings),
+                    groups: vec![
+                        plan.steps()
+                            .iter()
+                            .map(|step| step_group(step, plan.steps(), true))
+                            .collect(),
+                    ],
+                    plans: vec![plan],
+                    request_id: 0,
+                    target: Some(target.clone()),
+                }));
+            }
+            let expected_theme = if light { egui::Theme::Light } else { egui::Theme::Dark };
             let mut h = Harness::builder()
+                .with_theme(expected_theme)
                 .with_size(if group == "minimum" {
                     [820. / zoom, 520. / zoom]
                 } else {
                     [1280. / zoom, 800. / zoom]
                 })
-                .with_context_setup(|ctx| {
+                .with_context_setup(move |ctx| {
                     crate::theme::apply(ctx);
+                    appearance.apply(ctx);
                     crate::fonts::apply(ctx, Lang::Pt);
                     egui_extras::install_image_loaders(ctx);
                 })
@@ -526,7 +658,7 @@ fn render_audited_library() {
                 h.run_steps(1);
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            if group != "chrome" {
+            if !matches!(group, "chrome" | "review" | "preferences") {
                 let size = if group == "minimum" {
                     [820. / zoom, 520. / zoom]
                 } else {
@@ -534,9 +666,14 @@ fn render_audited_library() {
                 };
                 top_bar_fits(&mut h, Lang::Pt, tab.is_some(), size);
             }
+            assert_eq!(h.state().context.theme(), expected_theme);
             h.render()
                 .expect("offscreen render")
-                .save(out.join(format!("app-look-{group}-{phase}-{zoom:.1}x.png")))
+                .save(out.join(if light {
+                    format!("app-theme-{group}-{zoom:.1}x.png")
+                } else {
+                    format!("app-look-{group}-{phase}-{zoom:.1}x.png")
+                }))
                 .unwrap();
         }
     }
@@ -607,7 +744,7 @@ fn audited_sidebar_keeps_the_game_banner_inside_the_zoomed_window() {
                     .iter()
                     .find_map(|s| match &s.shape {
                         egui::Shape::Rect(r)
-                            if r.fill == theme::CARD
+                            if r.fill == theme::DARK.CARD
                                 && r.rect.left() > logical[0] * 0.25
                                 && r.rect.top() < 160.
                                 && r.rect.width() > 100. =>
@@ -636,7 +773,7 @@ fn audited_brand_mark_is_inside_the_named_home_button() {
                 .shapes
                 .iter()
                 .find_map(|s| match &s.shape {
-                    egui::Shape::Rect(r) if r.fill == theme::CANVAS && (r.rect.width() - 28.).abs() < 0.5 => {
+                    egui::Shape::Rect(r) if r.fill == theme::DARK.CANVAS && (r.rect.width() - 28.).abs() < 0.5 => {
                         Some(r.rect)
                     }
                     _ => None,
@@ -767,7 +904,7 @@ fn audited_library_titles_wrap_twice_and_only_attention_states_are_painted() {
                         ui,
                         name,
                         "",
-                        (t(lang, "st.current"), theme::GOOD),
+                        (t(lang, "st.current"), theme::DARK.GOOD),
                         None,
                         false,
                         None,
@@ -778,14 +915,22 @@ fn audited_library_titles_wrap_twice_and_only_attention_states_are_painted() {
                         ui,
                         "Attention",
                         "",
-                        (t(lang, "st.partial"), theme::BAD),
+                        (t(lang, "st.partial"), theme::DARK.BAD),
                         None,
                         false,
                         None,
                         None,
                         true,
                     );
-                    widgets::cover_card(ui, 160., name, None, (t(lang, "st.current"), theme::GOOD), None, false);
+                    widgets::cover_card(
+                        ui,
+                        160.,
+                        name,
+                        None,
+                        (t(lang, "st.current"), theme::DARK.GOOD),
+                        None,
+                        false,
+                    );
                 });
             h.run_steps(2);
             let titles: Vec<_> = h

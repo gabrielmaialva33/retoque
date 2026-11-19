@@ -3,7 +3,7 @@
 //! write to the game folder is "Capture now"'s request file, left only while the game runs and taken back when the
 //! game does not take it.
 use crate::i18n::{Lang, t};
-use egui::{Color32, ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
+use egui::{ColorImage, Pos2, Rect, Sense, TextureHandle, TextureOptions, Vec2};
 use retoque_data::captures::{self, Pair, Stats};
 use std::{
     collections::{HashMap, VecDeque},
@@ -505,7 +505,7 @@ impl CompareView {
     }
     fn content(&mut self, ui: &mut egui::Ui, lang: Lang, target: &Path) {
         if let Some(error) = self.error {
-            ui.colored_label(crate::theme::BAD, t(lang, error));
+            ui.colored_label(crate::theme::palette(ui).BAD, t(lang, error));
         }
         if self.pairs.is_empty() {
             if self.scanning {
@@ -528,7 +528,7 @@ impl CompareView {
             self.canvas(ui, lang, Vec2::new(ui.available_width(), canvas_height), held);
         } else {
             egui::Frame::new()
-                .fill(crate::theme::CANVAS)
+                .fill(crate::theme::palette(ui).CANVAS)
                 .corner_radius(8.0)
                 .show(ui, |ui| {
                     ui.set_min_size(Vec2::new(ui.available_width(), canvas_height));
@@ -589,7 +589,7 @@ impl CompareView {
                 ui.label(
                     egui::RichText::new(format!("{}", index + 1))
                         .strong()
-                        .color(crate::theme::ACCENT),
+                        .color(crate::theme::palette(ui).ACCENT),
                 );
                 ui.label(text);
             });
@@ -598,9 +598,9 @@ impl CompareView {
         ui.horizontal_wrapped(|ui| self.capture_controls(ui, lang, target, true));
         ui.add_space(16.0);
         // The same capture from inside the game, for the routes the request file does not reach.
-        ui.label(egui::RichText::new(t(lang, "cmp.empty.or_menu")).color(crate::theme::MUTED));
+        ui.label(egui::RichText::new(t(lang, "cmp.empty.or_menu")).color(crate::theme::palette(ui).MUTED));
         for text in [menu.as_str(), t(lang, "cmp.empty.capture")] {
-            ui.add(egui::Label::new(egui::RichText::new(text).color(crate::theme::MUTED)).wrap());
+            ui.add(egui::Label::new(egui::RichText::new(text).color(crate::theme::palette(ui).MUTED)).wrap());
         }
         ui.add_space(8.0);
         if ui.button(t(lang, "cmp.empty.refresh")).clicked() {
@@ -682,7 +682,7 @@ impl CompareView {
         let busy = self.capture_busy();
         let label = t(lang, "cmp.capture_now");
         let button = if primary {
-            crate::theme::primary(label)
+            crate::theme::primary(ui, label)
         } else {
             egui::Button::new(label)
         };
@@ -700,15 +700,15 @@ impl CompareView {
             }
             CaptureNow::Said(key) => {
                 let color = if *key == "cmp.capture_saved" {
-                    crate::theme::GOOD
+                    crate::theme::palette(ui).GOOD
                 } else {
-                    crate::theme::MUTED
+                    crate::theme::palette(ui).MUTED
                 };
                 ui.add(egui::Label::new(egui::RichText::new(t(lang, key)).color(color)).wrap());
             }
             CaptureNow::Failed(error) => {
                 ui.colored_label(
-                    crate::theme::BAD,
+                    crate::theme::palette(ui).BAD,
                     t(lang, "cmp.capture_failed").replace("{error}", error),
                 );
             }
@@ -721,7 +721,7 @@ impl CompareView {
         if self.loaded.is_none() {
             let texture = ui.ctx().load_texture(
                 "audit",
-                ColorImage::filled([1, 1], Color32::BLACK),
+                ColorImage::filled([1, 1], crate::theme::IMAGE_BLACK),
                 TextureOptions::default(),
             );
             self.loaded = Some(Loaded {
@@ -933,7 +933,7 @@ impl CompareView {
                                 texture.id(),
                                 Rect::from_center_size(rect.center(), source * scale),
                                 Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                                Color32::WHITE,
+                                crate::theme::IMAGE_TINT,
                             );
                         } else {
                             painter.text(
@@ -955,12 +955,18 @@ impl CompareView {
                             painter.rect_stroke(
                                 rect.shrink(1.0),
                                 6.0,
+                                (4.0, crate::theme::palette(ui).ON_ACCENT),
+                                egui::StrokeKind::Inside,
+                            );
+                            painter.rect_stroke(
+                                rect.shrink(1.0),
+                                6.0,
                                 (
                                     if response.has_focus() { 2.0 } else { 1.0 },
                                     if response.has_focus() {
-                                        Color32::WHITE
+                                        crate::theme::palette(ui).TEXT_STRONG
                                     } else {
-                                        crate::theme::ACCENT
+                                        crate::theme::palette(ui).ACCENT
                                     },
                                 ),
                                 egui::StrokeKind::Inside,
@@ -1086,7 +1092,7 @@ impl CompareView {
                 });
         }
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 4.0, crate::theme::CANVAS);
+        painter.rect_filled(rect, 4.0, crate::theme::palette(ui).CANVAS);
         let draw = |texture: &TextureHandle, pane: Rect, clip: Rect| {
             let destination =
                 Rect::from_center_size(pane.center() + self.transform.pan, loaded.size * self.transform.scale);
@@ -1094,7 +1100,7 @@ impl CompareView {
                 texture.id(),
                 destination,
                 Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                Color32::WHITE,
+                crate::theme::IMAGE_TINT,
             );
         };
         let shown_mode = if held { CompareMode::Flip } else { self.mode };
@@ -1111,17 +1117,25 @@ impl CompareView {
                     rect,
                     Rect::from_min_max(Pos2::new(x, rect.top()), rect.max),
                 );
+                // A two-tone rule remains visible over both the preview and the themed canvas.
                 painter.line_segment(
                     [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
-                    (2.0, Color32::WHITE),
+                    (4.0, crate::theme::IMAGE_BLACK),
                 );
-                painter.circle_filled(Pos2::new(x, rect.center().y), 13.0, crate::theme::ACCENT);
+                painter.line_segment(
+                    [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+                    (2.0, crate::theme::IMAGE_INK),
+                );
+                painter.circle_filled(Pos2::new(x, rect.center().y), 13.0, crate::theme::palette(ui).ACCENT);
                 // Geometry keeps the handle legible with both the system and egui fallback fonts.
                 let center = Pos2::new(x, rect.center().y);
                 for sign in [-1.0, 1.0] {
                     let tip = center + Vec2::new(sign * 7.0, 0.0);
                     for y in [-4.0, 4.0] {
-                        painter.line_segment([tip, center + Vec2::new(sign * 3.0, y)], (1.5, Color32::BLACK));
+                        painter.line_segment(
+                            [tip, center + Vec2::new(sign * 3.0, y)],
+                            (1.5, crate::theme::palette(ui).ON_ACCENT),
+                        );
                     }
                 }
                 image_label(
@@ -1176,7 +1190,18 @@ impl CompareView {
             );
         }
         if response.has_focus() {
-            painter.rect_stroke(rect.shrink(1.0), 4.0, (2.0, Color32::WHITE), egui::StrokeKind::Inside);
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                4.0,
+                (4.0, crate::theme::IMAGE_BLACK),
+                egui::StrokeKind::Inside,
+            );
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                4.0,
+                (2.0, crate::theme::IMAGE_INK),
+                egui::StrokeKind::Inside,
+            );
         }
     }
     fn keyboard(&mut self, ui: &mut egui::Ui) {
@@ -1229,7 +1254,7 @@ fn icon_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response
         ui.painter().rect_stroke(
             response.rect.shrink(1.0),
             4.0,
-            (2.0, Color32::WHITE),
+            (2.0, crate::theme::palette(ui).TEXT_STRONG),
             egui::StrokeKind::Inside,
         );
     }
@@ -1264,7 +1289,7 @@ fn mode_button(ui: &mut egui::Ui, lang: Lang, mode: CompareMode, selected: bool,
             );
         }
         CompareMode::Difference => {
-            p.circle_filled(rect.center(), 4.0, crate::theme::ACCENT);
+            p.circle_filled(rect.center(), 4.0, crate::theme::palette(ui).ACCENT);
         }
     }
     response
@@ -1289,7 +1314,7 @@ fn paint_expand(ui: &egui::Ui, response: &egui::Response, close: bool) {
     }
 }
 fn image_label(painter: &egui::Painter, pos: Pos2, text: &str, right: bool) {
-    let galley = painter.layout_no_wrap(text.into(), egui::FontId::proportional(14.0), Color32::WHITE);
+    let galley = painter.layout_no_wrap(text.into(), egui::FontId::proportional(14.0), crate::theme::IMAGE_INK);
     let pos = if right {
         pos - Vec2::new(galley.size().x, 0.0)
     } else {
@@ -1298,9 +1323,9 @@ fn image_label(painter: &egui::Painter, pos: Pos2, text: &str, right: bool) {
     painter.rect_filled(
         Rect::from_min_size(pos, galley.size()).expand2(Vec2::new(6.0, 4.0)),
         4.0,
-        Color32::from_black_alpha(210),
+        crate::theme::IMAGE_SCRIM,
     );
-    painter.galley(pos, galley, Color32::WHITE);
+    painter.galley(pos, galley, crate::theme::IMAGE_INK);
 }
 fn provenance(ui: &mut egui::Ui, lang: Lang, pair: &Pair) {
     if pair.provenance.is_empty() {
@@ -1422,127 +1447,133 @@ mod tests {
     #[test]
     fn real_panel_loads_switches_modes_flips_and_zooms() {
         use egui_kittest::{Harness, kittest::Queryable};
-        let dir = tempfile::tempdir().unwrap();
-        let folder = dir.path().join("retoque-captures");
-        std::fs::create_dir(&folder).unwrap();
-        for (suffix, rgb) in [("original", [220, 40, 20, 255]), ("processed", [20, 40, 220, 255])] {
-            captures::RgbaImage::from_pixel(8, 4, image::Rgba(rgb))
-                .save(folder.join(format!("synthetic.{suffix}.png")))
-                .unwrap();
-        }
-        let target = dir.path().to_owned();
-        let mut harness = Harness::builder().with_size(Vec2::new(1100.0, 800.0)).build_ui_state(
-            move |ui, view: &mut CompareView| view.ui(ui, Lang::En, &target),
-            CompareView::default(),
-        );
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while harness.state().loaded.is_none() && Instant::now() < deadline {
+        for appearance in [egui::Theme::Dark, egui::Theme::Light] {
+            let dir = tempfile::tempdir().unwrap();
+            let folder = dir.path().join("retoque-captures");
+            std::fs::create_dir(&folder).unwrap();
+            for (suffix, rgb) in [("original", [220, 40, 20, 255]), ("processed", [20, 40, 220, 255])] {
+                captures::RgbaImage::from_pixel(8, 4, image::Rgba(rgb))
+                    .save(folder.join(format!("synthetic.{suffix}.png")))
+                    .unwrap();
+            }
+            let target = dir.path().to_owned();
+            let mut harness = Harness::builder()
+                .with_theme(appearance)
+                .with_context_setup(crate::theme::apply)
+                .with_size(Vec2::new(1100.0, 800.0))
+                .build_ui_state(
+                    move |ui, view: &mut CompareView| view.ui(ui, Lang::En, &target),
+                    CompareView::default(),
+                );
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while harness.state().loaded.is_none() && Instant::now() < deadline {
+                harness.run_steps(2);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            assert!(harness.state().loaded.is_some());
+            harness.run();
+            assert_eq!(harness.state().selected, Some(0));
+            let canvas = harness.get_by_label("Comparison image").rect();
+            assert!(canvas.width() > 1000.0, "the image should use the whole panel width");
+            let filmstrip = harness
+                .get_by_role_and_label(egui::accesskit::Role::Button, "synthetic")
+                .rect();
+            assert!(filmstrip.top() > canvas.bottom(), "captures belong under the image");
+            for (name, mode) in [
+                ("Side by side", CompareMode::SideBySide),
+                ("Difference", CompareMode::Difference),
+                ("Flip", CompareMode::Flip),
+            ] {
+                harness.get_by_label(name).click();
+                harness.run();
+                assert_eq!(harness.state().mode, mode);
+            }
+            let texture_present = |h: &Harness<'_, CompareView>, id| {
+                h.output()
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape,egui::Shape::Mesh(mesh) if mesh.texture_id == id))
+            };
+            let original = harness.state().loaded.as_ref().unwrap().original.id();
+            let processed = harness.state().loaded.as_ref().unwrap().processed.id();
+            assert!(texture_present(&harness, processed));
+            assert!(!texture_present(&harness, original));
+            // Clicking Flip leaves button focus. Space must still flip unless a text editor is focused.
+            harness.key_down(egui::Key::Space);
             harness.run_steps(2);
-            std::thread::sleep(Duration::from_millis(2));
-        }
-        assert!(harness.state().loaded.is_some());
-        harness.run();
-        assert_eq!(harness.state().selected, Some(0));
-        let canvas = harness.get_by_label("Comparison image").rect();
-        assert!(canvas.width() > 1000.0, "the image should use the whole panel width");
-        let filmstrip = harness
-            .get_by_role_and_label(egui::accesskit::Role::Button, "synthetic")
-            .rect();
-        assert!(filmstrip.top() > canvas.bottom(), "captures belong under the image");
-        for (name, mode) in [
-            ("Side by side", CompareMode::SideBySide),
-            ("Difference", CompareMode::Difference),
-            ("Flip", CompareMode::Flip),
-        ] {
-            harness.get_by_label(name).click();
+            assert!(texture_present(&harness, original));
+            assert!(!texture_present(&harness, processed));
+            harness.key_up(egui::Key::Space);
             harness.run();
-            assert_eq!(harness.state().mode, mode);
-        }
-        let texture_present = |h: &Harness<'_, CompareView>, id| {
-            h.output()
-                .shapes
-                .iter()
-                .any(|s| matches!(&s.shape,egui::Shape::Mesh(mesh) if mesh.texture_id == id))
-        };
-        let original = harness.state().loaded.as_ref().unwrap().original.id();
-        let processed = harness.state().loaded.as_ref().unwrap().processed.id();
-        assert!(texture_present(&harness, processed));
-        assert!(!texture_present(&harness, original));
-        // Clicking Flip leaves button focus. Space must still flip unless a text editor is focused.
-        harness.key_down(egui::Key::Space);
-        harness.run_steps(2);
-        assert!(texture_present(&harness, original));
-        assert!(!texture_present(&harness, processed));
-        harness.key_up(egui::Key::Space);
-        harness.run();
-        assert!(texture_present(&harness, processed));
-        harness.key_press(egui::Key::Num1);
-        harness.run();
-        assert_eq!(
-            harness.state().mode,
-            CompareMode::Flip,
-            "viewer shortcuts require image focus"
-        );
-        harness.get_by_label("Wipe").click();
-        harness.run();
-        let canvas = harness.get_by_label("Comparison image").rect();
-        harness.hover_at(canvas.center());
-        harness.run_steps(1);
-        harness.drag_at(canvas.center());
-        harness.run_steps(1);
-        harness.hover_at(canvas.center() - Vec2::new(30.0, 0.0));
-        harness.run_steps(2);
-        harness.drop_at(canvas.center() - Vec2::new(30.0, 0.0));
-        harness.run();
-        assert!(harness.state().divider < 0.5);
-        harness.get_by_label("Actual size (1:1)").click();
-        harness.run();
-        assert!(!harness.state().transform.fit);
-        harness.get_by_label("Fit").click();
-        harness.run();
-        assert!(harness.state().transform.fit);
-        harness.hover_at(canvas.center() + Vec2::new(60.0, 10.0));
-        harness.run_steps(1);
-        let before = harness.state().transform.scale;
-        harness.event(egui::Event::MouseWheel {
-            unit: egui::MouseWheelUnit::Point,
-            phase: egui::TouchPhase::Move,
-            source: egui::MouseWheelSource::Wheel,
-            delta: Vec2::new(0.0, 80.0),
-            modifiers: egui::Modifiers::NONE,
-        });
-        harness.run();
-        assert!(harness.state().transform.scale > before);
-        harness.get_by_label("Comparison image").click();
-        harness.run();
-        for (key, mode) in [
-            (egui::Key::Num2, CompareMode::SideBySide),
-            (egui::Key::Num3, CompareMode::Flip),
-            (egui::Key::Num4, CompareMode::Difference),
-            (egui::Key::Num1, CompareMode::Wipe),
-        ] {
-            harness.key_press(key);
+            assert!(texture_present(&harness, processed));
+            harness.key_press(egui::Key::Num1);
             harness.run();
-            assert_eq!(harness.state().mode, mode);
+            assert_eq!(
+                harness.state().mode,
+                CompareMode::Flip,
+                "viewer shortcuts require image focus"
+            );
+            harness.get_by_label("Wipe").click();
+            harness.run();
+            let canvas = harness.get_by_label("Comparison image").rect();
+            harness.hover_at(canvas.center());
+            harness.run_steps(1);
+            harness.drag_at(canvas.center());
+            harness.run_steps(1);
+            harness.hover_at(canvas.center() - Vec2::new(30.0, 0.0));
+            harness.run_steps(2);
+            harness.drop_at(canvas.center() - Vec2::new(30.0, 0.0));
+            harness.run();
+            assert!(harness.state().divider < 0.5);
+            harness.get_by_label("Actual size (1:1)").click();
+            harness.run();
+            assert!(!harness.state().transform.fit);
+            harness.get_by_label("Fit").click();
+            harness.run();
+            assert!(harness.state().transform.fit);
+            harness.hover_at(canvas.center() + Vec2::new(60.0, 10.0));
+            harness.run_steps(1);
+            let before = harness.state().transform.scale;
+            harness.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                phase: egui::TouchPhase::Move,
+                source: egui::MouseWheelSource::Wheel,
+                delta: Vec2::new(0.0, 80.0),
+                modifiers: egui::Modifiers::NONE,
+            });
+            harness.run();
+            assert!(harness.state().transform.scale > before);
+            harness.get_by_label("Comparison image").click();
+            harness.run();
+            for (key, mode) in [
+                (egui::Key::Num2, CompareMode::SideBySide),
+                (egui::Key::Num3, CompareMode::Flip),
+                (egui::Key::Num4, CompareMode::Difference),
+                (egui::Key::Num1, CompareMode::Wipe),
+            ] {
+                harness.key_press(key);
+                harness.run();
+                assert_eq!(harness.state().mode, mode);
+            }
+            harness.key_press(egui::Key::ArrowRight);
+            harness.run();
+            assert_eq!(harness.state().transform.pan.x, 24.0);
+            let scale = harness.state().transform.scale;
+            harness.key_press(egui::Key::Equals);
+            harness.run();
+            assert!(harness.state().transform.scale > scale);
+            harness.key_press(egui::Key::F);
+            harness.run();
+            assert!(harness.state().transform.fit);
+            assert_eq!(harness.state().transform.pan, Vec2::ZERO);
+            harness.get_by_label("Enlarge comparison").click();
+            harness.run();
+            assert!(harness.state().expanded);
+            harness.key_press(egui::Key::Escape);
+            harness.run();
+            assert!(!harness.state().expanded);
+            assert!(harness.get_by_label("Enlarge comparison").is_focused());
         }
-        harness.key_press(egui::Key::ArrowRight);
-        harness.run();
-        assert_eq!(harness.state().transform.pan.x, 24.0);
-        let scale = harness.state().transform.scale;
-        harness.key_press(egui::Key::Equals);
-        harness.run();
-        assert!(harness.state().transform.scale > scale);
-        harness.key_press(egui::Key::F);
-        harness.run();
-        assert!(harness.state().transform.fit);
-        assert_eq!(harness.state().transform.pan, Vec2::ZERO);
-        harness.get_by_label("Enlarge comparison").click();
-        harness.run();
-        assert!(harness.state().expanded);
-        harness.key_press(egui::Key::Escape);
-        harness.run();
-        assert!(!harness.state().expanded);
-        assert!(harness.get_by_label("Enlarge comparison").is_focused());
     }
     #[test]
     fn hdr_panel_exposure_reset_and_all_background_thumbnails() {

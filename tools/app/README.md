@@ -75,6 +75,21 @@ performs no filesystem probes. The game-folder action remains in that menu.
 
 The feature idea came from the NeuRotic Hub comparison; implementation and text are independent.
 
+## Appearance
+
+Preferences offers **Appearance / Aparência** with **System / Sistema**, **Dark / Escuro** and **Light / Claro**.
+The choice applies immediately and survives restarts. New installs and old saved state without this field use
+Dark; System follows the operating system's theme, including changes while the window is open. Both palettes
+keep the warm accent and readable status words. Artwork and comparison pixels keep their original colours;
+art-backed game headers use a dark local surface with a readable shade in either appearance.
+
+Contrast tests cover both palettes, controls, selected text, image labels, focus outlines, stars and charts.
+The main-view layout matrix also runs in light mode in English and pt-BR. Optional `visual-tests` renders are
+read-only, including a synthetic settings review, and save outside the repository through `RETOQUE_LOOK_SHOTS`:
+`cargo test -p retoque-app --features visual-tests render_light_theme -- --ignored --test-threads=1`.
+Native OS theme event delivery still needs platform qualification; unit tests inject egui's system-theme input.
+The idea came from the NeuRotic Hub comparison; no code, palettes or translations were copied.
+
 ## Languages
 
 The window speaks English and Brazilian Portuguese, plus German, Spanish, French, Japanese, Korean, Polish, Russian

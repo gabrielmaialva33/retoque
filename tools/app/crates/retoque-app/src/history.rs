@@ -335,7 +335,7 @@ mod exact_undo_tests {
                 );
                 assert_eq!(crate::i18n::diagnostic(lang, &undo.notes()[0]), t(lang, "undo.exact"));
                 for step in undo.steps().iter().filter(|s| matches!(s, Step::UnsetIni { .. })) {
-                    let (label, text, _) = crate::format::step_text(lang, step);
+                    let (label, text, _) = crate::format::step_text(&crate::theme::DARK, lang, step);
                     assert_eq!(label, t(lang, "step.remove"));
                     assert!(text.contains("[LSFG]"));
                 }

@@ -24,7 +24,7 @@ pub(crate) fn refusal_text(lang: Lang, r: &Refusal) -> (&'static str, String) {
     }
 }
 
-pub(crate) fn step_text(lang: Lang, step: &Step) -> (&'static str, String, Color32) {
+pub(crate) fn step_text(palette: &theme::Palette, lang: Lang, step: &Step) -> (&'static str, String, Color32) {
     match step {
         Step::Copy { from, to } => {
             let name = from
@@ -38,11 +38,11 @@ pub(crate) fn step_text(lang: Lang, step: &Step) -> (&'static str, String, Color
                 } else {
                     format!("{to}  <- {name}")
                 },
-                theme::GOOD,
+                palette.GOOD,
             )
         }
-        Step::Backup { path, copy } => (t(lang, "step.backup"), format!("{path}  -> {copy}"), theme::MUTED),
-        Step::Rename { from, to } => (t(lang, "step.rename"), format!("{from}  -> {to}"), theme::WARN),
+        Step::Backup { path, copy } => (t(lang, "step.backup"), format!("{path}  -> {copy}"), palette.MUTED),
+        Step::Rename { from, to } => (t(lang, "step.rename"), format!("{from}  -> {to}"), palette.WARN),
         Step::SetIni {
             file,
             section,
@@ -54,20 +54,20 @@ pub(crate) fn step_text(lang: Lang, step: &Step) -> (&'static str, String, Color
             (
                 t(lang, "step.ini"),
                 format!("{file}: [{section}] {key}: {before} -> {value}"),
-                theme::ACCENT,
+                palette.ACCENT,
             )
         }
         Step::UnsetIni { file, section, key, .. } => (
             t(lang, "step.remove"),
             format!("[{section}] {key} ({file})"),
-            theme::ACCENT,
+            palette.ACCENT,
         ),
-        Step::Remove { path } => (t(lang, "step.remove"), path.clone(), theme::BAD),
-        Step::Restore { copy, to } => (t(lang, "step.restore"), format!("{to}  <- {copy}"), theme::WARN),
+        Step::Remove { path } => (t(lang, "step.remove"), path.clone(), palette.BAD),
+        Step::Restore { copy, to } => (t(lang, "step.restore"), format!("{to}  <- {copy}"), palette.WARN),
         Step::Keep { path, why } => (
             t(lang, "step.keep"),
             format!("{path} ({})", diagnostic(lang, why)),
-            theme::MUTED,
+            palette.MUTED,
         ),
     }
 }

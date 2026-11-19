@@ -1163,6 +1163,10 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Applies to every game at its next install, update or Optimize. A language file of your own is left as it is. The translations are machine-made drafts.",
         "Vale para cada jogo na próxima instalação, atualização ou otimização. Um arquivo de idioma seu fica como está. As traduções são rascunhos feitos por máquina.",
     ),
+    ("prefs.appearance", "Appearance", "Aparência"),
+    ("prefs.appearance_system", "System", "Sistema"),
+    ("prefs.appearance_dark", "Dark", "Escuro"),
+    ("prefs.appearance_light", "Light", "Claro"),
     ("prefs.language", "Language", "Idioma"),
     (
         "prefs.language_help",

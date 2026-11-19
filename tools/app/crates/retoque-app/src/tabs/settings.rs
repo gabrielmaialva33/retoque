@@ -25,8 +25,15 @@ impl RetoqueApp {
             }
             Some(Ok(Some(_))) => (),
         };
-        ui.add(egui::Label::new(RichText::new(self.tr("set.saved_summary")).small().color(theme::MUTED)).truncate())
-            .on_hover_text(self.tr("set.saved_notice"));
+        ui.add(
+            egui::Label::new(
+                RichText::new(self.tr("set.saved_summary"))
+                    .small()
+                    .color(theme::palette(ui).MUTED),
+            )
+            .truncate(),
+        )
+        .on_hover_text(self.tr("set.saved_notice"));
         self.settings_toolbar(ui, commands);
         self.intuitive.settings.refresh(self.lang);
         let mut any = false;
@@ -46,7 +53,11 @@ impl RetoqueApp {
                     widgets::collapsible(ui, "lsfg_settings", self.tr(title), widgets::Fold::Section, |ui| {
                         self.settings_section(ui, section, edits, commands)
                     });
-                    ui.label(RichText::new(self.tr("set.lsfg_note")).small().color(theme::MUTED));
+                    ui.label(
+                        RichText::new(self.tr("set.lsfg_note"))
+                            .small()
+                            .color(theme::palette(ui).MUTED),
+                    );
                 } else {
                     widgets::card_title(ui, self.tr(title));
                     self.settings_section(ui, section, edits, commands);
@@ -55,7 +66,7 @@ impl RetoqueApp {
             ui.add_space(theme::CARD_GAP);
         }
         if !any {
-            ui.label(RichText::new(self.tr("set.no_match")).color(theme::MUTED));
+            ui.label(RichText::new(self.tr("set.no_match")).color(theme::palette(ui).MUTED));
         }
         // Review and Discard live in the pending-changes footer (pending_footer), outside the scroll area.
         self.settings_plan(ui);
@@ -66,7 +77,7 @@ impl RetoqueApp {
         let font = egui::TextStyle::Button.resolve(ui.style());
         let text_width = |key| {
             ui.painter()
-                .layout_no_wrap(self.tr(key).into(), font.clone(), theme::TEXT)
+                .layout_no_wrap(self.tr(key).into(), font.clone(), theme::palette(ui).TEXT)
                 .size()
                 .x
         };
@@ -230,9 +241,14 @@ impl RetoqueApp {
                         |ui| {
                             ui.set_width(label_width);
                             let response = ui.add(egui::Label::new(RichText::new(label).strong()).wrap());
-                            ui.label(RichText::new(help).small().color(theme::MUTED));
+                            ui.label(RichText::new(help).small().color(theme::palette(ui).MUTED));
                             if let Some(key) = restart_note(s.section, s.key) {
-                                ui.add(egui::Label::new(RichText::new(t(lang, key)).small().color(theme::WARN)).wrap());
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(t(lang, key)).small().color(theme::palette(ui).WARN),
+                                    )
+                                    .wrap(),
+                                );
                             }
                             response.id
                         },
@@ -268,7 +284,7 @@ impl RetoqueApp {
             }
             // A value OptiScaler would not accept is kept as typed (so the user can fix it) but blocks the review.
             if edits.get(&key).is_some_and(|v| !s.accepts(v)) {
-                ui.colored_label(theme::BAD, RichText::new(t(lang, "set.invalid")).small());
+                ui.colored_label(theme::palette(ui).BAD, RichText::new(t(lang, "set.invalid")).small());
             }
             if (s.section, s.key) == ("DlssNr", "Passes") {
                 self.passes_notes(ui, &value);
@@ -288,11 +304,18 @@ impl RetoqueApp {
     /// RTX 30 card that its video memory budget may refuse the later passes (bounded-chain.md, "Ten passes").
     fn passes_notes(&self, ui: &mut egui::Ui, value: &str) {
         if let Some(cost) = passes_cost(self.lang, value) {
-            ui.add(egui::Label::new(RichText::new(cost).small().color(theme::MUTED)).wrap());
+            ui.add(egui::Label::new(RichText::new(cost).small().color(theme::palette(ui).MUTED)).wrap());
         }
         let gpu = self.tuning.gpus.as_deref().and_then(retoque_data::gpu::primary);
         if gpu.is_some_and(|g| g.arch == retoque_data::gpu::Arch::Ampere) {
-            ui.add(egui::Label::new(RichText::new(self.tr("set.passes_ampere")).small().color(theme::MUTED)).wrap());
+            ui.add(
+                egui::Label::new(
+                    RichText::new(self.tr("set.passes_ampere"))
+                        .small()
+                        .color(theme::palette(ui).MUTED),
+                )
+                .wrap(),
+            );
         }
     }
 

@@ -2,7 +2,7 @@
 //! (`retoque_data::session`). Numbers, the real frame rate over time, and what to change. No disk access here.
 
 use crate::app::*;
-use egui::{Color32, Sense, Stroke, pos2, vec2};
+use egui::{Sense, Stroke, pos2, vec2};
 use retoque_data::session::{self, Advice, Level, Pacing};
 
 /// Decimal with the language's separator (pt-BR writes 4,0).
@@ -116,12 +116,12 @@ impl RetoqueApp {
                 if let Some(driver) = &pacing.driver {
                     period.push_str(&format!(" · {} {driver}", t(lang, "sess.driver")));
                 }
-                ui.label(RichText::new(period).small().color(theme::MUTED));
+                ui.label(RichText::new(period).small().color(theme::palette(ui).MUTED));
             });
             ui.label(
                 RichText::new(t(lang, "sess.recorded_notice"))
                     .small()
-                    .color(theme::MUTED),
+                    .color(theme::palette(ui).MUTED),
             );
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(10.0, 10.0);
@@ -133,21 +133,21 @@ impl RetoqueApp {
                     w,
                     t(lang, "sess.base"),
                     &fps(pacing.base_fps_median),
-                    theme::TEXT_STRONG,
+                    theme::palette(ui).TEXT_STRONG,
                 );
                 widgets::stat_tile_width(
                     ui,
                     w,
                     t(lang, "sess.low"),
                     &fps(pacing.base_fps_low),
-                    theme::TEXT_STRONG,
+                    theme::palette(ui).TEXT_STRONG,
                 );
                 widgets::stat_tile_width(
                     ui,
                     w,
                     t(lang, "sess.screen"),
                     &fps(pacing.screen_fps_median),
-                    theme::TEXT_STRONG,
+                    theme::palette(ui).TEXT_STRONG,
                 );
                 if pacing.generation_share >= 0.05 {
                     let value = t(lang, "sess.generation_value")
@@ -156,19 +156,25 @@ impl RetoqueApp {
                             "{percent}",
                             &((pacing.generation_share * 100.0).round() as u32).to_string(),
                         );
-                    widgets::stat_tile_width(ui, w, t(lang, "sess.generation"), &value, theme::TEXT_STRONG);
+                    widgets::stat_tile_width(
+                        ui,
+                        w,
+                        t(lang, "sess.generation"),
+                        &value,
+                        theme::palette(ui).TEXT_STRONG,
+                    );
                 }
                 let drops = format!("{}%", (pacing.drop_share * 100.0).round() as u32);
-                widgets::stat_tile_width(ui, w, t(lang, "sess.drops"), &drops, theme::TEXT_STRONG);
+                widgets::stat_tile_width(ui, w, t(lang, "sess.drops"), &drops, theme::palette(ui).TEXT_STRONG);
             });
             ui.add_space(6.0);
             curve(ui, lang, pacing);
             ui.add_space(6.0);
             for advice in session::advice(pacing) {
                 let (mark, color) = match advice.level() {
-                    Level::Good => ("✓", theme::GOOD),
-                    Level::Info => ("i", theme::MUTED),
-                    Level::Warn => ("!", theme::WARN),
+                    Level::Good => ("✓", theme::palette(ui).GOOD),
+                    Level::Info => ("i", theme::palette(ui).MUTED),
+                    Level::Warn => ("!", theme::palette(ui).WARN),
                 };
                 ui.horizontal_top(|ui| {
                     ui.label(RichText::new(mark).strong().color(color));
@@ -192,7 +198,11 @@ fn curve(ui: &mut egui::Ui, lang: Lang, pacing: &Pacing) {
     if pacing.curve.len() < 2 {
         return;
     }
-    ui.label(RichText::new(t(lang, "sess.curve")).small().color(theme::MUTED));
+    ui.label(
+        RichText::new(t(lang, "sess.curve"))
+            .small()
+            .color(theme::palette(ui).MUTED),
+    );
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 72.0), Sense::hover());
     let painter = ui.painter_at(rect);
     // A loading-screen spike would decide the scale and flatten the session; the top follows the bulk of the
@@ -211,7 +221,7 @@ fn curve(ui: &mut egui::Ui, lang: Lang, pacing: &Pacing) {
     let median_y = rect.bottom() - rect.height() * (pacing.base_fps_median as f32 / top);
     painter.line_segment(
         [pos2(rect.left(), median_y), pos2(rect.right(), median_y)],
-        Stroke::new(1.0, theme::CARD_EDGE),
+        Stroke::new(1.0, theme::palette(ui).CONTROL_EDGE),
     );
     painter.text(
         pos2(rect.right() - 2.0, median_y - 2.0),
@@ -222,10 +232,10 @@ fn curve(ui: &mut egui::Ui, lang: Lang, pacing: &Pacing) {
             pacing.base_fps_median.round() as u32
         ),
         egui::FontId::proportional(11.0),
-        theme::MUTED,
+        theme::palette(ui).MUTED,
     );
     let points: Vec<_> = pacing.curve.iter().copied().map(at).collect();
-    painter.add(egui::Shape::line(points, Stroke::new(2.0, theme::ACCENT)));
+    painter.add(egui::Shape::line(points, Stroke::new(2.0, theme::palette(ui).ACCENT)));
     if let Some(pointer) = response.hover_pos() {
         let t = (pointer.x - rect.left()) / rect.width() * end;
         if let Some(nearest) = pacing
@@ -236,9 +246,14 @@ fn curve(ui: &mut egui::Ui, lang: Lang, pacing: &Pacing) {
             let p = at(*nearest);
             painter.line_segment(
                 [pos2(p.x, rect.top()), pos2(p.x, rect.bottom())],
-                Stroke::new(1.0, Color32::from_white_alpha(40)),
+                Stroke::new(1.0, theme::palette(ui).CONTROL_EDGE),
             );
-            painter.circle(p, 4.0, theme::ACCENT, Stroke::new(2.0, theme::CARD));
+            painter.circle(
+                p,
+                4.0,
+                theme::palette(ui).ACCENT,
+                Stroke::new(2.0, theme::palette(ui).CARD),
+            );
             let minute = (nearest.0 / 60.0).floor() as u32;
             let second = (nearest.0 % 60.0).floor() as u32;
             response.on_hover_text_at_pointer(format!("+{minute}:{second:02} · {} fps", nearest.1.round() as u32));

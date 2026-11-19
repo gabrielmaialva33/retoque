@@ -847,7 +847,7 @@ impl RetoqueApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::unique("plan_review"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 740.0));
                 self.safety_review(ui);
@@ -1047,7 +1047,7 @@ impl RetoqueApp {
         names.sort_unstable();
         names.dedup();
         let response = egui::Modal::new(egui::Id::unique("running_processes"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 480.0));
                 ui.heading(self.tr("remedy.close_processes"));

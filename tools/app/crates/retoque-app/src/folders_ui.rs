@@ -143,7 +143,7 @@ impl RetoqueApp {
             return;
         };
         ui.horizontal(|ui| {
-            ui.label(RichText::new(notice).small().color(theme::MUTED));
+            ui.label(RichText::new(notice).small().color(theme::palette(ui).MUTED));
             if widgets::close_button(ui, self.tr("dismiss.help")).clicked() {
                 self.library_state.migration = FolderMigration::default();
             }
@@ -182,7 +182,7 @@ impl RetoqueApp {
         }
         let Some(dialog) = self.folder_dialog else { return };
         let modal = egui::Modal::new(egui::Id::unique("user_folders"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.).clamp(260., 620.));
                 match dialog {
@@ -194,8 +194,12 @@ impl RetoqueApp {
                             self.folders_pick(FolderKind::Game);
                         }
                         ui.add(
-                            egui::Label::new(RichText::new(self.tr("folders.game_help")).small().color(theme::MUTED))
-                                .wrap(),
+                            egui::Label::new(
+                                RichText::new(self.tr("folders.game_help"))
+                                    .small()
+                                    .color(theme::palette(ui).MUTED),
+                            )
+                            .wrap(),
                         );
                         ui.add_space(12.);
                         if ui.button(self.tr("folders.library")).clicked() {
@@ -205,7 +209,7 @@ impl RetoqueApp {
                             egui::Label::new(
                                 RichText::new(self.tr("folders.library_help"))
                                     .small()
-                                    .color(theme::MUTED),
+                                    .color(theme::palette(ui).MUTED),
                             )
                             .wrap(),
                         );
@@ -220,7 +224,7 @@ impl RetoqueApp {
                             .max_height((ctx.content_rect().height() - 250.).clamp(120., 420.))
                             .show(ui, |ui| {
                                 if self.saved.manual.is_empty() && self.saved.libraries.is_empty() {
-                                    ui.label(RichText::new(self.tr("folders.empty")).color(theme::MUTED));
+                                    ui.label(RichText::new(self.tr("folders.empty")).color(theme::palette(ui).MUTED));
                                 }
                                 for (kind, paths) in [
                                     (FolderKind::Game, &self.saved.manual),
