@@ -22,7 +22,7 @@ impl RetoqueApp {
         let count = self.library_state.leftovers.len();
         widgets::card(ui, |ui| {
             widgets::card_title(ui, self.tr("left.title"));
-            ui.add(egui::Label::new(RichText::new(self.tr("left.why")).color(theme::MUTED)).wrap());
+            ui.add(egui::Label::new(RichText::new(self.tr("left.why")).color(theme::palette(ui).MUTED)).wrap());
             ui.label(
                 self.tr("left.summary")
                     .replace("{count}", &count.to_string())
@@ -56,11 +56,18 @@ impl RetoqueApp {
         let mut cancel = false;
         let bytes: u64 = self.library_state.leftovers.iter().map(|l| l.remove_bytes()).sum();
         let response = egui::Modal::new(egui::Id::unique("leftovers_review"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 640.0));
                 ui.heading(t(lang, "left.review_title"));
-                ui.add(egui::Label::new(RichText::new(t(lang, "left.review_note")).small().color(theme::MUTED)).wrap());
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(t(lang, "left.review_note"))
+                            .small()
+                            .color(theme::palette(ui).MUTED),
+                    )
+                    .wrap(),
+                );
                 ui.add_space(8.0);
                 egui::ScrollArea::vertical()
                     .max_height((ctx.content_rect().height() - 260.0).max(160.0))
@@ -75,14 +82,14 @@ impl RetoqueApp {
                                                 .replace("{files}", &leftover.remove.len().to_string())
                                                 .replace("{size}", &size_text(lang, leftover.remove_bytes())),
                                         )
-                                        .color(theme::TEXT),
+                                        .color(theme::palette(ui).TEXT),
                                     );
                                 });
                                 ui.label(
                                     RichText::new(crate::format::display_path(&leftover.dir))
                                         .small()
                                         .monospace()
-                                        .color(theme::MUTED),
+                                        .color(theme::palette(ui).MUTED),
                                 );
                                 if !leftover.keep.is_empty() {
                                     let keeps =
@@ -104,7 +111,7 @@ impl RetoqueApp {
                 ui.horizontal(|ui| {
                     cancel = ui.button(t(lang, "cancel")).clicked();
                     let label = t(lang, "left.confirm").replace("{size}", &size_text(lang, bytes));
-                    confirm = ui.add(theme::danger(&label)).clicked();
+                    confirm = ui.add(theme::danger(ui, &label)).clicked();
                 });
             });
         if response.should_close() {

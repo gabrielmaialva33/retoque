@@ -78,9 +78,9 @@ impl Screen {
                     }
                     if let Some(p) = self.state.problem {
                         let color = if matches!(self.state.phase, Phase::Failed | Phase::RestartRequired) {
-                            theme::BAD
+                            theme::palette(ui).BAD
                         } else {
-                            theme::WARN
+                            theme::palette(ui).WARN
                         };
                         ui.label(egui::RichText::new(tr(p.key())).color(color));
                     }
@@ -218,7 +218,7 @@ impl Screen {
             ui.horizontal_wrapped(|ui| {
                 ui.spinner();
                 if ui
-                    .add_enabled(self.state.phase != Phase::Stopping, theme::primary(tr("any.stop")))
+                    .add_enabled(self.state.phase != Phase::Stopping, theme::primary(ui, tr("any.stop")))
                     .clicked()
                 {
                     action = Action::Stop;
@@ -230,7 +230,10 @@ impl Screen {
         } else if self.available {
             ui.label(tr("any.pending"));
             let valid = !updating && self.draft.validate().is_ok() && models.iter().any(|m| m.path == self.draft.model);
-            if ui.add_enabled(valid, theme::primary(tr("any.start_review"))).clicked() {
+            if ui
+                .add_enabled(valid, theme::primary(ui, tr("any.start_review")))
+                .clicked()
+            {
                 self.review = Some(self.draft.clone());
             }
         }
@@ -243,7 +246,7 @@ impl Screen {
         let mut action = Action::None;
         let mut cancel = false;
         let result = egui::Modal::new(egui::Id::unique("any-start-review"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_max_width(500.0);
                 ui.heading(t(lang, "any.start"));
@@ -299,7 +302,7 @@ impl Screen {
                     if ui
                         .add_enabled(
                             models.iter().any(|m| m.path == settings.model),
-                            theme::primary(t(lang, "any.start")),
+                            theme::primary(ui, t(lang, "any.start")),
                         )
                         .clicked()
                     {

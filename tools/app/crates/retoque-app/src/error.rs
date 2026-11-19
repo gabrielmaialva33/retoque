@@ -240,7 +240,9 @@ pub(crate) fn card(
         notice(ui, error);
         return;
     }
-    crate::widgets::tinted_card(ui, crate::theme::ERROR_CARD, |ui| body(ui, error, lang, commands));
+    crate::widgets::tinted_card(ui, crate::theme::palette(ui).ERROR_CARD, |ui| {
+        body(ui, error, lang, commands)
+    });
 }
 
 /// A card's contents without the card: for places that already have a frame (a modal, a popup).
@@ -251,7 +253,10 @@ pub(crate) fn body(
     commands: &crate::commands::CommandSender,
 ) {
     crate::applog::shown_error(&error.to_string());
-    ui.add(egui::Label::new(egui::RichText::new(error.user_text(lang)).color(crate::theme::TEXT_STRONG)).wrap());
+    ui.add(
+        egui::Label::new(egui::RichText::new(error.user_text(lang)).color(crate::theme::palette(ui).TEXT_STRONG))
+            .wrap(),
+    );
     let remedies = error.remedies();
     if !remedies.is_empty() {
         ui.add_space(4.0);
@@ -283,9 +288,9 @@ pub(crate) fn details(ui: &mut egui::Ui, error: &AppError, lang: crate::i18n::La
 /// A notice (progress, nothing to do, something left out) in its colour; a failure in the error card.
 pub(crate) fn notice(ui: &mut egui::Ui, error: &AppError) {
     let color = match error.kind {
-        ErrorKind::Notice { warn: true } => crate::theme::WARN,
-        ErrorKind::Notice { warn: false } => crate::theme::MUTED,
-        _ => crate::theme::BAD,
+        ErrorKind::Notice { warn: true } => crate::theme::palette(ui).WARN,
+        ErrorKind::Notice { warn: false } => crate::theme::palette(ui).MUTED,
+        _ => crate::theme::palette(ui).BAD,
     };
     ui.add(egui::Label::new(egui::RichText::new(&error.message).color(color)).wrap());
 }
@@ -302,9 +307,9 @@ pub(crate) fn summary(
     let text = error.user_text(lang);
     let line = text.lines().next().unwrap_or_default().to_owned();
     let color = if error.is_failure() {
-        crate::theme::BAD
+        crate::theme::palette(ui).BAD
     } else {
-        crate::theme::MUTED
+        crate::theme::palette(ui).MUTED
     };
     // At most half the bar, so the controls after it keep their place.
     let width = (ui.available_width() * 0.5).max(160.0);

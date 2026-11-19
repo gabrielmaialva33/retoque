@@ -94,7 +94,7 @@ impl Palette {
         let mut chosen = None;
         let mut close = false;
         let modal = egui::Modal::new(egui::Id::unique("command_palette"))
-            .frame(crate::widgets::modal_frame())
+            .frame(crate::widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.).clamp(260., 660.));
                 ui.response()
@@ -135,10 +135,10 @@ impl Palette {
                 ui.label(
                     egui::RichText::new(t(lang, "palette.keys"))
                         .small()
-                        .color(crate::theme::MUTED),
+                        .color(crate::theme::palette(ui).MUTED),
                 );
                 if self.results.is_empty() {
-                    ui.label(egui::RichText::new(t(lang, "palette.empty")).color(crate::theme::MUTED));
+                    ui.label(egui::RichText::new(t(lang, "palette.empty")).color(crate::theme::palette(ui).MUTED));
                 }
                 egui::ScrollArea::vertical()
                     .max_height((ctx.content_rect().height() - 240.).clamp(120., 320.))

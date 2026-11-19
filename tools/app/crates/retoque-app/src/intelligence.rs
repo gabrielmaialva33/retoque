@@ -304,7 +304,7 @@ impl RetoqueApp {
     pub(crate) fn watcher_notice(&self, ui: &mut egui::Ui) {
         if let Some(error) = &self.view.intelligence.watch_error {
             ui.horizontal_wrapped(|ui| {
-                ui.colored_label(theme::WARN, self.tr("watch.manual"))
+                ui.colored_label(theme::palette(ui).WARN, self.tr("watch.manual"))
                     .on_hover_text(error);
                 if ui.button(self.tr("watch.refresh")).clicked() {
                     self.cmd_tx.send(AppCommand::RefreshSelected);

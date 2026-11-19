@@ -103,7 +103,11 @@ impl RetoqueApp {
             return;
         };
         let Some(gpu) = retoque_data::gpu::primary(gpus) else {
-            ui.label(RichText::new(self.tr("auto.gpu_unknown")).small().color(theme::MUTED));
+            ui.label(
+                RichText::new(self.tr("auto.gpu_unknown"))
+                    .small()
+                    .color(theme::palette(ui).MUTED),
+            );
             return;
         };
         let arch = self.tr(match gpu.arch {
@@ -122,7 +126,7 @@ impl RetoqueApp {
         let response = ui.label(
             RichText::new(format!("{} · {arch}{memory}", gpu.name))
                 .small()
-                .color(theme::MUTED),
+                .color(theme::palette(ui).MUTED),
         );
         if let Some(driver) = &gpu.driver {
             response.on_hover_text(format!("{} {driver}", self.tr("auto.driver")));
@@ -190,7 +194,9 @@ impl RetoqueApp {
             // repeat it under other names.
             let facts = &self.view.intelligence.facts;
             if !facts.installed || facts.untracked {
-                ui.add(egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::MUTED)).wrap());
+                ui.add(
+                    egui::Label::new(RichText::new(self.tr("auto.use_banner")).color(theme::palette(ui).MUTED)).wrap(),
+                );
                 if let Some(error) = &self.tuning.sm86.error {
                     crate::error::card(ui, error, self.lang, &self.cmd_tx);
                 }
@@ -339,7 +345,7 @@ impl RetoqueApp {
                                 && self.autotune_known_components();
                             ui.horizontal_wrapped(|ui| {
                                 if installed {
-                                    ui.colored_label(theme::GOOD, self.tr("auto.component_installed"));
+                                    ui.colored_label(theme::palette(ui).GOOD, self.tr("auto.component_installed"));
                                 } else {
                                     let install =
                                         ui.add_enabled(allowed, egui::Button::new(self.tr("auto.component_install")));
@@ -547,10 +553,10 @@ pub(crate) fn recommendation_evidence(ui: &mut egui::Ui, lang: Lang, rec: &recom
     ui.label(
         RichText::new(text(lang, rec.confidence.key()))
             .small()
-            .color(theme::MUTED),
+            .color(theme::palette(ui).MUTED),
     );
     if let Some(key) = rec.caveat_key {
-        ui.add(egui::Label::new(RichText::new(text(lang, key)).small().color(theme::MUTED)).wrap());
+        ui.add(egui::Label::new(RichText::new(text(lang, key)).small().color(theme::palette(ui).MUTED)).wrap());
     }
     let title = t(lang, "doctor.evidence");
     widgets::collapsible(ui, ("evidence", rec.id), title, widgets::Fold::Details, |ui| {

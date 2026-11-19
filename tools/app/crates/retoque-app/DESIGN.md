@@ -29,7 +29,16 @@ Use these instead of building a look by hand.
 
 Sizes and colours come from `theme`: `TITLE` (17), `SECTION` (20) and `DISPLAY` (22) beside the Body (14.5) and
 Small (13) text styles, and `CARD_GAP` (12) between cards. Colours are `ACCENT`, `GOOD`, `WARN`, `BAD`, `MUTED`,
-`TEXT`, `TEXT_STRONG`, `ON_ACCENT`, `ON_IMAGE` and `CANVAS`; no raw `Color32::from_rgb` outside `theme.rs`.
+`TEXT`, `TEXT_STRONG`, `ON_ACCENT`, `ON_IMAGE` and `CANVAS`. Resolve these from `theme::palette(ui)`;
+its dark and light palettes own every UI surface, widget fill and stroke. No raw colours outside `theme.rs`.
+Use the local UI, not a process-global theme: art-backed headers have a dark local scope in both appearances.
+Texture tint and image overlay ink/scrims are explicit image roles, independent of appearance; never tint the
+actual comparison pixels. Text/surface pairs meet 4.5:1, control edges and focus rings 3:1 in both palettes.
+Selected rows use strong text; image labels have a scrim and image focus/wipe rules have opposite outlines.
+
+Preferences offers **Appearance / Aparência**: System, Dark, Light, applied immediately and saved. Dark remains
+the default for new and pre-existing preferences; System follows OS theme events without reinstalling fonts.
+The light theme idea came from the NeuRotic Hub comparison; palettes, text and implementation are independent.
 
 ## Rules
 

@@ -332,15 +332,22 @@ impl RetoqueApp {
             self.payload_ui.files_open = true;
         }
         if self.payload.is_none() {
-            ui.colored_label(theme::WARN, RichText::new(self.tr("payload.missing")).small());
+            ui.colored_label(
+                theme::palette(ui).WARN,
+                RichText::new(self.tr("payload.missing")).small(),
+            );
         }
         if self.payload_ui.busy {
             ui.spinner();
         } else if self.payload_ui.update_available {
             // The accent dot never stands alone: the words say what it means.
             let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
-            ui.painter().circle_filled(rect.center(), 4.0, theme::ACCENT);
-            ui.colored_label(theme::ACCENT, RichText::new(self.tr("payload.new_release")).small());
+            ui.painter()
+                .circle_filled(rect.center(), 4.0, theme::palette(ui).ACCENT);
+            ui.colored_label(
+                theme::palette(ui).ACCENT,
+                RichText::new(self.tr("payload.new_release")).small(),
+            );
         }
         if let Some(error) = &self.payload_ui.error {
             crate::error::summary(ui, error, self.lang, &self.cmd_tx);
@@ -357,7 +364,7 @@ impl RetoqueApp {
         let mut close = false;
         let scroll = self.payload_ui.error.is_some() || ctx.content_rect().height() < 580.0;
         let modal = egui::Modal::new(egui::Id::unique("payload-files"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
                 ui.heading(self.tr("app.payload"));
@@ -380,21 +387,26 @@ impl RetoqueApp {
     }
 
     fn payload_files_body(&mut self, ui: &mut egui::Ui) {
-        ui.add(egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::MUTED)).wrap());
+        ui.add(egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::palette(ui).MUTED)).wrap());
         ui.add_space(8.0);
         match self.payload.clone() {
             Some(p) => {
                 if let Some(name) = self.payload_name() {
                     ui.label(RichText::new(name).strong());
                 }
-                ui.label(RichText::new(short_path(&p)).small().monospace().color(theme::MUTED))
-                    .on_hover_text(crate::format::display_path(&p));
+                ui.label(
+                    RichText::new(short_path(&p))
+                        .small()
+                        .monospace()
+                        .color(theme::palette(ui).MUTED),
+                )
+                .on_hover_text(crate::format::display_path(&p));
             }
             None => {
                 ui.add(
                     egui::Label::new(
                         RichText::new(format!("{} {}", self.tr("app.payload"), self.tr("app.payload.none")))
-                            .color(theme::WARN),
+                            .color(theme::palette(ui).WARN),
                     )
                     .wrap(),
                 );
@@ -475,11 +487,11 @@ impl RetoqueApp {
                 total,
             );
         } else if self.payload_ui.no_release {
-            ui.colored_label(theme::WARN, self.tr("payload.no_release"));
+            ui.colored_label(theme::palette(ui).WARN, self.tr("payload.no_release"));
         } else if let Some(rel) = self.payload_ui.release.clone() {
             if self.payload_ui.update_available {
                 ui.colored_label(
-                    theme::ACCENT,
+                    theme::palette(ui).ACCENT,
                     format!("{}: v{}", self.tr("payload.new_release"), rel.version),
                 );
                 if ui.button(self.tr("payload.download_now")).clicked() {
@@ -487,7 +499,7 @@ impl RetoqueApp {
                 }
             } else {
                 ui.colored_label(
-                    theme::GOOD,
+                    theme::palette(ui).GOOD,
                     format!("{}: v{}", self.tr("payload.up_to_date"), rel.version),
                 );
             }

@@ -24,13 +24,13 @@ pub fn file_uri(path: &Path) -> String {
 
 /// A rounded panel that groups one subject.
 pub fn card<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    tinted_card(ui, theme::CARD, add)
+    tinted_card(ui, theme::palette(ui).CARD, add)
 }
 
 pub fn tinted_card<R>(ui: &mut egui::Ui, fill: Color32, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Frame::new()
         .fill(fill)
-        .stroke(Stroke::new(1.0, theme::CARD_EDGE))
+        .stroke(Stroke::new(1.0, theme::palette(ui).CARD_EDGE))
         .corner_radius(12.0)
         .inner_margin(egui::Margin::same(16))
         .show(ui, |ui| {
@@ -53,9 +53,13 @@ pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
             painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
         }
         if response.has_focus() {
-            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::TEXT_STRONG));
+            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::palette(ui).TEXT_STRONG));
         }
-        let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
+        let color = if active {
+            theme::palette(ui).TEXT_STRONG
+        } else {
+            theme::palette(ui).MUTED
+        };
         let d = 4.5;
         let c = rect.center();
         let stroke = Stroke::new(1.6, color);
@@ -83,9 +87,13 @@ pub fn reset_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
             painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
         }
         if response.has_focus() {
-            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::TEXT_STRONG));
+            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::palette(ui).TEXT_STRONG));
         }
-        let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
+        let color = if active {
+            theme::palette(ui).TEXT_STRONG
+        } else {
+            theme::palette(ui).MUTED
+        };
         let stroke = Stroke::new(1.6, color);
         let (c, r) = (rect.center(), 6.0);
         let at = |angle: f32| c + r * vec2(angle.cos(), angle.sin());
@@ -116,7 +124,7 @@ pub fn reset_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
 /// and for screen readers (the bar is never the only cue).
 pub fn change_bar(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + std::fmt::Debug, row: Rect, note: &str) {
     let bar = Rect::from_min_max(pos2(row.left() - 10.0, row.top()), pos2(row.left() - 7.0, row.bottom()));
-    ui.painter().rect_filled(bar, 2.0, theme::ACCENT);
+    ui.painter().rect_filled(bar, 2.0, theme::palette(ui).ACCENT);
     let id = ui.scope_id().with(("change_bar", id_salt));
     let response = ui.interact(bar.expand2(vec2(3.0, 0.0)), id, Sense::hover());
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, note));
@@ -124,10 +132,11 @@ pub fn change_bar(ui: &mut egui::Ui, id_salt: impl std::hash::Hash + std::fmt::D
 }
 
 /// The frame every modal uses: the review's card look, so dialogs read as one family.
-pub fn modal_frame() -> egui::Frame {
+pub fn modal_frame(ctx: &egui::Context) -> egui::Frame {
+    let palette = theme::for_theme(ctx.theme());
     egui::Frame::new()
-        .fill(theme::CARD)
-        .stroke(Stroke::new(1.0, theme::CARD_EDGE))
+        .fill(palette.CARD)
+        .stroke(Stroke::new(1.0, palette.CARD_EDGE))
         .corner_radius(12)
         .inner_margin(20)
 }
@@ -216,7 +225,7 @@ pub fn collapsible<R>(
 ) -> Option<R> {
     let text = match fold {
         Fold::Section => RichText::new(title).size(theme::TITLE).strong(),
-        Fold::Details => RichText::new(title).small().color(theme::MUTED),
+        Fold::Details => RichText::new(title).small().color(theme::palette(ui).MUTED),
     };
     egui::CollapsingHeader::new(text)
         .id_salt(id_salt)
@@ -295,7 +304,7 @@ pub fn consent_modal_when(
 ) -> Option<Answer> {
     let mut answer = None;
     let modal = egui::Modal::new(egui::Id::unique(("consent", id)))
-        .frame(modal_frame())
+        .frame(modal_frame(ctx))
         .show(ctx, |ui| {
             ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
             ui.label(RichText::new(title).size(theme::TITLE).strong());
@@ -313,7 +322,7 @@ pub fn consent_modal_when(
                 if ui.button(cancel).clicked() {
                     answer = Some(Answer::Cancel);
                 }
-                if ui.add_enabled(can_confirm, theme::primary(confirm)).clicked() {
+                if ui.add_enabled(can_confirm, theme::primary(ui, confirm)).clicked() {
                     answer = Some(Answer::Confirm);
                 }
             });
@@ -337,19 +346,19 @@ pub fn delete_modal(
 ) -> Option<Answer> {
     let mut answer = None;
     let modal = egui::Modal::new(egui::Id::unique(("delete", id)))
-        .frame(modal_frame())
+        .frame(modal_frame(ctx))
         .show(ctx, |ui| {
             ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 480.0));
             ui.label(RichText::new(title).size(theme::TITLE).strong());
             ui.add_space(6.0);
             ui.label(RichText::new(item).strong());
-            ui.add(egui::Label::new(RichText::new(body).color(theme::MUTED)).wrap());
+            ui.add(egui::Label::new(RichText::new(body).color(theme::palette(ui).MUTED)).wrap());
             ui.add_space(12.0);
             ui.horizontal(|ui| {
                 if ui.button(crate::i18n::t(lang, "cancel")).clicked() {
                     answer = Some(Answer::Cancel);
                 }
-                if ui.add(theme::danger(crate::i18n::t(lang, "delete"))).clicked() {
+                if ui.add(theme::danger(ui, crate::i18n::t(lang, "delete"))).clicked() {
                     answer = Some(Answer::Confirm);
                 }
             });
@@ -384,7 +393,8 @@ pub fn chip(ui: &mut egui::Ui, text: &str, color: Color32) {
         (ui.max_rect().width() - 20.0).max(30.0),
     );
     let (rect, response) = ui.allocate_exact_size(galley.size() + vec2(20.0, 8.0), Sense::hover());
-    ui.painter().rect_filled(rect, 12.0, color.gamma_multiply(0.16));
+    ui.painter()
+        .rect_filled(rect, 12.0, color.gamma_multiply(theme::CHIP_TINT));
     ui.painter().rect_stroke(
         rect,
         12.0,
@@ -403,13 +413,17 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
         ui.spacing_mut().item_spacing.x = 22.0;
         for (i, label) in labels.iter().enumerate() {
             let selected = i == current;
-            let color = if selected { theme::TEXT_STRONG } else { theme::MUTED };
+            let color = if selected {
+                theme::palette(ui).TEXT_STRONG
+            } else {
+                theme::palette(ui).MUTED
+            };
             let galley = ui
                 .painter()
                 .layout_no_wrap(label.to_string(), FontId::proportional(16.0), color);
             let (rect, response) = ui.allocate_exact_size(galley.size() + vec2(0.0, 12.0), Sense::click());
             let color = if response.hovered() && !selected {
-                theme::TEXT
+                theme::palette(ui).TEXT
             } else {
                 color
             };
@@ -422,14 +436,16 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
                     .ctx()
                     .animate_value_with_time(ui.scope_id().with("tab_right"), rect.right(), 0.15);
                 let y = rect.bottom() - 2.0;
-                ui.painter()
-                    .line_segment([pos2(left, y), pos2(right, y)], Stroke::new(3.0, theme::ACCENT));
+                ui.painter().line_segment(
+                    [pos2(left, y), pos2(right, y)],
+                    Stroke::new(3.0, theme::palette(ui).ACCENT),
+                );
             }
             if response.has_focus() {
                 ui.painter().rect_stroke(
                     rect.expand(2.0),
                     4,
-                    Stroke::new(2.0, theme::TEXT_STRONG),
+                    Stroke::new(2.0, theme::palette(ui).TEXT_STRONG),
                     egui::StrokeKind::Outside,
                 );
             }
@@ -453,7 +469,7 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
     let full = ui.max_rect();
     ui.painter().line_segment(
         [pos2(full.left(), y), pos2(full.right(), y)],
-        Stroke::new(1.0, theme::CARD_EDGE),
+        Stroke::new(1.0, theme::palette(ui).CARD_EDGE),
     );
     ui.add_space(12.0);
     clicked
@@ -493,22 +509,26 @@ pub fn game_row(
 ) -> egui::Response {
     let right_pad = if spoken_extra.is_some() { 30.0 } else { 8.0 };
     let width = (ui.available_width() - 55.0 - right_pad).max(20.0);
-    let name_color = if selected { theme::TEXT_STRONG } else { theme::TEXT };
+    let name_color = if selected {
+        theme::palette(ui).TEXT_STRONG
+    } else {
+        theme::palette(ui).TEXT
+    };
     let name_galley = two_line_title(ui.painter(), name, width, 15.0, name_color);
     let lines = usize::from(attention) + usize::from(!detail.is_empty()) + usize::from(hint.is_some());
     let height = (name_galley.size().y + 16.0 + lines as f32 * 18.0).max(64.0);
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let painter = ui.painter_at(rect);
     if selected {
-        painter.rect_filled(rect, 8.0, theme::ACCENT.gamma_multiply(0.22));
+        painter.rect_filled(rect, 8.0, theme::palette(ui).ACCENT.gamma_multiply(0.22));
         painter.rect_stroke(
             rect,
             8.0,
-            Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)),
+            Stroke::new(1.0, theme::palette(ui).ACCENT.gamma_multiply(0.6)),
             egui::StrokeKind::Inside,
         );
     } else if response.hovered() || attention {
-        painter.rect_filled(rect, 8.0, theme::CARD);
+        painter.rect_filled(rect, 8.0, theme::palette(ui).CARD);
     }
     if attention {
         painter.rect_filled(
@@ -523,7 +543,7 @@ pub fn game_row(
             egui::Image::new(file_uri(path)).corner_radius(4).paint_at(ui, cover);
         }
         None => {
-            painter.rect_filled(cover, 4.0, theme::CARD_EDGE);
+            painter.rect_filled(cover, 4.0, theme::palette(ui).CARD_EDGE);
             let letter = name
                 .chars()
                 .find(|c| c.is_alphanumeric())
@@ -535,7 +555,7 @@ pub fn game_row(
                 egui::Align2::CENTER_CENTER,
                 letter,
                 FontId::proportional(18.0),
-                theme::MUTED,
+                theme::palette(ui).MUTED,
             );
         }
     }
@@ -549,8 +569,15 @@ pub fn game_row(
     painter.galley(pos2(left, top), name_galley, name_color);
     for (text, color) in [
         (attention.then_some(state.0), state.1),
-        ((!detail.is_empty()).then_some(detail), theme::MUTED),
+        ((!detail.is_empty()).then_some(detail), theme::palette(ui).MUTED),
     ] {
+        let color = if selected
+            && (!ui.visuals().dark_mode || color == theme::palette(ui).MUTED || color == theme::palette(ui).BAD)
+        {
+            theme::palette(ui).TEXT_STRONG
+        } else {
+            color
+        };
         if let Some(text) = text {
             let mut job = egui::text::LayoutJob::simple_singleline(text.into(), FontId::proportional(12.5), color);
             job.wrap = egui::text::TextWrapping::truncate_at_width(width);
@@ -562,14 +589,19 @@ pub fn game_row(
         painter.rect_stroke(
             rect.shrink(1.0),
             8,
-            Stroke::new(2.0, theme::TEXT_STRONG),
+            Stroke::new(2.0, theme::palette(ui).TEXT_STRONG),
             egui::StrokeKind::Inside,
         );
     }
     if let Some(hint) = hint {
         ui.put(
             Rect::from_min_size(pos2(left, y), vec2(width, 18.0)),
-            egui::Label::new(RichText::new(hint).size(12.5).color(theme::MUTED)).truncate(),
+            egui::Label::new(RichText::new(hint).size(12.5).color(if selected {
+                theme::palette(ui).TEXT_STRONG
+            } else {
+                theme::palette(ui).MUTED
+            }))
+            .truncate(),
         );
     }
     let spoken = match spoken_extra {
@@ -597,9 +629,13 @@ pub fn group_label(ui: &mut egui::Ui, text: &str, count: usize) {
             RichText::new(text)
                 .size(theme::TITLE)
                 .strong()
-                .color(theme::TEXT_STRONG),
+                .color(theme::palette(ui).TEXT_STRONG),
         );
-        ui.label(RichText::new(count.to_string()).size(15.0).color(theme::MUTED));
+        ui.label(
+            RichText::new(count.to_string())
+                .size(15.0)
+                .color(theme::palette(ui).MUTED),
+        );
     });
     ui.add_space(2.0);
 }
@@ -612,8 +648,13 @@ const HERO_ASPECT: f32 = 3840.0 / 1240.0;
 pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>, logo: Option<&Path>) {
     let Some(hero) = hero else {
         ui.add_space(4.0);
-        ui.label(RichText::new(name).heading().strong().color(theme::TEXT_STRONG));
-        ui.label(RichText::new(subtitle).color(theme::MUTED));
+        ui.label(
+            RichText::new(name)
+                .heading()
+                .strong()
+                .color(theme::palette(ui).TEXT_STRONG),
+        );
+        ui.label(RichText::new(subtitle).color(theme::palette(ui).MUTED));
         ui.add_space(6.0);
         return;
     };
@@ -631,8 +672,8 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
     // Darken the lower part so the logo and text read on any picture.
     let fade_top = rect.top() + rect.height() * 0.35;
     let mut mesh = egui::Mesh::default();
-    let clear = Color32::from_black_alpha(0);
-    let dark = Color32::from_black_alpha(200);
+    let clear = theme::image_shade(0);
+    let dark = theme::image_shade(200);
     mesh.colored_vertex(pos2(rect.left(), fade_top), clear);
     mesh.colored_vertex(pos2(rect.right(), fade_top), clear);
     mesh.colored_vertex(pos2(rect.right(), rect.bottom()), dark);
@@ -641,9 +682,11 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
     mesh.add_triangle(0, 2, 3);
     ui.painter().add(mesh);
     let pad = 20.0;
-    let sub = ui
-        .painter()
-        .layout_no_wrap(subtitle.to_string(), FontId::proportional(13.0), theme::ON_IMAGE);
+    let sub = ui.painter().layout_no_wrap(
+        subtitle.to_string(),
+        FontId::proportional(13.0),
+        theme::palette(ui).ON_IMAGE,
+    );
     let sub_pos = pos2(rect.left() + pad, rect.bottom() - pad - sub.size().y);
     match logo {
         Some(logo) => {
@@ -663,14 +706,14 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
             );
         }
         None => {
-            let title = ui
-                .painter()
-                .layout_no_wrap(name.to_string(), FontId::proportional(30.0), Color32::WHITE);
+            let title =
+                ui.painter()
+                    .layout_no_wrap(name.to_string(), FontId::proportional(30.0), crate::theme::IMAGE_INK);
             let pos = pos2(rect.left() + pad, sub_pos.y - 6.0 - title.size().y);
-            ui.painter().galley(pos, title, Color32::WHITE);
+            ui.painter().galley(pos, title, crate::theme::IMAGE_INK);
         }
     }
-    ui.painter().galley(sub_pos, sub, theme::ON_IMAGE);
+    ui.painter().galley(sub_pos, sub, theme::palette(ui).ON_IMAGE);
     ui.add_space(10.0);
 }
 
@@ -683,13 +726,21 @@ pub fn stat_tile(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
 pub fn stat_tile_width(ui: &mut egui::Ui, width: f32, label: &str, value: &str, color: Color32) {
     let width = width.min(ui.max_rect().width());
     let (rect, response) = ui.allocate_exact_size(vec2(width, 90.0), Sense::hover());
-    ui.painter().rect_filled(rect, 8.0, theme::CARD);
+    ui.painter().rect_filled(rect, 8.0, theme::palette(ui).CARD);
+    ui.painter().rect_stroke(
+        rect,
+        8.0,
+        Stroke::new(1.0, theme::palette(ui).CARD_EDGE),
+        egui::StrokeKind::Inside,
+    );
+    let caption = ui.painter().layout(
+        label.to_owned(),
+        FontId::proportional(12.0),
+        theme::palette(ui).MUTED,
+        width - 24.0,
+    );
     ui.painter()
-        .rect_stroke(rect, 8.0, Stroke::new(1.0, theme::CARD_EDGE), egui::StrokeKind::Inside);
-    let caption = ui
-        .painter()
-        .layout(label.to_owned(), FontId::proportional(12.0), theme::MUTED, width - 24.0);
-    ui.painter().galley(rect.min + vec2(12.0, 10.0), caption, theme::MUTED);
+        .galley(rect.min + vec2(12.0, 10.0), caption, theme::palette(ui).MUTED);
     let mut job = egui::text::LayoutJob::simple_singleline(value.to_owned(), FontId::proportional(21.0), color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(width - 24.0);
     let galley = ui.painter().layout_job(job);
@@ -698,7 +749,7 @@ pub fn stat_tile_width(ui: &mut egui::Ui, width: f32, label: &str, value: &str, 
 }
 
 /// The shade over a game's hero art: dark on the left where the name, status and actions sit, opening to the art
-/// on the right, with a little weight at the bottom edge. Rounded ends match the art's corners.
+/// on the right. These are the base gradient stops; rounded ends match the art corners.
 pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
     painter.add(hero_shade_shape(rect, radius));
 }
@@ -706,7 +757,7 @@ pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
 pub(crate) fn hero_shade_shape(rect: Rect, radius: f32) -> egui::Shape {
     // One mesh with shared vertices: separate pieces met at anti-aliased edges and left thin vertical seams.
     // Columns follow the rounded corners, so the shade sits exactly on the art's own rounded edge.
-    const STOPS: [(f32, f32); 3] = [(0.0, 232.0), (0.42, 150.0), (1.0, 40.0)];
+    const STOPS: [(f32, f32); 3] = theme::HERO_SHADE_STOPS;
     let alpha = |t: f32| {
         let i = STOPS
             .iter()
@@ -715,7 +766,7 @@ pub(crate) fn hero_shade_shape(rect: Rect, radius: f32) -> egui::Shape {
             .max(1);
         let ((a0, v0), (a1, v1)) = (STOPS[i - 1], STOPS[i]);
         let k = ((t - a0) / (a1 - a0)).clamp(0.0, 1.0);
-        Color32::from_black_alpha((v0 + (v1 - v0) * k).round() as u8)
+        crate::theme::image_shade((v0 + (v1 - v0) * k).round() as u8)
     };
     let r = radius.min(rect.width() / 2.0).min(rect.height() / 2.0).max(0.0);
     let steps = 12;
@@ -778,8 +829,13 @@ pub fn feature_tile(
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(width, 80.0), Sense::hover());
     let painter = ui.painter();
-    painter.rect_filled(rect, 10.0, theme::CARD);
-    painter.rect_stroke(rect, 10.0, Stroke::new(1.0, theme::CARD_EDGE), egui::StrokeKind::Inside);
+    painter.rect_filled(rect, 10.0, theme::palette(ui).CARD);
+    painter.rect_stroke(
+        rect,
+        10.0,
+        Stroke::new(1.0, theme::palette(ui).CARD_EDGE),
+        egui::StrokeKind::Inside,
+    );
     let bar = egui::Rect::from_min_size(rect.min + vec2(0.0, 14.0), vec2(3.0, rect.height() - 28.0));
     painter.rect_filled(bar, 2.0, color);
     let inner = width - 30.0;
@@ -790,14 +846,14 @@ pub fn feature_tile(
     };
     painter.galley(
         rect.min + vec2(16.0, 10.0),
-        line(caption, 12.5, theme::MUTED),
-        theme::MUTED,
+        line(caption, 12.5, theme::palette(ui).MUTED),
+        theme::palette(ui).MUTED,
     );
     painter.galley(rect.min + vec2(16.0, 28.0), line(value, 18.5, color), color);
     painter.galley(
         rect.min + vec2(16.0, 54.0),
-        line(detail, 12.5, theme::MUTED),
-        theme::MUTED,
+        line(detail, 12.5, theme::palette(ui).MUTED),
+        theme::palette(ui).MUTED,
     );
     let spoken = if detail.is_empty() {
         format!("{caption}: {value}")
@@ -827,13 +883,13 @@ pub fn cover_card(
     let hover = ui
         .ctx()
         .animate_bool_with_time(response.id.with("hover"), response.hovered(), 0.15);
-    ui.painter().rect_filled(cover, 12, theme::CARD);
+    ui.painter().rect_filled(cover, 12, theme::palette(ui).CARD);
     if let Some(path) = capsule {
         egui::Image::new(file_uri(path)).corner_radius(12).paint_at(ui, cover);
     } else {
-        let title = two_line_title(ui.painter(), name, width - 24.0, 20.0, theme::TEXT_STRONG);
+        let title = two_line_title(ui.painter(), name, width - 24.0, 20.0, theme::palette(ui).TEXT_STRONG);
         ui.painter()
-            .galley(cover.min + vec2(12.0, 24.0), title, theme::TEXT_STRONG);
+            .galley(cover.min + vec2(12.0, 24.0), title, theme::palette(ui).TEXT_STRONG);
     }
     if attention || hover > 0.0 {
         ui.painter().rect_stroke(
@@ -844,7 +900,7 @@ pub fn cover_card(
                 if attention {
                     color
                 } else {
-                    theme::ACCENT.gamma_multiply(hover)
+                    theme::palette(ui).ACCENT.gamma_multiply(hover)
                 },
             ),
             egui::StrokeKind::Inside,
@@ -854,13 +910,13 @@ pub fn cover_card(
         ui.painter().rect_stroke(
             rect.expand(3.0),
             12,
-            Stroke::new(2.0, theme::TEXT_STRONG),
+            Stroke::new(2.0, theme::palette(ui).TEXT_STRONG),
             egui::StrokeKind::Outside,
         );
     }
-    let title = two_line_title(ui.painter(), name, width, 14.5, theme::TEXT);
+    let title = two_line_title(ui.painter(), name, width, 14.5, theme::palette(ui).TEXT);
     ui.painter()
-        .galley(pos2(rect.left(), cover.bottom() + 8.0), title, theme::TEXT);
+        .galley(pos2(rect.left(), cover.bottom() + 8.0), title, theme::palette(ui).TEXT);
     if attention {
         ui.painter()
             .circle_filled(pos2(rect.left() + 4.0, cover.bottom() + 59.0), 3.5, color);
@@ -875,7 +931,7 @@ pub fn cover_card(
     if let Some(hint) = hint {
         ui.put(
             Rect::from_min_size(pos2(rect.left(), cover.bottom() + 74.0), vec2(width, 18.0)),
-            egui::Label::new(RichText::new(hint).size(12.0).color(theme::MUTED)).truncate(),
+            egui::Label::new(RichText::new(hint).size(12.0).color(theme::palette(ui).MUTED)).truncate(),
         );
     }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name}, {state}")));

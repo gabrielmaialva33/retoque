@@ -35,6 +35,8 @@ pub(crate) type Drafts = HashMap<PathBuf, BTreeMap<(String, String), String>>;
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Saved {
     #[serde(default)]
+    pub(crate) appearance: theme::Appearance,
+    #[serde(default)]
     pub(crate) anti_cheat_acknowledged: std::collections::BTreeSet<String>,
     #[serde(default)]
     pub(crate) favorites: std::collections::BTreeSet<String>,
@@ -175,6 +177,7 @@ impl RetoqueApp {
             .storage
             .and_then(|s| eframe::get_value(s, STORAGE_KEY))
             .unwrap_or_default();
+        saved.appearance.apply(&cc.egui_ctx);
         // The saved choice, else the system's language; Chinese, Japanese or Korean only with a font that has them.
         let lang = saved.lang.unwrap_or_else(Lang::from_system);
         let lang = if crate::fonts::can_show(lang) { lang } else { Lang::En };
@@ -307,14 +310,14 @@ impl RetoqueApp {
         egui::Panel::top("top")
             .frame(
                 egui::Frame::new()
-                    .fill(theme::SIDE)
+                    .fill(theme::palette(ui).SIDE)
                     .inner_margin(egui::Margin::symmetric(16, 10)),
             )
             .show(ui, |ui| self.top_bar(ui));
         egui::Panel::bottom("status")
             .frame(
                 egui::Frame::new()
-                    .fill(theme::SIDE)
+                    .fill(theme::palette(ui).SIDE)
                     .inner_margin(egui::Margin::symmetric(16, 6)),
             )
             .show(ui, |ui| self.status_bar(ui));
@@ -325,7 +328,7 @@ impl RetoqueApp {
                 .max_size((ui.available_width() * 0.32).clamp(180.0, 320.0))
                 .frame(
                     egui::Frame::new()
-                        .fill(theme::SIDE)
+                        .fill(theme::palette(ui).SIDE)
                         .inner_margin(egui::Margin::symmetric(10, 10)),
                 )
                 .show(ui, |ui| self.library(ui));
@@ -333,7 +336,7 @@ impl RetoqueApp {
         egui::CentralPanel::default()
             .frame(
                 egui::Frame::new()
-                    .fill(theme::BG)
+                    .fill(theme::palette(ui).BG)
                     .inner_margin(egui::Margin::symmetric(22, 16)),
             )
             .show(ui, |ui| {
@@ -425,14 +428,14 @@ impl InstallState {
             Self::Untracked => "st.untracked_short",
         }
     }
-    pub(crate) fn color(self) -> Color32 {
+    pub(crate) fn color(self, palette: &theme::Palette) -> Color32 {
         match self {
-            Self::Current | Self::Installed => theme::GOOD,
+            Self::Current | Self::Installed => palette.GOOD,
             // An update is something to do, not a problem.
-            Self::Update => theme::ACCENT,
-            Self::Untracked => theme::WARN,
-            Self::Partial => theme::BAD,
-            Self::Missing => theme::MUTED,
+            Self::Update => palette.ACCENT,
+            Self::Untracked => palette.WARN,
+            Self::Partial => palette.BAD,
+            Self::Missing => palette.MUTED,
         }
     }
 }

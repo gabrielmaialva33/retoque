@@ -145,7 +145,7 @@ impl RetoqueApp {
         let mut accepted = false;
         let mut cancelled = false;
         let modal = egui::Modal::new(egui::Id::unique("app-install-review"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 520.0));
                 ui.heading(title);
@@ -197,7 +197,7 @@ impl RetoqueApp {
                     accepted = ui
                         .add_enabled(
                             !self.jobs.busy() && !self.app_installer.waiting_host,
-                            theme::primary(&confirm),
+                            theme::primary(ui, &confirm),
                         )
                         .clicked();
                 });

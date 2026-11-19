@@ -228,7 +228,7 @@ impl RetoqueApp {
                     Some(dlss::download_size()),
                 );
             } else if self.dlss_all_current() {
-                ui.colored_label(theme::GOOD, self.tr("dlss.all_current"));
+                ui.colored_label(theme::palette(ui).GOOD, self.tr("dlss.all_current"));
             } else if !self.tuning.dlss.ready {
                 if ui.button(self.tr("dlss.download")).clicked() {
                     self.tuning.dlss.consent = true;
@@ -243,7 +243,7 @@ impl RetoqueApp {
             let restore = self.dlss_restore_label();
             let text = RichText::new(self.tr(restore));
             let text = if restore == "dlss.restore" {
-                text.color(theme::BAD)
+                text.color(theme::palette(ui).BAD)
             } else {
                 text
             };

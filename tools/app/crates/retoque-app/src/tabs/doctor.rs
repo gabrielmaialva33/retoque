@@ -54,7 +54,7 @@ pub(crate) fn repair_button(
                 egui::Label::new(
                     RichText::new(t(lang, "doctor.payload_action"))
                         .small()
-                        .color(theme::MUTED),
+                        .color(theme::palette(ui).MUTED),
                 )
                 .wrap(),
             );
@@ -85,9 +85,9 @@ pub(crate) fn show(
         for finding in &card.findings {
             ui.push_id(finding.id, |ui| {
                 let (severity, color) = match finding.severity {
-                    Severity::Info => ("severity.info", theme::MUTED),
-                    Severity::Error => ("severity.error", theme::BAD),
-                    Severity::Warning => ("severity.warning", theme::WARN),
+                    Severity::Info => ("severity.info", theme::palette(ui).MUTED),
+                    Severity::Error => ("severity.error", theme::palette(ui).BAD),
+                    Severity::Warning => ("severity.warning", theme::palette(ui).WARN),
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, text(lang, severity));
@@ -115,13 +115,13 @@ pub(crate) fn row_badge(ui: &egui::Ui, row: egui::Response, count: usize, lang: 
     }
     let center = egui::pos2(row.rect.right() - 16.0, row.rect.center().y);
     let painter = ui.painter_at(row.rect);
-    painter.circle_filled(center, 9.0, theme::WARN);
+    painter.circle_filled(center, 9.0, theme::palette(ui).WARN);
     painter.text(
         center,
         egui::Align2::CENTER_CENTER,
         badge_count(count),
         egui::FontId::proportional(if count > 9 { 10.5 } else { 13.0 }),
-        theme::ON_ACCENT,
+        theme::palette(ui).ON_ACCENT,
     );
     row.on_hover_text(format!("{} ({count})", t(lang, "doctor.badge")))
 }
@@ -143,7 +143,7 @@ pub(crate) fn spoken_findings(count: usize, lang: Lang) -> Option<String> {
 /// `count` is the cached per-target count in RetoqueApp::doctor_badges; never diagnose in a row.
 pub(crate) fn badge(ui: &mut egui::Ui, count: usize, lang: Lang) {
     if count > 0 {
-        ui.colored_label(theme::WARN, "!")
+        ui.colored_label(theme::palette(ui).WARN, "!")
             .on_hover_text(t(lang, "doctor.badge"));
     }
 }

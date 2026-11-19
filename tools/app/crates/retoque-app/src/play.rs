@@ -132,7 +132,11 @@ impl RetoqueApp {
             self.play_game(game);
         }
         if writing {
-            ui.label(RichText::new(self.tr("play.wait_write")).small().color(theme::MUTED));
+            ui.label(
+                RichText::new(self.tr("play.wait_write"))
+                    .small()
+                    .color(theme::palette(ui).MUTED),
+            );
         }
     }
 
@@ -257,7 +261,7 @@ fn favorite_control(
             let (rect, response) = ui.allocate_exact_size(egui::vec2(32., 32.), egui::Sense::click());
             if selected || card_active.unwrap_or(true) || response.hovered() || response.has_focus() {
                 if card_active.is_some() {
-                    ui.painter().rect_filled(rect, 6, theme::SIDE);
+                    ui.painter().rect_filled(rect, 6, theme::palette(ui).SIDE);
                 }
                 let points: Vec<_> = (0..10)
                     .map(|i| {
@@ -268,9 +272,9 @@ fn favorite_control(
                 // One mesh avoids antialiased seams between the convex wedges of the star.
                 if selected {
                     let mut mesh = egui::Mesh::default();
-                    mesh.colored_vertex(rect.center(), theme::TEXT_STRONG);
+                    mesh.colored_vertex(rect.center(), theme::palette(ui).TEXT_STRONG);
                     for point in &points {
-                        mesh.colored_vertex(*point, theme::TEXT_STRONG);
+                        mesh.colored_vertex(*point, theme::palette(ui).TEXT_STRONG);
                     }
                     for i in 0..points.len() as u32 {
                         mesh.add_triangle(0, i + 1, (i + 1) % points.len() as u32 + 1);
@@ -279,13 +283,13 @@ fn favorite_control(
                 }
                 ui.painter().add(egui::Shape::closed_line(
                     points,
-                    egui::Stroke::new(1.5, theme::TEXT_STRONG),
+                    egui::Stroke::new(1.5, theme::palette(ui).TEXT_STRONG),
                 ));
                 if response.has_focus() || response.hovered() {
                     ui.painter().rect_stroke(
                         rect.shrink(1.),
                         4,
-                        egui::Stroke::new(2., theme::TEXT_STRONG),
+                        egui::Stroke::new(2., theme::palette(ui).TEXT_STRONG),
                         egui::StrokeKind::Inside,
                     );
                 }

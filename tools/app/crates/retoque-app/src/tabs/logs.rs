@@ -64,7 +64,11 @@ impl RetoqueApp {
                         ui.label(self.tr("log.none"));
                     });
                 }
-                ui.label(RichText::new(self.tr("log.no_log_bundle")).small().color(theme::MUTED));
+                ui.label(
+                    RichText::new(self.tr("log.no_log_bundle"))
+                        .small()
+                        .color(theme::palette(ui).MUTED),
+                );
             }
             Ok(Some(s)) => {
                 ui.horizontal_wrapped(|ui| {
@@ -95,10 +99,14 @@ impl RetoqueApp {
                 let errors = s.error_count.max(s.errors.len());
                 widgets::card(ui, |ui| {
                     widgets::card_title(ui, &log_verdict(self.lang, s));
-                    ui.label(RichText::new(self.tr("log.evidence_note")).small().color(theme::MUTED));
+                    ui.label(
+                        RichText::new(self.tr("log.evidence_note"))
+                            .small()
+                            .color(theme::palette(ui).MUTED),
+                    );
                     if errors > 0 {
                         ui.add_space(8.0);
-                        ui.colored_label(theme::WARN, self.tr("log.hint_errors"));
+                        ui.colored_label(theme::palette(ui).WARN, self.tr("log.hint_errors"));
                     } else if !s.nr_initialized {
                         ui.add_space(8.0);
                         ui.label(self.tr("log.hint_inactive"));
@@ -110,43 +118,55 @@ impl RetoqueApp {
                         ui,
                         self.tr("log.dlss"),
                         s.dlss_version.as_deref().unwrap_or(self.tr("unknown")),
-                        theme::TEXT_STRONG,
+                        theme::palette(ui).TEXT_STRONG,
                     );
                     widgets::stat_tile(
                         ui,
                         self.tr("log.api"),
                         s.api.as_deref().unwrap_or(self.tr("unknown")),
-                        theme::TEXT_STRONG,
+                        theme::palette(ui).TEXT_STRONG,
                     );
                     widgets::stat_tile(
                         ui,
                         self.tr("log.errors"),
                         &errors.to_string(),
-                        if errors > 0 { theme::BAD } else { theme::GOOD },
+                        if errors > 0 {
+                            theme::palette(ui).BAD
+                        } else {
+                            theme::palette(ui).GOOD
+                        },
                     );
                     widgets::stat_tile(
                         ui,
                         self.tr("log.warnings"),
                         &s.warnings.to_string(),
-                        if s.warnings > 0 { theme::WARN } else { theme::MUTED },
+                        if s.warnings > 0 {
+                            theme::palette(ui).WARN
+                        } else {
+                            theme::palette(ui).MUTED
+                        },
                     );
                     if let Some(ms) = s.nr_gpu_ms {
                         widgets::stat_tile(
                             ui,
                             self.tr("log.gpu"),
                             &format!("{ms:.2} {}", self.tr("unit.ms")),
-                            theme::ACCENT,
+                            theme::palette(ui).ACCENT,
                         );
                     }
                 });
                 if s.nr_gpu_ms.is_none() {
                     ui.add_space(12.0);
                     ui.label(RichText::new(format!("{} · {}", self.tr("log.gpu"), self.tr("log.no_sample"))).strong());
-                    ui.label(RichText::new(self.tr("log.hint_timing")).small().color(theme::MUTED));
+                    ui.label(
+                        RichText::new(self.tr("log.hint_timing"))
+                            .small()
+                            .color(theme::palette(ui).MUTED),
+                    );
                 }
                 ui.add_space(theme::CARD_GAP);
                 if !s.errors.is_empty() {
-                    widgets::tinted_card(ui, theme::ERROR_CARD, |ui| {
+                    widgets::tinted_card(ui, theme::palette(ui).ERROR_CARD, |ui| {
                         let title = format!("{} ({errors})", self.tr("log.errors"));
                         widgets::collapsible(ui, "session_errors", &title, widgets::Fold::Section, |ui| {
                             let mut groups = BTreeMap::<&str, usize>::new();
@@ -155,7 +175,10 @@ impl RetoqueApp {
                             }
                             for (line, count) in groups {
                                 ui.add(
-                                    egui::Label::new(RichText::new(line).monospace().small().color(theme::BAD)).wrap(),
+                                    egui::Label::new(
+                                        RichText::new(line).monospace().small().color(theme::palette(ui).BAD),
+                                    )
+                                    .wrap(),
                                 );
                                 if count > 1 {
                                     ui.label(format!(
@@ -186,7 +209,11 @@ impl RetoqueApp {
                                 }
                             });
                         if s.highlights_omitted > 0 || s.truncated_lines > 0 {
-                            ui.label(RichText::new(self.tr("log.limited")).small().color(theme::MUTED));
+                            ui.label(
+                                RichText::new(self.tr("log.limited"))
+                                    .small()
+                                    .color(theme::palette(ui).MUTED),
+                            );
                         }
                     });
                 });
@@ -195,7 +222,7 @@ impl RetoqueApp {
         match &self.view.bundle {
             Some(Ok(p)) => {
                 ui.horizontal_wrapped(|ui| {
-                    ui.colored_label(theme::GOOD, self.tr("log.bundle_done"));
+                    ui.colored_label(theme::palette(ui).GOOD, self.tr("log.bundle_done"));
                     ui.add(egui::Label::new(RichText::new(short_path(p)).monospace()).wrap());
                     if ui.button(self.tr("log.open_folder")).clicked()
                         && let Some(dir) = p.parent()
