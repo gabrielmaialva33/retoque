@@ -35,7 +35,7 @@ set -euo pipefail
 #
 # Exit status: 0 done (or a dry run that would go ahead), 1 usage or error, 3 a process maps files
 # in the game directory (the game is running), 4 a file in the way is not ours, 5 another proxy name
-# in the directory already holds OptiScaler.
+# in the directory already holds OptiScaler, 7 only 32-bit executables.
 #
 # RETOQUE_DEPLOY_TEST_FAIL_AFTER_STEP=<n> stops the run with exit 1 after its n-th step, as a failed
 # copy would. It exists for tests/deploy-safety, which checks the partial receipt that leaves.
@@ -975,6 +975,77 @@ uninstall() {
 # Deploy
 # ------------------------------------------------------------------------------
 
+# Header-only PE check. Unknown/unreadable/nonregular/link entries never count as x86.
+exe_machine() {
+    local path=$1 offset machine magic
+    local -a dos=() pe=()
+    [[ -f $path && ! -L $path ]] || return 0
+    read -r -a dos <<< "$(od -An -v -tu1 -N64 -- "$path" 2>/dev/null | tr '\n' ' ')"
+    (( ${#dos[@]} == 64 )) || return 0
+    (( dos[0] == 77 && dos[1] == 90 )) || return 0
+    offset=$((dos[60] + (dos[61]<<8) + (dos[62]<<16) + (dos[63]<<24)))
+    (( offset >= 64 && offset <= 16777216 )) || return 0
+    read -r -a pe <<< "$(od -An -v -tu1 -j "$offset" -N26 -- "$path" 2>/dev/null | tr '\n' ' ')"
+    (( ${#pe[@]} == 26 )) || return 0
+    (( pe[0] == 80 && pe[1] == 69 && pe[2] == 0 && pe[3] == 0 && (pe[20]+(pe[21]<<8)) >= 2 && (pe[23]&32) == 0 )) || return 0
+    machine=$((pe[4] + (pe[5]<<8))); magic=$((pe[24] + (pe[25]<<8)))
+    (( magic == 267 || magic == 523 )) || return 0
+    if (( machine == 332 && magic == 267 )); then echo x86
+    elif (( machine == 34404 && magic == 523 )); then echo x64
+    else echo unknown; fi
+}
+check_executable_architecture() {
+    local entry machine count=0 readable=0 x86=0 x64=0 complete=0 names=''
+    while IFS= read -r -d '' entry; do
+        if [[ -z $entry ]]; then complete=1; break; fi
+        count=$((count+1))
+        if (( count > 4096 )); then complete=0; break; fi
+        [[ ${entry,,} == *.exe ]] || continue
+        machine=$(exe_machine "$entry")
+        [[ -n $machine ]] || continue
+        readable=$((readable+1))
+        if [[ $machine == x86 ]]; then x86=$((x86+1)); names+="${entry##*/}, "; fi
+        if [[ $machine == x64 ]]; then x64=$((x64+1)); fi
+    done < <(find -P "$TARGET_DIR" -mindepth 1 -maxdepth 1 -print0 && printf '\0')
+    if (( complete && readable > 0 && readable == x86 )); then
+        refuse 7 "Only 32-bit executables found: ${names%, }. Choose the folder containing the 64-bit executable. Retoque cannot be installed in a game that only exists in 32-bit."
+    elif (( x64 > 0 && x86 > 0 )); then
+        echo "[!] 32-bit executables also present: ${names%, }. Choose the folder of the 64-bit game executable."
+    fi
+}
+anti_cheat_notes() {
+    local entry name product count=0
+    while IFS= read -r -d '' entry; do
+        count=$((count+1)); (( count <= 4096 )) || break
+        [[ ! -L $entry && ( -f $entry || -d $entry ) ]] || continue
+        name=${entry##*/}; name=${name,,}; product=''
+        if [[ -d $entry ]]; then
+            case "$name" in
+                easyanticheat|easyanticheat_eos) product='Easy Anti-Cheat' ;;
+                battleye) product='BattlEye' ;;
+                eaanticheat) product='EA AntiCheat / Javelin' ;;
+                gameguard) product='nProtect GameGuard' ;;
+                xigncode|xigncode3) product='XIGNCODE3' ;;
+                pb) product='PunkBuster' ;;
+                anticheatexpert) product='Anti-Cheat Expert' ;;
+            esac
+        else
+            case "$name" in
+                easyanticheat_setup.exe|easyanticheat_eos_setup.exe|easyanticheat_x64.dll|easyanticheat_x86.dll) product='Easy Anti-Cheat' ;;
+                beservice.exe|beservice_x64.exe|beclient.dll|beclient_x64.dll) product='BattlEye' ;;
+                eaanticheat.gameservicelauncher.exe|eaanticheat.gameservice.exe|eaanticheat.installer.exe) product='EA AntiCheat / Javelin' ;;
+                gameguard.des|gamemon.des|gamemon64.des) product='nProtect GameGuard' ;;
+                xhunter1.sys|x3.xem|xcoronahost.xem) product='XIGNCODE3' ;;
+                pbcl.dll|pbcl64.dll|pbsvc.exe|pnkbstra.exe|pnkbstrb.exe) product='PunkBuster' ;;
+                aceservice.exe|ace-base.sys|ace-base64.sys) product='Anti-Cheat Expert' ;;
+            esac
+        fi
+        if [[ -n $product ]]; then
+            echo "[!] Anti-cheat evidence: $product (${entry#"$TARGET_DIR"/}). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
+        fi
+    done < <(find -P "$TARGET_DIR" -mindepth 1 -maxdepth 5 -print0)
+}
+
 deploy() {
     local custom_src=0 sha_opti='' sha_fwd=''
 
@@ -1020,6 +1091,8 @@ deploy() {
     if [[ $OLD_STATUS == partial ]]; then
         echo "[!] The last deploy here stopped part-way; its records are kept and this one carries on from them"
     fi
+    check_executable_architecture
+    anti_cheat_notes
     choose_backup_dir
 
     # 1. OptiScaler as the proxy DLL, and as OptiScaler.dll beside it when the proxy is a renamed copy

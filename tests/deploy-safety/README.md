@@ -9,6 +9,10 @@ so it never reaches `build-local.sh`.
 
 Cases:
 
+- header-only x86 refusal (exit 7) with no-write dry runs and no override, mixed x86/x64 note,
+  unknown PE headers, uninstall after the executable becomes x86, and all seven anti-cheat families as
+  named warning evidence without a refusal; Bash/core parity also excludes linked evidence;
+
 - a clean install, a re-install over our own build (no backup), an identical build left unwritten
   (same inode), and a proxy name given positionally;
 - an OptiScaler build with no receipt (what the old script left): replaced, kept under

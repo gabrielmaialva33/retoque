@@ -6,6 +6,7 @@ use std::{path::PathBuf, sync::Arc};
 pub enum Remedy {
     CloseRunningProcesses(Vec<(u32, String)>),
     ChoosePayloadDir,
+    ChooseExecutableFolder,
     OpenFolder(PathBuf),
     ReplanStale,
     KeepOrReplaceForeign,
@@ -146,6 +147,7 @@ fn folder(path: &std::path::Path) -> PathBuf {
 pub fn remedies_for_refusal(refusal: &Refusal) -> Vec<Remedy> {
     match refusal {
         Refusal::GameRunning { processes } => vec![Remedy::CloseRunningProcesses(processes.clone())],
+        Refusal::Executables32Bit { .. } => vec![Remedy::ChooseExecutableFolder],
         Refusal::Foreign { .. } => vec![Remedy::KeepOrReplaceForeign],
         // Usage may have many causes. Payload selection is exposed by the missing-payload card explicitly.
         _ => vec![],
@@ -214,6 +216,7 @@ pub(crate) fn button(
 ) {
     let key = match &remedy {
         Remedy::CloseRunningProcesses(_) => "remedy.processes",
+        Remedy::ChooseExecutableFolder => "safety.choose_folder",
         Remedy::ChoosePayloadDir => "app.payload.choose",
         Remedy::OpenFolder(_) => "log.open_folder",
         Remedy::ReplanStale => "remedy.replan",

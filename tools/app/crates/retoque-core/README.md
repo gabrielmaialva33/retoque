@@ -192,3 +192,18 @@ Existing Bash/PowerShell readers need no syntax changes, but must be invoked at 
 `combine_install_plans` merges only same-root disjoint installs before review, retaining source observations;
 `validate_plan` provides a read-only preflight for all plans before a compound apply. Multi-root applies are not
 atomic: interruption can leave the root completed and the target pending; replan restoration to finish.
+
+## Static installation safety evidence
+
+`pe_version::read_header` shares the PE/COFF parser with version inspection and ReShade's x64-DLL check.
+`file_header` reads only 90 header bytes at offsets capped at 16 MiB, checks regular files and excludes links;
+it never loads a binary. `safety::executables` bounds direct enumeration to 4096 entries and exposes x86, x64,
+ARM64 and unknown machines. Partial enumeration never proves x86-only. `plan_install` alone adds
+`Refusal::Executables32Bit` (exit 7) for a complete, nonempty x86-only list and retains the list as an apply
+precondition. Mixed x86/x64 lists get a note. Other machines remain unqualified; unknown is not x86.
+
+`safety::anti_cheat` returns product/path evidence and a coverage flag, with 4096 entries/four directory descent
+levels and no linked/reparse paths. No matches never prove absence or compatibility. Plans expose warning notes;
+only the GUI owns per-game acknowledgment. CLI/scripts have no override or consent flag. The GUI scans the known
+installation root; folder-only entrypoints scan the supplied folder. Status, settings and uninstall remain usable.
+See the [app contract](../../README.md#executable-architecture-and-anti-cheat-evidence) for semantics and limits.

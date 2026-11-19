@@ -39,6 +39,81 @@ fn read_at<R: Read + Seek>(r: &mut R, at: u64, len: usize) -> Option<Vec<u8>> {
     }
 }
 
+/// Machine values from the PE/COFF header; unknown is never treated as x86.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Machine {
+    X86,
+    X64,
+    Arm64,
+    Unknown,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct PeHeader {
+    pub machine: Machine,
+    pub dll: bool,
+}
+
+fn coff_header<R: Read + Seek>(r: &mut R) -> Option<(u64, [u8; 24])> {
+    let mut dos = [0; 64];
+    read_exact_at(r, 0, &mut dos)?;
+    if &dos[..2] != b"MZ" {
+        return None;
+    }
+    let pe = u64::from(u32_at(&dos, 60)?);
+    if !(64..=16 * 1024 * 1024).contains(&pe) {
+        return None;
+    }
+    let mut coff = [0; 24];
+    read_exact_at(r, pe, &mut coff)?;
+    if &coff[..4] != b"PE\0\0" {
+        return None;
+    }
+    Some((pe, coff))
+}
+/// Reads only 64 DOS bytes, 24 COFF bytes and 2 optional-header bytes.
+pub fn read_header<R: Read + Seek>(r: &mut R) -> Option<PeHeader> {
+    let (pe, coff) = coff_header(r)?;
+    if u16_at(&coff, 20)? < 2 {
+        return None;
+    }
+    let mut magic = [0; 2];
+    read_exact_at(r, pe + 24, &mut magic)?;
+    let magic = u16::from_le_bytes(magic);
+    let machine = match (u16_at(&coff, 4)?, magic) {
+        (0x14c, 0x10b) => Machine::X86,
+        (0x8664, 0x20b) => Machine::X64,
+        (0xaa64, 0x20b) => Machine::Arm64,
+        (_, 0x10b | 0x20b) => Machine::Unknown,
+        _ => return None,
+    };
+    Some(PeHeader {
+        machine,
+        dll: u16_at(&coff, 22)? & 0x2000 != 0,
+    })
+}
+pub fn file_header(path: &Path) -> Option<PeHeader> {
+    if !crate::safety::unlinked(path) || !std::fs::symlink_metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(0x00200000);
+    }
+    let mut file = options.open(path).ok()?;
+    if !file.metadata().ok()?.is_file() || !crate::safety::unlinked(path) {
+        return None;
+    }
+    read_header(&mut file)
+}
+
 pub fn file_version(path: &Path) -> Option<String> {
     let mut file = File::open(path).ok()?;
     if !file.metadata().ok()?.is_file() {
@@ -146,20 +221,7 @@ fn product_strings(block: &[u8], depth: usize, out: &mut Vec<String>) -> Option<
     Some(())
 }
 pub fn read_details<R: Read + Seek>(r: &mut R) -> Option<VersionInfo> {
-    let mut dos = [0u8; 64];
-    read_exact_at(r, 0, &mut dos)?;
-    if &dos[..2] != b"MZ" {
-        return None;
-    }
-    let pe = u64::from(u32_at(&dos, 60)?);
-    if pe > 16 * 1024 * 1024 {
-        return None;
-    }
-    let mut coff = [0u8; 24];
-    read_exact_at(r, pe, &mut coff)?;
-    if &coff[..4] != b"PE\0\0" {
-        return None;
-    }
+    let (pe, coff) = coff_header(r)?;
     let sections = usize::from(u16_at(&coff, 6)?);
     if sections == 0 || sections > 96 {
         return None;

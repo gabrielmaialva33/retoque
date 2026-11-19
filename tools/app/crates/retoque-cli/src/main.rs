@@ -93,6 +93,10 @@ static COMPONENT_COMMAND: AtomicBool = AtomicBool::new(false);
 fn refusal(r: &Refusal) -> String {
     match r {
         Refusal::Usage(s) | Refusal::Receipt(s) => s.clone(),
+        Refusal::Executables32Bit { names } => format!(
+            "Only 32-bit executables found: {}. Choose the folder containing the 64-bit executable. Retoque cannot be installed in a game that only exists in 32-bit.",
+            names.join(", ")
+        ),
         Refusal::GameRunning { processes } => format!(
             "game files are in use:\n{}\n    Quit the game, wait for it to exit, then run this again.",
             processes

@@ -31,7 +31,7 @@ removes only recorded files whose hash still matches, puts back what was set asi
 NVIDIA's model, nvngx_dlssnr.dll, is never copied, moved or removed; it is only reported when missing.
 
 Exit status: 0 done (or a dry run that would go ahead), 1 usage or error, 3 the game is running, 4 a file
-in the way is not ours, 5 another proxy name already holds OptiScaler.
+in the way is not ours, 5 another proxy name already holds OptiScaler, 7 only 32-bit executables.
 
 RETOQUE_DEPLOY_TEST_FAIL_AFTER_STEP=<n> stops a run with exit 1 after its n-th step, as a failed copy would.
 It is the same variable tools/deploy-to-game.sh reads, and exists for tests/windows-installer.
@@ -1005,6 +1005,85 @@ function Invoke-Uninstall {
 # Install
 # ------------------------------------------------------------------------------------------------------------
 
+# Static evidence only. No assembly loading; read 90 header bytes at bounded offsets.
+function Get-ExeMachine([string]$Path) {
+    $stream = $null
+    try {
+        $attributes = [IO.File]::GetAttributes($Path)
+        if (($attributes -band [IO.FileAttributes]::ReparsePoint) -or ($attributes -band [IO.FileAttributes]::Directory)) { return '' }
+        $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        $dos = New-Object byte[] 64
+        if ($stream.Read($dos, 0, 64) -ne 64 -or $dos[0] -ne 77 -or $dos[1] -ne 90) { return '' }
+        $offset = [BitConverter]::ToUInt32($dos, 60)
+        if ($offset -lt 64 -or $offset -gt 16777216) { return '' }
+        [void]$stream.Seek($offset, [IO.SeekOrigin]::Begin)
+        $pe = New-Object byte[] 26
+        if ($stream.Read($pe, 0, 26) -ne 26) { return '' }
+        if ($pe[0] -ne 80 -or $pe[1] -ne 69 -or $pe[2] -ne 0 -or $pe[3] -ne 0 -or [BitConverter]::ToUInt16($pe, 20) -lt 2 -or ($pe[23] -band 32)) { return '' }
+        $machine = [BitConverter]::ToUInt16($pe, 4); $magic = [BitConverter]::ToUInt16($pe, 24)
+        if ($magic -ne 267 -and $magic -ne 523) { return '' }
+        if ($machine -eq 332 -and $magic -eq 267) { return 'x86' }
+        if ($machine -eq 34404 -and $magic -eq 523) { return 'x64' }
+        return 'unknown'
+    } catch { return '' } finally { if ($stream) { $stream.Dispose() } }
+}
+function Test-ExecutableArchitecture {
+    $count = 0; $readable = 0; $x64 = 0; $complete = $true
+    $x86 = New-Object 'Collections.Generic.List[string]'
+    try {
+        foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries($script:Game)) {
+            $count++; if ($count -gt 4096) { $complete = $false; break }
+            if ([IO.Path]::GetExtension($entry) -ine '.exe') { continue }
+            $machine = Get-ExeMachine $entry
+            if (-not $machine) { continue }
+            $readable++
+            if ($machine -ceq 'x86') { $x86.Add([IO.Path]::GetFileName($entry)) }
+            if ($machine -ceq 'x64') { $x64++ }
+        }
+    } catch { $complete = $false }
+    if ($complete -and $readable -gt 0 -and $readable -eq $x86.Count) {
+        Add-Refusal 7 "Only 32-bit executables found: $($x86 -join ', '). Choose the folder containing the 64-bit executable. Retoque cannot be installed in a game that only exists in 32-bit."
+    } elseif ($x64 -gt 0 -and $x86.Count -gt 0) {
+        Write-Line "[!] 32-bit executables also present: $($x86 -join ', '). Choose the folder of the 64-bit game executable."
+    }
+}
+function Write-AntiCheatNotes {
+    $directories = @{
+        'easyanticheat'='Easy Anti-Cheat'; 'easyanticheat_eos'='Easy Anti-Cheat'; 'battleye'='BattlEye';
+        'eaanticheat'='EA AntiCheat / Javelin'; 'gameguard'='nProtect GameGuard'; 'xigncode'='XIGNCODE3';
+        'xigncode3'='XIGNCODE3'; 'pb'='PunkBuster'; 'anticheatexpert'='Anti-Cheat Expert'
+    }
+    $files = @{}
+    foreach ($name in @('easyanticheat_setup.exe','easyanticheat_eos_setup.exe','easyanticheat_x64.dll','easyanticheat_x86.dll')) { $files[$name]='Easy Anti-Cheat' }
+    foreach ($name in @('beservice.exe','beservice_x64.exe','beclient.dll','beclient_x64.dll')) { $files[$name]='BattlEye' }
+    foreach ($name in @('eaanticheat.gameservicelauncher.exe','eaanticheat.gameservice.exe','eaanticheat.installer.exe')) { $files[$name]='EA AntiCheat / Javelin' }
+    foreach ($name in @('gameguard.des','gamemon.des','gamemon64.des')) { $files[$name]='nProtect GameGuard' }
+    foreach ($name in @('xhunter1.sys','x3.xem','xcoronahost.xem')) { $files[$name]='XIGNCODE3' }
+    foreach ($name in @('pbcl.dll','pbcl64.dll','pbsvc.exe','pnkbstra.exe','pnkbstrb.exe')) { $files[$name]='PunkBuster' }
+    foreach ($name in @('aceservice.exe','ace-base.sys','ace-base64.sys')) { $files[$name]='Anti-Cheat Expert' }
+    $pending = New-Object Collections.Stack
+    $pending.Push(@($script:Game, 0)); $count = 0
+    while ($pending.Count -gt 0) {
+        $item = $pending.Pop()
+        try {
+            if ([IO.File]::GetAttributes($item[0]) -band [IO.FileAttributes]::ReparsePoint) { continue }
+            foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries($item[0])) {
+                $count++; if ($count -gt 4096) { return }
+                $attributes = [IO.File]::GetAttributes($entry)
+                if ($attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+                $directory = ($attributes -band [IO.FileAttributes]::Directory) -ne 0
+                $name = [IO.Path]::GetFileName($entry).ToLowerInvariant()
+                $product = if ($directory) { $directories[$name] } else { $files[$name] }
+                if ($product) {
+                    $relative = $entry.Substring($script:Game.TrimEnd([IO.Path]::DirectorySeparatorChar).Length + 1)
+                    Write-Line "[!] Anti-cheat evidence: $product ($relative). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
+                }
+                if ($directory -and $item[1] -lt 4) { $pending.Push(@($entry, ($item[1] + 1))) }
+            }
+        } catch { continue }
+    }
+}
+
 function Invoke-Deploy {
     $src = if ($SourceDir) { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($SourceDir) } else { $PSScriptRoot }
     $src = [IO.Path]::GetFullPath($src)
@@ -1036,6 +1115,8 @@ function Invoke-Deploy {
     if ($script:OldStatus -ceq 'partial') {
         Write-Line '[!] The last install here stopped part-way; its records are kept and this one carries on from them'
     }
+    Test-ExecutableArchitecture
+    Write-AntiCheatNotes
     Select-BackupDir
 
     # 1. OptiScaler as the proxy DLL, and as OptiScaler.dll beside it

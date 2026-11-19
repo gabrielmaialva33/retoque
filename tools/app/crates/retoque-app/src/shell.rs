@@ -420,6 +420,13 @@ impl RetoqueApp {
     /// Banner, status tiles, details and the tab strip. False when the game has nothing Retoque can act on.
     fn game_header(&mut self, ui: &mut egui::Ui, game: &Game) -> bool {
         self.game_banner(ui, game);
+        if let Some(warning) = self.view.safety.as_ref().and_then(|s| s.warning(self.lang)) {
+            crate::error::notice(ui, &crate::error::AppError::warning(warning));
+        }
+        if self.view.safety_choose_folder {
+            ui.label(self.tr("safety.choose_folder_help"));
+            self.target_picker(ui, game);
+        }
         if self.tab != Tab::Compare {
             self.feature_tiles(ui);
         }
@@ -498,6 +505,24 @@ impl RetoqueApp {
     pub(crate) fn target_picker(&mut self, ui: &mut egui::Ui, game: &Game) {
         let current = self.view.target.clone();
         let root = t(self.lang, "game.root");
+        let bitness = |p: &std::path::Path| {
+            self.view
+                .safety
+                .as_ref()
+                .map(|s| s.bitness(p, self.lang))
+                .unwrap_or_default()
+        };
+        let labels: std::collections::BTreeMap<_, _> = game
+            .targets
+            .iter()
+            .map(|t| (t.path.clone(), bitness(&t.path)))
+            .collect();
+        if let Some(p) = &current
+            && let Some(label) = labels.get(p)
+            && !label.is_empty()
+        {
+            ui.label(label);
+        }
         ui.horizontal(|ui| {
             ui.label(self.tr("game.target"));
             if game.targets.len() == 1 {
@@ -524,7 +549,11 @@ impl RetoqueApp {
                         let text = format!(
                             "{}  ({})",
                             relative_to(&t.path, &game.install_dir, root),
-                            t.executables.join(", ")
+                            labels
+                                .get(&t.path)
+                                .filter(|s| !s.is_empty())
+                                .cloned()
+                                .unwrap_or_else(|| t.executables.join(", "))
                         );
                         if ui.selectable_label(current.as_ref() == Some(&t.path), text).clicked() {
                             pick = Some(t.path.clone());
@@ -923,6 +952,11 @@ impl RetoqueApp {
             .small()
             .color(theme::MUTED),
         );
+        // A short banner can put its last caption below the image. Reserve the actual child bounds before
+        // the anti-cheat warning (or the feature tiles), so the next content never overlaps that caption.
+        if child.min_rect().bottom() > rect.bottom() {
+            ui.advance_cursor_after_rect(child.min_rect());
+        }
         ui.add_space(12.0);
     }
 

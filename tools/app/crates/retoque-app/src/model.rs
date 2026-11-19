@@ -24,6 +24,10 @@ pub enum PlanKind {
 }
 
 pub enum Outcome {
+    Safety {
+        target: PathBuf,
+        snapshot: crate::safety_ui::Snapshot,
+    },
     UpdateAll(crate::update_all::Event),
     ReShade(Box<crate::reshade_ui::Event>),
     Dlss(crate::dlss_ui::Event),
