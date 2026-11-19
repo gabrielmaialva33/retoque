@@ -34,3 +34,17 @@ Design note: `docs/dlssnr/design/descriptor-reuse.md`.
 CPU preparation and cleanup only: not GPU execution, not whether a reused descriptor is accepted by a
 real driver, not frame generation safety, image quality or FPS. Fewer view-creation calls is a count,
 not a profile. The existing ring reuse policy is unchanged.
+
+## Frame input contracts
+
+`contracts.py` compiles the production scratch-admission and uniform guide-selection blocks against
+`contracts_fakes.h`, with ASan/UBSan. Each mandatory colour allocation fails independently on single
+and chain routes at native and reduced sizes. Refusal must park every acquired piece without releasing
+it, report the reason, request history reset and allow a later retry. Guide cases fail bytecode
+availability, initialization, either allocation and dispatch; a later success must hand the model the
+working-size zero-origin pair. Initialized passes and successful guide allocations survive dispatch
+failure. All chain histories reset after a refused frame. MatchGuides off and no-needed-resample paths
+allocate nothing. Integration guards require the refusal before frame hold, model and resolve.
+
+The compiled slices are the production decisions; the surrounding model/evaluate and resources are
+fakes. This does not execute the complete renderer or establish actual pixel preservation on a GPU.

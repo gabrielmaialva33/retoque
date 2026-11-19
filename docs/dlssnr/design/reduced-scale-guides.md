@@ -2,7 +2,7 @@
 
 Status: **built behind two default-on keys; host-tested; fix 1 A/B'd in Cyberpunk 2077 on 2026-09-28**
 (see [Measured](#measured)). Written 2026-09-27. The guide resample's bytecode is in the tree since
-`c95ad19c`; a build without it reports the resample unavailable and only the motion-scale fix is live.
+`c95ad19c`; a build without it refuses frames that need resampling while `MatchGuides` is on.
 
 ## Where this comes from
 
@@ -23,7 +23,7 @@ which is v0.8.91 plus those changes, offered upstream as a pull request.
   - His Onimusha: Way of the Sword numbers: 4K, DLSS Performance, game scale 1920. The old conversion
     gave the model 1344.
 - **Vulkan.** v0.8.92 also ported both fixes to his Vulkan path (`57aa64e0`). Here both are on the Vulkan route
-  since 2026-10-23, with a failure rule of its own: [reduced-scale-guides-vk.md](reduced-scale-guides-vk.md).
+  since 2026-10-23, with the same refuse-instead-of-mismatch rule: [reduced-scale-guides-vk.md](reduced-scale-guides-vk.md).
 
 His code touches files this tree does not have (`DlssNr_Dx12_Run.cpp`, `DlssNr_Dx12_Models.cpp`), so
 nothing was copied. The rules are re-derived and pinned by our own tests. The comments at each site
@@ -84,15 +84,38 @@ pins them with the numbers of the cases they were written for.
    - Unmatched, the handed texture is the game's region, so the scale is the game's own. Matched, the
      handed texture is at the working size.
    - `false` restores working / frame, for an A/B on one build.
-   - The native Vulkan path has both since 2026-10-23: the same shader built as SPIR-V, and, where D3D12 falls
-     back to frame-size guides, a refused frame instead ([reduced-scale-guides-vk.md](reduced-scale-guides-vk.md)).
+   - The native Vulkan path has both since 2026-10-23: the same shader built as SPIR-V
+     ([reduced-scale-guides-vk.md](reduced-scale-guides-vk.md)).
+
+### D3D12 failure contract (2026-11-19)
+
+The single/master and chain paths require the complete colour scratch bundle: `output`, `colorCopy`,
+`hdrCopy`, and `colorSmall` whenever the working extent differs from the frame. A failed allocation
+refuses the frame before feature creation or colour processing. The partial bundle is parked through
+existing retirement, never immediately released, so a retry cannot inherit its old size or format.
+
+Guide selection uses `Game`, `Matched`, or `Refused`, as Vulkan does. Need is decided independently
+of bytecode availability. A needed resample that cannot initialize, allocate or dispatch refuses the
+frame before frame hold can overwrite the target, and before encode/model/resolve. Existing read-state
+scopes restore the guides on return. Both refusals request history reset for all passes; neither sets
+the permanent failure latch. Missing guide surfaces are retried, and only a pass whose constructor
+never initialized (and therefore never recorded work) is deleted and rebuilt. An initialized pass is
+retained after dispatch refusal. Later success resumes with matched extents and zero-origin regions.
+
+NR-off callers are unchanged. `MatchGuides=false` and guides no larger than the working extent retain
+the game-guide path without allocating a resample. Peripheral packing keeps its separate policy.
+
+`tests/nr-dispatch` fault-injects extracted production blocks with host fakes and ASan/UBSan: each
+colour allocation at native/reduced sizes on single/chain routes; absent bytecode, failed constructor,
+each matched-guide allocation, failed dispatch, and recovery. Source-order guards put refusal before
+frame hold/model/resolve. These tests do not execute NGX, shaders or a native D3D12 driver.
 
 **A pass of its own, with optional bytecode.**
 - The resample is `DlssNr_GuideMatch_Dx12` over `precompile/dlssnr_guides.hlsl`. It is not a new mode
   of the composition shader. `DlssNr_GuideMatch_Dx12.cpp` includes `precompile/DlssNr_Guides_Shader.h`
   only when `__has_include` finds it.
-- Without that header, `Available()` is false and nothing is built. The model keeps the frame-size
-  guides, with the corrected scale.
+- Without that header, `Available()` is false and nothing is built. Frames that need the resample
+  are refused when `MatchGuides` is on; `MatchGuides=false` keeps the explicit A/B arm.
 - The alternative was a new mode of `dlssnr.hlsl`, which nobody would have compiled. That is the silent
   failure mode: `nr-invariants` does not compare HLSL with bytecode, so a stale composition shader
   would run a mode it does not know.
@@ -121,8 +144,8 @@ DLSS-NR guides matched to the working size: depth and motion 1720x720 for a 1720
 DLSS-NR model motion scale 1720.0 x 720.0: game scale 2293.0 x 960.0 measured against 2293x960 (render size, low-resolution vectors), motion texture 1720x720 (matched to the working size), model 1720x720
 ```
 
-Without the bytecode, the first line reads `DLSS-NR guides: larger than the 1720x720 model and not
-resampled (this build has no guide resample shader); the model gets the frame-size guides`.
+Without the bytecode, or after a resample allocation/initialization/dispatch failure, the skip reason is
+`required guide resample unavailable or failed; frame kept unchanged, retry next frame`.
 
 ## In-game test plan
 
