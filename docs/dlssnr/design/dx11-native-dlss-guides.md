@@ -358,9 +358,11 @@ What it does:
   until then; a new D3D11 device also rebuilds the transport's own depth copies. A texture the game created shared
   already would be opened as it is and read while the game's next frame writes it, so it is refused (`already
   shared`). When the bridge's device or queue changes, the transport's old D3D12 objects are freed if their last list
-  has completed and left alive otherwise: the game's thread does not wait for the GPU. A build that fails is not
-  retried until the device or queue changes. `ShutdownNativeDx11Guides` drains (bounded) and releases them from
-  `DlssNr::Shutdown`, before that takes `g_nrMutex`, since a capture takes the transport's lock and then
+  has completed and left alive otherwise: the game's thread does not wait for the GPU. A removed device is the
+  "otherwise" (since 2026-11-18, host-tested only): its fence reads `UINT64_MAX`, which is not completion
+  (`DlssNr_FenceProgress.h`), so its objects are left alive and no set or cache is released on it. A build that
+  fails is not retried until the device or queue changes. `ShutdownNativeDx11Guides` drains (bounded) and releases
+  them from `DlssNr::Shutdown`, before that takes `g_nrMutex`, since a capture takes the transport's lock and then
   `g_nrMutex`; nothing in the DLL calls `DlssNr::Shutdown` today, so in practice they live until the process exits,
   like the module's other D3D12 objects.
 - **Step 1's report.** At `HookMethod=2` the native route's panel and log line (`NoGuides`) now appear only while the

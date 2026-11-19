@@ -103,6 +103,7 @@ experiment.
 | `DlssNr_MultiView.h` | several views in one colour allocation within a frame (multi-monitor, split screen): detected, and every evaluate stood down, counted; janblade's `1105908f` detector only (GPL-3.0), no view pick or per-view model; `../../docs/dlssnr/design/dx12-robustness.md`, tested by `tests/nr-multi-view` |
 | `DlssNr_Pictures.h`, `DlssNr_PictureGate.h` | several live DLSS features in a game (a menu preview next to the world): NR follows one main picture, by first, clearly larger, release or quiet, and every other feature is left as it is before any NR state sees it; views on main's colour allocation go on to the multi-view rule; idea from janblade #285 (GPL-3.0), no code taken; `../../docs/dlssnr/design/main-picture.md`, tested by `tests/nr-main-picture` |
 | `DlssNr_UntrackedRetire.h` | the default (untracked) D3D12 retirement path's GPU-completion decision rule: the 32-tick evaluation countdown plus a per-device `ID3D12Fence` signaled after each successful D3D12 `Present` (`completedValue >= parkedSerial + 1`), `UINT64_MAX`/device-removed retention, and live-device count-only fallback logged once at `INFO`; `../../docs/dlssnr/design/chain-in-flight.md`, tested by `tests/nr-untracked-retire` (host-tested only, unvalidated on GPU) |
+| `DlssNr_FenceProgress.h` | what an `ID3D12Fence`'s completed value proves: completed, pending or removed. `UINT64_MAX` is a removed device's answer, not a value a queue reached, so nothing waiting on it is released or reused. The D3D12 present lists (allocator reuse, the idle wait, the retired HDR textures, a refused `Signal`) and the native D3D11 guide transport's drain decide through it; tested by `tests/nr-present-fence` and `tests/nr-dx11-native-guides` (host-tested only, no device was removed on a GPU) |
 | `DlssNr_PrivateSr.h/.cpp` | Transfer 2's private DLSS Super Resolution, the NGX half: its own parameter table and handle through `NVNGXProxy`, created and evaluated with wilsjo2's parameters |
 | `shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp` | D3D12 present guide capture, identity and bridge consumption; shared state remains in the core renderer |
 | `shaders/dlssnr/DlssNr_Dx12.h/.cpp` | the pass: forwarder loading, feature lifetime, the evaluate path, encode/resolve orchestration, capture |
@@ -245,7 +246,10 @@ model file at startup; it does not select the caller module.
   queue after each successful `Present` to reach `parkedSerial + 1` (`UINT64_MAX` and device removal
   retain; live devices with no single present-queue fence log once at `INFO` and fall back to the
   evaluation count, which still does not cover unpresented recordings or command-list replay). Internal
-  feature creation uses its existing queue/fence discipline. See
+  feature creation uses its existing queue/fence discipline. Since 2026-11-18 (host-tested only) the
+  present lists' own fence follows the same rule (`DlssNr_FenceProgress.h`): a removed device is not a
+  finished list, so no present allocator is reset and no retired HDR texture or synthesized-motion
+  estimator is released on it; they are kept, said once, and the present pass stops. See
   [chain-in-flight](../../docs/dlssnr/design/chain-in-flight.md) and
   [submission tracking](../../docs/dlssnr/design/submission-tracking.md); elapsed frames alone
   must not be treated as proof that tracked GPU work is done.

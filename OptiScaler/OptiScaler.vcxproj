@@ -1058,6 +1058,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_UntrackedRetire.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Enlarge.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_FormatTwin.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_FenceProgress.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PrivateSr.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Readback.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ImageFile.h" />

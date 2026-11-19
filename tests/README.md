@@ -208,6 +208,11 @@ production headers or source slices with local fakes under AddressSanitizer and 
   the upscaled route decide through it. Not whether `State` reflects the game's DLSS-G in a given title.
 - `nr-present-sync` — what `[DlssNr] PresentSync=auto` means: the D3D12 present pass waits for its write-back
   only when frame generation could be involved (`DlssNr_PresentSync.h`). The wait itself is not exercised.
+- `nr-present-fence` — the D3D12 present lists when their fence cannot prove completion
+  (`DlssNr_FenceProgress.h`): the verbatim list, submit, idle-wait and HDR-retire helpers of `DlssNr_Dx12.cpp`
+  against fake D3D12 objects under ASan/UBSan, one scenario per process. A removed device (`UINT64_MAX`, a wait
+  woken by the removal, a refused `Signal`) never resets an allocator or releases what the lists read, and is said
+  once; a live device behaves as before; mutation controls and source guards. No D3D12 runtime or GPU.
 - `nr-dx11-route` — a D3D11 game's DLSS with NR on (`docs/dlssnr/design/dx11-native-dlss-guides.md`, steps 1
   and 2): `dlss_12` chosen over native D3D11 DLSS when `Dx11Upscaler` is unset, an explicit key kept, native DLSS
   reported once in the log and shown in the NR panel while it runs (`DlssNr_Dx11Route.h`, and the production layer

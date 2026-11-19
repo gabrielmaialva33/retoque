@@ -56,9 +56,12 @@ upstream_bridge = read('OptiScaler/with_dx12/dx11_with_dx12.cpp')
 depth_transfer = read('OptiScaler/shaders/depth_transfer/DT_Dx11.cpp')
 
 # --- The header is pure ------------------------------------------------------------------------------------------
+# Its one sibling include is the fence rule, standard library only itself.
 includes = sorted(l.strip() for l in header.splitlines() if l.startswith('#include'))
-assert includes == sorted(['#include <array>', '#include <chrono>', '#include <cstddef>', '#include <cstdint>',
-                           '#include <string>']), includes
+assert includes == sorted(['#include "DlssNr_FenceProgress.h"', '#include <array>', '#include <chrono>',
+                           '#include <cstddef>', '#include <cstdint>', '#include <string>']), includes
+assert [l.strip() for l in read('retoque/dlssnr/DlssNr_FenceProgress.h').splitlines()
+        if l.startswith('#include')] == ['#include <cstdint>']
 
 # --- One call site, after the evaluate, through the route layer ------------------------------------------------
 assert dx11.count('DlssNr::NoteDx11Evaluate(upscaler, InDevCtx, InParameters, upscaleResult);') == 1
@@ -152,6 +155,14 @@ ensure = function(transport, 'bool EnsureD3D12Locked(')
 assert ensure.index('if (t.failedDevice == device && t.failedQueue == queue)\n        return false;') < \
     ensure.index('ReleaseD3D12Locked(t, DrainLocked(t, 0));') < ensure.index('CreateFence(')
 assert 'timeoutMs != 0 && SUCCEEDED(t.fence->SetEventOnCompletion(' in drain
+# A removed device is never drained: its fence reads UINT64_MAX and its waiters are woken with nothing having run, so
+# the answer is the fence's value classified (DlssNr_FenceProgress.h), never a raw comparison or the wait's result.
+assert '>= t.fenceValue' not in code(drain) and 'WAIT_OBJECT_0' not in code(drain)
+assert code(drain).count('t.fence->GetCompletedValue()') == 2
+assert 'FenceProgress::Classify(t.fence->GetCompletedValue(), t.fenceValue)' in drain
+assert drain.rstrip().endswith('return FenceProgress::Completed(t.fence->GetCompletedValue(), t.fenceValue);\n}')
+for rule in ('SlotFree', 'CacheFree'):
+    assert 'FenceProgress::Completed(completed, ' in function(header, f'inline bool {rule}('), rule
 failed_build = ensure[ensure.index('if (!built)'):]
 assert failed_build.index('ReleaseUnusedD3D12Locked(t);') < failed_build.index('t.failedDevice = device;')
 assert 'D3D12_COMMAND_LIST_TYPE_DIRECT' in ensure and 't.lists[i]->Close();' in ensure

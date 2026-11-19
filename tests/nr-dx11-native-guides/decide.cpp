@@ -238,6 +238,9 @@ void Rotation()
 
     CHECK(carried > 10000 && refused > 1000);
     CHECK(SlotFree(0, 0) && SlotFree(5, 5) && SlotFree(5, 9) && !SlotFree(6, 5));
+    // A removed device's fence reads UINT64_MAX: not completion, so a set a list read stays in flight for good.
+    CHECK(!SlotFree(5, UINT64_MAX) && !SlotFree(UINT64_MAX - 1, UINT64_MAX));
+    CHECK(SlotFree(0, UINT64_MAX)); // a set no list ever read has nothing in flight
 }
 
 // Which copy carries the depth, and the one refusal it adds.
@@ -310,6 +313,9 @@ void CacheAndHost()
     CHECK(CacheFree(6, 7, 9, 5));  // a completed value past the last signal (a fence shared by nothing else) is fine
     CHECK(!CacheFree(6, 7, 4, 5)); // stale, a list still reading: refused, the sets live on
     CHECK(!CacheFree(6, 7, 0, 1));
+    CHECK(!CacheFree(6, 7, UINT64_MAX, 5)); // stale, the device removed: nothing proven, the sets live on
+    CHECK(!CacheFree(6, 7, UINT64_MAX, 0));
+    CHECK(CacheFree(7, 7, UINT64_MAX, 5)); // current: the prepare releases nothing whatever the fence says
 
     // No host: NR on, HookMethod 2, native DLSS and nothing hosting the pass. Every other gate off is just NotWanted.
     Inputs in = Good();

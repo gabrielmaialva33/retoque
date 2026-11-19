@@ -699,7 +699,9 @@ Where the code differs from sections 4 to 7, and why:
 - **The D3D12 route's two textures are retired by the present lists' own fence**, not parked with `ParkNrResource`
   (section 5.1): that parks on the NR recording's usage, and a present list whose pass declined still decoded into
   the work texture; a switch back to SDR comes with no resize and so no GPU idle wait. A retired texture is released
-  once the fence passes the last present list submitted before it was retired.
+  once the fence passes the last present list submitted before it was retired. A removed device never passes it:
+  its fence reads `UINT64_MAX`, which no list reached, and the retired textures are kept, not released
+  (`DlssNr_FenceProgress.h`, `tests/nr-present-fence`; since 2026-11-18, host-tested only).
 - **The stabilizer's HDR10 unit** is `1/128` relative: the finest PQ step from code 64 up (0.90%, near code 800)
   rounded down to a power of two. scRGB keeps the stabilizer's own FP16 unit.
 - **Timing**: the decode and the encode sit outside the NR Dispatch's GPU-timing interval, so they are their own
