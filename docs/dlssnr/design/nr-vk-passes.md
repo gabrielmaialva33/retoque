@@ -132,6 +132,39 @@ A refusal is logged once at publication; global capacity exhaustion logs once an
 all additional devices until slots retire. Native queue functions hidden behind an unqualified
 own-module wrapper are conservatively uncertified. The existing host install opt-in remains.
 
+## Step-2 attribution review: stopped before implementation, 2026-11-19
+
+Step 1a/1b/1c is implemented and host-tested. Step 2 is **not** implemented; steps 3/4 were not
+started. The unresolved contract is what proves the relevant heap for the opaque model's
+allocations before the first chain feature can be created. This is an attribution boundary,
+not a failure of Vulkan's live budget query.
+
+`AskModelVramVk` and the forwarder's `dlssnr_vk_query_stats` expose only an aggregate byte count,
+covering all features and APIs. `dlssnr_vk_create` supplies the model a command buffer and a
+parameter block, with no allocator/memory-type reporting callback in this integration. The
+fork's `CreateImageOn` chooses a device-local type from each image's actual requirements; its
+`OwnedImage` does not retain that type or allocation size. Its type is not evidence for the
+model's allocations. There is no certified model allocation observer here.
+
+The executable `budget_boundary.py` counterexample uses the actual `FindMemoryTypeIndexOn`:
+two valid device-local heaps and different requirement masks choose different heaps. Identical
+model statistics admit on one and refuse on the other; summing budgets masks the refusal.
+It demonstrates why neither aggregate bytes nor the first image's heap identifies the relevant
+heap. It makes **no claim** that a particular model or GPU uses those two heaps.
+
+The task requires refusing unknown/mixed attribution. I therefore did not substitute physical
+VRAM, aggregate heap budgets, elapsed time, or an assumed model allocation policy. A live query
+alone would not close this contract. To continue, establish either a model allocation contract
+or a complete allocation observation path, including allocations performed after create or on
+another thread. Alternatively, the lead must decide whether a restricted unique-device-local-heap
+policy is acceptable: charging all opaque model bytes to that heap is conservative for local
+VRAM, but does not attribute nonlocal allocations or turn aggregate stats into per-feature facts.
+That restriction is a proposed clarification, **not** an implemented or qualified policy.
+
+Until this is resolved there is no live budget adapter, retained chain generation, pass ramp,
+ping-pong execution or new menu. Passes=1 remains the legacy route; requests above one cannot
+run a chain. Step-1 completion infrastructure is not armed by the single-feature renderer.
+
 ## Initial step-1 safety review (superseded by the follow-up above), 2026-11-19
 
 The initial review at `bbdda337` started at `44ac22cb` and stopped **before completing step 1**. No submission

@@ -11,12 +11,12 @@ latching, overflow-safe budget admission, all ten ping-pong/failure positions an
 Nine seeded policy defects must compile and fail their own expected assertion; a compiler error or
 unrelated crash does not count. Temporary mutant copies never edit the production header.
 
-Source guards keep the runtime/menu one/master while the completion and heap-budget adapters are
+Source guards keep the runtime/menu one/master while the heap-budget adapter and generation integration are
 missing. This is intentionally **not** a Vulkan multipass runtime test. It runs no Vulkan calls,
 NGX, Wine or GPU and says nothing about image quality, synchronization or performance. See the
 [design and remaining integration](../../docs/dlssnr/design/nr-vk-passes.md).
 
-## Production submit boundary (step-1 blocker)
+## Historical production submit boundary (before step 1)
 
 `submit_boundary.py` additionally compiles the real host queue forwarding bodies with Vulkan
 headers and a fake driver. All 27 combinations of two known queues plus an unknown queue,
@@ -43,3 +43,12 @@ and completed replay, failed app/marker submits, reset/free/pool/reuse, lost-dev
 abandonment, off intervals and ten-slot exhaustion. Unknown marker completion is retained until
 a proven drain. These are host proofs of the adapter, not GPU/Detours or renderer-chain execution.
 The prior characterization paragraphs describe the initial boundary before steps 1a-1c.
+
+## Step-2 attribution boundary
+
+`budget_boundary.py` executes production `FindMemoryTypeIndexOn` against two synthetic legal
+device-local heaps. Different requirement masks select different heaps. The same scalar model
+estimate admits on one heap and refuses on the other; summing the heaps hides that refusal.
+This is a counterexample to aggregate-budget admission, **not** a trace of actual NGX allocations.
+The model stats callback supplies bytes only, not memory types or heap identity. The design
+records the unresolved attribution contract; no live budget adapter is claimed.

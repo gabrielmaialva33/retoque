@@ -60,3 +60,4 @@ assert controls.index('return;') < controls.index('GetDlssNrPassSnapshot()')
 print('PASS: runtime and menu retain the single-pass boundary until budget and generation integration')
 
 subprocess.run([sys.executable, str(HERE / 'submit_boundary.py')], check=True)
+subprocess.run([sys.executable, str(HERE / 'budget_boundary.py')], check=True)
