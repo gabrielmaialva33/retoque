@@ -12,6 +12,8 @@ here = Path(__file__).resolve().parent
 root = here.parents[1]
 renderer = renderer_source()
 header = (root / 'retoque/shaders/dlssnr/DlssNr_Dx12.h').read_text()
+from contracts import run_contracts
+run_contracts(root, renderer)
 
 
 def between(source, start, end):
@@ -110,7 +112,7 @@ def guard_original_in_target(shader, dispatch):
                    'if (g_detailMeasure.wanted && wrote && !originalInTarget && DlssNr_DetailStats_Dx12::Available())',
                    'g_nr.hdrCopy, wrote && !originalInTarget, width, height'):
         assert reader in dispatch, f'a reader of the keep is not guarded: {reader}'
-    assert dispatch.count('g_nr.hdrCopy') == 13, 'a new reader of the keep must be guarded and listed here'
+    assert dispatch.count('g_nr.hdrCopy') == 15, 'a new reader of the keep must be guarded and listed here'
 
 
 shader_source = (root / 'retoque/shaders/dlssnr/precompile/dlssnr.hlsl').read_text()

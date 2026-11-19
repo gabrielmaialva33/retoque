@@ -227,6 +227,16 @@ struct NrState
     // The frame shrunk for the model, when it is working below full resolution.
     ID3D12Resource* colorSmall = nullptr;
 
+    // Failed mandatory scratch allocations retry on eligible frames without discarding good members.
+    // Kept separately from the feature's dimensions: a partial bundle can exist before feature creation.
+    struct ScratchRetry
+    {
+        std::array<uint64_t, 5> contract {}; // frame W/H, working W/H, format
+        uint64_t frame = 0;
+        unsigned delay = 0;
+        unsigned remaining = 0;
+    } scratchRetry;
+
     // Supersampling (working scale > 1): the Output Scaling upsampler used to enlarge the proxy to the
     // model's larger-than-native working size with a real filter instead of the box minifier. Created
     // lazily on the first super-native frame, released in Shutdown; sizes from the resources each call,
@@ -805,9 +815,11 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
                  ID3D12Resource* target, ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height,
                  uint32_t format, uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
                  uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs);
+bool BeginMeterDispatch(ID3D12GraphicsCommandList* cmdList);
 void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound);
 void ConsumeMeterReadback();
 void InvalidateExposureMeter();
+void ShutdownExposureMeter();
 float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,
                         bool scanInverted, float scanTrim);
 void ReportSkipOnce(const char* reason);

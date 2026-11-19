@@ -109,6 +109,10 @@ bool ZeroGuides::Ensure(ID3D12Device* device, uint32_t width, uint32_t height)
 
 bool ZeroGuides::_Allocate(ID3D12Device* device, uint32_t width, uint32_t height)
 {
+    // Ours, not the game's: the guides and their clear views are made through the game's device, and the exposure
+    // scan must not report or adopt them.
+    ScopedInternalResourceCreation internalResources {};
+
     _depth = CreateGuide(device, kDepthFormat, width, height);
     _motion = CreateGuide(device, kMotionFormat, width, height);
 

@@ -27,6 +27,8 @@
 // NotWanted before anything else is looked at, and the caller returns without touching the device, the context or
 // the parameters: the evaluate is exactly what it was before this header existed.
 
+#include "DlssNr_FenceProgress.h"
+
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -250,15 +252,20 @@ inline Reason Decide(const Inputs& in)
 
 // The transport's rotation. completed: the value the transport's D3D12 fence has reached; lastRead: the value it
 // signalled after the list that last read this slot (zero for never). A slot is free when that list has completed.
-inline bool SlotFree(uint64_t lastRead, uint64_t completed) { return lastRead == 0 || completed >= lastRead; }
+// UINT64_MAX is a removed device's answer, not completion (DlssNr_FenceProgress.h): the slot stays in flight.
+inline bool SlotFree(uint64_t lastRead, uint64_t completed)
+{
+    return lastRead == 0 || FenceProgress::Completed(completed, lastRead);
+}
 
 // Upstream's Dx11WithDx12::PrepareUpscalerResources releases every set of a cache whose generation is not the current
 // one (Dx11WithDx12::Init bumps it when the D3D11 or D3D12 device or context changes), whichever set it was asked to
 // prepare. So a stale cache is prepared only once every list the transport submitted has completed: until then the
-// frame is refused as a set in flight. fenceValue: the last value the transport signalled.
+// frame is refused as a set in flight. fenceValue: the last value the transport signalled. On a removed device
+// (completed reads UINT64_MAX) nothing is proven complete, and the sets are not released.
 inline bool CacheFree(uint64_t cacheGeneration, uint64_t currentGeneration, uint64_t completed, uint64_t fenceValue)
 {
-    return cacheGeneration == currentGeneration || completed >= fenceValue;
+    return cacheGeneration == currentGeneration || FenceProgress::Completed(completed, fenceValue);
 }
 
 // NR on, HookMethod 2 and native DLSS, but no present host: the bridge decides at swapchain creation whether it hosts

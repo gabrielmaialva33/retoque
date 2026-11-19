@@ -93,6 +93,7 @@
 #include <menu/menu_overlay_base.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 #include <dlssnr/DlssNr_UntrackedRetire.h>
+#include <dlssnr/DlssNr_FenceProgress.h>
 #include <resource_tracking/ResTrack_dx12.h>
 
 namespace DlssNr::Dx12Internal
@@ -844,6 +845,14 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
 
     g_activePasses = 0;
+
+    // Ours, not the game's, from here to the end of the pass: the meter and the passes it builds (pulse, cadence and
+    // the rest), what the model creates inside CreateFeature and EvaluateFeature, and the views all of them make every
+    // frame. They go through the game's device, where the creation hooks hand them to the exposure scan: in a session
+    // with no UAV of the game's they took 32 of its 40 near-miss lines, and cadence's light state and the
+    // enlargement's exposure texel are shaped like the exposure it looks for. A counter on this thread, no lock
+    // (State.h); only the scan reads it.
+    ScopedInternalResourceCreation internalResources {};
     auto passSnapshot = cfg.GetDlssNrPassSnapshot();
     if (frame.AfterRayReconstruction)
         passSnapshot.Count = DlssNr::PassConfig::BoundRRCount(cfg.DlssNrRRPasses.value_or_default());
@@ -1384,6 +1393,26 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return false;
     }
 
+    // Retry failed mandatory scratch before any admission/rebuild can churn the partial bundle.
+    const std::array<uint64_t, 5> scratchContract { width, height, workWidth, workHeight,
+                                                    static_cast<uint64_t>(desc.Format) };
+    auto& scratchRetry = g_nr.scratchRetry;
+    const bool scratchContractChanged = scratchRetry.contract != scratchContract;
+    if (scratchContractChanged || (observedFrame != 0 && observedFrame < scratchRetry.frame))
+        scratchRetry = {};
+    // Count observed presents, not repeated evaluates of one frame. Without a present counter,
+    // eligible Dispatch calls advance the wait so an unobserved route cannot remain refused forever.
+    const uint64_t retryElapsed = observedFrame != 0 ? observedFrame - scratchRetry.frame : 1;
+    scratchRetry.frame = observedFrame;
+    scratchRetry.remaining =
+        retryElapsed >= scratchRetry.remaining ? 0 : scratchRetry.remaining - static_cast<unsigned>(retryElapsed);
+    if (scratchRetry.remaining != 0)
+    {
+        reportSkip("mandatory NR scratch retry is backing off; frame kept unchanged");
+        device->Release();
+        return false;
+    }
+
     if (chainEnabled && (!g_nr.feature || g_nr.width != width || g_nr.height != height || g_nr.workWidth != workWidth ||
                          g_nr.workHeight != workHeight || g_nr.passBuilt[0] != firstSettings ||
                          (g_nr.output && g_nr.output->GetDesc().Format != desc.Format &&
@@ -1516,27 +1545,54 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
     }
 
-    if (g_nr.output == nullptr)
+    // Each member may fail independently, including before feature creation. The ordinary resize
+    // retirement requires a feature, and format retirement requires output: neither covers every
+    // partial bundle. On a changed contract, retire only members that actually no longer fit.
+    if (scratchContractChanged)
     {
-        g_nr.output = CreateScratch(device, desc.Format, workWidth, workHeight);
-        g_nr.colorCopy = CreateScratch(device, desc.Format, width, height);
-        g_nr.hdrCopy = CreateScratch(device, desc.Format, width, height);
-        g_nr.workWidth = workWidth;
-        g_nr.workHeight = workHeight;
+        const auto retireMismatch = [&](ID3D12Resource*& resource, unsigned wantedWidth, unsigned wantedHeight)
+        {
+            if (resource == nullptr)
+                return;
+            const auto actual = resource->GetDesc();
+            if (actual.Width != wantedWidth || actual.Height != wantedHeight || actual.Format != desc.Format)
+                ParkNrResource(resource);
+        };
+        retireMismatch(g_nr.output, workWidth, workHeight);
+        retireMismatch(g_nr.colorCopy, width, height);
+        retireMismatch(g_nr.hdrCopy, width, height);
+        retireMismatch(g_nr.colorSmall, workWidth, workHeight);
     }
+    // Publish only after validation: admission above can defer a changed contract for another frame.
+    scratchRetry.contract = scratchContract;
+
+    if (g_nr.output == nullptr)
+        g_nr.output = CreateScratch(device, desc.Format, workWidth, workHeight);
+    if (g_nr.colorCopy == nullptr)
+        g_nr.colorCopy = CreateScratch(device, desc.Format, width, height);
+    if (g_nr.hdrCopy == nullptr)
+        g_nr.hdrCopy = CreateScratch(device, desc.Format, width, height);
+    g_nr.workWidth = workWidth;
+    g_nr.workHeight = workHeight;
 
     if (reduced && g_nr.colorSmall == nullptr)
         g_nr.colorSmall = CreateScratch(device, desc.Format, workWidth, workHeight);
 
-    if (chainEnabled && (g_nr.output == nullptr || g_nr.colorCopy == nullptr || g_nr.hdrCopy == nullptr ||
-                         (reduced && g_nr.colorSmall == nullptr)))
+    if (g_nr.output == nullptr || g_nr.colorCopy == nullptr || g_nr.hdrCopy == nullptr ||
+        (reduced && g_nr.colorSmall == nullptr))
     {
-        g_nr.failed = true;
-        g_nr.reason = "chain scratch initialization failed; retry latched";
-        reportSkip(g_nr.reason);
+        g_nr.reset = true;
+        for (auto& reset : g_nr.passReset)
+            reset = true;
+        // Keep every successful member: retiring it here would amplify a persistent OOM.
+        scratchRetry.delay = scratchRetry.delay == 0 ? 8 : std::min(scratchRetry.delay * 2, 240u);
+        scratchRetry.remaining = scratchRetry.delay;
+        reportSkip("mandatory NR scratch initialization failed; frame kept unchanged, retry with backoff");
         device->Release();
         return false;
     }
+
+    scratchRetry.delay = scratchRetry.remaining = 0;
 
     // The down-leg target is native (the answer is brought back to frame size before the resolve).
     if (workScale > 1.0f && g_nr.outputNative == nullptr)
@@ -2054,7 +2110,10 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     g_nr.gamePreExposure = DlssNr::Exposure::PreExposure(frame.PreExposure);
 
-    if (g_nr.meter != nullptr && wantExposure)
+    if (exposureSettingOn && !holdingColor)
+        ConsumeMeterReadback();
+
+    if (g_nr.meter != nullptr && wantExposure && BeginMeterDispatch(cmdList))
     {
         DlssNrConstants meterParams {};
         meterParams.Mode = DlssNrMode_Meter;
@@ -2080,7 +2139,6 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         CopyMeterToReadback(cmdList, device, true);
-        ConsumeMeterReadback();
     }
 
     float whitePoint =
@@ -2108,6 +2166,230 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             exposurePreMul = 0.0f;
         }
     }
+
+    // Read the exposure scan's candidates on the pass's own command list, once a frame.
+    if (!holdingColor && !frame.PresentSource)
+        DlssNr::ExposureScan::Tick(device, cmdList);
+
+    // Validate/prepare guides before frame hold can overwrite the target. Refusals must preserve
+    // the incoming game image even while a previously captured frame is held.
+    ReadResourceScope depthRead(cmdList, depth, depthBarrierState);
+    ReadResourceScope motionRead(cmdList, motion, motionBarrierState);
+    ID3D12Resource* depthIn = ReadableGuide(device, cmdList, depth, &g_nr.depthClone);
+    RestoreResourceState depthCloneRead { cmdList, depthIn != depth ? depthIn : nullptr,
+                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                          D3D12_RESOURCE_STATE_COPY_DEST };
+    ID3D12Resource* motionIn = ReadableGuide(device, cmdList, motion, &g_nr.motionClone);
+    RestoreResourceState motionCloneRead { cmdList, motionIn != motion ? motionIn : nullptr,
+                                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                           D3D12_RESOURCE_STATE_COPY_DEST };
+
+    if (depthIn == nullptr || motionIn == nullptr)
+    {
+        g_nr.failed = true;
+        g_nr.reason = "the game's depth or motion vectors could not be made readable";
+
+        // Say which guide failed and why, because the two causes need opposite answers: a guide the
+        // game never supplied is not ours to fix, while a supplied one that could not be cloned is a
+        // gap in TypedGuideFormat or a resource the runtime refused to create. Without this the log
+        // said only that something was unreadable, which fits both.
+        const auto describe = [](ID3D12Resource* src, ID3D12Resource* out) -> std::string
+        {
+            if (src == nullptr)
+                return "not supplied by the game";
+
+            const auto fmt = (int) src->GetDesc().Format;
+
+            if (out != nullptr)
+                return std::format("ok (format {})", fmt);
+
+            return std::format("supplied as typeless format {}, but the typed clone could not be "
+                               "created (typed format {})",
+                               fmt, (int) TypedGuideFormat(src->GetDesc().Format));
+        };
+
+        LOG_ERROR("DLSS-NR unavailable: depth {} | motion vectors {}", describe(depth, depthIn),
+                  describe(motion, motionIn));
+
+        device->Release();
+        return false;
+    }
+
+    // Zero-motion detection (zero-motion-detection.md): the game's own vectors, read in the game's region before
+    // anything resamples them, every eighth such evaluate; the verdict is applied above, from probes already read back.
+    // Only with ZeroGuideReset on: the probe is a pass of its own, and with the key off its verdict changes nothing.
+    if (frame.GameGuides && cfg.DlssNrZeroGuideReset.value_or_default())
+    {
+        DlssNr::MotionProbe::Shape probeShape;
+        probeShape.depthWidth = guideWidth;
+        probeShape.depthHeight = guideHeight;
+        probeShape.depthBaseX = depthBaseX;
+        probeShape.depthBaseY = depthBaseY;
+        probeShape.motionWidth = motionWidth;
+        probeShape.motionHeight = motionHeight;
+        probeShape.motionBaseX = motionBaseX;
+        probeShape.motionBaseY = motionBaseY;
+        probeShape.motionLowResolution = frame.MotionVectorsLowResolution;
+        UpdateMotionProbe(cmdList, device, depthIn, motionIn, probeShape, cfg.DlssNrZeroGuideReset.value_or_default());
+    }
+
+    // What the model is handed as guides, and the motion-vector scale that goes with them
+    // (reduced-scale-guides.md; both faults and both fixes are jlrouzies-fr's, v0.8.92 of wilsjo2's fork).
+    //
+    // Below the frame's size the colour shrinks to the working size. The guides used to stay at the
+    // frame's, and the model does not resample a guide larger than its input: each pixel's depth and
+    // motion described some other place and the history never lined up. So they are point-resampled to
+    // the working size when either is larger than it, and handed over as a full zero-origin region.
+    //
+    // The scale used to be the game's times working / frame. The model reads it in pixels of the motion
+    // texture it is handed, and the game's scale is in pixels of the size its vectors are measured in --
+    // the render size for low-resolution vectors -- so that shrank every such vector below 100% whether
+    // or not the guides matched. It is now the game's scale re-expressed for the texture handed over.
+    ID3D12Resource* depthForModel = depthIn;
+    ID3D12Resource* motionForModel = motionIn;
+    unsigned int modelDepthWidth = guideWidth;
+    unsigned int modelDepthHeight = guideHeight;
+    unsigned int modelDepthBaseX = depthBaseX;
+    unsigned int modelDepthBaseY = depthBaseY;
+    unsigned int modelMotionWidth = motionWidth;
+    unsigned int modelMotionHeight = motionHeight;
+    unsigned int modelMotionBaseX = motionBaseX;
+    unsigned int modelMotionBaseY = motionBaseY;
+    bool guidesMatched = false;
+
+    // Peripheral compression's guides are in packed space whatever their size, and their vectors in packed
+    // pixels, so `guidesPacked` replaces the resample below and the model is handed a scale of 1.
+    bool guidesPacked = false;
+
+    // The game's scale is measured in original render/display pixels, even when a guide is clipped.
+    const unsigned int motionReferenceWidth = DlssNr::GuideMatch::MotionReference(
+        frame.MotionVectorsLowResolution, renderReferenceWidth, displayReferenceWidth);
+    const unsigned int motionReferenceHeight = DlssNr::GuideMatch::MotionReference(
+        frame.MotionVectorsLowResolution, renderReferenceHeight, displayReferenceHeight);
+
+    if (peripheryActive)
+    {
+        if (g_nr.depthMatched == nullptr)
+            g_nr.depthMatched = CreateScratch(device, DXGI_FORMAT_R32_FLOAT, workWidth, workHeight);
+
+        if (g_nr.motionMatched == nullptr)
+            g_nr.motionMatched = CreateScratch(device, DXGI_FORMAT_R32G32_FLOAT, workWidth, workHeight);
+
+        // The game's vectors in FRAME pixels before their ends go through the mapping: measured against the
+        // size they come in, converted to the frame's. wilsjo2's v0.8.91 handed the raw game scale here,
+        // render pixels for low-resolution vectors, and every packed vector came out too short.
+        const float frameScaleX = DlssNr::Periphery::FrameMotionScale(g_nr.guideMvScaleX, width, motionReferenceWidth);
+        const float frameScaleY =
+            DlssNr::Periphery::FrameMotionScale(g_nr.guideMvScaleY, (unsigned int) height, motionReferenceHeight);
+
+        if (g_nr.depthMatched == nullptr || g_nr.motionMatched == nullptr ||
+            !g_nr.periphery->PackGuides(cmdList, periphery, depthIn, motionIn, depthBaseX, depthBaseY, guideWidth,
+                                        guideHeight, motionBaseX, motionBaseY, motionWidth, motionHeight, frameScaleX,
+                                        frameScaleY, g_nr.depthMatched, g_nr.motionMatched))
+        {
+            // The colour would be packed and nothing else fits it: no model this frame, the feature latched
+            // off, and the next frame rebuilds at the uniform size.
+            g_nr.peripheryFailed = true;
+            g_nr.reset = true;
+            LOG_ERROR("DLSS-NR periphery: the guide pack could not be recorded; off for this session");
+            reportSkip("the peripheral guide pack could not be recorded");
+            device->Release();
+            return false;
+        }
+
+        Barrier(cmdList, g_nr.depthMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        Barrier(cmdList, g_nr.motionMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        depthForModel = g_nr.depthMatched;
+        motionForModel = g_nr.motionMatched;
+        modelDepthWidth = modelMotionWidth = workWidth;
+        modelDepthHeight = modelMotionHeight = workHeight;
+        modelDepthBaseX = modelDepthBaseY = modelMotionBaseX = modelMotionBaseY = 0;
+        guidesMatched = true;
+        guidesPacked = true;
+
+        static float saidFrameScale[2] = { -1.0f, -1.0f };
+        if (saidFrameScale[0] != frameScaleX || saidFrameScale[1] != frameScaleY)
+        {
+            saidFrameScale[0] = frameScaleX;
+            saidFrameScale[1] = frameScaleY;
+            LOG_INFO("DLSS-NR periphery guides: depth and motion packed to {}x{}; the game's vectors to frame pixels "
+                     "by {:.1f} x {:.1f} (game scale {:.1f} x {:.1f} against {}x{}, {}), then both ends through the "
+                     "mapping",
+                     workWidth, workHeight, frameScaleX, frameScaleY, g_nr.guideMvScaleX, g_nr.guideMvScaleY,
+                     motionReferenceWidth, motionReferenceHeight,
+                     frame.MotionVectorsLowResolution ? "render size, low-resolution vectors" : "output size");
+        }
+    }
+    else
+    {
+        // Decide the need independently of shader availability: a missing shader cannot make
+        // frame-size guides valid for a smaller colour input. MatchGuides=false remains the A/B arm.
+        const bool matchWanted =
+            DlssNr::GuideMatch::Wanted(cfg.DlssNrMatchGuides.value_or_default(), true, workWidth, workHeight,
+                                       guideWidth, guideHeight, motionWidth, motionHeight);
+        bool matchReady = false;
+        if (matchWanted && DlssNr_GuideMatch_Dx12::Available())
+        {
+            if (g_nr.guideMatch != nullptr && !g_nr.guideMatch->IsInit())
+            {
+                // IsInit never became true, so this pass has never recorded GPU work. Only this
+                // failed constructor may be deleted here; an initialized pass survives a refused dispatch.
+                delete g_nr.guideMatch;
+                g_nr.guideMatch = nullptr;
+            }
+            if (g_nr.guideMatch == nullptr)
+                g_nr.guideMatch = new DlssNr_GuideMatch_Dx12("DLSS-NR guide match", device);
+
+            if (g_nr.depthMatched == nullptr)
+                g_nr.depthMatched = CreateScratch(device, DXGI_FORMAT_R32_FLOAT, workWidth, workHeight);
+
+            // 32-bit float: vectors in pixels reach the thousands, where 16-bit float has lost the sub-pixel.
+            if (g_nr.motionMatched == nullptr)
+                g_nr.motionMatched = CreateScratch(device, DXGI_FORMAT_R32G32_FLOAT, workWidth, workHeight);
+
+            matchReady = g_nr.guideMatch->IsInit() && g_nr.depthMatched != nullptr && g_nr.motionMatched != nullptr &&
+                         g_nr.guideMatch->Dispatch(cmdList, depthIn, motionIn, depthBaseX, depthBaseY, guideWidth,
+                                                   guideHeight, motionBaseX, motionBaseY, motionWidth, motionHeight,
+                                                   g_nr.depthMatched, g_nr.motionMatched, workWidth, workHeight);
+        }
+
+        const auto guideChoice = DlssNr::GuideMatch::Choose(matchWanted, matchReady);
+        if (guideChoice == DlssNr::GuideMatch::Guides::Refused)
+        {
+            // Only private guide scratch has been written. The scopes restore its read states on return,
+            // and no model/resolve touches the game image. A later successful resample resumes NR.
+            g_nr.reset = true;
+            for (auto& reset : g_nr.passReset)
+                reset = true;
+            reportSkip("required guide resample unavailable or failed; frame kept unchanged, retry next frame");
+            device->Release();
+            return false;
+        }
+        if (guideChoice == DlssNr::GuideMatch::Guides::Matched)
+        {
+            Barrier(cmdList, g_nr.depthMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            Barrier(cmdList, g_nr.motionMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+            depthForModel = g_nr.depthMatched;
+            motionForModel = g_nr.motionMatched;
+            modelDepthWidth = modelMotionWidth = workWidth;
+            modelDepthHeight = modelMotionHeight = workHeight;
+            modelDepthBaseX = modelDepthBaseY = modelMotionBaseX = modelMotionBaseY = 0;
+            guidesMatched = true;
+        }
+    }
+
+    RestoreResourceState depthMatchedRead { cmdList, guidesMatched ? g_nr.depthMatched : nullptr,
+                                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                            D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
+    RestoreResourceState motionMatchedRead { cmdList, guidesMatched ? g_nr.motionMatched : nullptr,
+                                             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                             D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
 
     // Frame hold. Freeze the encode's input so a live setting change re-renders the same frame. This
     // is self-contained on purpose: it copies the output aside on hold-on and copies it BACK over the
@@ -2364,209 +2646,6 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                                      D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
 
-    // Read the exposure scan's candidates on the pass's own command list, once a frame.
-    if (!holdingColor && !frame.PresentSource)
-        DlssNr::ExposureScan::Tick(device, cmdList);
-
-    ReadResourceScope depthRead(cmdList, depth, depthBarrierState);
-    ReadResourceScope motionRead(cmdList, motion, motionBarrierState);
-    ID3D12Resource* depthIn = ReadableGuide(device, cmdList, depth, &g_nr.depthClone);
-    RestoreResourceState depthCloneRead { cmdList, depthIn != depth ? depthIn : nullptr,
-                                          D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                                          D3D12_RESOURCE_STATE_COPY_DEST };
-    ID3D12Resource* motionIn = ReadableGuide(device, cmdList, motion, &g_nr.motionClone);
-    RestoreResourceState motionCloneRead { cmdList, motionIn != motion ? motionIn : nullptr,
-                                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                                           D3D12_RESOURCE_STATE_COPY_DEST };
-
-    if (depthIn == nullptr || motionIn == nullptr)
-    {
-        g_nr.failed = true;
-        g_nr.reason = "the game's depth or motion vectors could not be made readable";
-
-        // Say which guide failed and why, because the two causes need opposite answers: a guide the
-        // game never supplied is not ours to fix, while a supplied one that could not be cloned is a
-        // gap in TypedGuideFormat or a resource the runtime refused to create. Without this the log
-        // said only that something was unreadable, which fits both.
-        const auto describe = [](ID3D12Resource* src, ID3D12Resource* out) -> std::string
-        {
-            if (src == nullptr)
-                return "not supplied by the game";
-
-            const auto fmt = (int) src->GetDesc().Format;
-
-            if (out != nullptr)
-                return std::format("ok (format {})", fmt);
-
-            return std::format("supplied as typeless format {}, but the typed clone could not be "
-                               "created (typed format {})",
-                               fmt, (int) TypedGuideFormat(src->GetDesc().Format));
-        };
-
-        LOG_ERROR("DLSS-NR unavailable: depth {} | motion vectors {}", describe(depth, depthIn),
-                  describe(motion, motionIn));
-
-        device->Release();
-        return false;
-    }
-
-    // Zero-motion detection (zero-motion-detection.md): the game's own vectors, read in the game's region before
-    // anything resamples them, every eighth such evaluate; the verdict is applied above, from probes already read back.
-    // Only with ZeroGuideReset on: the probe is a pass of its own, and with the key off its verdict changes nothing.
-    if (frame.GameGuides && cfg.DlssNrZeroGuideReset.value_or_default())
-    {
-        DlssNr::MotionProbe::Shape probeShape;
-        probeShape.depthWidth = guideWidth;
-        probeShape.depthHeight = guideHeight;
-        probeShape.depthBaseX = depthBaseX;
-        probeShape.depthBaseY = depthBaseY;
-        probeShape.motionWidth = motionWidth;
-        probeShape.motionHeight = motionHeight;
-        probeShape.motionBaseX = motionBaseX;
-        probeShape.motionBaseY = motionBaseY;
-        probeShape.motionLowResolution = frame.MotionVectorsLowResolution;
-        UpdateMotionProbe(cmdList, device, depthIn, motionIn, probeShape, cfg.DlssNrZeroGuideReset.value_or_default());
-    }
-
-    // What the model is handed as guides, and the motion-vector scale that goes with them
-    // (reduced-scale-guides.md; both faults and both fixes are jlrouzies-fr's, v0.8.92 of wilsjo2's fork).
-    //
-    // Below the frame's size the colour shrinks to the working size. The guides used to stay at the
-    // frame's, and the model does not resample a guide larger than its input: each pixel's depth and
-    // motion described some other place and the history never lined up. So they are point-resampled to
-    // the working size when either is larger than it, and handed over as a full zero-origin region.
-    //
-    // The scale used to be the game's times working / frame. The model reads it in pixels of the motion
-    // texture it is handed, and the game's scale is in pixels of the size its vectors are measured in --
-    // the render size for low-resolution vectors -- so that shrank every such vector below 100% whether
-    // or not the guides matched. It is now the game's scale re-expressed for the texture handed over.
-    ID3D12Resource* depthForModel = depthIn;
-    ID3D12Resource* motionForModel = motionIn;
-    unsigned int modelDepthWidth = guideWidth;
-    unsigned int modelDepthHeight = guideHeight;
-    unsigned int modelDepthBaseX = depthBaseX;
-    unsigned int modelDepthBaseY = depthBaseY;
-    unsigned int modelMotionWidth = motionWidth;
-    unsigned int modelMotionHeight = motionHeight;
-    unsigned int modelMotionBaseX = motionBaseX;
-    unsigned int modelMotionBaseY = motionBaseY;
-    bool guidesMatched = false;
-
-    // Peripheral compression's guides are in packed space whatever their size, and their vectors in packed
-    // pixels, so `guidesPacked` replaces the resample below and the model is handed a scale of 1.
-    bool guidesPacked = false;
-
-    // The game's scale is measured in original render/display pixels, even when a guide is clipped.
-    const unsigned int motionReferenceWidth = DlssNr::GuideMatch::MotionReference(
-        frame.MotionVectorsLowResolution, renderReferenceWidth, displayReferenceWidth);
-    const unsigned int motionReferenceHeight = DlssNr::GuideMatch::MotionReference(
-        frame.MotionVectorsLowResolution, renderReferenceHeight, displayReferenceHeight);
-
-    if (peripheryActive)
-    {
-        if (g_nr.depthMatched == nullptr)
-            g_nr.depthMatched = CreateScratch(device, DXGI_FORMAT_R32_FLOAT, workWidth, workHeight);
-
-        if (g_nr.motionMatched == nullptr)
-            g_nr.motionMatched = CreateScratch(device, DXGI_FORMAT_R32G32_FLOAT, workWidth, workHeight);
-
-        // The game's vectors in FRAME pixels before their ends go through the mapping: measured against the
-        // size they come in, converted to the frame's. wilsjo2's v0.8.91 handed the raw game scale here,
-        // render pixels for low-resolution vectors, and every packed vector came out too short.
-        const float frameScaleX = DlssNr::Periphery::FrameMotionScale(g_nr.guideMvScaleX, width, motionReferenceWidth);
-        const float frameScaleY =
-            DlssNr::Periphery::FrameMotionScale(g_nr.guideMvScaleY, (unsigned int) height, motionReferenceHeight);
-
-        if (g_nr.depthMatched == nullptr || g_nr.motionMatched == nullptr ||
-            !g_nr.periphery->PackGuides(cmdList, periphery, depthIn, motionIn, depthBaseX, depthBaseY, guideWidth,
-                                        guideHeight, motionBaseX, motionBaseY, motionWidth, motionHeight, frameScaleX,
-                                        frameScaleY, g_nr.depthMatched, g_nr.motionMatched))
-        {
-            // The colour is already packed and nothing else fits it: no model this frame, the feature latched
-            // off, and the next frame rebuilds at the uniform size.
-            g_nr.peripheryFailed = true;
-            g_nr.reset = true;
-            LOG_ERROR("DLSS-NR periphery: the guide pack could not be recorded; off for this session");
-            reportSkip("the peripheral guide pack could not be recorded");
-            device->Release();
-            return false;
-        }
-
-        Barrier(cmdList, g_nr.depthMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        Barrier(cmdList, g_nr.motionMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-        depthForModel = g_nr.depthMatched;
-        motionForModel = g_nr.motionMatched;
-        modelDepthWidth = modelMotionWidth = workWidth;
-        modelDepthHeight = modelMotionHeight = workHeight;
-        modelDepthBaseX = modelDepthBaseY = modelMotionBaseX = modelMotionBaseY = 0;
-        guidesMatched = true;
-        guidesPacked = true;
-
-        static float saidFrameScale[2] = { -1.0f, -1.0f };
-        if (saidFrameScale[0] != frameScaleX || saidFrameScale[1] != frameScaleY)
-        {
-            saidFrameScale[0] = frameScaleX;
-            saidFrameScale[1] = frameScaleY;
-            LOG_INFO("DLSS-NR periphery guides: depth and motion packed to {}x{}; the game's vectors to frame pixels "
-                     "by {:.1f} x {:.1f} (game scale {:.1f} x {:.1f} against {}x{}, {}), then both ends through the "
-                     "mapping",
-                     workWidth, workHeight, frameScaleX, frameScaleY, g_nr.guideMvScaleX, g_nr.guideMvScaleY,
-                     motionReferenceWidth, motionReferenceHeight,
-                     frame.MotionVectorsLowResolution ? "render size, low-resolution vectors" : "output size");
-        }
-    }
-    else if (DlssNr::GuideMatch::Wanted(cfg.DlssNrMatchGuides.value_or_default(), DlssNr_GuideMatch_Dx12::Available(),
-                                        workWidth, workHeight, guideWidth, guideHeight, motionWidth, motionHeight))
-    {
-        if (g_nr.guideMatch == nullptr)
-            g_nr.guideMatch = new DlssNr_GuideMatch_Dx12("DLSS-NR guide match", device);
-
-        if (g_nr.depthMatched == nullptr)
-            g_nr.depthMatched = CreateScratch(device, DXGI_FORMAT_R32_FLOAT, workWidth, workHeight);
-
-        // 32-bit float: vectors in pixels reach the thousands, where 16-bit float has lost the sub-pixel.
-        if (g_nr.motionMatched == nullptr)
-            g_nr.motionMatched = CreateScratch(device, DXGI_FORMAT_R32G32_FLOAT, workWidth, workHeight);
-
-        if (g_nr.guideMatch->IsInit() && g_nr.depthMatched != nullptr && g_nr.motionMatched != nullptr &&
-            g_nr.guideMatch->Dispatch(cmdList, depthIn, motionIn, depthBaseX, depthBaseY, guideWidth, guideHeight,
-                                      motionBaseX, motionBaseY, motionWidth, motionHeight, g_nr.depthMatched,
-                                      g_nr.motionMatched, workWidth, workHeight))
-        {
-            Barrier(cmdList, g_nr.depthMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            Barrier(cmdList, g_nr.motionMatched, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-            depthForModel = g_nr.depthMatched;
-            motionForModel = g_nr.motionMatched;
-            modelDepthWidth = modelMotionWidth = workWidth;
-            modelDepthHeight = modelMotionHeight = workHeight;
-            modelDepthBaseX = modelDepthBaseY = modelMotionBaseX = modelMotionBaseY = 0;
-            guidesMatched = true;
-        }
-        else
-        {
-            static bool warned = false;
-            if (!warned)
-            {
-                warned = true;
-                LOG_WARN("DLSS-NR guides: the working-size resample could not run; the model keeps the frame-size "
-                         "guides this frame");
-            }
-        }
-    }
-
-    RestoreResourceState depthMatchedRead { cmdList, guidesMatched ? g_nr.depthMatched : nullptr,
-                                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                                            D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
-    RestoreResourceState motionMatchedRead { cmdList, guidesMatched ? g_nr.motionMatched : nullptr,
-                                             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-                                             D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
-
     // Packed vectors are packed pixels already: the model's scale is 1, and RenderMotionScale has nothing to
     // choose between (the pack's own conversion above is always the corrected one).
     const bool renderMotionScale = cfg.DlssNrRenderMotionScale.value_or_default();
@@ -2610,13 +2689,6 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                          "frame's guides are {}x{} and {}x{})",
                          workWidth, workHeight, workWidth, workHeight, guideWidth, guideHeight, motionWidth,
                          motionHeight);
-            else if (DlssNr::GuideMatch::Wanted(cfg.DlssNrMatchGuides.value_or_default(), true, workWidth, workHeight,
-                                                guideWidth, guideHeight, motionWidth, motionHeight))
-                LOG_INFO("DLSS-NR guides: larger than the {}x{} model and not resampled ({}); the model gets the "
-                         "frame-size guides",
-                         workWidth, workHeight,
-                         DlssNr_GuideMatch_Dx12::Available() ? "the resample did not run"
-                                                             : "this build has no guide resample shader");
 
             LOG_INFO("DLSS-NR model motion scale {:.1f} x {:.1f}: game scale {:.1f} x {:.1f} measured against {}x{} "
                      "({}), motion texture {}x{} ({}), model {}x{}{}",
@@ -3833,6 +3905,37 @@ DXGI_FORMAT Dx12Internal::g_bbCopyFormat = DXGI_FORMAT_UNKNOWN;
 // releases what it holds once the present lists have finished.
 DlssNr::SynthMotionGuide* Dx12Internal::g_presentMotion = nullptr;
 
+// The device the present lists were made on was removed. Latched for these lists: once it is, no list is handed out,
+// no allocator is reset and nothing the lists read is released. They are kept, and the present pass stops.
+static std::atomic<bool> s_presentDeviceRemoved { false };
+
+static void NotePresentDeviceRemoved(const char* seen)
+{
+    if (!s_presentDeviceRemoved.exchange(true))
+        LOG_WARN("DLSS-NR present: the device was removed ({}); the present lists and what they read are kept, not "
+                 "released, and the present pass stops",
+                 seen);
+}
+
+// Every look at the present lists' fence. UINT64_MAX is a removed device's answer, not a value a list reached
+// (DlssNr_FenceProgress.h): it is said once, and it is the answer from then on.
+static UINT64 ReadPresentFence()
+{
+    if (s_presentDeviceRemoved.load(std::memory_order_relaxed))
+        return UINT64_MAX;
+
+    const UINT64 completed = g_presentList.fence->GetCompletedValue();
+    if (completed == UINT64_MAX)
+        NotePresentDeviceRemoved("the present fence reads UINT64_MAX");
+
+    return completed;
+}
+
+static DlssNr::FenceProgress::State PresentFenceProgress(UINT64 wanted)
+{
+    return DlssNr::FenceProgress::Classify(ReadPresentFence(), wanted);
+}
+
 static void ResetPresentList()
 {
     for (unsigned int i = 0; i < PresentList::kSlots; ++i)
@@ -3866,6 +3969,7 @@ static void ResetPresentList()
     }
 
     g_presentFenceValue = 0;
+    s_presentDeviceRemoved = false;
 }
 
 static bool EnsurePresentList(ID3D12Device* device)
@@ -3925,8 +4029,10 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
 
     if (!g_presentList.dirty[slot])
     {
-        if (g_presentList.fenceValue[slot] != 0 &&
-            g_presentList.fence->GetCompletedValue() < g_presentList.fenceValue[slot])
+        // Zero for a slot that never submitted: nothing to wait for, and still no list on a removed device.
+        auto progress = PresentFenceProgress(g_presentList.fenceValue[slot]);
+
+        if (progress == DlssNr::FenceProgress::State::Pending)
         {
             if (SUCCEEDED(g_presentList.fence->SetEventOnCompletion(g_presentList.fenceValue[slot],
                                                                     g_presentList.fenceEvent)))
@@ -3942,7 +4048,10 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
                     LOG_WARN("DLSS-NR present: allocator wait returned {} (slot {})", (unsigned) wait, slot);
             }
 
-            if (g_presentList.fence->GetCompletedValue() < g_presentList.fenceValue[slot])
+            // The wait returning is not the answer: a removal sets the event as well.
+            progress = PresentFenceProgress(g_presentList.fenceValue[slot]);
+
+            if (progress == DlssNr::FenceProgress::State::Pending)
             {
                 static bool s_loggedBusy[PresentList::kSlots] = {};
                 if (!s_loggedBusy[slot])
@@ -3953,6 +4062,10 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
                 return nullptr;
             }
         }
+
+        // The lists this allocator recorded were dropped, not run: it is never reset again (said once, above).
+        if (progress == DlssNr::FenceProgress::State::Removed)
+            return nullptr;
 
         HRESULT hr = g_presentList.allocator[slot]->Reset();
         if (FAILED(hr))
@@ -3974,6 +4087,27 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
     return g_presentList.list[slot];
 }
 
+// A completion signal the queue refused. With the device gone that is a removal like any other. On a live device
+// the slot's value is never reached, so the slot and whatever is retired against it stay in use until a later
+// signal on the queue passes it.
+static void NotePresentSignalFailed(HRESULT result, unsigned int slot)
+{
+    if (result == DXGI_ERROR_DEVICE_REMOVED)
+        NotePresentDeviceRemoved("its queue refused the completion signal");
+
+    if (PresentFenceProgress(0) == DlssNr::FenceProgress::State::Removed)
+        return;
+
+    static bool s_logged = false;
+    if (!s_logged)
+    {
+        s_logged = true;
+        LOG_WARN("DLSS-NR present: the completion signal failed on slot {} (HRESULT {:08X}); the slot stays in use "
+                 "until a later signal passes it",
+                 slot, (unsigned) result);
+    }
+}
+
 // Whether the list was executed, which is the answer anything recorded on it is owed.
 static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
 {
@@ -3986,7 +4120,10 @@ static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
     {
         queue->ExecuteCommandLists(1, (ID3D12CommandList**) &g_presentList.list[slot]);
         g_presentList.fenceValue[slot] = ++g_presentFenceValue;
-        queue->Signal(g_presentList.fence, g_presentList.fenceValue[slot]);
+        // The list is the queue's whether or not the signal is: executed, with nothing yet proven about it.
+        const HRESULT signalled = queue->Signal(g_presentList.fence, g_presentList.fenceValue[slot]);
+        if (FAILED(signalled))
+            NotePresentSignalFailed(signalled, slot);
         executed = true;
     }
 
@@ -3994,20 +4131,23 @@ static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
     return executed;
 }
 
-// Every present list submitted so far has finished on the GPU. Bounded; false on a timeout, in which
-// case whatever those lists read is kept, not released.
+// Every present list submitted so far has finished on the GPU. Bounded; false on a timeout and on a removed
+// device, in which case whatever those lists read is kept, not released.
 static bool WaitPresentListsIdle(DWORD timeoutMs)
 {
-    if (g_presentList.fence == nullptr || g_presentFenceValue == 0 ||
-        g_presentList.fence->GetCompletedValue() >= g_presentFenceValue)
-    {
+    if (g_presentList.fence == nullptr || g_presentFenceValue == 0)
         return true;
-    }
+
+    const auto progress = PresentFenceProgress(g_presentFenceValue);
+    if (progress != DlssNr::FenceProgress::State::Pending)
+        return progress == DlssNr::FenceProgress::State::Completed;
 
     if (FAILED(g_presentList.fence->SetEventOnCompletion(g_presentFenceValue, g_presentList.fenceEvent)))
         return false;
 
-    return WaitForSingleObject(g_presentList.fenceEvent, timeoutMs) == WAIT_OBJECT_0;
+    // The event is set by a removal too, and can be left set by an earlier wait that timed out: the fence answers.
+    return WaitForSingleObject(g_presentList.fenceEvent, timeoutMs) == WAIT_OBJECT_0 &&
+           PresentFenceProgress(g_presentFenceValue) == DlssNr::FenceProgress::State::Completed;
 }
 
 // The present route's synthesized motion is owed the same answer as the list it was recorded on.
@@ -4084,15 +4224,16 @@ static void RetirePresentHdrTexture(ID3D12Resource*& resource)
 }
 
 // Under g_nrMutex, once per present: the retired textures the GPU is done with. Nothing pending, nothing done.
+// On a removed device none of them is: the fence proves nothing about the lists that used them, so they are kept.
 static void CollectPresentHdrRetired()
 {
     if (g_hdrRetired.empty() || g_presentList.fence == nullptr)
         return;
 
-    const UINT64 completed = g_presentList.fence->GetCompletedValue();
+    const UINT64 completed = ReadPresentFence();
     for (size_t i = 0; i < g_hdrRetired.size();)
     {
-        if (g_hdrRetired[i].fenceValue <= completed)
+        if (DlssNr::FenceProgress::Completed(completed, g_hdrRetired[i].fenceValue))
         {
             g_hdrRetired[i].resource->Release();
             g_hdrRetired[i] = g_hdrRetired.back();
@@ -5329,11 +5470,35 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     syncInputs.dlssgSeen = state.DlssgDetectedInterpolationCount() > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
     syncInputs.dlssgLoaded = dlssgLoaded;
     syncInputs.boundary = boundary;
-    const bool presentSync = DlssNr::PresentSyncWanted(cfg.DlssNrPresentSync, syncInputs);
+    // FSR-FG's own swapchain orders its game queue's work ahead of its own on the GPU (DlssNr_PresentSync.h): the
+    // FG hook hands this pass that queue, the one the FG object kept when the swapchain was created. A provider
+    // named in [FSRFG] Provider may bring another swapchain, and the answer is for FFX's and the fork's presenter.
+    syncInputs.fsrFgOutput = state.activeFgOutput == FGOutput::FSRFG;
+    syncInputs.fsrFgCustomProvider = !state.activeFsrFgProvider.empty();
+    syncInputs.onFgGameQueue = fgHook && state.currentFG != nullptr && state.currentFG->GetCommandQueue() == queue;
+    // Tracked recordings admitted one at a time are refused while the previous one runs (chain-in-flight.md): there
+    // the wait is also what lets the next frame's in. The untracked single pass never asks.
+    bool tracked = false;
+    {
+        std::lock_guard<std::mutex> lock(g_nrMutex);
+        tracked = g_tracked;
+    }
+    syncInputs.serialRecordings = tracked && DlssNr::Submission::Serialized();
+    const DlssNr::PresentSyncDecision sync = DlssNr::DecidePresentSync(cfg.DlssNrPresentSync, syncInputs);
+    const bool presentSync = sync.wait;
     DlssNr::g_presentSyncWaits.store(presentSync, std::memory_order_relaxed);
 
+    // Said when it changes: a present cpu window counts the waits, not which rule asked for them. Bounded, so two
+    // entries that took turns could not fill the log.
+    static std::atomic<const char*> loggedSync { nullptr };
+    static std::atomic<unsigned int> syncLines { 0 };
+    if (loggedSync.exchange(sync.why, std::memory_order_relaxed) != sync.why &&
+        syncLines.fetch_add(1, std::memory_order_relaxed) < 16)
+        LOG_INFO("DLSS-NR present: {} for its write-back before returning ({})",
+                 presentSync ? "waits" : "does not wait", sync.why);
+
     if (presentSync && g_presentList.fenceValue[slot] != 0 &&
-        g_presentList.fence->GetCompletedValue() < g_presentList.fenceValue[slot])
+        PresentFenceProgress(g_presentList.fenceValue[slot]) == DlssNr::FenceProgress::State::Pending)
     {
         const auto waitStart = std::chrono::steady_clock::now();
         const UINT64 done = g_presentList.fenceValue[slot];
@@ -7015,11 +7180,7 @@ void Shutdown()
     }
     g_cadence.Drop();
 
-    if (g_nr.meter != nullptr)
-    {
-        g_nr.meter->Release();
-        g_nr.meter = nullptr;
-    }
+    ShutdownExposureMeter();
 
     if (g_nr.calib != nullptr)
     {
@@ -7042,26 +7203,6 @@ void Shutdown()
     g_nr.calibSteadiness = 0.0f;
     g_nr.calibUsable = false;
     g_nr.calibWhy = "measuring...";
-
-    for (auto& rb : g_nr.meterReadback)
-    {
-        if (rb != nullptr)
-        {
-            rb->Release();
-            rb = nullptr;
-        }
-    }
-
-    // The slots these flags describe have just been released, so nothing may vouch for what the next
-    // buffers happen to contain. gameExposure is deliberately NOT cleared here: a recreate is a
-    // transition within the same scene, and dropping to the slider for a few frames would be the
-    // flicker the held value exists to prevent. The user switching the option off is the case where
-    // the held value has to go, and that is handled at the edge in Dispatch.
-    for (bool& valid : g_nr.meterExposureValid)
-        valid = false;
-
-    g_nr.meterFrames = 0;
-    g_nr.exposureLatch.Reset();
 
     if (g_nr.depthClone != nullptr)
     {

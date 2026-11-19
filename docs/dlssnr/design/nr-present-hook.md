@@ -859,3 +859,107 @@ FG output is selected, when DLSS-G options or frame counts were seen, or when St
 `true` or `false` wins, and both now survive a save, which they could not while `true` was the default. The menu's
 box shows what is in effect. `tests/nr-present-sync` holds the rule.
 
+# Update, 2026-11-18: `PresentSync=auto` does not wait under FSR-FG's own swapchain
+
+The 2026-10-13 rule kept the wait wherever frame generation could be involved, and OptiScaler's own FSR-FG was
+involved by definition: the pass came from the frame generation hook and an FG output was selected. Measured on the
+target PC in PCSX2 (D3D12, `FGInput=Synthesized`, `FGOutput=FSRFG`, LSFG x2 interpolating over FFX's swapchain,
+`GpuTiming` on, two sessions), the `present cpu window` lines show the wait on every submitted present but one, for
+the pass's whole GPU time, with no allocator wait in any window:
+
+| Passes | 5 s windows | `present_sync_wait`, mean per present |
+|---|---|---|
+| 1 | 24 | 10.5 to 16.4 ms |
+| 2 | 12 | 19.6 to 24.9 ms |
+| 3 | 28 | 30.3 to 35.6 ms |
+
+Windows in which the pass count changed, and the first two of the three-pass session (start-up), are left out. In
+PCSX2 the present thread is the GS thread, so that is time the emulator could not spend on the next frame. It is CPU
+time given back, not a frame-rate prediction: the GPU work is the same.
+
+## Why the wait is not needed on that route
+
+The wait was introduced for an interposer that paces the client queue from outside (the 2026-09-13 section).
+OptiScaler's FSR-FG is not that. Read from the sources, at this commit:
+
+- **The pass is on the swapchain's game queue, ahead of its Present.** `FGHooks::FGPresent` runs the pass on the
+  queue the FG object kept when the FG swapchain was created (`OptiScaler/hooks/FG_Hooks.cpp:1674-1680`), and only
+  then forwards the present (`:1720`). `FSRFG_Dx12` creates the swapchain on that same queue, FFX's and the fork's
+  alike (`OptiScaler/framegen/ffx/FSRFG_Dx12.cpp:1171`, `:1183-1194`, `:1222`, `:1234-1246`).
+- **FFX's swapchain orders that queue itself** (`external/FidelityFX-SDK-v2` at `7539ae8`,
+  `FrameInterpolationSwapchainDX12.cpp`). Interpolating, `presentInterpolated` signals `gameFence` on the game queue
+  and makes the interpolation queue wait for it (`:1965-1966`); the interpolation list is followed by a signal of
+  `interpolationFence`, and the presenter thread makes the present queue wait for that before it composes either
+  frame (`:643`, `:758`). Not interpolating, `Present` signals `gameFence` and makes the present queue wait for it
+  directly (`:2215-2216`).
+- **The fork's presenter kept both** (`retoque/lsfg/presenter/MfgSwapChain_Dx12.cpp:1429-1430`, `:1665-1666`,
+  presenter thread `:171`, `:269`), so LSFG at x3 and x4 is the same, as is LSFG at x2 over FFX's swapchain.
+
+So the write-back, submitted on the game queue before `Present`, is ahead of the fence the swapchain waits on before
+anything reads the frame. The CPU wait enforced an order the GPU already has.
+
+## The rule
+
+`DlssNr::DecidePresentSync` (`DlssNr_PresentSync.h`). Unset (auto), in this order:
+
+1. at the game's own Present, ahead of its DLSS-G: no wait (unchanged, nr-before-dlssg.md);
+2. DLSS-G options or frame counts seen, or Streamline's DLSS-G plugin or `nvngx_dlssg.dll` loaded: wait (unchanged);
+3. **new**: the pass came from the frame generation hook, the output is FSR-FG, no custom provider is named in
+   `[FSRFG] Provider`, and the pass was submitted on the queue the FG object keeps as its swapchain's: no wait,
+   unless tracked recordings are being admitted one at a time (below), where it waits as before;
+4. any other frame generation hook or selected output: wait (unchanged);
+5. no frame generation: no wait (unchanged).
+
+Rule 3 is narrow on purpose. XeFG, DLSS-G as OptiScaler's output, the flip meter and reprojection keep the wait:
+their swapchains were not read for this. A custom FSR-FG provider brings a swapchain of its own, so it keeps the
+wait, also under the fork's presenter, where that is one wait more than needed. The wrapped entry below any
+swapchain keeps it (`fgHook` is false there). `FGInput=dlssg` feeding FSR-FG keeps it too, because the game's own
+DLSS-G calls set rule 2 first; whether Streamline still paces anything there was not established. An explicit `true`
+or `false` wins as before, and the menu's box shows what is in effect.
+
+**The wait's second job.** Returning only once the list had finished also meant the next frame never found this
+one's recording unfinished. The untracked single pass does not care. Tracked recordings (`Passes` above 1,
+`IndividualPassSettings`, adaptive cadence) do: [chain-in-flight.md](chain-in-flight.md) admits a new one over up to
+three unfinished earlier ones only once eight batches have gone to one queue, and refuses it over any unfinished one
+before that, for the session once a second queue was seen, and in strict mode. Dropping the wait there would skip
+the pass on every frame that arrives while the last is still on the GPU, which at two or three passes is most of
+them. So rule 3 asks `Submission::Serialized()` (strict, or no overlap) while the route is tracked, and keeps the
+wait when it says yes. Read against the target PC's three-pass log: the wait would stay for the first eight tracked
+batches, go until the fullscreen switch that moved the game to another queue (the log's "NR recordings are
+serialized from now on"), and stay for the rest of that session; at one pass, untracked, it goes throughout. With
+overlap allowed nothing is skipped for want of it: a present list slot is reused only after its previous list has
+finished, so at most four lists are in flight, which is the three earlier recordings admission allows.
+
+The log says which rule decided, when it changes (the first sixteen changes of a session): `DLSS-NR present: does not
+wait for its write-back before returning (auto: FSR-FG's swapchain orders the game queue's work ahead of its own on
+the GPU)`.
+
+Nothing else moved: the slot fences are signalled as before, the allocator wait in `GetPresentCommandList` still
+holds a slot until its list has finished, and the wait itself is the same code when it runs.
+
+## What this does not establish
+
+- **No GPU run.** The rule's cases, mutants of each of rule 3's conditions and source guards on the hook, the FG
+  object's queue, both swapchains' fences and the admission rule are in `tests/nr-present-sync`. Expected in the
+  field: `present_sync_wait attempted=0` in the `present cpu window` lines, and the log line above. A picture that
+  compounds, or a frame shown half written, would mean the premise is wrong for that build: `PresentSync=true`
+  brings the wait back.
+- **What it buys is overlap, not GPU time.** The thread still stops when the GPU is the limit: in the swapchain's
+  own `Present`, which waits for a free buffer, or in the slot's allocator wait, which may now show in
+  `allocator_wait` where it never did. Both are a frame or more later than the wait that went, and that is the
+  gain; whether it shows as frame rate was not measured.
+- **The shipped FFX DLL is not the vendored source.** The claim is checked against `7539ae8`, not against whichever
+  `amd_fidelityfx_framegeneration_dx12.dll` a game folder holds.
+- **A present whose interpolation list is not submitted is not ordered by either swapchain.** Interpolating, the
+  present queue waits for `interpolationFence` only; when the frame generation callback fails, or the fork has no
+  outputs or no list to give (`MfgSwapChain_Dx12.cpp:1307-1322`), no new value is signalled and the real frame is
+  composed without waiting for the game queue. The game's own rendering is exposed on such a frame in the same way,
+  and the pass now is too, for longer. A frame the callback cancels while returning success (a repeated frame id,
+  `FSRFG_Dx12.cpp:940-945`) is not this case: its list is executed and signalled all the same.
+- **A swapchain reused for another queue.** With `PreserveSwapChain`, a game that creates its swapchain again on a
+  different queue leaves the FG object's queue differing from the one the swapchain fences. Nothing here detects
+  that; the FG object's own lists make the same assumption.
+- **More frames in flight.** The wait kept one NR list on the GPU at a time. Without it there can be as many as the
+  present slots allow (four, fewer with fewer backbuffers), the regime `auto` has had without frame generation since
+  2026-10-13 and the one the 64-slot descriptor and constant rings are sized for (six dispatches a frame, ten frames
+  before a slot is rewritten). Those rings still have no fence of their own.

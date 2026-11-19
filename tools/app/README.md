@@ -283,7 +283,9 @@ value already set (numbers compare as numbers) is not proposed again, and a fram
 included) is kept as the user's choice; the "Last session" card still advises x3 on a low base. The card also says to
 pick DLSS Balanced or Performance in the game below about 30 real frames per second: the DLSS mode is the game's
 setting, which the app does not change. They never choose a frame-generation provider. RTX 20 and RTX 40+ get neither
-until a game is measured there; one session is a starting point, not a qualification.
+until a game is measured there; one session is a starting point, not a qualification. With sm86 installed, the RTX 30
+NR profile also proposes `WorkingScale=0.5` only when absent/auto: older runtime builds can read the
+loader's spoofed Ada architecture and resolve auto to 1.0. Every explicit scale is preserved.
 
 The kit builder can opt into `INCLUDE_OFFICIAL_SM86=1`. The `cache_sm86` example stores the exact archive plus
 GitHub metadata in `first-run-cache/sm86`, requiring a published SHA-256 digest. The GUI verifies that cache

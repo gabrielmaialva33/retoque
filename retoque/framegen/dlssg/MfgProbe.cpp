@@ -7,6 +7,7 @@
 #include <State.h>
 #include <Util.h>
 #include <misc/IdentifyGpu.h>
+#include "../../gpu/NvidiaArchitectureGpu.h"
 #include <proxies/KernelBase_Proxy.h>
 #include <proxies/Ntdll_Proxy.h>
 #include <proxies/Nvngx_Proxy.h>
@@ -48,7 +49,7 @@ MfgProbe::GpuIdentity ReadGpuIdentity()
     MfgProbe::GpuIdentity id;
     id.known = gpu.vendorId != VendorId::Invalid;
     id.isNvidia = gpu.vendorId == VendorId::Nvidia;
-    id.arch = gpu.nvidiaArchInfo.architecture;
+    id.arch = Retoque::NvidiaArchitecture::ForGpu(gpu);
     return id;
 }
 
@@ -365,7 +366,7 @@ class ModuleEnv : public MfgProbe::IModuleProbeEnv
     explicit ModuleEnv(HMODULE module) : _module(module), _gpu(IdentifyGpu::getPrimaryGpu()) {}
 
     bool IsNvidia() override { return _gpu.vendorId == VendorId::Nvidia; }
-    uint32_t ArchId() override { return _gpu.nvidiaArchInfo.architecture; }
+    uint32_t ArchId() override { return Retoque::NvidiaArchitecture::ForGpu(_gpu); }
 
     bool ClaimModule() override
     {
@@ -416,7 +417,7 @@ class ModuleEnv : public MfgProbe::IModuleProbeEnv
     {
         MfgProbe::ModuleFacts facts;
         facts.adapterName = _gpu.name;
-        facts.arch = _gpu.nvidiaArchInfo.architecture;
+        facts.arch = Retoque::NvidiaArchitecture::ForGpu(_gpu);
         facts.impl = _gpu.nvidiaArchInfo.implementation;
         facts.driver = DriverVersion();
         facts.hags = HagsText(_gpu.luid);
@@ -458,7 +459,7 @@ class AdmissionEnv : public MfgProbe::IAdmissionProbeEnv
     }
 
     bool IsNvidia() override { return _gpu.vendorId == VendorId::Nvidia; }
-    uint32_t ArchId() override { return _gpu.nvidiaArchInfo.architecture; }
+    uint32_t ArchId() override { return Retoque::NvidiaArchitecture::ForGpu(_gpu); }
 
     bool ClaimOnce() override { return !g_admissionClaimed.exchange(true); }
 

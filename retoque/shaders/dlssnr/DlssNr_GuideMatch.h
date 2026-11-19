@@ -72,10 +72,9 @@ struct Handed
     float scaleY = 1.0f;
 };
 
-// Which guides a route that cannot fall back to frame-size guides hands over (the Vulkan route,
-// docs/dlssnr/design/reduced-scale-guides-vk.md): the game's regions when no resample is wanted, the matched pair when
-// it is wanted and can run, and otherwise none -- the frame is not run, rather than handed guides that describe some
-// other place than its colour.
+// Which guides D3D12 and Vulkan hand over (docs/dlssnr/design/reduced-scale-guides.md): the game's regions when no
+// resample is wanted, the matched pair when it is wanted and can run, and otherwise none -- the frame is not run,
+// rather than handed guides that describe some other place than its colour.
 enum class Guides
 {
     Game,

@@ -8,6 +8,7 @@
 #include <Util.h>
 #include <scanner/scanner.h>
 #include <misc/IdentifyGpu.h>
+#include "../../gpu/NvidiaArchitectureGpu.h"
 
 #include <algorithm>
 #include <atomic>
@@ -777,8 +778,8 @@ void MfgUnlock::TryApply(HMODULE provider)
             // Ampere. What that loader does to these same kernel images is unknown, and relabelling
             // them underneath it was never tried; AdaBlackwellKernels=true still forces it.
             const auto& gpu = IdentifyGpu::getPrimaryGpu();
-            const bool ada =
-                gpu.vendorId == VendorId::Nvidia && gpu.nvidiaArchInfo.architecture_id == NV_GPU_ARCHITECTURE_AD100;
+            const bool ada = gpu.vendorId == VendorId::Nvidia &&
+                             Retoque::NvidiaArchitecture::ForGpu(gpu) == NV_GPU_ARCHITECTURE_AD100;
 
             // Only on top of our own gates, unless forced. Without them there is no MFG to fix, and a
             // module another unlocker owns may have had its kernels reworked by it as well.

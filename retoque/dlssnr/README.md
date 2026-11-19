@@ -103,6 +103,7 @@ experiment.
 | `DlssNr_MultiView.h` | several views in one colour allocation within a frame (multi-monitor, split screen): detected, and every evaluate stood down, counted; janblade's `1105908f` detector only (GPL-3.0), no view pick or per-view model; `../../docs/dlssnr/design/dx12-robustness.md`, tested by `tests/nr-multi-view` |
 | `DlssNr_Pictures.h`, `DlssNr_PictureGate.h` | several live DLSS features in a game (a menu preview next to the world): NR follows one main picture, by first, clearly larger, release or quiet, and every other feature is left as it is before any NR state sees it; views on main's colour allocation go on to the multi-view rule; idea from janblade #285 (GPL-3.0), no code taken; `../../docs/dlssnr/design/main-picture.md`, tested by `tests/nr-main-picture` |
 | `DlssNr_UntrackedRetire.h` | the default (untracked) D3D12 retirement path's GPU-completion decision rule: the 32-tick evaluation countdown plus a per-device `ID3D12Fence` signaled after each successful D3D12 `Present` (`completedValue >= parkedSerial + 1`), `UINT64_MAX`/device-removed retention, and live-device count-only fallback logged once at `INFO`; `../../docs/dlssnr/design/chain-in-flight.md`, tested by `tests/nr-untracked-retire` (host-tested only, unvalidated on GPU) |
+| `DlssNr_FenceProgress.h` | what an `ID3D12Fence`'s completed value proves: completed, pending or removed. `UINT64_MAX` is a removed device's answer, not a value a queue reached, so nothing waiting on it is released or reused. The D3D12 present lists (allocator reuse, the idle wait, the retired HDR textures, a refused `Signal`) and the native D3D11 guide transport's drain decide through it; tested by `tests/nr-present-fence` and `tests/nr-dx11-native-guides` (host-tested only, no device was removed on a GPU) |
 | `DlssNr_PrivateSr.h/.cpp` | Transfer 2's private DLSS Super Resolution, the NGX half: its own parameter table and handle through `NVNGXProxy`, created and evaluated with wilsjo2's parameters |
 | `shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp` | D3D12 present guide capture, identity and bridge consumption; shared state remains in the core renderer |
 | `shaders/dlssnr/DlssNr_Dx12.h/.cpp` | the pass: forwarder loading, feature lifetime, the evaluate path, encode/resolve orchestration, capture |
@@ -245,13 +246,28 @@ model file at startup; it does not select the caller module.
   queue after each successful `Present` to reach `parkedSerial + 1` (`UINT64_MAX` and device removal
   retain; live devices with no single present-queue fence log once at `INFO` and fall back to the
   evaluation count, which still does not cover unpresented recordings or command-list replay). Internal
-  feature creation uses its existing queue/fence discipline. See
+  feature creation uses its existing queue/fence discipline. Since 2026-11-18 (host-tested only) the
+  present lists' own fence follows the same rule (`DlssNr_FenceProgress.h`): a removed device is not a
+  finished list, so no present allocator is reset and no retired HDR texture or synthesized-motion
+  estimator is released on it; they are kept, said once, and the present pass stops. See
   [chain-in-flight](../../docs/dlssnr/design/chain-in-flight.md) and
   [submission tracking](../../docs/dlssnr/design/submission-tracking.md); elapsed frames alone
   must not be treated as proof that tracked GPU work is done.
 - **One lock.** Every caller is on the game's render thread now, but the D3D11-on-D3D12 bridge
   enters from its own call site, and the lock is CPU-side on a path that already records command
   lists. It was added after a period of crashes that looked random and were not.
+- **Ours is not the game's.** What the module creates through the game's D3D12 device passes the same
+  creation hooks as the game's own resources, and the exposure scan looks there for a small UAV shaped
+  like an exposure. `ScopedInternalResourceCreation` (`OptiScaler/State.h`: a counter on the creating
+  thread, no lock, read only by the scan) marks ours. `Dispatch` holds it from its admission checks to
+  its end, which covers the meter, the passes it builds, the model's `CreateFeature` and
+  `EvaluateFeature` and every view made per frame; the allocators other routes reach open their own
+  (`CreateScratch`, `CreatePreUpscaleScratch`, `ZeroGuides`, the MFG presenter). Before 2026-11-19 only
+  the periphery and UI-mask passes did: a PCSX2 session with no UAV of its own spent 32 of its 40
+  near-miss lines on them, and the enlargement's 1x1 exposure texel and cadence smoothing's 4x1 light
+  state and 16x16 light grid pass the scan's filter. A new allocation belongs inside a scope;
+  `tests/nr-exposure-scan` guards the sites. Host-tested only; a library's own allocations when the
+  game calls it directly (FFX's swapchain) are still outside any scope.
 - **Temporal filtering of the model's answer was measured to be a dead end** (twice, including with
   a trained DLAA pass): the model re-decides detail with the framing, so old answers do not belong
   to new frames. There is no accumulator; the composition is re-anchored to the model every frame

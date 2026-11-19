@@ -201,13 +201,24 @@ production headers or source slices with local fakes under AddressSanitizer and 
   exposure, recreation before a feature release, an exposure kept across one, attribution by id after a list
   change and a late completion, integer and quiet candidates giving way, waiting overflow, failed, unanswered,
   device-removed and discarded recordings, a freed address reused, a placed resource whose heap the game frees,
-  view candidates at the boundary, and the inert paths; source guards on the call sites. No D3D12 runtime or GPU.
+  view candidates at the boundary, the inert paths, and OptiScaler's own creations skipped inside
+  `ScopedInternalResourceCreation` on the creating thread only; source guards on the call sites and on the scopes
+  at Retoque's own allocation sites (the NR pass, its scratch, the zero guides, the MFG presenter). No D3D12
+  runtime or GPU.
 - `nr-present-boundary` — the present pass under the game's own DLSS-G (`DlssNr_PresentBoundary.h`):
   `HookMethod=2` declines on the wrapped entry below DLSS-G, Auto stays upscaled for the session once it has seen
   it, `HookMethod=1` and OptiScaler's own frame generation are untouched; source guards that `RunPresentPass` and
   the upscaled route decide through it. Not whether `State` reflects the game's DLSS-G in a given title.
 - `nr-present-sync` — what `[DlssNr] PresentSync=auto` means: the D3D12 present pass waits for its write-back
-  only when frame generation could be involved (`DlssNr_PresentSync.h`). The wait itself is not exercised.
+  only when frame generation could be involved (`DlssNr_PresentSync.h`), and not under FSR-FG's own swapchain at the
+  frame generation hook, which orders the pass on the GPU itself, unless multi-pass recordings are admitted one at
+  a time; mutants of each condition of that exception, and source guards on the hook, the FG object's queue, both
+  swapchains' fences and the admission rule. The wait itself is not exercised.
+- `nr-present-fence` — the D3D12 present lists when their fence cannot prove completion
+  (`DlssNr_FenceProgress.h`): the verbatim list, submit, idle-wait and HDR-retire helpers of `DlssNr_Dx12.cpp`
+  against fake D3D12 objects under ASan/UBSan, one scenario per process. A removed device (`UINT64_MAX`, a wait
+  woken by the removal, a refused `Signal`) never resets an allocator or releases what the lists read, and is said
+  once; a live device behaves as before; mutation controls and source guards. No D3D12 runtime or GPU.
 - `nr-dx11-route` — a D3D11 game's DLSS with NR on (`docs/dlssnr/design/dx11-native-dlss-guides.md`, steps 1
   and 2): `dlss_12` chosen over native D3D11 DLSS when `Dx11Upscaler` is unset, an explicit key kept, native DLSS
   reported once in the log and shown in the NR panel while it runs (`DlssNr_Dx11Route.h`, and the production layer
@@ -410,6 +421,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-multipass` — portable multi-pass chain helpers.
 - `nr-pass-config` — the pass-settings codec and the four-point Config round trip
   for the master keys.
+- `nr-config-locale` — locale-independent float serialization (`GetFloatValue`, `SerializeAnchors`),
+  single-comma decimal recovery (`isFloat`, `PassConfig::Float`, `LoadAnchors`, `PackOverlayValue`),
+  and dot-decimal NR log lines (`PresentCpu::Format`, `ReportScalingRatios`) sliced from production
+  sources and run under a live comma `LC_NUMERIC` and ASan/UBSan, plus source guards. No GPU.
 - `nr-periphery` — peripheral compression's layout and per-pixel mapping, compiled from the header the
   shader includes: extents and stated refusals, the inverse, monotonicity and no kink at either join,
   the whole-texel centre at 100, the uniform path it must reduce to (the guide read and the downsample),

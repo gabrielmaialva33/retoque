@@ -33,6 +33,9 @@ ASan/UBSan and `-Werror`, the runner does two things.
   transport, held here by a source guard.
 - **A stale cache** (`CacheFree`): upstream's prepare releases every set of a cache a device change made stale, so it
   is prepared only once nothing the transport submitted is in flight.
+- **A removed device** (`DlssNr_FenceProgress.h`): its fence reads `UINT64_MAX`, which is not completion, so a set a
+  list read stays in flight and a stale cache is not released; a source guard holds `DrainLocked` to the fence's
+  classified value, never a raw comparison or the wait's result.
 - **The missing host** (`NoHost`): NR on, HookMethod 2 and native DLSS with no bridge hosting the pass, exactly, and
   its one line.
 - **Which copy runs a shader** (`RunsShader`): only R24G8 and R32G8X24 typeless over legacy handles reach upstream's

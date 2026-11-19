@@ -47,7 +47,8 @@ other sections, including malformed names, are not changed. Canonical section nu
 
 Both Passes (default 1) and IndividualPassSettings (default false) have declaration, read,
 save and shipped-INI entries. Default master values and disabled inheritance are unchanged.
-Strict parsers are scoped to NR model keys; general parsers/float serialization are unchanged.
+Both NR model parsers and general Config float serialization/parsing use the classic locale and
+recover unambiguous single-comma decimals written under a comma `LC_NUMERIC`.
 Aliases are merged first-valid per key and rebuilt canonically on save; stale field and
 pass removal cannot reappear from the persistent INI object. Explicit values are never
 collapsed merely because they currently equal their master. All mutable override storage

@@ -31,6 +31,13 @@ present host uses that state comes from `DepthResourceBarrier` / `MVResourceBarr
 meant for a game's own buffers, whose defaults happen to match but need not. A barrier from a state
 to itself is rejected rather than ignored, so asking for the state they are already in records none.
 
+The guides are UAV textures made through the game's device, so the resource-creation hooks see them, and
+the exposure scan logged them as near-misses in every present-route session. Both guides and the view each
+is cleared through are created inside `ScopedInternalResourceCreation` (the production class, taken from
+`OptiScaler/State.h` by the runner): the fake device counts every resource and view asked for outside the
+scope, and the scope is closed again when `Ensure` returns, on failure too. Creating the views after the
+scope closed fails the suite (2026-11-19).
+
 Eleven mutations of the production code were confirmed to fail this suite: the CPU handle taken from
 the shader-visible heap (the shape the donor's version got wrong), an unbound heap, a depth cleared to
 one instead of zero, a descriptor offset that ignores the heap stride, recording treated as execution,

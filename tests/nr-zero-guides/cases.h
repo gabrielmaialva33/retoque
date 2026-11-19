@@ -30,6 +30,13 @@ int main()
         assert(guides.Ensure(&device, 1280, 720) && guides.Depth() != depth);
         assert(device.resources == 4 && depth->refs == 0);
         CASE("the same size is reused, a different size reallocates and releases the old pair");
+
+        // Ours, not the game's: the guides are UAV textures made through the game's device, so the creation hooks
+        // see them. Every one of them, and the view each is cleared through, is asked for inside the scope the
+        // exposure scan skips, and the scope is closed again when Ensure returns.
+        assert(device.unscoped == 0);
+        assert(!ScopedInternalResourceCreation::Active());
+        CASE("both guides and their clear views are created inside the internal-creation scope, which then closes");
     }
 
     // --- the clear, and the rule it has to obey --------------------------
@@ -154,6 +161,8 @@ int main()
         ZeroGuides guides;
         assert(!guides.Ensure(&device, 800, 600));
         assert(guides.Depth() == nullptr && guides.Motion() == nullptr && !guides.Ready());
+        // A failure leaves the scope closed too: left open, it would hide the game's own creations on this thread.
+        assert(device.unscoped == 0 && !ScopedInternalResourceCreation::Active());
         for (const auto& resource : device.ownedResources)
             assert(resource->refs == 0);
         for (const auto& heap : device.ownedHeaps)
