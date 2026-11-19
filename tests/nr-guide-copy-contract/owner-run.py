@@ -46,7 +46,7 @@ struct DlssNr_Dx12 {
     bool Dispatch(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,ID3D12Resource*,
                   const DlssNrFrameInfo&,ID3D12CommandQueue*,DlssNr::Detail::CoverageSample*,DlssNr::Chain::RecordingLease*);
 };
-std::unique_ptr<DlssNr_Dx12> g_compose;
+std::shared_ptr<DlssNr_Dx12> g_compose;
 '''
 anchor='static bool EnsureCompose(' if 'static bool EnsureCompose(' in main else 'static void EnsureCompose('
 unit+=function(main,anchor)
@@ -219,17 +219,20 @@ int main(int argc,char**argv) {
         assert(g_compose->_device==&a && b.refs==1);
     } else if(which=="dispatch-wrapped" || which=="dispatch-wrapped-foreign") {
         // A wrapper layer's list: the pass lives on the list's device, the game's resources report the one beneath.
-        DlssNr_Dx12 pass("test",&wrapper);cmd.device=&wrapper;
+        DlssNr_Dx12 pass("test",&wrapper);
+        g_compose = std::shared_ptr<DlssNr_Dx12>(&pass, [](auto*){});cmd.device=&wrapper;
         if(which=="dispatch-wrapped-foreign")depth.device=&b;
         const bool accepted=pass.Dispatch(&cmd,&color,&depth,&motion,&output,frame,nullptr,nullptr,nullptr);
         assert(accepted==(which=="dispatch-wrapped"));assert(cmd.copies==0 && cmd.barriers==0);
         if(accepted)assert(g_nrDeviceOwner.device==&wrapper);
     } else if(which=="dispatch-wrapped-list") {
         // The list is held to the pass's exact device: another interface on the adapter is not enough for a list.
-        DlssNr_Dx12 pass("test",&a);cmd.device=&wrapper;
+        DlssNr_Dx12 pass("test",&a);
+        g_compose = std::shared_ptr<DlssNr_Dx12>(&pass, [](auto*){});cmd.device=&wrapper;
         assert(!pass.Dispatch(&cmd,&color,&depth,&motion,&output,frame,nullptr,nullptr,nullptr));
     } else {
         DlssNr_Dx12 pass("test",&a);
+        g_compose = std::shared_ptr<DlssNr_Dx12>(&pass, [](auto*){});
         if(which=="dispatch-cmd")cmd.device=&b;
         else if(which=="dispatch-depth")depth.device=&b;
         else if(which=="dispatch-motion")motion.device=&b;
@@ -237,6 +240,8 @@ int main(int argc,char**argv) {
         else if(which=="dispatch-output")output.device=&b;
         else if(which=="dispatch-exposure") { exposure.device=&b;frame.ExposureTexture=&exposure; }
         else if(which=="dispatch-owner")assert(Compose(EnsureCompose,&b));
+        else if(which=="dispatch-stale")g_compose=std::make_shared<DlssNr_Dx12>("replacement",&a);
+        else if(which=="dispatch-detached")g_compose.reset();
         else assert(which=="dispatch-valid");
         const bool accepted=pass.Dispatch(&cmd,&color,&depth,&motion,&output,frame,nullptr,nullptr,nullptr);
         assert(accepted==(which=="dispatch-valid"));assert(cmd.copies==0 && cmd.barriers==0);
@@ -251,7 +256,7 @@ with tempfile.TemporaryDirectory(prefix='retoque-device-owner-') as temp:
                     '-fsanitize=address,undefined','-fno-omit-frame-pointer','-I'+str(ROOT),str(cpp),'-o',str(binary)],check=True)
     failures=[]
     for name in ('retain','refuse-second','dispatch-cmd','dispatch-depth','dispatch-motion','dispatch-color',
-                 'dispatch-output','dispatch-exposure','dispatch-owner','dispatch-valid',
+                 'dispatch-output','dispatch-exposure','dispatch-owner','dispatch-valid','dispatch-stale','dispatch-detached',
                  'dispatch-wrapped','dispatch-wrapped-foreign','dispatch-wrapped-list',
                  'capture-cmd','capture-motion','capture-planes','capture-quality','capture-mips',
                  'capture-two-planes','capture-valid','capture-postallocation','capture-prepark-order'):

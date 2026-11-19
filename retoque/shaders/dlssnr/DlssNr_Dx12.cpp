@@ -156,7 +156,7 @@ struct CoverageScope
 
 NrDeviceOwner g_nrDeviceOwner;
 NrState g_nr;
-std::unique_ptr<DlssNr_Dx12> g_compose;
+std::shared_ptr<DlssNr_Dx12> g_compose;
 
 // The before-upscale path's own surface: the copy of the game's colour that carries the model's edit
 // into the upscaler. Sized to the render subrect and reallocated when that moves, which in a
@@ -194,7 +194,7 @@ std::filesystem::path g_dllDir;
 // clamps linear HDR into an 8-bit texture -- wrong brightness until something forces a rebuild -- or
 // hands CopyResource mismatched formats, which fails silently and makes the whole pass appear to do
 // nothing. So the set is torn down whenever the format it was built for is not the format needed now.
-// Tracking is sticky: lifetime evidence must begin before the first recorded NR use.
+// Tracking is sticky. A private-present untracked generation can be retired before tracking starts.
 bool g_tracked = false;
 bool g_legacyRecorded = false;
 DlssNr::Submission::Usage g_usage;
@@ -777,6 +777,14 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // Idle, one relaxed load.
     DlssNr::PairCapture::Poll();
 
+    // A caller may have acquired this generation before another thread began its retirement.
+    // Keep the CPU object alive through the call, but never record on a detached generation.
+    if (this != g_compose.get())
+    {
+        reportSkip("NR composition generation changed before this recording");
+        return false;
+    }
+
     if (g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr || motion == nullptr ||
         output == nullptr)
     {
@@ -862,7 +870,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ownedRecording.emplace(g_recordings, reinterpret_cast<uintptr_t>(cmdList));
         recording = &*ownedRecording;
     }
-    if (!TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene))
+    if (!TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene, frame.PrivatePresentRecording))
     {
         reportSkip(g_chainStatus.load());
         return false;
@@ -921,9 +929,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ChainStatus("Driver proxy uses one pass and master settings; overrides are inactive");
     if (!chainEnabled)
     {
-        // Ask for more than one pass only while the chain can still arm. TrackNrRecording arms it on
-        // the first NR dispatch and, the moment a dispatch is recorded without the opt-in, sets
-        // g_legacyRecorded and locks it off for the session -- that is the "Restart required" status.
+        // A supported untracked generation migrates before reaching here. Unsupported histories retain
+        // one/master, and keep g_legacyRecorded set with a route-specific restart status.
         // The proxy path is one pass by construction.
         //
         // Promising a count that cannot run costs twice, and the second cost is the one that hid the
@@ -3869,8 +3876,15 @@ static bool EnsureCompose(ID3D12Device* device)
     if (!g_nrDeviceOwner.Accept(device))
         return false;
     if (g_compose == nullptr)
-        g_compose = std::make_unique<DlssNr_Dx12>("Neural Rendering", device);
+        g_compose = std::make_shared<DlssNr_Dx12>("Neural Rendering", device);
     return g_compose != nullptr;
+}
+
+// Keep a caller alive across a concurrent transition without holding g_nrMutex through Dispatch.
+static std::shared_ptr<DlssNr_Dx12> AcquireCompose()
+{
+    std::lock_guard<std::mutex> nrLock(g_nrMutex);
+    return g_compose;
 }
 
 // Internal type: PresentList (DlssNr_Dx12_Internal.h)
@@ -4127,6 +4141,11 @@ static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
         executed = true;
     }
 
+    {
+        std::lock_guard<std::mutex> nrLock(g_nrMutex);
+        EndUntrackedPresent(g_presentList.list[slot], executed ? queue : nullptr, g_presentList.fence,
+                            g_presentList.fenceValue[slot]);
+    }
     g_presentList.dirty[slot] = false;
     return executed;
 }
@@ -4172,6 +4191,10 @@ static void DropPresentList(unsigned int slot)
 
     // It will never execute: its submission epoch is abandoned, or it stays sealed and is never pruned.
     DlssNr::Submission::Abandon(g_presentList.list[slot]);
+    {
+        std::lock_guard<std::mutex> nrLock(g_nrMutex);
+        EndUntrackedPresent(g_presentList.list[slot], nullptr, nullptr, 0);
+    }
     g_presentList.dirty[slot] = false;
 }
 
@@ -4505,6 +4528,24 @@ uint64_t Dx12Internal::SnapshotUntrackedPresentSerial()
             return DlssNr::UntrackedRetire::NextSignalValue(slot.lastSignaled);
     }
     return DlssNr::UntrackedRetire::NextSignalValue(0);
+}
+
+// Migration must not borrow a same-adapter fence from a different swapchain queue.
+// The legacy queue is held alive by its history, so canonical COM identity cannot have been recycled.
+bool Dx12Internal::UntrackedPresentFenceMatches(ID3D12CommandQueue* queue)
+{
+    if (!queue)
+        return true; // Every legacy private list was cancelled; none reached a queue.
+    uintptr_t deviceIdentity = 0;
+    LUID adapterLuid {};
+    if (!ResolveNrRetireDevice(&deviceIdentity, &adapterLuid))
+        return false;
+    const uintptr_t queueIdentity = PresentComIdentity(queue);
+    std::lock_guard<std::mutex> lock(s_presentFenceMutex);
+    for (const auto& slot : s_presentFenceSlots)
+        if (SlotMatchesDevice(slot, deviceIdentity, adapterLuid))
+            return slot.usable && !slot.deviceRemoved && slot.fence != nullptr && slot.queueIdentity == queueIdentity;
+    return false;
 }
 
 void Dx12Internal::QueryUntrackedPresentFence(bool* hasFence, bool* deviceRemoved, uint8_t* unavailableReason,
@@ -5344,6 +5385,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     // the two present transports drifted: ExtentIsStable and the reason string each existed on one
     // side only, on paths facing the identical situation.
     // On an HDR frame the pass runs on the decode, and only if the decode was recorded.
+    frame.PrivatePresentRecording = true;
     const char* reason = "";
     bool recorded = false;
     if (presentHdr && !hdrDecoded)
@@ -5830,8 +5872,9 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     coverage.sample.width = static_cast<uint32_t>(desc.Width);
     coverage.sample.height = desc.Height;
     funnel.Recording();
+    auto compose = AcquireCompose();
     coverage.sample.applied =
-        g_compose->Dispatch(cmdList, target, depth, motion, target, frame, timingQueue, &coverage.sample);
+        compose && compose->Dispatch(cmdList, target, depth, motion, target, frame, timingQueue, &coverage.sample);
     if (coverage.sample.applied)
         coverage.sample.reason = "composition recorded into upscaler output";
     g_upscaleApplied = coverage.sample.applied;
@@ -6306,9 +6349,11 @@ bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colou
     sample.width = static_cast<uint32_t>(desc.Width);
     sample.height = desc.Height;
 
+    auto compose = AcquireCompose();
     if (route != nullptr)
         route->BeforeDispatch();
-    const bool recorded = g_compose->Dispatch(cmdList, colour, depth, motion, colour, frame, timingQueue, &sample);
+    const bool recorded =
+        compose && compose->Dispatch(cmdList, colour, depth, motion, colour, frame, timingQueue, &sample);
     if (route != nullptr)
         route->AfterDispatch();
 
@@ -6733,9 +6778,9 @@ ScopedPreUpscale::ScopedPreUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX
 
     bool wrote = false;
 
-    if (g_compose != nullptr)
-        wrote = g_compose->Dispatch(cmdList, colour, depth, motion, g_pre.scratch, frame, timingQueue, &coverage.sample,
-                                    _recording.get());
+    if (auto compose = AcquireCompose())
+        wrote = compose->Dispatch(cmdList, colour, depth, motion, g_pre.scratch, frame, timingQueue, &coverage.sample,
+                                  _recording.get());
 
     // Nothing written means nothing to swap: the copy holds stale or no picture, and the upscaler
     // gets the game's own colour, which is the frame as it would have been without the pass. This is
@@ -6938,6 +6983,13 @@ void Shutdown()
     std::lock_guard<std::mutex> preLock(g_preMutex);
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
 
+    // Migration entries have no submission epochs. Never let shutdown bypass their strict fence gate.
+    if (TrackingTransitionPending())
+    {
+        LOG_INFO("DLSS-NR shutdown: untracked generation still draining; all objects retained");
+        return;
+    }
+
     const bool pendingClones = std::any_of(
         std::begin(g_presentGuideClones), std::end(g_presentGuideClones),
         [](const auto& clone)
@@ -6977,6 +7029,9 @@ void Shutdown()
         delete r.detailStats;
         delete r.pulse;
         delete r.motionProbe;
+        delete r.compose;
+        delete r.guideMatch;
+        delete r.periphery;
         if (r.feature != nullptr && g_nr.release != nullptr)
             g_nr.release(r.feature);
 

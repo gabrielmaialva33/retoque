@@ -27,3 +27,18 @@ The suite compiles `retoque/dlssnr/DlssNr_UntrackedRetire.h` and verbatim produc
 
 Not proved here: real DXGI/D3D12 swapchain queue ownership, Streamline or FG swapchain behavior, GPU execution
 ordering, or native Windows / Proton compatibility.
+
+Live tracking opt-in regression (`migration_cases.cpp`) also compiles the production `TrackNrRecording`,
+`WantsTrackedRecording`, private-list provenance and submission-completion helpers. It covers a pending CPU
+recording, cancellation, delayed/removed GPU fence, an undrained generation, invalid recording lease, changing
+back to one pass during migration, sticky tracking, failed tracker installation, individual/adaptive requests,
+mandatory scene-stage refusal after unsupported history and a late submission on a second queue. Six
+independent mutations remove detach, pending-list, device-loss, queue, individual-opt-in or drain guards; each
+must be rejected by an executable scenario. Only the
+resource-detach operation and collector are faked in that controller fixture; the collector itself is separately
+compiled verbatim above. Its migration tests require the private submission fence even when another collector
+entrypoint is used, prohibit count-only fallback and shutdown release, and retain on device loss.
+
+Source guards inventory all `NrState` resource pointers and helper passes, verify no destruction at detach,
+check private submit/cancel notification ordering, and require held composition references plus stale-generation
+refusal. Runtime queue behavior, actual model rebuilds and native Windows/Proton compatibility remain unverified.

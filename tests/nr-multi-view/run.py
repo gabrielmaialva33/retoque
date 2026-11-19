@@ -108,7 +108,7 @@ def check(text):
     asked = after.index(CALL)
     assert after.index('UpscaledDefersToPresent(') < asked
     assert after.index('++g_upscaleRenders;') < asked
-    assert asked < after.index('EnsureCompose(') < after.index('g_compose->Dispatch(')
+    assert asked < after.index('EnsureCompose(') < after.index('compose->Dispatch(')
     stand = branch(after, CALL)
     assert 'return;' in stand and 'g_resetOnReturn = true;' in stand and 'g_upscaleReason' in stand
 

@@ -1,3 +1,4 @@
+#include <memory>
 #include <dlssnr/DlssNr_UntrackedRetire.h>
 
 #include <cassert>
@@ -137,6 +138,17 @@ struct ID3D12Resource
     unsigned releases = 0;
     void Release() { ++releases; }
 };
+struct DlssNr_Periphery_Dx12
+{
+};
+struct DlssNr_GuideMatch_Dx12
+{
+};
+struct DlssNr_Dx12
+{
+    inline static unsigned destroyed = 0;
+    ~DlssNr_Dx12() { ++destroyed; }
+};
 struct OS_Dx12
 {
 };
@@ -216,6 +228,12 @@ void LogUntrackedPresentFenceUnavailableOnce(uint8_t unavailableReason)
 }
 
 bool g_tracked = false;
+bool s_trackingTransition = false;
+bool ownFenceComplete = true;
+void* s_legacyQueue = nullptr;
+bool migrationQueueMatches = true;
+bool UntrackedPresentFenceMatches(void*) { return migrationQueueMatches; }
+bool UntrackedPresentCompleted() { return ownFenceComplete; }
 DlssNr::Submission::Usage g_usage;
 unsigned g_releasedFeatures = 0;
 void FakeReleaseFeature(void*) { ++g_releasedFeatures; }
@@ -241,6 +259,9 @@ void ResetHarness()
     g_nrRetired.clear();
     g_logs.clear();
     g_tracked = false;
+    s_trackingTransition = false;
+    ownFenceComplete = true;
+    migrationQueueMatches = true;
     g_releasedFeatures = 0;
     g_fakeFence = FakePresentFence {};
 }
@@ -336,6 +357,69 @@ void TestProductionLifetimeSlice()
     for (int tick = 1; tick <= 32; ++tick)
         TickNrRetired(false);
     assert(fb2.releases == 1 && g_logs.size() == 1); // still logged once
+
+    // A migration generation must NEVER use the legacy count-only or shutdown fallback.
+    ResetHarness();
+    ID3D12Resource migrationRes {};
+    ID3D12Resource* migrationPtr = &migrationRes;
+    ParkNrResource(migrationPtr);
+    g_nrRetired.back().requiresPresentFence = true;
+    ownFenceComplete = false;
+    g_fakeFence.completedValue = 100;
+    for (int i = 0; i < 100; ++i)
+        TickNrRetired(false); // Other collector entrypoints must obey the private submission fence too.
+    assert(migrationRes.releases == 0 && g_nrRetired.size() == 1);
+    ownFenceComplete = true;
+    migrationQueueMatches = false;
+    for (int i = 0; i < 100; ++i)
+        TickNrRetired(false); // An unrelated swapchain's completed fence is not evidence for this queue.
+    assert(migrationRes.releases == 0 && g_nrRetired.size() == 1);
+    migrationQueueMatches = true;
+    g_fakeFence.hasFence = false;
+    for (int i = 0; i < 100; ++i)
+        TickNrRetired(false);
+    assert(migrationRes.releases == 0 && g_nrRetired.size() == 1);
+    for (int i = 0; i < 100; ++i)
+        TickNrRetired(true);
+    assert(migrationRes.releases == 0 && g_nrRetired.size() == 1);
+    g_fakeFence.hasFence = true;
+    g_fakeFence.completedValue = UINT64_MAX;
+    TickNrRetired(false);
+    assert(migrationRes.releases == 0);
+    g_fakeFence.completedValue = 2;
+    TickNrRetired(false);
+    assert(migrationRes.releases == 1 && g_nrRetired.empty());
+
+    // Transport resizes can park additional untracked objects while NR is draining; they inherit the strict gate.
+    ResetHarness();
+    s_trackingTransition = true;
+    ID3D12Resource duringTransition {};
+    ID3D12Resource* duringPtr = &duringTransition;
+    ParkNrResource(duringPtr);
+    assert(g_nrRetired.back().requiresPresentFence);
+    g_fakeFence.hasFence = false;
+    for (int i = 0; i < 100; ++i)
+        TickNrRetired(false);
+    assert(duringTransition.releases == 0);
+    g_fakeFence.hasFence = true;
+    g_fakeFence.completedValue = 2;
+    TickNrRetired(false);
+    assert(duringTransition.releases == 1);
+
+    // The retired CPU composition is held across a delayed caller; collection may not destroy its object early.
+    ResetHarness();
+    DlssNr_Dx12::destroyed = 0;
+    auto activeCaller = std::make_shared<DlssNr_Dx12>();
+    NrRetired composition;
+    composition.compose = new std::shared_ptr<DlssNr_Dx12>(activeCaller);
+    composition.requiresPresentFence = true;
+    g_nrRetired.push_back(composition);
+    g_fakeFence.completedValue = 2;
+    for (int tick = 0; tick < 32; ++tick)
+        TickNrRetired(false);
+    assert(g_nrRetired.empty() && DlssNr_Dx12::destroyed == 0);
+    activeCaller.reset();
+    assert(DlssNr_Dx12::destroyed == 1);
 
     // 6. Shutdown path (shutdown=true): preserves original countdown behavior without querying the present fence.
     ResetHarness();

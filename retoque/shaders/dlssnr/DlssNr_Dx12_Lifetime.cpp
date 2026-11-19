@@ -15,9 +15,12 @@
 #include "DlssNr_UiMask_Dx12.h"
 #include "DlssNr_Cadence_Dx12.h"
 #include "DlssNr_MotionProbe_Dx12.h"
+#include "DlssNr_GuideMatch_Dx12.h"
+#include "DlssNr_Periphery_Dx12.h"
 #include <dlssnr/DlssNr_UntrackedRetire.h>
 #include <algorithm>
 #include <optional>
+#include <utility>
 
 namespace DlssNr::Dx12Internal
 {
@@ -153,29 +156,206 @@ bool AdaptiveCadenceRequested()
            DlssNr::Cadence::Requested(config.DlssNrCadence.value_or_default()) > 1;
 }
 
+namespace
+{
+// Under g_nrMutex. Provenance only: the default path installs no hooks and issues no additional GPU work.
+bool s_legacyExternalRecording = false;
+bool s_trackingTransition = false;
+bool s_generationParked = false;
+std::array<ID3D12GraphicsCommandList*, PresentList::kSlots> s_legacyPending {};
+// Held for process lifetime, like the present-fence registry. A lost device is never torn down here.
+ID3D12CommandQueue* s_legacyQueue = nullptr;
+ID3D12Fence* s_legacyFence = nullptr;
+uint64_t s_legacyFenceValue = 0;
+} // namespace
+
+bool TrackingTransitionPending() { return s_trackingTransition; }
+
+// Called only for the private present host, under g_nrMutex after submission/cancellation calls return.
+void EndUntrackedPresent(ID3D12GraphicsCommandList* cmd, ID3D12CommandQueue* queue, ID3D12Fence* fence, uint64_t value)
+{
+    if (!cmd)
+        return;
+    auto pending = std::find(s_legacyPending.begin(), s_legacyPending.end(), cmd);
+    if (pending == s_legacyPending.end())
+        return;
+    if (queue)
+    {
+        if (!s_legacyQueue)
+        {
+            s_legacyQueue = queue;
+            queue->AddRef();
+            s_legacyFence = fence;
+            if (fence)
+                fence->AddRef();
+        }
+        if (queue != s_legacyQueue || fence != s_legacyFence || !fence || !value)
+            s_legacyExternalRecording = true; // No one-queue completion argument.
+        s_legacyFenceValue = std::max(s_legacyFenceValue, value);
+    }
+    *pending = nullptr; // A dropped private list is never replayed; a submitted one has its fence above.
+}
+
+static void NoteUntrackedRecording(ID3D12GraphicsCommandList* cmd, bool privatePresent)
+{
+    s_legacyExternalRecording |= !privatePresent;
+    if (!privatePresent)
+        return;
+    // Re-entering the same open list, or more pending recordings than the private host has slots, cannot
+    // be reconstructed after the fact. Keep the old path running, but refuse migration for that session.
+    if (std::find(s_legacyPending.begin(), s_legacyPending.end(), cmd) != s_legacyPending.end())
+    {
+        s_legacyExternalRecording = true;
+        return;
+    }
+    auto free = std::find(s_legacyPending.begin(), s_legacyPending.end(), nullptr);
+    if (free == s_legacyPending.end())
+        s_legacyExternalRecording = true;
+    else
+        *free = cmd;
+}
+
+static bool UntrackedPresentCompleted()
+{
+    if (s_legacyExternalRecording ||
+        std::any_of(s_legacyPending.begin(), s_legacyPending.end(), [](auto* list) { return list != nullptr; }))
+        return false;
+    if (!s_legacyFence)
+        return s_legacyFenceValue == 0; // All recorded lists were cancelled.
+    const uint64_t completed = s_legacyFence->GetCompletedValue();
+    return completed != UINT64_MAX && completed >= s_legacyFenceValue;
+}
+
+// Detach the entire NR generation while it is STILL untracked. No GPU object is destroyed here.
+// Input/output transport (backbuffer, HDR, synthesized/zero/captured guides) retains its own lifetime gates;
+// it is not part of the NR generation and is not reclassified as tracked by this operation.
+static void ParkUntrackedGeneration()
+{
+    ParkNrFeature(g_nr.feature);
+    for (void*& feature : g_nr.passFeature)
+        ParkNrFeature(feature);
+    for (ID3D12Resource** resource :
+         { &g_nr.colorCopy, &g_nr.output, &g_nr.hdrCopy, &g_nr.colorSmall, &g_nr.outputNative, &g_nr.passPing,
+           &g_nr.heldColor, &g_nr.meter, &g_nr.calib, &g_nr.depthClone, &g_nr.motionClone, &g_nr.depthConstant,
+           &g_nr.depthMatched, &g_nr.motionMatched, &g_nr.unpackedProxy, &g_nr.unpackedAnswer })
+        ParkNrResource(*resource);
+    for (auto& resource : g_nr.meterReadback)
+        ParkNrResource(resource);
+    for (auto& resource : g_nr.calibReadback)
+        ParkNrResource(resource);
+    ParkAltSurfaces();
+    ParkNrScaler(g_nr.superUp);
+    ParkNrScaler(g_nr.superDown);
+    ParkNrStabilizer(g_nr.stabilizer);
+    ParkNrUiMask(g_nr.uiMask);
+    ParkNrCadence(g_nr.cadence);
+    ParkNrEnlarger(g_enlarge.live);
+    ParkTrackingDiagnostics();
+
+    NrRetired shaders;
+    shaders.presentSerial = SnapshotUntrackedPresentSerial();
+    // Keep a reference behind a raw retirement owner so abandoning on device loss also survives static teardown.
+    shaders.compose = new std::shared_ptr<DlssNr_Dx12>(std::move(g_compose));
+    shaders.guideMatch = std::exchange(g_nr.guideMatch, nullptr);
+    shaders.periphery = std::exchange(g_nr.periphery, nullptr);
+    g_nrRetired.push_back(shaders);
+    // Also protect objects parked before the request, without inventing tracked usage for them.
+    for (auto& retired : g_nrRetired)
+        if (!retired.tracked)
+            retired.requiresPresentFence = true;
+
+    g_nr.width = g_nr.height = g_nr.workWidth = g_nr.workHeight = 0;
+    g_nr.scratchRetry = {};
+    g_nr.heldActive = false;
+    g_nr.nrScaler = Scaler::Count;
+    g_nr.reset = true;
+    g_nr.passReset.fill(true);
+    for (unsigned i = 0; i < NrState::kMaxPasses; ++i)
+    {
+        g_nr.passFailed[i] = false;
+        g_nr.creation[i] = {};
+        g_nr.creationFrame[i] = 0;
+    }
+    g_nr.cadencePasses = 0;
+    g_nr.calibFrames = 0;
+    InvalidateExposureMeter();
+    ForgetCalibration();
+    g_cadence.Drop();
+    g_chainSchedule = {};
+    g_chainExtent.Reset();
+    g_postExtent.Reset();
+    g_resetOnReturn = true;
+}
+
 bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory)
 {
-    return mandatory || g_tracked ||
-           (!g_legacyRecorded && (requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested()));
+    return mandatory || g_tracked || s_trackingTransition || requested.Count > 1 || requested.Individual ||
+           AdaptiveCadenceRequested();
 }
 
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
-                      DlssNr::Chain::RecordingLease* lease, bool mandatory)
+                      DlssNr::Chain::RecordingLease* lease, bool mandatory, bool privatePresent)
 {
-    if (mandatory && g_legacyRecorded)
-    {
-        ChainStatus("Dx11SceneStage: PriorUntrackedRecording; restart required");
-        return false;
-    }
     const bool optIn = mandatory || requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested();
+    if (!g_tracked && g_legacyRecorded && (optIn || s_trackingTransition))
+    {
+        if (!s_trackingTransition && s_legacyExternalRecording)
+        {
+            ChainStatus(mandatory ? "Dx11SceneStage: PriorUntrackedRecording on an unsupported route; restart required"
+                                  : "Restart required: prior untracked NR is not confined to private present lists");
+            if (mandatory)
+                return false;
+            // Unsupported routes retain the existing single/master fallback, without tracking old resources.
+            NoteUntrackedRecording(cmd, privatePresent);
+            return true;
+        }
+        if (!lease || !lease->Valid(g_recordings, reinterpret_cast<uintptr_t>(cmd)))
+        {
+            ChainStatus("Another NR recording scope owns the resources; transition deferred");
+            return false;
+        }
+        s_trackingTransition = true;
+        if (s_legacyExternalRecording)
+        {
+            ChainStatus("Restart required: untracked present submissions used more than one queue or lost evidence");
+            return false;
+        }
+        if (std::any_of(s_legacyPending.begin(), s_legacyPending.end(), [](auto* list) { return list != nullptr; }))
+        {
+            ChainStatus("Waiting for the private present host to submit or cancel its last untracked NR list");
+            return false;
+        }
+        if (!s_generationParked)
+        {
+            ParkUntrackedGeneration();
+            s_generationParked = true;
+            ChainStatus("Retiring the untracked NR generation before enabling submission tracking");
+            return false; // Never collect Dispatch's parked `this` during the call that detached it.
+        }
+        // This is additional evidence, not a substitute for the retirement path's later present fence.
+        // A fence on another swapchain/device cannot authorize freeing this generation.
+        if (!UntrackedPresentCompleted())
+        {
+            ChainStatus("Waiting for the private NR submission fence; device loss retains the old generation");
+            return false;
+        }
+        TickNrRetired();
+        if (std::any_of(g_nrRetired.begin(), g_nrRetired.end(),
+                        [](const NrRetired& r) { return r.requiresPresentFence; }))
+        {
+            ChainStatus("Waiting for the untracked NR generation's present fence; no NR recorded");
+            return false;
+        }
+        s_trackingTransition = false;
+        g_legacyRecorded = false;
+        g_tracked = true; // All old NR objects are gone; the normal path builds fresh tracked resources.
+    }
     if (!g_tracked && optIn && !g_legacyRecorded)
         g_tracked = true;
     if (!g_tracked)
     {
-        if (optIn)
-            ChainStatus(
-                "Restart required: existing NR work has no submission lifetime evidence; single/master retained");
         g_legacyRecorded = true;
+        NoteUntrackedRecording(cmd, privatePresent);
         return true;
     }
     if (!lease || !lease->Valid(g_recordings, reinterpret_cast<uintptr_t>(cmd)))
@@ -243,6 +423,7 @@ void ParkNrFeature(void*& feature)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -259,6 +440,7 @@ void ParkNrResource(ID3D12Resource*& res)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -278,6 +460,7 @@ void ParkNrScaler(OS_Dx12*& scaler)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -296,6 +479,7 @@ void ParkNrStabilizer(DlssNr_Stabilizer_Dx12*& stabilizer)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -314,6 +498,7 @@ void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -332,6 +517,7 @@ void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -349,6 +535,7 @@ void ParkNrEnlarger(NrEnlarger*& enlarger)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -390,6 +577,11 @@ void TickNrRetired(bool shutdown)
             }
             retired.stuck = stuck;
         }
+        else if (retired.requiresPresentFence &&
+                 (shutdown || !UntrackedPresentCompleted() || !UntrackedPresentFenceMatches(s_legacyQueue)))
+        {
+            keep = true;
+        }
         else if (shutdown)
         {
             keep = --retired.framesLeft > 0;
@@ -409,11 +601,12 @@ void TickNrRetired(bool shutdown)
                     uint8_t reason = 0;
                     QueryUntrackedPresentFence(&q.hasFence, &q.deviceRemoved, &reason, &q.completedValue);
                     q.unavailable = static_cast<DlssNr::UntrackedRetire::UnavailableReason>(reason);
-                    if (!q.hasFence && !q.deviceRemoved)
+                    if (!q.hasFence && !q.deviceRemoved && !retired.requiresPresentFence)
                         LogUntrackedPresentFenceUnavailableOnce(reason);
                     untrackedQuery = q;
                 }
-                keep = !DlssNr::UntrackedRetire::CanFree(retired.framesLeft, retired.presentSerial, *untrackedQuery);
+                keep = (retired.requiresPresentFence && !untrackedQuery->hasFence) ||
+                       !DlssNr::UntrackedRetire::CanFree(retired.framesLeft, retired.presentSerial, *untrackedQuery);
             }
         }
         if (keep)
@@ -435,6 +628,9 @@ void TickNrRetired(bool shutdown)
         delete retired.detailStats;
         delete retired.pulse;
         delete retired.motionProbe;
+        delete retired.compose;
+        delete retired.guideMatch;
+        delete retired.periphery;
 
         if (retired.enlarger != nullptr)
             enlargers.push_back(retired.enlarger);
@@ -489,6 +685,7 @@ void ParkNrDetailStats(DlssNr_DetailStats_Dx12*& detailStats)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -506,6 +703,7 @@ void ParkNrPulse(DlssNr_Pulse_Dx12*& pulse)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -523,6 +721,7 @@ void ParkNrMotionProbe(DlssNr_MotionProbe_Dx12*& probe)
 
     NrRetired r;
     r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (g_tracked)
         r.usage = g_usage;
     else
@@ -695,6 +894,7 @@ void ParkNrClone(ID3D12Resource*& res, const DlssNr::Submission::Usage& usage, b
 
     NrRetired r;
     r.tracked = tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
     if (tracked)
         r.usage = usage;
     else

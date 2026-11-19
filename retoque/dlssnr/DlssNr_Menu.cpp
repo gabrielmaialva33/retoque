@@ -824,8 +824,10 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
                "second apart, and one the adapter's memory budget cannot hold is refused. A failed extra pass "
                "keeps the last successful answer. Requested passes are not proof of completed work; check the "
                "last evaluation and INFO log."
-               "\n\nEnabling this after untracked NR has already run requires restarting the application. "
-               "Retry cannot make earlier GPU work tracked. Unsupported submission paths refuse extra passes.");
+               "\n\nAfter single-pass NR on private D3D12 present lists, enabling this pauses NR while the old "
+               "generation retires, then builds fresh tracked resources. If earlier NR used game or bridge "
+               "lists, restart the application. An unavailable completion fence keeps NR paused; Retry cannot "
+               "supply missing GPU evidence. Unsupported submission paths refuse extra passes.");
 
     if (!showIndividualSettings)
         return;

@@ -169,7 +169,7 @@ def check(s):
     assert after.count(GAME_NR) == 1, 'the after-upscale route does not ask'
     asked = after.index(GAME_NR)
     assert after.index('UpscaledDefersToPresent(') < asked and after.index('++g_upscaleRenders;') < asked
-    assert asked < after.index('EnsureCompose(') < after.index('g_compose->Dispatch(')
+    assert asked < after.index('EnsureCompose(') < after.index('compose->Dispatch(')
     stand = branch(after, GAME_NR)
     assert 'return;' in stand and 'g_resetOnReturn = true;' in stand and 'g_upscaleReason = why;' in stand
 

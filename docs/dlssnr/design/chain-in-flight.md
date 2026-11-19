@@ -179,3 +179,93 @@ no current generation and nothing non-stuck left parked latches the failure, as 
   - Crimson Desert re-run with multiple passes, to check that the alternation is gone.
   - Native Windows on Rafael's PC before calling it done (CLAUDE.md, "Proton is not a D3D12
     validator").
+
+## Live opt-in after an untracked generation (2026-11-19)
+
+The old `g_legacyRecorded` session latch prevented the first menu change from one pass to multiple passes,
+individual settings or adaptive cadence from taking effect until restart. It was correct to refuse assigning
+an empty tracked usage set to objects already used without tracking. The migration below replaces that refusal
+only when the old recording history can be proved by the private D3D12 present host. Source/host validation is
+not Windows, Proton or GPU qualification.
+
+### Evidence and route boundary
+
+`RunPresentPass` alone marks `PrivatePresentRecording`. `PresentSource`, a current hook setting, or the presence
+of *some* swapchain fence is insufficient. Each untracked NR admission remembers the private list until
+`SubmitPresentList` reports its actual submission (including a failed Signal), or `DropPresentList` reports
+cancellation. A list not yet submitted cannot be made safe by waiting for unrelated presents. Duplicate pending
+list identities and pending-slot overflow make the history unsupported.
+
+The first submitted private list retains its queue and fence identities; subsequent legacy submissions must
+use the same queue and fence. These two COM references are intentionally held for process lifetime, as in the
+existing present-fence registry, so pointer recycling cannot fabricate queue identity. Migration waits for the
+last legacy submission's fence value; `UINT64_MAX` never satisfies it. A failed Signal may be covered by a later
+successful signal on that *same* queue, but cannot authorize release by itself. There are no new queue waits,
+GPU commands, or submission hooks on the single/master path. Its commands, constants, configuration and model
+settings are unchanged; it gains CPU provenance bookkeeping and a held composition reference per entry.
+
+An untracked game-owned list (before/after upscale), the D3D11 bridge's present host, mixed private queues or an
+unknown history retains a route-specific restart status. Mandatory `Dx11SceneStage` refuses that history;
+non-mandatory opt-ins retain the previous single/master fallback. A scene-stage session which starts tracked
+is unchanged. A mandatory scene-stage request may migrate an exclusively private-present legacy history;
+the restriction concerns the old work, not the new tracked destination. Vulkan is unchanged. Supporting those other legacy routes requires their own completion AND
+no-late-submission/replay argument; the generic present fence alone is not one.
+
+### Transition and resource inventory
+
+Under the existing `g_nrMutex` and a valid recording lease:
+
+1. The first supported opt-in stops all new untracked NR recording. If a private legacy list is still on the
+   CPU, NR skips until that host submits or cancels it. Reverting the menu choice during this wait does not
+   resume untracked writes. No other recording scope can begin the transition.
+2. Detach the old generation while `g_tracked` is still false: every model/pass feature; current and alternate
+   color/output/HDR/working/ping-pong textures; held frame; depth/motion clones, constant depth and matched
+   guides; unpacked periphery surfaces; meter/calibration textures and their readbacks; both scalers;
+   stabilizer, UI mask, cadence, enlargement, guide-match and periphery passes; the entire composition shader
+   (including its descriptors and mapped constants); detail measurement copies/pass, pulse and motion probe.
+   Reset histories, pending diagnostic readbacks and settling/scheduling state. The runtime entry points,
+   capability parameter table and device owner remain session-owned CPU state.
+3. Existing `ParkNr*` helpers stamp untracked present serials. Mark *all* parked untracked entries, including
+   earlier ones, `requiresPresentFence`; later untracked parks during the transition inherit the same gate. `TickNrRetired` retains these until the private submission proof,
+   the existing 32-evaluation count and the existing later present fence all pass. The present-fence registry
+   must match the retained legacy queue's canonical COM identity; a same-adapter fence on another queue cannot
+   authorize collection. Missing/multiple-queue/
+   failed fences have **no count-only fallback** for migration entries. The guard is inside the collector,
+   so guide-capture calls to that collector cannot bypass it. Shutdown retains the entire pending transition;
+   it cannot bypass these gates. Device loss retains/abandons, never destroys the generation.
+4. Once no migration entry remains, arm sticky tracking and let normal tracked creation build fresh model,
+   textures and helper passes. The new composition may be allocated while draining, but records no NR GPU
+   commands before admission. Tracker/creation failures remain normal refusals; the code never reverts to
+   untracked recording. There is no repeated generation retirement if settings change while draining.
+
+Transport-owned resources stay under their existing transport lifetime, rather than being reclassified:
+backbuffer/HDR conversion, zero/synthesized guides, captured guide rings and capture/timing machinery. They
+can still be used to pass the untouched frame through during the NR pause. All old NR reads of them finish
+before migration completes; tracked NR thereafter borrows them through the existing contracts. Pre-upscale
+scratch cannot belong to a migratable history: its admission would already have marked the history external.
+
+`g_compose` is now shared with active callers. Acquisition is under `g_nrMutex`, and Dispatch refuses a detached
+instance before recording. This covers a caller delayed between obtaining the composition and entering
+Dispatch; replacing a bare unique owner would otherwise permit a null/stale dereference. Retirement owns a
+heap-held shared reference through a raw pointer: abandoning the retirement entry on device loss also avoids
+running its GPU destructor during static vector teardown. A caller's final reference may delay destruction
+past fence collection, never bring it forward.
+
+Lock order remains pre-scope -> NR -> diagnostic session/status and the existing present-fence leaf lock.
+Submission/cancellation notification acquires NR only after queue calls/abandon return; no queue call is made
+under a new lock. The transition does not call shutdown, take the pre-scope mutex or wait on the CPU for GPU progress.
+It preserves the collector's release order, including enlargement destruction after vector edits.
+
+### Validation boundary
+
+`tests/nr-untracked-retire` runs the production admission/provenance functions with host fakes, plus the real
+retirement slices under ASan/UBSan: default no tracking, pending CPU list, cancellation, delayed GPU fence,
+removed device, retirement delay, rollback during migration, invalid lease, tracker refusal, sticky tracking,
+individual/adaptive opt-ins and late mixed-queue refusal. Source guards inventory every `NrState` resource,
+check composition acquisition/stale-generation refusal and submission/cancellation ordering. The existing
+scene-stage, pre-upscale, multipass, present-fence and internal-linkage suites cover adjacent contracts.
+
+Required runtime follow-up: native Windows and Proton on the route matrix; one -> two -> ten -> one passes,
+individual/adaptive enable, rapid setting changes, outstanding asynchronous present work, deliberate signal/
+device loss and NR shutdown during draining. Confirm requested/completed counts, history restart and unchanged
+default pixels/commands. No visual, performance or GPU correctness claim follows from the host tests.

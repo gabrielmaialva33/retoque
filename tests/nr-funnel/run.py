@@ -88,7 +88,7 @@ tail = evaluate[returns[-1]:] if returns else evaluate
 require(re.search(r'if \(coverage\.sample\.applied\)\s*funnel\.Ran\(coverage\.sample\.modelCalled\);\s*else\s*'
                   r'funnel\.Declined\(Funnel::Decline::PassRecordedNothing, coverage\.sample\.reason\);', tail),
         'the end of the pass counts what Dispatch did: ran (with whether the model was called) or recorded nothing')
-require(re.search(r'funnel\.Recording\(\);\s*(?:\n.*){0,6}g_compose->Dispatch\(', evaluate),
+require(re.search(r'funnel\.Recording\(\);\s*(?:\n.*){0,6}compose->Dispatch\(', evaluate),
         'the stage mark says the pass is recording just before Dispatch')
 used = set(re.findall(r'Funnel::Decline::(\w+)', evaluate))
 for decline in declines:
