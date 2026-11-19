@@ -450,6 +450,12 @@ impl RetoqueApp {
                 self.tr("shell.details"),
                 widgets::Fold::Details,
                 |ui| {
+                    self.status_chips(ui, true);
+                    ui.label(format!(
+                        "{} · {}",
+                        store_name(self.lang, game.store),
+                        runtime_text(self.lang, &game.runtime)
+                    ));
                     self.target_picker(ui, game);
                     if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
                         ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
@@ -808,173 +814,177 @@ impl RetoqueApp {
     pub(crate) fn game_banner(&mut self, ui: &mut egui::Ui, game: &Game) {
         let art = self.library_state.art.get(&game.id).cloned().unwrap_or_default();
         let compact = self.tab == Tab::Compare;
-        // A short window gets a lower banner, so the tab's first card shows without scrolling.
-        let short = ui.ctx().content_rect().height() < SHORT_PAGE;
-        let height = if compact {
-            100.0
-        } else if short {
-            176.0
-        } else {
-            240.0
-        };
-        let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
-        if let Some(hero) = art.hero.as_deref() {
-            let ratio = rect.width() / rect.height();
-            let source_ratio = 3840.0 / 1240.0;
-            let uv = if ratio < source_ratio {
-                let fraction = ratio / source_ratio;
-                egui::Rect::from_min_max(
-                    egui::pos2((1.0 - fraction) / 2.0, 0.0),
-                    egui::pos2((1.0 + fraction) / 2.0, 1.0),
-                )
-            } else {
-                let fraction = source_ratio / ratio;
-                egui::Rect::from_min_max(
-                    egui::pos2(0.0, (1.0 - fraction) / 2.0),
-                    egui::pos2(1.0, (1.0 + fraction) / 2.0),
-                )
-            };
-            egui::Image::new(widgets::file_uri(hero))
-                .uv(uv)
-                .corner_radius(12)
-                .paint_at(ui, rect);
-        } else {
-            ui.painter().rect_filled(rect, 12, theme::CARD);
-        }
-        if compact {
-            ui.painter().rect_filled(rect, 12, Color32::from_black_alpha(200));
-        } else {
-            widgets::hero_shade(ui.painter(), rect, 12.0);
-        }
-        let mut child = ui.new_child(
-            egui::UiBuilder::new()
-                .max_rect(rect.shrink(16.0))
-                .layout(egui::Layout::top_down(egui::Align::Min)),
-        );
-        let mut star_ui = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
-            egui::pos2(rect.right() - 48., rect.top() + 8.),
+        // Lay out the content first. Background slots precede the controls in paint order, but get their
+        // final bounds only after wrapping (including zoom and long translations) has determined the height.
+        let mut frame = egui::Frame::new()
+            .fill(theme::CARD)
+            .corner_radius(12)
+            .inner_margin(16)
+            .begin(ui);
+        let background = ui.painter().add(egui::Shape::Noop);
+        let shade = ui.painter().add(egui::Shape::Noop);
+        let child = &mut frame.content_ui;
+        child.set_width(child.available_width());
+        let title_width = (child.available_width() - 44.0).max(1.0);
+        let star_rect = egui::Rect::from_min_size(
+            egui::pos2(child.max_rect().right() - 32., child.max_rect().top()),
             egui::vec2(32., 32.),
-        )));
+        );
+        let mut star_ui = child.new_child(egui::UiBuilder::new().max_rect(star_rect));
         if crate::play::favorite_button(&mut star_ui, game, self.saved.favorites.contains(&game.id), self.lang)
             .clicked()
         {
             self.toggle_favorite(&game.id);
         }
-        if compact {
-            child.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
-        } else if let Some(logo) = art.logo.as_deref() {
-            child.add(
-                egui::Image::new(widgets::file_uri(logo))
-                    .fit_to_exact_size(egui::vec2(300.0, 96.0))
-                    .maintain_aspect_ratio(true),
-            );
-        } else {
-            child.label(RichText::new(&game.name).heading().strong());
-            child.add_space(22.0);
-        }
-        self.status_chips(&mut child, !compact);
-        if compact {
-            return;
-        }
-        child.add_space(8.0);
-        if let Some((done, total)) = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied() {
-            let kind = self
-                .view
-                .target
-                .as_ref()
-                .and_then(|target| self.write_kinds.get(target));
-            let key = match kind {
-                Some(PlanKind::Uninstall) => "shell.progress_remove",
-                Some(PlanKind::Settings) => "shell.progress_save",
-                Some(PlanKind::Install) if matches!(&self.view.status,Some(Ok(s)) if s.receipt.is_some()) => {
-                    "shell.progress_update"
-                }
-                _ => "shell.progress_install",
-            };
-            child.horizontal_wrapped(|ui| {
-                ui.add_enabled(false, theme::primary(&format!("{} {done}/{total}", self.tr(key))));
-                self.play_button(ui, game);
-            });
-            child.ctx().request_repaint_after(std::time::Duration::from_millis(100));
-        } else {
-            let state = self.view.status.as_ref().and_then(|r| r.as_ref().ok()).map(|s| {
-                install_state(
-                    s,
+        child.scope(|ui| {
+            ui.set_width(title_width);
+            ui.set_min_height(32.0);
+            if !compact && let Some(logo) = art.logo.as_deref() {
+                ui.add(
+                    egui::Image::new(widgets::file_uri(logo))
+                        .fit_to_exact_size(egui::vec2(title_width.min(300.0), 64.0))
+                        .maintain_aspect_ratio(true),
+                );
+            } else {
+                ui.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
+            }
+        });
+        match &self.view.status {
+            Some(Ok(status)) => {
+                let state = install_state(
+                    status,
                     self.payload_build
                         .as_ref()
                         .and_then(|r| r.as_ref().ok())
                         .map(String::as_str),
-                )
-            });
-            let ready = self.optimize_ready();
-            child.horizontal_wrapped(|ui| {
-                // The page's one primary, named for what it does here: "Install and optimize" opens one review for
-                // Retoque plus everything this card and GPU need; an update or an old script's install goes into
-                // the same review. Every other action sits in "More actions" beside it.
-                if state == Some(InstallState::Partial) {
-                    if ui
-                        .add(theme::primary(self.tr("shell.resume")))
-                        .on_hover_text(self.tr("shell.review_shortcut"))
-                        .clicked()
-                    {
-                        self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
-                    }
-                } else {
-                    let key = self.optimize_action_key();
-                    let only_optimize = key == "shell.optimize";
-                    let response = ui
-                        .add_enabled(
-                            state.is_some() && ready && (only_optimize || self.payload.is_some()),
-                            theme::primary(self.tr(key)),
-                        )
-                        .on_hover_text(self.tr(if only_optimize {
-                            "shell.optimize_hint"
-                        } else {
-                            "shell.install_optimize_hint"
-                        }))
-                        .on_disabled_hover_text(self.tr(if self.payload.is_none() && !only_optimize {
-                            "shell.no_payload"
-                        } else {
-                            "shell.checking"
-                        }));
-                    if response.clicked() {
-                        self.optimize_automatically();
-                    }
+                );
+                child.label(RichText::new(self.tr(state.label())).color(theme::TEXT_STRONG));
+                if status.version_mismatch() {
+                    child.colored_label(theme::WARN, self.tr("ver.mismatch"));
                 }
-                self.play_button(ui, game);
-                self.banner_more_actions(ui, state, game);
-                let download = if self.nr_fetch.busy {
-                    Some((
-                        "nr_fetch.downloading",
-                        self.nr_fetch.downloaded,
-                        Some(self.nr_fetch.total),
-                    ))
-                } else if self.tuning.sm86.busy {
-                    Some(("sm86.progress", self.tuning.sm86.downloaded, self.sm86_download_total()))
-                } else {
-                    self.tuning
-                        .dlss
-                        .download_progress()
-                        .map(|bytes| ("dlss.downloading", bytes, Some(retoque_data::dlss::download_size())))
-                };
-                if let Some((label, bytes, total)) = download {
-                    widgets::busy(ui, self.lang, self.tr(label), (bytes > 0).then_some(bytes), total);
-                }
-            });
+            }
+            Some(Err(error)) => {
+                crate::error::card(child, error, self.lang, &self.cmd_tx);
+            }
+            None => {
+                child.label(self.tr("shell.checking"));
+            }
         }
-        child.label(
-            RichText::new(format!(
-                "{} · {}",
-                store_name(self.lang, game.store),
-                runtime_text(self.lang, &game.runtime)
-            ))
-            .small()
-            .color(theme::MUTED),
-        );
-        // A short banner can put its last caption below the image. Reserve the actual child bounds before
-        // the anti-cheat warning (or the feature tiles), so the next content never overlaps that caption.
-        if child.min_rect().bottom() > rect.bottom() {
-            ui.advance_cursor_after_rect(child.min_rect());
+        if !compact {
+            child.add_space(4.0);
+            if let Some((done, total)) = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied() {
+                let kind = self
+                    .view
+                    .target
+                    .as_ref()
+                    .and_then(|target| self.write_kinds.get(target));
+                let key = match kind {
+                    Some(PlanKind::Uninstall) => "shell.progress_remove",
+                    Some(PlanKind::Settings) => "shell.progress_save",
+                    Some(PlanKind::Install) if matches!(&self.view.status,Some(Ok(s)) if s.receipt.is_some()) => {
+                        "shell.progress_update"
+                    }
+                    _ => "shell.progress_install",
+                };
+                child.horizontal_wrapped(|ui| {
+                    ui.add_enabled(false, theme::primary(&format!("{} {done}/{total}", self.tr(key))));
+                    self.play_button(ui, game);
+                });
+                child.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+            } else {
+                let state = self.view.status.as_ref().and_then(|r| r.as_ref().ok()).map(|s| {
+                    install_state(
+                        s,
+                        self.payload_build
+                            .as_ref()
+                            .and_then(|r| r.as_ref().ok())
+                            .map(String::as_str),
+                    )
+                });
+                let ready = self.optimize_ready();
+                child.horizontal_wrapped(|ui| {
+                    // The page's one primary, named for what it does here: "Install and optimize" opens one review for
+                    // Retoque plus everything this card and GPU need; an update or an old script's install goes into
+                    // the same review. Every other action sits in "More actions" beside it.
+                    if state == Some(InstallState::Partial) {
+                        if ui
+                            .add(theme::primary(self.tr("shell.resume")))
+                            .on_hover_text(self.tr("shell.review_shortcut"))
+                            .clicked()
+                        {
+                            self.request_plan(PlanKind::Uninstall, PlanInputs::Uninstall);
+                        }
+                    } else {
+                        let key = self.optimize_action_key();
+                        let only_optimize = key == "shell.optimize";
+                        let response = ui
+                            .add_enabled(
+                                state.is_some() && ready && (only_optimize || self.payload.is_some()),
+                                theme::primary(self.tr(key)),
+                            )
+                            .on_hover_text(self.tr(if only_optimize {
+                                "shell.optimize_hint"
+                            } else {
+                                "shell.install_optimize_hint"
+                            }))
+                            .on_disabled_hover_text(self.tr(if self.payload.is_none() && !only_optimize {
+                                "shell.no_payload"
+                            } else {
+                                "shell.checking"
+                            }));
+                        if response.clicked() {
+                            self.optimize_automatically();
+                        }
+                    }
+                    self.play_button(ui, game);
+                    self.banner_more_actions(ui, state, game);
+                    let download = if self.nr_fetch.busy {
+                        Some((
+                            "nr_fetch.downloading",
+                            self.nr_fetch.downloaded,
+                            Some(self.nr_fetch.total),
+                        ))
+                    } else if self.tuning.sm86.busy {
+                        Some(("sm86.progress", self.tuning.sm86.downloaded, self.sm86_download_total()))
+                    } else {
+                        self.tuning
+                            .dlss
+                            .download_progress()
+                            .map(|bytes| ("dlss.downloading", bytes, Some(retoque_data::dlss::download_size())))
+                    };
+                    if let Some((label, bytes, total)) = download {
+                        widgets::busy(ui, self.lang, self.tr(label), (bytes > 0).then_some(bytes), total);
+                    }
+                });
+            }
+            child.label(
+                RichText::new(format!(
+                    "{} · {}",
+                    store_name(self.lang, game.store),
+                    runtime_short(self.lang, &game.runtime)
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
+        }
+        let rect = frame.end(ui).rect;
+        if let Some(hero) = art.hero.as_deref() {
+            let image = egui::Image::new(widgets::file_uri(hero));
+            if let Ok(egui::load::TexturePoll::Ready { texture }) = image.load_for_size(ui.ctx(), rect.size()) {
+                let ratio = rect.width() / rect.height();
+                let source_ratio = texture.size.x / texture.size.y;
+                let fraction = (ratio / source_ratio).min(1.0);
+                let height = (source_ratio / ratio).min(1.0);
+                let uv = egui::Rect::from_min_max(
+                    egui::pos2((1.0 - fraction) / 2.0, (1.0 - height) / 2.0),
+                    egui::pos2((1.0 + fraction) / 2.0, (1.0 + height) / 2.0),
+                );
+                ui.painter().set(
+                    background,
+                    egui::epaint::RectShape::filled(rect, 12, Color32::WHITE).with_texture(texture.id, uv),
+                );
+                ui.painter().set(shade, widgets::hero_shade_shape(rect, 12.0));
+            }
         }
         ui.add_space(12.0);
     }

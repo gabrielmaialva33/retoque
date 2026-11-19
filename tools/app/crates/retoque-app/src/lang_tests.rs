@@ -316,3 +316,280 @@ fn choosing_a_language_applies_at_once_and_is_saved() {
     h.get_by_label(t(Lang::De, "prefs.title"));
     assert_ne!(t(Lang::De, "prefs.title"), t(Lang::En, "prefs.title"));
 }
+
+/// Physical window sizes divided by zoom give egui's logical viewport. Exercise all translations, including
+/// the owner's 1.2 zoom and the minimum window at 1.5, without depending on a compositor or graphics driver.
+#[test]
+fn audited_banner_and_tiles_fit_at_every_zoom_and_language() {
+    let dir = tempfile::tempdir().unwrap();
+    let logo = dir.path().join("logo.png");
+    std::fs::write(&logo, include_bytes!("../assets/retoque-256.png")).unwrap();
+    for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+        for zoom in [1.0, 1.2, 1.5] {
+            for lang in Lang::ALL {
+                assert!(
+                    crate::fonts::can_show(lang),
+                    "layout qualification needs a font for {lang:?}"
+                );
+                for compact in [false, true] {
+                    let mut state = app();
+                    state.lang = lang;
+                    state.tab = if compact { Tab::Compare } else { Tab::Install };
+                    state.view.status = Some(Ok(Status {
+                        optiscaler_proxies: vec!["dxgi.dll".into()],
+                        proxy_version: Some("10.0.0.1".into()),
+                        forwarder_version: Some("10.0.0.1".into()),
+                        ..Default::default()
+                    }));
+                    state.library_state.art.insert(
+                        "steam:1".into(),
+                        retoque_discovery::Artwork {
+                            logo: Some(logo.clone()),
+                            ..Default::default()
+                        },
+                    );
+                    let game = game(dir.path());
+                    let mut h = Harness::builder()
+                        .with_size([size[0] / zoom, size[1] / zoom])
+                        .with_context_setup(move |ctx| {
+                            crate::theme::apply(ctx);
+                            crate::fonts::apply(ctx, lang);
+                            egui_extras::install_image_loaders(ctx);
+                        })
+                        .build_ui_state(
+                            move |ui, state: &mut RetoqueApp| {
+                                state.game_banner(ui, &game);
+                                state.feature_tiles(ui);
+                            },
+                            state,
+                        );
+                    h.run_steps(4);
+                    let banner = h
+                        .output()
+                        .shapes
+                        .iter()
+                        .find_map(|s| match &s.shape {
+                            egui::Shape::Rect(r)
+                                if r.fill == theme::CARD && r.rect.width() > 400. && r.rect.top() < 20. =>
+                            {
+                                Some(r.rect)
+                            }
+                            _ => None,
+                        })
+                        .expect("banner background");
+                    for button in h.query_all_by_role(Role::Button) {
+                        assert!(
+                            banner.expand(0.5).contains_rect(button.rect()),
+                            "{lang:?} {size:?} zoom={zoom} compact={compact}: button {:?} outside {banner:?}",
+                            button.rect()
+                        );
+                    }
+                    assert!(
+                        h.query_by_label("OptiScaler 10.0.0.1 · NR component 10.0.0.1")
+                            .is_none()
+                    );
+                    let tiles: Vec<_> = h
+                        .query_all_by_role(Role::Label)
+                        .filter(|n| n.rect().height() == 80.)
+                        .map(|n| n.rect())
+                        .collect();
+                    assert_eq!(tiles.len(), 5);
+                    let mut rows: Vec<Vec<egui::Rect>> = vec![];
+                    for tile in tiles {
+                        assert!(tile.top() >= banner.bottom());
+                        assert!(tile.right() <= size[0] / zoom);
+                        if rows.last().is_none_or(|row| row[0].top() != tile.top()) {
+                            rows.push(vec![]);
+                        }
+                        rows.last_mut().unwrap().push(tile);
+                    }
+                    assert!(rows.len() <= 2, "{lang:?} {size:?} zoom={zoom}: 5 or 3+2 tiles");
+                    for row in &rows {
+                        assert!(row.len() >= 2, "orphan tile");
+                        assert!(
+                            (row.last().unwrap().right() - banner.right()).abs() < 2.,
+                            "row does not fill width: {row:?} {banner:?}"
+                        );
+                        for tile in row {
+                            assert!((tile.width() - row[0].width()).abs() < 1.);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Explicit local visual review only. Reads the installed library, never applies a plan or persists app state.
+/// Images stay in the caller's scratch directory, not snapshots checked into the repository.
+#[cfg(feature = "visual-tests")]
+#[test]
+#[ignore = "manual read-only library render; requires RETOQUE_LOOK_SHOTS"]
+fn render_audited_library() {
+    let out = PathBuf::from(std::env::var("RETOQUE_LOOK_SHOTS").expect("scratch output folder"));
+    let phase = std::env::var("RETOQUE_LOOK_PHASE").unwrap_or_else(|_| "after".into());
+    let (games, _) = retoque_discovery::discover(&retoque_discovery::Config::default());
+    assert!(!games.is_empty(), "real library is required for this manual review");
+    let statuses: HashMap<_, _> = games
+        .iter()
+        .flat_map(|g| &g.targets)
+        .filter_map(|t| retoque_core::status(&t.path).ok().map(|s| (t.path.clone(), s)))
+        .collect();
+    for zoom in [1.0, 1.2] {
+        for (group, tab) in [
+            ("defects", Some(Tab::Install)),
+            ("identity", Some(Tab::Install)),
+            ("library", None),
+            ("chrome", Some(Tab::Settings)),
+            ("minimum", Some(Tab::Install)),
+        ] {
+            let mut state = app();
+            state.lang = Lang::Pt;
+            state.tuning.gpus = Some(vec![]);
+            state.payload = std::env::var_os("RETOQUE_SOURCE_DIR").map(PathBuf::from);
+            state.library_state.games = games.clone();
+            state.library_state.status = statuses.clone();
+            for game in &games {
+                if let Runtime::Proton { app_id, .. } = game.runtime {
+                    state.library_state.art.insert(
+                        game.id.clone(),
+                        retoque_discovery::steam_artwork(app_id, dirs::home_dir().as_deref()),
+                    );
+                }
+            }
+            let game = games
+                .iter()
+                .find(|g| g.name.to_lowercase().contains("cyberpunk"))
+                .expect("review game");
+            let target = &game.targets[0].path;
+            state.payload_build = statuses.get(target).and_then(|s| s.build_sha256.clone()).map(Ok);
+            if let Some(tab) = tab {
+                state.selected = Some(game.id.clone());
+                state.tab = tab;
+                state.view.target = Some(target.clone());
+                state.view.status = statuses.get(target).cloned().map(Ok);
+                if let Ok(bytes) = std::fs::read(target.join("OptiScaler.ini")) {
+                    let ini = Ini::parse(&bytes);
+                    state.view.ini_values = crate::state::settings::IniValues::read(&ini);
+                    state.view.ini = Some(Ok(Some(ini)));
+                }
+            }
+            let mut h = Harness::builder()
+                .with_size(if group == "minimum" {
+                    [820. / zoom, 520. / zoom]
+                } else {
+                    [1280. / zoom, 800. / zoom]
+                })
+                .with_context_setup(|ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, Lang::Pt);
+                    egui_extras::install_image_loaders(ctx);
+                })
+                .build_ui_state(
+                    move |ui, state: &mut RetoqueApp| {
+                        state.context = ui.ctx().clone();
+                        if group == "chrome" {
+                            let mut edits = std::mem::take(&mut state.view.edits);
+                            let commands = state.cmd_tx.clone();
+                            state.settings_tab(ui, &mut edits, &commands);
+                            state.view.edits = edits;
+                        } else {
+                            state.window(ui);
+                        }
+                    },
+                    state,
+                );
+            // File-image loaders work asynchronously; advance frames until their textures are ready.
+            for _ in 0..30 {
+                h.run_steps(1);
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            h.render()
+                .expect("offscreen render")
+                .save(out.join(format!("app-look-{group}-{phase}-{zoom:.1}x.png")))
+                .unwrap();
+        }
+    }
+}
+
+#[test]
+fn audited_install_intent_precedes_information_and_versions_live_in_details() {
+    use retoque_data::doctor::{Finding, Severity};
+    let dir = tempfile::tempdir().unwrap();
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut state = app();
+            state.lang = lang;
+            state.view.target = Some(dir.path().into());
+            state.view.status = Some(Ok(Status::default()));
+            state.view.doctor = Some(crate::tabs::doctor::DoctorCard {
+                findings: vec![Finding {
+                    id: "informational",
+                    severity: Severity::Info,
+                    title_key: "tile.dlss",
+                    why_key: "tile.dlss_detail",
+                    evidence: vec![],
+                    repair: None,
+                }],
+            });
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(|ui, state: &mut RetoqueApp| state.install_tab(ui), state);
+            h.run_steps(2);
+            assert!(
+                h.get_by_label(t(lang, "inst.plan_title")).rect().top()
+                    < h.get_by_label(t(lang, "doctor.title")).rect().top()
+            );
+        }
+        let mut h = window(lang, dir.path(), true, Some(Tab::Install), [1280., 800.]);
+        let status = h.state_mut().view.status.as_mut().unwrap().as_mut().unwrap();
+        status.optiscaler_proxies.push("dxgi.dll".into());
+        status.proxy_version = Some("10.0.0.1".into());
+        status.forwarder_version = Some("10.0.0.1".into());
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("10.0.0.1").is_none());
+        h.get_by_label(t(lang, "shell.details")).click();
+        h.run_steps(3);
+        h.get_by_label_contains("OptiScaler 10.0.0.1");
+        h.get_by_label(&format!(
+            "{} · {}",
+            store_name(lang, Store::Steam),
+            runtime_text(lang, &game(dir.path()).runtime)
+        ));
+    }
+}
+
+#[test]
+fn audited_sidebar_keeps_the_game_banner_inside_the_zoomed_window() {
+    let dir = tempfile::tempdir().unwrap();
+    for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+        for zoom in [1.0, 1.2, 1.5] {
+            let logical = [size[0] / zoom, size[1] / zoom];
+            for lang in Lang::ALL {
+                let mut h = window(lang, dir.path(), true, Some(Tab::Install), logical);
+                let rect = h
+                    .output()
+                    .shapes
+                    .iter()
+                    .find_map(|s| match &s.shape {
+                        egui::Shape::Rect(r)
+                            if r.fill == theme::CARD
+                                && r.rect.left() > logical[0] * 0.25
+                                && r.rect.top() < 160.
+                                && r.rect.width() > 100. =>
+                        {
+                            Some(r.rect)
+                        }
+                        _ => None,
+                    })
+                    .expect("game banner");
+                assert!(rect.right() <= logical[0], "{lang:?} {size:?} at {zoom}: {rect:?}");
+                top_bar_fits(&mut h, lang, true, logical);
+            }
+        }
+    }
+}

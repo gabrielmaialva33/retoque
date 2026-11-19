@@ -88,6 +88,8 @@ impl RetoqueApp {
         // Before install the page stays short: what "Install and optimize" will do, and the Diagnóstico only when it
         // found something. ReShade shows up when the game already has it.
         if !installed {
+            self.plan_card(ui, busy);
+            ui.add_space(theme::CARD_GAP);
             if let (Some(card), Some(target)) = (&self.view.doctor, &self.view.target)
                 && !card.findings.is_empty()
             {
@@ -100,7 +102,6 @@ impl RetoqueApp {
                 self.reshade_card(ui);
                 ui.add_space(theme::CARD_GAP);
             }
-            self.plan_card(ui, busy);
             return;
         }
         self.session_card(ui);
@@ -330,10 +331,8 @@ impl RetoqueApp {
                 .and_then(|r| r.as_ref().ok())
                 .map(String::as_str),
         );
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
-            // Five tiles share the column's width: one even row when they fit, equal columns when they wrap.
-            let tile_w = widgets::row_width(5, ui.available_width(), 138.0, 10.0);
+        let mut tiles: Vec<(String, String, String, Color32)> = Vec::with_capacity(5);
+        {
             // Graphics card.
             let (value, detail) = match gpu {
                 Some(g) => (
@@ -351,17 +350,14 @@ impl RetoqueApp {
                 ),
                 None => (self.tr("tile.unknown").to_owned(), String::new()),
             };
-            widgets::feature_tile(ui, tile_w, self.tr("tile.gpu"), &value, &detail, theme::ACCENT);
+            tiles.push((self.tr("tile.gpu").into(), value, detail, theme::ACCENT));
             // Retoque itself.
             let detail = match &status.build_sha256 {
                 Some(hash) => self.build_text(hash),
                 None => String::new(),
             };
             let value = self.tr(state.short_label());
-            let tile = widgets::feature_tile(ui, tile_w, self.tr("brand"), value, &detail, state.color());
-            if let Some(hash) = &status.build_sha256 {
-                tile.on_hover_text(self.build_hover(hash));
-            }
+            tiles.push((self.tr("brand").into(), value.into(), detail, state.color()));
             // Neural Rendering.
             let model = self.view.inspection.as_ref();
             let (value, detail, color) = match status.nr_enabled {
@@ -385,7 +381,7 @@ impl RetoqueApp {
                 Some(false) => (self.tr("tile.off"), String::new(), theme::MUTED),
                 None => (self.tr("tile.unknown"), String::new(), theme::MUTED),
             };
-            widgets::feature_tile(ui, tile_w, self.tr("tile.nr"), value, &detail, color);
+            tiles.push((self.tr("tile.nr").into(), value.into(), detail, color));
             // Frame generation: ours (LSFG, sm86) first, then the game's own DLSS-G where this card can run it.
             let lsfg_multiplier = ini.and_then(|i| i.get("LSFG", "Multiplier")).map(str::trim);
             let older = gpu.is_some_and(|g| matches!(g.arch, Arch::Turing | Arch::Ampere));
@@ -408,7 +404,7 @@ impl RetoqueApp {
             } else {
                 (self.tr("tile.off").to_owned(), String::new(), theme::MUTED)
             };
-            widgets::feature_tile(ui, tile_w, self.tr("tile.fg"), &value, &detail, color);
+            tiles.push((self.tr("tile.fg").into(), value, detail, color));
             // The game's DLSS files.
             let names = self
                 .selected_game()
@@ -433,15 +429,37 @@ impl RetoqueApp {
             } else {
                 (parts.join(" · "), theme::GOOD)
             };
-            widgets::feature_tile(
-                ui,
-                tile_w,
-                self.tr("tile.dlss"),
-                &value,
-                self.tr("tile.dlss_detail"),
+            tiles.push((
+                self.tr("tile.dlss").into(),
+                value,
+                self.tr("tile.dlss_detail").into(),
                 color,
-            );
-        });
+            ));
+        }
+        // Five in one line, or 3 + 2 with both rows filling the width. At very narrow widths a vertical stack
+        // remains readable; never leave a single tile stranded below a two-column grid.
+        let width = ui.available_width();
+        let per_row = if width >= 5.0 * 138.0 + 40.0 {
+            5
+        } else if width >= 3.0 * 100.0 + 20.0 {
+            3
+        } else {
+            1
+        };
+        for row in tiles.chunks(per_row) {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                let tile_w = (width - 10.0 * (row.len() - 1) as f32 - 1.0) / row.len() as f32;
+                for (caption, value, detail, color) in row {
+                    let response = widgets::feature_tile(ui, tile_w, caption, value, detail, *color);
+                    if caption == self.tr("brand")
+                        && let Some(hash) = &status.build_sha256
+                    {
+                        response.on_hover_text(self.build_hover(hash));
+                    }
+                }
+            });
+        }
         ui.add_space(12.0);
     }
 

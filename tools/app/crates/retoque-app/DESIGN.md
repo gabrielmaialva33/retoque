@@ -98,3 +98,12 @@ and announces “Add to favorites: {game}” or “Remove from favorites: {game}
 Sidebar rows have no star control. On cards, paint the badge only for favorites or on hover/focus;
 it remains reachable by Tab even when not painted. Favorites form the first filtered library group. Library cards/rows still open the game page; they have no Play.
 The existing More actions menu holds game folder, settings file and captures folder, the latter two only if present.
+
+## Responsive game header
+
+The banner grows with its content at every zoom: its art and shade enclose the wrapped actions. Keep the game
+name or logo, installation state, primary action, Play and store/runtime here. Component versions and the store's
+raw identifier belong in game details. Before installation, the card explaining the primary action comes before
+informational health-check notes; a failed change still comes first.
+The five status tiles fill one row when there is room, otherwise two full-width rows of three and two. An extremely
+narrow page uses a readable vertical stack instead of leaving a single orphan below a two-column grid.

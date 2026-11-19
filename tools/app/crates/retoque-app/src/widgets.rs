@@ -675,6 +675,10 @@ pub fn stat_tile_width(ui: &mut egui::Ui, width: f32, label: &str, value: &str, 
 /// The shade over a game's hero art: dark on the left where the name, status and actions sit, opening to the art
 /// on the right, with a little weight at the bottom edge. Rounded ends match the art's corners.
 pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
+    painter.add(hero_shade_shape(rect, radius));
+}
+
+pub(crate) fn hero_shade_shape(rect: Rect, radius: f32) -> egui::Shape {
     // One mesh with shared vertices: separate pieces met at anti-aliased edges and left thin vertical seams.
     // Columns follow the rounded corners, so the shade sits exactly on the art's own rounded edge.
     const STOPS: [(f32, f32); 3] = [(0.0, 232.0), (0.42, 150.0), (1.0, 40.0)];
@@ -715,7 +719,7 @@ pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
             mesh.add_triangle(b - 1, b, b + 1);
         }
     }
-    painter.add(egui::Shape::mesh(mesh));
+    egui::Shape::mesh(mesh)
 }
 
 /// Width for `count` items of at least `min` points that share a row of `available` points with `gap` between
