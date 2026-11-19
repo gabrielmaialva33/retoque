@@ -16,8 +16,39 @@ pub(crate) struct State {
     pub compound_history: HashMap<PathBuf, Vec<crate::history::Applied>>,
 }
 impl RetoqueApp {
+    /// True while any modal dialog is open so global shortcuts and background navigation stay silent.
+    pub(crate) fn modal_open(&self, ctx: &egui::Context) -> bool {
+        #[cfg(windows)]
+        let app_install = self.app_installer.open();
+        #[cfg(not(windows))]
+        let app_install = false;
+        self.review_open
+            || self.library_state.update_all.open
+            || self.folder_dialog.is_some()
+            || self.intuitive.palette.open
+            || self.intuitive.drop.open()
+            || self.prefs.open
+            || self.payload_ui.files_open
+            || self.payload_ui.consent.is_some()
+            || self.library_state.leftovers_review
+            || self.process_notice.is_some()
+            || self.nr_fetch.consent.is_some()
+            || self.tuning.sm86.consent.is_some()
+            || self.tuning.dlss.consent
+            || self.tuning.reshade.consent
+            || self.lsfg.asking
+            || self.compare.modal_open()
+            || app_install
+            || ctx.data(|d| {
+                d.get_temp::<(String, String)>(egui::Id::unique("model-delete-pending"))
+                    .is_some()
+                    || d.get_temp::<(String, String)>(egui::Id::unique("component-delete-pending"))
+                        .is_some()
+            })
+    }
+
     pub(crate) fn intuitive_shortcuts(&mut self, ctx: &egui::Context) -> bool {
-        if self.review_open || self.folder_dialog.is_some() || self.intuitive.drop.open() {
+        if self.modal_open(ctx) {
             return true;
         }
         if ctx.input_mut(|i| {

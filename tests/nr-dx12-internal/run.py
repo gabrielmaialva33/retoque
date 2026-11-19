@@ -64,6 +64,11 @@ assert [name for name in seen if name not in extension_names] == contract['names
 for extension in extensions:
     assert definitions.count(extension['definition']) == 1, 'extension owner definition changed'
     assert seen.index(extension['definition_after']) < seen.index(extension['name']) < seen.index(extension['definition_before'])
+# Intentional 2026-11-19 ownership change: active callers hold the old composition during migration.
+assert 'extern std::shared_ptr<DlssNr_Dx12> g_compose;' in header
+assert 'std::shared_ptr<DlssNr_Dx12> g_compose;' in baseline_definitions
+baseline_definitions = [line.replace('std::shared_ptr<DlssNr_Dx12> g_compose;',
+                                     'std::unique_ptr<DlssNr_Dx12> g_compose;') for line in baseline_definitions]
 normalize = lambda s: re.sub(r'\s+', '', s)
 digest = hashlib.sha256(normalize('\n'.join(baseline_definitions)).encode()).hexdigest()
 assert digest == contract['initializers_sha256'], 'shared initializers changed from pre-refactor'

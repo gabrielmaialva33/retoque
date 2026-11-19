@@ -74,11 +74,11 @@ optimize.up_to_date	{game} ma już zalecane ustawienia dla twojej karty graficzn
 optimize.install_first	Przed optymalizacją zainstaluj lub zarejestruj Retoque.
 optimize.identity_missing	Tożsamość zainstalowanego komponentu jest niedostępna. Odśwież grę przed przeglądem.
 optimize.conflict	Proponowane ustawienia są ze sobą sprzeczne. Nie zastosowano żadnych zmian.
-remedy.processes	Pokaż uruchomione procesy
+remedy.processes	Pokaż uruchomione procesy…
 remedy.close_processes	Zamknij te programy i spróbuj ponownie
 remedy.retry	Spróbuj ponownie
 remedy.replan	Przygotuj nowy przegląd
-remedy.foreign	Wybierz: zachowaj lub zastąp…
+remedy.foreign	Wybierz: zachowaj lub zastąp
 mdl.incompatible	Nie działa z tą kartą graficzną
 mdl.arch_match	Zgodny z twoją kartą graficzną
 mdl.compat_unknown	Zgodność niepotwierdzona
@@ -172,6 +172,8 @@ lib.installed_only	Tylko zainstalowane
 lib.add_folder	Dodaj folder…
 lib.scanning	Szukanie gier…
 lib.empty	Nie znaleziono gier. Dodaj folder gry ręcznie.
+lib.no_match	Żadna gra nie pasuje do wyszukiwania.
+lib.no_installed	Żadna gra nie ma jeszcze zainstalowanego Retoque.
 lib.skipped	Nie udało się odczytać
 game.root	folder gry
 game.target	Folder pliku wykonywalnego
@@ -208,8 +210,8 @@ inst.keep_reshade	Zachowaj ReShade (ładuj go przez OptiScaler)
 inst.replace_foreign	Zastąp plik, który nie jest nasz (zostanie zachowany jako kopia zapasowa)
 inst.second_proxy	Zezwól na drugi plik ładujący OptiScaler
 inst.copy_nvngx	Skopiuj _nvngx.dll sterownika dla Wine
-inst.preview	Podgląd instalacji
-inst.preview_uninstall	Podgląd odinstalowania
+inst.preview	Przejrzyj instalację…
+inst.preview_uninstall	Przejrzyj odinstalowanie…
 inst.install	Zainstaluj
 inst.update	Zaktualizuj
 inst.uninstall	Odinstaluj
@@ -617,7 +619,7 @@ auto.components	Komponenty generowania klatek
 auto.no_component	Brak komponentu sm86 w twoich komponentach
 auto.component_installed	Komponent zainstalowany w tej grze
 auto.component_install	Przejrzyj instalację komponentu…
-auto.component_remove	Przejrzyj odinstalowanie komponentu
+auto.component_remove	Przejrzyj odinstalowanie komponentu…
 auto.catalog_remove	Usuń komponent z aplikacji…
 auto.catalog_remove_title	Usunąć ten komponent z aplikacji?
 auto.catalog_remove_help	Usuwa kopię przechowywaną przez aplikację. Gry, które go mają, zachowują swoje pliki; aby zainstalować go ponownie, zaimportuj go lub pobierz jeszcze raz.

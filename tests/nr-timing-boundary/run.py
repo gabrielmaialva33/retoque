@@ -103,9 +103,9 @@ def present_region_guards(source):
     assert present.index('WaitForSingleObject(g_presentList.fenceEvent, 1000)') < present.index('g_presentCpu.Add(')
     # The route's split: marks immediately around the one Dispatch call, the region lent by RunPresentPass.
     evaluate = between(source, 'bool EvaluateAtPresent(', 'ScopedPreUpscale::ScopedPreUpscale(')
-    assert evaluate.count('g_compose->Dispatch(') == 1
-    assert re.search(r'if \(route != nullptr\)\n\s*route->BeforeDispatch\(\);\n\s*const bool recorded = '
-                     r'g_compose->Dispatch\([^;]*;\n\s*if \(route != nullptr\)\n\s*route->AfterDispatch\(\);', evaluate)
+    assert evaluate.count('compose->Dispatch(') == 1
+    assert re.search(r'if \(route != nullptr\)\n\s*route->BeforeDispatch\(\);\n\s*const bool recorded =\s*'
+                     r'\s*compose && compose->Dispatch\([^;]*;\n\s*if \(route != nullptr\)\n\s*route->AfterDispatch\(\);', evaluate)
     assert evaluate.count('route->BeforeDispatch();') == evaluate.count('route->AfterDispatch();') == 1
     assert present.count('EvaluateAtPresent(') == 1 and 'presentTiming ? &*presentTiming : nullptr);' in present
 

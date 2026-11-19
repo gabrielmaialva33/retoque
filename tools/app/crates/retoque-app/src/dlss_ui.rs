@@ -17,7 +17,7 @@ pub struct State {
     restorable: bool,
     busy: bool,
     downloaded: u64,
-    consent: bool,
+    pub(crate) consent: bool,
     error: Option<AppError>,
 }
 pub enum Event {

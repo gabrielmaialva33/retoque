@@ -92,62 +92,70 @@ impl Palette {
         }
         let mut chosen = None;
         let mut close = false;
-        let modal = egui::Modal::new(egui::Id::unique("command_palette")).show(ctx, |ui| {
-            ui.set_width((ctx.content_rect().width() - 64.).clamp(260., 660.));
-            ui.response()
-                .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Dialog, true, t(lang, "palette.title")));
-            ui.heading(t(lang, "palette.title"));
-            let (down, up, enter) = ui.input_mut(|i| {
-                (
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
-                )
-            });
-            let label = ui.label(t(lang, "palette.search"));
-            let input = ui
-                .add(
-                    egui::TextEdit::singleline(&mut self.query)
-                        .id(egui::Id::unique("palette_query"))
-                        .desired_width(f32::INFINITY),
-                )
-                .labelled_by(label.id);
-            if self.focus {
-                input.request_focus();
-                self.focus = false;
-            }
-            self.refresh();
-            if down {
-                self.selected = (self.selected + 1).min(self.results.len().saturating_sub(1));
-            }
-            if up {
-                self.selected = self.selected.saturating_sub(1);
-            }
-            if enter {
-                chosen = self
-                    .results
-                    .get(self.selected)
-                    .map(|&i| self.entries[i].destination.clone());
-            }
-            ui.label(t(lang, "palette.keys"));
-            if self.results.is_empty() {
-                ui.label(t(lang, "palette.empty"));
-            }
-            egui::ScrollArea::vertical().max_height(320.).show(ui, |ui| {
-                for (row, &index) in self.results.iter().enumerate() {
-                    let response = ui.selectable_label(self.selected == row, &self.entries[index].label);
-                    if response.clicked() {
-                        chosen = Some(self.entries[index].destination.clone());
-                    }
-                    if self.selected == row && (up || down) {
-                        response.scroll_to_me(None);
-                    }
+        let modal = egui::Modal::new(egui::Id::unique("command_palette"))
+            .frame(crate::widgets::modal_frame())
+            .show(ctx, |ui| {
+                ui.set_width((ctx.content_rect().width() - 64.).clamp(260., 660.));
+                ui.response()
+                    .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Dialog, true, t(lang, "palette.title")));
+                ui.heading(t(lang, "palette.title"));
+                let (down, up, enter) = ui.input_mut(|i| {
+                    (
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
+                        i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
+                    )
+                });
+                let label = ui.label(t(lang, "palette.search"));
+                let input = ui
+                    .add(
+                        egui::TextEdit::singleline(&mut self.query)
+                            .id(egui::Id::unique("palette_query"))
+                            .desired_width(f32::INFINITY),
+                    )
+                    .labelled_by(label.id);
+                if self.focus {
+                    input.request_focus();
+                    self.focus = false;
+                }
+                self.refresh();
+                if down {
+                    self.selected = (self.selected + 1).min(self.results.len().saturating_sub(1));
+                }
+                if up {
+                    self.selected = self.selected.saturating_sub(1);
+                }
+                if enter {
+                    chosen = self
+                        .results
+                        .get(self.selected)
+                        .map(|&i| self.entries[i].destination.clone());
+                }
+                ui.label(
+                    egui::RichText::new(t(lang, "palette.keys"))
+                        .small()
+                        .color(crate::theme::MUTED),
+                );
+                if self.results.is_empty() {
+                    ui.label(egui::RichText::new(t(lang, "palette.empty")).color(crate::theme::MUTED));
+                }
+                egui::ScrollArea::vertical()
+                    .max_height((ctx.content_rect().height() - 240.).clamp(120., 320.))
+                    .show(ui, |ui| {
+                        for (row, &index) in self.results.iter().enumerate() {
+                            let response = ui.selectable_label(self.selected == row, &self.entries[index].label);
+                            if response.clicked() {
+                                chosen = Some(self.entries[index].destination.clone());
+                            }
+                            if self.selected == row && (up || down) {
+                                response.scroll_to_me(None);
+                            }
+                        }
+                    });
+                if ui.button(t(lang, "cancel")).clicked() {
+                    close = true;
                 }
             });
-            if ui.button(t(lang, "cancel")).clicked() {
-                close = true;
-            }
-        });
         if modal.should_close() || close || chosen.is_some() {
             self.open = false;
             self.restore_frames = if matches!(&chosen, Some(Destination::Setting(_) | Destination::FocusSearch)) {

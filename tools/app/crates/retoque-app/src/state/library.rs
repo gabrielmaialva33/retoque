@@ -4,8 +4,72 @@ use retoque_core::Status;
 use retoque_discovery::{Artwork, Game};
 use std::{
     collections::{BTreeMap, HashMap},
-    path::PathBuf,
+    path::{Path, PathBuf},
+    sync::RwLock,
 };
+
+/// What a scan saw in a candidate folder: Retoque's files (a receipt, OptiScaler under a proxy name or beside it),
+/// and whether the receipt there is only the DLSS update's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Seen {
+    retoque: bool,
+    dlss_receipt: bool,
+}
+
+/// Telling takes reading the folder, and a proxy name another program holds (ReShade's dxgi.dll) is read whole.
+/// The library is projected again after every background answer, on the UI thread, so the jobs that read a folder
+/// anyway leave what they saw here: the scan for every folder, a status read for its own.
+static SEEN: RwLock<BTreeMap<PathBuf, Seen>> = RwLock::new(BTreeMap::new());
+
+fn look(target: &retoque_discovery::TargetDir) -> Seen {
+    Seen {
+        dlss_receipt: retoque_discovery::is_standalone_dlss_receipt(&target.path),
+        retoque: retoque_discovery::target_has_retoque(target),
+    }
+}
+
+/// Runs in the scan's job: what every candidate folder of these games holds now. A folder that is no longer listed
+/// keeps its old answer, which nothing asks for.
+pub(crate) fn remember_scan(games: &[Game]) {
+    let seen: Vec<_> = games
+        .iter()
+        .flat_map(|game| &game.targets)
+        .map(|target| (target.path.clone(), look(target)))
+        .collect();
+    SEEN.write().unwrap_or_else(|e| e.into_inner()).extend(seen);
+}
+
+/// Runs in a job that read one folder again (its status): what that folder holds now.
+pub(crate) fn remember_folder(path: &Path) {
+    let target = retoque_discovery::TargetDir {
+        path: path.to_owned(),
+        executables: Vec::new(),
+        score: 0,
+        dlss: Vec::new(),
+        has_receipt: false,
+        proxies_present: retoque_discovery::PROXY_DLLS
+            .iter()
+            .filter(|name| path.join(name).is_file())
+            .map(|name| (*name).to_owned())
+            .collect(),
+        loaders: Vec::new(),
+    };
+    let seen = look(&target);
+    SEEN.write()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(path.to_owned(), seen);
+}
+
+/// What the jobs last saw there. A folder no job has read (none in the app: every listed folder comes from a scan)
+/// is read here.
+fn seen(target: &retoque_discovery::TargetDir) -> Seen {
+    let remembered = SEEN
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&target.path)
+        .copied();
+    remembered.unwrap_or_else(|| look(target))
+}
 
 #[derive(Default)]
 pub(crate) struct LibraryState {
@@ -20,6 +84,7 @@ pub(crate) struct LibraryState {
     pub leftovers: Vec<retoque_core::leftovers::Leftover>,
     pub leftovers_review: bool,
     pub leftovers_busy: bool,
+    pub leftovers_focus: crate::widgets::FocusRestore,
     /// Set by each completed scan: the home grid opens at its top.
     pub scroll_to_top: bool,
     generation: u64,
@@ -56,7 +121,8 @@ pub(crate) fn single_target_install_state(
     status_map: &HashMap<PathBuf, Status>,
     payload: Option<&str>,
 ) -> InstallState {
-    let is_dlss_root = retoque_discovery::is_standalone_dlss_receipt(&target.path);
+    let seen = seen(target);
+    let is_dlss_root = seen.dlss_receipt;
     if let Some(s) = status_map.get(&target.path)
         && !(is_dlss_root && s.optiscaler_proxies.is_empty())
     {
@@ -67,7 +133,7 @@ pub(crate) fn single_target_install_state(
     }
     if target.has_receipt && !is_dlss_root {
         InstallState::Installed
-    } else if retoque_discovery::target_has_retoque(target) {
+    } else if seen.retoque {
         InstallState::Untracked
     } else {
         InstallState::Missing
@@ -252,6 +318,60 @@ mod tests {
         library.search = "Divinity Engine".into();
         library.refresh(&targets, None, Lang::En);
         assert_eq!(library.derived.others, vec![4]);
+    }
+
+    #[test]
+    fn the_library_is_projected_from_what_the_jobs_saw_without_reading_game_folders() {
+        use retoque_discovery::TargetDir;
+
+        let temp = tempfile::tempdir().unwrap();
+        let folder = temp.path().join("Game");
+        std::fs::create_dir_all(&folder).unwrap();
+        // An old script's install: OptiScaler under a proxy name, no receipt.
+        let proxy = folder.join("dxgi.dll");
+        std::fs::write(&proxy, b"MZ OptiScaler working as dxgi synthetic").unwrap();
+        let target = TargetDir {
+            path: folder.clone(),
+            executables: vec!["Game.exe".into()],
+            score: 10,
+            dlss: vec![],
+            has_receipt: false,
+            proxies_present: vec!["dxgi.dll".into()],
+            loaders: vec![],
+        };
+        let mut found = game("Game");
+        found.targets = vec![target.clone()];
+        let status = HashMap::new();
+        remember_scan(std::slice::from_ref(&found));
+        assert_eq!(
+            single_target_install_state(&target, &status, None),
+            InstallState::Untracked
+        );
+        // The folder changes behind the app: the projection keeps the scan's answer, it does not open the folder.
+        std::fs::remove_file(&proxy).unwrap();
+        assert_eq!(
+            single_target_install_state(&target, &status, None),
+            InstallState::Untracked
+        );
+        // A job that reads the folder again (its status, after the watcher saw the change) brings the new answer.
+        remember_folder(&folder);
+        assert_eq!(
+            single_target_install_state(&target, &status, None),
+            InstallState::Missing
+        );
+        std::fs::write(&proxy, b"MZ OptiScaler working as dxgi synthetic").unwrap();
+        remember_folder(&folder);
+        assert_eq!(
+            single_target_install_state(&target, &status, None),
+            InstallState::Untracked
+        );
+        // A proxy name another program holds is not Retoque.
+        std::fs::write(&proxy, b"MZ ReShade synthetic").unwrap();
+        remember_folder(&folder);
+        assert_eq!(
+            single_target_install_state(&target, &status, None),
+            InstallState::Missing
+        );
     }
 
     #[test]

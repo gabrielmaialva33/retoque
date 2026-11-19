@@ -237,10 +237,12 @@ impl RetoqueApp {
         if app.tab == Tab::Compare {
             app.sidebar_visible = false;
         }
+        // The library first: these all wait in one line, and the others (nvidia-smi, hashing what the app keeps and
+        // the Retoque files) are not needed to show the games.
+        app.rescan();
         app.autotune_start();
         app.payload_init();
         app.hash_payload();
-        app.rescan();
         app.jobs.spawn("catalog", None, |_| model::catalog_list());
         app.clean_app_data();
         app

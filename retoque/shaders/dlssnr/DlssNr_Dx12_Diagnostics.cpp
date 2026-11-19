@@ -1100,6 +1100,20 @@ void ShutdownExposureMeter()
     s_meterReadback = {};
 }
 
+// Called under g_nrMutex before a tracking transition. The existing lock order is NR -> session/status.
+void ParkTrackingDiagnostics()
+{
+    {
+        std::lock_guard<std::mutex> lock(g_detailMeasure.mutex);
+        ParkDetailMeasureLocked();
+        g_detailMeasure.status.running = false;
+        g_detailMeasure.status.endReason = "NR generation changed for submission tracking";
+    }
+    StopPulseLocked();
+    StopMotionProbeLocked();
+    s_meterReadback = {}; // The old buffers were detached; no slot may describe their replacements.
+}
+
 // Keep source selection testable without changing the established exposure law.
 float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,
                         bool scanInverted, float scanTrim)

@@ -655,7 +655,7 @@ fn check_elf_recursive(root: &Path, dir: &Path, depth: usize, budget: &mut usize
 
 fn is_candidate_elf_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    if lower.ends_with(".so")
+    !(lower.ends_with(".so")
         || lower.contains(".so.")
         || lower.ends_with(".dll")
         || lower.ends_with(".exe")
@@ -673,11 +673,7 @@ fn is_candidate_elf_name(name: &str) -> bool {
         || lower.ends_with(".pck")
         || lower.ends_with(".assets")
         || lower.ends_with(".ress")
-        || lower.ends_with(".resource")
-    {
-        return false;
-    }
-    true
+        || lower.ends_with(".resource"))
 }
 
 fn is_elf_file(path: &Path) -> bool {
@@ -706,6 +702,8 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
         .components()
         .next()
         .is_some_and(|c| c.as_os_str().to_string_lossy().eq_ignore_ascii_case("engine"));
+
+    let in_wine_drive_c = is_wine_drive_c(dir);
 
     let mut has_retoque_dir = false;
     let mut has_retoque_companion = false;
@@ -742,6 +740,7 @@ fn walk_dir(root: &Path, dir: &Path, depth: usize, budget: &mut usize, out: &mut
                 } else if depth < MAX_WALK_DEPTH
                     && !in_root_engine
                     && !(depth == 0 && lower == "engine")
+                    && !(in_wine_drive_c && lower == "windows")
                     && !should_skip_subdir_lower(lower)
                 {
                     let priority = subdir_walk_priority(lower);
@@ -1070,11 +1069,21 @@ fn should_skip_subdir_lower(lower: &str) -> bool {
     )
 }
 
+/// `dir` is drive C of a Wine or Proton prefix (`<prefix>/drive_c`). Its `windows` folder is Wine's own: thousands
+/// of system files, and under Proton the DXVK and vkd3d `dxgi.dll` / `d3d12.dll`, which are no game's folder.
+fn is_wine_drive_c(dir: &Path) -> bool {
+    dir.file_name()
+        .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("drive_c"))
+}
+
 fn should_skip_subdir(root: &Path, sub_path: &Path, dir_name: &str) -> bool {
     if dir_name.starts_with('.') {
         return true;
     }
     if with_ascii_lower(dir_name, should_skip_subdir_lower) {
+        return true;
+    }
+    if dir_name.eq_ignore_ascii_case("windows") && sub_path.parent().is_some_and(is_wine_drive_c) {
         return true;
     }
 
@@ -1210,10 +1219,12 @@ pub fn is_ignored_exe(exe_name: &str, rel_dir: &Path) -> bool {
             return true;
         }
 
-        // Known launcher and engine helper binaries.
+        // Known launcher and engine helper binaries. `steam` is the store's client, and the stub Proton puts in
+        // every prefix (`drive_c/Program Files (x86)/Steam/steam.exe`).
         matches!(
             stem,
-            "7za"
+            "steam"
+                | "7za"
                 | "7z"
                 | "cefsharp.browsersubprocess"
                 | "unrealcefsubprocess"
@@ -1436,10 +1447,7 @@ fn exe_matches_game_name(exe_stem: &str, game_name: &str) -> bool {
         .filter_map(|w| w.chars().next())
         .map(|c| c.to_ascii_lowercase())
         .collect();
-    if initials.len() >= 2 && (norm_exe == initials || norm_exe.starts_with(&initials)) {
-        return true;
-    }
-    false
+    initials.len() >= 2 && (norm_exe == initials || norm_exe.starts_with(&initials))
 }
 
 fn normalize_alnum(s: &str) -> String {

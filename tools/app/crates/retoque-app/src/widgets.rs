@@ -52,6 +52,9 @@ pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         if active {
             painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
         }
+        if response.has_focus() {
+            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::TEXT_STRONG));
+        }
         let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
         let d = 4.5;
         let c = rect.center();
@@ -78,6 +81,9 @@ pub fn reset_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         let active = response.hovered() || response.has_focus();
         if active {
             painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
+        }
+        if response.has_focus() {
+            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::TEXT_STRONG));
         }
         let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
         let stroke = Stroke::new(1.6, color);
@@ -124,6 +130,64 @@ pub fn modal_frame() -> egui::Frame {
         .stroke(Stroke::new(1.0, theme::CARD_EDGE))
         .corner_radius(12)
         .inner_margin(20)
+}
+
+/// Remembers which widget held keyboard focus when a dialog opened, and restores focus to it for two frames after the
+/// dialog closes so keyboard users never lose their place.
+#[derive(Clone, Copy, Default)]
+pub struct FocusRestore {
+    was_open: bool,
+    origin: Option<egui::Id>,
+    frames: u8,
+}
+
+impl FocusRestore {
+    pub fn sync(&mut self, ctx: &egui::Context, open: bool) {
+        if open {
+            if !self.was_open {
+                self.was_open = true;
+                self.origin = ctx.memory(|m| m.focused());
+                self.frames = 0;
+            }
+            return;
+        }
+        if self.was_open {
+            self.was_open = false;
+            if self.origin.is_some() {
+                self.frames = 2;
+            }
+        }
+        if self.frames > 0 {
+            if let Some(id) = self.origin {
+                ctx.memory_mut(|m| m.request_focus(id));
+            }
+            self.frames -= 1;
+            ctx.request_repaint();
+        }
+    }
+
+    pub fn closed(&mut self, ctx: &egui::Context) {
+        if self.was_open {
+            self.was_open = false;
+            if self.origin.is_some() {
+                self.frames = 2;
+                ctx.request_repaint();
+            }
+        }
+    }
+}
+
+/// Convenience wrapper storing [`FocusRestore`] in egui temporary data by `id`.
+pub fn sync_modal_focus(ctx: &egui::Context, id: egui::Id, open: bool) {
+    let mut state = ctx.data(|d| d.get_temp::<FocusRestore>(id)).unwrap_or_default();
+    state.sync(ctx, open);
+    ctx.data_mut(|d| d.insert_temp(id, state));
+}
+
+pub fn close_modal_focus(ctx: &egui::Context, id: egui::Id) {
+    let mut state = ctx.data(|d| d.get_temp::<FocusRestore>(id)).unwrap_or_default();
+    state.closed(ctx);
+    ctx.data_mut(|d| d.insert_temp(id, state));
 }
 
 /// A heading between cards that groups the cards below it (a tab's sections).
@@ -449,7 +513,9 @@ pub fn game_row(
         }
     }
     let left = cover.right() + 12.0;
-    let width = (rect.right() - 8.0 - left).max(20.0);
+    // Leave room for the Doctor's 18 px warning badge (`tabs::doctor::row_badge` at `right() - 16.0`) when present.
+    let right_pad = if spoken_extra.is_some() { 30.0 } else { 8.0 };
+    let width = (rect.right() - right_pad - left).max(20.0);
     let name_color = if selected { theme::TEXT_STRONG } else { theme::TEXT };
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_string(), FontId::proportional(15.0), name_color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(width);
@@ -468,7 +534,7 @@ pub fn game_row(
     x += w + 8.0;
     let mut job =
         egui::text::LayoutJob::simple_singleline(detail.to_string(), FontId::proportional(12.5), theme::MUTED);
-    job.wrap = egui::text::TextWrapping::truncate_at_width((rect.right() - 8.0 - x).max(10.0));
+    job.wrap = egui::text::TextWrapping::truncate_at_width((rect.right() - right_pad - x).max(10.0));
     let g = ui.painter().layout_job(job);
     painter.galley(pos2(x, y), g, theme::MUTED);
     if response.has_focus() {
@@ -829,6 +895,24 @@ mod tab_a11y_tests {
                 .data()
                 .supports_action(egui::accesskit::Action::Click)
         );
+    }
+
+    #[test]
+    fn frameless_close_and_reset_buttons_take_keyboard_focus_and_32px_hit_area() {
+        let mut harness = Harness::new_ui(|ui| {
+            super::close_button(ui, "Fechar mensagem");
+            super::reset_button(ui, "Voltar ao automático: Nitidez");
+        });
+        let close = harness.get_by_role_and_label(egui::Role::Button, "Fechar mensagem");
+        let reset = harness.get_by_role_and_label(egui::Role::Button, "Voltar ao automático: Nitidez");
+        assert_eq!(close.rect().size(), egui::vec2(32.0, 32.0));
+        assert_eq!(reset.rect().size(), egui::vec2(32.0, 32.0));
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Fechar mensagem").is_focused());
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Voltar ao automático: Nitidez").is_focused());
     }
 }
 

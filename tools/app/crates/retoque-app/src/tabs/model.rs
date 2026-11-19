@@ -221,13 +221,6 @@ impl RetoqueApp {
                 ui.horizontal_wrapped(|ui| {
                     let version = m.version.as_deref().unwrap_or(self.tr("unknown"));
                     ui.label(RichText::new(format!("{} {version}", self.tr("mdl.version"))).color(theme::MUTED));
-                    ui.label(
-                        RichText::new(&m.sha256[..m.sha256.len().min(12)])
-                            .small()
-                            .monospace()
-                            .color(theme::MUTED),
-                    )
-                    .on_hover_text(&m.sha256);
                     ui.label(RichText::new(size_text(self.lang, m.size)).small().color(theme::MUTED));
                 });
                 self.model_compatibility_label(ui, &m.compatibility);
@@ -238,6 +231,16 @@ impl RetoqueApp {
                             .color(theme::MUTED),
                     );
                 }
+                widgets::collapsible(
+                    ui,
+                    ("model_details", &m.sha256),
+                    self.tr("technical.details"),
+                    widgets::Fold::Details,
+                    |ui| {
+                        ui.label(RichText::new(format!("SHA-256: {}", m.sha256)).small().monospace());
+                        ui.label(RichText::new(crate::format::display_path(&m.path)).small().monospace());
+                    },
+                );
                 ui.add_space(6.0);
                 ui.horizontal_wrapped(|ui| {
                     if !in_use {
@@ -426,15 +429,8 @@ impl RetoqueApp {
             ui.add(egui::Label::new(RichText::new(self.tr("nr_fetch.source_note")).color(theme::MUTED)).wrap());
             ui.add_space(6.0);
             if let Some(entry) = compatible {
-                ui.label(
-                    RichText::new(format!(
-                        "{} · {} · SHA-256 {}",
-                        entry.label,
-                        size_text(self.lang, entry.size),
-                        &entry.sha256[..entry.sha256.len().min(12)]
-                    ))
-                    .strong(),
-                );
+                ui.label(RichText::new(format!("{} · {}", entry.label, size_text(self.lang, entry.size))).strong())
+                    .on_hover_text(format!("SHA-256 {}", entry.sha256));
                 self.model_compatibility_label(ui, &entry.compatibility);
             } else {
                 ui.colored_label(theme::WARN, self.tr("nr_fetch.no_compatible_gpu"));
@@ -481,11 +477,8 @@ impl RetoqueApp {
                     ui.push_id(&entry.sha256, |ui| {
                         ui.horizontal_wrapped(|ui| {
                             ui.strong(&entry.label);
-                            ui.label(format!(
-                                "{} · {}",
-                                size_text(self.lang, entry.size),
-                                &entry.sha256[..entry.sha256.len().min(12)]
-                            ));
+                            ui.label(size_text(self.lang, entry.size))
+                                .on_hover_text(format!("SHA-256 {}", entry.sha256));
                             if ui
                                 .add_enabled(
                                     !self.busy() && !self.nr_fetch.busy,

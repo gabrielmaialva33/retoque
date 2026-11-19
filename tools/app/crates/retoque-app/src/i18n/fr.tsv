@@ -74,11 +74,11 @@ optimize.up_to_date	{game} a déjà les réglages recommandés pour votre carte 
 optimize.install_first	Installez ou enregistrez Retoque avant d'optimiser.
 optimize.identity_missing	L'identité du composant installé est indisponible. Actualisez le jeu avant de vérifier.
 optimize.conflict	Les réglages proposés sont en conflit. Aucune modification n'a été appliquée.
-remedy.processes	Voir les processus en cours
+remedy.processes	Voir les processus en cours…
 remedy.close_processes	Fermez ces programmes, puis réessayez
 remedy.retry	Réessayer
 remedy.replan	Préparer une nouvelle vérification
-remedy.foreign	Choisir de conserver ou remplacer…
+remedy.foreign	Choisir de conserver ou remplacer
 mdl.incompatible	Ne fonctionne pas sur cette carte graphique
 mdl.arch_match	Compatible avec votre carte graphique
 mdl.compat_unknown	Compatibilité non confirmée
@@ -172,6 +172,8 @@ lib.installed_only	Installés uniquement
 lib.add_folder	Ajouter un dossier…
 lib.scanning	Recherche de jeux…
 lib.empty	Aucun jeu trouvé. Ajoutez le dossier d'un jeu manuellement.
+lib.no_match	Aucun jeu ne correspond à votre recherche.
+lib.no_installed	Aucun jeu n'a encore Retoque installé.
 lib.skipped	Lecture impossible
 game.root	dossier du jeu
 game.target	Dossier de l'exécutable
@@ -208,8 +210,8 @@ inst.keep_reshade	Conserver ReShade (chargé par OptiScaler)
 inst.replace_foreign	Remplacer un fichier qui n'est pas à nous (une copie est conservée)
 inst.second_proxy	Autoriser un second fichier de chargement d'OptiScaler
 inst.copy_nvngx	Copier le _nvngx.dll du pilote pour Wine
-inst.preview	Aperçu de l'installation
-inst.preview_uninstall	Aperçu de la désinstallation
+inst.preview	Vérifier l'installation…
+inst.preview_uninstall	Vérifier la désinstallation…
 inst.install	Installer
 inst.update	Mettre à jour
 inst.uninstall	Désinstaller
@@ -609,7 +611,7 @@ auto.components	Composants de génération d'images
 auto.no_component	Aucun composant sm86 dans vos composants
 auto.component_installed	Composant installé dans ce jeu
 auto.component_install	Vérifier l'installation du composant…
-auto.component_remove	Vérifier le retrait du composant
+auto.component_remove	Vérifier le retrait du composant…
 auto.catalog_remove	Supprimer le composant de l'app…
 auto.catalog_remove_title	Supprimer ce composant de l'app ?
 auto.catalog_remove_help	Supprime la copie conservée par l'app. Les jeux qui l'ont gardent leurs fichiers ; pour l'installer à nouveau, importez-le ou téléchargez-le de nouveau.

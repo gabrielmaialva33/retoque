@@ -3,7 +3,7 @@ use crate::{
     app::RetoqueApp,
     app_install::{self, InstallPlan, windows},
     i18n::{Lang, t},
-    widgets,
+    theme, widgets,
 };
 use retoque_data::{
     app_release,
@@ -31,6 +31,9 @@ enum ResultState {
 }
 
 impl State {
+    pub(crate) fn open(&self) -> bool {
+        self.review.is_some()
+    }
     fn run(&mut self, ctx: &egui::Context, job: impl FnOnce() -> io::Result<ResultState> + Send + 'static) {
         let (tx, rx) = mpsc::channel();
         let ctx = ctx.clone();
@@ -140,49 +143,51 @@ impl RetoqueApp {
         let modal = egui::Modal::new(egui::Id::unique("app-install-review"))
             .frame(widgets::modal_frame())
             .show(ctx, |ui| {
-                ui.set_width(520.0);
+                ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 520.0));
                 ui.heading(title);
-                egui::ScrollArea::vertical().max_height(360.0).show(ui, |ui| {
-                    ui.label(body);
-                    if let Review::Install(plan) = review {
-                        ui.label(plan.paths.install.display().to_string());
-                        ui.label(t(lang, "app_install.files"));
-                        for file in &plan.files {
-                            ui.label(&file.name);
+                egui::ScrollArea::vertical()
+                    .max_height((ctx.content_rect().height() - 190.0).clamp(160.0, 360.0))
+                    .show(ui, |ui| {
+                        ui.label(body);
+                        if let Review::Install(plan) = review {
+                            ui.label(plan.paths.install.display().to_string());
+                            ui.label(t(lang, "app_install.files"));
+                            for file in &plan.files {
+                                ui.label(&file.name);
+                            }
+                            ui.label(t(lang, "app_install.shortcuts"));
+                            for shortcut in &plan.paths.shortcuts {
+                                ui.label(shortcut.display().to_string());
+                            }
+                            ui.label(t(lang, "app_install.registration"));
+                            crate::widgets::collapsible(
+                                ui,
+                                "app-install-registry",
+                                t(lang, "technical.details"),
+                                crate::widgets::Fold::Details,
+                                |ui| {
+                                    ui.label(format!("HKCU\\{}", app_install::UNINSTALL_KEY));
+                                    for (name, value) in
+                                        app_install::registry_values(&plan.paths, app_install::version(), plan.bytes())
+                                    {
+                                        let value = match value {
+                                            app_install::RegistryValue::Text(v) => v,
+                                            app_install::RegistryValue::Dword(v) => v.to_string(),
+                                        };
+                                        ui.label(format!("{name}: {value}"));
+                                    }
+                                },
+                            );
                         }
-                        ui.label(t(lang, "app_install.shortcuts"));
-                        for shortcut in &plan.paths.shortcuts {
-                            ui.label(shortcut.display().to_string());
+                        if matches!(review, Review::Check | Review::Download(_)) {
+                            ui.label(t(lang, "payload.hosts_note"));
                         }
-                        ui.label(t(lang, "app_install.registration"));
-                        crate::widgets::collapsible(
-                            ui,
-                            "app-install-registry",
-                            t(lang, "technical.details"),
-                            crate::widgets::Fold::Details,
-                            |ui| {
-                                ui.label(format!("HKCU\\{}", app_install::UNINSTALL_KEY));
-                                for (name, value) in
-                                    app_install::registry_values(&plan.paths, app_install::version(), plan.bytes())
-                                {
-                                    let value = match value {
-                                        app_install::RegistryValue::Text(v) => v,
-                                        app_install::RegistryValue::Dword(v) => v.to_string(),
-                                    };
-                                    ui.label(format!("{name}: {value}"));
-                                }
-                            },
-                        );
-                    }
-                    if matches!(review, Review::Check | Review::Download(_)) {
-                        ui.label(t(lang, "payload.hosts_note"));
-                    }
-                    ui.label(t(lang, "app_install.preserve"));
-                });
+                        ui.label(t(lang, "app_install.preserve"));
+                    });
                 ui.horizontal(|ui| {
-                    // Restart cannot interrupt a game-install write already in flight.
-                    accepted = ui.add_enabled(!self.jobs.busy(), egui::Button::new(confirm)).clicked();
                     cancelled = ui.button(t(lang, "cancel")).clicked();
+                    // Restart cannot interrupt a game-install write already in flight.
+                    accepted = ui.add_enabled(!self.jobs.busy(), theme::primary(&confirm)).clicked();
                 });
             });
         if cancelled || modal.should_close() {

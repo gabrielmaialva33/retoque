@@ -53,6 +53,7 @@ struct ID3D12DeviceChild
 {
 };
 struct D3D12_RESOURCE_DESC;
+struct ID3D12CommandQueue;
 struct ID3D12GraphicsCommandList;
 struct ID3D12Resource;
 struct ID3D12CommandAllocator;

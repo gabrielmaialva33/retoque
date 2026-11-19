@@ -74,11 +74,11 @@ optimize.up_to_date	{game} はすでにお使いの GPU に推奨される設定
 optimize.install_first	最適化の前に、Retoque をインストールするか旧インストールを登録してください。
 optimize.identity_missing	インストール済みコンポーネントの識別情報を取得できません。確認の前にゲームを再読み込みしてください。
 optimize.conflict	提案された設定どうしが競合しています。変更は適用されていません。
-remedy.processes	実行中のプロセスを表示
+remedy.processes	実行中のプロセスを表示…
 remedy.close_processes	これらのプログラムを閉じてから、もう一度お試しください
 remedy.retry	もう一度試す
 remedy.replan	新しい確認を用意
-remedy.foreign	保持するか置き換えるかを選択…
+remedy.foreign	保持するか置き換えるかを選択
 mdl.incompatible	この GPU では動作しません
 mdl.arch_match	お使いの GPU に対応
 mdl.compat_unknown	対応状況は未確認
@@ -172,6 +172,8 @@ lib.installed_only	インストール済みのみ
 lib.add_folder	フォルダーを追加…
 lib.scanning	ゲームを探しています…
 lib.empty	ゲームが見つかりません。ゲームのフォルダーを手動で追加してください。
+lib.no_match	検索に一致するゲームはありません。
+lib.no_installed	Retoque がインストールされたゲームはまだありません。
 lib.skipped	読み取れませんでした
 game.root	ゲームフォルダー
 game.target	実行ファイルのフォルダー
@@ -208,8 +210,8 @@ inst.keep_reshade	ReShade を保持（OptiScaler 経由で読み込む）
 inst.replace_foreign	Retoque のものではないファイルを置き換える（バックアップとして保持）
 inst.second_proxy	2 つ目の OptiScaler ローダーファイルを許可
 inst.copy_nvngx	Wine 用にドライバーの _nvngx.dll をコピー
-inst.preview	インストールをプレビュー
-inst.preview_uninstall	アンインストールをプレビュー
+inst.preview	インストールを確認…
+inst.preview_uninstall	アンインストールを確認…
 inst.install	インストール
 inst.update	更新
 inst.uninstall	アンインストール
@@ -609,7 +611,7 @@ auto.components	フレーム生成コンポーネント
 auto.no_component	マイコンポーネントに sm86 コンポーネントがありません
 auto.component_installed	このゲームにインストール済みのコンポーネント
 auto.component_install	コンポーネントのインストールを確認…
-auto.component_remove	コンポーネントの削除を確認
+auto.component_remove	コンポーネントの削除を確認…
 auto.catalog_remove	コンポーネントをアプリから削除…
 auto.catalog_remove_title	このコンポーネントをアプリから削除しますか？
 auto.catalog_remove_help	アプリが保持しているコピーを削除します。インストール済みのゲームのファイルはそのまま残ります。再度インストールするには、もう一度インポートまたはダウンロードしてください。

@@ -302,6 +302,9 @@ impl Default for CompareView {
     }
 }
 impl CompareView {
+    pub(crate) fn modal_open(&self) -> bool {
+        self.expanded && !self.pairs.is_empty()
+    }
     pub fn new() -> Self {
         Self {
             divider: 0.5,

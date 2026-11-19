@@ -171,9 +171,9 @@ impl RetoqueApp {
         let mut intelligence_changed = false;
         for outcome in self.jobs.drain() {
             intelligence_changed |= match &outcome {
+                // A log read counts below, and only when it says something new.
                 Outcome::Status { .. }
                 | Outcome::Ini { .. }
-                | Outcome::Logs { .. }
                 | Outcome::ModelInspection(_)
                 | Outcome::Catalog { .. } => true,
                 Outcome::Auto(event) => !matches!(**event, crate::autotune::Event::Sm86Progress(_)),
@@ -430,12 +430,7 @@ impl RetoqueApp {
                     target,
                     files,
                     result,
-                } if ours(&target) => {
-                    if latest {
-                        self.view.intelligence.latest_log = result.as_ref().ok().and_then(|s| s.as_ref()).cloned();
-                    }
-                    self.view.logs = Some((files, result));
-                }
+                } if ours(&target) => intelligence_changed |= self.receive_logs(latest, files, result),
                 Outcome::Bundle { target, result } if ours(&target) => {
                     self.toast(
                         self.tr(if result.is_ok() {
@@ -528,14 +523,36 @@ impl RetoqueApp {
         }
     }
 
+    /// Takes a log read for the selected game. True when it says something the page did not already know: the same
+    /// answer again (the watcher saw another file change, the log did not grow) is not diagnosed again.
+    fn receive_logs(&mut self, latest: bool, files: Vec<PathBuf>, result: Result<Option<Summary>, AppError>) -> bool {
+        let newest = result.as_ref().ok().and_then(|s| s.as_ref());
+        let mut changed = false;
+        if latest && self.view.intelligence.latest_log.as_ref() != newest {
+            self.view.intelligence.latest_log = newest.cloned();
+            changed = true;
+        }
+        match &mut self.view.logs {
+            // An older session chosen in the Logs tab stays on screen while a running game keeps writing the newest
+            // log; only the list of sessions follows.
+            Some((listed, Ok(Some(shown))))
+                if latest
+                    && listed.first().is_some_and(|newest| *newest != shown.path)
+                    && files.contains(&shown.path) =>
+            {
+                *listed = files;
+            }
+            Some((listed, Ok(shown))) if *listed == files && result.as_ref().is_ok_and(|read| read == shown) => {}
+            _ => {
+                self.view.logs = Some((files, result));
+                changed = true;
+            }
+        }
+        changed
+    }
+
     pub(crate) fn shell_shortcuts(&mut self, ctx: &egui::Context) {
-        if self.library_state.update_all.open {
-            return;
-        }
         if self.intuitive_shortcuts(ctx) {
-            return;
-        }
-        if self.review_open || self.folder_dialog.is_some() {
             return;
         }
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::F)) {
@@ -724,7 +741,7 @@ impl RetoqueApp {
                                 latest: false,
                                 target,
                                 files,
-                                result: retoque_data::logs::summarize(&path).map(Some).map_err(AppError::from),
+                                result: model::read_log(&path).map(Some).map_err(AppError::from),
                             },
                         });
                     }
@@ -988,6 +1005,8 @@ impl RetoqueApp {
         }
     }
     pub(crate) fn show_process_notice(&mut self, ctx: &egui::Context) {
+        let focus_id = egui::Id::unique("running_processes_focus");
+        widgets::sync_modal_focus(ctx, focus_id, self.process_notice.is_some());
         let Some(processes) = &self.process_notice else { return };
         // An information dialog: the program names (a game often runs several processes of one name), "Close",
         // and "Try again" for when the user has closed them.
@@ -997,14 +1016,15 @@ impl RetoqueApp {
         let response = egui::Modal::new(egui::Id::unique("running_processes"))
             .frame(widgets::modal_frame())
             .show(ctx, |ui| {
+                ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 480.0));
                 ui.heading(self.tr("remedy.close_processes"));
                 for name in &names {
                     ui.label(*name);
                 }
                 ui.add_space(8.0);
                 ui.horizontal(|ui| {
-                    let retry = ui.button(self.tr("remedy.retry")).clicked();
                     let close = ui.button(self.tr("close")).clicked();
+                    let retry = ui.button(self.tr("remedy.retry")).clicked();
                     (retry, close)
                 })
                 .inner
@@ -1012,11 +1032,106 @@ impl RetoqueApp {
         let (retry, close) = response.inner;
         if retry || close || response.should_close() {
             self.process_notice = None;
+            widgets::close_modal_focus(ctx, focus_id);
         }
         if retry {
             self.cmd_tx
                 .send(AppCommand::Remedy(Remedy::ReplanStale, self.view.target.clone()));
         }
+    }
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::*;
+
+    fn summary(path: &str, errors: usize) -> Summary {
+        Summary {
+            path: path.into(),
+            error_count: errors,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_older_session_chosen_in_the_logs_tab_stays_while_the_game_writes_the_newest() {
+        let mut app = crate::app_tests::shell_tests::app();
+        let files: Vec<PathBuf> = vec!["/game/OptiScaler.log".into(), "/game/OptiScaler.previous.log".into()];
+        // The page opens on the newest log.
+        assert!(app.receive_logs(true, files.clone(), Ok(Some(summary("/game/OptiScaler.log", 1)))));
+        // The user picks yesterday's session.
+        assert!(app.receive_logs(
+            false,
+            files.clone(),
+            Ok(Some(summary("/game/OptiScaler.previous.log", 7)))
+        ));
+        // The running game keeps writing: the newest log is read again and again.
+        assert!(app.receive_logs(true, files.clone(), Ok(Some(summary("/game/OptiScaler.log", 2)))));
+        let (listed, shown) = app.view.logs.as_ref().unwrap();
+        assert_eq!(
+            shown.as_ref().unwrap().as_ref().unwrap().error_count,
+            7,
+            "the chosen session stays"
+        );
+        assert_eq!(listed, &files);
+        // What the health check and "Last session" read is the newest all the same.
+        assert_eq!(app.view.intelligence.latest_log.as_ref().unwrap().error_count, 2);
+        // "Read again" (the view cleared first) and a chosen log that is gone both show the newest.
+        app.view.logs = None;
+        assert!(app.receive_logs(true, files.clone(), Ok(Some(summary("/game/OptiScaler.log", 2)))));
+        assert_eq!(
+            app.view
+                .logs
+                .as_ref()
+                .unwrap()
+                .1
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .path,
+            files[0]
+        );
+        app.view.logs = Some((files.clone(), Ok(Some(summary("/game/OptiScaler.previous.log", 7)))));
+        assert!(app.receive_logs(
+            true,
+            vec![files[0].clone()],
+            Ok(Some(summary("/game/OptiScaler.log", 2)))
+        ));
+        assert_eq!(
+            app.view
+                .logs
+                .as_ref()
+                .unwrap()
+                .1
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .path,
+            files[0]
+        );
+    }
+
+    #[test]
+    fn the_newest_log_follows_a_new_session_and_the_same_answer_is_not_diagnosed_again() {
+        let mut app = crate::app_tests::shell_tests::app();
+        let files: Vec<PathBuf> = vec!["/game/OptiScaler_2.log".into(), "/game/OptiScaler_1.log".into()];
+        assert!(app.receive_logs(true, files.clone(), Ok(Some(summary("/game/OptiScaler_2.log", 1)))));
+        // The watcher saw another file change, or the log did not grow: nothing new to diagnose.
+        assert!(!app.receive_logs(true, files.clone(), Ok(Some(summary("/game/OptiScaler_2.log", 1)))));
+        assert!(app.receive_logs(true, files.clone(), Ok(Some(summary("/game/OptiScaler_2.log", 3)))));
+        // The game starts again and writes a new file: the view was on the newest, so it moves to the new one.
+        let mut next = files.clone();
+        next.insert(0, "/game/OptiScaler_3.log".into());
+        assert!(app.receive_logs(true, next.clone(), Ok(Some(summary("/game/OptiScaler_3.log", 0)))));
+        let (listed, shown) = app.view.logs.as_ref().unwrap();
+        assert_eq!(shown.as_ref().unwrap().as_ref().unwrap().path, next[0]);
+        assert_eq!(listed, &next);
+        // No log at all is an answer too, and is not repeated either.
+        assert!(app.receive_logs(true, vec![], Ok(None)));
+        assert!(!app.receive_logs(true, vec![], Ok(None)));
+        assert!(app.view.intelligence.latest_log.is_none());
     }
 }
 
