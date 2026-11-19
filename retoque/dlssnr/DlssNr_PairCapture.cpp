@@ -152,7 +152,18 @@ struct Dx12Backend
     bool Alloc(Recording& recording, int which, Readback& out)
     {
         const D3D12_RESOURCE_DESC desc = recording.surface[which]->GetDesc();
-        return capture::AllocReadback(recording.device, desc, out);
+        HRESULT result = S_OK;
+        if (capture::AllocReadback(recording.device, desc, out, &result))
+            return true;
+        // The menu says only that the buffers could not be created; the log says which one and why (2026-11-18: an
+        // RTX 3060 under Dying Light: The Beast refused every capture with no further evidence).
+        LOG_INFO("DLSS-NR capture: readback for the {} not created: {:X} (format {} copied as {}, {}x{}, dimension {}, "
+                 "flags {:X}, footprint {} bytes, device {:X})",
+                 which == 0 ? "original" : "processed", static_cast<unsigned>(result),
+                 static_cast<unsigned>(desc.Format), static_cast<unsigned>(capture::TypedForCopy(desc.Format)),
+                 desc.Width, desc.Height, static_cast<unsigned>(desc.Dimension), static_cast<unsigned>(desc.Flags),
+                 out.bytes, static_cast<unsigned>(recording.device->GetDeviceRemovedReason()));
+        return false;
     }
 
     // Before any copy is recorded, as Submission::Track requires. Where it refuses, nothing is captured, and the log

@@ -48,7 +48,9 @@ inline DXGI_FORMAT TypedForCopy(DXGI_FORMAT f)
 
 // A readback buffer sized for subresource 0 of a texture described by desc. False, with nothing held, when the
 // footprint is empty or the buffer could not be created.
-inline bool AllocReadback(ID3D12Device* device, const D3D12_RESOURCE_DESC& desc, Shot& shot)
+// result, when given, receives why it failed: E_INVALIDARG for a description with no copyable footprint, otherwise
+// CreateCommittedResource's HRESULT.
+inline bool AllocReadback(ID3D12Device* device, const D3D12_RESOURCE_DESC& desc, Shot& shot, HRESULT* result = nullptr)
 {
     D3D12_RESOURCE_DESC typed = desc;
     typed.Format = TypedForCopy(desc.Format);
@@ -57,8 +59,12 @@ inline bool AllocReadback(ID3D12Device* device, const D3D12_RESOURCE_DESC& desc,
     device->GetCopyableFootprints(&typed, 0, 1, 0, &shot.layout, nullptr, nullptr, &total);
     shot.bytes = total;
 
-    if (total == 0)
+    if (total == 0 || total == UINT64_MAX)
+    {
+        if (result != nullptr)
+            *result = E_INVALIDARG;
         return false;
+    }
 
     D3D12_HEAP_PROPERTIES heap = {};
     heap.Type = D3D12_HEAP_TYPE_READBACK;
@@ -73,8 +79,11 @@ inline bool AllocReadback(ID3D12Device* device, const D3D12_RESOURCE_DESC& desc,
     buf.SampleDesc.Count = 1;
     buf.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 
-    return SUCCEEDED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buf, D3D12_RESOURCE_STATE_COPY_DEST,
-                                                     nullptr, IID_PPV_ARGS(&shot.readback)));
+    const HRESULT created = device->CreateCommittedResource(
+        &heap, D3D12_HEAP_FLAG_NONE, &buf, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&shot.readback));
+    if (result != nullptr)
+        *result = created;
+    return SUCCEEDED(created);
 }
 
 // Records the copy of subresource 0 of src into shot, with src moved to COPY_SOURCE around it and handed back in
