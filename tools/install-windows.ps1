@@ -1061,6 +1061,7 @@ function Write-AntiCheatNotes {
     foreach ($name in @('xhunter1.sys','x3.xem','xcoronahost.xem')) { $files[$name]='XIGNCODE3' }
     foreach ($name in @('pbcl.dll','pbcl64.dll','pbsvc.exe','pnkbstra.exe','pnkbstrb.exe')) { $files[$name]='PunkBuster' }
     foreach ($name in @('aceservice.exe','ace-base.sys','ace-base64.sys')) { $files[$name]='Anti-Cheat Expert' }
+    $evidence = @{}
     $pending = New-Object Collections.Stack
     $pending.Push(@($script:Game, 0)); $count = 0
     while ($pending.Count -gt 0) {
@@ -1068,7 +1069,7 @@ function Write-AntiCheatNotes {
         try {
             if ([IO.File]::GetAttributes($item[0]) -band [IO.FileAttributes]::ReparsePoint) { continue }
             foreach ($entry in [IO.Directory]::EnumerateFileSystemEntries($item[0])) {
-                $count++; if ($count -gt 4096) { return }
+                $count++; if ($count -gt 4096) { break }
                 $attributes = [IO.File]::GetAttributes($entry)
                 if ($attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
                 $directory = ($attributes -band [IO.FileAttributes]::Directory) -ne 0
@@ -1076,11 +1077,17 @@ function Write-AntiCheatNotes {
                 $product = if ($directory) { $directories[$name] } else { $files[$name] }
                 if ($product) {
                     $relative = $entry.Substring($script:Game.TrimEnd([IO.Path]::DirectorySeparatorChar).Length + 1)
-                    Write-Line "[!] Anti-cheat evidence: $product ($relative). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
+                    if (-not $evidence.ContainsKey($product)) { $evidence[$product] = New-Object 'Collections.Generic.List[string]' }
+                    $evidence[$product].Add($relative)
                 }
                 if ($directory -and $item[1] -lt 4) { $pending.Push(@($entry, ($item[1] + 1))) }
             }
         } catch { continue }
+        if ($count -gt 4096) { break }
+    }
+    foreach ($product in @($evidence.Keys | Sort-Object)) {
+        $paths = ($evidence[$product] | Sort-Object -Unique) -join '; '
+        Write-Line "[!] Anti-cheat evidence: $product ($paths). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
     }
 }
 

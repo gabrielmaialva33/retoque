@@ -1015,6 +1015,7 @@ check_executable_architecture() {
 }
 anti_cheat_notes() {
     local entry name product count=0
+    local -A evidence=()
     while IFS= read -r -d '' entry; do
         count=$((count+1)); (( count <= 4096 )) || break
         [[ ! -L $entry && ( -f $entry || -d $entry ) ]] || continue
@@ -1041,9 +1042,13 @@ anti_cheat_notes() {
             esac
         fi
         if [[ -n $product ]]; then
-            echo "[!] Anti-cheat evidence: $product (${entry#"$TARGET_DIR"/}). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
+            evidence[$product]+="${evidence[$product]:+; }${entry#"$TARGET_DIR"/}"
         fi
     done < <(find -P "$TARGET_DIR" -mindepth 1 -maxdepth 5 -print0)
+    for product in 'Anti-Cheat Expert' 'BattlEye' 'EA AntiCheat / Javelin' 'Easy Anti-Cheat' 'PunkBuster' 'XIGNCODE3' 'nProtect GameGuard'; do
+        [[ -n ${evidence[$product]:-} ]] || continue
+        echo "[!] Anti-cheat evidence: $product (${evidence[$product]}). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
+    done
 }
 
 deploy() {

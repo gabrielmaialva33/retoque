@@ -787,6 +787,16 @@ def architecture_refusal_and_anti_cheat_evidence(tmp):
         result = deploy_ok(game, '--dry-run', src=src)
         expect(name in result.stdout and 'account ban' in result.stdout, 'anti-cheat is named information, never refusal')
         (game / name).rmdir()
+    (game / 'BattlEye').mkdir()
+    (game / 'BattlEye' / 'BEClient_x64.dll').write_bytes(b'')
+    (game / 'BEService.exe').write_bytes(b'')
+    result = deploy_ok(game, '--dry-run', src=src)
+    notes = [line for line in result.stdout.splitlines() if 'Anti-cheat evidence:' in line]
+    expect(len(notes) == 1, 'one note per product')
+    expect(all(name in notes[0] for name in ('BattlEye', 'BEClient_x64.dll', 'BEService.exe')), 'grouped note retains each path')
+    (game / 'BattlEye' / 'BEClient_x64.dll').unlink()
+    (game / 'BattlEye').rmdir()
+    (game / 'BEService.exe').unlink()
     outside = tmp / 'outside'
     outside.mkdir()
     (outside / 'real.exe').write_bytes(pe_executable(0x14c))

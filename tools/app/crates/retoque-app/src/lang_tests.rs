@@ -20,7 +20,7 @@ fn window_rect(size: [f32; 2]) -> egui::Rect {
 
 fn game(target: &Path) -> Game {
     Game {
-        id: "synthetic".into(),
+        id: "steam:1".into(),
         name: "Synthetic Game With A Fairly Long Name".into(),
         store: Store::Steam,
         install_dir: target.into(),
@@ -55,10 +55,11 @@ fn window(
     app.payload = Some("/synthetic/payload".into());
     app.payload_build = Some(Ok("old".into()));
     app.library_state.games.push(game(target));
+    app.saved.favorites.insert("steam:1".into());
     app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
     app.tuning.installed = Some(Ok(vec![]));
     if let Some(tab) = tab {
-        app.selected = Some("synthetic".into());
+        app.selected = Some("steam:1".into());
         app.tab = tab;
         app.view.target = Some(target.into());
         app.view.status = Some(Ok(Status {
@@ -239,7 +240,15 @@ fn every_language_fits_the_main_views_in_a_small_window() {
                         );
                     }
                     if tab != Tab::Compare {
-                        inside(&h, size, Role::Button, primary, &what);
+                        let main = inside(&h, size, Role::Button, primary, &what);
+                        let play = inside(&h, size, Role::Button, t(lang, "play.action"), &what);
+                        assert!(
+                            !main.shrink(0.5).intersects(play.shrink(0.5)),
+                            "{what}: Play overlaps primary"
+                        );
+                        for tab in h.query_all_by_role(Role::Tab) {
+                            assert!(play.bottom() <= tab.rect().top(), "{what}: Play overlaps tab content");
+                        }
                     }
                     for tab_node in h.query_all_by_role(Role::Tab) {
                         let rect = tab_node.rect();

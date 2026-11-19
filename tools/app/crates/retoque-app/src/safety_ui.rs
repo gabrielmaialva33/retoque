@@ -9,7 +9,10 @@ use retoque_core::{
     pe_version::Machine,
     safety::{AntiCheatScan, Executables},
 };
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {
@@ -29,22 +32,8 @@ impl Snapshot {
                 .collect(),
         }
     }
-    pub fn warning(&self, lang: Lang) -> Option<String> {
-        if self.anti_cheat.findings.is_empty() {
-            return None;
-        }
-        let evidence = self
-            .anti_cheat
-            .findings
-            .iter()
-            .map(|f| format!("{} ({})", f.product, f.path.display()))
-            .collect::<Vec<_>>()
-            .join("; ");
-        Some(format!(
-            "{}\n{}",
-            t(lang, "safety.anti_cheat").replace("{evidence}", &evidence),
-            t(lang, "safety.anti_cheat_risk")
-        ))
+    pub fn notice(&self, ui: &mut egui::Ui, lang: Lang) {
+        Warning::from_scan(&self.anti_cheat).show(ui, lang);
     }
     pub fn bitness(&self, target: &std::path::Path, lang: Lang) -> String {
         let Some(exes) = self.architectures.get(target) else {
@@ -63,6 +52,59 @@ impl Snapshot {
             })
             .collect::<Vec<_>>()
             .join(" · ")
+    }
+}
+/// The summary names each product once; technical paths stay behind a closed details fold.
+#[derive(Default)]
+struct Warning(BTreeMap<String, BTreeSet<String>>);
+impl Warning {
+    fn from_scan(scan: &AntiCheatScan) -> Self {
+        let mut warning = Self::default();
+        for f in &scan.findings {
+            warning
+                .0
+                .entry(f.product.into())
+                .or_default()
+                .insert(f.path.display().to_string());
+        }
+        warning
+    }
+    fn include_plan_notes(&mut self, review: &ReviewSession) {
+        for note in review.plans.iter().flat_map(|p| p.notes()) {
+            if let Some((product, paths)) = crate::i18n::anti_cheat_evidence(note) {
+                // Root evidence already lists the individual paths. The plan is a fallback for new findings.
+                self.0
+                    .entry(product.into())
+                    .or_insert_with(|| BTreeSet::from([paths.into()]));
+            }
+        }
+    }
+    fn summary(&self, lang: Lang) -> String {
+        format!(
+            "{}\n{}",
+            t(lang, "safety.anti_cheat").replace("{products}", &self.0.keys().cloned().collect::<Vec<_>>().join(", ")),
+            t(lang, "safety.anti_cheat_risk")
+        )
+    }
+    fn show(&self, ui: &mut egui::Ui, lang: Lang) {
+        if self.0.is_empty() {
+            return;
+        }
+        crate::error::notice(ui, &crate::error::AppError::warning(self.summary(lang)));
+        crate::widgets::collapsible(
+            ui,
+            "anti-cheat-evidence",
+            t(lang, "safety.evidence"),
+            crate::widgets::Fold::Details,
+            |ui| {
+                for (product, paths) in &self.0 {
+                    ui.label(product);
+                    for path in paths {
+                        ui.add(egui::Label::new(egui::RichText::new(path).small().monospace()).wrap());
+                    }
+                }
+            },
+        );
     }
 }
 fn installs(review: &ReviewSession) -> bool {
@@ -93,6 +135,15 @@ impl RetoqueApp {
                 .is_some_and(|key| self.saved.anti_cheat_acknowledged.contains(&key))
             || self.view.safety_ack == Some(review.request_id)
     }
+    pub(crate) fn safety_blocked_reason(&self, review: &ReviewSession) -> Option<&'static str> {
+        if self.safety_allowed(review) {
+            None
+        } else if self.view.safety.is_none() {
+            Some(t(self.lang, "safety.reading"))
+        } else {
+            Some(t(self.lang, "safety.ack_required"))
+        }
+    }
     pub(crate) fn remember_safety_ack(&mut self, review: &ReviewSession) {
         if installs(review)
             && self.view.safety_ack == Some(review.request_id)
@@ -113,23 +164,18 @@ impl RetoqueApp {
             crate::widgets::busy(ui, self.lang, t(self.lang, "safety.reading"), None, None);
             return;
         };
-        let Some(warning) = evidence.warning(self.lang).or_else(|| {
-            review
-                .plans
-                .iter()
-                .flat_map(|p| p.notes())
-                .find(|n| n.starts_with(retoque_core::safety::ANTI_CHEAT_NOTE))
-                .map(|n| crate::i18n::diagnostic(self.lang, n))
-        }) else {
+        let mut warning = Warning::from_scan(&evidence.anti_cheat);
+        warning.include_plan_notes(review);
+        if warning.0.is_empty() {
             return;
-        };
+        }
         if self
             .safety_key()
             .is_some_and(|key| self.saved.anti_cheat_acknowledged.contains(&key))
         {
             return;
         }
-        crate::error::notice(ui, &crate::error::AppError::warning(warning));
+        warning.show(ui, self.lang);
         let mut checked = self.view.safety_ack == Some(request_id);
         if ui.checkbox(&mut checked, t(self.lang, "safety.acknowledge")).changed() {
             self.view.safety_ack = checked.then_some(request_id);
@@ -151,6 +197,40 @@ mod tests {
         kittest::{NodeT, Queryable},
     };
     use retoque_core::{InstallOptions, safety::AntiCheatFinding};
+
+    #[test]
+    fn compact_warning_groups_products_and_folds_paths_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            let scan = AntiCheatScan {
+                findings: [
+                    ("BattlEye", "BattlEye"),
+                    ("BattlEye", "BattlEye/BEClient_x64.dll"),
+                    ("BattlEye", "BEService.exe"),
+                    ("Easy Anti-Cheat", "EasyAntiCheat"),
+                ]
+                .into_iter()
+                .map(|(product, path)| AntiCheatFinding {
+                    product,
+                    path: path.into(),
+                })
+                .collect(),
+                complete: true,
+            };
+            let warning = Warning::from_scan(&scan);
+            let summary = warning.summary(lang);
+            assert_eq!(summary.matches("BattlEye").count(), 1);
+            assert!(!summary.contains("BEClient_x64.dll"));
+            let mut h = Harness::builder()
+                .with_size([900., 600.])
+                .build_ui(|ui| warning.show(ui, lang));
+            h.get_by_label(&summary);
+            assert!(h.query_by_label("BattlEye/BEClient_x64.dll").is_none());
+            h.get_by_label(t(lang, "safety.evidence")).click();
+            h.run_steps(3);
+            h.get_by_label("BattlEye/BEClient_x64.dll");
+            h.get_by_label("BEService.exe");
+        }
+    }
 
     #[test]
     fn acknowledgment_gates_both_reviews_and_survives_saved_state() {
@@ -201,12 +281,14 @@ mod tests {
                 });
                 app.review = Some(Ok(review.clone()));
                 app.review_open = true;
+                assert_eq!(app.safety_blocked_reason(&review), Some(t(lang, "safety.ack_required")));
                 // Direct commands must not bypass the disabled button.
                 app.confirm_review(42);
                 assert!(app.writing.is_empty());
                 assert!(app.saved.anti_cheat_acknowledged.is_empty());
                 let mut harness = Harness::builder().with_size([1000., 1200.]).build_ui_state(
                     |ui, app: &mut RetoqueApp| {
+                        crate::theme::apply(ui.ctx());
                         app.context = ui.ctx().clone();
                         app.review_sheet(ui.ctx());
                         app.handle_commands();
@@ -224,7 +306,7 @@ mod tests {
                         .accesskit_node()
                         .is_disabled()
                 );
-                harness.get_by_label(t(lang, "safety.acknowledge")).click();
+                harness.get_by_label(t(lang, "safety.acknowledge")).click_accesskit();
                 harness.run_steps(3);
                 assert!(
                     !harness
@@ -241,7 +323,9 @@ mod tests {
                     1,
                     "review has not written to the synthetic game"
                 );
-                harness.get_by_role_and_label(egui::Role::Button, confirm).click();
+                harness
+                    .get_by_role_and_label(egui::Role::Button, confirm)
+                    .click_accesskit();
                 harness.run_steps(3);
                 let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
                 while harness.state().jobs.busy() {
@@ -283,6 +367,7 @@ mod tests {
         assert!(app.safety_allowed(&review));
         app.view.safety = None;
         assert!(!app.safety_allowed(&review));
+        assert_eq!(app.safety_blocked_reason(&review), Some(t(app.lang, "safety.reading")));
         for kind in [PlanKind::Settings, PlanKind::Uninstall] {
             review.kind = ReviewKind::Standard(kind);
             assert!(app.safety_allowed(&review));

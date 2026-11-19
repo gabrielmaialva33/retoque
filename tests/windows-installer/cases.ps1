@@ -358,6 +358,16 @@ Add-Case 'architecture_refusal_and_anti_cheat_evidence' {
         Expect ($r.Out.Contains($name) -and $r.Out.Contains('account ban')) 'anti-cheat is evidence, not refusal'
         [IO.Directory]::Delete($dir)
     }
+    [void][IO.Directory]::CreateDirectory((Join-Path $game 'BattlEye'))
+    [IO.File]::WriteAllText((Join-Path $game 'BattlEye/BEClient_x64.dll'), '')
+    [IO.File]::WriteAllText((Join-Path $game 'BEService.exe'), '')
+    $r = Install-Ok $game @('-DryRun') -Src $src
+    $notes = @($r.Out -split "`n" | Where-Object { $_.Contains('Anti-cheat evidence:') })
+    Expect ($notes.Count -eq 1) 'one note per product'
+    foreach ($path in @('BattlEye','BEClient_x64.dll','BEService.exe')) {
+        Expect ($notes[0].Contains($path)) 'grouped note retains each path'
+    }
+
 }
 
 Add-Case 'clean_install' {

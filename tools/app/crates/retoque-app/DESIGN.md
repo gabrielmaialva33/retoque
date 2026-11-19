@@ -57,6 +57,8 @@ translated packs (`src/i18n/*.tsv`, see the app README), each of which renders e
 
 | Idea | pt-BR | en | Never |
 |---|---|---|---|
+| Ask the game’s launcher to start it | Jogar | Play | “Jogo iniciado” before process detection |
+| Games starred by the user | Favoritos | Favorites | “Fixados” |
 | Put Retoque into a game, tuned | Instalar e otimizar… | Install and optimize… | "Otimizar automaticamente" as the main action |
 | Tune an installed game | Otimizar… | Optimize… | "Aplicar recomendação" as the main action |
 | Newer Retoque files over an install | Atualizar o Retoque… | Update Retoque… | "Revisar atualização do jogo" |
@@ -86,3 +88,13 @@ translated packs (`src/i18n/*.tsv`, see the app README), each of which renders e
 | Interrupted install | instalação incompleta | incomplete install | "interrompida", "precisa de limpeza" |
 
 English text uses US spelling (catalog, optimize, center).
+
+## Game shortcuts
+
+Play is a plain secondary beside optimization, without “…”, and only for a verified launcher identifier.
+While a game-folder write runs, it is disabled with a visible reason; feedback says the launcher was asked.
+A star on the page and cards is independently keyboard reachable, shows an outline/fill and focus ring,
+and announces “Add to favorites: {game}” or “Remove from favorites: {game}” plus the row/card's favorite state.
+Sidebar rows have no star control. On cards, paint the badge only for favorites or on hover/focus;
+it remains reachable by Tab even when not painted. Favorites form the first filtered library group. Library cards/rows still open the game page; they have no Play.
+The existing More actions menu holds game folder, settings file and captures folder, the latter two only if present.

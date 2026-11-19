@@ -687,9 +687,7 @@ pub(crate) fn plan_install(options: &InstallOptions) -> Result<Plan, Error> {
             x86.join(", ")
         ));
     }
-    for finding in crate::safety::anti_cheat(&plan.game_dir).findings {
-        plan.notes.push(crate::safety::anti_cheat_note(&finding));
-    }
+    plan.notes.extend(crate::safety::anti_cheat(&plan.game_dir).notes());
     let proxy = if options.proxy.is_empty() {
         "dxgi.dll"
     } else {

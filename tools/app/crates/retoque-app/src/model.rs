@@ -78,6 +78,7 @@ pub enum Outcome {
     Status {
         target: PathBuf,
         result: Result<Status, AppError>,
+        captures_dir_exists: bool,
     },
     /// The ini's actual path (its spelling may differ in case) and bytes, or None when the folder has none.
     Ini {
@@ -188,7 +189,12 @@ pub fn remove_leftovers(reviewed: Vec<retoque_core::leftovers::Leftover>) -> Out
 pub fn status(target: PathBuf) -> Outcome {
     let result = retoque_core::status(&target).map_err(|e| AppError::from(e).for_target(target.clone()));
     crate::state::library::remember_folder(&target);
-    Outcome::Status { target, result }
+    let captures_dir_exists = target.join("retoque-captures").is_dir();
+    Outcome::Status {
+        target,
+        result,
+        captures_dir_exists,
+    }
 }
 
 pub fn read_ini(target: PathBuf) -> Outcome {
@@ -345,11 +351,34 @@ pub fn bundle_dir() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
 }
 
-/// Opens a folder in the system file manager.
-pub fn open_folder(dir: &Path) {
+/// Opens a folder or file through the same OS association boundary as launcher URIs.
+pub fn open_folder(path: &Path) {
+    let _ = open_system(path.as_os_str());
+}
+
+/// One dispatch boundary; never interpret paths or URIs as shell command text.
+pub(crate) fn open_system(target: &std::ffi::OsStr) -> std::io::Result<()> {
     #[cfg(windows)]
-    let program = "explorer";
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::{
+            Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+            core::{PCWSTR, w},
+        };
+        let wide: Vec<u16> = target.encode_wide().chain(Some(0)).collect();
+        // SAFETY: the UTF-16 target is NUL-terminated and lives through the synchronous shell call.
+        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
+        if result.0 as isize <= 32 {
+            return Err(std::io::Error::other("The system could not open the requested item"));
+        }
+        Ok(())
+    }
     #[cfg(not(windows))]
-    let program = "xdg-open";
-    let _ = std::process::Command::new(program).arg(dir).spawn();
+    {
+        let mut child = std::process::Command::new("xdg-open").arg(target).spawn()?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        Ok(())
+    }
 }

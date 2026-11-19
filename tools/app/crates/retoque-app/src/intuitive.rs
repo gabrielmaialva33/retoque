@@ -94,8 +94,21 @@ impl RetoqueApp {
             return;
         }
         let optimize = self.optimize_action_key();
-        let key = (self.library_state.generation(), self.lang, optimize);
-        if self.intuitive.palette.catalog_key != Some(key) {
+        let selected_game = self
+            .library_state
+            .games
+            .iter()
+            .find(|g| Some(&g.id) == self.selected.as_ref());
+        let play = selected_game.filter(|g| crate::play::launch_uri(g, cfg!(windows)).is_some());
+        let blocked = play.is_some_and(|g| self.game_write_in_flight(g));
+        let key = (
+            self.library_state.generation(),
+            self.lang,
+            optimize,
+            self.selected.clone(),
+            blocked,
+        );
+        if self.intuitive.palette.catalog_key.as_ref() != Some(&key) {
             let mut entries: Vec<_> = self
                 .library_state
                 .games
@@ -134,6 +147,13 @@ impl RetoqueApp {
                     destination: Destination::Action(action),
                 }
             }));
+            if let Some(game) = play.filter(|_| !blocked) {
+                entries.push(Entry {
+                    label: self.tr("play.command").replace("{game}", &game.name),
+                    search: String::new(),
+                    destination: Destination::Play(game.id.clone()),
+                });
+            }
             entries.push(Entry {
                 label: format!("{} · /", t(self.lang, "palette.focus")),
                 search: String::new(),
@@ -146,6 +166,11 @@ impl RetoqueApp {
         if let Some(destination) = self.intuitive.palette.show(ctx, self.lang) {
             match destination {
                 Destination::Game(id) => self.select_id(id),
+                Destination::Play(id) => {
+                    if let Some(game) = self.library_state.games.iter().find(|g| g.id == id).cloned() {
+                        self.play_game(&game);
+                    }
+                }
                 Destination::Tab(tab) => self.cmd_tx.send(AppCommand::SwitchTab(tab)),
                 Destination::Setting(key) => {
                     self.intuitive.settings.query = key.into();

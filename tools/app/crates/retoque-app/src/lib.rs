@@ -62,4 +62,7 @@ pub mod app_install;
 #[cfg(windows)]
 mod app_install_ui;
 
+pub(crate) mod play;
+#[cfg(test)]
+mod play_tests;
 pub(crate) mod safety_ui;

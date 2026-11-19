@@ -251,6 +251,37 @@ pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static s
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    ("play.action", "Play", "Jogar"),
+    ("play.command", "Play {game}", "Jogar {game}"),
+    (
+        "play.asked",
+        "Asked {launcher} to start {game}",
+        "Pedimos ao {launcher} para abrir {game}",
+    ),
+    (
+        "play.failed",
+        "Could not reach {launcher}. Open {launcher} and start the game there.",
+        "Não foi possível chamar o {launcher}. Abra o {launcher} e inicie o jogo por lá.",
+    ),
+    (
+        "play.wait_write",
+        "Wait until changes to this game finish.",
+        "Aguarde o fim das alterações neste jogo.",
+    ),
+    ("play.open_settings", "Open settings file", "Abrir arquivo de ajustes"),
+    ("play.open_captures", "Open captures folder", "Abrir pasta de capturas"),
+    ("favorites.title", "Favorites", "Favoritos"),
+    ("favorites.state", "Favorite", "Favorito"),
+    (
+        "favorites.add",
+        "Add to favorites: {game}",
+        "Adicionar aos favoritos: {game}",
+    ),
+    (
+        "favorites.remove",
+        "Remove from favorites: {game}",
+        "Remover dos favoritos: {game}",
+    ),
     ("lsfg.found", "Lossless Scaling found", "Lossless Scaling encontrado"),
     (
         "lsfg.preparing",
@@ -1005,9 +1036,10 @@ const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "safety.anti_cheat",
-        "Warning — anti-cheat evidence: {evidence}.",
-        "Atenção — indício de anti-cheat: {evidence}.",
+        "This game has anti-cheat files: {products}.",
+        "Este jogo tem arquivos de anti-cheat: {products}.",
     ),
+    ("safety.evidence", "Evidence", "Evidências"),
     (
         "safety.anti_cheat_risk",
         "A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it.",
@@ -3248,16 +3280,22 @@ mod packs {
     }
 }
 
+/// Stable core/script note envelope; paths stay literal and are only shown as folded evidence in reviews.
+pub(crate) fn anti_cheat_evidence(message: &str) -> Option<(&str, &str)> {
+    message
+        .strip_prefix("Anti-cheat evidence: ")?
+        .split_once("). A proxy DLL")?
+        .0
+        .split_once(" (")
+}
+
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
-    if let Some(evidence) = message
-        .strip_prefix("Anti-cheat evidence: ")
-        .and_then(|s| s.split_once("). A proxy DLL"))
-    {
+    if let Some((product, _)) = anti_cheat_evidence(message) {
         return format!(
             "{} {}",
-            t(lang, "safety.anti_cheat").replace("{evidence}", &format!("{})", evidence.0)),
+            t(lang, "safety.anti_cheat").replace("{products}", product),
             t(lang, "safety.anti_cheat_risk")
         );
     }

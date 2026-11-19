@@ -9,21 +9,16 @@ pub const ENTRY_BUDGET: usize = 4096;
 pub const MAX_DEPTH: usize = 4;
 
 pub(crate) fn unlinked(path: &Path) -> bool {
-    path.ancestors().all(|p| {
-        if p.as_os_str().is_empty() {
-            return true;
+    fs::symlink_metadata(path).is_ok_and(|m| {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            m.file_attributes() & 0x400 == 0
         }
-        fs::symlink_metadata(p).is_ok_and(|m| {
-            #[cfg(windows)]
-            {
-                use std::os::windows::fs::MetadataExt;
-                m.file_attributes() & 0x400 == 0
-            }
-            #[cfg(not(windows))]
-            {
-                !m.file_type().is_symlink()
-            }
-        })
+        #[cfg(not(windows))]
+        {
+            !m.file_type().is_symlink()
+        }
     })
 }
 
@@ -53,7 +48,13 @@ fn executables_with_budget(root: &Path, budget: usize) -> Executables {
     if !unlinked(root) {
         return result;
     }
-    let Ok(entries) = fs::read_dir(root) else { return result };
+    // Trust the selected library's ancestors, as new_plan does, then inspect entries below the resolved root.
+    let Ok(root) = fs::canonicalize(root) else {
+        return result;
+    };
+    let Ok(entries) = fs::read_dir(&root) else {
+        return result;
+    };
     for (i, entry) in entries.enumerate() {
         if i >= budget {
             return result;
@@ -125,8 +126,11 @@ fn anti_cheat_with_budget(root: &Path, budget: usize) -> AntiCheatScan {
     if !unlinked(root) {
         return result;
     }
+    let Ok(root) = fs::canonicalize(root) else {
+        return result;
+    };
     result.complete = true;
-    let mut pending = vec![(root.to_owned(), 0)];
+    let mut pending = vec![(root.clone(), 0)];
     let mut visited = 0;
     while let Some((dir, depth)) = pending.pop() {
         if !unlinked(&dir) {
@@ -162,7 +166,7 @@ fn anti_cheat_with_budget(root: &Path, budget: usize) -> AntiCheatScan {
             if let Some(product) = product(&entry.file_name().to_string_lossy().to_ascii_lowercase(), kind.is_dir()) {
                 result.findings.push(AntiCheatFinding {
                     product,
-                    path: path.strip_prefix(root).unwrap().to_owned(),
+                    path: path.strip_prefix(&root).unwrap().to_owned(),
                 });
             }
             if kind.is_dir() {
@@ -178,12 +182,20 @@ fn anti_cheat_with_budget(root: &Path, budget: usize) -> AntiCheatScan {
     result
 }
 pub const ANTI_CHEAT_NOTE: &str = "Anti-cheat evidence";
-pub fn anti_cheat_note(f: &AntiCheatFinding) -> String {
-    format!(
-        "{ANTI_CHEAT_NOTE}: {} ({}). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it.",
-        f.product,
-        f.path.display()
-    )
+impl AntiCheatScan {
+    /// One note per product, with all its relative indicators and a stable prefix for UI translation.
+    pub fn notes(&self) -> Vec<String> {
+        let mut products = std::collections::BTreeMap::<_, std::collections::BTreeSet<_>>::new();
+        for finding in &self.findings {
+            products.entry(finding.product).or_default().insert(&finding.path);
+        }
+        products.into_iter().map(|(product, paths)| {
+            let paths = paths.into_iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("; ");
+            format!(
+                "{ANTI_CHEAT_NOTE}: {product} ({paths}). A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it."
+            )
+        }).collect()
+    }
 }
 
 #[cfg(test)]
@@ -318,6 +330,48 @@ mod tests {
         fs::write(deep.join("pbcl.dll"), b"").unwrap();
         assert!(!anti_cheat(d.path()).complete);
         assert_eq!(anti_cheat(d.path()).findings.len(), 1);
+    }
+    #[test]
+    fn notes_group_paths_by_product() {
+        let d = tempfile::tempdir().unwrap();
+        fs::create_dir(d.path().join("BattlEye")).unwrap();
+        fs::write(d.path().join("BattlEye/BEClient_x64.dll"), b"").unwrap();
+        fs::write(d.path().join("BEService.exe"), b"").unwrap();
+        let notes = anti_cheat(d.path()).notes();
+        assert_eq!(notes.len(), 1);
+        assert!(notes[0].starts_with("Anti-cheat evidence: BattlEye ("));
+        for name in ["BattlEye", "BEClient_x64.dll", "BEService.exe"] {
+            assert!(notes[0].contains(name));
+        }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn linked_library_parent_is_resolved_but_internal_links_are_not_followed() {
+        let d = tempfile::tempdir().unwrap();
+        let library = d.path().join("library");
+        let game = library.join("game");
+        fs::create_dir_all(&game).unwrap();
+        fs::write(game.join("game.exe"), pe(0x14c)).unwrap();
+        fs::create_dir(game.join("BattlEye")).unwrap();
+        let alias = d.path().join("library-alias");
+        std::os::unix::fs::symlink(&library, &alias).unwrap();
+        let selected = alias.join("game");
+        assert!(executables(&selected).x86_only());
+        assert_eq!(anti_cheat(&selected).findings, anti_cheat(&game).findings);
+        std::os::unix::fs::symlink(&game, d.path().join("linked-root")).unwrap();
+        assert!(!executables(&d.path().join("linked-root")).complete);
+        assert!(!anti_cheat(&d.path().join("linked-root")).complete);
+        let outside = d.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("game64.exe"), pe(0x8664)).unwrap();
+        fs::create_dir(outside.join("EasyAntiCheat")).unwrap();
+        std::os::unix::fs::symlink(&outside, game.join("linked-child")).unwrap();
+        std::os::unix::fs::symlink(outside.join("game64.exe"), game.join("game64.exe")).unwrap();
+        assert!(executables(&selected).x86_only());
+        let scan = anti_cheat(&selected);
+        assert!(!scan.complete);
+        assert_eq!(scan.findings.len(), 1);
+        assert_eq!(scan.findings[0].product, "BattlEye");
     }
     #[cfg(unix)]
     #[test]

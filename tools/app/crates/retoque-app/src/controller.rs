@@ -315,7 +315,12 @@ impl RetoqueApp {
                         self.open_target(None);
                     }
                 }
-                Outcome::Status { target, result } if ours(&target) => {
+                Outcome::Status {
+                    target,
+                    result,
+                    captures_dir_exists,
+                } if ours(&target) => {
+                    self.view.captures_dir_exists = captures_dir_exists;
                     if let Ok(s) = &result {
                         self.library_state.status.insert(target.clone(), s.clone());
                         if let Some(proxy) = installed_proxy(s) {
@@ -332,6 +337,11 @@ impl RetoqueApp {
                     self.view.status = Some(result);
                 }
                 Outcome::Ini { target, result } if ours(&target) => {
+                    self.view.ini_path = result
+                        .as_ref()
+                        .ok()
+                        .and_then(|o| o.as_ref())
+                        .map(|(path, _)| path.clone());
                     self.view.ini = Some(result.map(|o| o.map(|(_, b)| Ini::parse(&b))));
                     self.view.ini_values = self
                         .view
@@ -880,13 +890,8 @@ impl RetoqueApp {
                             review,
                             self.lang,
                             self.review_stale(),
-                            if self.busy() {
-                                Some(self.tr("inst.working"))
-                            } else if !self.safety_allowed(review) {
-                                Some(self.tr("safety.ack_required"))
-                            } else {
-                                None
-                            },
+                            self.safety_blocked_reason(review)
+                                .or_else(|| self.busy().then(|| self.tr("inst.working"))),
                             label,
                             &self.cmd_tx,
                         );

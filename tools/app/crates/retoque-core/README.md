@@ -203,7 +203,9 @@ ARM64 and unknown machines. Partial enumeration never proves x86-only. `plan_ins
 precondition. Mixed x86/x64 lists get a note. Other machines remain unqualified; unknown is not x86.
 
 `safety::anti_cheat` returns product/path evidence and a coverage flag, with 4096 entries/four directory descent
-levels and no linked/reparse paths. No matches never prove absence or compatibility. Plans expose warning notes;
+levels and no linked/reparse entries. The selected root's ancestors are canonicalized, allowing libraries reached
+through a linked parent; a linked root itself and linked entries within it are skipped. Notes group all paths per
+product under the stable `Anti-cheat evidence:` prefix. No matches never prove absence or compatibility. Plans expose warning notes;
 only the GUI owns per-game acknowledgment. CLI/scripts have no override or consent flag. The GUI scans the known
 installation root; folder-only entrypoints scan the supplied folder. Status, settings and uninstall remain usable.
 See the [app contract](../../README.md#executable-architecture-and-anti-cheat-evidence) for semantics and limits.

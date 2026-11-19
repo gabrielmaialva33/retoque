@@ -178,6 +178,8 @@ pub(crate) fn show(
                     .notes()
                     .iter()
                     .filter(|n| !(model_named && n.starts_with(MODEL_NOT_INCLUDED)))
+                    // The safety notice above the review owns this warning and its folded evidence.
+                    .filter(|n| !n.starts_with(retoque_core::safety::ANTI_CHEAT_NOTE))
                     .collect();
                 if !notes.is_empty() {
                     ui.add_space(12.0);
