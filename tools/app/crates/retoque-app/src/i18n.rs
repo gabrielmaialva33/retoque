@@ -139,7 +139,7 @@ impl Lang {
 type Pack = HashMap<&'static str, &'static str>;
 
 /// The embedded pack of a language that is not in the built-in table.
-fn pack_source(lang: Lang) -> Option<&'static str> {
+pub(crate) fn pack_source(lang: Lang) -> Option<&'static str> {
     Some(match lang {
         Lang::En | Lang::Pt => return None,
         Lang::De => include_str!("i18n/de.tsv"),
@@ -195,7 +195,10 @@ pub fn plural(lang: Lang, n: usize, one: &'static str, other: &'static str) -> &
     let category = plural_category(lang, n);
     let base = other.strip_suffix("_other").unwrap_or(other);
     let extra = matches!(category, "few" | "many")
-        .then(|| pack(lang).and_then(|p| p.get(format!("{base}_{category}").as_str()).copied()))
+        .then(|| {
+            let key = format!("{base}_{category}");
+            crate::language_editor::lookup(lang, &key).or_else(|| pack(lang).and_then(|p| p.get(key.as_str()).copied()))
+        })
         .flatten();
     extra.unwrap_or_else(|| t(lang, if category == "one" { one } else { other }))
 }
@@ -211,8 +214,12 @@ pub fn setting_text(lang: Lang, setting: &retoque_data::settings::Setting) -> (&
     };
     let key = format!("setting.{}.{}", setting.section, setting.key);
     (
-        pack.get(key.as_str()).copied().unwrap_or(builtin.0),
-        pack.get(format!("{key}.help").as_str()).copied().unwrap_or(builtin.1),
+        crate::language_editor::lookup(lang, &key)
+            .or_else(|| pack.get(key.as_str()).copied())
+            .unwrap_or(builtin.0),
+        crate::language_editor::lookup(lang, &format!("{key}.help"))
+            .or_else(|| pack.get(format!("{key}.help").as_str()).copied())
+            .unwrap_or(builtin.1),
     )
 }
 
@@ -240,6 +247,9 @@ fn choice_key(en: &str) -> String {
 
 /// A drop-down value's label, given its English and Portuguese labels from `Setting::choice_labels`.
 pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static str {
+    if let Some(value) = crate::language_editor::lookup(lang, &choice_key(en)) {
+        return value;
+    }
     match lang {
         Lang::En => en,
         Lang::Pt => pt,
@@ -251,6 +261,167 @@ pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static s
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    ("languages.open", "Languages…", "Idiomas…"),
+    ("languages.title", "Languages", "Idiomas"),
+    ("languages.app", "App", "App"),
+    ("languages.menu", "In-game menu", "Menu no jogo"),
+    ("languages.search", "Search keys or text", "Buscar chaves ou texto"),
+    ("languages.untranslated", "Only untranslated", "Só sem tradução"),
+    ("languages.changed", "Only changed", "Só alteradas"),
+    ("languages.source", "English source", "Original em inglês"),
+    ("languages.current", "Current text", "Texto atual"),
+    ("languages.draft", "Draft", "Rascunho"),
+    (
+        "languages.preview",
+        "Preview with sample values",
+        "Prévia com valores de exemplo",
+    ),
+    ("languages.apply", "Apply", "Aplicar"),
+    ("languages.applied", "Applied to the app.", "Aplicado ao app."),
+    (
+        "languages.menu_applied",
+        "Applied for the next reviewed install, update or optimization. Restart the game afterward.",
+        "Aplicado para a próxima instalação, atualização ou otimização revisada. Reinicie o jogo depois.",
+    ),
+    (
+        "languages.scope",
+        "Drafts stay in the app. Apply uses every changed row in this pack. Export a file to send your corrections to a maintainer.",
+        "Os rascunhos ficam no app. Aplicar usa todas as linhas alteradas deste idioma. Exporte um arquivo para enviar suas correções a quem mantém o Retoque.",
+    ),
+    (
+        "languages.menu_scope",
+        "Apply selects this menu language for future install reviews. No game is changed here.",
+        "Aplicar seleciona este idioma do menu para futuras revisões de instalação. Nenhum jogo é alterado aqui.",
+    ),
+    ("languages.import", "Import…", "Importar…"),
+    ("languages.export", "Export…", "Exportar…"),
+    (
+        "languages.imported",
+        "Imported as drafts. Review the changed rows before applying.",
+        "Importado como rascunhos. Revise as linhas alteradas antes de aplicar.",
+    ),
+    (
+        "languages.exported",
+        "Exported. Send this file to a maintainer.",
+        "Exportado. Envie este arquivo a quem mantém o Retoque.",
+    ),
+    ("languages.reset", "Reset key…", "Redefinir chave…"),
+    ("languages.reset_all", "Reset pack…", "Redefinir idioma…"),
+    ("languages.reset_title", "Delete corrections?", "Apagar correções?"),
+    (
+        "languages.reset_help",
+        "Delete these drafts and applied corrections and restore the embedded text. Existing games stay unchanged.",
+        "Apagar estes rascunhos e correções aplicadas e restaurar o texto do app. Os jogos existentes ficam como estão.",
+    ),
+    ("languages.reset_done", "Corrections deleted.", "Correções apagadas."),
+    (
+        "languages.saved",
+        "Drafts saved in the app.",
+        "Rascunhos salvos no app.",
+    ),
+    (
+        "languages.pending",
+        "Drafts not yet saved.",
+        "Rascunhos ainda não salvos.",
+    ),
+    ("languages.retry", "Save drafts", "Salvar rascunhos"),
+    ("languages.help", "How corrections work", "Como corrigir"),
+    (
+        "languages.invalid",
+        "Invalid draft: {reason}",
+        "Rascunho inválido: {reason}",
+    ),
+    (
+        "languages.invalid_pack",
+        "Fix the invalid drafts before applying or exporting.",
+        "Corrija os rascunhos inválidos antes de aplicar ou exportar.",
+    ),
+    (
+        "languages.count",
+        "Entries: {n} · changed: {changed}",
+        "Entradas: {n} · alteradas: {changed}",
+    ),
+    (
+        "languages.working",
+        "Working with the language file…",
+        "Processando o arquivo de idioma…",
+    ),
+    (
+        "languages.no_rows",
+        "No matching entries.",
+        "Nenhuma entrada encontrada.",
+    ),
+    (
+        "languages.error.io",
+        "Could not read or save the file. Check folder access and try again.",
+        "Não foi possível ler ou salvar o arquivo. Confira o acesso à pasta e tente novamente.",
+    ),
+    (
+        "languages.error.size",
+        "The file or text is too large. Use a file up to 1 MB and shorter entries.",
+        "O arquivo ou texto é grande demais. Use um arquivo de até 1 MB e entradas menores.",
+    ),
+    (
+        "languages.error.encoding",
+        "Use a valid UTF-8 language file.",
+        "Use um arquivo de idioma UTF-8 válido.",
+    ),
+    (
+        "languages.error.unknown",
+        "This key is not part of the selected pack. Choose the matching pack.",
+        "Esta chave não pertence ao idioma selecionado. Escolha o idioma correspondente.",
+    ),
+    (
+        "languages.error.duplicate",
+        "Each key must appear only once. Remove the duplicate.",
+        "Cada chave deve aparecer uma única vez. Remova a repetida.",
+    ),
+    (
+        "languages.error.columns",
+        "Each row needs exactly two fields separated by a tab.",
+        "Cada linha precisa de dois campos separados por uma tabulação.",
+    ),
+    ("languages.error.empty", "Enter a translation.", "Digite uma tradução."),
+    (
+        "languages.error.control",
+        "Remove control characters from the text.",
+        "Remova os caracteres de controle do texto.",
+    ),
+    (
+        "languages.error.padding",
+        "Remove spaces at the start and end.",
+        "Remova os espaços do início e do fim.",
+    ),
+    (
+        "languages.error.placeholder",
+        "Keep every {placeholder} exactly as in the source, including repetitions.",
+        "Mantenha cada {placeholder} igual ao original, incluindo as repetições.",
+    ),
+    (
+        "languages.error.ellipsis",
+        "Keep the same final … as the source; do not use three dots.",
+        "Mantenha as mesmas reticências finais (…) do original; não use três pontos.",
+    ),
+    (
+        "languages.error.printf",
+        "Keep the source percent formats exactly, in the same order.",
+        "Mantenha os formatos com porcentagem iguais aos do original, na mesma ordem.",
+    ),
+    (
+        "languages.error.identity",
+        "Remove ## from the translation; it changes the control identity.",
+        "Remova ## da tradução; isso altera a identidade do controle.",
+    ),
+    (
+        "languages.error.escape",
+        "Use only the supported escapes: backslash, n, r and t.",
+        "Use apenas as sequências de escape permitidas: barra invertida, n, r e t.",
+    ),
+    (
+        "languages.error.memory",
+        "Save your drafts and restart the app before applying more text.",
+        "Salve seus rascunhos e reinicie o app antes de aplicar mais texto.",
+    ),
     (
         "any.restart_state",
         "Capture needs to restart",
@@ -3175,7 +3346,7 @@ const TEXT: &[(&str, &str, &str)] = &[
 ];
 
 pub fn t(lang: Lang, key: &str) -> &str {
-    text_in(pack(lang), lang, key)
+    crate::language_editor::lookup(lang, key).unwrap_or_else(|| text_in(pack(lang), lang, key))
 }
 
 /// A key's text in a pack, else in the built-in table for the language's fallback column.
@@ -3286,34 +3457,32 @@ mod tests {
     }
 }
 
+/// Every permitted pack key: app/data tables, settings labels/help and choice labels.
+pub(crate) fn english() -> HashMap<String, &'static str> {
+    let mut keys: HashMap<String, &'static str> = TEXT
+        .iter()
+        .chain(retoque_data::messages::TEXT)
+        .map(|(k, en, _)| (k.to_string(), *en))
+        .collect();
+    for s in retoque_data::settings::all() {
+        keys.insert(format!("setting.{}.{}", s.section, s.key), s.label_en);
+        keys.insert(format!("setting.{}.{}.help", s.section, s.key), s.help_en);
+        let mut values = vec!["auto", "true", "false"];
+        if let retoque_data::settings::Kind::Choice(choices) = s.kind {
+            values.extend(choices);
+        }
+        for value in values {
+            if let Some((en, _)) = s.choice_labels(value) {
+                keys.insert(choice_key(en), en);
+            }
+        }
+    }
+    keys
+}
+
 #[cfg(test)]
 mod packs {
     use super::*;
-    use retoque_data::settings::Kind;
-
-    /// Every key a pack may translate, with its English text: the table, retoque-data's messages, the settings'
-    /// labels and help lines, and the drop-down values a setting can show.
-    fn english() -> HashMap<String, &'static str> {
-        let mut keys: HashMap<String, &'static str> = TEXT
-            .iter()
-            .chain(retoque_data::messages::TEXT)
-            .map(|(k, en, _)| (k.to_string(), *en))
-            .collect();
-        for s in retoque_data::settings::all() {
-            keys.insert(format!("setting.{}.{}", s.section, s.key), s.label_en);
-            keys.insert(format!("setting.{}.{}.help", s.section, s.key), s.help_en);
-            let mut values = vec!["auto", "true", "false"];
-            if let Kind::Choice(choices) = s.kind {
-                values.extend(choices);
-            }
-            for value in values {
-                if let Some((en, _)) = s.choice_labels(value) {
-                    keys.insert(choice_key(en), en);
-                }
-            }
-        }
-        keys
-    }
 
     /// The English a pack line is checked against: its own key, or for a `_few`/`_many` plural form the `_other`
     /// form beside an `_one` (only languages with those forms may add them).

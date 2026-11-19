@@ -67,3 +67,6 @@ pub(crate) mod play;
 #[cfg(test)]
 mod play_tests;
 pub(crate) mod safety_ui;
+
+pub(crate) mod language_editor;
+mod language_editor_ui;

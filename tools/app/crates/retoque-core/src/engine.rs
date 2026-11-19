@@ -541,6 +541,12 @@ impl Installer<'_> {
         let want = match &self.options.menu_language {
             MenuLanguage::Keep => return Ok(()),
             MenuLanguage::English => None,
+            MenuLanguage::UserPack(path) => {
+                crate::menu_pack::read(path)
+                    .and_then(|bytes| crate::menu_pack::parse(&bytes))
+                    .map_err(|reason| Error::Other(format!("invalid user menu language: {reason}")))?;
+                Some(path.clone())
+            }
             MenuLanguage::Pack(code) => {
                 if !MENU_PACKS.contains(&code.as_str()) {
                     self.plan.notes.push(format!(
@@ -810,7 +816,19 @@ pub(crate) fn plan_install(options: &InstallOptions) -> Result<Plan, Error> {
         }
         .into(),
     );
-    seal(installer.plan, &installer.receipt)
+    let plan = seal(installer.plan, &installer.receipt)?;
+    if let MenuLanguage::UserPack(path) = &options.menu_language
+        && let Some(Fingerprint::File(expected, _)) = plan.execution.snapshots.get(path)
+    {
+        let bytes = crate::menu_pack::read(path)
+            .map_err(|reason| Error::Other(format!("invalid user menu language: {reason}")))?;
+        crate::menu_pack::parse(&bytes)
+            .map_err(|reason| Error::Other(format!("invalid user menu language: {reason}")))?;
+        if format!("{:x}", Sha256::digest(&bytes)) != *expected {
+            return Err(Error::StalePlan("user menu language changed during planning".into()));
+        }
+    }
+    Ok(plan)
 }
 
 pub(crate) fn plan_uninstall(game: &Path) -> Result<Plan, Error> {

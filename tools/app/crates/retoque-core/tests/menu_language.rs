@@ -93,3 +93,37 @@ fn the_packs_named_here_are_the_ones_the_repository_ships() {
         assert!(optional.join(format!("{code}.lang")).is_file(), "{code}");
     }
 }
+
+#[test]
+fn a_user_pack_uses_receipts_and_never_replaces_a_foreign_dictionary() {
+    let f = Fixture::new();
+    let path = f.source.join("user.lang");
+    fs::write(&path, b"Reset\tMy correction\n").unwrap();
+    f.install(MenuLanguage::UserPack(path.clone()));
+    assert_eq!(f.lang().unwrap(), b"Reset\tMy correction\n");
+    f.install(MenuLanguage::English);
+    assert!(f.lang().is_none());
+    fs::write(f.game.join(MENU_LANG_NAME), b"mine\tminha\n").unwrap();
+    f.install(MenuLanguage::UserPack(path));
+    assert_eq!(f.lang().unwrap(), b"mine\tminha\n");
+}
+#[test]
+fn user_pack_rejects_invalid_data_and_changed_reviewed_source() {
+    let f = Fixture::new();
+    let path = f.source.join("user.lang");
+    let options = InstallOptions {
+        game_dir: f.game.clone(),
+        source_dir: f.source.clone(),
+        copy_nvngx: false,
+        menu_language: MenuLanguage::UserPack(path.clone()),
+        ..Default::default()
+    };
+    fs::write(&path, b"Reset\t%n\n").unwrap();
+    assert!(plan_install(&options).is_err());
+    assert!(f.lang().is_none());
+    fs::write(&path, b"Reset\tCorrection\n").unwrap();
+    let plan = plan_install(&options).unwrap().into_verified().unwrap();
+    fs::write(&path, b"Reset\tChanged\n").unwrap();
+    assert!(apply(&plan, &mut |_| {}).is_err());
+    assert!(f.lang().is_none());
+}
