@@ -197,6 +197,23 @@ fn every_language_fits_the_main_views_in_a_small_window() {
                 home.query_by_label(t(lang, "welcome.title")).is_some(),
                 "{lang:?}: home grid"
             );
+            let home_what = format!("{lang:?} {size:?} home");
+            let search = inside(&home, size, Role::TextInput, t(lang, "lib.search"), &home_what);
+            assert!(search.width() >= 180.0, "{home_what}: search width {}", search.width());
+            let home_controls = [
+                search,
+                inside(&home, size, Role::CheckBox, t(lang, "lib.installed_only"), &home_what),
+                inside(&home, size, Role::Button, t(lang, "lib.add_folder"), &home_what),
+                inside(&home, size, Role::Button, t(lang, "folders.title"), &home_what),
+            ];
+            for (i, a) in home_controls.iter().enumerate() {
+                for b in &home_controls[i + 1..] {
+                    assert!(
+                        !a.shrink(0.5).intersects(b.shrink(0.5)),
+                        "{home_what}: filter row overlap {a:?} {b:?}"
+                    );
+                }
+            }
             if size == SIZE && matches!(lang, Lang::En | Lang::Pt) {
                 assert!(folded.is_empty(), "{lang:?}: the whole bar fits at 1024: {folded:?}");
             }
@@ -213,6 +230,14 @@ fn every_language_fits_the_main_views_in_a_small_window() {
                 for tab in [Tab::Install, Tab::Settings, Tab::Model, Tab::Compare, Tab::Logs] {
                     let mut h = window(lang, dir.path(), installed, Some(tab), size);
                     let what = format!("{lang:?} {size:?} {tab:?} installed={installed}");
+                    if tab == Tab::Install {
+                        let only = inside(&h, size, Role::CheckBox, t(lang, "lib.installed_only"), &what);
+                        let folders = inside(&h, size, Role::Button, t(lang, "folders.title"), &what);
+                        assert!(
+                            !only.shrink(0.5).intersects(folders.shrink(0.5)),
+                            "{what}: sidebar filter overlap {only:?} {folders:?}"
+                        );
+                    }
                     if tab != Tab::Compare {
                         inside(&h, size, Role::Button, primary, &what);
                     }

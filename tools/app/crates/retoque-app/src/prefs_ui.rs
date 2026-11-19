@@ -137,6 +137,7 @@ impl RetoqueApp {
         let lang = self.lang;
         let before = self.saved.install_defaults.clone();
         let mut close = false;
+        let scroll = cfg!(windows) || ctx.content_rect().height() < 680.0;
         let modal = egui::Modal::new(egui::Id::unique("preferences"))
             .frame(widgets::modal_frame())
             .show(ctx, |ui| {
@@ -145,121 +146,15 @@ impl RetoqueApp {
                 ui.heading(t(lang, "prefs.title"));
                 ui.add_space(8.0);
 
-                egui::ScrollArea::vertical()
-                    .id_salt("prefs_scroll")
-                    .max_height((ctx.content_rect().height() - 190.0).max(160.0))
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let label = ui.label(t(lang, "prefs.language"));
-                            self.language_combo(ui, "prefs_language").labelled_by(label.id);
-                        });
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(t(lang, "prefs.language_help"))
-                                    .small()
-                                    .color(theme::MUTED),
-                            )
-                            .wrap(),
-                        );
-                        if lang.is_draft() {
-                            ui.add(
-                                egui::Label::new(
-                                    RichText::new(t(lang, "prefs.language_draft"))
-                                        .small()
-                                        .color(theme::MUTED),
-                                )
-                                .wrap(),
-                            );
-                        }
-                        let missing = crate::fonts::unavailable();
-                        if !missing.is_empty() {
-                            let names: Vec<&str> = missing.iter().map(|l| language_name(lang, *l)).collect();
-                            let note = t(lang, "prefs.language_no_font").replace("{languages}", &names.join(", "));
-                            ui.add(egui::Label::new(RichText::new(note).small().color(theme::MUTED)).wrap());
-                        }
-
-                        widgets::section_header(ui, t(lang, "prefs.installs"));
-                        ui.add(
-                            egui::Label::new(RichText::new(t(lang, "prefs.installs_help")).color(theme::MUTED)).wrap(),
-                        );
-                        ui.add_space(4.0);
-                        let defaults = &mut self.saved.install_defaults;
-                        ui.checkbox(&mut defaults.enable_nr, t(lang, "inst.enable_nr"));
-                        ui.checkbox(&mut defaults.keep_reshade, t(lang, "inst.keep_reshade"));
-                        if cfg!(not(windows)) {
-                            ui.checkbox(&mut defaults.copy_nvngx, t(lang, "inst.copy_nvngx"));
-                        }
-                        ui.horizontal(|ui| {
-                            let label = ui.label(t(lang, "inst.proxy"));
-                            egui::ComboBox::from_id_salt("default_proxy")
-                                .selected_text(defaults.proxy.clone())
-                                .show_ui(ui, |ui| {
-                                    for name in retoque_core::PROXY_NAMES {
-                                        ui.selectable_value(&mut defaults.proxy, name.to_string(), name);
-                                    }
-                                })
-                                .response
-                                .labelled_by(label.id);
-                        });
-                        ui.label(RichText::new(t(lang, "inst.proxy_help")).small().color(theme::MUTED));
-                        ui.horizontal(|ui| {
-                            let label = ui.label(t(lang, "inst.menu_language"));
-                            let mut choices = vec![MenuLanguagePref::SameAsApp, MenuLanguagePref::English];
-                            choices.extend(
-                                Lang::ALL
-                                    .iter()
-                                    .filter(|l| **l != Lang::En)
-                                    .map(|l| MenuLanguagePref::Pack(l.code().to_owned())),
-                            );
-                            egui::ComboBox::from_id_salt("menu_language")
-                                .selected_text(menu_language_name(lang, &defaults.menu_language))
-                                .show_ui(ui, |ui| {
-                                    for choice in choices {
-                                        let text = menu_language_name(lang, &choice);
-                                        ui.selectable_value(&mut defaults.menu_language, choice, text);
-                                    }
-                                })
-                                .response
-                                .labelled_by(label.id);
-                        });
-                        ui.add(
-                            egui::Label::new(
-                                RichText::new(t(lang, "prefs.menu_lang_help"))
-                                    .small()
-                                    .color(theme::MUTED),
-                            )
-                            .wrap(),
-                        );
-
-                        #[cfg(windows)]
-                        self.app_install_controls(ui);
-
-                        widgets::section_header(ui, t(lang, "prefs.data"));
-                        let dir = retoque_data::lsfg_prepare::data_dir().ok();
-                        ui.horizontal_wrapped(|ui| {
-                            match self.prefs.usage {
-                                Some(bytes) => {
-                                    ui.label(t(lang, "prefs.data_usage").replace("{size}", &size_text(lang, bytes)))
-                                }
-                                None => ui.label(t(lang, "prefs.data_measuring")),
-                            };
-                            if let Some(dir) = &dir
-                                && ui.button(t(lang, "log.open_folder")).clicked()
-                            {
-                                model::open_folder(dir);
-                            }
-                        });
-                        if let Some(dir) = &dir {
-                            ui.label(RichText::new(short_path(dir)).small().monospace().color(theme::MUTED));
-                        }
-                        let cleaned = match self.prefs.cleaned {
-                            Some(c) if c.removed > 0 => t(lang, "prefs.cleaned")
-                                .replace("{n}", &c.removed.to_string())
-                                .replace("{size}", &size_text(lang, c.bytes)),
-                            _ => t(lang, "prefs.clean").to_owned(),
-                        };
-                        ui.add(egui::Label::new(RichText::new(cleaned).small().color(theme::MUTED)).wrap());
-                    });
+                if scroll {
+                    egui::ScrollArea::vertical()
+                        .id_salt("prefs_scroll")
+                        .auto_shrink([false, true])
+                        .max_height((ctx.content_rect().height() - 190.0).max(160.0))
+                        .show(ui, |ui| self.prefs_body(ui, lang));
+                } else {
+                    self.prefs_body(ui, lang);
+                }
 
                 ui.add_space(12.0);
                 close = ui.button(t(lang, "close")).clicked();
@@ -271,6 +166,115 @@ impl RetoqueApp {
             self.prefs.open = false;
             self.prefs.focus.closed(ctx);
         }
+    }
+
+    fn prefs_body(&mut self, ui: &mut egui::Ui, lang: Lang) {
+        ui.horizontal(|ui| {
+            let label = ui.label(t(lang, "prefs.language"));
+            self.language_combo(ui, "prefs_language").labelled_by(label.id);
+        });
+        ui.add(
+            egui::Label::new(
+                RichText::new(t(lang, "prefs.language_help"))
+                    .small()
+                    .color(theme::MUTED),
+            )
+            .wrap(),
+        );
+        if lang.is_draft() {
+            ui.add(
+                egui::Label::new(
+                    RichText::new(t(lang, "prefs.language_draft"))
+                        .small()
+                        .color(theme::MUTED),
+                )
+                .wrap(),
+            );
+        }
+        let missing = crate::fonts::unavailable();
+        if !missing.is_empty() {
+            let names: Vec<&str> = missing.iter().map(|l| language_name(lang, *l)).collect();
+            let note = t(lang, "prefs.language_no_font").replace("{languages}", &names.join(", "));
+            ui.add(egui::Label::new(RichText::new(note).small().color(theme::MUTED)).wrap());
+        }
+
+        widgets::section_header(ui, t(lang, "prefs.installs"));
+        ui.add(egui::Label::new(RichText::new(t(lang, "prefs.installs_help")).color(theme::MUTED)).wrap());
+        ui.add_space(4.0);
+        let defaults = &mut self.saved.install_defaults;
+        ui.checkbox(&mut defaults.enable_nr, t(lang, "inst.enable_nr"));
+        ui.checkbox(&mut defaults.keep_reshade, t(lang, "inst.keep_reshade"));
+        if cfg!(not(windows)) {
+            ui.checkbox(&mut defaults.copy_nvngx, t(lang, "inst.copy_nvngx"));
+        }
+        ui.horizontal(|ui| {
+            let label = ui.label(t(lang, "inst.proxy"));
+            egui::ComboBox::from_id_salt("default_proxy")
+                .selected_text(defaults.proxy.clone())
+                .show_ui(ui, |ui| {
+                    for name in retoque_core::PROXY_NAMES {
+                        ui.selectable_value(&mut defaults.proxy, name.to_string(), name);
+                    }
+                })
+                .response
+                .labelled_by(label.id);
+        });
+        ui.label(RichText::new(t(lang, "inst.proxy_help")).small().color(theme::MUTED));
+        ui.horizontal(|ui| {
+            let label = ui.label(t(lang, "inst.menu_language"));
+            let mut choices = vec![MenuLanguagePref::SameAsApp, MenuLanguagePref::English];
+            choices.extend(
+                Lang::ALL
+                    .iter()
+                    .filter(|l| **l != Lang::En)
+                    .map(|l| MenuLanguagePref::Pack(l.code().to_owned())),
+            );
+            egui::ComboBox::from_id_salt("menu_language")
+                .selected_text(menu_language_name(lang, &defaults.menu_language))
+                .show_ui(ui, |ui| {
+                    for choice in choices {
+                        let text = menu_language_name(lang, &choice);
+                        ui.selectable_value(&mut defaults.menu_language, choice, text);
+                    }
+                })
+                .response
+                .labelled_by(label.id);
+        });
+        ui.add(
+            egui::Label::new(
+                RichText::new(t(lang, "prefs.menu_lang_help"))
+                    .small()
+                    .color(theme::MUTED),
+            )
+            .wrap(),
+        );
+
+        #[cfg(windows)]
+        self.app_install_controls(ui);
+
+        widgets::section_header(ui, t(lang, "prefs.data"));
+        let dir = retoque_data::lsfg_prepare::data_dir().ok();
+        ui.horizontal_wrapped(|ui| {
+            match self.prefs.usage {
+                Some(bytes) => ui.label(t(lang, "prefs.data_usage").replace("{size}", &size_text(lang, bytes))),
+                None => ui.label(t(lang, "prefs.data_measuring")),
+            };
+            if let Some(dir) = &dir
+                && ui.button(t(lang, "log.open_folder")).clicked()
+            {
+                model::open_folder(dir);
+            }
+        });
+        if let Some(dir) = &dir {
+            ui.label(RichText::new(short_path(dir)).small().monospace().color(theme::MUTED));
+        }
+        let cleaned = match self.prefs.cleaned {
+            Some(c) if c.removed > 0 => t(lang, "prefs.cleaned")
+                .replace("{n}", &c.removed.to_string())
+                .replace("{size}", &size_text(lang, c.bytes)),
+            _ => t(lang, "prefs.clean").to_owned(),
+        };
+        ui.add(egui::Label::new(RichText::new(cleaned).small().color(theme::MUTED)).wrap());
     }
 
     /// Switch the app's language: the text changes on the next frame and the choice is saved.
@@ -432,7 +436,7 @@ mod tests {
             let mut h = Harness::builder().with_size(min_size).build_ui_state(
                 |ui, app: &mut RetoqueApp| {
                     app.context = ui.ctx().clone();
-                    if ui.button(t(app.lang, "prefs.button")).clicked() {
+                    if ui.button(t(app.lang, "prefs.open")).clicked() {
                         app.prefs_open();
                     }
                     app.prefs_dialog(ui.ctx());
@@ -442,7 +446,7 @@ mod tests {
             h.key_press(egui::Key::Tab);
             h.run_steps(2);
             assert!(
-                h.get_by_role_and_label(egui::Role::Button, t(lang, "prefs.button"))
+                h.get_by_role_and_label(egui::Role::Button, t(lang, "prefs.open"))
                     .is_focused()
             );
             h.key_press(egui::Key::Space);
@@ -458,7 +462,7 @@ mod tests {
             h.run_steps(3);
             assert!(!h.state().prefs.open);
             assert!(
-                h.get_by_role_and_label(egui::Role::Button, t(lang, "prefs.button"))
+                h.get_by_role_and_label(egui::Role::Button, t(lang, "prefs.open"))
                     .is_focused()
             );
         }

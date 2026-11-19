@@ -355,57 +355,59 @@ impl RetoqueApp {
             return;
         }
         let mut close = false;
+        let scroll = self.payload_ui.error.is_some() || ctx.content_rect().height() < 580.0;
         let modal = egui::Modal::new(egui::Id::unique("payload-files"))
             .frame(widgets::modal_frame())
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
                 ui.heading(self.tr("app.payload"));
-                egui::ScrollArea::vertical()
-                    .id_salt("payload_files_scroll")
-                    .max_height((ctx.content_rect().height() - 190.0).max(160.0))
-                    .show(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::MUTED)).wrap(),
-                        );
-                        ui.add_space(8.0);
-                        match self.payload.clone() {
-                            Some(p) => {
-                                if let Some(name) = self.payload_name() {
-                                    ui.label(RichText::new(name).strong());
-                                }
-                                ui.label(RichText::new(short_path(&p)).small().monospace().color(theme::MUTED))
-                                    .on_hover_text(crate::format::display_path(&p));
-                            }
-                            None => {
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(format!(
-                                            "{} {}",
-                                            self.tr("app.payload"),
-                                            self.tr("app.payload.none")
-                                        ))
-                                        .color(theme::WARN),
-                                    )
-                                    .wrap(),
-                                );
-                            }
-                        }
-
-                        widgets::section_header(ui, self.tr("payload.files_source"));
-                        ui.horizontal_wrapped(|ui| self.payload_source_buttons(ui));
-
-                        widgets::section_header(ui, self.tr("payload.files_updates"));
-                        ui.horizontal_wrapped(|ui| self.payload_release_controls(ui));
-                        if let Some(error) = &self.payload_ui.error {
-                            crate::error::body(ui, error, self.lang, &self.cmd_tx);
-                        }
-                    });
+                if scroll {
+                    egui::ScrollArea::vertical()
+                        .id_salt("payload_files_scroll")
+                        .auto_shrink([false, true])
+                        .max_height((ctx.content_rect().height() - 190.0).max(160.0))
+                        .show(ui, |ui| self.payload_files_body(ui));
+                } else {
+                    self.payload_files_body(ui);
+                }
                 ui.add_space(12.0);
                 close = ui.button(self.tr("close")).clicked();
             });
         if close || modal.should_close() {
             self.payload_ui.files_open = false;
             self.payload_ui.focus.closed(ctx);
+        }
+    }
+
+    fn payload_files_body(&mut self, ui: &mut egui::Ui) {
+        ui.add(egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::MUTED)).wrap());
+        ui.add_space(8.0);
+        match self.payload.clone() {
+            Some(p) => {
+                if let Some(name) = self.payload_name() {
+                    ui.label(RichText::new(name).strong());
+                }
+                ui.label(RichText::new(short_path(&p)).small().monospace().color(theme::MUTED))
+                    .on_hover_text(crate::format::display_path(&p));
+            }
+            None => {
+                ui.add(
+                    egui::Label::new(
+                        RichText::new(format!("{} {}", self.tr("app.payload"), self.tr("app.payload.none")))
+                            .color(theme::WARN),
+                    )
+                    .wrap(),
+                );
+            }
+        }
+
+        widgets::section_header(ui, self.tr("payload.files_source"));
+        ui.horizontal_wrapped(|ui| self.payload_source_buttons(ui));
+
+        widgets::section_header(ui, self.tr("payload.files_updates"));
+        ui.horizontal_wrapped(|ui| self.payload_release_controls(ui));
+        if let Some(error) = &self.payload_ui.error {
+            crate::error::body(ui, error, self.lang, &self.cmd_tx);
         }
     }
 

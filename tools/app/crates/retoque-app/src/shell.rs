@@ -273,35 +273,37 @@ impl RetoqueApp {
         self.migrate_saved_folders();
         ui.add_space(6.0);
         self.search_field(ui);
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.checkbox(
                 &mut self.library_state.installed_only,
                 t(self.lang, "lib.installed_only"),
             );
-            // One row in the narrow sidebar; adding a folder is one step inside "Your folders".
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                self.folders_button(ui);
-            });
+            // Wraps cleanly when long translations or a narrowed sidebar cannot fit both on one line.
+            self.folders_button(ui);
         });
         self.migration_notice_ui(ui);
         ui.separator();
         if self.scanning && self.library_state.games.is_empty() {
-            ui.horizontal(|ui| {
-                ui.spinner();
-                ui.label(self.tr("lib.scanning"));
-            });
+            widgets::busy(ui, self.lang, self.tr("lib.scanning"), None, None);
             return;
         }
         if self.library_state.games.is_empty() {
-            ui.label(self.tr("lib.empty"));
+            ui.label(RichText::new(self.tr("lib.empty")).color(theme::MUTED));
         }
         self.library_keyboard(ui);
         self.refresh_library_cache();
+        let empty_filter = (!self.library_state.games.is_empty()
+            && self.library_state.derived.installed.is_empty()
+            && self.library_state.derived.others.is_empty())
+        .then(|| self.library_empty_filter_key());
         let mut clicked = None;
         let mut list_focus = false;
         let installed = &self.library_state.derived.installed;
         let others = &self.library_state.derived.others;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            if let Some(key) = empty_filter {
+                ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
+            }
             let groups = [
                 (self.tr("lib.group_installed"), installed),
                 (self.tr("lib.group_other"), others),
@@ -628,6 +630,16 @@ impl RetoqueApp {
         line
     }
 
+    fn library_empty_filter_key(&self) -> &'static str {
+        if !self.library_state.search.trim().is_empty() {
+            "lib.no_match"
+        } else if self.library_state.installed_only {
+            "lib.no_installed"
+        } else {
+            "lib.empty"
+        }
+    }
+
     pub(crate) fn home_grid(&mut self, ui: &mut egui::Ui) {
         self.migrate_saved_folders();
         ui.heading(self.tr("welcome.title"));
@@ -644,33 +656,54 @@ impl RetoqueApp {
             );
         }
         ui.add_space(12.0);
-        // Search and its filters on one line: the field takes what the controls on its right leave.
-        ui.horizontal(|ui| {
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                self.folders_button(ui);
-                if ui.button(self.tr("lib.add_folder")).clicked() {
-                    self.folders_open(FolderDialog::Add);
-                }
+        // Search and its filters sit on one line when the search box keeps a comfortable width; otherwise stack.
+        if ui.available_width() >= 680.0 {
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.folders_button(ui);
+                    if ui.button(self.tr("lib.add_folder")).clicked() {
+                        self.folders_open(FolderDialog::Add);
+                    }
+                    ui.checkbox(
+                        &mut self.library_state.installed_only,
+                        t(self.lang, "lib.installed_only"),
+                    );
+                    ui.add_space(6.0);
+                    self.search_field(ui);
+                });
+            });
+        } else {
+            self.search_field(ui);
+            ui.horizontal_wrapped(|ui| {
                 ui.checkbox(
                     &mut self.library_state.installed_only,
                     t(self.lang, "lib.installed_only"),
                 );
-                ui.add_space(6.0);
-                self.search_field(ui);
+                if ui.button(self.tr("lib.add_folder")).clicked() {
+                    self.folders_open(FolderDialog::Add);
+                }
+                self.folders_button(ui);
             });
-        });
+        }
         self.library_keyboard(ui);
         ui.add_space(6.0);
         self.migration_notice_ui(ui);
         if self.library_state.games.is_empty() {
             widgets::card(ui, |ui| {
-                widgets::card_title(ui, self.tr(if self.scanning { "lib.scanning" } else { "lib.empty" }));
-                ui.label(self.tr("shell.home_help"));
+                if self.scanning {
+                    widgets::busy(ui, self.lang, self.tr("lib.scanning"), None, None);
+                } else {
+                    widgets::card_title(ui, self.tr("lib.empty"));
+                }
+                ui.label(RichText::new(self.tr("shell.home_help")).color(theme::MUTED));
             });
             self.skipped_note(ui);
             return;
         }
         self.refresh_library_cache();
+        let empty_filter = (self.library_state.derived.installed.is_empty()
+            && self.library_state.derived.others.is_empty())
+        .then(|| self.library_empty_filter_key());
         let mut clicked = None;
         // A new scan reorders and resizes the grid; an offset kept from before would open it cut off at the top.
         let mut scroll = egui::ScrollArea::vertical().auto_shrink([false, false]);
@@ -678,6 +711,10 @@ impl RetoqueApp {
             scroll = scroll.vertical_scroll_offset(0.0);
         }
         scroll.show(ui, |ui| {
+            if let Some(key) = empty_filter {
+                ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
+                ui.add_space(theme::CARD_GAP);
+            }
             for installed_group in [true, false] {
                 if !installed_group && self.library_state.installed_only {
                     continue;

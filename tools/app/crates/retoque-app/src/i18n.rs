@@ -837,6 +837,16 @@ const TEXT: &[(&str, &str, &str)] = &[
         "No games found. Add a game folder by hand.",
         "Nenhum jogo encontrado. Adicione a pasta de um jogo à mão.",
     ),
+    (
+        "lib.no_match",
+        "No games match your search.",
+        "Nenhum jogo corresponde à busca.",
+    ),
+    (
+        "lib.no_installed",
+        "No games have Retoque installed yet.",
+        "Nenhum jogo tem o Retoque instalado ainda.",
+    ),
     ("lib.skipped", "Could not read", "Não foi possível ler"),
     ("game.root", "game folder", "pasta do jogo"),
     ("game.target", "Executable folder", "Pasta do executável"),
