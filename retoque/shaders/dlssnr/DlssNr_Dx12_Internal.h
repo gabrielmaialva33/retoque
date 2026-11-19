@@ -476,6 +476,12 @@ struct NrRetired
     DlssNr_Pulse_Dx12* pulse = nullptr;
     DlssNr_MotionProbe_Dx12* motionProbe = nullptr;
     uint64_t cloneBytes = 0;
+    // A migration never uses the legacy count-only fallback, including at shutdown.
+    bool requiresPresentFence = false;
+    // Heap-held reference: an abandoned NrRetired must not run a GPU destructor at static teardown.
+    std::shared_ptr<DlssNr_Dx12>* compose = nullptr;
+    DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
+    DlssNr_Periphery_Dx12* periphery = nullptr;
 };
 
 struct DetailMeasureSession
@@ -644,7 +650,7 @@ extern std::mutex g_coverageMutex;
 extern DlssNr::Detail::StageCoverage g_coverage[4];
 extern DlssNr::Detail::CoverageTotals g_coverageLogged[4];
 extern NrState g_nr;
-extern std::unique_ptr<DlssNr_Dx12> g_compose;
+extern std::shared_ptr<DlssNr_Dx12> g_compose;
 extern PreUpscaleState g_pre;
 extern std::mutex g_preMutex;
 extern DlssNr::Detail::StableExtent g_preExtent;
@@ -857,7 +863,11 @@ const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission);
 bool AdaptiveCadenceRequested();
 bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory = false);
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
-                      DlssNr::Chain::RecordingLease* lease, bool mandatory = false);
+                      DlssNr::Chain::RecordingLease* lease, bool mandatory = false, bool privatePresent = false);
+bool TrackingTransitionPending();
+bool UntrackedPresentFenceMatches(ID3D12CommandQueue* queue);
+void EndUntrackedPresent(ID3D12GraphicsCommandList* cmd, ID3D12CommandQueue* queue, ID3D12Fence* fence, uint64_t value);
+void ParkTrackingDiagnostics();
 bool VideoMemory(ID3D12Device* device, DXGI_QUERY_VIDEO_MEMORY_INFO& memory);
 void ParkNrFeature(void*& feature);
 void ParkNrScaler(OS_Dx12*& scaler);

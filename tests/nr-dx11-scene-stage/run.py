@@ -56,8 +56,8 @@ def contracts(files):
     assert evaluate.index('if (nvResult != NVSDK_NGX_Result_Success)') < evaluate.index('EvaluateNativeDx11Scene(') < evaluate.index('LOG_TRACE')
     assert 'routeNotice = scene;' in menu and 'in.dx11Route = scene;' in menu
     assert 'WantsTrackedRecording(passSnapshot, frame.NativeDx11Scene)' in renderer
-    assert 'TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene)' in renderer
-    assert 'mandatory && g_legacyRecorded' in lifetime and 'optIn = mandatory ||' in lifetime
+    assert 'TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene, frame.PrivatePresentRecording)' in renderer
+    assert 'if (mandatory)\n                return false;' in lifetime and 'optIn = mandatory ||' in lifetime
     assert renderer.index('ShutdownNativeDx11Scene();') < renderer.index('ShutdownNativeDx11Guides();')
 
 
@@ -95,7 +95,7 @@ mutants = [
     (3, 'DlssNrDx11SceneStage { false }', 'DlssNrDx11SceneStage { true }', 'default-off'),
     (4, 'readBool("DlssNr", "Dx11SceneStage")', 'readBool("DlssNr", "WrongKey")', 'read-key'),
     (4, 'Instance()->DlssNrDx11SceneStage.value_for_config()', 'Instance()->DlssNrEnabled.value_for_config()', 'save-key'),
-    (9, 'mandatory && g_legacyRecorded', 'false && g_legacyRecorded', 'legacy-lifetime'),
+    (9, 'if (mandatory)\n                return false;', 'if (false)\n                return false;', 'legacy-lifetime'),
 ]
 for index, old, new, name in mutants:
     changed = dict(base)

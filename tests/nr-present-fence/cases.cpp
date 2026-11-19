@@ -1,3 +1,4 @@
+#include <mutex>
 // The D3D12 present lists against a fence that cannot prove completion: the pure rule, then the production helpers
 // (sliced verbatim out of DlssNr_Dx12.cpp by run.py) over fake D3D12 objects. One scenario per process, because the
 // helpers latch a removal and their "said once" flags for the session.
@@ -300,6 +301,8 @@ PresentList g_presentList;
 UINT64 g_presentFenceValue = 0;
 std::vector<PresentHdrRetired> g_hdrRetired;
 
+std::mutex g_nrMutex;
+void EndUntrackedPresent(ID3D12GraphicsCommandList*, ID3D12CommandQueue*, ID3D12Fence*, uint64_t) {}
 #include "artifacts/present_list_slice.inc"
 
 // --- scenarios ----------------------------------------------------------------------------------------------------

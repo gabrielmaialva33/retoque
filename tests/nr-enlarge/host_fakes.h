@@ -1,3 +1,4 @@
+#include <memory>
 // What DlssNr_Dx12.cpp's Transfer 2 section stands on, faked: resource states that every barrier must
 // chain through, scratch allocation, the composition pass's DispatchPass, the guide resample, submission
 // tracking, the NGX proxy's getters and the process-exit flag. run.py puts the production slices after this.
@@ -146,6 +147,11 @@ constexpr uint64_t AgeOutTicks = 128;
 } // namespace DlssNr::Submission
 
 bool g_tracked = false;
+bool s_trackingTransition = false;
+void* s_legacyQueue = nullptr;
+bool migrationQueueMatches = true;
+bool UntrackedPresentFenceMatches(void*) { return migrationQueueMatches; }
+bool UntrackedPresentCompleted() { return true; }
 DlssNr::Submission::Usage g_usage;
 
 inline uint64_t SnapshotUntrackedPresentSerial() { return 1; }
@@ -159,6 +165,9 @@ inline void QueryUntrackedPresentFence(bool* hasFence, bool* deviceRemoved, uint
 }
 inline void LogUntrackedPresentFenceUnavailableOnce(uint8_t) {}
 
+struct DlssNr_Periphery_Dx12
+{
+};
 struct OS_Dx12
 {
 };

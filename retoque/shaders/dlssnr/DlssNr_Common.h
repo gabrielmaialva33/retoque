@@ -250,6 +250,9 @@ struct DlssNrFrameInfo
 
     // Owned native D3D11 POST-SR transport: mandatory exact recording lifetime and owned exposure state.
     bool NativeDx11Scene = false;
+
+    // Set only by RunPresentPass for its private, serially submitted lists (never replayed by the game).
+    bool PrivatePresentRecording = false;
 };
 
 struct alignas(256) DlssNrConstants
