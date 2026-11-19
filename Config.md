@@ -484,6 +484,12 @@ VulkanPresentFgTransport=auto
 ; true or false - Default (auto) is false
 RequireDlss=auto
 
+; Startup-only D3D12 depth observer, requires Enabled=true and HookMethod=2.
+; constant: unchanged guides. log: rank submitted depth candidates and log refusals/comparisons only.
+; Never supplies depth to the model. No observer hooks/bookkeeping with constant, auto or an invalid value.
+; constant or log - Default (auto) is constant. D3D11 and Vulkan discovery are not implemented.
+PresentDepth=auto
+
 ; Present hosts running on zero guides (no upscaler handed over depth and motion): start the model's
 ; history over every frame. With zero motion the model believes nothing moved and blends the new frame
 ; with where things used to be -- ghosts and doubled edges whenever the camera moves, worst in fast

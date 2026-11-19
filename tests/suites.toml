@@ -1256,3 +1256,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Locale-independent float INI serialization (GetFloatValue, SerializeAnchors), single-comma recovery (isFloat, PassConfig::Float, LoadAnchors, PackOverlayValue), and dot-decimal NR log lines (PresentCpu::Format, ReportScalingRatios) under live comma LC_NUMERIC and ASan/UBSan."
+
+[nr-present-depth]
+path = "nr-present-depth"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "Log-only D3D12 depth: independent rankings, refusals, identities, bounded recordings, atomic lookup, log windows and hook/config guards."

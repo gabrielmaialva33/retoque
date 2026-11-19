@@ -383,6 +383,9 @@ production headers or source slices with local fakes under AddressSanitizer and 
   split and the separate Present CPU stream under host fakes; these do not prove native D3D12 behavior.
 - `nr-gpu-timing-config` — the Config GPU-timing transactions and their INI
   expressions.
+- `nr-present-depth` — log-only D3D12 depth ranking, refusals, lifetime generations, bounded recordings, atomic
+  descriptor lookup and log windows, plus hook/config source guards. Optional full adapter syntax check against
+  MinGW D3D12 headers; no Detours runtime, GPU, game or DLL build.
 - `nr-invariants` — the `DEVELOPMENT.md` §4 guards against the live tree: config
   round-trip for every `DlssNr` key, struct equals cbuffer, precompiled headers equal
   the committed bytecode, retired identifiers. Pure Python, no compiler.

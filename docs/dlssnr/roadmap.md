@@ -48,12 +48,16 @@ Host coverage does not validate the clipboard result in a running game.
 
 ## In progress
 
+Real depth without an upscaler, reopened 2026-11-19: [step 0](design/present-depth-without-upscaler.md) is a
+D3D12 `PresentDepth=log` observer only, with independent ranking/refusal/comparison host contracts. No depth is
+supplied to the model. The four diagnostic-contract amendments were accepted by the lead, owner confirmation
+at review. Integration build and in-game numbers are pending; step 0b is described, not built, and step 1 waits
+for both precision/coverage and demonstrated value.
+
 NR on any window ([nr-anything](design/nr-anything.md)): NR on another program's window by capture, Windows only, approved by the owner on 2026-11-11 with version 1 scoped to no upscaling and no depth estimation. Phases 0-2 (probe, gated DLL export, capture host with a preview) are built and host-tested, not qualified. Next: the first native Windows run on the RTX 3060 and its probe table, then the overlay (phase 3) and the app screen "NR on any window" (phase 4).
 
 ## Parked or deliberately not promoted
 
-Real depth without an upscaler remains gated on the value experiment in
-[present-depth-without-upscaler](design/present-depth-without-upscaler.md), not on implementing a scanner first.
 `Stage=1` is not promoted to the default from a single [before-upscale measurement](design/stage-before-upscale-measured.md).
 The tested adaptive cadence and half-rate look model were not promoted; preserve their negative results.
 The guide-fidelity probe is designed and parked, not implemented. Its temporal pairing, ordering, source continuity
