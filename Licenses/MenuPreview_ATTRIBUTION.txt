@@ -1,0 +1,19 @@
+Retoque menu preview
+====================
+
+tools/menu-preview/raster.h is original project code, under the repository's GPL-3.0 licence.
+No third-party software rasterizer or PNG implementation was imported for this tool.
+PNG writing reuses retoque/dlssnr/DlssNr_ImageFile.h, already part of this project.
+
+Dear ImGui sources and FreeType adapter are the repository's existing copies under
+OptiScaler/include/imgui/. Their MIT licence is at OptiScaler/include/imgui/LICENSE.txt.
+The tool links the host's FreeType library through pkg-config; it does not redistribute it.
+FreeType is available under the FreeType Project License or GPLv2 (see the installed
+FreeType package's licensing files for that build).
+
+The Hack font is the existing embedded OptiScaler/menu/font/Hack_Compressed.h asset used
+by the DLL. No font file is added or redistributed by this tool change.
+The pt-BR dictionary is the existing retoque/translations/optional/pt-BR.lang.
+
+NeuRotic's production-page fixture pictures inspired the tooling idea only. No NeuRotic
+source, data, strings, font, or other assets were imported for this implementation.
