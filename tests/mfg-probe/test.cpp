@@ -7,6 +7,8 @@
 // ever copied; the real-file case reads it in place and is skipped when it is absent.
 
 #include "MfgProbe.h"
+#include "../../retoque/gpu/NvidiaArchitecture.h"
+#include "../../retoque/dlssnr/DlssNr_WorkingScale.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -108,6 +110,7 @@ struct CountingModuleEnv : MfgProbe::IModuleProbeEnv
     bool nvidia;
     uint32_t arch;
 
+    MfgProbe::ForeignLoader foreign {};
     bool claimResult = true; // what ClaimModule answers (false: no module, or already described)
 
     int claimCalls = 0;
@@ -129,7 +132,7 @@ struct CountingModuleEnv : MfgProbe::IModuleProbeEnv
     MfgProbe::ForeignLoader DetectForeignLoader() override
     {
         ++foreignCalls;
-        return {};
+        return foreign;
     }
     MfgProbe::Census TakeModuleCensus() override
     {
@@ -255,6 +258,42 @@ void testGate()
     check(MfgProbe::ProbeApplies(true, MfgProbe::kArchTuring), "TU100 (0x160) is included");
     check(!MfgProbe::ProbeApplies(true, MfgProbe::kArchTuring - 1), "one id below TU100 is excluded");
     check(!MfgProbe::ProbeApplies(true, 0), "an unread architecture (0) is excluded");
+}
+
+// Hardware identity must win over a newer architecture advertised by a foreign loader.
+void testAdapterArchitecture()
+{
+    using Retoque::NvidiaArchitecture::ForAdapter;
+    const auto ampere = ForAdapter(true, 0x2504, "NVIDIA GeForce RTX 3060", 0x190);
+    check(ampere == 0x170, "GA106 reporting Ada resolves to Ampere");
+    check(DlssNr::AutoWorkingScaleFor(ampere) == 0.5f, "spoofed RTX 3060 auto scale is 0.5 (NR and RR)");
+    CountingModuleEnv env(true, ampere);
+    env.foreign.moduleLoaded = true;
+    MfgProbe::RunModuleProbe(env);
+    check(env.foreignCalls == 1 && !env.emitted.empty() &&
+              env.emitted.front() == MfgProbe::ForeignLoaderLine(env.foreign),
+          "spoofed RTX 3060 emits the foreign-loader diagnostic");
+    MfgProbe::GateCache gate;
+    check(gate.Applies([&] { return MfgProbe::GpuIdentity { true, true, ampere }; }),
+          "cached production gate admits corrected Ampere");
+    check(ampere != 0x190, "spoofed Ampere is not eligible for the automatic Ada kernel swap");
+    check(ForAdapter(true, 0x2504, "", 0x1b0) == 0x170, "known PCI ID works without a name");
+    check(ForAdapter(true, 0x2504, "NVIDIA GeForce RTX 4090", 0x190) == 0x170,
+          "known PCI ID survives a spoofed adapter name too");
+    check(ForAdapter(true, 0, "NVIDIA GeForce RTX 2080 Ti", 0x1b0) == 0x160,
+          "RTX 20 reporting Blackwell resolves to Turing");
+    check(ForAdapter(true, 0, "NVIDIA GeForce RTX 3070 Laptop GPU", 0x190) == 0x170,
+          "RTX 30 laptop resolves from its adapter name");
+    check(ForAdapter(true, 0, "NVIDIA GeForce RTX 3080", 0x170) == 0x170, "unspoofed Ampere unchanged");
+    check(ForAdapter(true, 0, "NVIDIA GeForce RTX 2080", 0x160) == 0x160, "unspoofed Turing unchanged");
+    check(ForAdapter(true, 0x2684, "NVIDIA GeForce RTX 4090", 0x190) == 0x190, "real Ada unchanged");
+    check(ForAdapter(true, 0, "NVIDIA GeForce RTX 5090", 0x1b0) == 0x1b0, "real Blackwell unchanged");
+    check(ForAdapter(false, 0x2504, "NVIDIA GeForce RTX 3060", 0x190) == 0x190, "non-NVIDIA unchanged");
+    check(ForAdapter(true, 0x2504, "NVIDIA GeForce RTX 3060", 0) == 0, "unknown NVAPI is never promoted");
+    check(ForAdapter(true, 0x2504, "NVIDIA GeForce RTX 3060", 0x160) == 0x160, "older NVAPI is never promoted");
+    for (const auto name : { "", "Unknown GPU", "NVIDIA RTX A3000", "NVIDIA GeForce RTX 30600", "NVIDIA GeForce RTX 30",
+                             "NVIDIA GeForce RTX 3060ish" })
+        check(ForAdapter(true, 0xffff, name, 0x190) == 0x190, "unknown or ambiguous name unchanged");
 }
 
 // The production entry points' memo of the gate (GateCache). read() stands in for IdentifyGpu.
@@ -628,6 +667,7 @@ void testRealProvider(const char* path)
 
 int main(int argc, char** argv)
 {
+    testAdapterArchitecture();
     testGate();
     testGateCache();
     testLoadable();

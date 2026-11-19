@@ -123,6 +123,7 @@ pub fn facts_for_with_ini(
         facts.profile_values = SM86_MFG
             .iter()
             .chain(RTX30_NR.iter())
+            .chain(RTX30_SM86_NR.iter())
             .filter_map(|(section, key, _)| {
                 ini.get(section, key)
                     .map(str::trim)
@@ -189,19 +190,22 @@ pub const SM86_MFG: [(&str, &str, &str); 2] = [
 /// such as x4 on a game with a high base, which the session card can still advise against.
 const SM86_MFG_KEEP: [(&str, &str); 1] = [("DLSSG", "OverrideInterpolationCount")];
 /// Neural Rendering on RTX 30 (Ampere) from the same session: peripheral compression keeps full detail in the centre at the
-/// same cost, and a stronger transfer is the look the user chose. WorkingScale 0.5 and Preset 2 are already the
-/// automatic values on these cards, and the white point belongs to one game's exposure, so neither is set here.
+/// same cost, and a stronger transfer is the look the user chose. Preset 2 is already automatic and the white point
+/// belongs to one game's exposure. With sm86 present, pin WorkingScale only when unset: older Retoque builds
+/// can mistake its spoofed NVAPI architecture for Ada and choose full resolution.
 /// RTX 20 (Turing) is left out until a game is measured there.
 pub const RTX30_NR: [(&str, &str, &str); 2] = [
     ("DlssNr", "PeripheryCompression", "true"),
     ("DlssNr", "TransferStrength", "1.5"),
 ];
+const RTX30_SM86_NR: [(&str, &str, &str); 1] = [("DlssNr", "WorkingScale", "0.5")];
+const RTX30_NR_KEEP: [(&str, &str); 1] = [("DlssNr", "WorkingScale")];
 /// Recommendations that tune what is already there; they never choose a frame-generation provider.
 pub const PROFILE_IDS: [&str; 2] = ["rtx30_nr", "sm86_mfg"];
 const FIELD_EVIDENCE: &str = "Dying Light: The Beast, RTX 3060, Windows, 2026-11-10";
 
 /// The profile edits whose value differs from the game's (numbers compare as numbers: the menu saves 1.500000). A key in
-/// SM86_MFG_KEEP that the game already sets is left as it is.
+/// SM86_MFG_KEEP or RTX30_NR_KEEP that the game already sets is left as it is.
 fn missing(edits: &[(&str, &str, &str)], game: &GameFacts) -> Vec<(String, String, String)> {
     let same = |a: &str, b: &str| match (a.trim().parse::<f64>(), b.trim().parse::<f64>()) {
         (Ok(x), Ok(y)) => (x - y).abs() < 1e-6,
@@ -210,6 +214,7 @@ fn missing(edits: &[(&str, &str, &str)], game: &GameFacts) -> Vec<(String, Strin
     let kept = |section: &str, key: &str| {
         SM86_MFG_KEEP
             .iter()
+            .chain(RTX30_NR_KEEP.iter())
             .any(|(s, k)| s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key))
     };
     edits
@@ -344,7 +349,10 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
     }
     // Peripheral compression is D3D12 only; an explicit other API from the last session gets no profile.
     if gpu.arch == Arch::Ampere && game.last_session_api.as_deref().is_none_or(|api| api == "D3D12") {
-        let edits = missing(&RTX30_NR, game);
+        let mut edits = missing(&RTX30_NR, game);
+        if game.sm86_installed {
+            edits.extend(missing(&RTX30_SM86_NR, game));
+        }
         if !edits.is_empty() {
             out.push(Recommendation {
                 id: "rtx30_nr",
@@ -668,7 +676,8 @@ mod tests {
             set("rtx30_nr"),
             [
                 edit("DlssNr", "PeripheryCompression", "true"),
-                edit("DlssNr", "TransferStrength", "1.5")
+                edit("DlssNr", "TransferStrength", "1.5"),
+                edit("DlssNr", "WorkingScale", "0.5")
             ]
         );
         // The INI the menu saved on the RTX 3060 (2026-11-10) writes 1.500000 and "None"/"3"/"true": already applied.
@@ -678,6 +687,7 @@ mod tests {
                 edit("DLSSG", "OverrideInterpolationCount", "3"),
                 edit("DlssNr", "PeripheryCompression", "true"),
                 edit("DlssNr", "TransferStrength", "1.500000"),
+                edit("DlssNr", "WorkingScale", "0.500000"),
             ],
             ..fresh.clone()
         };
@@ -720,6 +730,45 @@ mod tests {
         // RTX 20 (not measured yet), Ada and newer: neither.
         assert!(recommend(Some(&gpu(Arch::Turing)), &fresh).is_empty());
         assert!(recommend(Some(&gpu(Arch::Ada)), &fresh).is_empty());
+    }
+
+    #[test]
+    fn sm86_rtx30_working_scale_is_proposed_only_without_a_user_value() {
+        let (game, mut target, mut status) = fixture();
+        target.loaders = vec!["dlssg_for_sm86".into()];
+        status.optiscaler_proxies = vec!["winmm.dll".into()];
+        status.receipt = Some(receipt());
+        for (value, wanted) in [
+            (None, true),
+            (Some("auto"), true),
+            (Some(" AUTO "), true),
+            (Some("0.5"), false),
+            (Some("1.0"), false),
+            (Some("0.75"), false),
+        ] {
+            let text = value.map_or(String::new(), |v| format!("[DlssNr]\nWorkingScale={v}\n"));
+            let ini = retoque_core::ini::Ini::parse(text.as_bytes());
+            let facts = facts_for_with_ini(&game, &target, Some(&status), &[], Some(&ini));
+            let has_scale = |arch, facts: &GameFacts| {
+                recommend(Some(&gpu(arch)), facts).iter().any(|r| {
+                    r.actions.iter().any(|a| {
+                        matches!(a, Action::SetIni { section, key, value }
+                    if section == "DlssNr" && key == "WorkingScale" && value == "0.5")
+                    })
+                })
+            };
+            assert_eq!(has_scale(Arch::Ampere, &facts), wanted, "current scale {value:?}");
+            assert!(!has_scale(Arch::Turing, &facts));
+            assert!(!has_scale(Arch::Ada, &facts));
+            assert!(!has_scale(Arch::Blackwell, &facts));
+            assert!(!has_scale(
+                Arch::Ampere,
+                &GameFacts {
+                    sm86_installed: false,
+                    ..facts
+                }
+            ));
+        }
     }
 
     #[test]

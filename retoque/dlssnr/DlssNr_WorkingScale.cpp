@@ -5,6 +5,7 @@
 #include <Config.h>
 #include <Logger.h>
 #include <misc/IdentifyGpu.h>
+#include "../gpu/NvidiaArchitectureGpu.h"
 
 #include <atomic>
 #include <mutex>
@@ -79,7 +80,7 @@ template <typename Match> void Resolve(const char* how, Match&& matches)
         return;
     }
 
-    const uint32_t arch = gpu->vendorId == VendorId::Nvidia ? gpu->nvidiaArchInfo.architecture_id : 0;
+    const uint32_t arch = gpu->vendorId == VendorId::Nvidia ? Retoque::NvidiaArchitecture::ForGpu(*gpu) : 0;
     const float scale = AutoWorkingScaleFor(arch);
     g_auto = scale;
 

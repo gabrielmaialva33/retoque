@@ -163,3 +163,16 @@ Known and left alone:
 - Auto is one value for the adapter noted last. Two devices on different adapters dispatching in
   turn would re-resolve on every frame. No route does that today: the bridges put their D3D12 device
   on the render GPU.
+
+## Foreign-loader architecture correction (2026-11-18)
+
+`dlssg_for_sm86` can report Ada through NVAPI on an RTX 3060, which made `auto` choose 1.0.
+The Retoque-only resolver in `retoque/gpu/NvidiaArchitecture.h` now demotes that reported architecture
+using PCI device `0x2504` or a recognized GeForce RTX 20/30 adapter name. It never promotes a reported
+ID, including zero; unknown hardware keeps the previous answer. It leaves NVAPI and IdentifyGpu's
+cache untouched. NR and RR share the corrected scale; explicit scales still win.
+
+The same resolver feeds the MFG probe and automatic Ada kernel gate, with one mismatch log per
+process. Host regression coverage is in `tests/mfg-probe`; Windows build and real loader sessions
+remain unverified by that suite. The app also proposes explicit `WorkingScale=0.5` for RTX 30 with
+sm86 installed when the key is absent/auto, preserving any explicit user value.

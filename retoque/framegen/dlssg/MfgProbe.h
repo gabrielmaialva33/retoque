@@ -21,11 +21,12 @@
 // forward-declared COM type so this header stays portable.
 //
 // The gate is the whole safety story: the probe runs only on an NVIDIA adapter whose architecture is
-// known and below AD100 (0x190). On Ada, Blackwell, non-NVIDIA, and an NVIDIA adapter whose architecture
-// was never read, it returns at the gate, before the census, the foreign-loader check, the formatting or
-// any emit is reached. The run drivers below (RunModuleProbe, RunAdmissionProbe) take an injected
-// environment precisely so a test can prove that inertness by counting that nothing past the gate was
-// ever called; GateCache is the production entry points' memo of the same decision, tested the same way.
+// known and below AD100 (0x190), after the Retoque-only hardware correction for foreign-loader spoofing. On Ada,
+// Blackwell, non-NVIDIA, and an NVIDIA adapter whose architecture was never read, it returns at the gate, before the
+// census, the foreign-loader check, the formatting or any emit is reached. The run drivers below (RunModuleProbe,
+// RunAdmissionProbe) take an injected environment precisely so a test can prove that inertness by counting that nothing
+// past the gate was ever called; GateCache is the production entry points' memo of the same decision, tested the same
+// way.
 namespace MfgProbe
 {
 
