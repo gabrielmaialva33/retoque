@@ -2,13 +2,14 @@
 //! of GPU completion; only the explicitly confirmed timing records contribute to the timing mean.
 
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 const MAX_LINE: usize = 16 * 1024;
 const MAX_HIGHLIGHTS: usize = 200;
 const MAX_ERRORS: usize = 100;
+const READ_BUFFER: usize = 64 * 1024;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Coverage {
@@ -141,25 +142,38 @@ pub fn find(target_dir: &Path) -> Vec<PathBuf> {
     files.into_iter().map(|(_, path)| path).collect()
 }
 
+struct LineRead {
+    /// The line was longer than `MAX_LINE`; only its start was kept.
+    truncated: bool,
+    /// It ended in a newline. The last line of a log still being written may not have one yet.
+    terminated: bool,
+    /// Bytes taken from the reader, the dropped tail of an over-long line included.
+    consumed: u64,
+}
+
 // Unlike BufRead::lines, this cannot allocate the size of a malformed unbroken log line.
-fn bounded_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> io::Result<Option<bool>> {
+fn bounded_line(reader: &mut impl BufRead, line: &mut Vec<u8>) -> io::Result<Option<LineRead>> {
     line.clear();
-    let mut seen = false;
-    let mut truncated = false;
+    let mut read = LineRead {
+        truncated: false,
+        terminated: false,
+        consumed: 0,
+    };
     loop {
         let bytes = reader.fill_buf()?;
         if bytes.is_empty() {
-            return Ok(seen.then_some(truncated));
+            return Ok((read.consumed > 0).then_some(read));
         }
-        seen = true;
         let newline = bytes.iter().position(|b| *b == b'\n');
         let consumed = newline.map_or(bytes.len(), |i| i + 1);
         let retained = consumed.min(MAX_LINE - line.len());
         line.extend_from_slice(&bytes[..retained]);
-        truncated |= retained < consumed;
+        read.truncated |= retained < consumed;
+        read.consumed += consumed as u64;
         reader.consume(consumed);
         if newline.is_some() {
-            return Ok(Some(truncated));
+            read.terminated = true;
+            return Ok(Some(read));
         }
     }
 }
@@ -217,29 +231,78 @@ fn api(line: &str) -> Option<&'static str> {
     None
 }
 
-pub fn summarize(log: &Path) -> io::Result<Summary> {
-    let mut result = Summary {
-        path: log.to_owned(),
-        ..Summary::default()
-    };
-    let mut reader = BufReader::new(File::open(log)?);
-    let mut bytes = Vec::new();
-    let mut mean = 0.0;
-    let mut pacing = crate::session::PacingBuilder::default();
-    let mut timing = crate::measure::TimingBuilder::default();
-    while let Some(truncated) = bounded_line(&mut reader, &mut bytes)? {
-        result.truncated_lines += usize::from(truncated);
-        let decoded = String::from_utf8_lossy(&bytes);
+/// Matches every line that can change a summary: one pass over a line instead of one per text looked for.
+/// A superset is fine (a matched line is read in full); a text missing here would never be seen.
+fn relevant() -> &'static regex::bytes::Regex {
+    static RELEVANT: std::sync::OnceLock<regex::bytes::Regex> = std::sync::OnceLock::new();
+    RELEVANT.get_or_init(|| {
+        regex::bytes::Regex::new(concat!(
+            r"(?-u)DLSS-NR|DLSS v|DLSSG override state:|BuildEnlarger|EnlargeEdit",
+            r"|NVSDK_NGX_|NVNGXProxy::|API: |nvapi64\.dll is loaded",
+            r"|\[E\]|\[W\]|\tE\t|\tW\t",
+            r"|(?i:faulted|device removed|device_removed|hung|0x887a)",
+        ))
+        .expect("the pattern is a constant")
+    })
+}
+
+/// What `summarize` has learned up to a line boundary. `Follower` keeps one, so a log that only grew is read from
+/// where the last read stopped.
+#[derive(Clone)]
+struct Scan {
+    result: Summary,
+    mean: f64,
+    pacing: crate::session::PacingBuilder,
+    timing: crate::measure::TimingBuilder,
+}
+
+impl Scan {
+    fn new(log: &Path) -> Self {
+        Self {
+            result: Summary {
+                path: log.to_owned(),
+                ..Summary::default()
+            },
+            mean: 0.0,
+            pacing: Default::default(),
+            timing: Default::default(),
+        }
+    }
+
+    fn line(&mut self, bytes: &[u8], truncated: bool) {
+        self.result.truncated_lines += usize::from(truncated);
+        // Most of a verbose log is per-frame debug and trace output that names nothing the summary reads.
+        if !relevant().is_match(bytes) {
+            #[cfg(test)]
+            {
+                let mut read = self.clone();
+                read.read(bytes);
+                assert!(
+                    read.finish() == self.clone().finish(),
+                    "`relevant` skips a line the summary reads: {}",
+                    String::from_utf8_lossy(bytes)
+                );
+            }
+            return;
+        }
+        self.read(bytes);
+    }
+
+    /// Every text looked for here, in `PacingBuilder`, in `TimingBuilder` and in `signal_kinds` must be covered by
+    /// `relevant`, or its lines are never seen. The unit tests check each line `relevant` skips against this.
+    fn read(&mut self, bytes: &[u8]) {
+        let decoded = String::from_utf8_lossy(bytes);
         let line = decoded.trim();
-        pacing.observe(line);
-        timing.observe(line);
+        self.pacing.observe(line);
+        self.timing.observe(line);
         for kind in signal_kinds(line) {
-            if !result
+            if !self
+                .result
                 .diagnostic_lines
                 .iter()
                 .any(|old| signal_kinds(old).contains(&kind))
             {
-                result.diagnostic_lines.push(line.to_owned());
+                self.result.diagnostic_lines.push(line.to_owned());
             }
         }
         let lower = line.to_ascii_lowercase();
@@ -248,37 +311,37 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
             .any(|s| lower.contains(s));
         let error_level = line.contains("[E]") || line.contains("\tE\t");
         let noise = error_level && line.contains("streamlineLogCallback") && !severe;
-        result.streamline_noise_count += usize::from(noise);
+        self.result.streamline_noise_count += usize::from(noise);
         let is_error = severe || (error_level && !noise);
         if is_error {
-            result.error_count += 1;
-            if result.errors.len() < MAX_ERRORS {
-                result.errors.push(line.to_owned());
+            self.result.error_count += 1;
+            if self.result.errors.len() < MAX_ERRORS {
+                self.result.errors.push(line.to_owned());
             }
         }
         if line.contains("[W]") || line.contains("\tW\t") {
-            result.warnings += 1;
+            self.result.warnings += 1;
         }
         let mut interesting = is_error;
         if let Some((_, rest)) = line.split_once("DLSS v") {
             let version: String = rest.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
             if version.split('.').count() >= 3 && version.split('.').all(|part| !part.is_empty()) {
-                result.dlss_version = Some(version);
+                self.result.dlss_version = Some(version);
                 interesting = true;
             }
         }
         if let Some(name) = api(line) {
-            result.api = Some(name.into());
+            self.result.api = Some(name.into());
             interesting = true;
         }
         if let Some((_, nr)) = line.split_once("DLSS-NR") {
             if nr.starts_with(" coverage stage=") {
                 if let Some(cov) = coverage(nr) {
-                    result.nr_initialized |= cov.model_ok > 0;
-                    result.nr_evaluated |= cov.model_ok > 0;
-                    result.coverage = Some(cov);
+                    self.result.nr_initialized |= cov.model_ok > 0;
+                    self.result.nr_evaluated |= cov.model_ok > 0;
+                    self.result.coverage = Some(cov);
                 }
-                result.nr_route = Some(format!("DLSS-NR{nr}"));
+                self.result.nr_route = Some(format!("DLSS-NR{nr}"));
                 interesting = true;
             }
             if nr.contains("the model initialised on this device")
@@ -289,7 +352,7 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
                 || nr.starts_with(" Vulkan: feature up at ")
                 || nr.starts_with(" Vulkan: running natively at ")
             {
-                result.nr_initialized = true;
+                self.result.nr_initialized = true;
                 interesting = true;
             }
             if nr.starts_with(" gpu timing confirmed:") {
@@ -306,10 +369,10 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
                     && dispatch >= 0.0
                     && model >= 0.0
                 {
-                    result.nr_evaluated = true;
-                    result.timing_samples += 1;
-                    mean += (dispatch - mean) / result.timing_samples as f64;
-                    result.nr_initialized = true;
+                    self.result.nr_evaluated = true;
+                    self.result.timing_samples += 1;
+                    self.mean += (dispatch - self.mean) / self.result.timing_samples as f64;
+                    self.result.nr_initialized = true;
                 }
             } else if [
                 "route",
@@ -326,7 +389,7 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
             .iter()
             .any(|s| nr.contains(s))
             {
-                result.nr_route = Some(format!("DLSS-NR{nr}"));
+                self.result.nr_route = Some(format!("DLSS-NR{nr}"));
                 interesting = true;
             }
             if [
@@ -348,17 +411,146 @@ pub fn summarize(log: &Path) -> io::Result<Summary> {
         interesting |=
             line.contains("DLSSG override state:") || line.contains("BuildEnlarger") || line.contains("EnlargeEdit");
         if interesting {
-            if result.highlights.len() < MAX_HIGHLIGHTS {
-                result.highlights.push(line.to_owned());
+            if self.result.highlights.len() < MAX_HIGHLIGHTS {
+                self.result.highlights.push(line.to_owned());
             } else {
-                result.highlights_omitted += 1;
+                self.result.highlights_omitted += 1;
             }
         }
     }
-    result.nr_gpu_ms = (result.timing_samples > 0).then_some(mean);
-    result.pacing = pacing.finish();
-    result.nr_timing = timing.finish();
-    Ok(result)
+
+    fn finish(self) -> Summary {
+        let mut result = self.result;
+        result.nr_gpu_ms = (result.timing_samples > 0).then_some(self.mean);
+        result.pacing = self.pacing.finish();
+        result.nr_timing = self.timing.finish();
+        result
+    }
+}
+
+pub fn summarize(log: &Path) -> io::Result<Summary> {
+    let mut scan = Scan::new(log);
+    let mut reader = BufReader::with_capacity(READ_BUFFER, File::open(log)?);
+    let mut bytes = Vec::new();
+    while let Some(read) = bounded_line(&mut reader, &mut bytes)? {
+        scan.line(&bytes, read.truncated);
+    }
+    Ok(scan.finish())
+}
+
+/// Bytes compared at the start of the log and just before the place the last read stopped at.
+const ANCHOR: usize = 256;
+
+/// One log, read once and then followed. A log that did not change since the last `refresh` is not read at all, and
+/// one that only grew is read from where the last read stopped, so looking at a running game's log costs what the
+/// game wrote since, not the whole file again. A log that was replaced or rewritten (a new session, a truncation) is
+/// read from its start. The answer is always what `summarize` gives for the file as it is.
+pub struct Follower {
+    path: PathBuf,
+    /// The lines before `offset`, all of them complete.
+    scan: Scan,
+    offset: u64,
+    /// The file's first bytes and the bytes just before `offset`, as last read: both still there means it only grew.
+    head: Vec<u8>,
+    tail: Vec<u8>,
+    /// The file's size and time when it was last read, and the answer then.
+    seen: Option<(u64, Option<SystemTime>, Summary)>,
+    read: u64,
+}
+
+impl Follower {
+    /// Nothing is read until `refresh`.
+    pub fn new(log: &Path) -> Follower {
+        Follower {
+            path: log.to_owned(),
+            scan: Scan::new(log),
+            offset: 0,
+            head: Vec::new(),
+            tail: Vec::new(),
+            seen: None,
+            read: 0,
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Bytes the last `refresh` read from the log (0 when it had not changed).
+    pub fn bytes_read(&self) -> u64 {
+        self.read
+    }
+
+    /// The summary of the log as it is now. After an error the next call reads the log from its start.
+    pub fn refresh(&mut self) -> io::Result<Summary> {
+        let result = self.advance();
+        if result.is_err() {
+            *self = Follower::new(&self.path);
+        }
+        result
+    }
+
+    fn advance(&mut self) -> io::Result<Summary> {
+        self.read = 0;
+        let mut file = File::open(&self.path)?;
+        let metadata = file.metadata()?;
+        let stamp = (metadata.len(), metadata.modified().ok());
+        if let Some((len, modified, summary)) = &self.seen
+            && (*len, *modified) == stamp
+        {
+            return Ok(summary.clone());
+        }
+        if !(self.seen.is_some() && stamp.0 >= self.offset && self.unchanged_before_offset(&mut file)?) {
+            self.scan = Scan::new(&self.path);
+            self.offset = 0;
+            self.head.clear();
+            self.tail.clear();
+        }
+        file.seek(SeekFrom::Start(self.offset))?;
+        let mut reader = BufReader::with_capacity(READ_BUFFER, &mut file);
+        let mut bytes = Vec::new();
+        // A last line without its newline may still be growing: it counts for this answer and is read again next time.
+        let mut unfinished = None;
+        while let Some(read) = bounded_line(&mut reader, &mut bytes)? {
+            self.read += read.consumed;
+            if !read.terminated {
+                // Stop here: bytes the game adds meanwhile belong to this line, not to a new one.
+                unfinished = Some(read.truncated);
+                break;
+            }
+            self.scan.line(&bytes, read.truncated);
+            self.offset += read.consumed;
+        }
+        drop(reader);
+        if self.head.len() < ANCHOR {
+            self.head = read_at(&mut file, 0, self.offset.min(ANCHOR as u64))?;
+        }
+        let tail = self.offset.min(ANCHOR as u64);
+        self.tail = read_at(&mut file, self.offset - tail, tail)?;
+        let summary = match unfinished {
+            Some(truncated) => {
+                let mut scan = self.scan.clone();
+                scan.line(&bytes, truncated);
+                scan.finish()
+            }
+            None => self.scan.clone().finish(),
+        };
+        self.seen = Some((stamp.0, stamp.1, summary.clone()));
+        Ok(summary)
+    }
+
+    fn unchanged_before_offset(&self, file: &mut File) -> io::Result<bool> {
+        Ok(read_at(file, 0, self.head.len() as u64)? == self.head
+            && read_at(file, self.offset - self.tail.len() as u64, self.tail.len() as u64)? == self.tail)
+    }
+}
+
+/// Up to `len` bytes at `offset`; fewer when the file ends before that.
+fn read_at(file: &mut File, offset: u64, len: u64) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::with_capacity(len as usize);
+    file.seek(SeekFrom::Start(offset))?;
+    file.take(len).read_to_end(&mut bytes)?;
+    Ok(bytes)
 }
 
 struct Redactor {
@@ -813,6 +1005,155 @@ mod tests {
         let out = temp.path().join("out");
         assert!(bundle(temp.path(), "status", &out).is_err());
         assert_eq!(fs::read_dir(out).unwrap().count(), 0);
+    }
+
+    /// Lines of every kind the summary reads, with the shapes that are hard on a reader that stops and resumes:
+    /// CRLF, bytes that are not UTF-8, a line longer than `MAX_LINE`, and no newline at the end.
+    fn session_log() -> Vec<u8> {
+        let mut log = Vec::new();
+        log.extend_from_slice(
+            concat!(
+                "[12:00:00.000000] [I] ReadVersion DLSS v310.9.0 loaded.\r\n",
+                "[12:00:01.000000] [I] NVSDK_NGX_D3D12_Init_Ext called\n",
+                "[12:00:01.100000] [I] DLSS-NR: NVIDIA driver 581.42 on this device\n",
+                "[12:00:01.200000] [I] DLSS-NR Vulkan: the model initialised on this device\n",
+                "[12:00:01.300000] [W] DLSS-NR Vulkan: this route waits: ownership\n",
+                "[12:00:01.400000] [E] streamlineLogCallback optional plugin unavailable\n",
+                "[12:00:01.500000] [E] failed synthetic call\n",
+                "12:00:01\tW\twarning\n",
+            )
+            .as_bytes(),
+        );
+        for second in (2..40).step_by(2) {
+            log.extend_from_slice(
+                format!(
+                    "[12:00:{second:02}.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: upscaled: active on the \
+                     upscaler's output | {} presents : {} renders = 4.00x on screen\n\
+                     [12:00:{second:02}.500000] [D] LocalPresent Calling original present\n\
+                     [12:00:{second:02}.600000] [I] DLSS-NR gpu timing confirmed: stage=post carried=false passes=2/2 \
+                     dispatch_ms={}.5 model_ms=1 unit=eligible-evaluations\n\
+                     [12:00:{second:02}.700000] [I] DLSS-NR coverage stage=post calls={second} model_ok={second} \
+                     model_failed=0 skipped=0 fallback=0\n",
+                    180 + second,
+                    45 + second / 4,
+                    second % 5
+                )
+                .as_bytes(),
+            );
+        }
+        log.extend_from_slice(b"[12:00:41.000000] [T] not text: \xff\xfe\n[12:00:42.000000] [W] ");
+        log.extend(std::iter::repeat_n(b'x', MAX_LINE + 300));
+        log.extend_from_slice(
+            b"\n[12:00:43.000000] [E] device removed 0x887A0005\n[12:00:44.000000] [I] DLSS-NR status: unfinished",
+        );
+        log
+    }
+
+    #[test]
+    fn a_followed_log_is_summarized_as_a_whole_read_wherever_the_writes_stop() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("OptiScaler.log");
+        let log = session_log();
+        // Chunk sizes from a fixed sequence: single bytes, a few lines, and pieces longer than a line.
+        for seed in [1u32, 7, 4099] {
+            let mut file = File::create(&path).unwrap();
+            let mut follower = Follower::new(&path);
+            let (mut written, mut state) = (0, seed);
+            while written < log.len() {
+                state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                let size = match (state >> 16) % 8 {
+                    0 => 1,
+                    1..=5 => 1 + (state >> 8) as usize % 211,
+                    _ => 1 + (state >> 8) as usize % 9_001,
+                };
+                let end = (written + size).min(log.len());
+                file.write_all(&log[written..end]).unwrap();
+                file.flush().unwrap();
+                written = end;
+                assert_eq!(
+                    follower.refresh().unwrap(),
+                    summarize(&path).unwrap(),
+                    "seed {seed}, {written} bytes written"
+                );
+            }
+            let whole = summarize(&path).unwrap();
+            assert!(whole.pacing.is_some() && whole.nr_timing.is_some() && whole.truncated_lines == 1);
+            assert_eq!(whole.error_count, 2);
+        }
+    }
+
+    #[test]
+    fn a_followed_log_is_read_once_then_only_what_was_added() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("OptiScaler.log");
+        let first = "[12:00:00.000000] [E] first failure\n".repeat(500);
+        fs::write(&path, &first).unwrap();
+        let mut follower = Follower::new(&path);
+        assert_eq!(follower.refresh().unwrap().error_count, 500);
+        assert_eq!(follower.bytes_read(), first.len() as u64);
+        // Nothing changed: the answer comes back without reading the log.
+        assert_eq!(follower.refresh().unwrap().error_count, 500);
+        assert_eq!(follower.bytes_read(), 0);
+        let added = "[12:00:01.000000] [E] one more\n[12:00:02.000000] [W] and an unfinished li";
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(added.as_bytes())
+            .unwrap();
+        let summary = follower.refresh().unwrap();
+        assert_eq!((summary.error_count, summary.warnings), (501, 1));
+        assert_eq!(follower.bytes_read(), added.len() as u64);
+        // The unfinished line is read again once the game completes it, and counted once.
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"ne\n")
+            .unwrap();
+        let summary = follower.refresh().unwrap();
+        assert_eq!((summary.error_count, summary.warnings), (501, 1));
+        assert_eq!(
+            follower.bytes_read(),
+            "[12:00:02.000000] [W] and an unfinished line\n".len() as u64
+        );
+        assert_eq!(summary, summarize(&path).unwrap());
+    }
+
+    #[test]
+    fn a_followed_log_that_was_replaced_is_read_from_its_start() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("OptiScaler.log");
+        let old = "[12:00:00.000000] [E] yesterday's failure\n".repeat(40);
+        fs::write(&path, &old).unwrap();
+        let mut follower = Follower::new(&path);
+        assert_eq!(follower.refresh().unwrap().error_count, 40);
+        // A new session: shorter, then grown past where the old one ended, then the same size again.
+        for new in [
+            "[13:00:00.000000] [W] today\n".to_owned(),
+            "[14:00:00.000000] [W] later today\n".repeat(200),
+            old.replace("[E] yesterday's failure", "[W] same length, new text"),
+        ] {
+            fs::write(&path, &new).unwrap();
+            // A clock too coarse to tell two quick writes apart must not hide the new file's time.
+            let later = fs::metadata(&path).unwrap().modified().unwrap() + std::time::Duration::from_secs(1);
+            File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(later)
+                .unwrap();
+            let summary = follower.refresh().unwrap();
+            assert_eq!(summary, summarize(&path).unwrap());
+            assert_eq!(summary.error_count, 0);
+            assert_eq!(follower.bytes_read(), new.len() as u64);
+        }
+        // A log that went away is an error; when it is back it is read whole.
+        fs::remove_file(&path).unwrap();
+        assert!(follower.refresh().is_err());
+        fs::write(&path, &old).unwrap();
+        assert_eq!(follower.refresh().unwrap().error_count, 40);
+        assert_eq!(follower.bytes_read(), old.len() as u64);
     }
 
     #[test]
