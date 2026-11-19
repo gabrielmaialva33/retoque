@@ -54,6 +54,13 @@ inline bool AllocReadback(ID3D12Device* device, const D3D12_RESOURCE_DESC& desc,
 {
     D3D12_RESOURCE_DESC typed = desc;
     typed.Format = TypedForCopy(desc.Format);
+    // The footprint describes the buffer the copy lands in, not the texture's own memory, so neither the source's
+    // flags nor its alignment take part. A texture created with D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT (0x400,
+    // Agility SDK) reports an alignment that is only legal together with that flag, and the device answered
+    // UINT64_MAX for it: Dying Light: The Beast's output on an RTX 3060, 2026-11-19, flags 0x405. The guide clone
+    // in DlssNr_Dx12_Resources.cpp drops both for the same reason.
+    typed.Flags = D3D12_RESOURCE_FLAG_NONE;
+    typed.Alignment = 0;
 
     unsigned long long total = 0;
     device->GetCopyableFootprints(&typed, 0, 1, 0, &shot.layout, nullptr, nullptr, &total);

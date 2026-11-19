@@ -392,6 +392,14 @@ for name, text in (('DlssNr_Capture.h', burst_h), ('DlssNr_PairCapture.cpp', cap
             fail(f'{name} has its own {token}: use DlssNr_Readback.h')
 if 'D3D12_RESOURCE_STATE_COPY_DEST' not in readback_h or 'TypedForCopy' not in readback_h:
     fail('DlssNr_Readback.h lost the readback heap state or the typed footprint')
+# A source with D3D12_RESOURCE_FLAG_USE_TIGHT_ALIGNMENT has no copyable footprint while its flags and alignment ride
+# along (Dying Light: The Beast, 2026-11-19): both are cleared before GetCopyableFootprints.
+alloc = body_of(readback_h, 'inline bool AllocReadback(')
+footprint_at = alloc.find('GetCopyableFootprints')
+for token in ('typed.Flags = D3D12_RESOURCE_FLAG_NONE;', 'typed.Alignment = 0;'):
+    at = alloc.find(token)
+    if at < 0 or footprint_at < 0 or at > footprint_at:
+        fail(f'AllocReadback must set {token} before GetCopyableFootprints')
 
 # The record never takes a path: the backend fills the builders' inputs (FillFrameRecord, FillWriteRecord, whose exact
 # text test.cpp holds) from things that are not one, sets no key of its own, and the executable goes in only as its
