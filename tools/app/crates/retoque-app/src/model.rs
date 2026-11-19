@@ -341,11 +341,34 @@ pub fn bundle_dir() -> PathBuf {
         .unwrap_or_else(std::env::temp_dir)
 }
 
-/// Opens a folder in the system file manager.
-pub fn open_folder(dir: &Path) {
+/// Opens a folder or file through the same OS association boundary as launcher URIs.
+pub fn open_folder(path: &Path) {
+    let _ = open_system(path.as_os_str());
+}
+
+/// One dispatch boundary; never interpret paths or URIs as shell command text.
+pub(crate) fn open_system(target: &std::ffi::OsStr) -> std::io::Result<()> {
     #[cfg(windows)]
-    let program = "explorer";
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::{
+            Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+            core::{PCWSTR, w},
+        };
+        let wide: Vec<u16> = target.encode_wide().chain(Some(0)).collect();
+        // SAFETY: the UTF-16 target is NUL-terminated and lives through the synchronous shell call.
+        let result = unsafe { ShellExecuteW(None, w!("open"), PCWSTR(wide.as_ptr()), None, None, SW_SHOWNORMAL) };
+        if result.0 as isize <= 32 {
+            return Err(std::io::Error::other("The system could not open the requested item"));
+        }
+        Ok(())
+    }
     #[cfg(not(windows))]
-    let program = "xdg-open";
-    let _ = std::process::Command::new(program).arg(dir).spawn();
+    {
+        let mut child = std::process::Command::new("xdg-open").arg(target).spawn()?;
+        std::thread::spawn(move || {
+            let _ = child.wait();
+        });
+        Ok(())
+    }
 }

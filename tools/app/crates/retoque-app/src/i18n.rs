@@ -251,6 +251,37 @@ pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static s
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    ("play.action", "Play", "Jogar"),
+    ("play.command", "Play {game}", "Jogar {game}"),
+    (
+        "play.asked",
+        "Asked {launcher} to start {game}",
+        "Solicitado ao {launcher} que inicie {game}",
+    ),
+    (
+        "play.failed",
+        "Could not ask the launcher. Open the launcher and try again.",
+        "Não foi possível chamar o launcher. Abra o launcher e tente novamente.",
+    ),
+    (
+        "play.wait_write",
+        "Wait until changes to this game finish.",
+        "Aguarde o fim das alterações neste jogo.",
+    ),
+    ("play.open_settings", "Open settings file", "Abrir arquivo de ajustes"),
+    ("play.open_captures", "Open captures folder", "Abrir pasta de capturas"),
+    ("favorites.title", "Favorites", "Favoritos"),
+    ("favorites.state", "Favorite", "Favorito"),
+    (
+        "favorites.add",
+        "Add to favorites: {game}",
+        "Adicionar aos favoritos: {game}",
+    ),
+    (
+        "favorites.remove",
+        "Remove from favorites: {game}",
+        "Remover dos favoritos: {game}",
+    ),
     ("lsfg.found", "Lossless Scaling found", "Lossless Scaling encontrado"),
     (
         "lsfg.preparing",

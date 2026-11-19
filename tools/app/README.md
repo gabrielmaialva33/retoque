@@ -51,6 +51,28 @@ Linux has no app installation/update controls. Packaging, recovery limits and Wi
   are the user's own files, kept in the app's data folder, chosen with `[DlssNr] ModelFile`.
 - Settings are written key by key into the ini on disk, so a change the in-game menu made to another key survives.
 
+## Play, favorites and quick actions
+
+The game page offers a plain **Play** button beside its optimization action and a **Play {game}** command in
+Ctrl+K. Steam, Heroic (Epic/GOG/Amazon) and Lutris use their own launch protocols; on Windows Epic uses its
+backwards-compatible artifact URI. Identifiers are validated/encoded by a pure builder, and all opening goes
+through the same OS association boundary as folders and files. The toast says the launcher was asked; only
+process inspection establishes that a game is running. A write anywhere under the game's folder disables Play
+with a visible explanation and temporarily removes its palette command. The Proton launch-option card stays.
+
+There is no Play for manual/unregistered folders, unknown identifiers, ambiguous numeric Lutris identifiers,
+GOG Galaxy (no launch URI verified in its own documentation) or Xbox (discovery has a path, not a Store/Title ID).
+No direct executable launch or guessed protocol is used. Source references are beside the builder in [play.rs](crates/retoque-app/src/play.rs).
+These are protocol contracts tested with synthetic inputs; real launchers and native Windows still need qualification.
+
+A keyboard-accessible outlined/filled star on the page, sidebar and cards toggles **Favorites**, saved by game ID
+with the rest of app state. Favorites have their own first group in both lists, obey existing filters, and expose
+their state and action to screen readers. The heading disappears when the filtered list has no favorites.
+**More actions** adds **Open settings file** and **Open captures folder** only when `OptiScaler.ini` and
+`retoque-captures` exist in the selected executable folder. The game-folder action remains in that menu.
+
+The feature idea came from the NeuRotic Hub comparison; implementation and text are independent.
+
 ## Languages
 
 The window speaks English and Brazilian Portuguese, plus German, Spanish, French, Japanese, Korean, Polish, Russian

@@ -34,6 +34,8 @@ pub(crate) type Drafts = HashMap<PathBuf, BTreeMap<(String, String), String>>;
 /// What survives a restart.
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Saved {
+    #[serde(default)]
+    pub(crate) favorites: std::collections::BTreeSet<String>,
     pub(crate) lang: Option<Lang>,
     pub(crate) manual: Vec<PathBuf>,
     #[serde(default)]

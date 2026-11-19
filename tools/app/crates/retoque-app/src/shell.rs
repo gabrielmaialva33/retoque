@@ -298,21 +298,17 @@ impl RetoqueApp {
         .then(|| self.library_empty_filter_key());
         let mut clicked = None;
         let mut list_focus = false;
-        let installed = &self.library_state.derived.installed;
-        let others = &self.library_state.derived.others;
+        let groups = self.library_groups();
+        let mut favorite_clicked = None;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             if let Some(key) = empty_filter {
                 ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
             }
-            let groups = [
-                (self.tr("lib.group_installed"), installed),
-                (self.tr("lib.group_other"), others),
-            ];
-            for (title, games) in groups {
+            for (title, games) in &groups {
                 if games.is_empty() {
                     continue;
                 }
-                widgets::group_label(ui, title, games.len());
+                widgets::group_label(ui, self.tr(title), games.len());
                 for &index in games.iter() {
                     let game = &self.library_state.games[index];
                     let selected = self.selected.as_ref() == Some(&game.id);
@@ -328,17 +324,32 @@ impl RetoqueApp {
                         .copied()
                         .max()
                         .unwrap_or(0);
-                    let spoken = crate::tabs::doctor::spoken_findings(findings, self.lang);
-                    let response = widgets::game_row(
-                        ui,
-                        &game.name,
-                        detail,
-                        (self.tr(state.short_label()), state.color()),
-                        capsule,
-                        selected,
-                        hint,
-                        spoken.as_deref(),
-                    );
+                    let mut spoken = crate::tabs::doctor::spoken_findings(findings, self.lang);
+                    let favorite = self.saved.favorites.contains(&game.id);
+                    if favorite {
+                        spoken = Some(format!(
+                            "{}{}",
+                            self.tr("favorites.state"),
+                            spoken.map(|s| format!(", {s}")).unwrap_or_default()
+                        ));
+                    }
+                    let response = ui
+                        .horizontal(|ui| {
+                            if crate::play::favorite_button(ui, game, favorite, self.lang).clicked() {
+                                favorite_clicked = Some(game.id.clone());
+                            }
+                            widgets::game_row(
+                                ui,
+                                &game.name,
+                                detail,
+                                (self.tr(state.short_label()), state.color()),
+                                capsule,
+                                selected,
+                                hint,
+                                spoken.as_deref(),
+                            )
+                        })
+                        .inner;
                     let response = crate::tabs::doctor::row_badge(ui, response, findings, self.lang);
                     list_focus |= response.has_focus();
                     if response.clicked() {
@@ -349,6 +360,9 @@ impl RetoqueApp {
             }
             self.skipped_note(ui);
         });
+        if let Some(id) = favorite_clicked {
+            self.toggle_favorite(&id);
+        }
         self.library_has_focus = list_focus;
         if let Some(id) = clicked {
             self.select_id(id);
@@ -576,18 +590,15 @@ impl RetoqueApp {
             return;
         }
         self.refresh_library_cache();
-        let games = &self.library_state.derived;
-        let count = games.installed.len() + games.others.len();
+        let order: Vec<_> = self.library_groups().into_iter().flat_map(|(_, games)| games).collect();
+        let count = order.len();
         if count == 0 {
             return;
         }
-        let index = self.selected.as_ref().and_then(|id| {
-            games
-                .installed
-                .iter()
-                .chain(&games.others)
-                .position(|&i| &self.library_state.games[i].id == id)
-        });
+        let index = self
+            .selected
+            .as_ref()
+            .and_then(|id| order.iter().position(|&i| &self.library_state.games[i].id == id));
         let next = match index {
             Some(index) => (index as isize + direction).clamp(0, count as isize - 1) as usize,
             None => {
@@ -598,7 +609,7 @@ impl RetoqueApp {
                 }
             }
         };
-        let index = *games.installed.iter().chain(&games.others).nth(next).unwrap();
+        let index = order[next];
         self.select_id(self.library_state.games[index].id.clone());
     }
 
@@ -710,32 +721,18 @@ impl RetoqueApp {
         if std::mem::take(&mut self.library_state.scroll_to_top) {
             scroll = scroll.vertical_scroll_offset(0.0);
         }
+        let groups = self.library_groups();
+        let mut favorite_clicked = None;
         scroll.show(ui, |ui| {
             if let Some(key) = empty_filter {
                 ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
                 ui.add_space(theme::CARD_GAP);
             }
-            for installed_group in [true, false] {
-                if !installed_group && self.library_state.installed_only {
-                    continue;
-                }
-                let games = if installed_group {
-                    &self.library_state.derived.installed
-                } else {
-                    &self.library_state.derived.others
-                };
+            for (title, games) in &groups {
                 if games.is_empty() {
                     continue;
                 }
-                widgets::group_label(
-                    ui,
-                    self.tr(if installed_group {
-                        "lib.group_installed"
-                    } else {
-                        "lib.group_other"
-                    }),
-                    games.len(),
-                );
+                widgets::group_label(ui, self.tr(title), games.len());
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(18.0, 22.0);
                     // As many covers as fit at 150 points, widened together so each row ends at the column's edge.
@@ -744,7 +741,8 @@ impl RetoqueApp {
                         let game = &self.library_state.games[index];
                         let state = self.library_state.derived.states[index];
                         let art = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
-                        if widgets::cover_card(
+                        let favorite = self.saved.favorites.contains(&game.id);
+                        let card = widgets::cover_card(
                             ui,
                             cover_w,
                             &game.name,
@@ -752,9 +750,31 @@ impl RetoqueApp {
                             self.tr(state.label()),
                             state.color(),
                             (!game.registered).then(|| self.tr("folders.unregistered")),
-                        )
-                        .clicked()
-                        {
+                        );
+                        if favorite {
+                            card.widget_info(|| {
+                                egui::WidgetInfo::labeled(
+                                    egui::Role::Button,
+                                    ui.is_enabled(),
+                                    format!(
+                                        "{}, {}, {}",
+                                        game.name,
+                                        self.tr(state.label()),
+                                        self.tr("favorites.state")
+                                    ),
+                                )
+                            });
+                        }
+                        let star_rect = egui::Rect::from_min_size(
+                            egui::pos2(card.rect.right() - 40., card.rect.top() + 8.),
+                            egui::vec2(32., 32.),
+                        );
+                        ui.painter().rect_filled(star_rect, 6, theme::SIDE);
+                        let mut star_ui = ui.new_child(egui::UiBuilder::new().max_rect(star_rect));
+                        let star = crate::play::favorite_button(&mut star_ui, game, favorite, self.lang);
+                        if star.clicked() {
+                            favorite_clicked = Some(game.id.clone());
+                        } else if card.clicked() {
                             clicked = Some(game.id.clone());
                         }
                     }
@@ -765,6 +785,9 @@ impl RetoqueApp {
             self.skipped_note(ui);
         });
         self.leftovers_modal(ui.ctx());
+        if let Some(id) = favorite_clicked {
+            self.toggle_favorite(&id);
+        }
         if let Some(id) = clicked {
             self.select_id(id);
         }
@@ -816,6 +839,15 @@ impl RetoqueApp {
                 .max_rect(rect.shrink(16.0))
                 .layout(egui::Layout::top_down(egui::Align::Min)),
         );
+        let mut star_ui = ui.new_child(egui::UiBuilder::new().max_rect(egui::Rect::from_min_size(
+            egui::pos2(rect.right() - 48., rect.top() + 8.),
+            egui::vec2(32., 32.),
+        )));
+        if crate::play::favorite_button(&mut star_ui, game, self.saved.favorites.contains(&game.id), self.lang)
+            .clicked()
+        {
+            self.toggle_favorite(&game.id);
+        }
         if compact {
             child.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
         } else if let Some(logo) = art.logo.as_deref() {
@@ -833,7 +865,7 @@ impl RetoqueApp {
             return;
         }
         child.add_space(8.0);
-        if let Some((done, total)) = self.view.target.as_ref().and_then(|t| self.writing.get(t)) {
+        if let Some((done, total)) = self.view.target.as_ref().and_then(|t| self.writing.get(t)).copied() {
             let kind = self
                 .view
                 .target
@@ -847,7 +879,10 @@ impl RetoqueApp {
                 }
                 _ => "shell.progress_install",
             };
-            child.add_enabled(false, theme::primary(&format!("{} {done}/{total}", self.tr(key))));
+            child.horizontal_wrapped(|ui| {
+                ui.add_enabled(false, theme::primary(&format!("{} {done}/{total}", self.tr(key))));
+                self.play_button(ui, game);
+            });
             child.ctx().request_repaint_after(std::time::Duration::from_millis(100));
         } else {
             let state = self.view.status.as_ref().and_then(|r| r.as_ref().ok()).map(|s| {
@@ -894,6 +929,7 @@ impl RetoqueApp {
                         self.optimize_automatically();
                     }
                 }
+                self.play_button(ui, game);
                 self.banner_more_actions(ui, state, game);
                 let download = if self.nr_fetch.busy {
                     Some((
@@ -970,6 +1006,7 @@ impl RetoqueApp {
             {
                 self.cmd_tx.send(AppCommand::UndoSettings(target));
             }
+            self.quick_actions(ui);
             if ui.button(self.tr("shell.open_folder")).clicked() {
                 model::open_folder(&game.install_dir);
             }
