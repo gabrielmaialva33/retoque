@@ -28,6 +28,11 @@ impl RetoqueApp {
             }
             Some(Ok(Some(_))) => (),
         };
+        widgets::card(ui, |ui| {
+            widgets::card_title(ui, self.tr("set.saved_title"));
+            ui.label(self.tr("set.saved_notice"));
+        });
+        ui.add_space(theme::CARD_GAP);
         ui.horizontal_wrapped(|ui| {
             let label = ui.label(t(self.lang, "set.filter"));
             let response = ui
@@ -191,6 +196,9 @@ impl RetoqueApp {
                             ui.set_width(label_width);
                             let response = ui.add(egui::Label::new(RichText::new(label).strong()).wrap());
                             ui.label(RichText::new(help).small().color(theme::MUTED));
+                            if let Some(key) = restart_note(s.section, s.key) {
+                                ui.add(egui::Label::new(RichText::new(t(lang, key)).small().color(theme::WARN)).wrap());
+                            }
                             response.id
                         },
                     )
@@ -260,6 +268,19 @@ impl RetoqueApp {
         }
     }
 }
+/// These are in-game lifecycle caveats, not a claim that the app can edit a running game.
+/// Keep the conditional cases explicit; a saved value cannot prove the current runtime has applied it.
+fn restart_note(section: &str, key: &str) -> Option<&'static str> {
+    match (section, key) {
+        ("DlssNr", "ModelFile" | "GameProfiles") => Some("set.restart_required"),
+        ("DlssNr", "Stage") => Some("set.restart_vulkan"),
+        ("DlssNr", "HookMethod") => Some("set.restart_placement"),
+        ("DlssNr", "Passes") => Some("set.restart_passes"),
+        ("LSFG", "Multiplier") => Some("set.restart_multiplier"),
+        _ => None,
+    }
+}
+
 pub(crate) fn value_widget(
     ui: &mut egui::Ui,
     setting: &settings::Setting,
@@ -429,7 +450,7 @@ mod tests {
         if ampere {
             app.tuning.gpus = Some(retoque_data::gpu::parse_nvidia_smi_csv("RTX 3060,8.6,1,12288"));
         }
-        Harness::builder().with_size([1100., 900.]).build_ui_state(
+        Harness::builder().with_size([820., 900.]).build_ui_state(
             |ui, app: &mut RetoqueApp| {
                 let mut edits = std::mem::take(&mut app.view.edits);
                 app.settings_tab(ui, &mut edits, &app.cmd_tx.clone());
@@ -452,6 +473,44 @@ mod tests {
         assert!(h.query_all_by_label(label).next().is_some());
         assert!(h.query_by_label_contains("model instances").is_none());
         assert!(h.query_by_label(t(lang, "set.passes_ampere")).is_none());
+    }
+
+    #[test]
+    fn saved_settings_and_pass_restart_caveat_are_visible_in_both_languages() {
+        for lang in [Lang::En, Lang::Pt] {
+            // Include 1/auto: the warning must be discoverable before raising the count, not only afterward.
+            for value in ["auto", "1", "4"] {
+                let mut h = settings_with(value, true);
+                h.state_mut().lang = lang;
+                h.state_mut().intuitive.settings.query = "Passes".into();
+                h.run_steps(2);
+                h.get_by_label(t(lang, "set.saved_title"));
+                h.get_by_label(t(lang, "set.saved_notice"));
+                h.get_by_label(t(lang, "set.restart_passes"));
+                assert!(h.state().view.edits.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn restart_notes_identify_conditional_settings_without_marking_live_controls() {
+        for (section, key) in [
+            ("DlssNr", "ModelFile"),
+            ("DlssNr", "GameProfiles"),
+            ("DlssNr", "Stage"),
+            ("DlssNr", "HookMethod"),
+            ("DlssNr", "Passes"),
+            ("LSFG", "Multiplier"),
+        ] {
+            assert!(settings::all().iter().any(|s| (s.section, s.key) == (section, key)));
+            for lang in [Lang::En, Lang::Pt] {
+                let note = restart_note(section, key).unwrap();
+                assert_ne!(t(lang, note), note);
+            }
+        }
+        assert_eq!(restart_note("DlssNr", "ApplyModel"), None);
+        assert_eq!(restart_note("DlssNr", "CompareSplit"), None);
+        assert_eq!(restart_note("LSFG", "PerformanceMode"), None);
     }
 
     fn all_label() -> &'static str {

@@ -50,6 +50,15 @@ pub(crate) fn repair_button(
         let button = ui.add_enabled(enabled, egui::Button::new(label));
         if !enabled {
             button.clone().on_hover_text(t(lang, "app.payload.none"));
+            ui.add(
+                egui::Label::new(
+                    RichText::new(t(lang, "doctor.payload_action"))
+                        .small()
+                        .color(theme::MUTED),
+                )
+                .wrap(),
+            );
+            crate::error::button(ui, crate::error::Remedy::ChoosePayloadDir, None, lang, commands);
         }
         if button.clicked() {
             commands.send(AppCommand::PrepareRepair(target.to_owned(), repair.clone()));
@@ -152,6 +161,39 @@ mod tests {
             repair: Some(Repair::UpdateDlss),
         }
     }
+    #[test]
+    fn unavailable_reinstall_explains_the_next_action_without_hover() {
+        use egui_kittest::{
+            Harness,
+            kittest::{NodeT, Queryable},
+        };
+        for lang in [Lang::En, Lang::Pt] {
+            let app = crate::app_tests::shell_tests::app();
+            let commands = app.cmd_tx.clone();
+            let h = Harness::new_ui(move |ui| {
+                repair_button(
+                    ui,
+                    Some(&Repair::Reinstall),
+                    Path::new("/synthetic/game"),
+                    lang,
+                    &commands,
+                    false,
+                );
+            });
+            h.get_by_label(t(lang, "doctor.payload_action"));
+            assert!(
+                h.get_by_role_and_label(egui::Role::Button, t(lang, "shell.reinstall"))
+                    .accesskit_node()
+                    .is_disabled()
+            );
+            assert!(
+                !h.get_by_role_and_label(egui::Role::Button, t(lang, "app.payload.choose"))
+                    .accesskit_node()
+                    .is_disabled()
+            );
+        }
+    }
+
     #[test]
     fn the_badge_counts_problems_not_news() {
         // A newer DLSS being available is information: it shows in the card, but no badge or "1 issue".

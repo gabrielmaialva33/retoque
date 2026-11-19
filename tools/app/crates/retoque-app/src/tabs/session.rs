@@ -118,6 +118,11 @@ impl RetoqueApp {
                 }
                 ui.label(RichText::new(period).small().color(theme::MUTED));
             });
+            ui.label(
+                RichText::new(t(lang, "sess.recorded_notice"))
+                    .small()
+                    .color(theme::MUTED),
+            );
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = vec2(10.0, 10.0);
                 let fps = |v: f64| format!("{} fps", v.round() as u32);
@@ -268,6 +273,7 @@ mod tests {
                 .with_size([1100., 700.])
                 .build_ui_state(|ui, app: &mut RetoqueApp| app.session_card(ui), app);
             h.get_by_label_contains(t(lang, "sess.title"));
+            h.get_by_label(t(lang, "sess.recorded_notice"));
             // Real frames and the worst 5% are both 23 in this steady synthetic session.
             assert_eq!(h.query_all_by_label_contains("23 fps").count(), 2);
             h.get_by_label_contains("92 fps");

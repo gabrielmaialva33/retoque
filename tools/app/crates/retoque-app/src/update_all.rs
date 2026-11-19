@@ -14,6 +14,37 @@ pub(crate) struct State {
     pub error: Option<AppError>,
     focus: Option<egui::Id>,
 }
+impl State {
+    fn ready_count(&self) -> usize {
+        self.rows
+            .iter()
+            .filter(|r| matches!(r.result, RowResult::Ready))
+            .count()
+    }
+
+    fn summary(&self, lang: Lang) -> String {
+        let updated = self
+            .rows
+            .iter()
+            .filter(|r| matches!(r.result, RowResult::Updated))
+            .count();
+        let skipped = self
+            .rows
+            .iter()
+            .filter(|r| matches!(r.result, RowResult::Skipped(_)))
+            .count();
+        let failed = self
+            .rows
+            .iter()
+            .filter(|r| matches!(r.result, RowResult::Failed(_)))
+            .count();
+        t(lang, "update_all.done")
+            .replace("{updated}", &updated.to_string())
+            .replace("{skipped}", &skipped.to_string())
+            .replace("{failed}", &failed.to_string())
+    }
+}
+
 #[derive(Clone)]
 pub struct Row {
     pub(crate) name: String,
@@ -332,19 +363,10 @@ impl RetoqueApp {
             Event::Done => {
                 self.library_state.update_all.running = false;
                 self.library_state.update_all.finished = true;
-                let rows = &self.library_state.update_all.rows;
-                let updated = rows.iter().filter(|r| matches!(r.result, RowResult::Updated)).count();
-                let skipped = rows
-                    .iter()
-                    .filter(|r| matches!(r.result, RowResult::Skipped(_)))
-                    .count();
-                let failed = rows.iter().filter(|r| matches!(r.result, RowResult::Failed(_))).count();
-                let message = self
-                    .tr("update_all.done")
-                    .replace("{updated}", &updated.to_string())
-                    .replace("{skipped}", &skipped.to_string())
-                    .replace("{failed}", &failed.to_string());
-                self.toast(message, None, failed > 0);
+                let state = &self.library_state.update_all;
+                let failed = state.rows.iter().any(|r| matches!(r.result, RowResult::Failed(_)));
+                let message = state.summary(self.lang);
+                self.toast(message, None, failed);
                 self.inspect_library();
                 if let Some(target) = self.view.target.clone() {
                     self.load_target(target);
@@ -382,6 +404,11 @@ impl RetoqueApp {
                 ui.set_width(640.0_f32.min(ctx.content_rect().width() - 48.0));
                 ui.heading(t(lang, "update_all.title"));
                 ui.label(t(lang, "update_all.note"));
+                if state.finished {
+                    ui.label(RichText::new(state.summary(lang)).strong());
+                } else if !busy && state.error.is_none() && state.ready_count() == 0 {
+                    ui.label(t(lang, "update_all.no_ready"));
+                }
                 if state.preparing {
                     widgets::busy(ui, lang, t(lang, "shell.checking"), None, None);
                 }
@@ -410,6 +437,9 @@ impl RetoqueApp {
                                     RowResult::Ready => ("update_all.ready", theme::TEXT),
                                     RowResult::Updating => ("shell.progress_update", theme::MUTED),
                                     RowResult::Updated => ("shell.updated_done", theme::GOOD),
+                                    RowResult::Skipped(skip) if skip.key == "update_all.current" => {
+                                        ("update_all.current_status", theme::MUTED)
+                                    }
                                     RowResult::Skipped(_) => ("update_all.skipped", theme::WARN),
                                     RowResult::Failed(_) => ("shell.failed", theme::BAD),
                                 };
@@ -424,6 +454,10 @@ impl RetoqueApp {
                                 }
                                 if let RowResult::Skipped(skip) = &row.result {
                                     ui.label(t(lang, skip.key));
+                                    if let Some(error) = &skip.detail {
+                                        // The actionable explanation belongs beside the result; only raw evidence is folded.
+                                        ui.add(egui::Label::new(error.user_text(lang)).wrap());
+                                    }
                                 }
                                 if let RowResult::Failed(error) = &row.result {
                                     crate::error::body(ui, error, lang, &self.cmd_tx);
@@ -468,7 +502,7 @@ impl RetoqueApp {
                         !busy,
                         egui::Button::new(t(
                             lang,
-                            if state.finished || state.error.is_some() {
+                            if state.finished || state.error.is_some() || (!busy && state.ready_count() == 0) {
                                 "close"
                             } else {
                                 "cancel"
@@ -476,12 +510,8 @@ impl RetoqueApp {
                         )),
                     );
                     close = cancel_button.clicked();
-                    if !state.finished {
-                        let count = state
-                            .rows
-                            .iter()
-                            .filter(|r| matches!(r.result, RowResult::Ready))
-                            .count();
+                    let count = state.ready_count();
+                    if !state.finished && (busy || count > 0) {
                         let label = t(
                             lang,
                             if count == 1 {
