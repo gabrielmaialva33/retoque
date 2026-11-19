@@ -6,6 +6,7 @@
 #include "Sources.h"
 
 #include <algorithm>
+#include <shellapi.h>
 
 namespace RetoqueWindowHost::Sources
 {
@@ -154,6 +155,51 @@ Policy::SourceFacts SourceState(HWND window, const Policy::Identity& expected, b
     DWORD cloaked = 0;
     s.cloaked = SUCCEEDED(DwmGetWindowAttribute(window, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked != 0;
     return s;
+}
+
+// Interaction ideas: NeuRotic beae4eea / Magpie 69d6105d, GPL-3.0; see NRAnything_ATTRIBUTION.txt.
+Overlay::Interaction ReadInteraction(HWND source, HWND output)
+{
+    Overlay::Interaction state;
+    state.topmost = (GetWindowLongPtrW(source, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0 ||
+                    (output != nullptr && (GetWindowLongPtrW(output, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0);
+    state.disabled = IsWindowEnabled(source) == FALSE;
+    state.hidden = IsWindowVisible(source) == FALSE;
+    state.minimized = IsIconic(source) != FALSE;
+    DWORD cloak = 0;
+    state.unknown = FAILED(DwmGetWindowAttribute(source, DWMWA_CLOAKED, &cloak, sizeof(cloak)));
+    state.cloaked = cloak != 0;
+    const DWORD thread = GetWindowThreadProcessId(source, nullptr);
+    GUITHREADINFO gui { sizeof(gui) };
+    const bool known = thread != 0 && GetGUIThreadInfo(thread, &gui) != FALSE;
+    state.unknown = state.unknown || !known;
+    state.menu = (gui.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE | GUI_SYSTEMMENUMODE)) != 0;
+    state.moveSize = (gui.flags & GUI_INMOVESIZE) != 0;
+    // Check visible owned popups, including modeless dialogs on a different GUI thread.
+    struct Walk
+    {
+        HWND source, output;
+        bool found = false;
+    } walk { source, output };
+    const bool enumerated = EnumWindows(
+                                [](HWND window, LPARAM data) -> BOOL
+                                {
+                                    auto& w = *reinterpret_cast<Walk*>(data);
+                                    if (window != w.source && window != w.output && IsWindowVisible(window) &&
+                                        GetAncestor(window, GA_ROOTOWNER) == w.source)
+                                        w.found = true;
+                                    return TRUE;
+                                },
+                                reinterpret_cast<LPARAM>(&walk)) != FALSE;
+    state.dialog = walk.found;
+    state.unknown = state.unknown || !enumerated;
+    // Documented system-wide exclusive-D3D signal, not a source swapchain query. Conservatively refuse even when
+    // another program owns that exclusive session. Borderless geometry alone is never treated as exclusive.
+    QUERY_USER_NOTIFICATION_STATE notification {};
+    const HRESULT hr = SHQueryUserNotificationState(&notification);
+    state.unknown = state.unknown || FAILED(hr);
+    state.exclusive = SUCCEEDED(hr) && notification == QUNS_RUNNING_D3D_FULL_SCREEN;
+    return state;
 }
 
 bool CropInputs(HWND window, Geometry::CropInputs& in)

@@ -4,6 +4,7 @@
 
 #include "Geometry.h"
 #include "Policy.h"
+#include "Overlay.h"
 
 #include <string>
 #include <vector>
@@ -28,6 +29,9 @@ std::vector<Entry> Catalog(size_t& refused);
 
 // For the running capture: is it still there, the same window, visible?
 Policy::SourceFacts SourceState(HWND window, const Policy::Identity& expected, bool itemClosed);
+
+// Overlay-only interaction policy; foreground changes alone do not pause an owned, non-topmost output.
+Overlay::Interaction ReadInteraction(HWND source, HWND output);
 
 // Client rectangle, frame bounds and monitor facts for ClientCrop; the frame's content size is filled by the caller.
 bool CropInputs(HWND window, Geometry::CropInputs& in);

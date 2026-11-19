@@ -45,12 +45,14 @@ enum class Mode
 struct Options
 {
     Mode mode = Mode::Help;
-    uint64_t window = 0;    // --window 0x...: a top-level window handle
-    int countdown = 0;      // --countdown N: take the foreground window after N seconds
-    uint64_t maxFrames = 0; // 0: until stopped
-    bool trace = false;     // one event per processed frame
-    bool noNr = false;      // capture and preview only; OptiScaler.dll is not loaded
-    bool vsync = true;      // --no-vsync presents without waiting for the display
+    uint64_t window = 0;             // --window 0x...: a top-level window handle
+    int countdown = 0;               // --countdown N: take the foreground window after N seconds
+    uint64_t maxFrames = 0;          // 0: until stopped
+    bool trace = false;              // one event per processed frame
+    bool noNr = false;               // capture and preview only; OptiScaler.dll is not loaded
+    bool overlay = false;            // --overlay: owned click-through composition output
+    bool excludeFromCapture = false; // owner opt-in; overlay only
+    bool vsync = true;               // --no-vsync presents without waiting for the display
 };
 
 struct Parsed
@@ -104,6 +106,10 @@ inline Parsed ParseArguments(const std::vector<std::string>& args)
             catalog = true;
         else if (a == "--run")
             run = true;
+        else if (a == "--overlay")
+            parsed.options.overlay = true;
+        else if (a == "--exclude-from-capture")
+            parsed.options.excludeFromCapture = true;
         else if (a == "--trace")
             parsed.options.trace = true;
         else if (a == "--no-nr")
@@ -144,7 +150,8 @@ inline Parsed ParseArguments(const std::vector<std::string>& args)
     }
     if (help || (!catalog && !run))
     {
-        if (catalog || run || haveWindow || haveCountdown)
+        if (catalog || run || haveWindow || haveCountdown || parsed.options.overlay ||
+            parsed.options.excludeFromCapture)
             return fail("--help takes no other arguments");
         parsed.ok = true;
         parsed.options.mode = Mode::Help;
@@ -155,12 +162,14 @@ inline Parsed ParseArguments(const std::vector<std::string>& args)
     if (catalog)
     {
         if (haveWindow || haveCountdown || parsed.options.maxFrames != 0 || parsed.options.trace ||
-            parsed.options.noNr || !parsed.options.vsync)
+            parsed.options.noNr || !parsed.options.vsync || parsed.options.overlay || parsed.options.excludeFromCapture)
             return fail("--catalog takes no other arguments");
         parsed.ok = true;
         parsed.options.mode = Mode::Catalog;
         return parsed;
     }
+    if (parsed.options.excludeFromCapture && !parsed.options.overlay)
+        return fail("--exclude-from-capture requires --overlay");
     if (haveWindow == haveCountdown)
         return fail("--run needs exactly one of --window HANDLE or --countdown SECONDS");
     parsed.ok = true;
@@ -410,6 +419,7 @@ inline constexpr char kUsage[] =
     "  RetoqueWindowHost --run --window 0xHANDLE   capture that window into a preview window with NR\n"
     "  RetoqueWindowHost --run --countdown N       capture the foreground window after N seconds (1-60)\n"
     "Options for --run: --max-frames N, --trace (one event per frame), --no-nr (no OptiScaler.dll),\n"
+    "  --overlay (click-through; Ctrl+Alt+F10 stops), --exclude-from-capture (overlay only, default off),\n"
     "  --no-vsync. stdin takes {\"cmd\":\"status\"} and {\"cmd\":\"stop\"}; stdout is JSON lines.\n"
     "OptiScaler.dll, nvngx.dll_dlssnr.dll and OptiScaler.ini come from this exe's own folder, never a game's.\n";
 } // namespace RetoqueWindowHost::Protocol

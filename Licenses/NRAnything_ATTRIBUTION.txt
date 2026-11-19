@@ -32,6 +32,14 @@ What is derived from them
     signals a wake event, newest frame wins, pool recreation on a content
     size change, and the cursor/border settings guarded by API presence.
 
+  * Overlay.h, Sources.cpp and Output.cpp -- interaction pause rules,
+    owned non-topmost click-through popup, client-rectangle following and
+    hidden-until-matching-frame presentation. Phase 3 (2026-11-19) was
+    independently implemented from those ideas; no source, tables or
+    translated strings copied. Retoque adds a QPC freshness gate, D3D12
+    composition output, explicit opt-in recorder exclusion and fail-closed
+    interaction/refusal events.
+
 Nothing of NeuRotic's NR host, forwarder ABI, guidance, depth estimation or
 composition shader is used: NR runs through Retoque's own production
 OptiScaler.dll (docs/dlssnr/design/nr-anything.md). No Win32CaptureSample
