@@ -1264,6 +1264,57 @@ const TEXT: &[(&str, &str, &str)] = &[
         "Host: reshade.me. The installer and the DLL taken from it have fixed SHA-256 hashes. License: BSD-3-Clause.",
         "Host: reshade.me. O instalador e a DLL tirada dele têm hashes SHA-256 fixos. Licença: BSD-3-Clause.",
     ),
+    (
+        "set.saved_title",
+        "Settings for the next launch",
+        "Ajustes para a próxima abertura do jogo",
+    ),
+    (
+        "set.saved_notice",
+        "These values come from the saved settings, not the running game. Close the game before applying changes here, then open it again. Changes made in the in-game menu appear here after you save them there and refresh this page.",
+        "Estes valores vêm dos ajustes salvos, não do jogo em execução. Feche o jogo antes de aplicar alterações aqui e abra-o novamente depois. Alterações feitas no menu do jogo aparecem aqui depois de salvar naquele menu e atualizar esta página.",
+    ),
+    (
+        "set.restart_required",
+        "Game restart required after changing this setting.",
+        "Reinicie o jogo depois de alterar este ajuste.",
+    ),
+    (
+        "set.restart_vulkan",
+        "In Vulkan games, changing the NR stage requires a game restart.",
+        "Em jogos Vulkan, mudar a etapa do NR exige reiniciar o jogo.",
+    ),
+    (
+        "set.restart_placement",
+        "Some placement changes require a game restart. If changed in the in-game menu, save and restart to use the new placement.",
+        "Algumas trocas de posição exigem reiniciar o jogo. Se alterou no menu do jogo, salve e reinicie para usar a nova posição.",
+    ),
+    (
+        "set.restart_passes",
+        "If you first increase from 1 to multiple passes in the in-game menu, save and restart the game. The saved count alone does not confirm how many passes are running.",
+        "Ao passar de 1 para vários passes pela primeira vez no menu do jogo, salve e reinicie o jogo. O número salvo, sozinho, não confirma quantos passes estão em execução.",
+    ),
+    (
+        "set.restart_multiplier",
+        "Going from 2 to 3 or 4 frames requires a game restart. Save first if you changed it in the in-game menu.",
+        "Passar de 2 para 3 ou 4 quadros exige reiniciar o jogo. Salve antes se alterou no menu do jogo.",
+    ),
+    (
+        "sess.recorded_notice",
+        "Recorded in the last log read by the app. These numbers do not confirm the current settings. After testing changes in the game, refresh this page to read the new log.",
+        "Registrado no último log lido pelo app. Estes números não confirmam os ajustes atuais. Depois de testar as alterações no jogo, atualize esta página para ler o novo log.",
+    ),
+    (
+        "doctor.payload_action",
+        "To reinstall, first choose the folder containing the Retoque files. Then review the repair.",
+        "Para reinstalar, primeiro escolha a pasta com os arquivos do Retoque. Depois revise a correção.",
+    ),
+    (
+        "update_all.no_ready",
+        "No updates to apply in this review. Check each result below. If an action is needed, close this review, follow the instructions and review again.",
+        "Não há atualizações para aplicar nesta revisão. Confira os resultados abaixo. Se houver uma pendência, feche a revisão, siga a orientação e revise novamente.",
+    ),
+    ("update_all.current_status", "Up to date", "Atualizado"),
     ("sess.title", "Last session", "Última sessão"),
     ("sess.driver", "driver", "driver"),
     ("sess.base", "Real frames", "Quadros reais"),

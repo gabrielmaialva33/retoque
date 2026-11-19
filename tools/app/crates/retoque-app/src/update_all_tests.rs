@@ -175,6 +175,8 @@ fn update_all_review_lists_ready_partial_foreign_unknown_and_refused() {
         for (name, _) in &f.games {
             h.get_by_label(name);
         }
+        // The refusal itself is readable without expanding the technical/build details.
+        h.get_by_label_contains(t(lang, "ref.foreign"));
         h.get_by_role_and_label(
             egui::Role::Button,
             &t(lang, "update_all.confirm").replace("{count}", "2"),
@@ -384,4 +386,65 @@ fn update_all_worker_failure_releases_all_reserved_games_and_names_failures() {
             .iter()
             .all(|r| matches!(r.result, RowResult::Failed(_)))
     );
+}
+
+#[test]
+fn update_all_with_nothing_ready_explains_and_closes_without_an_update_zero_button() {
+    let f = Fixture::new();
+    // The installed version and source match: this is a normal no-op, not a warning or failed update.
+    fs::copy(f.games[0].1.join("winmm.dll"), f.source.join("OptiScaler.dll")).unwrap();
+    for lang in [Lang::En, Lang::Pt] {
+        for rows in [vec![], f.rows()] {
+            let mut app = crate::app_tests::shell_tests::app();
+            app.lang = lang;
+            app.library_state.update_all.open = true;
+            app.library_state.update_all.rows = rows;
+            let mut h = Harness::builder()
+                .with_size([820., 768.])
+                .build_ui_state(|ui, app: &mut RetoqueApp| app.update_all_modal(ui.ctx()), app);
+            h.run_steps(2);
+            h.get_by_label(t(lang, "update_all.no_ready"));
+            h.get_by_role_and_label(egui::Role::Button, t(lang, "close"));
+            assert!(
+                h.query_by_role_and_label(
+                    egui::Role::Button,
+                    &t(lang, "update_all.confirm").replace("{count}", "0")
+                )
+                .is_none()
+            );
+            assert!(h.query_by_label(t(lang, "update_all.skipped")).is_none());
+            if !h.state().library_state.update_all.rows.is_empty() {
+                assert_eq!(h.query_all_by_label(t(lang, "update_all.current_status")).count(), 2);
+            }
+            assert!(h.state().writing.is_empty());
+        }
+    }
+}
+
+#[test]
+fn finished_batch_keeps_mixed_result_summary_visible_after_toast_expires() {
+    let f = Fixture::new();
+    for lang in [Lang::En, Lang::Pt] {
+        let mut rows = f.rows();
+        rows[0].result = RowResult::Updated;
+        rows[1].result = RowResult::Failed(retoque_core::Error::StalePlan("synthetic".into()).into());
+        let mut app = crate::app_tests::shell_tests::app();
+        app.lang = lang;
+        app.library_state.update_all.open = true;
+        app.library_state.update_all.finished = true;
+        app.library_state.update_all.rows = rows;
+        let mut h = Harness::builder()
+            .with_size([820., 768.])
+            .build_ui_state(|ui, app: &mut RetoqueApp| app.update_all_modal(ui.ctx()), app);
+        h.run_steps(2);
+        h.get_by_label(
+            &t(lang, "update_all.done")
+                .replace("{updated}", "1")
+                .replace("{skipped}", "0")
+                .replace("{failed}", "1"),
+        );
+        h.get_by_label(t(lang, "inst.stale"));
+        assert!(h.query_by_label(t(lang, "update_all.no_ready")).is_none());
+        h.get_by_role_and_label(egui::Role::Button, t(lang, "close"));
+    }
 }
