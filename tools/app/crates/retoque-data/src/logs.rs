@@ -1083,6 +1083,32 @@ mod tests {
     }
 
     #[test]
+    fn a_log_followed_while_it_is_written_ends_with_the_whole_summary() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("OptiScaler.log");
+        File::create(&path).unwrap();
+        let log = session_log();
+        let writer = {
+            let (path, log) = (path.clone(), log.clone());
+            std::thread::spawn(move || {
+                let mut file = fs::OpenOptions::new().append(true).open(path).unwrap();
+                // Pieces that end in the middle of lines, as a game's buffered writes do.
+                for piece in log.chunks(37) {
+                    file.write_all(piece).unwrap();
+                    std::thread::yield_now();
+                }
+            })
+        };
+        let mut follower = Follower::new(&path);
+        while !writer.is_finished() {
+            follower.refresh().unwrap();
+        }
+        writer.join().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), log);
+        assert_eq!(follower.refresh().unwrap(), summarize(&path).unwrap());
+    }
+
+    #[test]
     fn a_followed_log_is_read_once_then_only_what_was_added() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("OptiScaler.log");
