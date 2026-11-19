@@ -5,8 +5,8 @@
 //
 // A pass of its own rather than a mode of the composition shader, so that its bytecode can be absent:
 // DlssNr_GuideMatch_Dx12.cpp includes the precompiled header only if it exists, and without it
-// Available() is false, the pass is never built, and the model keeps the frame-size guides it always
-// had. A stale composition shader running a mode it does not know would be the silent version of that.
+// Available() is false and the pass is never built. With MatchGuides on, a frame that needs
+// resampling is refused; MatchGuides=false keeps the explicit frame-size A/B arm.
 
 #include <d3d12.h>
 #include <d3dx/d3dx12.h>

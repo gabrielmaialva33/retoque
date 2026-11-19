@@ -245,8 +245,8 @@ The menu's frame count stops while frames are refused; the log line is the expla
 
 Rejected alternatives:
 
-- **Frame-size guides,** which is D3D12's fallback when its resample does not run. That is the very fault this fixes,
-  and on this route it would come back silently.
+- **Frame-size guides,** which was D3D12's fallback when this Vulkan rule was introduced. That is the very fault
+  this fixes; D3D12 also refuses failed required resamples since 2026-11-19.
 - **Running at 1.0.** That means a feature rebuild at about four times the model's cost on the GPUs that chose 0.5
   because 1.0 is too slow, and a working-scale change made behind the user's back.
 
