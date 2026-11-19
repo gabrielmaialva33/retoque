@@ -74,11 +74,11 @@ optimize.up_to_date	{game} ya tiene los ajustes recomendados para tu tarjeta gr�
 optimize.install_first	Instala Retoque o registra la instalación antigua antes de optimizar.
 optimize.identity_missing	La identidad del componente instalado no está disponible. Vuelve a cargar el juego antes de revisar.
 optimize.conflict	Los ajustes propuestos están en conflicto. No se aplicó ningún cambio.
-remedy.processes	Ver procesos en ejecución
+remedy.processes	Ver procesos en ejecución…
 remedy.close_processes	Cierra estos programas e inténtalo de nuevo
 remedy.retry	Intentar de nuevo
 remedy.replan	Preparar una nueva revisión
-remedy.foreign	Elegir conservar o reemplazar…
+remedy.foreign	Elegir conservar o reemplazar
 mdl.incompatible	No funciona en esta tarjeta gráfica
 mdl.arch_match	Compatible con tu tarjeta gráfica
 mdl.compat_unknown	Compatibilidad no confirmada
@@ -172,6 +172,8 @@ lib.installed_only	Solo instalados
 lib.add_folder	Agregar carpeta…
 lib.scanning	Buscando juegos…
 lib.empty	No se encontraron juegos. Agrega la carpeta de un juego a mano.
+lib.no_match	Ningún juego coincide con tu búsqueda.
+lib.no_installed	Ningún juego tiene Retoque instalado todavía.
 lib.skipped	No se pudo leer
 game.root	carpeta del juego
 game.target	Carpeta del ejecutable
@@ -208,8 +210,8 @@ inst.keep_reshade	Conservar ReShade (cargado a través de OptiScaler)
 inst.replace_foreign	Reemplazar un archivo que no es nuestro (se guarda una copia de seguridad)
 inst.second_proxy	Permitir un segundo archivo de carga de OptiScaler
 inst.copy_nvngx	Copiar el _nvngx.dll del controlador para Wine
-inst.preview	Vista previa de la instalación
-inst.preview_uninstall	Vista previa de la desinstalación
+inst.preview	Revisar instalación…
+inst.preview_uninstall	Revisar desinstalación…
 inst.install	Instalar
 inst.update	Actualizar
 inst.uninstall	Desinstalar
@@ -609,7 +611,7 @@ auto.components	Componentes de generación de fotogramas
 auto.no_component	No tienes ningún componente sm86
 auto.component_installed	Componente instalado en este juego
 auto.component_install	Revisar instalación del componente…
-auto.component_remove	Revisar desinstalación del componente
+auto.component_remove	Revisar desinstalación del componente…
 auto.catalog_remove	Eliminar componente de la app…
 auto.catalog_remove_title	¿Eliminar este componente de la app?
 auto.catalog_remove_help	Elimina la copia que guarda la app. Los juegos que ya lo tienen conservan sus archivos; para volver a instalarlo, impórtalo o descárgalo de nuevo.

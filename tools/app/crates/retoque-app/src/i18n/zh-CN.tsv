@@ -74,11 +74,11 @@ optimize.up_to_date	{game} 已采用适合你显卡的推荐设置。
 optimize.install_first	请先安装或登记 Retoque，再进行优化。
 optimize.identity_missing	无法获取已安装组件的标识。请先刷新游戏再审阅。
 optimize.conflict	建议的设置相互冲突。未应用任何更改。
-remedy.processes	查看正在运行的进程
+remedy.processes	查看正在运行的进程…
 remedy.close_processes	关闭这些程序，然后重试
 remedy.retry	重试
 remedy.replan	准备新的审阅
-remedy.foreign	选择保留或替换…
+remedy.foreign	选择保留或替换
 mdl.incompatible	不适用于此显卡
 mdl.arch_match	与你的显卡兼容
 mdl.compat_unknown	兼容性未确认
@@ -172,6 +172,8 @@ lib.installed_only	仅显示已安装
 lib.add_folder	添加文件夹…
 lib.scanning	正在查找游戏…
 lib.empty	未找到游戏。请手动添加游戏文件夹。
+lib.no_match	没有与搜索匹配的游戏。
+lib.no_installed	尚无游戏安装 Retoque。
 lib.skipped	无法读取
 game.root	游戏文件夹
 game.target	可执行文件所在文件夹
@@ -208,8 +210,8 @@ inst.keep_reshade	保留 ReShade（通过 OptiScaler 加载）
 inst.replace_foreign	替换不属于我们的文件（保留备份）
 inst.second_proxy	允许第二个 OptiScaler 加载器文件
 inst.copy_nvngx	为 Wine 复制驱动的 _nvngx.dll
-inst.preview	预览安装
-inst.preview_uninstall	预览卸载
+inst.preview	审阅安装…
+inst.preview_uninstall	审阅卸载…
 inst.install	安装
 inst.update	更新
 inst.uninstall	卸载
@@ -609,7 +611,7 @@ auto.components	帧生成组件
 auto.no_component	你的组件中没有 sm86 组件
 auto.component_installed	此游戏中已安装该组件
 auto.component_install	审阅组件安装…
-auto.component_remove	审阅组件移除
+auto.component_remove	审阅组件移除…
 auto.catalog_remove	从应用中删除组件…
 auto.catalog_remove_title	要从应用中删除此组件吗？
 auto.catalog_remove_help	删除应用中保存的副本。已安装它的游戏会保留其文件；如需再次安装，请重新导入或下载。

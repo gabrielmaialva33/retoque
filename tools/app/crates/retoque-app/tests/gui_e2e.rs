@@ -80,7 +80,7 @@ fn select_tab(ui: &mut Window, text: &str) {
 /// The install previews sit in a closed section on the Overview: "Install options" in the card that says what
 /// Retoque will do before install, "Reinstall options" at the end once installed.
 fn open_install_options(ui: &mut Window) {
-    if ui.query_by_label("Preview install").is_none() {
+    if ui.query_by_label("Review installation…").is_none() {
         wait(ui, "install options section", |ui| {
             label(ui, "Install options") || label(ui, "Reinstall options")
         });
@@ -92,7 +92,7 @@ fn open_install_options(ui: &mut Window) {
         ui.get_by_label(section).click_accesskit();
         ui.run_steps(3);
     }
-    wait_label(ui, "Preview install");
+    wait_label(ui, "Review installation…");
 }
 
 fn select_game(ui: &mut Window) {
@@ -231,7 +231,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     select_game(&mut ui);
     wait_label(&mut ui, "Not installed");
     open_install_options(&mut ui);
-    click(&mut ui, Role::Button, "Preview install");
+    click(&mut ui, Role::Button, "Review installation…");
     wait(&mut ui, "install plan", |ui| {
         ui.query_by_role_and_label(Role::Button, "Install").is_some()
     });
@@ -326,7 +326,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     let before_refusal = snapshot(&game);
     select_tab(&mut ui, "Overview");
     open_install_options(&mut ui);
-    click(&mut ui, Role::Button, "Preview install");
+    click(&mut ui, Role::Button, "Review installation…");
     wait_label(&mut ui, "The game is running");
     // A refused plan keeps its confirm in place, disabled.
     assert!(
@@ -339,7 +339,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
 
     // Modified settings are user-owned: uninstall must show Keep, not silently remove this INI.
     open_install_options(&mut ui);
-    click(&mut ui, Role::Button, "Preview uninstall");
+    click(&mut ui, Role::Button, "Review uninstall…");
     wait_label(&mut ui, "left in place, it changed since this script wrote it");
     assert_eq!(snapshot(&game), before_refusal);
     click(&mut ui, Role::Button, "Cancel");
@@ -355,7 +355,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
     assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
     select_tab(&mut ui, "Overview");
     open_install_options(&mut ui);
-    click(&mut ui, Role::Button, "Preview uninstall");
+    click(&mut ui, Role::Button, "Review uninstall…");
     wait(&mut ui, "uninstall plan", |ui| {
         ui.query_by_role_and_label(Role::Button, "Uninstall").is_some()
     });
@@ -372,7 +372,7 @@ fn real_window_install_settings_model_refusal_uninstall_and_stale_plan() {
 
     open_install_options(&mut ui);
 
-    click(&mut ui, Role::Button, "Preview install");
+    click(&mut ui, Role::Button, "Review installation…");
     wait(&mut ui, "fresh reinstall plan", |ui| {
         ui.query_by_role_and_label(Role::Button, "Install").is_some()
     });
