@@ -23,7 +23,7 @@ def main():
     common_fakes = common.split('// @production@', 1)[0]
     common_helpers = '\n\n'.join(function(common, signature) for signature in
                                     ('Ticket DirectRecording(', 'std::weak_ptr<int> Pin(', 'void Fresh()'))
-    hook_device = function(host, 'void HookDevice(VkDevice device)')
+    hook_device = function(host, 'DlssNr::VkChain::HookCoverage HookDevice(VkDevice device)')
     declarations = re.findall(r'^Targets<(PFN_\w+)> (g_\w+);', host, re.MULTILINE)
     real_types = {'PFN_vkAllocateCommandBuffers', 'PFN_vkBeginCommandBuffer', 'PFN_vkEndCommandBuffer',
                   'PFN_vkResetCommandBuffer', 'PFN_vkFreeCommandBuffers', 'PFN_vkResetCommandPool',
@@ -33,7 +33,7 @@ def main():
     production += '\n' + function(host, 'template <typename Pfn> struct Targets') + ';\n'
     production += '\n'.join(f'Targets<{pfn}> {name};' for pfn, name in declarations)
     production += '\n' + re.search(r'template <typename T> Handle H\(T handle\)[^\n]+', host).group(0) + '\n'
-    production += function(host, 'template <typename Pfn>\nvoid AttachTarget(') + '\n'
+    production += function(host, 'template <typename Pfn>\nbool AttachTarget(') + '\n'
 
     # Unrelated swapchain/queue callbacks are outside this fixture. Their lookup returns null; only lifecycle
     # callbacks and their slot tables are extracted. This compiles with no wDx12 wrapper implementations linked.
@@ -55,7 +55,7 @@ def main():
     production += '#undef DLSSNR_VK_SLOTS\n'
     production += function(host, 'struct QueueCallTargets') + ';\n'
     production += function(host, 'QueueCallTargets QueueCall(') + '\n'
-    production += function(host, 'void AttachQueueCall(') + '\n' + hook_device + '\n'
+    production += function(host, 'bool AttachQueueCall(') + '\n' + hook_device + '\n'
     production += 'void ResetTargetSets()\n{\n'
     production += '\n'.join(f'    {name} = {{}};' for _, name in declarations) + '\n}\n'
     install = function(host, 'void DlssNr::VkPresentHost::Install(')

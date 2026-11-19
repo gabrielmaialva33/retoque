@@ -87,7 +87,23 @@ Remaining implementation, in dependency order:
 4. Only then expose the after-upscale Vulkan controls. Keep the one/master message on present,
    before-upscale and proxy routes; update locale packs and executed menu states at the same time.
 
-## Step-1 safety review, 2026-11-19
+## Follow-up implementation, 2026-11-19
+
+Step 1a now publishes a bounded, allocation-free per-device hook certificate. Every required
+lifecycle, queue retrieval and submit/submit2/KHR entrypoint must attach successfully; failures,
+missing pointers and target saturation deny chain admission. Repeating installation cannot upgrade
+a partial certificate on a live device. `Passes=1` does not publish or consult it; the submit
+wrappers are unchanged. A request above one without coverage now stands down before NR recording.
+The certificate records installation only, not primary level, submission or completion. Step 1b
+and the owned-completion adapter remain pending; no multipass feature is available.
+
+The certificate has 16 process-wide slots, no map or lazy heap initialization. It is published
+under the existing installation lock, read with atomics, and cleared at device destruction.
+A refusal is logged once at publication; global capacity exhaustion logs once and refuses
+all additional devices until slots retire. Native queue functions hidden behind an unqualified
+own-module wrapper are conservatively uncertified. The existing host install opt-in remains.
+
+## Initial step-1 safety review (superseded by the follow-up above), 2026-11-19
 
 The follow-up starts at `44ac22cb` and stops **before completing step 1**. No submission
 observer, owned completion primitive, heap adapter, runtime chain or menu control was added.

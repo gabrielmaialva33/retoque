@@ -11,6 +11,7 @@
 #include "DlssNr_SlNativeNr.h"
 #include "DlssNr_DriverInitGate.h"
 #include "DlssNr_VkRecording.h"
+#include "DlssNr_VkCoverage.h"
 #include "DlssNr_VkPreRuntime.h"
 
 #include <Config.h>
@@ -76,6 +77,7 @@ constexpr size_t kTargets = 4;
 std::mutex g_installMutex;  // the detour bookkeeping; held across Detours, never across a call into Vulkan
 std::mutex g_registryMutex; // the records; never held across a call into Vulkan or the log
 Registry g_registry;
+DlssNr::VkChain::CoverageRegistry g_chainCoverage;
 std::atomic<bool> g_installed { false }; // published after installation; writes under g_installMutex
 HMODULE g_module = nullptr;
 std::unordered_set<void*> g_attached; // every address detoured here, whatever function it was taken for
@@ -2652,23 +2654,23 @@ std::string TeardownDevice(DeviceTransport& dev, bool& destroyDeferred)
 
 // Detours `address` into slot i of `set` unless it is there already. With g_installMutex held.
 template <typename Pfn>
-void AttachTarget(Targets<Pfn>& set, const std::array<void*, kTargets>& hooks, PFN_vkVoidFunction address,
+bool AttachTarget(Targets<Pfn>& set, const std::array<void*, kTargets>& hooks, PFN_vkVoidFunction address,
                   const char* name)
 {
     void* const target = reinterpret_cast<void*>(address);
 
     if (target == nullptr)
-        return;
+        return false;
 
     for (size_t i = 0; i < kTargets; ++i)
     {
         if (set.target[i] == target)
-            return;
+            return true;
     }
 
     // vkQueueSubmit2 and vkQueueSubmit2KHR are often one function; once is enough.
     if (g_attached.count(target) != 0)
-        return;
+        return false;
 
     for (size_t i = 0; i < kTargets; ++i)
     {
@@ -2677,21 +2679,30 @@ void AttachTarget(Targets<Pfn>& set, const std::array<void*, kTargets>& hooks, P
 
         set.next[i] = reinterpret_cast<Pfn>(target);
 
-        DetourTransactionBegin();
-        DetourUpdateThread(GetCurrentThread());
-        DetourAttach(&(PVOID&) set.next[i], hooks[i]);
+        if (DetourTransactionBegin() != NO_ERROR)
+        {
+            set.next[i] = nullptr;
+            return false;
+        }
+        if (DetourUpdateThread(GetCurrentThread()) != NO_ERROR ||
+            DetourAttach(&(PVOID&) set.next[i], hooks[i]) != NO_ERROR)
+        {
+            DetourTransactionAbort();
+            set.next[i] = nullptr;
+            return false;
+        }
 
         if (const LONG result = DetourTransactionCommit(); result != NO_ERROR)
         {
             set.next[i] = nullptr;
             LOG_WARN("DLSS-NR Vulkan present host: could not detour {} at {} ({}); not watched", name, target, result);
-            return;
+            return false;
         }
 
         set.target[i] = target;
         g_attached.insert(target);
         LOG_DEBUG("DLSS-NR Vulkan present host: watching {} at {} (slot {})", name, target, i);
-        return;
+        return true;
     }
 
     if (!set.fullReported)
@@ -2701,6 +2712,7 @@ void AttachTarget(Targets<Pfn>& set, const std::array<void*, kTargets>& hooks, P
                  "is not watched",
                  name, kTargets, target);
     }
+    return false;
 }
 
 // --- Device-level hooks, one instantiation per slot --------------------------------------------------------------
@@ -3478,20 +3490,22 @@ QueueCallTargets QueueCall(VkDevice device, const char* name)
 }
 
 // With g_installMutex held.
-void AttachQueueCall(const QueueCallTargets& targets, auto& set, const std::array<void*, kTargets>& hooks,
+bool AttachQueueCall(const QueueCallTargets& targets, auto& set, const std::array<void*, kTargets>& hooks,
                      const char* name)
 {
-    AttachTarget(set, hooks, targets.byDevice, name);
-    AttachTarget(set, hooks, targets.byExport, name);
+    const bool device = AttachTarget(set, hooks, targets.byDevice, name);
+    const bool exported = AttachTarget(set, hooks, targets.byExport, name);
+    // Unknown device-level dispatch cannot be certified by observing only a loader export.
+    return device && (targets.byExport == nullptr || exported);
 }
 
 // Right after vkCreateDevice returned: the device's own addresses for what the records follow. Resolved through
 // vkGetDeviceProcAddr, so a function the application reaches through an export or through a returned pointer is the
 // same target.
-void HookDevice(VkDevice device)
+DlssNr::VkChain::HookCoverage HookDevice(VkDevice device)
 {
     if (g_getDeviceProcAddr == nullptr)
-        return;
+        return {};
 
     const auto get = [device](const char* name) { return g_getDeviceProcAddr(device, name); };
 
@@ -3516,27 +3530,71 @@ void HookDevice(VkDevice device)
     const QueueCallTargets recordingResetPool = QueueCall(device, "vkResetCommandPool");
     const QueueCallTargets recordingDestroyPool = QueueCall(device, "vkDestroyCommandPool");
 
+    const bool chainRequested =
+        Config::Instance()->DlssNrEnabled.value_or_default() && Config::Instance()->DlssNrPasses.value_or_default() > 1;
+    const auto chainDestroy = chainRequested ? QueueCall(device, "vkDestroyDevice") : QueueCallTargets {};
+    const auto chainQueue = chainRequested ? QueueCall(device, "vkGetDeviceQueue") : QueueCallTargets {};
+    const auto chainQueue2 = chainRequested ? QueueCall(device, "vkGetDeviceQueue2") : QueueCallTargets {};
+    using DlssNr::VkChain::HookCoverage;
+    HookCoverage coverage;
     std::lock_guard lock(g_installMutex);
-    AttachTarget(g_destroyDevice, kDestroyDeviceHooks, destroyDevice, "vkDestroyDevice");
-    AttachTarget(g_getQueue, kGetQueueHooks, getQueue, "vkGetDeviceQueue");
-    AttachTarget(g_getQueue2, kGetQueue2Hooks, getQueue2, "vkGetDeviceQueue2");
+    if (AttachTarget(g_destroyDevice, kDestroyDeviceHooks, destroyDevice, "vkDestroyDevice"))
+        coverage.installed |= HookCoverage::Destroy;
+    if (AttachTarget(g_getQueue, kGetQueueHooks, getQueue, "vkGetDeviceQueue"))
+        coverage.installed |= HookCoverage::Queue;
+    if (AttachTarget(g_getQueue2, kGetQueue2Hooks, getQueue2, "vkGetDeviceQueue2"))
+        coverage.installed |= HookCoverage::Queue2;
     AttachTarget(g_createSwapchain, kCreateSwapchainHooks, createSwapchain, "vkCreateSwapchainKHR");
     AttachTarget(g_destroySwapchain, kDestroySwapchainHooks, destroySwapchain, "vkDestroySwapchainKHR");
     AttachTarget(g_getImages, kGetImagesHooks, getImages, "vkGetSwapchainImagesKHR");
     AttachTarget(g_acquire, kAcquireHooks, acquire, "vkAcquireNextImageKHR");
     AttachTarget(g_acquire2, kAcquire2Hooks, acquire2, "vkAcquireNextImage2KHR");
-    AttachQueueCall(submit, g_submit, kSubmitHooks, "vkQueueSubmit");
-    AttachQueueCall(submit2, g_submit2, kSubmit2Hooks, "vkQueueSubmit2");
-    AttachQueueCall(submit2Khr, g_submit2, kSubmit2Hooks, "vkQueueSubmit2KHR");
+    if (AttachQueueCall(submit, g_submit, kSubmitHooks, "vkQueueSubmit"))
+        coverage.installed |= HookCoverage::Submit;
+    if (AttachQueueCall(submit2, g_submit2, kSubmit2Hooks, "vkQueueSubmit2"))
+        coverage.installed |= HookCoverage::Submit2;
+    if (AttachQueueCall(submit2Khr, g_submit2, kSubmit2Hooks, "vkQueueSubmit2KHR"))
+        coverage.installed |= HookCoverage::Submit2Khr;
     AttachQueueCall(bindSparse, g_bindSparse, kBindSparseHooks, "vkQueueBindSparse");
     AttachQueueCall(waitIdle, g_waitIdle, kWaitIdleHooks, "vkQueueWaitIdle");
-    AttachQueueCall(recordingAllocate, g_recordingAllocate, kRecordingAllocateHooks, "vkAllocateCommandBuffers");
-    AttachQueueCall(recordingBegin, g_recordingBegin, kRecordingBeginHooks, "vkBeginCommandBuffer");
-    AttachQueueCall(recordingEnd, g_recordingEnd, kRecordingEndHooks, "vkEndCommandBuffer");
-    AttachQueueCall(recordingReset, g_recordingReset, kRecordingResetHooks, "vkResetCommandBuffer");
-    AttachQueueCall(recordingFree, g_recordingFree, kRecordingFreeHooks, "vkFreeCommandBuffers");
-    AttachQueueCall(recordingResetPool, g_recordingResetPool, kRecordingResetPoolHooks, "vkResetCommandPool");
-    AttachQueueCall(recordingDestroyPool, g_recordingDestroyPool, kRecordingDestroyPoolHooks, "vkDestroyCommandPool");
+    if (AttachQueueCall(recordingAllocate, g_recordingAllocate, kRecordingAllocateHooks, "vkAllocateCommandBuffers"))
+        coverage.installed |= HookCoverage::Allocate;
+    if (AttachQueueCall(recordingBegin, g_recordingBegin, kRecordingBeginHooks, "vkBeginCommandBuffer"))
+        coverage.installed |= HookCoverage::Begin;
+    if (AttachQueueCall(recordingEnd, g_recordingEnd, kRecordingEndHooks, "vkEndCommandBuffer"))
+        coverage.installed |= HookCoverage::End;
+    if (AttachQueueCall(recordingReset, g_recordingReset, kRecordingResetHooks, "vkResetCommandBuffer"))
+        coverage.installed |= HookCoverage::Reset;
+    if (AttachQueueCall(recordingFree, g_recordingFree, kRecordingFreeHooks, "vkFreeCommandBuffers"))
+        coverage.installed |= HookCoverage::Free;
+    if (AttachQueueCall(recordingResetPool, g_recordingResetPool, kRecordingResetPoolHooks, "vkResetCommandPool"))
+        coverage.installed |= HookCoverage::ResetPool;
+    if (AttachQueueCall(recordingDestroyPool, g_recordingDestroyPool, kRecordingDestroyPoolHooks,
+                        "vkDestroyCommandPool"))
+        coverage.installed |= HookCoverage::DestroyPool;
+    // No new record, lookup, mutex or log when no chain was requested at device creation.
+    if (chainRequested)
+    {
+        if (!AttachQueueCall(chainDestroy, g_destroyDevice, kDestroyDeviceHooks, "vkDestroyDevice"))
+            coverage.installed &= ~HookCoverage::Destroy;
+        if (!AttachQueueCall(chainQueue, g_getQueue, kGetQueueHooks, "vkGetDeviceQueue"))
+            coverage.installed &= ~HookCoverage::Queue;
+        if (!AttachQueueCall(chainQueue2, g_getQueue2, kGetQueue2Hooks, "vkGetDeviceQueue2"))
+            coverage.installed &= ~HookCoverage::Queue2;
+        if (g_chainCoverage.Publish(H(device), coverage))
+            LOG_INFO("DLSS-NR Vulkan chain observer: device {} coverage {} (mask {})", H(device), coverage.Reason(),
+                     coverage.installed);
+        else if (!g_chainCoverage.Contains(H(device)))
+        {
+            static bool reportedCapacity = false;
+            if (!reportedCapacity)
+            {
+                reportedCapacity = true;
+                LOG_WARN("DLSS-NR Vulkan chain observer: certificate capacity exhausted; new devices refused");
+            }
+        }
+    }
+    return coverage;
 }
 
 // At a device's swapchain creation, not at its creation: by then the bundle's own present hook, which it installs in
@@ -4140,5 +4198,8 @@ void DlssNr::VkPresentHost::Install(HMODULE vulkan1)
 
 std::optional<bool> DlssNr::VkPresentHost::PrepareForDeviceDestroy(VkDevice device)
 {
+    g_chainCoverage.Forget(H(device));
     return PrepareDeviceDestroy(device);
 }
+
+bool DlssNr::VkPresentHost::ChainCoverageReady(VkDevice device) { return g_chainCoverage.Ready(H(device)); }

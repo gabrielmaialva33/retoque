@@ -1,9 +1,11 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_VkCoverage.h>
 // @common-fakes@
 
 #include <string_view>
 #include <unordered_set>
 
+#define LOG_INFO(...) Log(__VA_ARGS__)
 #define VKAPI_CALL
 using PFN_vkVoidFunction = void (*)();
 using PFN_vkGetDeviceProcAddr = PFN_vkVoidFunction (*)(VkDevice, const char*);
@@ -35,6 +37,10 @@ std::unordered_map<void*, void*> installed;
 void* pendingTarget = nullptr;
 void* pendingHook = nullptr;
 LONG commitResult = NO_ERROR;
+LONG beginResult = NO_ERROR, updateResult = NO_ERROR, attachResult = NO_ERROR;
+int aborts = 0;
+bool coverQueues = false;
+DlssNr::VkChain::CoverageRegistry g_chainCoverage;
 int rejectedOperation = -1;
 int lookups = 0;
 int exportKind = 0;
@@ -100,11 +106,23 @@ const std::array<std::array<PFN_vkVoidFunction, 4>, 7> addresses { ADDRESSES(All
 #undef ADDRESSES
 
 void OwnBegin() {}
+void Extra0() {}
+void Extra1() {}
+void Extra2() {}
+void Extra3() {}
+void Extra4() {}
+constexpr std::array<const char*, 6> extraNames { "vkDestroyDevice", "vkGetDeviceQueue", "vkGetDeviceQueue2",
+                                                  "vkQueueSubmit",   "vkQueueSubmit2",   "vkQueueSubmit2KHR" };
+const std::array<PFN_vkVoidFunction, 6> extraAddresses { Extra0, Extra1, Extra2, Extra3, Extra4, Extra4 };
 bool InOwnModule(const void* address) { return address == reinterpret_cast<const void*>(&OwnBegin); }
 PFN_vkVoidFunction Lookup(const char* name, int kind)
 {
     Check(!g_installMutex.held, "procedure lookup must happen before taking installation lock");
     ++lookups;
+    if (coverQueues)
+        for (size_t i = 0; i < extraNames.size(); ++i)
+            if (std::string_view(name) == extraNames[i])
+                return extraAddresses[i];
     for (size_t operation = 0; operation < names.size(); ++operation)
         if (std::string_view(name) == names[operation])
             return operation == 1 && ownBeginAddress ? &OwnBegin : addresses[operation][kind];
@@ -123,13 +141,23 @@ auto GetProcAddress_() { return &ExportLookup; }
 } // namespace KernelBaseProxy
 
 void* GetCurrentThread() { return nullptr; }
-void DetourTransactionBegin() { pendingTarget = pendingHook = nullptr; }
-void DetourUpdateThread(void*) {}
-void DetourAttach(void** next, void* hook)
+LONG DetourTransactionBegin()
+{
+    pendingTarget = pendingHook = nullptr;
+    return beginResult;
+}
+void DetourTransactionAbort()
+{
+    pendingTarget = pendingHook = nullptr;
+    ++aborts;
+}
+LONG DetourUpdateThread(void*) { return updateResult; }
+LONG DetourAttach(void** next, void* hook)
 {
     Check(g_installMutex.held, "detour bookkeeping must hold installation lock");
     pendingTarget = *next;
     pendingHook = hook;
+    return attachResult;
 }
 LONG DetourTransactionCommit()
 {
@@ -149,6 +177,12 @@ struct Config
         bool value = true;
         bool value_or_default() const { return value; }
     };
+    struct Count
+    {
+        uint32_t value = 1;
+        uint32_t value_or_default() const { return value; }
+    };
+    Count DlssNrPasses;
     Option DlssNrEnabled;
     Option DlssNrVulkanPresentHost;
     static Config* Instance()
@@ -171,6 +205,12 @@ template <class Pfn> Pfn Through(size_t operation, int kind)
 void FreshInstall()
 {
     Fresh();
+    for (uint64_t d = 1; d <= 32; ++d)
+        g_chainCoverage.Forget(d);
+    coverQueues = false;
+    beginResult = updateResult = attachResult = NO_ERROR;
+    aborts = 0;
+    Config::Instance()->DlssNrPasses.value = 1;
     R().ForgetDevice(2);
     R().ForgetDevice(3);
     ResetTargetSets();
@@ -345,8 +385,11 @@ void FailedDetourAndOwnAddresses()
 // a per-device coverage result, then replace it with an assertion that such admission is refused.
 void PartialInstallCannotCertifyRecordingLifetime()
 {
+    Config::Instance()->DlssNrPasses.value = 2;
     rejectedOperation = 3; // both ResetCommandBuffer addresses fail; all other hooks install
-    HookDevice(device);
+    const auto coverage = HookDevice(device);
+    Check(!coverage.Complete() && !g_chainCoverage.Ready(Key(device)),
+          "partial installation must deny chain admission");
     Check(installed.size() == 12, "partial install must leave only reset unwatched in this witness");
     auto buffer = AllocateThrough(device, 1);
     auto ticket = BeginThrough(device, buffer, 1);
@@ -379,6 +422,53 @@ void SerialSecondaryIsNotPrimaryEvidence()
         Through<PFN_vkFreeCommandBuffers>(4, 1)(device, pool, 1, &buffer);
         Check(resource.expired(), "witness cleanup must retire the observed recording");
     }
+}
+
+void CoverageCertificates()
+{
+    coverQueues = true;
+    const auto legacy = HookDevice(device);
+    Check(legacy.Complete() && !g_chainCoverage.Contains(1), "one pass must not publish any new device certificate");
+    Config::Instance()->DlssNrPasses.value = 2;
+    const auto complete = HookDevice(device);
+    Check(complete.Complete() && g_chainCoverage.Ready(1), "complete required hooks must certify this device");
+    Check(!g_chainCoverage.Ready(2), "coverage must not cross devices");
+    failAllocation.store(true);
+    const bool readyWithoutHeap = g_chainCoverage.Ready(1);
+    failAllocation.store(false);
+    Check(readyWithoutHeap, "certificate admission must not allocate");
+    g_chainCoverage.Forget(1);
+    Check(!g_chainCoverage.Ready(1), "device retirement revokes its certificate");
+    Check(g_chainCoverage.Publish(1, {}) && !g_chainCoverage.Publish(1, complete) && !g_chainCoverage.Ready(1),
+          "a partial live-device certificate cannot be upgraded after observation was lost");
+    for (uint64_t d = 2; d <= 16; ++d)
+        Check(g_chainCoverage.Publish(d, complete), "bounded certificate slots must admit within capacity");
+    Check(!g_chainCoverage.Publish(17, complete) && !g_chainCoverage.Ready(17),
+          "capacity exhaustion must deny admission");
+}
+
+void TransactionFailuresCannotCertify()
+{
+    for (auto* failed : { &beginResult, &updateResult, &attachResult })
+    {
+        FreshInstall();
+        coverQueues = true;
+        Config::Instance()->DlssNrPasses.value = 2;
+        *failed = 42;
+        Check(!HookDevice(device).Complete() && !g_chainCoverage.Ready(1) && installed.empty(),
+              "every transaction phase must succeed before coverage is certified");
+    }
+}
+
+void TargetSaturationCannotCertify()
+{
+    Targets<PFN_vkVoidFunction> targets;
+    const std::array<void*, kTargets> hooks {};
+    std::lock_guard lock(g_installMutex);
+    for (size_t i = 0; i < 4; ++i)
+        Check(AttachTarget(targets, hooks, extraAddresses[i], "fixture"), "first four distinct targets must install");
+    Check(!AttachTarget(targets, hooks, extraAddresses[4], "fixture"), "fifth target must report failure");
+    Check(AttachTarget(targets, hooks, extraAddresses[0], "fixture"), "a known alias still has coverage at capacity");
 }
 
 void ObserverAllocationFailure()
@@ -521,6 +611,9 @@ int main()
         { "detour-failure-own-address", FailedDetourAndOwnAddresses },
         { "partial-install-is-not-lifetime-proof", PartialInstallCannotCertifyRecordingLifetime },
         { "serial-secondary-is-not-primary-proof", SerialSecondaryIsNotPrimaryEvidence },
+        { "per-device-coverage-certificates", CoverageCertificates },
+        { "transaction-phase-failures", TransactionFailuresCannotCertify },
+        { "target-capacity-refusal", TargetSaturationCannotCertify },
         { "observer-allocation-failure", ObserverAllocationFailure },
         { "observer-handle-reuse-after-oom", ObserverHandleReuseAfterOutOfMemory },
         { "observer-bulk-free-reentrant-reuse", ObserverBulkFreePreservesReentrantAllocation },

@@ -45,6 +45,9 @@ namespace DlssNr::VkPresentHost
 // its own [Vulkan] SkipHooks / marker check. Installs once; a no-op unless the configuration above holds.
 void Install(HMODULE vulkan1);
 
+// No allocation or lock. False after partial/missing installation or device retirement.
+bool ChainCoverageReady(VkDevice device);
+
 // Called once by VulkanHooks::DestroyDevice, shared by both detour layers. Stops/drains NR,
 // or drains an untracked device under the host's transport/known-queue locks. False requires
 // abandonment. Child owners enqueue their releases afterward, before final deferred retirement.

@@ -14,6 +14,7 @@
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_VkModelOwner.h>
 #include <dlssnr/DlssNr_VkRecording.h>
+#include <dlssnr/DlssNr_VkPresentHost.h>
 #include <dlssnr/DlssNr_VkMeterReadback.h>
 #include <dlssnr/DlssNr_VkMotionProbe.h>
 #include <dlssnr/DlssNr_VkPresentBuild.h>
@@ -1579,6 +1580,10 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
     if (cmdBuffer == VK_NULL_HANDLE || params == nullptr || device == VK_NULL_HANDLE ||
         physicalDevice == VK_NULL_HANDLE)
+        return;
+
+    // Chain admission is fail-closed. The one-pass body does not consult the new observer.
+    if (cfg.DlssNrPasses.value_or_default() > 1 && !VkPresentHost::ChainCoverageReady(device))
         return;
 
     // Another of the game's DLSS pictures (DlssNr_PictureGate.h): left as it is before the recordings, the meter or the
