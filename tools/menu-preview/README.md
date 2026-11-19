@@ -40,8 +40,15 @@ not instrumentation of a real game. No timestamps or host paths enter the PNG.
 | `comparison` | Full view, held frame, wipe, labels and split controls |
 | `d3d12-simple-pt-BR` | Simple view with the shipped optional Portuguese dictionary |
 | `present-hdr-pt-BR` | HDR present with the shipped optional Portuguese dictionary |
+| `advisor-eligible-pt-BR` | Advisor ready with fresh synthetic timing |
+| `advisor-running-pt-BR` | Active trial settling, with cancellation |
+| `advisor-done-pt-BR` | Completed synthetic windows, statistics and explicit Apply |
+| `advisor-rr-done-pt-BR` | After-RR results identifying RRWorkingScale |
+| `advisor-timing-off-pt-BR` | One missing condition and timing recovery action |
+| `advisor-hidden-off` | NR off, no advisor heading or text (Portuguese) |
 
-The fixed canvas is 560 x 560 for simple states and 560 x 2600 for full states. This is an isolated,
+The fixed canvas is 560 x 560 for simple states and 560 x 2600 for full states.
+Advisor fixtures use 560 x 1000, or 560 x 1300 for result tables; the hidden state uses 560 x 560. This is an isolated,
 long-form panel view at scale 1, with a synthetic title/watermark and enough height to inspect all sections.
 It does **not** reproduce the main window's sidebar, footer, card border, viewport clipping or actual available
 width (which varies with translated tab labels). Long unwrapped text can be clipped horizontally exactly as
@@ -64,7 +71,9 @@ loading location is replaced with the explicit repository pack path.
 
 `facade.h` supplies synthetic Config/State and runtime getters. Getters report fixture values, empty observations
 or unavailable measurements, and action methods have no external effects. It is not the runtime Config lock,
-transaction or renderer implementation. Every visible value is synthetic, including pass counts, Vulkan frame
+transaction or renderer implementation. The advisor uses its real portable state machine, fed deterministic synthetic sample windows; no GPU
+collector runs. Its frames and reported costs are fixture inputs, never measured performance.
+Every visible value is synthetic, including pass counts, Vulkan frame
 count, model availability, HDR status and capability flags. The HDR menu preview is an ordinary SDR PNG;
 HDR display encoding/tone mapping (`MenuHdrCheck`) is deliberately a no-op.
 

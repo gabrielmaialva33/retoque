@@ -13,7 +13,10 @@ sys.path.insert(0, str(ROOT / 'tools/menu-preview'))
 from run import build, run  # noqa: E402
 
 SIMPLE = {'nr-off', 'd3d12-simple', 'model-missing', 'd3d12-simple-pt-BR'}
-STATES = SIMPLE | {'d3d12-full', 'individual-passes', 'present-hdr', 'native-vulkan', 'comparison', 'present-hdr-pt-BR'}
+ADVISOR_HEIGHTS = {'advisor-eligible-pt-BR': 1000, 'advisor-running-pt-BR': 1000,
+                   'advisor-done-pt-BR': 1300, 'advisor-rr-done-pt-BR': 1300,
+                   'advisor-timing-off-pt-BR': 1000, 'advisor-hidden-off': 560}
+STATES = set(ADVISOR_HEIGHTS) | SIMPLE | {'d3d12-full', 'individual-passes', 'present-hdr', 'native-vulkan', 'comparison', 'present-hdr-pt-BR'}
 
 
 def png_pixels(path, expected):
@@ -69,7 +72,7 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
     images={}
     for state in states:
         one,two = temp/'first'/state,temp/'second'/state
-        expected=(560,560 if state in SIMPLE else 2600)
+        expected=(560,ADVISOR_HEIGHTS.get(state,560 if state in SIMPLE else 2600))
         images[state]=png_pixels(one.with_suffix('.png'),expected)
         assert images[state]==two.with_suffix('.png').read_bytes(), f'{state}: nondeterministic PNG'
         stats=json.loads(one.with_suffix('.json').read_text())
@@ -78,11 +81,24 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
         text=one.with_suffix('.txt').read_text()
         assert len(text)>200
         assert 'DLSS Neural Rendering' in text or 'Renderização neural DLSS' in text
-        if state not in SIMPLE:
+        if state not in SIMPLE and state not in ADVISOR_HEIGHTS:
             assert 'Debug view' in text or 'Visualização de diagnóstico' in text
+        if state == 'advisor-hidden-off':
+            assert 'Assistente de custo do NR' not in text
+        elif state in ADVISOR_HEIGHTS:
+            assert 'Assistente de custo do NR' in text
+        if state == 'advisor-eligible-pt-BR':
+            assert 'Medir opções do NR' in text
+        elif state == 'advisor-running-pt-BR':
+            assert 'Estabilizando o histórico' in text and 'Cancelar teste' in text
+        elif state in {'advisor-done-pt-BR', 'advisor-rr-done-pt-BR'}:
+            assert 'Média ms' in text and 'Cauda ms' in text and 'Aplicar opção medida' in text
+            assert ('RRWorkingScale' in text) == (state == 'advisor-rr-done-pt-BR')
+        elif state == 'advisor-timing-off-pt-BR':
+            assert 'Ativar medição da GPU' in text and 'Medir opções do NR' not in text
     for left,right in [('d3d12-simple','d3d12-simple-pt-BR'),('present-hdr','present-hdr-pt-BR'),
                        ('nr-off','d3d12-simple'),('d3d12-full','individual-passes'),('d3d12-full','comparison')]:
         assert images[left]!=images[right], f'{left}/{right}: fixtures unexpectedly identical'
     assert subprocess.run([str(binary),'not-a-state',str(temp/'bad'),str(ROOT)],capture_output=True).returncode != 0
     assert not (temp/'bad').exists()
-print('PASS: 10 named states, actual ImGui glyph pixels, valid PNGs, complete panel height and byte-identical reruns')
+print('PASS: 16 named states, advisor visibility and results, actual ImGui glyph pixels, valid PNGs, complete panel height and byte-identical reruns')

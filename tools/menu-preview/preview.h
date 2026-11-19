@@ -62,6 +62,75 @@ void Compare()
     c->DlssNrCompareTags = true;
     c->DlssNrCompareSplit = 0.45f;
 }
+void AdvisorEligible()
+{
+    Simple();
+    auto* c = Config::Instance();
+    c->DlssNrWorkingScale = 1.0f;
+    c->DlssNrCadence = 1;
+    c->DlssNrCadenceAdaptive = false;
+    c->DlssNrGpuTiming = true;
+    c->DlssNrGpuTimingInterval = 1;
+    auto& t = DlssNr::GpuTiming::snapshot;
+    t.valid = t.enabled = true;
+    t.sampleAgeMs = 0;
+    t.metadata.stage = "after";
+    t.metadata.workingScale = 1;
+    t.metadata.evaluationId = 100;
+    t.metadata.contractHash = 123;
+    t.metadata.outputWidth = 1920;
+    t.metadata.outputHeight = 1080;
+}
+void AdvisorWaiting()
+{
+    AdvisorEligible();
+    Config::Instance()->DlssNrGpuTiming = false;
+}
+void AdvisorRunning()
+{
+    AdvisorEligible();
+    DlssNr::AdvisorRuntime::Start({ 1, 1 }, 60);
+    DlssNr::Advisor::Context c;
+    c.device = 1;
+    c.width = 1920;
+    c.height = 1080;
+    c.route = static_cast<uint32_t>(State::Instance().api) << 8 |
+              (Config::Instance()->DlssNrHookMethod.value_or_default() << 16);
+    DlssNr::AdvisorRuntime::Frame(c, 1, true);
+}
+void AdvisorResults(bool rr = false)
+{
+    AdvisorEligible();
+    auto& s = DlssNr::AdvisorRuntime::session;
+    s.Start({ 1, 1 }, 60, 0);
+    DlssNr::Advisor::Context c;
+    c.device = 1;
+    c.width = 1920;
+    c.height = 1080;
+    c.route = static_cast<uint32_t>(State::Instance().api) << 8 |
+              (Config::Instance()->DlssNrHookMethod.value_or_default() << 16);
+    c.afterRR = rr;
+    DlssNr::GpuTiming::snapshot.metadata.stage = rr ? "after-rr" : "after";
+    s.Observe(c);
+    double now = 0;
+    uint64_t id = 0;
+    while (s.Active())
+    {
+        auto token = s.Token();
+        now += 1100;
+        for (unsigned i = 0; i < 90; ++i)
+        {
+            const auto cadence = s.Override()->cadence;
+            const bool carried = cadence > 1 && i % cadence != 0;
+            const double base = s.Index() == 0 ? 24.0 : 16.0;
+            s.Accept({ token, ++id, 123, carried ? 1.0 : 6.0, base, true, false, false, carried }, now);
+        }
+    }
+    s.Restored();
+    DlssNr::AdvisorRuntime::Publish();
+}
+void AdvisorDone() { AdvisorResults(); }
+void AdvisorRRDone() { AdvisorResults(true); }
 struct Scene
 {
     const char* name;
@@ -78,7 +147,13 @@ const Scene scenes[] = { { "nr-off", Off, false, 560 },
                          { "model-missing", Missing, false, 560 },
                          { "comparison", Compare, false, 2600 },
                          { "d3d12-simple-pt-BR", Simple, true, 560 },
-                         { "present-hdr-pt-BR", Hdr, true, 2600 } };
+                         { "present-hdr-pt-BR", Hdr, true, 2600 },
+                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 1000 },
+                         { "advisor-running-pt-BR", AdvisorRunning, true, 1000 },
+                         { "advisor-done-pt-BR", AdvisorDone, true, 1300 },
+                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 1300 },
+                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 1000 },
+                         { "advisor-hidden-off", Off, true, 560 } };
 } // namespace Preview
 int main(int argc, char** argv)
 {

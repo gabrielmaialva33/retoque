@@ -6,11 +6,12 @@ error, never a silent PASS or a fallback to another rasterizer. Host execution i
 
 The suite builds [the preview tool](../../tools/menu-preview/README.md), which compiles the complete production
 NR panel body against fixture Config/State/runtime getters and the repository's real Dear ImGui. It renders all
-ten named states twice in fresh processes into temporary directories, then independently decodes PNG chunks,
+sixteen named states twice in fresh processes into temporary directories, then independently decodes PNG chunks,
 checks CRCs/zlib/scanline lengths/dimensions, rejects flat pictures, requires bright text inside the panel and
 font-atlas-covered pixels, and compares the two PNG byte streams. Text transcripts check that the final full-view
 control was submitted; measured content height rejects vertical clipping. English/Portuguese and materially
-different fixtures must produce different images. An unknown state must fail without creating output.
+different fixtures must produce different images. Advisor transcripts check eligible/running/done/after-RR states, timing recovery and absence when NR is off.
+An unknown state must fail without creating output.
 
 A small sanitized raster test independently checks a shared triangle edge (no double blend or crack), clipping,
 source-over blending and bilinear font alpha. This is not an image-quality benchmark or a menu behavior test.

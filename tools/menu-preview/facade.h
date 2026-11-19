@@ -1,6 +1,8 @@
 #pragma once
 // Fixture-only runtime data. No DLL discovery, GPU calls, settings persistence or clipboard writes.
 #include <misc/Localization.h>
+#include <dlssnr/DlssNr_AdvisorRuntime.h>
+#include <dlssnr/DlssNr_AdvisorPolicy.h>
 #include <dlssnr/DlssNr_PassSettings.h>
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <shaders/dlssnr/DlssNr_Periphery.h>
@@ -81,6 +83,7 @@ struct Config
         bool Enabled;
         unsigned Interval;
     };
+    bool DlssNrDx11SceneStageAtStart() const { return false; }
     Timing GetDlssNrGpuTimingSettings() const
     {
         return { DlssNrGpuTiming.value_or_default(), DlssNrGpuTimingInterval.value_or_default() };
@@ -190,7 +193,8 @@ inline void SessionGuardEnableAnyway() {}
 inline const char* SessionGuardReasonText(const SessionGuard::Verdict&) { return ""; }
 namespace GpuTiming
 {
-inline Snapshot GetSnapshot() { return {}; }
+inline Snapshot snapshot;
+inline Snapshot GetSnapshot() { return snapshot; }
 inline void SetEnabled(bool) {}
 } // namespace GpuTiming
 namespace PresentBoundary
