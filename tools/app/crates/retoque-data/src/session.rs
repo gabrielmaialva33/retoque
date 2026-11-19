@@ -4,7 +4,8 @@
 //!
 //! The runtime reports `DLSS-NR status: ... | <presents> presents : <renders> renders = <x>x on screen` about every
 //! two seconds. A window's rate is its count divided by the time since the previous status line, measured from the
-//! timestamps, never assumed: reading a two-second window as one second doubles every rate.
+//! timestamps, never assumed: reading a two-second window as one second doubles every rate. Pure present-route
+//! sessions (`0 renders`) measure their rate from `presents` on active present windows.
 
 use std::collections::VecDeque;
 
@@ -55,6 +56,7 @@ pub struct PacingBuilder {
     previous: Option<f64>,
     day_offset: f64,
     last_raw: Option<f64>,
+    saw_renders: bool,
     windows: VecDeque<(f64, f32, f32)>,
     start: Option<String>,
     end: Option<String>,
@@ -85,6 +87,22 @@ fn counts(line: &str) -> Option<(u64, u64)> {
     Some((presents.trim().parse().ok()?, renders.trim().parse().ok()?))
 }
 
+/// Whether a status line names an active present-route pass, where `renders` stays zero when no upscaler runs.
+/// Waiting, skipping, declined and upscaled windows are excluded.
+fn present_route_active(line: &str) -> bool {
+    let Some((_, rest)) = line.split_once("DLSS-NR status: ") else {
+        return false;
+    };
+    let Some((route, _)) = rest.split_once(" | ") else {
+        return false;
+    };
+    route.starts_with("present: active")
+        || route.starts_with("present: at the game's own Present")
+        || (route.starts_with("auto: present, ")
+            && !route.starts_with("auto: present, no new frame")
+            && !route.starts_with("auto: present, waiting"))
+}
+
 impl PacingBuilder {
     pub fn observe(&mut self, line: &str) {
         if line.contains("nvapi64.dll is loaded when Nvidia is not the primary GPU") {
@@ -107,18 +125,34 @@ impl PacingBuilder {
         self.last_raw = Some(raw);
         let now = raw + self.day_offset;
         let previous = self.previous.replace(now);
-        let (Some(previous), Some((presents, renders))) = (previous, counts(line)) else {
+        let Some((presents, renders)) = counts(line) else {
+            return;
+        };
+        if renders > 0 && !self.saw_renders {
+            self.saw_renders = true;
+            self.windows.clear();
+            self.start = None;
+            self.end = None;
+        }
+        let Some(previous) = previous else {
             return;
         };
         let dt = now - previous;
-        if !(MIN_WINDOW_S..=MAX_WINDOW_S).contains(&dt) || renders == 0 {
+        if !(MIN_WINDOW_S..=MAX_WINDOW_S).contains(&dt) {
             return;
         }
+        let (base, screen) = if renders > 0 {
+            ((renders as f64 / dt) as f32, (presents as f64 / dt) as f32)
+        } else if !self.saw_renders && presents > 0 && present_route_active(line) {
+            let fps = (presents as f64 / dt) as f32;
+            (fps, fps)
+        } else {
+            return;
+        };
         if self.windows.len() == MAX_WINDOWS {
             self.windows.pop_front();
         }
-        self.windows
-            .push_back((now, (renders as f64 / dt) as f32, (presents as f64 / dt) as f32));
+        self.windows.push_back((now, base, screen));
         if self.start.is_none() {
             self.start = Some(clock.to_owned());
         }
@@ -378,5 +412,118 @@ mod tests {
         let p = b.finish().unwrap();
         assert!(p.curve.len() <= CURVE_POINTS);
         assert!((p.base_fps_median - 25.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn present_route_sessions_without_upscaler_renders_record_pacing_from_presents() {
+        // Sanitized PCSX2 present-route session (2026-11-18): no upscaler runs, so `renders` stays 0 across every
+        // window while `presents` carries the real base rate. Warm-up and settling windows without a pass still anchor
+        // the clock for the first active window without being counted themselves.
+        const PCSX2_SANITIZED: &[&str] = &[
+            "[12:09:12.566823] [I] DlssNr::ApplyDriverGate DLSS-NR: NVIDIA driver 621.14 meets Neural Rendering's minimum (610.88)",
+            "[12:09:17.025766] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: no pass this window (startup deferred (stabilizing swapchain)) | 1 presents : 0 renders",
+            "[12:09:28.516965] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: no pass this window (startup deferred (stabilizing swapchain)) | 1 presents : 0 renders",
+            "[12:09:30.732168] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: no pass this window (chain working resolution is settling (500 ms); no model reconstruction) | 35 presents : 0 renders",
+            "[12:09:32.761598] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 53 presents : 0 renders = 0.00x on screen",
+            "[12:09:34.771472] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 88 presents : 0 renders = 0.00x on screen",
+            "[12:09:36.793684] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 78 presents : 0 renders = 0.00x on screen",
+            "[12:09:38.819895] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 61 presents : 0 renders = 0.00x on screen",
+            "[12:09:40.854621] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 60 presents : 0 renders = 0.00x on screen",
+            "[12:09:42.867383] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 60 presents : 0 renders = 0.00x on screen",
+            "[12:09:44.898752] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 61 presents : 0 renders = 0.00x on screen",
+            "[12:09:46.909983] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 60 presents : 0 renders = 0.00x on screen",
+            "[12:09:48.921009] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 49 presents : 0 renders = 0.00x on screen",
+            "[12:09:50.938047] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 61 presents : 0 renders = 0.00x on screen",
+            "[12:09:52.948565] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 59 presents : 0 renders = 0.00x on screen",
+            "[12:09:54.960334] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 60 presents : 0 renders = 0.00x on screen",
+            "[12:09:56.989148] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 60 presents : 0 renders = 0.00x on screen",
+            "[12:09:59.022729] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 59 presents : 0 renders = 0.00x on screen",
+            "[12:10:01.025133] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 58 presents : 0 renders = 0.00x on screen",
+            "[12:10:03.057659] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 60 presents : 0 renders = 0.00x on screen",
+            "[12:10:05.064709] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 59 presents : 0 renders = 0.00x on screen",
+            "[12:10:07.097318] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 58 presents : 0 renders = 0.00x on screen",
+            "[12:10:09.103583] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 54 presents : 0 renders = 0.00x on screen",
+            "[12:10:11.141364] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 53 presents : 0 renders = 0.00x on screen",
+            "[12:10:13.175447] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 48 presents : 0 renders = 0.00x on screen",
+            "[12:10:15.200285] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 59 presents : 0 renders = 0.00x on screen",
+            "[12:10:17.215633] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides (no motion) | 59 presents : 0 renders = 0.00x on screen",
+        ];
+
+        let mut b = PacingBuilder::default();
+        for line in PCSX2_SANITIZED {
+            b.observe(line);
+        }
+        let p = b.finish().expect("present-route session must produce pacing");
+        assert_eq!(p.windows, 23);
+        assert_eq!(p.start, "12:09:32");
+        assert_eq!(p.end, "12:10:17");
+        assert_eq!(p.driver.as_deref(), Some("621.14"));
+        assert!((p.base_fps_median - p.screen_fps_median).abs() < 1e-6);
+        assert!((p.base_fps_median - 29.4).abs() < 0.6, "{}", p.base_fps_median);
+        assert!((p.base_fps_low - 24.3).abs() < 1.0, "{}", p.base_fps_low);
+        assert_eq!(p.generation_share, 0.0);
+        assert_eq!(p.drop_share, 0.0);
+        assert_eq!(advice(&p), [Advice::Steady]);
+
+        // Active auto-present and boundary-present variants count when renders == 0; waiting/skipping/declined do not.
+        assert!(present_route_active(
+            "[12:00:02.000000] [I] DlssNr status: DLSS-NR status: auto: present, synthesized motion | 120 presents : 0 renders = 0.00x on screen"
+        ));
+        assert!(present_route_active(
+            "[12:00:02.000000] [I] DlssNr status: DLSS-NR status: present: at the game's own Present, ahead of its frame generation | 120 presents : 0 renders = 0.00x on screen"
+        ));
+        for inactive in [
+            "present: waiting for the game's depth and motion",
+            "present: no new frame from the upscaler (shown as the game drew it)",
+            "present: declined, the game's DLSS-G interpolates before this pass",
+            "auto: present, waiting for the game's depth and motion",
+            "auto: present, no new frame from the upscaler (shown as the game drew it)",
+            "auto: upscaled, the upscaler has handed over no temporal inputs yet",
+            "off",
+        ] {
+            let line = format!(
+                "[12:00:02.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: {inactive} | 120 presents : 0 renders = 0.00x on screen"
+            );
+            assert!(!present_route_active(&line), "{inactive}");
+        }
+    }
+
+    #[test]
+    fn upscaler_sessions_ignore_present_only_menus_and_transient_zero_render_windows() {
+        let mut b = PacingBuilder::default();
+        // Intro/menu before DLSS starts: HookMethod=0 runs auto: present at 120 fps with 0 renders.
+        for i in 0..6 {
+            b.observe(&format!(
+                "[10:00:{:02}.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: auto: present, zero guides \
+                 (no motion) | 240 presents : 0 renders = 0.00x on screen",
+                i * 2
+            ));
+        }
+        // Gameplay begins on DLSS at 60 fps (120 renders per 2 s); tentative intro windows are cleared.
+        for i in 6..26 {
+            b.observe(&format!(
+                "[10:{:02}:{:02}.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, the game's \
+                 depth and motion | 120 presents : 120 renders = 1.00x on screen",
+                (i * 2) / 60,
+                (i * 2) % 60
+            ));
+        }
+        // Transient pause/loading window with 0 renders on HookMethod=2 must not count as a 10 fps drop.
+        b.observe(
+            "[10:00:52.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, zero guides \
+             (no motion) | 20 presents : 0 renders = 0.00x on screen",
+        );
+        b.observe(
+            "[10:00:54.000000] [I] DlssNr::ReportRuntimeStatus DLSS-NR status: present: active, the game's \
+             depth and motion | 120 presents : 120 renders = 1.00x on screen",
+        );
+
+        let p = b.finish().unwrap();
+        assert_eq!(p.windows, 21);
+        assert_eq!(p.start, "10:00:12");
+        assert_eq!(p.end, "10:00:54");
+        assert!((p.base_fps_median - 60.0).abs() < 0.01);
+        assert_eq!(p.drop_share, 0.0);
+        assert_eq!(advice(&p), [Advice::Steady]);
     }
 }

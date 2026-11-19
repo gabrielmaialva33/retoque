@@ -690,15 +690,116 @@ void CopyCalibrationToReadback(ID3D12GraphicsCommandList* cmdList)
     g_nr.calibFrames++;
 }
 
+namespace
+{
+constexpr uint32_t kMeterReadbackSlots = 4;
+
+struct MeterReadbackSession
+{
+    struct Slot
+    {
+        bool pending = false;
+        bool consumed = false;
+        bool usable = false;
+        uint64_t seq = 0;
+        float preExposure = 1.0f;
+        DlssNr::Submission::Usage captureUsage {};
+        DlssNr::Submission::Usage lifetimeUsage {};
+    };
+
+    Slot slots[kMeterReadbackSlots] {};
+    uint32_t next = 0;
+    uint64_t recordedSeq = 0;
+    uint64_t publishedSeq = 0;
+    bool saidUntracked = false;
+};
+
+MeterReadbackSession s_meterReadback;
+} // namespace
+
+bool BeginMeterDispatch(ID3D12GraphicsCommandList* cmdList)
+{
+    if (cmdList == nullptr || g_nr.meter == nullptr)
+        return false;
+
+    ConsumeMeterReadback();
+
+    uint32_t chosen = kMeterReadbackSlots;
+    for (uint32_t step = 0; step < kMeterReadbackSlots; ++step)
+    {
+        const uint32_t candidate = (s_meterReadback.next + step) % kMeterReadbackSlots;
+        if (!s_meterReadback.slots[candidate].pending && g_nr.meterReadback[candidate] != nullptr)
+        {
+            chosen = candidate;
+            break;
+        }
+    }
+
+    if (chosen == kMeterReadbackSlots)
+        return false;
+
+    auto& slot = s_meterReadback.slots[chosen];
+    DlssNr::Submission::PruneFinished(slot.lifetimeUsage);
+    if (!DlssNr::Submission::Track(cmdList, slot.lifetimeUsage))
+    {
+        if (!s_meterReadback.saidUntracked)
+        {
+            LOG_INFO("DLSS-NR exposure: this command list cannot be tracked ({}); meter readback is skipped on it",
+                     DlssNr::Submission::LastRefusal());
+            s_meterReadback.saidUntracked = true;
+        }
+        return false;
+    }
+
+    return true;
+}
+
 void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound)
 {
-    const unsigned int slot = (unsigned int) (g_nr.meterFrames % 4);
-
-    if (g_nr.meterReadback[slot] == nullptr)
+    (void) device;
+    if (cmdList == nullptr || g_nr.meter == nullptr)
         return;
 
-    // Travels with the grid: read back three frames from now, alongside the tiles it describes.
-    g_nr.meterExposureValid[slot] = exposureBound;
+    // Drain any completed or cancelled recordings first so their slots are reusable immediately on this frame.
+    ConsumeMeterReadback();
+
+    uint32_t chosen = kMeterReadbackSlots;
+    for (uint32_t step = 0; step < kMeterReadbackSlots; ++step)
+    {
+        const uint32_t candidate = (s_meterReadback.next + step) % kMeterReadbackSlots;
+        if (!s_meterReadback.slots[candidate].pending && g_nr.meterReadback[candidate] != nullptr)
+        {
+            chosen = candidate;
+            break;
+        }
+    }
+
+    if (chosen == kMeterReadbackSlots)
+        return;
+
+    auto& slot = s_meterReadback.slots[chosen];
+    DlssNr::Submission::Usage captureUsage {};
+    DlssNr::Submission::PruneFinished(slot.lifetimeUsage);
+
+    if (!DlssNr::Submission::Track(cmdList, captureUsage) || !DlssNr::Submission::Track(cmdList, slot.lifetimeUsage))
+    {
+        if (!s_meterReadback.saidUntracked)
+        {
+            LOG_INFO("DLSS-NR exposure: this command list cannot be tracked ({}); meter readback is skipped on it",
+                     DlssNr::Submission::LastRefusal());
+            s_meterReadback.saidUntracked = true;
+        }
+        return;
+    }
+
+    slot.captureUsage = std::move(captureUsage);
+    slot.pending = true;
+    slot.consumed = false;
+    slot.usable = exposureBound;
+    slot.seq = ++s_meterReadback.recordedSeq;
+    slot.preExposure = DlssNr::Exposure::PreExposure(g_nr.gamePreExposure);
+    g_nr.meterExposureValid[chosen] = exposureBound;
+    s_meterReadback.next = (chosen + 1) % kMeterReadbackSlots;
 
     D3D12_TEXTURE_COPY_LOCATION src {};
     src.pResource = g_nr.meter;
@@ -706,7 +807,7 @@ void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* devic
     src.SubresourceIndex = 0;
 
     D3D12_TEXTURE_COPY_LOCATION dst {};
-    dst.pResource = g_nr.meterReadback[slot];
+    dst.pResource = g_nr.meterReadback[chosen];
     dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     dst.PlacedFootprint.Offset = 0;
     dst.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R32_FLOAT;
@@ -833,48 +934,90 @@ void ConsumeCalibrationReadback()
 
 void ConsumeMeterReadback()
 {
-    if (g_nr.meterFrames < 4)
-        return;
+    uint32_t done[kMeterReadbackSlots] {};
+    uint32_t doneCount = 0;
 
-    const unsigned int slot = (unsigned int) (g_nr.meterFrames % 4);
-    ID3D12Resource* buffer = g_nr.meterReadback[slot];
-
-    if (buffer == nullptr)
-        return;
-
-    void* mapped = nullptr;
-    D3D12_RANGE range { 0, sizeof(float) };
-
-    if (FAILED(buffer->Map(0, &range, &mapped)) || mapped == nullptr)
-        return;
-
-    const float* src = (const float*) mapped;
-
-    // Only believed when the frame that wrote this grid actually had an exposure texture bound. With
-    // nothing bound DispatchPass substitutes the source picture, and tile 0 is then a scene pixel
-    // rather than an exposure -- believing it made the white point follow the top-left corner of the
-    // screen, which in Cyberpunk moved by up to 272x between frames and flashed the whole picture.
-    //
-    // When it is not believed gameExposure keeps its last good value, or stays 0 and lets
-    // ResolveWhitePoint fall back to the slider, which is what a game supplying none should get.
-    if (g_nr.meterExposureValid[slot] && DlssNr::Exposure::ValidSample(src[0]))
+    for (uint32_t i = 0; i < kMeterReadbackSlots; ++i)
     {
-        g_nr.gameExposure = src[0];
+        const auto& slot = s_meterReadback.slots[i];
+        if (slot.pending && !slot.consumed && DlssNr::Submission::Completed(slot.captureUsage))
+            done[doneCount++] = i;
+    }
 
-        // The game's own implied white, without the user's trim: sweeping the trim across its 0.01..4 range
-        // would itself read as a nine-stop swing.
-        const float implied = DlssNr::Exposure::PreExposure(g_nr.gamePreExposure) / src[0];
-        if (g_nr.exposureLatch.Observe(implied))
+    std::sort(done, done + doneCount,
+              [](uint32_t a, uint32_t b) { return s_meterReadback.slots[a].seq < s_meterReadback.slots[b].seq; });
+
+    for (uint32_t k = 0; k < doneCount; ++k)
+    {
+        const uint32_t index = done[k];
+        auto& slot = s_meterReadback.slots[index];
+        slot.consumed = true;
+
+        ID3D12Resource* buffer = g_nr.meterReadback[index];
+
+        // Only believed when the frame that wrote this grid actually had an exposure texture bound and was not
+        // invalidated since. With nothing bound DispatchPass substitutes the source picture, and tile 0 is then a
+        // scene pixel rather than an exposure -- believing it made the white point follow the top-left corner of the
+        // screen, which in Cyberpunk moved by up to 272x between frames and flashed the whole picture.
+        //
+        // When it is not believed gameExposure keeps its last good value, or stays 0 and lets ResolveWhitePoint fall
+        // back to the slider, which is what a game supplying none should get.
+        if (buffer != nullptr && slot.usable && g_nr.meterExposureValid[index])
         {
-            LOG_WARN("DLSS-NR: the game's exposure is not usable (implied white point as low as {:.4f} and as high "
-                     "as {:.1f}; {} readings below 0.02, {} above 512); using paper white for the rest of the session",
-                     g_nr.exposureLatch.Lowest(), g_nr.exposureLatch.Highest(), g_nr.exposureLatch.LowCount(),
-                     g_nr.exposureLatch.HighCount());
+            void* mapped = nullptr;
+            D3D12_RANGE range { 0, sizeof(float) };
+
+            if (!FAILED(buffer->Map(0, &range, &mapped)))
+            {
+                const float sample = mapped != nullptr ? *static_cast<const float*>(mapped) : 0.0f;
+                const bool haveSample = mapped != nullptr;
+
+                D3D12_RANGE nothingWritten { 0, 0 };
+                buffer->Unmap(0, &nothingWritten);
+
+                if (haveSample && DlssNr::Exposure::ValidSample(sample))
+                {
+                    if (slot.seq > s_meterReadback.publishedSeq)
+                    {
+                        g_nr.gameExposure = sample;
+                        s_meterReadback.publishedSeq = slot.seq;
+                    }
+
+                    // The game's own implied white on the frame that recorded this copy, without the user's trim:
+                    // pairing a completed readback with the current frame's gamePreExposure invents false excursions
+                    // across auto-exposure cuts.
+                    const float implied = slot.preExposure / sample;
+                    if (g_nr.exposureLatch.Observe(implied))
+                    {
+                        LOG_WARN("DLSS-NR: the game's exposure is not usable (implied white point as low as {:.4f} and "
+                                 "as high as {:.1f}; {} readings below 0.02, {} above 512); using paper white for the "
+                                 "rest of the session",
+                                 g_nr.exposureLatch.Lowest(), g_nr.exposureLatch.Highest(),
+                                 g_nr.exposureLatch.LowCount(), g_nr.exposureLatch.HighCount());
+                    }
+                }
+            }
         }
     }
 
-    D3D12_RANGE nothingWritten { 0, 0 };
-    buffer->Unmap(0, &nothingWritten);
+    const bool strict = DlssNr::Submission::Strict();
+    for (uint32_t i = 0; i < kMeterReadbackSlots; ++i)
+    {
+        auto& slot = s_meterReadback.slots[i];
+        if (!slot.pending)
+            continue;
+
+        const bool reusable = strict ? DlssNr::Submission::Settled(slot.captureUsage)
+                                     : DlssNr::Submission::CaptureReusable(slot.captureUsage);
+        if (reusable)
+        {
+            slot.pending = false;
+            slot.consumed = false;
+            slot.usable = false;
+            slot.captureUsage = {};
+            g_nr.meterExposureValid[i] = false;
+        }
+    }
 }
 
 // Forget everything the meter knows, so nothing read before this moment can be believed after it.
@@ -888,9 +1031,9 @@ void ConsumeMeterReadback()
 // and leaves its hue behind. That is the colour cast, and it looked random because it depends on the
 // light at the moment of the PREVIOUS switch-off, which nothing on screen shows.
 //
-// The readback ring made it worse. `meterFrames` also only advances inside that block, so the four
-// slots kept their contents and their valid flags across the gap, and the first frames after
-// re-enabling consumed buffers written before it as though they had just arrived.
+// In-flight readback slots keep their `pending` state until their GPU fences complete or cancel so a
+// post-switch copy never overwrites a readback buffer the GPU is still writing; clearing `usable`
+// ensures those pre-switch recordings cannot publish once they finish.
 //
 // Zero is not a fallback value here, it is the absence of one: ResolveWhitePoint's `> 1e-6f` guard
 // fails and the manual slider is used, which is what a game supplying no exposure already gets.
@@ -901,10 +1044,60 @@ void InvalidateExposureMeter()
     for (bool& valid : g_nr.meterExposureValid)
         valid = false;
 
-    // Re-arms the `< 4` guard in ConsumeMeterReadback, so nothing is read back until four frames
-    // have genuinely been queued since this point.
+    for (auto& slot : s_meterReadback.slots)
+        slot.usable = false;
+
     g_nr.meterFrames = 0;
     g_nr.exposureLatch.Reset();
+}
+
+void ShutdownExposureMeter()
+{
+    bool anyRetained = false;
+
+    for (uint32_t i = 0; i < kMeterReadbackSlots; ++i)
+    {
+        auto& slot = s_meterReadback.slots[i];
+        DlssNr::Submission::PruneFinished(slot.lifetimeUsage);
+        const bool settled = DlssNr::Submission::Settled(slot.lifetimeUsage);
+
+        if (g_nr.meterReadback[i] != nullptr)
+        {
+            if (settled)
+                g_nr.meterReadback[i]->Release();
+            else
+                anyRetained = true;
+            g_nr.meterReadback[i] = nullptr;
+        }
+        else if (!settled)
+        {
+            anyRetained = true;
+        }
+    }
+
+    if (g_nr.meter != nullptr)
+    {
+        if (!anyRetained)
+            g_nr.meter->Release();
+        g_nr.meter = nullptr;
+    }
+
+    if (anyRetained)
+    {
+        LOG_INFO("DLSS-NR shutdown: exposure meter copy still in flight or unsettled; retaining meter resource(s)");
+    }
+
+    // The slots these flags describe have just been released or abandoned, so nothing may vouch for what the next
+    // buffers happen to contain. gameExposure is deliberately NOT cleared here: a recreate is a transition within
+    // the same scene, and dropping to the slider for a few frames would be the flicker the held value exists to
+    // prevent. The user switching the option off is the case where the held value has to go, and that is handled at
+    // the edge in Dispatch.
+    for (bool& valid : g_nr.meterExposureValid)
+        valid = false;
+
+    g_nr.meterFrames = 0;
+    g_nr.exposureLatch.Reset();
+    s_meterReadback = {};
 }
 
 // Keep source selection testable without changing the established exposure law.
