@@ -21,6 +21,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 ## Performance and cost
 
 - [model-cadence.md](design/model-cadence.md): run the model every Nth frame and carry its edit along the motion vectors in between.
+- [nexus-edit-reuse-comparison-20261119.md](design/nexus-edit-reuse-comparison-20261119.md): dated comparison with NR Nexus v0.6.0; existing whole-chain reuse, log-ratio/confidence differences and deferred experiments for sm86. Static/host evidence only; no runtime port.
 - [look-model-half-rate.md](design/look-model-half-rate.md): offline bilateral look-model experiment; better fast motion than plain hold, worse stable/recovery fidelity; no production port recommended yet.
 - [cadence-smoothing.md](design/cadence-smoothing.md): walk each new answer in over the interval and rate-limit the shown light, against the cadence's pulse.
 - [cadence-deferred-coarse.md](design/cadence-deferred-coarse.md): build the unchanged coarse history at the first carry, not each Record; dated replay/game comparison, first-carry cost and limits, with no demonstrated overall FPS gain (2026-11-01).
