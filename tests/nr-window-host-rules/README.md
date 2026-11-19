@@ -1,7 +1,7 @@
 # nr-window-host-rules
 
-NR on any window, phase 2 ([design](../../docs/dlssnr/design/nr-anything.md)): the capture host's pure rules
-(`retoque/window_host/{Geometry,Policy,Pacing,Protocol}.h`), compiled as they ship with g++ and sanitizers:
+NR on any window, phases 2-3 ([design](../../docs/dlssnr/design/nr-anything.md)): the capture host's pure rules
+(`retoque/window_host/{Geometry,Policy,Overlay,Pacing,Protocol}.h`), compiled as they ship with g++ and sanitizers:
 
 - client crop against DWM's frame bounds, confirmed by the captured size: framed, borderless, negative coordinates,
   a stale size after a resize, Magpie's two maximized cases, no DWM frame, and the refusals;
@@ -9,9 +9,15 @@ NR on any window, phase 2 ([design](../../docs/dlssnr/design/nr-anything.md)): t
   adapter rule;
 - pacing: QPC to 100 ns without overflow, strictly later stamps, new streams (first, resume, geometry, a gap over
   100 ms), the one-second crop wait, nearest-rank source-age percentiles over a bounded window;
+- overlay interaction: each blocker and all 255 combinations, exclusive/topmost refusal, cursor control, negative
+  screen coordinates, same-size moves, resizes, matching-only reveal, fresh frames after pause/resume, empty and
+  overflowing geometry; preview-default and overlay/exclusion argument refusals;
 - the command line, the JSON event encoding and the stdin command parser, with its refusals.
 
 Plus a source contract on the Windows units: `pch.h` first, the pure headers free of Windows headers, devices and the
 preview swapchain created before `OptiScaler.dll` is loaded and no factory, device or swapchain created after it, the
 variable set before `LoadLibraryExW`, no `FreeLibrary`, the DLL's own `DlssNr_WindowHost.h` used for the outcome, and
-the NeuRotic/Magpie attribution present. Nothing here runs on Windows.
+the NeuRotic/Magpie attribution present. Overlay source contracts cover DComp on the queue, nonactivating popup
+styles, cursor control, hotkey registration, opt-in recording exclusion, effective DPI verification, rechecking before
+reveal, and stopping on DLL-seam refusal (including wrapped swapchains). Nothing here runs on Windows or proves
+DComp visibility, input delivery, capture exclusion, fullscreen classification, GPU lifetime or latency.

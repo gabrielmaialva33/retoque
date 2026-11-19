@@ -54,7 +54,7 @@ supplied to the model. The four diagnostic-contract amendments were accepted by 
 at review. Integration build and in-game numbers are pending; step 0b is described, not built, and step 1 waits
 for both precision/coverage and demonstrated value.
 
-NR on any window ([nr-anything](design/nr-anything.md)): NR on another program's window by capture, Windows only, approved by the owner on 2026-11-11 with version 1 scoped to no upscaling and no depth estimation. Phases 0-2 (probe, gated DLL export, capture host with a preview) are built and host-tested, not qualified. Next: the first native Windows run on the RTX 3060 and its probe table, then the overlay (phase 3) and the app screen "NR on any window" (phase 4).
+NR on any window ([nr-anything](design/nr-anything.md)): Windows-only capture host, approved with no upscaling or depth estimation. Phases 0-2 (probe, DLL seam, preview) were built and host-tested but never run on Windows. Phase 3 (2026-11-19) is implemented: opt-in click-through DComp overlay, pause/fresh-frame visibility rules, hotkey and recorder exclusion off by default. Host contracts are built/tested and Win32 units syntax-checked with MinGW; the integrated MSVC build and Windows/RTX 3060 checklist remain pending. No compositor, input, latency or GPU qualification is claimed. Next: integration build, native preview/overlay checklist, then the app screen (phase 4).
 
 ## Parked or deliberately not promoted
 

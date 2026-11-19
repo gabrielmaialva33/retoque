@@ -10,6 +10,7 @@
 // host's D3D11 fence shows that the copy which read it completed (Hold/Retire), and only then closed.
 
 #include "Capture.h"
+#include "Overlay.h"
 
 #include <windows.graphics.capture.interop.h>
 #include <windows.graphics.directx.direct3d11.interop.h>
@@ -149,7 +150,16 @@ bool Capture::Start(HWND window, ID3D11Device* device, bool cursor, HANDLE wake,
         phase = "the capture session";
         p.session = p.pool.CreateCaptureSession(p.item);
         const auto session = winrt::name_of<GraphicsCaptureSession>();
-        if (ApiInformation::IsPropertyPresent(session, L"IsCursorCaptureEnabled"))
+        const bool cursorControl = ApiInformation::IsPropertyPresent(session, L"IsCursorCaptureEnabled");
+        if (!cursor)
+        {
+            if (const char* refusal = Overlay::StartRefusal(cursorControl))
+            {
+                why = refusal;
+                return false;
+            }
+        }
+        if (cursorControl)
             p.session.IsCursorCaptureEnabled(cursor);
         if (ApiInformation::IsPropertyPresent(session, L"IsBorderRequired"))
         {

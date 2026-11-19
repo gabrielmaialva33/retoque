@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NR on any window, phase 2 (docs/dlssnr/design/nr-anything.md): the capture host's pure rules -- client crop,
+"""NR on any window, phases 2-3 (docs/dlssnr/design/nr-anything.md): the capture host's pure rules -- client crop,
 candidate windows, source identity, pause and stop, the adapter rule, frame pacing, source age, the command line,
 stdout events and stdin commands -- compiled as they ship (g++, sanitizers, no Windows types). Plus a source contract
 on the Windows units: every translation unit starts with pch.h, the pure headers include no Windows header, and the
@@ -14,7 +14,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 HOST = ROOT / 'retoque/window_host'
-PURE = ('Geometry.h', 'Policy.h', 'Pacing.h', 'Protocol.h')
+PURE = ('Geometry.h', 'Policy.h', 'Pacing.h', 'Protocol.h', 'Overlay.h')
 
 # --- Source contract ---------------------------------------------------------------------------------------------
 for name in PURE:
@@ -55,6 +55,29 @@ for name in ('Geometry.h', 'Capture.cpp'):
     assert 'NeuRotic beae4eea' in text and 'Magpie 69d6105d' in text and 'GPL-3.0' in text, name
 assert (ROOT / 'Licenses/Magpie-LICENSE.txt').is_file(), 'Magpie licence kept with its adaptation'
 
+# Overlay wiring: these are source contracts, not a Win32 runtime test.
+output = (HOST / 'Output.cpp').read_text()
+for token in ('CreateSwapChainForComposition(queue', 'DCompositionCreateDevice2', 'WS_EX_LAYERED',
+              'WS_EX_TRANSPARENT', 'WS_EX_NOACTIVATE', 'WS_EX_TOOLWINDOW', 'HTTRANSPARENT', 'MA_NOACTIVATE',
+              'SWP_NOZORDER | SWP_NOACTIVATE', 'MOD_CONTROL | MOD_ALT | MOD_NOREPEAT', 'VK_F10',
+              'UnregisterHotKey', 'WDA_EXCLUDEFROMCAPTURE', 'visibility_.Observe', 'visibility_.Accept'):
+    assert token in output, token
+assert 'HWND_TOPMOST' not in output, 'overlay never promoted to topmost'
+assert output.index('if (excludeFromCapture') < output.index('WDA_EXCLUDEFROMCAPTURE'), 'recorder policy is opt-in'
+assert 'bool OverlayUpdate(' in main, 'same source and interaction rechecked immediately before reveal'
+assert main.index('const HRESULT presented') < main.index('output.AcceptOverlayFrame('), 'no reveal before Present'
+assert 'if (overlay && !entered)' in main, 'seam refusal stops overlay, including wrapped swapchains'
+capture = (HOST / 'Capture.cpp').read_text()
+assert 'Overlay::StartRefusal(cursorControl)' in capture, 'overlay requires cursor control'
+assert 'capture.Start(source, devices.d3d11.Get(), !overlay' in main, 'real cursor only in overlay'
+assert 'AreDpiAwarenessContextsEqual' in main, 'overlay checks effective per-monitor-v2 awareness'
+assert run.index('OverlayUpdate(') < run.index('capture.Start('), 'geometry epoch precedes initial capture frame'
+startup = main[main.index('case Protocol::Mode::Run:'):]
+assert startup.index('outputMode =') < startup.index('winrt::init_apartment'), 'WinRT refusals also report output mode'
+for name in ('Overlay.h', 'Output.cpp'):
+    text = (HOST / name).read_text()
+    assert 'NeuRotic beae4eea' in text and 'Magpie 69d6105d' in text and 'GPL-3.0' in text, name
+
 # --- Behaviour ---------------------------------------------------------------------------------------------------
 compiler = shutil.which('g++') or shutil.which('clang++')
 assert compiler, 'no C++ compiler'
@@ -68,4 +91,4 @@ with tempfile.TemporaryDirectory() as scratch:
     if result.returncode:
         raise SystemExit(f'window host rules failed ({result.returncode})')
 print('PASS: window host source contract: pch.h first, pure headers Windows-free, DLL loaded after the D3D objects, '
-      'one outcome layout, attribution kept')
+      'one outcome layout, overlay wiring, attribution kept')

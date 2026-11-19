@@ -1,5 +1,6 @@
 // The window host's pure rules (retoque/window_host/{Geometry,Policy,Pacing,Protocol}.h), compiled as they ship.
 #include "Geometry.h"
+#include "Overlay.h"
 #include "Pacing.h"
 #include "Policy.h"
 #include "Protocol.h"
@@ -28,6 +29,90 @@ namespace G = RetoqueWindowHost::Geometry;
 namespace P = RetoqueWindowHost::Policy;
 namespace Pc = RetoqueWindowHost::Pacing;
 namespace Pr = RetoqueWindowHost::Protocol;
+
+void Overlay()
+{
+    namespace O = RetoqueWindowHost::Overlay;
+    O::Interaction facts;
+    Expect(O::Decide(facts).action == P::Action::Run, "overlay: available source runs");
+    struct Row
+    {
+        bool O::Interaction::* field;
+        const char* reason;
+    };
+    const Row rows[] = {
+        { &O::Interaction::disabled, "source-disabled" },   { &O::Interaction::dialog, "source-dialog" },
+        { &O::Interaction::menu, "source-menu" },           { &O::Interaction::moveSize, "source-move-size" },
+        { &O::Interaction::minimized, "source-minimized" }, { &O::Interaction::cloaked, "source-cloaked" },
+        { &O::Interaction::hidden, "source-hidden" },       { &O::Interaction::unknown, "source-state-unavailable" },
+    };
+    for (const auto& row : rows)
+    {
+        facts = {};
+        facts.*row.field = true;
+        auto d = O::Decide(facts);
+        Expect(d.action == P::Action::Pause && Same(d.reason, row.reason), row.reason);
+    }
+    // Every combination pauses; no independent interaction gate may accidentally cancel another.
+    for (unsigned mask = 1; mask < 256; ++mask)
+    {
+        facts = {};
+        for (unsigned bit = 0; bit < 8; ++bit)
+            facts.*rows[bit].field = (mask & (1u << bit)) != 0;
+        Expect(O::Decide(facts).action == P::Action::Pause, "combined blockers pause");
+    }
+    facts = {};
+    facts.exclusive = true;
+    Expect(O::Decide(facts).action == P::Action::Stop && Same(O::Decide(facts).reason, "exclusive-fullscreen"),
+           "exclusive fullscreen refuses");
+    facts = {};
+    facts.topmost = true;
+    Expect(O::Decide(facts).action == P::Action::Stop && Same(O::Decide(facts).reason, "source-topmost"),
+           "cannot guarantee non-topmost for a topmost owner");
+    facts.exclusive = true;
+    facts.unknown = true;
+    Expect(O::Decide(facts).action == P::Action::Stop, "exclusive refusal wins over unknown");
+    Expect(Same(O::StartRefusal(false), "cursor-capture-control-unavailable"), "cursor control required");
+    Expect(O::StartRefusal(true) == nullptr, "cursor capture control available");
+
+    const G::Rect first { -1280, 100, 0, 820 };
+    const G::Size size { 1280, 720 };
+    O::Visibility visibility;
+    Expect(!visibility.Observe(first, true, 100), "no frame yet: hidden");
+    Expect(!visibility.Accept(first, size, 99), "queued frame before geometry observation refused");
+    Expect(visibility.Accept(first, size, 100), "matching fresh frame reveals");
+    Expect(visibility.Observe(first, true, 110), "same rectangle keeps accepted frame");
+    G::Rect moved { -1279, 100, 1, 820 };
+    Expect(!visibility.Observe(moved, true, 120), "move invalidates even at same size");
+    Expect(!visibility.Accept(first, size, 121), "frame from previous position refused");
+    Expect(visibility.Accept(moved, size, 122), "matching move reveals");
+    Expect(!visibility.Observe(moved, false, 130), "pause hides");
+    Expect(!visibility.Accept(moved, size, 131), "paused cannot reveal");
+    Expect(!visibility.Observe(moved, true, 140), "resume waits for new frame");
+    Expect(!visibility.Accept(moved, size, 139), "frame queued during pause refused");
+    Expect(visibility.Accept(moved, size, 141), "post-resume frame reveals");
+    G::Rect resized { 0, 0, 1920, 1080 };
+    Expect(!visibility.Observe(resized, true, 150), "resize hides");
+    Expect(!visibility.Accept(resized, size, 151), "stale extent rejected");
+    Expect(visibility.Accept(resized, { 1920, 1080 }, 152), "borderless extent accepted");
+    Expect(!visibility.Observe({}, true, 160), "empty geometry hides");
+    Expect(!visibility.Accept({}, {}, 161), "empty frame cannot reveal");
+    Expect(!visibility.Observe({ INT32_MIN, 0, INT32_MAX, 720 }, true, 170), "unrepresentable width hidden");
+
+    auto overlay = Pr::ParseArguments({ "--run", "--countdown", "5", "--overlay" });
+    Expect(overlay.ok && overlay.options.overlay && !overlay.options.excludeFromCapture,
+           "overlay opt-in, recorder default off");
+    overlay = Pr::ParseArguments({ "--run", "--window", "0x123", "--overlay", "--exclude-from-capture" });
+    Expect(overlay.ok && overlay.options.excludeFromCapture, "recorder exclusion opt-in");
+    Expect(!Pr::ParseArguments({ "--run", "--window", "0x123", "--exclude-from-capture" }).ok,
+           "recorder exclusion only on overlay");
+    Expect(!Pr::ParseArguments({ "--catalog", "--overlay" }).ok, "catalog rejects overlay");
+    Expect(!Pr::ParseArguments({ "--overlay" }).ok, "overlay needs run");
+    Expect(!Pr::ParseArguments({ "--exclude-from-capture" }).ok, "exclusion needs run");
+    Expect(!Pr::ParseArguments({ "--help", "--overlay" }).ok, "help rejects overlay");
+    auto preview = Pr::ParseArguments({ "--run", "--countdown", "5" });
+    Expect(preview.ok && !preview.options.overlay && !preview.options.excludeFromCapture, "preview default unchanged");
+}
 
 void Geometry()
 {
@@ -393,6 +478,7 @@ void Protocol()
 
 int main()
 {
+    Overlay();
     Geometry();
     Policy();
     Pacing();
@@ -403,7 +489,7 @@ int main()
         return 1;
     }
     std::printf("PASS: window host rules: %d checks (crop, candidates, identity, pause/stop, adapter, pacing, "
-                "source age, command line, events, commands)\n",
+                "source age, overlay interaction/visibility, command line, events, commands)\n",
                 checks);
     return 0;
 }

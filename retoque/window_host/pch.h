@@ -14,6 +14,7 @@
 #include <d3d11_4.h>
 #include <d3d12.h>
 #include <dwmapi.h>
+#include <dcomp.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
