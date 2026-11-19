@@ -55,6 +55,15 @@ platform evidence means pending/unknown, never inferred success.
 | Source test reports | Implemented, invocation-aware | [Runner tests](../tests/runner-results/README.md), [methodology](../tests/README.md); process-exit suites and structured-result suites are labeled separately |
 | Package identity and source evidence | Tooling in this change | [Release contract](releases/VALIDATION.md); runtime remains NOT_RUN in the automatic manifest. CI itself must run before claiming a hosted release passed |
 
+## Windows capture app
+
+**Experimental, Windows only; not run on Windows.** The app's **NR on any window** screen selects the model,
+source/countdown, processing and preview/overlay output. Reviewed launch settings, bounded JSON-lines client,
+Stop during startup and job-owned child lifetime are implemented. Linux ships no entry. Portable fake-host and
+synthetic egui tests cover protocol/lifecycle/UI contracts; Windows cross-compilation does not qualify capture,
+job-object behavior, input pass-through, model output, quality or latency. See the
+[phase 4 implementation and RTX 3060 checklist](dlssnr/design/nr-anything.md#implementation-phase-4).
+
 ## How to record new evidence
 
 Record source commit plus dirty state, binary/model hashes where relevant, date, environment (GPU/driver/API/runtime),
