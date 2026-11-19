@@ -693,3 +693,37 @@ Base	Base
 Share	Share
 Refused	Refused
 Second line: model / carried evaluations.	Second line: model / carried evaluations.
+Measurements and diagnostics	Measurements and diagnostics
+Model appearance	Model appearance
+Look sets a group of appearance values. Custom means you changed that recipe.	Look sets a group of appearance values. Custom means you changed that recipe.
+Model preset chooses the weight set. Style chooses the model variant.	Model preset chooses the weight set. Style chooses the model variant.
+Intensity is the strength requested inside the model.	Intensity is the strength requested inside the model.
+Result strength	Result strength
+Detail strength blends the result: 0 is the original frame, 1 is the model answer. Colour strength adjusts colour transfer.	Detail strength blends the result: 0 is the original frame, 1 is the model answer. Colour strength adjusts colour transfer.
+Inherited	Inherited
+Explicit	Explicit
+Check a field to set it for this pass; uncheck it to inherit the master value.	Check a field to set it for this pass; uncheck it to inherit the master value.
+Processing route	Processing route
+Brightness and exposure	Brightness and exposure
+Last evaluation: %u successful model pass	Last evaluation: %u successful model pass
+Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u pass	Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u pass
+A key can toggle NR; assign it in Keybinds.	A key can toggle NR; assign it in Keybinds.
+%.2f stops	%.2f stops
+after	after
+after-rr	after-rr
+before	before
+present	present
+Option %u of %u	Option %u of %u
+Preparing the image	Preparing the image
+Measuring frame times	Measuring frame times
+Frames prepared: %u	Frames prepared: %u
+Samples collected: %u	Samples collected: %u
+Waiting for a recent measurement. Keep the game running at the current settings.	Waiting for a recent measurement. Keep the game running at the current settings.
+Test stopped. Your saved settings are unchanged.	Test stopped. Your saved settings are unchanged.
+Measurements complete.	Measurements complete.
+Option = scale / cadence. GPU is NR time; Base is frame time before generated frames. Share is NR's part of base time.	Option = scale / cadence. GPU is NR time; Base is frame time before generated frames. Share is NR's part of base time.
+Option	Option
+Median (ms)	Median (ms)
+Mean (ms)	Mean (ms)
+Slowest (ms)	Slowest (ms)
+%.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused

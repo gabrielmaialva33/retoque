@@ -1,6 +1,7 @@
 // Included after the unchanged production menu body in the generated translation unit.
 #include <menu/font/Hack_Compressed.h>
 #include "raster.h"
+#include "layout_test.h"
 #include <imgui/imgui_internal.h>
 
 namespace Preview
@@ -62,9 +63,27 @@ void Compare()
     c->DlssNrCompareTags = true;
     c->DlssNrCompareSplit = 0.45f;
 }
+void SimpleCompare()
+{
+    Compare();
+    Config::Instance()->DlssNrShowAllSettings = false;
+}
+void GuardSimple()
+{
+    Off();
+    DlssNr::guardNotice.action = DlssNr::SessionGuard::Action::Disable;
+    DlssNr::guardNotice.end = DlssNr::SessionGuard::End::Crashed;
+    DlssNr::guardNotice.code = 0xC0000005;
+    DlssNr::guardNotice.ranSeconds = 3;
+}
+void GuardFull()
+{
+    GuardSimple();
+    Config::Instance()->DlssNrShowAllSettings = true;
+}
 void AdvisorEligible()
 {
-    Simple();
+    Full();
     auto* c = Config::Instance();
     c->DlssNrWorkingScale = 1.0f;
     c->DlssNrCadence = 1;
@@ -129,6 +148,11 @@ void AdvisorResults(bool rr = false)
     s.Restored();
     DlssNr::AdvisorRuntime::Publish();
 }
+void AdvisorAborted()
+{
+    AdvisorRunning();
+    DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::Cancelled);
+}
 void AdvisorDone() { AdvisorResults(); }
 void AdvisorRRDone() { AdvisorResults(true); }
 struct Scene
@@ -137,28 +161,50 @@ struct Scene
     void (*setup)();
     bool portuguese;
     int height;
+    int width = 560;
 };
-const Scene scenes[] = { { "nr-off", Off, false, 560 },
-                         { "d3d12-simple", Simple, false, 560 },
-                         { "d3d12-full", Full, false, 2600 },
-                         { "individual-passes", Passes, false, 2600 },
-                         { "present-hdr", Hdr, false, 2600 },
-                         { "native-vulkan", Vulkan, false, 2600 },
-                         { "model-missing", Missing, false, 560 },
-                         { "comparison", Compare, false, 2600 },
-                         { "d3d12-simple-pt-BR", Simple, true, 560 },
-                         { "present-hdr-pt-BR", Hdr, true, 2600 },
-                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 1000 },
-                         { "advisor-running-pt-BR", AdvisorRunning, true, 1000 },
-                         { "advisor-done-pt-BR", AdvisorDone, true, 1300 },
-                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 1300 },
-                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 1000 },
-                         { "advisor-hidden-off", Off, true, 560 } };
+const Scene scenes[] = { { "nr-off", Off, false, 900 },
+                         { "d3d12-simple", Simple, false, 900 },
+                         { "d3d12-full", Full, false, 4200 },
+                         { "individual-passes", Passes, false, 4200 },
+                         { "present-hdr", Hdr, false, 4200 },
+                         { "native-vulkan", Vulkan, false, 4200 },
+                         { "model-missing", Missing, false, 900 },
+                         { "comparison", Compare, false, 4200 },
+                         { "d3d12-simple-pt-BR", Simple, true, 900 },
+                         { "present-hdr-pt-BR", Hdr, true, 4200 },
+                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 4200 },
+                         { "advisor-running-pt-BR", AdvisorRunning, true, 4200 },
+                         { "advisor-done-pt-BR", AdvisorDone, true, 4200 },
+                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 4200 },
+                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 4200 },
+                         { "advisor-hidden-off", Off, true, 900 },
+                         { "model-missing-pt-BR-narrow", Missing, true, 1100, 420 },
+                         { "model-missing-narrow", Missing, false, 1100, 420 },
+                         { "present-hdr-pt-BR-narrow", Hdr, true, 4200, 420 },
+                         { "native-vulkan-narrow", Vulkan, false, 4200, 480 },
+                         { "individual-passes-pt-BR-narrow", Passes, true, 4200, 420 },
+                         { "simple-comparison-pt-BR", SimpleCompare, true, 1400, 420 },
+                         { "advisor-eligible-en-narrow", AdvisorEligible, false, 5200, 420 },
+                         { "advisor-running-en-narrow", AdvisorRunning, false, 1200, 420 },
+                         { "advisor-done-en-narrow", AdvisorDone, false, 5200, 420 },
+                         { "advisor-done-pt-BR-narrow", AdvisorDone, true, 5200, 420 },
+                         { "advisor-rr-done-pt-BR-narrow", AdvisorRRDone, true, 5200, 420 },
+                         { "advisor-running-pt-BR-narrow", AdvisorRunning, true, 1200, 420 },
+                         { "advisor-aborted-pt-BR", AdvisorAborted, true, 5200, 420 },
+                         { "guard-simple-pt-BR", GuardSimple, true, 1200, 420 },
+                         { "guard-full-pt-BR", GuardFull, true, 4200, 420 } };
 } // namespace Preview
 int main(int argc, char** argv)
 {
     try
     {
+        if (argc == 2 && std::string(argv[1]) == "--layout-test")
+        {
+            Preview::VerifyLayoutInput();
+            std::cout << "PASS: wrapped checkbox box/caption clicks, disabled refusal and original active IDs\n";
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--list")
         {
             for (const auto& s : Preview::scenes)
@@ -185,7 +231,7 @@ int main(int argc, char** argv)
         ImGui::CreateContext();
         auto& io = ImGui::GetIO();
         io.IniFilename = io.LogFilename = nullptr;
-        io.DisplaySize = ImVec2(560, float(scene->height));
+        io.DisplaySize = ImVec2(float(scene->width), float(scene->height));
         io.DeltaTime = 1.0f / 60.0f;
         io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures;
         if (Config::Instance()->UseHQFont.value_or_default())
@@ -202,15 +248,56 @@ int main(int argc, char** argv)
         {
             ImGui::NewFrame();
             ImGui::SetNextWindowPos(ImVec2(12, 12));
-            ImGui::SetNextWindowSize(ImVec2(536, float(scene->height) - 24));
+            ImGui::SetNextWindowSize(ImVec2(float(scene->width) - 24, float(scene->height) - 24));
             ImGui::Begin("Retoque | synthetic preview", nullptr,
                          ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextDisabled("PREVIEW | synthetic values | no game or GPU");
             ImGui::Separator();
             if (frame == 4)
                 ImGui::LogToBuffer();
+            ImGui::SetNextWindowPos(ImVec2(-2000, -2000));
+            ImGui::SetNextWindowSize(ImVec2(560, 900));
+            ImGui::Begin("identity-test", nullptr, ImGuiWindowFlags_NoSavedSettings);
+            for (const char* label : { "Plain", "Reset##detail", "Long translated caption###fixed" })
+                for (float width : { 20.0f, 500.0f })
+                {
+                    ImGui::PushItemWidth(width);
+                    const ImGuiID expected = ImGui::GetID(label);
+                    float value = 0.5f;
+                    ImGui::SliderFloat(DlssNr::MenuLayout::FieldLabel(label), &value, 0, 1);
+                    if (GImGui->LastItemData.ID != expected)
+                        throw std::runtime_error("FieldLabel changed ImGui identity");
+                    ImGui::PopItemWidth();
+                }
+            {
+                DlssNr::MenuLayout::WrapText wrap;
+                const float available = ImGui::GetContentRegionAvail().x;
+                ImGui::TextColored(
+                    ImVec4(1, 0, 0, 1), "%s",
+                    "A deliberately long recovery explanation repeated to exceed the available panel width: "
+                    "the model is unavailable and the player needs a complete explanation before retrying.");
+                if (ImGui::GetItemRectSize().x > available + 1 ||
+                    ImGui::GetItemRectSize().y <= ImGui::GetTextLineHeight())
+                    throw std::runtime_error("Recovery text did not wrap");
+            }
+            ImGui::End();
             DlssNr::RenderMenu(Config::Instance(), 1.0f);
             contentBottom = ImGui::GetCursorPosY();
+            if (frame == 4 && (std::string(scene->name).find("advisor-done") == 0 ||
+                               std::string(scene->name).find("advisor-rr-done") == 0))
+            {
+                bool found = false;
+                for (const auto& table : GImGui->Tables.Buf)
+                    if (table.ColumnsCount == 5)
+                    {
+                        found = true;
+                        for (int column = 0; column < table.ColumnsCount; ++column)
+                            if (table.Columns[column].WorkMaxX - table.Columns[column].WorkMinX < 50.0f)
+                                throw std::runtime_error("Advisor column collapsed below readable width");
+                    }
+                if (!found)
+                    throw std::runtime_error("Advisor result table was not rendered");
+            }
             if (frame == 4)
             {
                 text = GImGui->LogBuffer.c_str();
@@ -232,14 +319,14 @@ int main(int argc, char** argv)
                 }
             }
         }
-        Preview::Raster raster(560, scene->height);
+        Preview::Raster raster(scene->width, scene->height);
         raster.Draw(*ImGui::GetDrawData());
         std::filesystem::create_directories(output);
         const auto stem = output / scene->name;
         raster.Save(stem.string() + ".png");
         std::ofstream(stem.string() + ".txt") << text;
         std::ofstream(stem.string() + ".json")
-            << "{\"width\":560,\"height\":" << scene->height << ",\"triangles\":" << raster.triangles
+            << "{\"width\":" << scene->width << ",\"height\":" << scene->height << ",\"triangles\":" << raster.triangles
             << ",\"glyph_pixels\":" << raster.glyphPixels << ",\"content_bottom\":" << contentBottom << "}\n";
         ImGui::DestroyContext();
         std::cout << scene->name << ": " << raster.triangles << " triangles, " << raster.glyphPixels

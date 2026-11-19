@@ -41,6 +41,10 @@ int main()
     timing.sampleAgeMs = 0;
     RenderAdvisor(&config, false);
     assert(AdvisorRuntime::Active() && configWrites == 0);
+    ImGui::click.clear();
+    RenderAdvisor(&config, false);
+    assert(ImGui::text.count("Preparing the image") && ImGui::text.count("Option %u of %u") &&
+           ImGui::text.count("Frames prepared: %u"));
     ImGui::click = "Cancel trial###nrAdvisorCancel";
     RenderAdvisor(&config, false);
     assert(!AdvisorRuntime::Active() && configWrites == 0);
@@ -70,6 +74,7 @@ int main()
     assert(session.Recommendation() == 1);
     ImGui::click = "Copy trial report###nrAdvisorCopy";
     RenderAdvisor(&config, false);
+    assert(ImGui::tableColumns == 5 && ImGui::text.count("Measurements complete."));
     assert(ImGui::clipboard.find("0.75 / 1") != std::string::npos && configWrites == 0);
     ImGui::click = "Apply measured choice###nrAdvisorApply";
     timing.metadata.contractHash = 2;
