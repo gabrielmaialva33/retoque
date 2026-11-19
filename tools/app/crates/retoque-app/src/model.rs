@@ -250,7 +250,7 @@ pub fn apply(
 
 /// A log's summary. The few logs read last are remembered (`retoque_data::logs::Follower`): one that did not change
 /// is not read again, and one that only grew is read from where the last read stopped. A running game's log, tens
-/// or hundreds of MB written many times a second, then costs what the game added, not the whole file each time.
+/// or hundreds of MB and still growing, then costs what the game added, not the whole file at every look.
 pub fn read_log(log: &Path) -> std::io::Result<Summary> {
     use retoque_data::logs::Follower;
     static FOLLOWED: std::sync::Mutex<Vec<Follower>> = std::sync::Mutex::new(Vec::new());

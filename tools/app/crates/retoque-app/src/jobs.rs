@@ -13,10 +13,12 @@ use std::time::{Duration, Instant};
 /// A log that keeps changing is read again at most this often.
 pub(crate) const LIVE_LOG_INTERVAL: Duration = Duration::from_secs(2);
 
-/// The selected game's log, read again because the watcher saw it change. A running game writes its log many times
-/// a second: these reads run one at a time, the next no sooner than `LIVE_LOG_INTERVAL` after the last began, and
-/// each one's answer is delivered. Asked for as ordinary "logs" jobs, every burst of writes queued a read that
-/// superseded the one before it: the app read a large log over and over beside the game and showed none of it.
+/// The selected game's log, read again because the watcher saw it change. The watcher reports a running game's log
+/// after every pause in its writing (`watcher::DEBOUNCE`): about every two seconds with the runtime's status lines,
+/// more often with others between them. These reads run one at a time, the next no sooner than
+/// `LIVE_LOG_INTERVAL` after the last began, and each one's answer is delivered. Asked for as ordinary "logs" jobs,
+/// every report read the log again and superseded the read before it, so a log that takes longer to read than the
+/// game pauses was read over and over beside the game and never shown.
 struct LiveLog {
     wanted: Option<PathBuf>,
     reading: Arc<AtomicBool>,
