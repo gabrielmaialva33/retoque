@@ -137,23 +137,28 @@ struct Scene
     void (*setup)();
     bool portuguese;
     int height;
+    int width = 560;
 };
-const Scene scenes[] = { { "nr-off", Off, false, 560 },
-                         { "d3d12-simple", Simple, false, 560 },
-                         { "d3d12-full", Full, false, 2600 },
-                         { "individual-passes", Passes, false, 2600 },
-                         { "present-hdr", Hdr, false, 2600 },
-                         { "native-vulkan", Vulkan, false, 2600 },
-                         { "model-missing", Missing, false, 560 },
-                         { "comparison", Compare, false, 2600 },
-                         { "d3d12-simple-pt-BR", Simple, true, 560 },
-                         { "present-hdr-pt-BR", Hdr, true, 2600 },
-                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 1000 },
-                         { "advisor-running-pt-BR", AdvisorRunning, true, 1000 },
-                         { "advisor-done-pt-BR", AdvisorDone, true, 1300 },
-                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 1300 },
-                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 1000 },
-                         { "advisor-hidden-off", Off, true, 560 } };
+const Scene scenes[] = { { "nr-off", Off, false, 900 },
+                         { "d3d12-simple", Simple, false, 900 },
+                         { "d3d12-full", Full, false, 4200 },
+                         { "individual-passes", Passes, false, 4200 },
+                         { "present-hdr", Hdr, false, 4200 },
+                         { "native-vulkan", Vulkan, false, 4200 },
+                         { "model-missing", Missing, false, 900 },
+                         { "comparison", Compare, false, 4200 },
+                         { "d3d12-simple-pt-BR", Simple, true, 900 },
+                         { "present-hdr-pt-BR", Hdr, true, 4200 },
+                         { "advisor-eligible-pt-BR", AdvisorEligible, true, 1600 },
+                         { "advisor-running-pt-BR", AdvisorRunning, true, 1600 },
+                         { "advisor-done-pt-BR", AdvisorDone, true, 1900 },
+                         { "advisor-rr-done-pt-BR", AdvisorRRDone, true, 1900 },
+                         { "advisor-timing-off-pt-BR", AdvisorWaiting, true, 1600 },
+                         { "advisor-hidden-off", Off, true, 900 },
+                         { "model-missing-pt-BR-narrow", Missing, true, 1100, 420 },
+                         { "model-missing-narrow", Missing, false, 1100, 420 },
+                         { "present-hdr-pt-BR-narrow", Hdr, true, 4200, 420 },
+                         { "native-vulkan-narrow", Vulkan, false, 4200, 480 } };
 } // namespace Preview
 int main(int argc, char** argv)
 {
@@ -185,7 +190,7 @@ int main(int argc, char** argv)
         ImGui::CreateContext();
         auto& io = ImGui::GetIO();
         io.IniFilename = io.LogFilename = nullptr;
-        io.DisplaySize = ImVec2(560, float(scene->height));
+        io.DisplaySize = ImVec2(float(scene->width), float(scene->height));
         io.DeltaTime = 1.0f / 60.0f;
         io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset | ImGuiBackendFlags_RendererHasTextures;
         if (Config::Instance()->UseHQFont.value_or_default())
@@ -202,13 +207,39 @@ int main(int argc, char** argv)
         {
             ImGui::NewFrame();
             ImGui::SetNextWindowPos(ImVec2(12, 12));
-            ImGui::SetNextWindowSize(ImVec2(536, float(scene->height) - 24));
+            ImGui::SetNextWindowSize(ImVec2(float(scene->width) - 24, float(scene->height) - 24));
             ImGui::Begin("Retoque | synthetic preview", nullptr,
                          ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::TextDisabled("PREVIEW | synthetic values | no game or GPU");
             ImGui::Separator();
             if (frame == 4)
                 ImGui::LogToBuffer();
+            ImGui::SetNextWindowPos(ImVec2(-2000, -2000));
+            ImGui::SetNextWindowSize(ImVec2(560, 900));
+            ImGui::Begin("identity-test", nullptr, ImGuiWindowFlags_NoSavedSettings);
+            for (const char* label : { "Plain", "Reset##detail", "Long translated caption###fixed" })
+                for (float width : { 20.0f, 500.0f })
+                {
+                    ImGui::PushItemWidth(width);
+                    const ImGuiID expected = ImGui::GetID(label);
+                    float value = 0.5f;
+                    ImGui::SliderFloat(DlssNr::MenuLayout::FieldLabel(label), &value, 0, 1);
+                    if (GImGui->LastItemData.ID != expected)
+                        throw std::runtime_error("FieldLabel changed ImGui identity");
+                    ImGui::PopItemWidth();
+                }
+            {
+                DlssNr::MenuLayout::WrapText wrap;
+                const float available = ImGui::GetContentRegionAvail().x;
+                ImGui::TextColored(
+                    ImVec4(1, 0, 0, 1), "%s",
+                    "A deliberately long recovery explanation repeated to exceed the available panel width: "
+                    "the model is unavailable and the player needs a complete explanation before retrying.");
+                if (ImGui::GetItemRectSize().x > available + 1 ||
+                    ImGui::GetItemRectSize().y <= ImGui::GetTextLineHeight())
+                    throw std::runtime_error("Recovery text did not wrap");
+            }
+            ImGui::End();
             DlssNr::RenderMenu(Config::Instance(), 1.0f);
             contentBottom = ImGui::GetCursorPosY();
             if (frame == 4)
@@ -232,14 +263,14 @@ int main(int argc, char** argv)
                 }
             }
         }
-        Preview::Raster raster(560, scene->height);
+        Preview::Raster raster(scene->width, scene->height);
         raster.Draw(*ImGui::GetDrawData());
         std::filesystem::create_directories(output);
         const auto stem = output / scene->name;
         raster.Save(stem.string() + ".png");
         std::ofstream(stem.string() + ".txt") << text;
         std::ofstream(stem.string() + ".json")
-            << "{\"width\":560,\"height\":" << scene->height << ",\"triangles\":" << raster.triangles
+            << "{\"width\":" << scene->width << ",\"height\":" << scene->height << ",\"triangles\":" << raster.triangles
             << ",\"glyph_pixels\":" << raster.glyphPixels << ",\"content_bottom\":" << contentBottom << "}\n";
         ImGui::DestroyContext();
         std::cout << scene->name << ": " << raster.triangles << " triangles, " << raster.glyphPixels

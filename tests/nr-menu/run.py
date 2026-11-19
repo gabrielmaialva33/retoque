@@ -13,6 +13,10 @@ root = Path(__file__).resolve().parents[2]
 source = (root / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
 # The real presentation gate must precede every advanced section, after common status/profile lines.
 menu = source[source.index('void RenderMenu('):]
+assert menu.index('ScopedIndent indent {};') < menu.index('MenuLayout::WrapText wrap;')
+retry = menu[menu.index('if (!DlssNr::DriverGate::Refuses())'):menu.index('DlssNr::RetryAfterFailure();')]
+assert 'SameLine' not in retry, 'recovery action must have its own line'
+
 assert 'if (RenderSimpleView(config, nativeVulkan, menuResScale))' in menu
 assert menu.index('GameProfiles::Summary()') < menu.index('if (RenderSimpleView(') < menu.index('Localization::Tr("Source")')
 assert re.search(r'if \(RenderSimpleView\(config, nativeVulkan, menuResScale\)\)\s*return;', menu)

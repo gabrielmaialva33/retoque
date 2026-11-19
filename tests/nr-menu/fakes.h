@@ -265,3 +265,13 @@ bool cadenceAvailable = true;
 bool CadenceAvailable() { return cadenceAvailable; }
 const char* CadenceStatus() { return DlssNr::Cadence::Describe(DlssNr::Cadence::Reason::Carried, 2); }
 } // namespace DlssNr
+
+namespace DlssNr::MenuLayout
+{
+const char* FieldLabel(const char* label) { return label; }
+} // namespace DlssNr::MenuLayout
+
+namespace DlssNr::MenuLayout
+{
+inline bool Checkbox(const char* label, bool* value) { return ImGui::Checkbox(label, value); }
+} // namespace DlssNr::MenuLayout

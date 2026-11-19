@@ -188,6 +188,21 @@ out is the game's own NR setting, and the pass comes back 5 s after it is turned
 
 ---
 
+### 2.7 Panel layout and readable recovery
+
+| State | Presentation contract |
+|---|---|
+| Failure reason, retry allowed | Complete wrapped reason; Retry on its own line, with its original ID/action |
+| Driver refusal or latched out-of-date | Same wrapped reason; no Retry (section 2.5) |
+| Long text in English or a loaded dictionary | Wrap at the panel content edge, including coloured/disabled guidance |
+| Field label plus editor exceeds available width | Wrapped label above its editor; original ImGui ID, range and Config write |
+| White-point source/HDR, route and capture states | Every availability row in sections 2.1–2.6 remains unchanged |
+
+The shell is at most 680 scaled pixels, minus the translated sidebar, padding, card and indent.
+The CPU fixtures include 420- and 480-pixel canvases as width pressure, in addition to 560 pixels;
+they are isolated panels, not a shell/game qualification. `FieldLabel` is only for single-call fields,
+never a begin/end popup pair. Real ImGui assertions verify the original item ID in both layout modes.
+
 ## 3. Per-change-type review (run BEFORE deploy)
 
 Match the change to its type and run that review — as an adversarial pass (a subagent given the diff

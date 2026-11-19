@@ -256,3 +256,5 @@ inline Fixture& Instance()
 }
 } // namespace SlNativeNr
 } // namespace DlssNr
+
+#include <dlssnr/DlssNr_MenuLayout.h>

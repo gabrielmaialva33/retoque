@@ -47,8 +47,10 @@ not instrumentation of a real game. No timestamps or host paths enter the PNG.
 | `advisor-timing-off-pt-BR` | One missing condition and timing recovery action |
 | `advisor-hidden-off` | NR off, no advisor heading or text (Portuguese) |
 
-The fixed canvas is 560 x 560 for simple states and 560 x 2600 for full states.
-Advisor fixtures use 560 x 1000, or 560 x 1300 for result tables; the hidden state uses 560 x 560. This is an isolated,
+The fixed canvas is 560 x 900 for simple states and 560 x 4200 for full states.
+Narrow model-missing states in both languages use 420 x 1100; HDR pt-BR uses 420 x 4200,
+and native Vulkan uses 480 x 4200. These pressure widths cover the shell sidebar consuming panel space.
+Advisor fixtures use 560 x 1600, or 560 x 1900 for result tables; the hidden state uses 560 x 900. This is an isolated,
 long-form panel view at scale 1, with a synthetic title/watermark and enough height to inspect all sections.
 It does **not** reproduce the main window's sidebar, footer, card border, viewport clipping or actual available
 width (which varies with translated tab labels). Long unwrapped text can be clipped horizontally exactly as

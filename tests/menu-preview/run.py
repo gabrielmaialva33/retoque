@@ -13,10 +13,11 @@ sys.path.insert(0, str(ROOT / 'tools/menu-preview'))
 from run import build, run  # noqa: E402
 
 SIMPLE = {'nr-off', 'd3d12-simple', 'model-missing', 'd3d12-simple-pt-BR'}
-ADVISOR_HEIGHTS = {'advisor-eligible-pt-BR': 1000, 'advisor-running-pt-BR': 1000,
-                   'advisor-done-pt-BR': 1300, 'advisor-rr-done-pt-BR': 1300,
-                   'advisor-timing-off-pt-BR': 1000, 'advisor-hidden-off': 560}
-STATES = set(ADVISOR_HEIGHTS) | SIMPLE | {'d3d12-full', 'individual-passes', 'present-hdr', 'native-vulkan', 'comparison', 'present-hdr-pt-BR'}
+ADVISOR_HEIGHTS = {'advisor-eligible-pt-BR': 1600, 'advisor-running-pt-BR': 1600,
+                   'advisor-done-pt-BR': 1900, 'advisor-rr-done-pt-BR': 1900,
+                   'advisor-timing-off-pt-BR': 1600, 'advisor-hidden-off': 900}
+NARROW = {'model-missing-pt-BR-narrow': (420,1100), 'model-missing-narrow': (420,1100), 'present-hdr-pt-BR-narrow': (420,4200), 'native-vulkan-narrow': (480,4200)}
+STATES = set(NARROW) | set(ADVISOR_HEIGHTS) | SIMPLE | {'d3d12-full', 'individual-passes', 'present-hdr', 'native-vulkan', 'comparison', 'present-hdr-pt-BR'}
 
 
 def png_pixels(path, expected):
@@ -72,7 +73,7 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
     images={}
     for state in states:
         one,two = temp/'first'/state,temp/'second'/state
-        expected=(560,ADVISOR_HEIGHTS.get(state,560 if state in SIMPLE else 2600))
+        expected=NARROW.get(state,(560,ADVISOR_HEIGHTS.get(state,900 if state in SIMPLE else 4200)))
         images[state]=png_pixels(one.with_suffix('.png'),expected)
         assert images[state]==two.with_suffix('.png').read_bytes(), f'{state}: nondeterministic PNG'
         stats=json.loads(one.with_suffix('.json').read_text())
@@ -81,7 +82,7 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
         text=one.with_suffix('.txt').read_text()
         assert len(text)>200
         assert 'DLSS Neural Rendering' in text or 'Renderização neural DLSS' in text
-        if state not in SIMPLE and state not in ADVISOR_HEIGHTS:
+        if state not in SIMPLE and state not in ADVISOR_HEIGHTS and not state.startswith('model-missing'):
             assert 'Debug view' in text or 'Visualização de diagnóstico' in text
         if state == 'advisor-hidden-off':
             assert 'Assistente de custo do NR' not in text
@@ -101,4 +102,4 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
         assert images[left]!=images[right], f'{left}/{right}: fixtures unexpectedly identical'
     assert subprocess.run([str(binary),'not-a-state',str(temp/'bad'),str(ROOT)],capture_output=True).returncode != 0
     assert not (temp/'bad').exists()
-print('PASS: 16 named states, advisor visibility and results, actual ImGui glyph pixels, valid PNGs, complete panel height and byte-identical reruns')
+print('PASS: 20 named states, advisor visibility and results, actual ImGui glyph pixels, valid PNGs, complete panel height and byte-identical reruns')

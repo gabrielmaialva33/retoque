@@ -114,3 +114,8 @@ struct State
         return s;
     }
 };
+
+namespace DlssNr::MenuLayout
+{
+const char* FieldLabel(const char* label) { return label; }
+} // namespace DlssNr::MenuLayout
