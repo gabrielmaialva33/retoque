@@ -5,9 +5,41 @@ use crate::model::Outcome;
 use std::path::PathBuf;
 use std::sync::{
     Arc,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     mpsc::{Receiver, Sender, channel},
 };
+use std::time::{Duration, Instant};
+
+/// A log that keeps changing is read again at most this often.
+pub(crate) const LIVE_LOG_INTERVAL: Duration = Duration::from_secs(2);
+
+/// The selected game's log, read again because the watcher saw it change. A running game writes its log many times
+/// a second: these reads run one at a time, the next no sooner than `LIVE_LOG_INTERVAL` after the last began, and
+/// each one's answer is delivered. Asked for as ordinary "logs" jobs, every burst of writes queued a read that
+/// superseded the one before it: the app read a large log over and over beside the game and showed none of it.
+struct LiveLog {
+    wanted: Option<PathBuf>,
+    reading: Arc<AtomicBool>,
+    began: Option<Instant>,
+    interval: Duration,
+}
+impl Default for LiveLog {
+    fn default() -> Self {
+        Self {
+            wanted: None,
+            reading: Default::default(),
+            began: None,
+            interval: LIVE_LOG_INTERVAL,
+        }
+    }
+}
+/// Clears the flag when the read ends, or when it never ran (no worker).
+struct Reading(Arc<AtomicBool>);
+impl Drop for Reading {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum Lane {
@@ -51,6 +83,7 @@ pub struct TaskHub {
     epoch: Arc<AtomicU64>,
     pub(crate) catalog_publications: CatalogPublications,
     catalog_received: u64,
+    live_log: LiveLog,
 }
 
 impl TaskHub {
@@ -70,9 +103,44 @@ impl TaskHub {
             epoch: Arc::new(AtomicU64::new(0)),
             catalog_publications: Default::default(),
             catalog_received: 0,
+            live_log: Default::default(),
         }
     }
+    /// The watcher saw the selected game's log change: read it again, now or when the last read allows.
+    pub(crate) fn log_changed(&mut self, target: PathBuf) {
+        self.live_log.wanted = Some(target);
+        self.read_live_log();
+    }
+    fn read_live_log(&mut self) {
+        if self.live_log.wanted.is_none() || self.live_log.reading.load(Ordering::Acquire) {
+            // A read that is running repaints when it ends, and `drain` comes back here.
+            return;
+        }
+        if let Some(wait) = self
+            .live_log
+            .began
+            .and_then(|began| self.live_log.interval.checked_sub(began.elapsed()))
+            .filter(|wait| !wait.is_zero())
+        {
+            self.ctx.request_repaint_after(wait);
+            return;
+        }
+        let Some(target) = self.live_log.wanted.take() else {
+            return;
+        };
+        self.live_log.began = Some(Instant::now());
+        self.live_log.reading.store(true, Ordering::Release);
+        let reading = Reading(self.live_log.reading.clone());
+        // Not a tracked "logs" request: the Fast lane runs in order, so this answer can only come before that of a
+        // read asked for later, and it is never dropped for one. The view takes it only for the selected folder.
+        self.submit(Lane::Fast, false, "logs-live", None, move |_| {
+            let _reading = reading;
+            crate::model::logs(target)
+        });
+    }
     pub(crate) fn watch(&mut self, target: Option<PathBuf>) {
+        // Another selection: a read still waiting for its turn was for the folder the user left.
+        self.live_log.wanted = None;
         self.watch_generation += 1;
         if !self.watcher.select(self.watch_generation, target.clone())
             && let Some(target) = target
@@ -219,6 +287,7 @@ impl TaskHub {
                 other => out.extend(self.accept_catalog(other)),
             }
         }
+        self.read_live_log();
         out
     }
     fn accept_catalog(&mut self, outcome: Outcome) -> Option<Outcome> {
@@ -271,6 +340,67 @@ mod tests {
             }
             assert!(start.elapsed() < Duration::from_secs(3));
             std::thread::yield_now();
+        }
+    }
+    fn log_reads(events: &[Outcome]) -> Vec<usize> {
+        events
+            .iter()
+            .filter_map(|event| match event {
+                Outcome::Logs {
+                    result: Ok(Some(summary)),
+                    ..
+                } => Some(summary.error_count),
+                _ => None,
+            })
+            .collect()
+    }
+    #[test]
+    fn a_log_that_keeps_changing_is_read_one_at_a_time_and_each_answer_arrives() {
+        use std::io::Write;
+        let temp = tempfile::tempdir().unwrap();
+        let log = temp.path().join("OptiScaler.log");
+        std::fs::write(&log, "[12:00:00.000000] [E] first\n").unwrap();
+        let mut hub = TaskHub::new(egui::Context::default());
+        hub.live_log.interval = Duration::from_millis(60);
+        // The game writes many times a second: every event asks, one read starts, and the game writes on.
+        for _ in 0..20 {
+            hub.log_changed(temp.path().into());
+        }
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&log)
+            .unwrap()
+            .write_all(b"[12:00:01.000000] [E] second\n")
+            .unwrap();
+        // The read that was running answers (it is not dropped for the requests that came after it), and those
+        // requests are one more read, after the interval, with what was added.
+        let mut reads = Vec::new();
+        while reads.len() < 2 {
+            reads.extend(log_reads(&until(&mut hub, |e| !log_reads(e).is_empty())));
+        }
+        assert!(matches!(reads[..], [1 | 2, 2]), "{reads:?}");
+        // And then nothing: twenty events were two reads.
+        let quiet = Instant::now();
+        while quiet.elapsed() < Duration::from_millis(200) {
+            assert!(log_reads(&hub.drain()).is_empty(), "a read nobody asked for");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(hub.live_log.wanted.is_none());
+    }
+    #[test]
+    fn a_log_read_waiting_for_its_turn_is_dropped_when_the_selection_changes() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::write(temp.path().join("OptiScaler.log"), "[12:00:00.000000] [E] first\n").unwrap();
+        let mut hub = TaskHub::new(egui::Context::default());
+        hub.live_log.interval = Duration::from_millis(60);
+        hub.log_changed(temp.path().into());
+        hub.log_changed(temp.path().into());
+        assert_eq!(log_reads(&until(&mut hub, |e| !log_reads(e).is_empty())), [1]);
+        hub.watch(None);
+        let began = Instant::now();
+        while began.elapsed() < Duration::from_millis(200) {
+            assert!(log_reads(&hub.drain()).is_empty(), "read for a folder the user left");
+            std::thread::sleep(Duration::from_millis(5));
         }
     }
     #[test]
