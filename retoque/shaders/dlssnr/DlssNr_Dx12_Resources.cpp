@@ -23,6 +23,10 @@ ID3D12Resource* CreateScratch(ID3D12Device* device, DXGI_FORMAT format, unsigned
     // The model writes its result, so the destination has to be a UAV.
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
+    // Ours, not the game's: the creation hooks see it, and the exposure scan must neither report it nor take it for
+    // a candidate (the enlargement's 1x1 exposure texel is shaped like one). Here, so every route's scratch is covered.
+    ScopedInternalResourceCreation internalResources {};
+
     ID3D12Resource* res = nullptr;
     device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
                                     IID_PPV_ARGS(&res));
@@ -54,6 +58,9 @@ ID3D12Resource* CreatePreUpscaleScratch(ID3D12Device* device, DXGI_FORMAT format
     desc.SampleDesc.Count = 1;
     desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS | D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+    // Ours, not the game's: as CreateScratch, the exposure scan must not see it.
+    ScopedInternalResourceCreation internalResources {};
 
     ID3D12Resource* res = nullptr;
 

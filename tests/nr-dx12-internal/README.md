@@ -28,9 +28,10 @@ GPU lifetime, performance, or native Windows runtime validation.
 `function-owners.json` pins extracted definitions to one renderer unit each;
 adding a declaration elsewhere does not satisfy a definition signature.
 `resource-contract.json` preserves the eleven original helper entries from the step-4
-base (`3a05c194`), ignoring formatting whitespace only. The two intentional hardening
-updates (`CreateGuideClone`, `ReadableGuide`) are individually recorded; the other nine
-hashes stay unchanged. Four new helpers (`DeviceChildBelongsTo`, `GuideCopyFamily`,
+base (`3a05c194`), ignoring formatting whitespace only. The four intentional
+updates (`CreateGuideClone`, `ReadableGuide`, `CreateScratch`, `CreatePreUpscaleScratch`) are
+individually recorded; the other seven hashes stay unchanged.
+Four new helpers (`DeviceChildBelongsTo`, `GuideCopyFamily`,
 `GuideCopyCompatible`, `PresentGuideCopyCompatible`) have explicit extension hashes and
 single-definition ownership entries. The scratch
 generation and descriptor-reuse helper must remain in the core. Resource RAII
@@ -44,6 +45,12 @@ The 2026-10-27 changes are explicit device/copy hardening, not a new extraction 
 Only the two intentionally changed resource-body hashes are updated. The four new helper
 hashes freeze the added contract; behavioral RED/GREEN is in `nr-guide-copy-contract`.
 No production declaration/definition was reordered to satisfy this fixture.
+
+The 2026-11-19 change puts the two scratch allocations inside `ScopedInternalResourceCreation`
+(`OptiScaler/State.h`), so the exposure scan stops reporting and adopting the pass's own surfaces.
+Only those two resource-body hashes are updated, each body gaining that one declaration and its
+comment; `nr-before-upscale` runs `CreatePreUpscaleScratch` against a fake device that counts
+allocations made outside the scope, and `nr-exposure-scan` guards both.
 
 `present-guides-contract.json` pins the 27 moved function bodies to `dd2a5891`,
 with token boundaries preserved and linkage/formatting normalized. Each definition

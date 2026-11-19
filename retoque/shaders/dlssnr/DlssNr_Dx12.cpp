@@ -844,6 +844,14 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     }
 
     g_activePasses = 0;
+
+    // Ours, not the game's, from here to the end of the pass: the meter and the passes it builds (pulse, cadence and
+    // the rest), what the model creates inside CreateFeature and EvaluateFeature, and the views all of them make every
+    // frame. They go through the game's device, where the creation hooks hand them to the exposure scan: in a session
+    // with no UAV of the game's they took 32 of its 40 near-miss lines, and cadence's light state and the
+    // enlargement's exposure texel are shaped like the exposure it looks for. A counter on this thread, no lock
+    // (State.h); only the scan reads it.
+    ScopedInternalResourceCreation internalResources {};
     auto passSnapshot = cfg.GetDlssNrPassSnapshot();
     if (frame.AfterRayReconstruction)
         passSnapshot.Count = DlssNr::PassConfig::BoundRRCount(cfg.DlssNrRRPasses.value_or_default());

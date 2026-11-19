@@ -6,7 +6,8 @@ python3 tests/run_all.py --only nr-exposure-scan -v
 ```
 
 The production `retoque/dlssnr/DlssNr_ExposureScan.cpp` compiled with `g++` under ASan and UBSan against
-`stubs/` (the D3D12 declarations it names, its two Config keys families, the log macros) and driven by
+`stubs/` (the D3D12 declarations it names, its two Config keys families, the log macros; the internal-creation
+scope is the production class, written beside the build from `OptiScaler/State.h`) and driven by
 `cases.cpp` through its public API, the way the creation hooks, the NR pass and `ReleaseFeature` drive it. The
 submission tracker underneath is the production model (`retoque/dlssnr/DlssNr_SubmissionModel.h`); the case
 decides when each recording executes, whether its Signal succeeds and when its fence completes. One case per
@@ -55,6 +56,8 @@ process, because the scan's state is global. Design: `docs/dlssnr/design/exposur
 | `budget` | review E-05, built with a copy budget of 8: at most 8 first copies, none while the budget is held by unconfirmed copies, retained let-gos within it, copying resumes once confirmed |
 | `inert-off`, `inert-unwanted` | NR off, or the scan not the white point's source: no reference, no copy (and with NR off nothing examined) |
 | `untracked` | a list the tracker refuses gets no copies, and the status says why |
+| `internal` | OptiScaler's own creations: inside `ScopedInternalResourceCreation` (nested too) the pass's 1x1 exposure texel, 4x1 light state, 16x16 light grid, a scratch surface, a model-sized buffer and a view-only buffer are not examined, reported as near-misses, referenced, copied or offered; the same shapes after the scope are examined, four held, two reported |
+| `internal-threads` | the scope is the creating thread's alone: with it open here another thread's creation is held, and with it open on another thread this thread's creation is held |
 | `match-off` | `ScanMatch` off: widest travel offers a timer though the meter follows another candidate (the default rule, unchanged) |
 | `match-on` | `ScanMatch` on: nothing offered before the match is sure; then the adapted divisor-form exposure, not the timer |
 | `match-eased` | a lag-0 match (the per-frame target) is eased: a 1 EV flash over one sweep moves the offered value ~0.02 EV |
@@ -67,6 +70,22 @@ that, they check the placed creation hook passes its heap, `ReleaseFeature` call
 boundary once and before the feature is torn down, each `Tick` probes before it sweeps, the sweep tracks the
 slot and every candidate before recording, readings come only from completed recordings and never from elapsed
 sweeps, and the boundary releases view candidates without forgetting the rest.
+
+**OptiScaler's own creations** (review 2026-11-18, item 8). The skip the two `internal` cases exercise is only as
+good as the scopes at the places Retoque creates through the game's device, so the guards also read those sites:
+the scope is a thread-local counter with no lock or shared state, and `NoteResource` and `NoteUav` leave a scoped
+creation before they take the scan's lock or count it (a scope therefore removes lock acquisitions and adds none);
+nothing but the scan reads the scope, so resource tracking and HUDfix see what they saw; `CreateScratch` and
+`CreatePreUpscaleScratch` allocate inside it; `DlssNr_Dx12::Dispatch` opens it once at function level, after its
+admission checks and before anything it creates, with every `g_nr.create` and `g_nr.evaluate` of the renderer and
+the meter, cadence, pulse, motion probe, enlargement and proxy calls inside; the zero guides and their clear views
+are created inside it; and the MFG presenter's four allocating functions open it and are the only ones that
+allocate. Before the scopes were added (`0d6a5220`) 15 of these guards failed, with `nr-zero-guides` and
+`nr-before-upscale` failing on a fake device that counts creations made outside the scope. Twelve mutations were
+each caught: the pass's scope removed, nested in a block, or opened after the model's creation; an evaluate and a
+cadence build outside `Dispatch`; a scratch allocated before its scope; the presenter's outputs unscoped and a new
+allocation elsewhere in it; `NoteResource` or `NoteUav` ignoring the scope (the cases) or checking it under the
+lock (the guard); the zero guides' views made after the scope closed (`nr-zero-guides`).
 
 The review cases (`b0f73a5e`) failed against `0c527c43`, the first version of this change: 6 of them (`budget`,
 `cost`, `off-after-on`, `placed-boundary`, `replay-prune`, `replay-slot`); `prune-model` and `boundary-probe` were
@@ -87,5 +106,7 @@ before, and the retiring bound stopping promotions.
 
 Nothing here runs D3D12, a driver or a GPU. Real reference counts under vkd3d-proton or Windows, whether a
 runtime keeps a placed resource's heap alive, Streamline's or NGX's own lifetime rules, and whether the scan
-finds any particular game's exposure are all outside it. The readback contents are what the fake list wrote,
+finds any particular game's exposure are all outside it. The guards on the creation sites read the source: they
+show where a scope opens, not what a run creates. Whether NGX allocates on the thread that called it (the scope
+is that thread's), and what a library creates when the game calls it directly (FFX's swapchain), are not shown. The readback contents are what the fake list wrote,
 not what a GPU would have; the stub `Track` admits every direct list, where the production one can refuse.

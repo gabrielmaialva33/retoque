@@ -1,8 +1,8 @@
 {
   "base": "3a05c194",
   "definitions": {
-    "CreateScratch": "126f16234b5d9134fc16dfd947621961c45d236b63a144a3afef2495da24cfff",
-    "CreatePreUpscaleScratch": "657f901d8f0b696a63c658d509320a548099eed1c9c29996b9b547ba5803220a",
+    "CreateScratch": "cc7757401d4f8307e43706754b2fc8fb87ebaa250853ede5b7a9be4f451297c2",
+    "CreatePreUpscaleScratch": "a6480077b6852fbcc635252d4423b11619be4b1b2ed57e52425fc3b454140ba9",
     "IsSrgb": "b51530445621dc3e05ac0c840060c106430a418cf4ce24d0ffc5b739d71eb76d",
     "Barrier": "4d82330e6ae07cc202bb568694678b8d8adb776c9aebd715593ba32ca255eaa5",
     "TypedGuideFormat": "2530c900ca5ea0a52ad5102798540dec135ea5bf4ec986281fd2bfb6526a03ee",
@@ -18,6 +18,8 @@
     "PresentGuideCopyCompatible": "7a9e57c45d3fb6e48973f2bc01ae578b296fddc7738edbaa3e85b76b3e8f5aad"
   },
   "updates": {
+    "CreateScratch": "2026-11-19: the allocation is made inside ScopedInternalResourceCreation (State.h), so the DLSS-NR exposure scan neither reports nor adopts the pass's own scratch; nothing else in the body changed. Guarded by nr-exposure-scan.",
+    "CreatePreUpscaleScratch": "2026-11-19: the allocation is made inside ScopedInternalResourceCreation (State.h), as CreateScratch; nothing else in the body changed. Behavioral RED/GREEN: nr-before-upscale.",
     "ReadableGuide": "2026-10-23: full CopyResource shape checks; behavior exercised by nr-guide-copy-contract; 2026-10-27: source/list/clone device checks, family-aware cache reuse and explicit full-copy compatibility before recording; nr-guide-copy-contract.",
     "CreateGuideClone": "2026-10-27: refuse foreign owner and incompatible family/planes/sample descriptor; remove packed-depth-to-R32_FLOAT fallbacks. Behavioral RED/GREEN: nr-guide-copy-contract."
   },

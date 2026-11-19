@@ -141,6 +141,9 @@ struct ID3D12Device
     LUID GetAdapterLuid() { return luid; }
     bool allocationFails = false, formatSupported = true;
     unsigned allocations = 0;
+    // Of those, the ones asked for outside ScopedInternalResourceCreation (the production class; run.py puts it ahead
+    // of this file): the creation hooks hand such a surface to the exposure scan as if the game had made it.
+    unsigned unscopedAllocations = 0;
     std::vector<std::unique_ptr<ID3D12Resource>> owned;
     void AddRef() {}
     void Release() {}
@@ -154,6 +157,7 @@ struct ID3D12Device
                                 ID3D12Resource** out)
     {
         ++allocations;
+        unscopedAllocations += !ScopedInternalResourceCreation::Active();
         if (allocationFails)
         {
             *out = nullptr;
