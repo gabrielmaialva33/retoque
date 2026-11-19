@@ -531,6 +531,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrToggleKey.set_from_config(readInt("DlssNr", "ToggleKey"));
             DlssNrHookMethod.set_from_config(readUInt("DlssNr", "HookMethod"));
             DlssNrRequireDlss.set_from_config(readBool("DlssNr", "RequireDlss"));
+            DlssNrPresentDepth.set_from_config(readString("DlssNr", "PresentDepth", true));
             DlssNrZeroGuideReset.set_from_config(readBool("DlssNr", "ZeroGuideReset"));
             DlssNrSynthMotion.set_from_config(readBool("DlssNr", "SynthMotion"));
             DlssNrUiProtection.set_from_config(readBool("DlssNr", "UiProtection"));
@@ -2030,6 +2031,7 @@ bool Config::SaveIni()
         }
         ini.SetValue("DlssNr", "HookMethod", GetIntValue(Instance()->DlssNrHookMethod.value_for_config()).c_str());
         ini.SetValue("DlssNr", "RequireDlss", GetBoolValue(Instance()->DlssNrRequireDlss.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "PresentDepth", Instance()->DlssNrPresentDepth.value_for_config_or("auto").c_str());
         ini.SetValue("DlssNr", "ZeroGuideReset",
                      GetBoolValue(Instance()->DlssNrZeroGuideReset.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SynthMotion", GetBoolValue(Instance()->DlssNrSynthMotion.value_for_config()).c_str());

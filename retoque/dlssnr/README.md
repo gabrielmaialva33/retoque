@@ -64,6 +64,7 @@ experiment.
 
 | File | Role |
 |---|---|
+| `DlssNr_PresentDepth.h`, `DlssNr_PresentDepthTables.h`, `DlssNr_PresentDepthDx12.h/.cpp` | Startup-only D3D12 `PresentDepth=log`: bounded CPU observation, independent ranks/refusals and separate clock; never supplies a guide to NR. [Design](../../docs/dlssnr/design/present-depth-without-upscaler.md), [host suite](../../tests/nr-present-depth/README.md); game/native qualification pending |
 | `DlssNr.h` | umbrella header; documents the call sites |
 | `DlssNrFeature_Dx12.h` | the namespace-level API the menu and the call sites use |
 | `DlssNr_Menu.cpp` | the settings panel |

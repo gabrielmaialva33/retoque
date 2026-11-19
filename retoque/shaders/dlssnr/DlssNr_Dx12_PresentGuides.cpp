@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_PresentDepthDx12.h>
 
 #include "DlssNr_Dx12_Internal.h"
 
@@ -526,6 +527,7 @@ namespace Dx12Internal
 {
 static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture& source, const DlssNrFrameInfo& frame)
 {
+    DlssNr::PresentDepthDx12::InternalScope depthInternal;
     if (g_nr.failed)
         return false;
 
@@ -822,6 +824,10 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
     StampPresentGuide(slot, stamp, frame, clone.width, clone.height);
     g_presentGuideRing.CommitRecord(slot, clone.width, clone.height, frame.DepthInverted, NowMs(),
                                     &clone.captureWriteUsage, &clone);
+    DlssNr::PresentDepthDx12::Captured(slot, source.depth, frame.DepthInverted,
+                                       frame.DepthSubrectBaseX == 0 && frame.DepthSubrectBaseY == 0 &&
+                                           frame.RenderSubrectWidth == depthDesc.Width &&
+                                           frame.RenderSubrectHeight == depthDesc.Height);
     NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::Recorded, acquire, ResidentGuideBytes(),
                      ParkedGuideBytes());
     if (captureTiming)
