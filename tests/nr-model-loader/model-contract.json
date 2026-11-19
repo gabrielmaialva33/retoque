@@ -7,7 +7,7 @@
     "bool EnsureForwarder()": "f838fba82435357262a40c2f26fb37972b5018fb5a1afba88e124040228f4647",
     "bool NoteModelFault()": "301fde34ac811679b98074fcc87728a678d64743ea3c1c5c4158c862b3bd88b4",
     "bool EnsureCapabilityParams(ID3D12Device* device)": "3fa06d54c6e43880a136f9cb97ddb6dbb821803d96f632270cb4b95ee7246d05",
-    "void ReportScalingRatios()\n{": "8a6a69c414010ef8755fc6eae93af8f82d294e19289a34c081ef96636801f7e8",
+    "void ReportScalingRatios()\n{": "1057d818df8a7c3fa9d40cc36885270230391d27be97492f0ae14be57f6abb8a",
     "void DiscoverFloatSlot(NVSDK_NGX_Parameter* params)\n{": "de233b918fcd40a0e42520d2305ab42ecea9d72c808d9b38dbe65baa93e390f4",
     "void SetExtras(const Config& cfg,": "693b78b3cf78ea646f718d80fdd9c919defa9abfa1402e50e08b25193c99aecc",
     "bool TuningMatchesFeature(const Config& cfg)": "ba464e6ba22bfd6cce0f4af026f80d6d90b1dab2967953986d5067f6db0897ab",
@@ -17,6 +17,7 @@
   "reviewed_changes": [
     "2026-10-30: ProbeProxyDispatch, EnsureCapabilityParams and ProbeD3D11 take the driver-init gate around their NGX create/init calls (retoque/dlssnr/DlssNr_DriverInitGate.h; tests/nr-driver-init-gate)",
     "2026-10-30: EnsureDirectRuntime and EnsureForwarder also resolve the model's stats query (DirectRuntime::QueryStats / the optional dlssnr_query_stats and dlssnr_last_stats_result exports); nothing else in either changed, and an old forwarder without the export is still accepted (docs/dlssnr/design/model-vram-stats.md; tests/nr-model-stats)",
-    "2026-11-09: EnsureForwarder hands NR to another neural producer in the process before loading anything of the model (DlssNr::Consumers::HandOverIfCompeting, [DlssNr] YieldToAddons; tests/nr-consumers); nothing else changed"
+    "2026-11-09: EnsureForwarder hands NR to another neural producer in the process before loading anything of the model (DlssNr::Consumers::HandOverIfCompeting, [DlssNr] YieldToAddons; tests/nr-consumers); nothing else changed",
+    "2026-11-18: ReportScalingRatios formats each ratio with std::to_chars (fixed, 4) instead of snprintf %.4f so processes with a decimal-comma LC_NUMERIC still log dot decimals (tests/nr-config-locale); query calls and messages unchanged"
   ]
 }

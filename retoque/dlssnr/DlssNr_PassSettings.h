@@ -101,6 +101,17 @@ inline std::optional<float> Float(const char* text, float minimum, float maximum
     // Reject a second sign after consuming '+', including the malformed '+-1'.
     if (text[0] == '+' && value.starts_with('-'))
         return std::nullopt;
+    std::string normalized;
+    if (value.find('.') == std::string_view::npos)
+    {
+        const size_t comma = value.find(',');
+        if (comma != std::string_view::npos && value.find(',', comma + 1) == std::string_view::npos)
+        {
+            normalized.assign(value);
+            normalized[comma] = '.';
+            value = normalized;
+        }
+    }
     float parsed = 0.0f;
     const auto [end, error] = std::from_chars(value.data(), value.data() + value.size(), parsed);
     if (error != std::errc() || end != value.data() + value.size() || !std::isfinite(parsed) || parsed < minimum ||

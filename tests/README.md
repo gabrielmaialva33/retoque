@@ -410,6 +410,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-multipass` — portable multi-pass chain helpers.
 - `nr-pass-config` — the pass-settings codec and the four-point Config round trip
   for the master keys.
+- `nr-config-locale` — locale-independent float serialization (`GetFloatValue`, `SerializeAnchors`),
+  single-comma decimal recovery (`isFloat`, `PassConfig::Float`, `LoadAnchors`, `PackOverlayValue`),
+  and dot-decimal NR log lines (`PresentCpu::Format`, `ReportScalingRatios`) sliced from production
+  sources and run under a live comma `LC_NUMERIC` and ASan/UBSan, plus source guards. No GPU.
 - `nr-periphery` — peripheral compression's layout and per-pixel mapping, compiled from the header the
   shader includes: extents and stated refusals, the inverse, monotonicity and no kink at either join,
   the whole-texel centre at 100, the uniform path it must reduce to (the guide read and the downsample),

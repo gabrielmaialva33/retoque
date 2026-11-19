@@ -81,7 +81,8 @@ impl Setting {
         })
     }
 
-    /// Validate before building an edit plan. Numeric settings accept finite values in the runtime range or auto.
+    /// Validate before building an edit plan. Numeric settings accept finite values in the runtime range or auto,
+    /// including unambiguous single-comma decimals (`0,5`) written under a comma locale.
     /// Keeping this beside the schema lets the GUI reject text fallback input without duplicating its rules.
     pub fn accepts(&self, value: &str) -> bool {
         let value = value.trim();
@@ -91,12 +92,20 @@ impl Setting {
         match self.kind {
             Kind::Bool => matches!(value, "true" | "false"),
             Kind::Choice(choices) => choices.contains(&value),
-            Kind::Float { min, max } => value
-                .parse::<f32>()
-                .is_ok_and(|number| number.is_finite() && (min..=max).contains(&number)),
+            Kind::Float { min, max } => {
+                parse_float(value).is_some_and(|number| number.is_finite() && (min..=max).contains(&number))
+            }
             Kind::Int { min, max } => value.parse::<i64>().is_ok_and(|number| (min..=max).contains(&number)),
             Kind::Text => !value.is_empty() && !value.contains(['\r', '\n', '\0']),
         }
+    }
+}
+
+fn parse_float(value: &str) -> Option<f32> {
+    if !value.contains('.') && value.bytes().filter(|&b| b == b',').count() == 1 {
+        value.replacen(',', ".", 1).parse::<f32>().ok()
+    } else {
+        value.parse::<f32>().ok()
     }
 }
 
@@ -410,7 +419,24 @@ mod tests {
     fn working_scale_rejects_invalid_input_and_round_trips_finite_values_or_auto() {
         let setting = all().iter().find(|s| s.key == "WorkingScale").unwrap();
         for invalid in [
-            "abc", "50%", "NaN", "inf", "-inf", "1e50", "0", "0.249", "2.001", "", "1.0junk",
+            "abc",
+            "50%",
+            "NaN",
+            "inf",
+            "-inf",
+            "1e50",
+            "0",
+            "0.249",
+            "2.001",
+            "",
+            "1.0junk",
+            "1,000,000",
+            "1.0,5",
+            "1,0.5",
+            ",",
+            "0,249",
+            "2,001",
+            "0,5junk",
         ] {
             assert!(!setting.accepts(invalid), "accepted {invalid}");
         }
@@ -421,6 +447,27 @@ mod tests {
             let text = ini.to_bytes();
             let round_trip = retoque_core::ini::Ini::parse(&text);
             assert_eq!(round_trip.get(setting.section, setting.key), Some(value));
+        }
+    }
+
+    #[test]
+    fn float_settings_accept_single_comma_decimals_without_dot() {
+        let working_scale = all().iter().find(|s| s.key == "WorkingScale").unwrap();
+        let compare_split = all().iter().find(|s| s.key == "CompareSplit").unwrap();
+        let flow_scale = all().iter().find(|s| s.key == "FlowScale").unwrap();
+        for valid in ["0,25", "0,500000", "0,5", "1,75", "2,0", " 0,500000 "] {
+            assert!(working_scale.accepts(valid), "WorkingScale rejected {valid}");
+        }
+        for valid in ["0,0", "0,500000", "1,0"] {
+            assert!(compare_split.accepts(valid), "CompareSplit rejected {valid}");
+        }
+        for valid in ["0,25", "0,75", "1,0"] {
+            assert!(flow_scale.accepts(valid), "FlowScale rejected {valid}");
+        }
+        for invalid in ["1,000,000", "0.5,0", "0,5.0", ",", ",,", "+-0,5"] {
+            assert!(!working_scale.accepts(invalid), "WorkingScale accepted {invalid}");
+            assert!(!compare_split.accepts(invalid), "CompareSplit accepted {invalid}");
+            assert!(!flow_scale.accepts(invalid), "FlowScale accepted {invalid}");
         }
     }
 
