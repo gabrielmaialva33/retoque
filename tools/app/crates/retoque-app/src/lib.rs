@@ -1,6 +1,7 @@
 //! Retoque's desktop app as a library, so tests can drive the real window (egui_kittest) without a display.
 //! `main.rs` only opens the native window.
 
+pub mod any_window;
 pub mod app;
 pub mod applog;
 pub mod compare;

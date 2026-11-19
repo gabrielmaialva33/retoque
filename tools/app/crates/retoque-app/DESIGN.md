@@ -127,3 +127,18 @@ Game details name their contents: files, versions and folder. The settings expla
 its complete saved-versus-live explanation remains available on hover. Search and settings actions share
 one row; secondary controls move into a named Options menu when they would squeeze search below 160 points.
 Comparison controls with symbols or numeric shorthand have descriptive hover text and accessible names.
+
+## Window capture
+
+| Idea | pt-BR | en | Never |
+|---|---|---|---|
+| Windows capture screen | NR em qualquer janela | NR on any window | A Linux control for Windows capture |
+| Output in another window | Prévia separada | Separate preview | Claiming NR is running when only capture started |
+| Output over the captured window | Sobre a janela original | Over the source window | An overlay without its stop shortcut |
+| Fraction used by the model | Escala de processamento | Processing scale | Output resolution or upscaling |
+| Motion estimated from capture | Estimar movimento pela imagem | Estimate motion from the image | Native game motion vectors |
+
+The screen has one primary action: Start… when idle, Stop while active. Start reviews the exact session choices
+and private-folder preparation; its confirm is Start. Settings stay locked during a session because protocol 1
+has no live settings command. Capture opened, NR running, paused, stopping, refused and restart required are
+separate worded states. Raw host responses stay in Technical details. Linux ships neither this screen nor its entry.
