@@ -72,13 +72,13 @@ pub fn apply(ctx: &egui::Context) {
     visuals.faint_bg_color = Color32::from_rgb(0x19, 0x1C, 0x21);
     visuals.override_text_color = Some(TEXT);
     visuals.selection.bg_fill = ACCENT.gamma_multiply(0.35);
-    visuals.selection.stroke.color = ACCENT;
+    visuals.selection.stroke.color = TEXT_STRONG;
     visuals.hyperlink_color = ACCENT;
     visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(0x25, 0x2A, 0x32);
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x25, 0x2A, 0x32);
     visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(0x2E, 0x34, 0x3D);
     visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x2E, 0x34, 0x3D);
-    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x57, 0x61, 0x70));
+    visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x62, 0x6D, 0x7E));
     visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, ACCENT);
     visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, TEXT_STRONG);
     let radius = CornerRadius::same(8);
@@ -122,6 +122,35 @@ pub fn danger(text: &str) -> egui::Button<'static> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn relative_luminance(c: Color32) -> f64 {
+        let ch = |u: u8| {
+            let s = f64::from(u) / 255.0;
+            if s <= 0.04045 {
+                s / 12.92
+            } else {
+                ((s + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * ch(c.r()) + 0.7152 * ch(c.g()) + 0.0722 * ch(c.b())
+    }
+
+    fn contrast(a: Color32, b: Color32) -> f64 {
+        let (la, lb) = (relative_luminance(a), relative_luminance(b));
+        (la.max(lb) + 0.05) / (la.min(lb) + 0.05)
+    }
+
+    fn over(premul_fg: Color32, opaque_bg: Color32) -> Color32 {
+        let inv = 1.0 - f64::from(premul_fg.a()) / 255.0;
+        let mix = |f: u8, b: u8| (f64::from(f) + f64::from(b) * inv).round().clamp(0.0, 255.0) as u8;
+        Color32::from_rgb(
+            mix(premul_fg.r(), opaque_bg.r()),
+            mix(premul_fg.g(), opaque_bg.g()),
+            mix(premul_fg.b(), opaque_bg.b()),
+        )
+    }
+
     #[test]
     fn dark_theme_overrides_a_light_system_preference() {
         let ctx = egui::Context::default();
@@ -129,5 +158,42 @@ mod tests {
         super::apply(&ctx);
         assert_eq!(ctx.theme(), egui::Theme::Dark);
         assert!(ctx.style_of(egui::Theme::Dark).visuals.dark_mode);
+    }
+
+    #[test]
+    fn wcag_contrast_ratios_meet_aa_for_text_selection_and_controls() {
+        let ctx = egui::Context::default();
+        super::apply(&ctx);
+        let visuals = &ctx.style_of(egui::Theme::Dark).visuals;
+
+        for bg in [BG, SIDE, CARD, ERROR_CARD] {
+            for (name, fg) in [
+                ("TEXT", TEXT),
+                ("TEXT_STRONG", TEXT_STRONG),
+                ("MUTED", MUTED),
+                ("ACCENT", ACCENT),
+                ("GOOD", GOOD),
+                ("WARN", WARN),
+                ("BAD", BAD),
+            ] {
+                let r = contrast(fg, bg);
+                assert!(r >= 4.5, "{name} on {bg:?} contrast {r:.2}:1 < 4.5:1");
+            }
+        }
+        assert!(contrast(ON_ACCENT, ACCENT) >= 4.5);
+        assert!(contrast(ON_ACCENT, BAD) >= 4.5);
+
+        // Selected items (ComboBox options, Command Palette row, selected text) must remain readable.
+        let selected_bg = over(visuals.selection.bg_fill, CARD);
+        let sel_ratio = contrast(visuals.selection.stroke.color, selected_bg);
+        assert!(sel_ratio >= 4.5, "selected text contrast {sel_ratio:.2}:1 < 4.5:1");
+
+        // Control boundaries on cards meet WCAG 1.4.11 (3:1 non-text contrast), and focus uses TEXT_STRONG.
+        let border_ratio = contrast(visuals.widgets.inactive.bg_stroke.color, CARD);
+        assert!(
+            border_ratio >= 3.0,
+            "control border contrast {border_ratio:.2}:1 < 3.0:1"
+        );
+        assert_eq!(visuals.widgets.active.bg_stroke, egui::Stroke::new(2.0, TEXT_STRONG));
     }
 }

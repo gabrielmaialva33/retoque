@@ -52,6 +52,9 @@ pub fn close_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         if active {
             painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
         }
+        if response.has_focus() {
+            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::TEXT_STRONG));
+        }
         let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
         let d = 4.5;
         let c = rect.center();
@@ -78,6 +81,9 @@ pub fn reset_button(ui: &mut egui::Ui, label: &str) -> egui::Response {
         let active = response.hovered() || response.has_focus();
         if active {
             painter.circle_filled(rect.center(), 12.0, ui.visuals().widgets.hovered.weak_bg_fill);
+        }
+        if response.has_focus() {
+            painter.circle_stroke(rect.center(), 13.0, Stroke::new(2.0, theme::TEXT_STRONG));
         }
         let color = if active { theme::TEXT_STRONG } else { theme::MUTED };
         let stroke = Stroke::new(1.6, color);
@@ -449,7 +455,9 @@ pub fn game_row(
         }
     }
     let left = cover.right() + 12.0;
-    let width = (rect.right() - 8.0 - left).max(20.0);
+    // Leave room for the Doctor's 18 px warning badge (`tabs::doctor::row_badge` at `right() - 16.0`) when present.
+    let right_pad = if spoken_extra.is_some() { 30.0 } else { 8.0 };
+    let width = (rect.right() - right_pad - left).max(20.0);
     let name_color = if selected { theme::TEXT_STRONG } else { theme::TEXT };
     let mut job = egui::text::LayoutJob::simple_singleline(name.to_string(), FontId::proportional(15.0), name_color);
     job.wrap = egui::text::TextWrapping::truncate_at_width(width);
@@ -468,7 +476,7 @@ pub fn game_row(
     x += w + 8.0;
     let mut job =
         egui::text::LayoutJob::simple_singleline(detail.to_string(), FontId::proportional(12.5), theme::MUTED);
-    job.wrap = egui::text::TextWrapping::truncate_at_width((rect.right() - 8.0 - x).max(10.0));
+    job.wrap = egui::text::TextWrapping::truncate_at_width((rect.right() - right_pad - x).max(10.0));
     let g = ui.painter().layout_job(job);
     painter.galley(pos2(x, y), g, theme::MUTED);
     if response.has_focus() {
@@ -829,6 +837,24 @@ mod tab_a11y_tests {
                 .data()
                 .supports_action(egui::accesskit::Action::Click)
         );
+    }
+
+    #[test]
+    fn frameless_close_and_reset_buttons_take_keyboard_focus_and_32px_hit_area() {
+        let mut harness = Harness::new_ui(|ui| {
+            super::close_button(ui, "Fechar mensagem");
+            super::reset_button(ui, "Voltar ao automático: Nitidez");
+        });
+        let close = harness.get_by_role_and_label(egui::Role::Button, "Fechar mensagem");
+        let reset = harness.get_by_role_and_label(egui::Role::Button, "Voltar ao automático: Nitidez");
+        assert_eq!(close.rect().size(), egui::vec2(32.0, 32.0));
+        assert_eq!(reset.rect().size(), egui::vec2(32.0, 32.0));
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Fechar mensagem").is_focused());
+        harness.key_press(egui::Key::Tab);
+        harness.run_steps(2);
+        assert!(harness.get_by_label("Voltar ao automático: Nitidez").is_focused());
     }
 }
 
