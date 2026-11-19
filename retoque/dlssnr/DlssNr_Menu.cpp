@@ -1,4 +1,8 @@
 #include "pch.h"
+#include "DlssNr_AdvisorRuntime.h"
+#include "DlssNr_AdvisorPolicy.h"
+#include "DlssNr_AdvisorMenu.h"
+#include <sstream>
 #include <misc/Localization.h>
 #include "DlssNrFeature_Vk.h"
 
@@ -694,6 +698,226 @@ static void RenderGpuTiming(Config* config, bool nativeVulkan)
     RenderGpuTimingReadout();
 }
 
+void AdvisorMenuTick(Config* config, bool visible)
+{
+    if (!AdvisorRuntime::Active())
+        return;
+    const auto& state = ::State::Instance();
+    const bool nativeVulkan =
+        IsRunningVk() || (state.api == API::Vulkan && (!state.currentFeature || !state.currentFeature->IsWithDx12()));
+    const auto gate = AdvisorPolicy::CheckConfig(*config, nativeVulkan);
+    const uint32_t hostRoute =
+        (static_cast<uint32_t>(state.api) << 8) | (config->DlssNrHookMethod.value_or_default() << 16);
+    AdvisorRuntime::Heartbeat(visible, gate != AdvisorPolicy::Gate::Hidden,
+                              gate != AdvisorPolicy::Gate::TimingDisabled && gate != AdvisorPolicy::Gate::TimingSparse,
+                              gate == AdvisorPolicy::Gate::Ready, hostRoute);
+}
+
+// Temporary cost trials; all overrides live in AdvisorRuntime, never in Config.
+static void RenderAdvisor(Config* config, bool nativeVulkan)
+{
+    using namespace Advisor;
+    using Gate = AdvisorPolicy::Gate;
+    const auto gate = AdvisorPolicy::CheckConfig(*config, nativeVulkan);
+    if (gate == Gate::Hidden)
+        return;
+    ImGui::SeparatorText(Localization::Tr("NR cost advisor"));
+    if (gate != Gate::Ready)
+    {
+        const char* reason = "";
+        switch (gate)
+        {
+        case Gate::Stage:
+            reason = Localization::Tr("Choose the after-upscaler stage to measure NR choices.");
+            break;
+        case Gate::Adaptive:
+            reason = Localization::Tr("Turn off adaptive cadence for a repeatable trial.");
+            break;
+        case Gate::Periphery:
+            reason = Localization::Tr("Turn off peripheral compression before the trial.");
+            break;
+        case Gate::Hold:
+            reason = Localization::Tr("Release the held frame before the trial.");
+            break;
+        case Gate::TimingDisabled:
+            reason = Localization::Tr("GPU timing is needed to measure NR choices.");
+            break;
+        case Gate::TimingSparse:
+            reason = Localization::Tr("The trial needs timing for every NR evaluation.");
+            break;
+        default:
+            break;
+        }
+        ImGui::TextWrapped("%s", reason);
+        if ((gate == Gate::TimingDisabled &&
+             ImGui::Button(Localization::Label("Turn on GPU timing###nrAdvisorTiming"))) ||
+            (gate == Gate::TimingSparse &&
+             ImGui::Button(Localization::Label("Use detailed GPU timing###nrAdvisorTimingInterval"))))
+        {
+            config->SetDlssNrGpuTimingEnabled(true);
+            config->SetDlssNrGpuTimingInterval(1);
+        }
+        return;
+    }
+    const auto timing = GpuTiming::GetSnapshot();
+    const auto& m = timing.metadata;
+    const bool afterRR = std::strcmp(m.stage, "after-rr") == 0;
+    const float originalScale = afterRR ? DlssNr::RRWorkingScale() : DlssNr::WorkingScale();
+    const uint32_t originalCadence = config->DlssNrCadence.value_or_default();
+    const uint32_t hostRoute =
+        (static_cast<uint32_t>(::State::Instance().api) << 8) | (config->DlssNrHookMethod.value_or_default() << 16);
+    const bool eligible = timing.valid && timing.sampleAgeMs < 1000 && m.evaluationId != 0 &&
+                          (afterRR || std::strcmp(m.stage, "after") == 0) && !m.captureActive &&
+                          std::isfinite(originalScale) && originalScale >= 0.25f && originalScale <= 2.0f &&
+                          std::abs(originalScale - m.workingScale) < 0.001f && originalCadence >= 1 &&
+                          originalCadence <= 4;
+    static int target = 60;
+    const auto trial = AdvisorRuntime::Snapshot();
+    const bool running = trial.Active();
+    if (running)
+    {
+        ImGui::Text("%s: %u / %u (%u)",
+                    Localization::Tr(trial.Status() == Advisor::State::Settling ? "Settling history"
+                                                                                : "Collecting confirmed samples"),
+                    static_cast<unsigned>(trial.Index() + 1), static_cast<unsigned>(trial.Total()),
+                    static_cast<unsigned>(trial.Count()));
+        if (ImGui::Button(Localization::Label("Cancel trial###nrAdvisorCancel")))
+            AdvisorRuntime::Cancel(Abort::Cancelled);
+    }
+    else if (eligible)
+    {
+        ImGui::SliderInt(Localization::Label("Target base FPS###nrAdvisorTarget"), &target, 20, 240);
+        if (ImGui::Button(Localization::Label("Measure NR choices###nrAdvisorStart")))
+            AdvisorRuntime::Start({ originalScale, originalCadence }, target);
+        ImGui::TextWrapped("%s",
+                           Localization::Tr("Measures cost, not image quality. Keep the scene and camera repeatable."));
+        ImGui::TextWrapped("%s", Localization::Tr("Frame generation may be paused while this menu is open."));
+        ImGui::TextWrapped("%s", Localization::Tr("Stage and pass count stay unchanged during the trial."));
+    }
+    else
+        ImGui::TextWrapped("%s",
+                           Localization::Tr("Waiting for a fresh, uncaptured NR timing sample at the current scale."));
+
+    if (trial.Status() == Advisor::State::Aborted)
+        ImGui::TextWrapped(
+            "%s", Localization::Tr("Trial aborted; temporary overrides removed. Player settings are unchanged."));
+    if (trial.Results().empty())
+        return;
+    const auto& context = trial.BoundContext();
+    const bool measuredRR = context ? context->afterRR : afterRR;
+    const char* scaleKey = measuredRR ? "RRWorkingScale" : "WorkingScale";
+    ImGui::Text("%s: %s", Localization::Tr("Scale setting"), scaleKey);
+    ImGui::TextWrapped("%s", Localization::Tr("Slow tail: mean of the slowest five percent. The target uses mean base "
+                                              "time and a tail limit of 1.5 frame budgets."));
+    std::ostringstream report;
+    report << Localization::Tr(trial.Status() == Advisor::State::Done      ? "Trial complete"
+                               : trial.Status() == Advisor::State::Aborted ? "Trial aborted"
+                                                                           : "Trial in progress")
+           << "\n";
+    report << Localization::Tr("NR cost advisor") << "\n"
+           << Localization::Tr("Target base FPS") << ": " << trial.Target() << "\n";
+    report << Localization::Tr("Scale setting") << ": " << scaleKey << "\n";
+    report << Localization::Tr("Measures cost, not image quality. Keep the scene and camera repeatable.") << "\n";
+    report << Localization::Tr("Frame generation may be paused while this menu is open.") << "\n";
+    report << Localization::Tr("Slow tail: mean of the slowest five percent. The target uses mean base time and a tail "
+                               "limit of 1.5 frame budgets.")
+           << "\n";
+    report << Localization::Tr("Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame "
+                               "share | model / carried | reason")
+           << "\n";
+    if (ImGui::BeginTable("nrAdvisorResults", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg))
+    {
+        ImGui::TableSetupColumn(Localization::Tr("Scale / cadence"));
+        ImGui::TableSetupColumn(Localization::Tr("Clock"));
+        ImGui::TableSetupColumn(Localization::Tr("Median ms"));
+        ImGui::TableSetupColumn(Localization::Tr("Mean ms"));
+        ImGui::TableSetupColumn(Localization::Tr("Slow tail ms"));
+        ImGui::TableSetupColumn(Localization::Tr("Share"));
+        ImGui::TableHeadersRow();
+        for (const auto& result : trial.Results())
+        {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%.0f%% / %u", result.settings.scale * 100, result.settings.cadence);
+            ImGui::TableNextColumn();
+            if (!result.reason.empty())
+            {
+                ImGui::TextUnformatted(Localization::Tr("Refused"));
+                continue;
+            }
+            ImGui::TextUnformatted(Localization::Tr("GPU"));
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", result.medianMs);
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", result.meanMs);
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", result.worst5Ms);
+            ImGui::TableNextColumn();
+            ImGui::Text("%.1f%%", result.share);
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("%u / %u", static_cast<unsigned>(result.modelCount),
+                        static_cast<unsigned>(result.carriedCount));
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(Localization::Tr("Base"));
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", result.frameMs);
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", result.meanFrameMs);
+            ImGui::TableNextColumn();
+            ImGui::Text("%.2f", result.frameWorst5Ms);
+        }
+        ImGui::EndTable();
+    }
+    ImGui::TextWrapped("%s", Localization::Tr("Second line: model / carried evaluations."));
+    for (const auto& result : trial.Results())
+        if (!result.reason.empty())
+            ImGui::TextWrapped("%.0f%% / %u: %s", result.settings.scale * 100, result.settings.cadence,
+                               Localization::Tr(result.reason.c_str()));
+    for (const auto& result : trial.Results())
+        report << result.settings.scale << " / " << result.settings.cadence << " | " << result.medianMs << " / "
+               << result.meanMs << " / " << result.worst5Ms << " | " << result.frameMs << " / " << result.meanFrameMs
+               << " / " << result.frameWorst5Ms << " | " << result.share << "% | " << result.modelCount << " / "
+               << result.carriedCount << " | " << Localization::Tr(result.reason.c_str()) << "\n";
+    if (trial.Status() == Advisor::State::Done)
+    {
+        if (const auto recommended = trial.Recommendation())
+        {
+            const auto chosen = trial.Results()[*recommended].settings;
+            ImGui::Text(Localization::Tr("Measured choice: %.0f%% scale, cadence %u"), chosen.scale * 100,
+                        chosen.cadence);
+            const bool sameContext =
+                eligible && trial.ResultValid() && context && context->afterRR == afterRR &&
+                (context->route & ~1u) == hostRoute && context->width == m.outputWidth &&
+                context->height == m.outputHeight && context->passes == m.requestedPasses &&
+                trial.Results()[0].contract != 0 && trial.Results()[0].contract == m.contractHash &&
+                context->original.scale == originalScale && context->original.cadence == originalCadence;
+            if (*recommended == 0)
+                ImGui::TextWrapped("%s", Localization::Tr("Current settings met the target in this trial."));
+            else if (!sameContext)
+                ImGui::TextWrapped(
+                    "%s", Localization::Tr(
+                              "Wait for the original settings to settle, or run a new trial if the context changed."));
+            else if (ImGui::Button(Localization::Label("Apply measured choice###nrAdvisorApply")))
+            {
+                if (chosen.scale != context->original.scale)
+                {
+                    if (context->afterRR)
+                        config->DlssNrRRWorkingScale = chosen.scale;
+                    else
+                        config->DlssNrWorkingScale = chosen.scale;
+                }
+                if (chosen.cadence != context->original.cadence)
+                    config->DlssNrCadence = chosen.cadence;
+            }
+        }
+        else
+            ImGui::TextWrapped("%s", Localization::Tr("No measured choice met the target. No recommendation."));
+    }
+    if (ImGui::Button(Localization::Label("Copy trial report###nrAdvisorCopy")))
+        ImGui::SetClipboardText(report.str().c_str());
+}
+
 // A slider that only writes its value when the handle is released.
 //
 // Some controls -- intensity, the structure and tone strengths -- are read by the model once, when
@@ -1337,6 +1561,10 @@ void RenderMenu(Config* config, float menuResScale)
 
         // In both views, under the status lines it copies.
         RenderDiagnosticExport(config);
+
+        RenderAdvisor(config, nativeVulkan);
+        if (AdvisorRuntime::Active())
+            return;
 
         if (RenderSimpleView(config, nativeVulkan, menuResScale))
             return;

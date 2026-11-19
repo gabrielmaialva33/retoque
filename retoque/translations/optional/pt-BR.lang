@@ -637,3 +637,56 @@ Game's	Do jogo
 Game's present mode: %s	Modo de apresentação do jogo: %s
 Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	Inverte a textura sem HUD\nO jogo também pode solicitar isso pelo parâmetro Opti.Hudless.Flip
 Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	Substitui o modo de apresentação Vulkan; o jogo recria a swapchain para aplicá-lo.\n\nImmediate: sem V-Sync, com cortes na imagem.\nMailbox: sem cortes; o quadro mais novo substitui o da fila.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, com cortes abaixo da taxa de atualização.\nFIFO Latest Ready: V-Sync, exibe o quadro pronto mais recente a cada atualização.\n\nMailbox e FIFO Latest Ready podem descartar quadros gerados acima da taxa de atualização.\nSão listados apenas os modos compatíveis com a tela.
+
+# NR cost advisor: authored independently; English fallback pending native review outside pt-BR.
+NR cost advisor	Assistente de custo do NR
+Measures cost, not image quality. Keep the scene and camera repeatable.	Mede o custo, não a qualidade da imagem. Mantenha a cena e a câmera comparáveis.
+Stage and passes are not trialled. Vulkan stage changes need a restart.	A etapa e o número de passes não são testados. Mudar a etapa no Vulkan exige reiniciar.
+Settling history	Estabilizando o histórico
+Collecting confirmed samples	Coletando amostras confirmadas
+Cancel trial	Cancelar teste
+Target base FPS	FPS base desejado
+Measure NR choices	Medir opções do NR
+Trial unavailable. Use a running D3D12 Stage 0 route, no frame generation, adaptive cadence, capture or peripheral compression; enable GPU timing at interval 1.	Teste indisponível. Use uma rota D3D12 ativa na etapa 0, sem geração de quadros, cadência adaptativa, captura ou compressão periférica; ative a medição da GPU com intervalo 1.
+Trial aborted; temporary overrides removed. Player settings are unchanged.	Teste interrompido; ajustes temporários removidos. Suas configurações não foram alteradas.
+Scale / cadence | median ms | worst five percent ms | frame share | base frame ms | samples / reason	Escala / cadência | mediana ms | piores cinco por cento ms | parte do quadro | quadro base ms | amostras / motivo
+Scale / cadence	Escala / cadência
+Median ms	Mediana ms
+Worst five percent ms	Piores cinco por cento ms
+Frame share	Parte do quadro
+Base frame ms / reason	Quadro base ms / motivo
+Measured choice: %.0f%% scale, cadence %u	Opção medida: escala de %.0f%%, cadência %u
+Current settings met the target in this trial.	As configurações atuais atingiram a meta neste teste.
+Apply measured choice	Aplicar opção medida
+No measured choice met the target. No recommendation.	Nenhuma opção medida atingiu a meta. Sem recomendação.
+Copy trial report	Copiar relatório do teste
+No complete confirmed timing window	Sem janela completa de tempos confirmados
+Wait for the original settings to settle, or run a new trial if the context changed.	Aguarde as configurações originais estabilizarem ou refaça o teste se o contexto mudou.
+Trial complete	Teste concluído
+Trial aborted	Teste interrompido
+Trial in progress	Teste em andamento
+
+# NR advisor round 2; English fallback pending native review outside pt-BR.
+Choose the after-upscaler stage to measure NR choices.	Escolha a etapa após o upscaler para medir as opções do NR.
+Turn off adaptive cadence for a repeatable trial.	Desative a cadência adaptativa para comparar as opções.
+Turn off peripheral compression before the trial.	Desative a compressão periférica antes do teste.
+Release the held frame before the trial.	Solte o quadro congelado antes do teste.
+GPU timing is needed to measure NR choices.	Ative a medição da GPU para comparar as opções do NR.
+The trial needs timing for every NR evaluation.	O teste precisa medir todas as avaliações do NR.
+Turn on GPU timing	Ativar medição da GPU
+Use detailed GPU timing	Usar medição detalhada da GPU
+Frame generation may be paused while this menu is open.	A geração de quadros pode ficar pausada enquanto este menu estiver aberto.
+Stage and pass count stay unchanged during the trial.	A etapa e o número de passes não mudam durante o teste.
+Waiting for a fresh, uncaptured NR timing sample at the current scale.	Aguardando uma nova medição do NR na escala atual, sem captura em andamento.
+Scale setting	Configuração da escala
+Slow tail: mean of the slowest five percent. The target uses mean base time and a tail limit of 1.5 frame budgets.	Cauda lenta: média dos cinco por cento mais lentos. A meta usa o tempo base médio e limita essa cauda a 1,5 vez o tempo por quadro desejado.
+Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame share | model / carried | reason	Escala / cadência | GPU mediana / média / cauda ms | base mediana / média / cauda ms | parte do quadro | modelo / reaproveitados | motivo
+Clock	Tempo
+Mean ms	Média ms
+Slow tail ms	Cauda ms
+GPU	GPU
+Base	Base
+%u model / %u carried	%u modelo / %u reaproveitados
+Share	Parte
+Refused	Recusado
+Second line: model / carried evaluations.	Segunda linha: avaliações do modelo / reaproveitadas.

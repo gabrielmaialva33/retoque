@@ -640,3 +640,56 @@ Game's	게임 설정
 Game's present mode: %s	게임의 프레젠트 모드: %s
 Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	HUDless 텍스처를 뒤집습니다\n게임이 Opti.Hudless.Flip 매개변수로 요청할 수도 있습니다
 Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	게임의 Vulkan 프레젠트 모드를 재정의합니다. 적용하려면 게임이 스왑체인을 다시 생성합니다.\n\nImmediate: V-Sync 없음, 티어링 발생.\nMailbox: 티어링 없음, 최신 프레임이 대기 중인 프레임을 대체.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, 주사율보다 낮으면 티어링 발생.\nFIFO Latest Ready: V-Sync, 매 주사 시 준비된 최신 프레임 표시.\n\nMailbox와 FIFO Latest Ready는 주사율을 넘는 생성 프레임을 버릴 수 있습니다.\n디스플레이가 지원하는 모드만 표시됩니다.
+
+# NR cost advisor: authored independently; English fallback pending native review outside pt-BR.
+NR cost advisor	NR cost advisor
+Measures cost, not image quality. Keep the scene and camera repeatable.	Measures cost, not image quality. Keep the scene and camera repeatable.
+Stage and passes are not trialled. Vulkan stage changes need a restart.	Stage and passes are not trialled. Vulkan stage changes need a restart.
+Settling history	Settling history
+Collecting confirmed samples	Collecting confirmed samples
+Cancel trial	Cancel trial
+Target base FPS	Target base FPS
+Measure NR choices	Measure NR choices
+Trial unavailable. Use a running D3D12 Stage 0 route, no frame generation, adaptive cadence, capture or peripheral compression; enable GPU timing at interval 1.	Trial unavailable. Use a running D3D12 Stage 0 route, no frame generation, adaptive cadence, capture or peripheral compression; enable GPU timing at interval 1.
+Trial aborted; temporary overrides removed. Player settings are unchanged.	Trial aborted; temporary overrides removed. Player settings are unchanged.
+Scale / cadence | median ms | worst five percent ms | frame share | base frame ms | samples / reason	Scale / cadence | median ms | worst five percent ms | frame share | base frame ms | samples / reason
+Scale / cadence	Scale / cadence
+Median ms	Median ms
+Worst five percent ms	Worst five percent ms
+Frame share	Frame share
+Base frame ms / reason	Base frame ms / reason
+Measured choice: %.0f%% scale, cadence %u	Measured choice: %.0f%% scale, cadence %u
+Current settings met the target in this trial.	Current settings met the target in this trial.
+Apply measured choice	Apply measured choice
+No measured choice met the target. No recommendation.	No measured choice met the target. No recommendation.
+Copy trial report	Copy trial report
+No complete confirmed timing window	No complete confirmed timing window
+Wait for the original settings to settle, or run a new trial if the context changed.	Wait for the original settings to settle, or run a new trial if the context changed.
+Trial complete	Trial complete
+Trial aborted	Trial aborted
+Trial in progress	Trial in progress
+
+# NR advisor round 2; English fallback pending native review outside pt-BR.
+Choose the after-upscaler stage to measure NR choices.	Choose the after-upscaler stage to measure NR choices.
+Turn off adaptive cadence for a repeatable trial.	Turn off adaptive cadence for a repeatable trial.
+Turn off peripheral compression before the trial.	Turn off peripheral compression before the trial.
+Release the held frame before the trial.	Release the held frame before the trial.
+GPU timing is needed to measure NR choices.	GPU timing is needed to measure NR choices.
+The trial needs timing for every NR evaluation.	The trial needs timing for every NR evaluation.
+Turn on GPU timing	Turn on GPU timing
+Use detailed GPU timing	Use detailed GPU timing
+Frame generation may be paused while this menu is open.	Frame generation may be paused while this menu is open.
+Stage and pass count stay unchanged during the trial.	Stage and pass count stay unchanged during the trial.
+Waiting for a fresh, uncaptured NR timing sample at the current scale.	Waiting for a fresh, uncaptured NR timing sample at the current scale.
+Scale setting	Scale setting
+Slow tail: mean of the slowest five percent. The target uses mean base time and a tail limit of 1.5 frame budgets.	Slow tail: mean of the slowest five percent. The target uses mean base time and a tail limit of 1.5 frame budgets.
+Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame share | model / carried | reason	Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame share | model / carried | reason
+Clock	Clock
+Mean ms	Mean ms
+Slow tail ms	Slow tail ms
+GPU	GPU
+Base	Base
+%u model / %u carried	%u model / %u carried
+Share	Share
+Refused	Refused
+Second line: model / carried evaluations.	Second line: model / carried evaluations.
