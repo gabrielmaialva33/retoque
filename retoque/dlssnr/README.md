@@ -4,6 +4,10 @@ A self-contained module that drives NVIDIA's DLSS Neural Rendering model (`nvngx
 feature 18) over the frames OptiScaler already handles. Nothing in it is officially supported by
 NVIDIA; the model ships in driver packages and is not redistributed here.
 
+Native Vulkan sequential passes: [design and first safe slice](../../docs/dlssnr/design/nr-vk-passes.md).
+`DlssNr_VkChain.h` implements portable decisions only; it is not connected to the renderer. Vulkan
+continues to use one/master until the submission/completion and live heap-budget adapters exist.
+
 ## For maintainers: how to remove it
 
 There is no compile switch. There used to be one, `OPTI_DLSSNR`, and it was removed on purpose: once

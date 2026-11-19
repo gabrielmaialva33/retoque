@@ -419,6 +419,9 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-model-file` — `[DlssNr] ModelFile`: the startup selection rule, auto preservation, named refusal, labels
   and source wiring; backend loading remains a runtime boundary.
 - `nr-multipass` — portable multi-pass chain helpers.
+- `nr-vk-passes` — first safe slice of Vulkan chain decisions: creation evidence, refusal, budget,
+  settings failure and shared routing/settling, with eight mutants. Runtime remains one/master;
+  no Vulkan or GPU execution.
 - `nr-pass-config` — the pass-settings codec and the four-point Config round trip
   for the master keys.
 - `nr-config-locale` — locale-independent float serialization (`GetFloatValue`, `SerializeAnchors`),
