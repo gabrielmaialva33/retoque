@@ -8,8 +8,8 @@ is the production `OptiScaler.dll`'s present pass, reached through the gated `Re
 Design, decisions and status: [nr-anything.md](../../docs/dlssnr/design/nr-anything.md). **Windows 10 2004 or later,
 an NVIDIA GPU, the user's own NR model. In progress, not qualified: built and host-tested on Linux, never run on
 Windows yet.** Phases 0-2 have a historical MSVC build; phase 3 is implemented and its host test binary is built/tested,
-with MinGW syntax checks of the Win32 units. The integrated MSVC build and native run are still pending. No app screen
-(phase 4), upscaling or depth estimation; capture stays SDR.
+with MinGW syntax checks of the Win32 units. The integrated MSVC build and native run are still pending. The Windows app screen (phase 4) is implemented with portable client/UI tests, not run on Windows.
+No upscaling or depth estimation; capture stays SDR.
 
 ## Files
 

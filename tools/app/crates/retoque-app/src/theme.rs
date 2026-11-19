@@ -6,7 +6,7 @@ use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId,
 
 /// Semantic roles shared by the two themes. Resolve from the local UI (including image-backed scopes),
 /// never process-global state: independent windows and test contexts may use different themes.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[allow(non_snake_case)]
 pub struct Palette {
     pub ACCENT: Color32,
@@ -128,10 +128,25 @@ pub const CLEAR: Color32 = Color32::TRANSPARENT;
 pub const PLACEHOLDER: Color32 = Color32::PLACEHOLDER;
 pub const CHIP_TINT: f32 = 0.10;
 pub const NOTICE_TINT: f32 = 0.08;
-pub const HERO_SHADE_MIN: u8 = 216;
-pub const HERO_SHADE_STOPS: [(f32, f32); 3] = [(0.0, 232.0), (0.42, 224.0), (1.0, HERO_SHADE_MIN as f32)];
+/// The base banner's left-to-right gradient: preserve the artwork outside the text side.
+pub const HERO_SHADE_STOPS: [(f32, f32); 3] = [(0.0, 232.0), (0.42, 150.0), (1.0, 40.0)];
 pub fn image_shade(alpha: u8) -> Color32 {
     Color32::from_black_alpha(alpha)
+}
+
+pub fn comparison_focus_ink(ui: &egui::Ui) -> Color32 {
+    if ui.visuals().dark_mode {
+        IMAGE_INK
+    } else {
+        LIGHT.TEXT_STRONG
+    }
+}
+pub fn comparison_handle_ink(ui: &egui::Ui) -> Color32 {
+    if ui.visuals().dark_mode {
+        IMAGE_BLACK
+    } else {
+        LIGHT.ON_ACCENT
+    }
 }
 
 // Type scale, in points. Body text is 14.5 and small text 13 (set in `apply`); nothing else uses ad-hoc sizes.
@@ -201,15 +216,36 @@ pub fn visuals(theme: egui::Theme) -> Visuals {
     };
     v.panel_fill = p.BG;
     v.window_fill = p.CARD;
-    v.window_stroke.color = p.CARD_EDGE;
     v.extreme_bg_color = p.CANVAS;
     v.faint_bg_color = p.FAINT;
-    v.code_bg_color = p.WIDGET;
     v.override_text_color = Some(p.TEXT);
-    v.weak_text_color = Some(p.MUTED);
     v.selection.bg_fill = p.ACCENT.gamma_multiply(0.35);
     v.selection.stroke.color = p.TEXT_STRONG;
     v.hyperlink_color = p.ACCENT;
+    if theme == egui::Theme::Dark {
+        // Exact base visuals, with only the control-boundary exception proved below.
+        v.widgets.inactive.weak_bg_fill = p.WIDGET;
+        v.widgets.inactive.bg_fill = p.WIDGET;
+        v.widgets.hovered.weak_bg_fill = p.HOVER;
+        v.widgets.hovered.bg_fill = p.HOVER;
+        v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, p.CONTROL_EDGE);
+        v.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, p.ACCENT);
+        v.widgets.active.bg_stroke = egui::Stroke::new(2.0, p.TEXT_STRONG);
+        v.widgets.open.bg_stroke.color = p.CONTROL_EDGE;
+        for w in [
+            &mut v.widgets.noninteractive,
+            &mut v.widgets.inactive,
+            &mut v.widgets.hovered,
+            &mut v.widgets.active,
+            &mut v.widgets.open,
+        ] {
+            w.corner_radius = CornerRadius::same(8);
+        }
+        return v;
+    }
+    v.window_stroke.color = p.CARD_EDGE;
+    v.code_bg_color = p.WIDGET;
+    v.weak_text_color = Some(p.MUTED);
     v.warn_fg_color = p.WARN;
     v.error_fg_color = p.BAD;
     v.text_cursor.stroke.color = p.TEXT_STRONG;
@@ -277,6 +313,153 @@ mod tests {
             mix(premul_fg.g(), opaque_bg.g()),
             mix(premul_fg.b(), opaque_bg.b()),
         )
+    }
+
+    #[test]
+    fn dark_palette_is_pinned_to_base_with_reviewed_control_edge() {
+        assert_eq!(
+            DARK,
+            Palette {
+                ACCENT: Color32::from_rgb(0xF0, 0xA8, 0x45),
+                GOOD: Color32::from_rgb(0x6C, 0xCB, 0x8E),
+                WARN: Color32::from_rgb(0xE6, 0xC2, 0x5C),
+                BAD: Color32::from_rgb(0xEE, 0x70, 0x70),
+                MUTED: Color32::from_rgb(0x8E, 0x97, 0xA4),
+                TEXT: Color32::from_rgb(0xD6, 0xDB, 0xE2),
+                TEXT_STRONG: Color32::from_rgb(0xF5, 0xF7, 0xFA),
+                BG: Color32::from_rgb(0x12, 0x14, 0x18),
+                SIDE: Color32::from_rgb(0x17, 0x1A, 0x1F),
+                CARD: Color32::from_rgb(0x1C, 0x20, 0x26),
+                ERROR_CARD: Color32::from_rgb(0x2D, 0x1D, 0x23),
+                CARD_EDGE: Color32::from_rgb(0x2A, 0x2F, 0x37),
+                ON_ACCENT: Color32::from_rgb(0x1A, 0x14, 0x0A),
+                ON_IMAGE: Color32::from_gray(220),
+                CANVAS: Color32::from_rgb(0x0E, 0x10, 0x13),
+                FAINT: Color32::from_rgb(0x19, 0x1C, 0x21),
+                WIDGET: Color32::from_rgb(0x25, 0x2A, 0x32),
+                HOVER: Color32::from_rgb(0x2E, 0x34, 0x3D),
+                ACTIVE: Color32::from_gray(55),
+                OPEN: Color32::from_gray(27),
+                CONTROL_EDGE: Color32::from_rgb(0x6C, 0x77, 0x88),
+            }
+        );
+        assert_eq!(HERO_SHADE_STOPS, [(0.0, 232.0), (0.42, 150.0), (1.0, 40.0)]);
+        assert_eq!(CHIP_TINT, 0.10);
+        assert_eq!(NOTICE_TINT, 0.08);
+    }
+
+    #[test]
+    fn dark_visuals_differ_from_base_only_at_proven_control_boundaries() {
+        let mut visuals = Visuals::dark();
+        visuals.panel_fill = DARK.BG;
+        visuals.window_fill = DARK.CARD;
+        visuals.extreme_bg_color = DARK.CANVAS;
+        visuals.faint_bg_color = Color32::from_rgb(0x19, 0x1C, 0x21);
+        visuals.override_text_color = Some(DARK.TEXT);
+        visuals.selection.bg_fill = DARK.ACCENT.gamma_multiply(0.35);
+        visuals.selection.stroke.color = DARK.TEXT_STRONG;
+        visuals.hyperlink_color = DARK.ACCENT;
+        visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(0x25, 0x2A, 0x32);
+        visuals.widgets.inactive.bg_fill = Color32::from_rgb(0x25, 0x2A, 0x32);
+        visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(0x2E, 0x34, 0x3D);
+        visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x2E, 0x34, 0x3D);
+        visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, Color32::from_rgb(0x62, 0x6D, 0x7E));
+        visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, DARK.ACCENT);
+        visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, DARK.TEXT_STRONG);
+        let radius = CornerRadius::same(8);
+        for w in [
+            &mut visuals.widgets.noninteractive,
+            &mut visuals.widgets.inactive,
+            &mut visuals.widgets.hovered,
+            &mut visuals.widgets.active,
+            &mut visuals.widgets.open,
+        ] {
+            w.corner_radius = radius;
+        }
+        let mut actual = super::visuals(egui::Theme::Dark);
+        // Baseline border values are restored only for the equality comparison below.
+        actual.widgets.inactive.bg_stroke = visuals.widgets.inactive.bg_stroke;
+        actual.widgets.open.bg_stroke = visuals.widgets.open.bg_stroke;
+        assert_eq!(actual, visuals);
+    }
+
+    #[test]
+    fn dark_contrast_exceptions_have_failing_base_pairs() {
+        let check = |name: &str, old_fg, old_bg, new_fg, new_bg, minimum| {
+            let before = contrast(old_fg, old_bg);
+            let after = contrast(new_fg, new_bg);
+            eprintln!("{name}: {before:.4}:1 -> {after:.4}:1 (minimum {minimum})");
+            assert!(before < minimum, "{name} did not need a change");
+            assert!(after >= minimum, "{name} still fails");
+        };
+        check(
+            "inactive border / widget",
+            Color32::from_rgb(0x62, 0x6d, 0x7e),
+            DARK.WIDGET,
+            DARK.CONTROL_EDGE,
+            DARK.WIDGET,
+            3.0,
+        );
+        check(
+            "open border / open fill",
+            Color32::from_gray(60),
+            DARK.OPEN,
+            DARK.CONTROL_EDGE,
+            DARK.OPEN,
+            3.0,
+        );
+        for (name, fg) in [("BAD badge / CARD", DARK.BAD), ("MUTED badge / CARD", DARK.MUTED)] {
+            check(
+                name,
+                fg,
+                over(fg.gamma_multiply(0.16), DARK.CARD),
+                fg,
+                over(fg.gamma_multiply(CHIP_TINT), DARK.CARD),
+                4.5,
+            );
+        }
+        check(
+            "MUTED / tinted CARD",
+            DARK.MUTED,
+            over(DARK.ACCENT.gamma_multiply(0.12), DARK.CARD),
+            DARK.MUTED,
+            over(DARK.ACCENT.gamma_multiply(NOTICE_TINT), DARK.CARD),
+            4.5,
+        );
+        let row = over(DARK.ACCENT.gamma_multiply(0.22), DARK.SIDE);
+        for (name, fg) in [("MUTED / selected row", DARK.MUTED), ("BAD / selected row", DARK.BAD)] {
+            check(name, fg, row, DARK.TEXT_STRONG, row, 4.5);
+        }
+        check(
+            "chart reference / CARD",
+            DARK.CARD_EDGE,
+            DARK.CARD,
+            DARK.CONTROL_EDGE,
+            DARK.CARD,
+            3.0,
+        );
+        check(
+            "chart cursor / CARD",
+            over(Color32::from_white_alpha(40), DARK.CARD),
+            DARK.CARD,
+            DARK.CONTROL_EDGE,
+            DARK.CARD,
+            3.0,
+        );
+        for (name, foreground) in [
+            ("thumbnail focus / white art", IMAGE_INK),
+            ("thumbnail selection / white art", DARK.ACCENT),
+        ] {
+            check(name, foreground, IMAGE_TINT, DARK.ON_ACCENT, IMAGE_TINT, 3.0);
+        }
+        check(
+            "image outline / white art",
+            IMAGE_INK,
+            IMAGE_TINT,
+            IMAGE_BLACK,
+            IMAGE_TINT,
+            3.0,
+        );
     }
 
     #[test]
@@ -348,10 +531,6 @@ mod tests {
                     contrast(p.TEXT_STRONG, over(p.ACCENT.gamma_multiply(0.22), bg)) >= 4.5,
                     "{theme:?}: selected row"
                 );
-            }
-            let hero = over(image_shade(HERO_SHADE_MIN), IMAGE_TINT);
-            for fg in [DARK.TEXT, DARK.TEXT_STRONG, DARK.MUTED, DARK.WARN] {
-                assert!(contrast(fg, hero) >= 4.5, "hero on white art");
             }
             // The opposite ink under image focus outlines and wipe rules cannot disappear on white/black art.
             assert!(contrast(IMAGE_INK, IMAGE_BLACK) >= 3.0);

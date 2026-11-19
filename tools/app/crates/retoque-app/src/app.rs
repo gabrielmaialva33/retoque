@@ -159,6 +159,10 @@ pub struct RetoqueApp {
     pub(crate) prefs: crate::prefs_ui::State,
     #[cfg(windows)]
     pub(crate) app_installer: crate::app_install_ui::State,
+    #[cfg(windows)]
+    pub(crate) any_window: crate::any_window::screen::Screen,
+    #[cfg(windows)]
+    pub(crate) any_window_models: bool,
     pub(crate) payload_ui: crate::payload_ui::State,
     pub(crate) nr_fetch: crate::tabs::model::NrFetchState,
     pub(crate) folder_dialog: Option<FolderDialog>,
@@ -216,6 +220,10 @@ impl RetoqueApp {
             prefs: crate::prefs_ui::State::default(),
             #[cfg(windows)]
             app_installer: crate::app_install_ui::State::default(),
+            #[cfg(windows)]
+            any_window: Default::default(),
+            #[cfg(windows)]
+            any_window_models: false,
             payload_ui: crate::payload_ui::State::default(),
             nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,
@@ -282,6 +290,16 @@ impl RetoqueApp {
     /// One frame of the whole window. Apart from `eframe::App` so tests can draw the real window headless.
     pub(crate) fn window(&mut self, ui: &mut egui::Ui) {
         self.receive();
+        #[cfg(windows)]
+        {
+            self.any_window.poll();
+            if self.selected.is_some() {
+                self.any_window.open = false;
+            }
+            if self.any_window.active() {
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+            }
+        }
         self.global_drop_input(ui.ctx());
         self.shell_shortcuts(ui.ctx());
         if ui.ctx().input(|i| i.viewport().close_requested()) && !self.writing.is_empty() {
@@ -332,6 +350,13 @@ impl RetoqueApp {
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                 );
                 self.watcher_notice(&mut child);
+                #[cfg(windows)]
+                if self.any_window.open {
+                    self.any_window_page(&mut child);
+                } else {
+                    self.game(&mut child);
+                }
+                #[cfg(not(windows))]
                 self.game(&mut child);
                 ui.advance_cursor_after_rect(rect);
             });

@@ -505,18 +505,25 @@ fn audited_banner_and_tiles_fit_at_every_zoom_and_language() {
 #[test]
 #[ignore = "manual read-only library render; requires RETOQUE_LOOK_SHOTS"]
 fn render_audited_library() {
-    render_library_appearance(theme::Appearance::Dark);
+    render_library_appearance(theme::Appearance::Dark, false);
 }
 
 #[cfg(feature = "visual-tests")]
 #[test]
 #[ignore = "manual read-only light theme render; requires RETOQUE_LOOK_SHOTS"]
 fn render_light_theme() {
-    render_library_appearance(theme::Appearance::Light);
+    render_library_appearance(theme::Appearance::Light, true);
 }
 
 #[cfg(feature = "visual-tests")]
-fn render_library_appearance(appearance: theme::Appearance) {
+#[test]
+#[ignore = "manual read-only dark theme render; requires RETOQUE_LOOK_SHOTS"]
+fn render_dark_theme() {
+    render_library_appearance(theme::Appearance::Dark, true);
+}
+
+#[cfg(feature = "visual-tests")]
+fn render_library_appearance(appearance: theme::Appearance, theme_review: bool) {
     let out = PathBuf::from(std::env::var("RETOQUE_LOOK_SHOTS").expect("scratch output folder"));
     let phase = std::env::var("RETOQUE_LOOK_PHASE").unwrap_or_else(|_| "after".into());
     let (games, _) = retoque_discovery::discover(&retoque_discovery::Config::default());
@@ -529,7 +536,7 @@ fn render_library_appearance(appearance: theme::Appearance) {
     let light = appearance == theme::Appearance::Light;
     let review_dir = tempfile::tempdir().unwrap();
     std::fs::write(review_dir.path().join("OptiScaler.ini"), "[DlssNr]\nEnabled=false\n").unwrap();
-    let groups = if light {
+    let groups = if theme_review {
         vec![
             ("library", None),
             ("game", Some(Tab::Install)),
@@ -671,6 +678,8 @@ fn render_library_appearance(appearance: theme::Appearance) {
                 .expect("offscreen render")
                 .save(out.join(if light {
                     format!("app-theme-{group}-{zoom:.1}x.png")
+                } else if theme_review {
+                    format!("app-theme-dark-{group}-{zoom:.1}x.png")
                 } else {
                     format!("app-look-{group}-{phase}-{zoom:.1}x.png")
                 }))

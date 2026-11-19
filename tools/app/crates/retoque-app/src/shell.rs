@@ -56,11 +56,20 @@ pub(crate) enum BarItem {
     Prefs,
     Language,
     GameList,
+    #[cfg(windows)]
+    AnyWindow,
 }
 
 /// The order they go there in as the window narrows: the least used first. The language is also in Preferences;
 /// Rescan library is what a new game needs, so it stays longest.
-const OVERFLOW_ORDER: [BarItem; 4] = [BarItem::Language, BarItem::Prefs, BarItem::GameList, BarItem::Refresh];
+const OVERFLOW_ORDER: &[BarItem] = &[
+    BarItem::Language,
+    BarItem::Prefs,
+    BarItem::GameList,
+    #[cfg(windows)]
+    BarItem::AnyWindow,
+    BarItem::Refresh,
+];
 
 struct BarLayout {
     overflow: Vec<BarItem>,
@@ -88,6 +97,10 @@ impl RetoqueApp {
                 .on_hover_text(self.tr("shell.home"))
                 .clicked()
             {
+                #[cfg(windows)]
+                {
+                    self.any_window.open = false;
+                }
                 self.selected = None;
                 self.open_target(None);
             }
@@ -115,6 +128,10 @@ impl RetoqueApp {
                     self.language_combo(ui, "lang").widget_info(|| {
                         egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t(self.lang, "prefs.language"))
                     });
+                }
+                #[cfg(windows)]
+                if shown(BarItem::AnyWindow) && ui.button(self.tr("any.title")).clicked() {
+                    self.any_window_open();
                 }
                 if shown(BarItem::Prefs) && ui.button(self.tr("prefs.open")).clicked() {
                     self.prefs_open();
@@ -175,6 +192,8 @@ impl RetoqueApp {
         let item = |item: BarItem| match item {
             BarItem::GameList => button(self.game_list_key()),
             BarItem::Prefs => button("prefs.open"),
+            #[cfg(windows)]
+            BarItem::AnyWindow => button("any.title"),
             BarItem::Refresh => button("app.refresh"),
             // As egui draws a ComboBox: the text, the arrow and the button padding, at least `combo_width`.
             BarItem::Language => (text(self.lang.native_name(), egui::TextStyle::Button.resolve(ui.style()))
@@ -194,7 +213,8 @@ impl RetoqueApp {
             fixed.push(spacing.interact_size.y);
         }
         let optional: Vec<BarItem> = OVERFLOW_ORDER
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|i| on_game || *i != BarItem::GameList)
             .collect();
         let more = MORE_MARK.x + pad;
@@ -241,6 +261,13 @@ impl RetoqueApp {
                         }
                     }
                     BarItem::Language => self.language_menu(ui),
+                    #[cfg(windows)]
+                    BarItem::AnyWindow => {
+                        if ui.button(self.tr("any.title")).clicked() {
+                            self.any_window_open();
+                            ui.close();
+                        }
+                    }
                     BarItem::GameList => {
                         if ui.button(self.tr(self.game_list_key())).clicked() {
                             self.sidebar_visible = !self.sidebar_visible;
@@ -935,12 +962,12 @@ impl RetoqueApp {
             if !compact && let Some(logo) = art.logo.as_deref() {
                 ui.add(
                     egui::Image::new(widgets::file_uri(logo))
-                        .fit_to_exact_size(egui::vec2(title_width.min(180.0), 32.0))
+                        .fit_to_exact_size(egui::vec2(title_width.min(300.0), 64.0))
                         .maintain_aspect_ratio(true),
                 );
+            } else {
+                ui.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
             }
-            // A supplied logo may be dark or transparent; it cannot be the only readable game name.
-            ui.label(RichText::new(&game.name).size(theme::DISPLAY).strong());
         });
         match &self.view.status {
             Some(Ok(status)) => {

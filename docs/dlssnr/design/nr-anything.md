@@ -11,7 +11,8 @@ preview window. All of it builds here (MSVC under Wine) and its pure rules and t
 it has run on Windows, on a GPU or with the model**; the first native run on the RTX 3060 is described below.
 Phase 3 is now implemented and host contracts are built/tested
 ([Implementation (phase 3)](#implementation-phase-3)); its integrated MSVC build is pending lead integration.
-The app screen (phase 4) does not exist yet. No Windows run, GPU qualification or latency claim for either output.
+The app screen (phase 4) is implemented ([Implementation (phase 4)](#implementation-phase-4)).
+No Windows run, GPU qualification or latency claim for either output.
 
 ## The answer
 
@@ -651,3 +652,55 @@ Answered on 2026-11-11 except 3 and 5; see [Decisions](#decisions-2026-11-11).
    the app or part of the game list?
 7. **Scope of v1.** Should the first version stay as close to the original as NeuRotic's does (no upscaling, no
    frame generation), with upscaling as the first follow-up?
+
+
+## Implementation (phase 4)
+
+2026-11-19, `app/nr-anywhere-20261119`. The Windows-only app screen and top-bar entry live in
+`tools/app/crates/retoque-app/src/any_window/`. The protocol/state module is portable; the screen is compiled on
+Linux only for tests, never exposed in the product. This UI independently implements the screen idea from the
+NeuRotic comparison above; no source, tables or translations were copied.
+
+- **Protocol truth:** the existing host supports only status and stop on stdin. Settings are a launch snapshot,
+  reviewed before Start and locked until Stop completes. `requested` is the launch request; `applied` is populated
+  only after a protocol-1 `started` event with NR loaded and the expected output. It is a confirmed launch snapshot,
+  not an echo of each runtime setting. NR running additionally requires `nr.running=true`; there is no false live
+  strength/scale application. Status revisions only acknowledge matching queries.
+- **Files:** catalog queries run read-only from the selected payload. Confirmed sessions copy the host, production
+  DLL and forwarder from that one folder into a new private temporary folder. The embedded host INI is changed key
+  by key; the catalog model is referenced by absolute path, never redistributed. No game folder is touched. The
+  selected payload is responsible for supplying a coherent build; this change does not establish binary provenance.
+- **Lifetime:** the native launcher inherits only the intended stdin/stdout handles, creates a kill-on-close job and
+  assigns it via the process creation attribute list before code runs. Pipes and process waits run off the UI thread.
+  Startup timeout is 80 seconds, Stop grace is three seconds; Stop during countdown or preparation remains valid.
+  App installation/update/restart waits for the session owner to finish, and running private files are never replaced.
+- **Bounds:** lines ≤64 KiB, reader queue 64, UI queue 256, catalog ≤512 windows. Garbage, partial lines, incompatible
+  startup, overflow and unexpected exit fail closed. Restart-required stays latched through later stopped events;
+  a retry creates a fresh process/folder. Automatic restart is deliberately absent.
+- **Presentation:** model/catalog or countdown, strength, scale 25–100%, SynthMotion, UiProtection, comparison,
+  preview/overlay. Every refusal gets a localized reason category and next step, including cursor control,
+  exclusive fullscreen, topmost source, occupied hotkey, DPI and restart-required. Exact host text is under Details.
+  Capture remains SDR and output stays source-sized. Recorder exclusion remains at the host default, off.
+
+### Manual phase 4 run on Windows (RTX 3060)
+
+1. Use the integrated app and three host files from the same build, in a dedicated Retoque folder; select it in
+   Preferences. Record app/host/DLL/forwarder hashes, source commit, Windows build and driver. Import the user's
+   own model into Your models. Do not replace files in a running game.
+2. Open **NR em qualquer janela**, refresh windows and select a moving windowed source. Choose the model,
+   50% processing scale, preview, and review **Iniciar…**. Check that choices in the review match the page, capture
+   readiness appears before NR execution, and changing strength/comparison requires stopping and starting again.
+3. Test a five-second countdown while switching to the source. Repeat and press Stop before it expires: no later
+   preview or overlay may appear. Stop during slow model startup too. Refresh/select a source that closes before
+   Start and verify the explained refusal.
+4. Test overlay: hotkey, input pass-through, source menus/dialogs, minimize/restore, move/resize, Alt-Tab, monitor/DPI
+   changes, borderless and exclusive fullscreen. Follow the phase-3 checklist above for separate observations.
+   Set the source Always on top and verify the specific remedy; reserve Ctrl+Alt+F10 elsewhere and verify refusal.
+5. End capture by Stop, preview close and hotkey. Close the app normally, then force-close the app in a separate
+   controlled run: no host may survive either case. Check Task Manager; confirm private files are no longer held.
+6. While capture is running, request an app update/restart. The host must stop before replacement starts. Cancel
+   the update review and verify it performs no update. Test missing host files, unavailable model, and a mismatch
+   between host and DLL; do not induce device loss on this machine merely to manufacture restart-required.
+7. Repeat the page and failures in English. Record actual visuals, GPU/model output, memory, p50/p95 latency and
+   shutdown behavior in a dated evidence record. Linux fake-host/egui tests and Windows cross-check compilation
+   prove none of those runtime properties. No native Windows run has been performed for this implementation.

@@ -63,6 +63,10 @@ pub(crate) mod shell_tests {
             prefs: crate::prefs_ui::State::default(),
             #[cfg(windows)]
             app_installer: crate::app_install_ui::State::default(),
+            #[cfg(windows)]
+            any_window: Default::default(),
+            #[cfg(windows)]
+            any_window_models: false,
             payload_ui: crate::payload_ui::State::default(),
             nr_fetch: crate::tabs::model::NrFetchState::default(),
             folder_dialog: None,

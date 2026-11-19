@@ -964,7 +964,7 @@ impl CompareView {
                                 (
                                     if response.has_focus() { 2.0 } else { 1.0 },
                                     if response.has_focus() {
-                                        crate::theme::palette(ui).TEXT_STRONG
+                                        crate::theme::comparison_focus_ink(ui)
                                     } else {
                                         crate::theme::palette(ui).ACCENT
                                     },
@@ -1134,7 +1134,7 @@ impl CompareView {
                     for y in [-4.0, 4.0] {
                         painter.line_segment(
                             [tip, center + Vec2::new(sign * 3.0, y)],
-                            (1.5, crate::theme::palette(ui).ON_ACCENT),
+                            (1.5, crate::theme::comparison_handle_ink(ui)),
                         );
                     }
                 }
@@ -1254,7 +1254,7 @@ fn icon_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response
         ui.painter().rect_stroke(
             response.rect.shrink(1.0),
             4.0,
-            (2.0, crate::theme::palette(ui).TEXT_STRONG),
+            (2.0, crate::theme::comparison_focus_ink(ui)),
             egui::StrokeKind::Inside,
         );
     }

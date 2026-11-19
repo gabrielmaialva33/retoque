@@ -14,6 +14,7 @@ use std::{io, sync::mpsc};
 #[derive(Default)]
 pub(crate) struct State {
     review: Option<Review>,
+    waiting_host: bool,
     result: Option<ResultState>,
     rx: Option<mpsc::Receiver<io::Result<ResultState>>>,
     error: Option<crate::error::AppError>,
@@ -31,6 +32,9 @@ enum ResultState {
 }
 
 impl State {
+    pub(crate) fn busy(&self) -> bool {
+        self.rx.is_some() || self.waiting_host
+    }
     pub(crate) fn open(&self) -> bool {
         self.review.is_some()
     }
@@ -184,19 +188,43 @@ impl RetoqueApp {
                         }
                         ui.label(t(lang, "app_install.preserve"));
                     });
+                if self.app_installer.waiting_host {
+                    widgets::busy(ui, lang, t(lang, "any.stopping"), None, None);
+                }
                 ui.horizontal(|ui| {
                     cancelled = ui.button(t(lang, "cancel")).clicked();
                     // Restart cannot interrupt a game-install write already in flight.
                     accepted = ui
-                        .add_enabled(!self.jobs.busy(), theme::primary(ui, &confirm))
+                        .add_enabled(
+                            !self.jobs.busy() && !self.app_installer.waiting_host,
+                            theme::primary(ui, &confirm),
+                        )
                         .clicked();
                 });
             });
         if cancelled || modal.should_close() {
             self.app_installer.review = None;
+            self.app_installer.waiting_host = false;
             return;
         }
+        if self.app_installer.waiting_host {
+            if self.any_window.active() || self.jobs.busy() {
+                ctx.request_repaint_after(std::time::Duration::from_millis(50));
+                return;
+            }
+            self.app_installer.waiting_host = false;
+            accepted = true;
+        }
         if !accepted {
+            return;
+        }
+        let replaces_files = matches!(
+            self.app_installer.review.as_ref(),
+            Some(Review::Install(_) | Review::Restart)
+        );
+        if replaces_files && self.any_window.active() {
+            self.any_window.stop();
+            self.app_installer.waiting_host = true;
             return;
         }
         match self.app_installer.review.take().unwrap() {

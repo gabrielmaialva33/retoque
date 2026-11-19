@@ -81,12 +81,14 @@ Preferences offers **Appearance / Aparência** with **System / Sistema**, **Dark
 The choice applies immediately and survives restarts. New installs and old saved state without this field use
 Dark; System follows the operating system's theme, including changes while the window is open. Both palettes
 keep the warm accent and readable status words. Artwork and comparison pixels keep their original colours;
-art-backed game headers use a dark local surface with a readable shade in either appearance.
+art-backed game headers keep their original left-to-right shade in either appearance,
+with a dark local surface for controls and the game name shown only when logo art is absent.
 
 Contrast tests cover both palettes, controls, selected text, image labels, focus outlines, stars and charts.
-The main-view layout matrix also runs in light mode in English and pt-BR. Optional `visual-tests` renders are
+The main-view and Windows NR screen layout matrices also run in light mode in English and pt-BR. Optional `visual-tests` renders are
 read-only, including a synthetic settings review, and save outside the repository through `RETOQUE_LOOK_SHOTS`:
-`cargo test -p retoque-app --features visual-tests render_light_theme -- --ignored --test-threads=1`.
+`cargo test -p retoque-app --features visual-tests render_light_theme -- --ignored --test-threads=1`
+(or `render_dark_theme` for the matching dark views).
 Native OS theme event delivery still needs platform qualification; unit tests inject egui's system-theme input.
 The idea came from the NeuRotic Hub comparison; no code, palettes or translations were copied.
 
@@ -515,3 +517,28 @@ Public references behind the indicator vocabulary and risk wording include
 [Wellbia's XIGNCODE FAQ](https://faq.wellbia.com/index_en.html).
 These are filename heuristics, not signature verification or evidence that the product is currently running.
 Synthetic tests do not qualify native Windows reparse races, game launch, anti-cheat policy, GPU behavior or bans.
+
+## NR on any window (experimental, Windows only)
+
+The Windows top bar opens **NR on any window** (**NR em qualquer janela**). The entry is absent from Linux builds.
+Choose an open window or a countdown, a model from **Your models**, effect strength, processing scale, estimated
+motion, interface protection, comparison and separate preview or overlay output. **Start…** reviews these choices
+before preparing a private temporary session folder. The model is referenced by path, never copied into a game.
+**Stop** works during startup too. Overlay output displays its **Ctrl+Alt+F10** disengage shortcut.
+
+The capture component must be present with `OptiScaler.dll` and `nvngx.dll_dlssnr.dll` in the selected Retoque files
+folder. A catalog query is read-only; a confirmed run copies those three files into a new session folder and edits
+its own INI key by key. Settings are fixed for that session: stop and start again to change them. The app distinguishes
+capture readiness from the host's NR-running event. Startup is bounded to 80 seconds (including the countdown);
+Stop asks gracefully, then terminates the job after three seconds if needed. App management waits for the session
+worker to finish before installing/updating files. Private run files are never updated in place while active.
+
+`src/any_window/protocol.rs` is platform independent. Pipe lines, event queues and catalogs are bounded. Native
+Windows uses `PROC_THREAD_ATTRIBUTE_JOB_LIST` at process creation with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`;
+only the intended pipe handles are inherited. Refusals have English and pt-BR next steps, with raw details folded.
+The screen is built on Linux only in the test harness, for synthetic `egui_kittest` states and offscreen renders.
+
+Native Windows capture, child/job lifetime, keyboard/mouse pass-through, GPU/model execution, image quality and
+latency remain **not qualified**. See [phase 4 implementation and Windows checklist](../../docs/dlssnr/design/nr-anything.md#implementation-phase-4).
+The screen idea and requested-versus-applied distinction came from the NeuRotic Hub comparison; no Hub source,
+text or data was copied.

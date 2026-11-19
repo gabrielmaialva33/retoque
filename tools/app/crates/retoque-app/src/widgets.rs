@@ -571,7 +571,9 @@ pub fn game_row(
         (attention.then_some(state.0), state.1),
         ((!detail.is_empty()).then_some(detail), theme::palette(ui).MUTED),
     ] {
-        let color = if selected {
+        let color = if selected
+            && (!ui.visuals().dark_mode || color == theme::palette(ui).MUTED || color == theme::palette(ui).BAD)
+        {
             theme::palette(ui).TEXT_STRONG
         } else {
             color
@@ -667,7 +669,18 @@ pub fn banner(ui: &mut egui::Ui, name: &str, subtitle: &str, hero: Option<&Path>
         .uv(uv)
         .corner_radius(CornerRadius::same(12))
         .paint_at(ui, rect);
-    hero_shade(ui.painter(), rect, 12.0);
+    // Darken the lower part so the logo and text read on any picture.
+    let fade_top = rect.top() + rect.height() * 0.35;
+    let mut mesh = egui::Mesh::default();
+    let clear = theme::image_shade(0);
+    let dark = theme::image_shade(200);
+    mesh.colored_vertex(pos2(rect.left(), fade_top), clear);
+    mesh.colored_vertex(pos2(rect.right(), fade_top), clear);
+    mesh.colored_vertex(pos2(rect.right(), rect.bottom()), dark);
+    mesh.colored_vertex(pos2(rect.left(), rect.bottom()), dark);
+    mesh.add_triangle(0, 1, 2);
+    mesh.add_triangle(0, 2, 3);
+    ui.painter().add(mesh);
     let pad = 20.0;
     let sub = ui.painter().layout_no_wrap(
         subtitle.to_string(),
@@ -736,7 +749,7 @@ pub fn stat_tile_width(ui: &mut egui::Ui, width: f32, label: &str, value: &str, 
 }
 
 /// The shade over a game's hero art: dark on the left where the name, status and actions sit, opening to the art
-/// on the right. Even the lightest stop keeps text readable on white art; rounded ends match the corners.
+/// on the right. These are the base gradient stops; rounded ends match the art corners.
 pub fn hero_shade(painter: &egui::Painter, rect: Rect, radius: f32) {
     painter.add(hero_shade_shape(rect, radius));
 }
