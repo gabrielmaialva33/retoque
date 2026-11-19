@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""First safe slice only: portable Vulkan chain decisions, no runtime adapter or GPU."""
+"""Portable Vulkan chain decisions and owned creation adapter; no GPU."""
 from pathlib import Path
 import resource
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +31,8 @@ with tempfile.TemporaryDirectory(prefix='nr-vk-passes-') as directory:
          'void Invalidate() {}', '!creation.Ready(22)'),
         ('headroom omitted', 'std::max<uint64_t>(512ull << 20, budget / 5)', 'uint64_t(0)',
          '!Admit(1024 * MiB, 128 * MiB + 1, 0, 0)'),
+        ('secondary creation admitted', 'ticket.level == VkRecording::Level::Primary', 'true',
+         '!refused.Submitted(nonPrimary, 1)'),
         ('failure latch erased', 'return _failed && *_failed == settings;',
          'return _failed && *_failed != settings;', 'failure.Refused(tuning)'),
     ]
@@ -50,8 +53,13 @@ assert after.count('g_fwd.create(') == 1
 assert after.count('g_fwd.evaluate(') == 1
 assert 'cfg.DlssNrIntensity.value_or_default()' in after
 assert 'DlssNr_VkChain.h' not in source
+assert 'VkPresentHost::ChainRecordingAllowed(device, *recording)' in after
+assert '&& !VkPresentHost::ChainCoverageReady(device)' not in after
 menu = (ROOT / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
 controls = menu[menu.index('static void RenderPassControls('):menu.index('static void RenderCadenceControls(')]
 assert 'if (vulkan || config->DlssNrUseProxy.value_or_default())' in controls
 assert controls.index('return;') < controls.index('GetDlssNrPassSnapshot()')
-print('PASS: runtime and menu remain one/master until completion/budget adapters are implemented')
+print('PASS: runtime and menu retain the single-pass boundary until budget and generation integration')
+
+subprocess.run([sys.executable, str(HERE / 'submit_boundary.py')], check=True)
+subprocess.run([sys.executable, str(HERE / 'budget_boundary.py')], check=True)

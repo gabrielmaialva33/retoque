@@ -1,8 +1,11 @@
+#include "pch.h"
+#include <dlssnr/DlssNr_VkCoverage.h>
 // @common-fakes@
 
 #include <string_view>
 #include <unordered_set>
 
+#define LOG_INFO(...) Log(__VA_ARGS__)
 #define VKAPI_CALL
 using PFN_vkVoidFunction = void (*)();
 using PFN_vkGetDeviceProcAddr = PFN_vkVoidFunction (*)(VkDevice, const char*);
@@ -34,6 +37,11 @@ std::unordered_map<void*, void*> installed;
 void* pendingTarget = nullptr;
 void* pendingHook = nullptr;
 LONG commitResult = NO_ERROR;
+LONG beginResult = NO_ERROR, updateResult = NO_ERROR, attachResult = NO_ERROR;
+int aborts = 0;
+bool coverQueues = false;
+
+int rejectedOperation = -1;
 int lookups = 0;
 int exportKind = 0;
 int admissions = 0;
@@ -98,11 +106,25 @@ const std::array<std::array<PFN_vkVoidFunction, 4>, 7> addresses { ADDRESSES(All
 #undef ADDRESSES
 
 void OwnBegin() {}
+void Extra0() {}
+void Extra1() {}
+void Extra2() {}
+void Extra3() {}
+void Extra4() {}
+void Extra5() {}
+constexpr std::array<const char*, 7> extraNames { "vkDestroyDevice",    "vkGetDeviceQueue", "vkGetDeviceQueue2",
+                                                  "vkQueueSubmit",      "vkQueueSubmit2",   "vkQueueSubmit2KHR",
+                                                  "vkCreateCommandPool" };
+const std::array<PFN_vkVoidFunction, 7> extraAddresses { Extra0, Extra1, Extra2, Extra3, Extra4, Extra4, Extra5 };
 bool InOwnModule(const void* address) { return address == reinterpret_cast<const void*>(&OwnBegin); }
 PFN_vkVoidFunction Lookup(const char* name, int kind)
 {
     Check(!g_installMutex.held, "procedure lookup must happen before taking installation lock");
     ++lookups;
+    if (coverQueues)
+        for (size_t i = 0; i < extraNames.size(); ++i)
+            if (std::string_view(name) == extraNames[i])
+                return extraAddresses[i];
     for (size_t operation = 0; operation < names.size(); ++operation)
         if (std::string_view(name) == names[operation])
             return operation == 1 && ownBeginAddress ? &OwnBegin : addresses[operation][kind];
@@ -121,20 +143,33 @@ auto GetProcAddress_() { return &ExportLookup; }
 } // namespace KernelBaseProxy
 
 void* GetCurrentThread() { return nullptr; }
-void DetourTransactionBegin() { pendingTarget = pendingHook = nullptr; }
-void DetourUpdateThread(void*) {}
-void DetourAttach(void** next, void* hook)
+LONG DetourTransactionBegin()
+{
+    pendingTarget = pendingHook = nullptr;
+    return beginResult;
+}
+void DetourTransactionAbort()
+{
+    pendingTarget = pendingHook = nullptr;
+    ++aborts;
+}
+LONG DetourUpdateThread(void*) { return updateResult; }
+LONG DetourAttach(void** next, void* hook)
 {
     Check(g_installMutex.held, "detour bookkeeping must hold installation lock");
     pendingTarget = *next;
     pendingHook = hook;
+    return attachResult;
 }
 LONG DetourTransactionCommit()
 {
-    if (commitResult == NO_ERROR && pendingTarget != nullptr)
+    const bool rejected = rejectedOperation >= 0 &&
+                          std::any_of(addresses[rejectedOperation].begin(), addresses[rejectedOperation].end(),
+                                      [](auto address) { return reinterpret_cast<void*>(address) == pendingTarget; });
+    if (commitResult == NO_ERROR && !rejected && pendingTarget != nullptr)
         installed[pendingTarget] = pendingHook;
     pendingTarget = pendingHook = nullptr;
-    return commitResult;
+    return rejected ? 42 : commitResult;
 }
 
 struct Config
@@ -144,6 +179,12 @@ struct Config
         bool value = true;
         bool value_or_default() const { return value; }
     };
+    struct Count
+    {
+        uint32_t value = 1;
+        uint32_t value_or_default() const { return value; }
+    };
+    Count DlssNrPasses;
     Option DlssNrEnabled;
     Option DlssNrVulkanPresentHost;
     static Config* Instance()
@@ -166,6 +207,12 @@ template <class Pfn> Pfn Through(size_t operation, int kind)
 void FreshInstall()
 {
     Fresh();
+    g_chainState.store(nullptr);
+    g_chainOwner.reset();
+    coverQueues = false;
+    beginResult = updateResult = attachResult = NO_ERROR;
+    aborts = 0;
+    Config::Instance()->DlssNrPasses.value = 1;
     R().ForgetDevice(2);
     R().ForgetDevice(3);
     ResetTargetSets();
@@ -177,6 +224,7 @@ void FreshInstall()
     deviceKinds = { 0, 1, 2, 3 };
     ownBeginAddress = false;
     commitResult = NO_ERROR;
+    rejectedOperation = -1;
     g_module = reinterpret_cast<HMODULE>(1);
     g_getDeviceProcAddr = DeviceLookup;
     Config::Instance()->DlssNrEnabled.value = true;
@@ -203,7 +251,7 @@ Ticket BeginThrough(VkDevice d, VkCommandBuffer buffer, int kind)
 
 void InstallCoversExportAndProcedure()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     for (size_t operation = 0; operation < names.size(); ++operation)
         for (int kind : { 0, 1 })
             Check(installed.count(reinterpret_cast<void*>(addresses[operation][kind])) == 1,
@@ -225,12 +273,12 @@ void InstallCoversExportAndProcedure()
 void MultipleTargetsAndAliases()
 {
     exportKind = 1;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.size() == 7, "identical export and device addresses must be attached once");
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.size() == 7, "repeat installation must not stack another detour");
     auto second = H<VkDevice>(2);
-    HookDevice(second);
+    HookDevice(second, false);
     Check(installed.size() == 14, "another ICD address must receive its own target slot");
     auto buffer = AllocateThrough(second, 2);
     auto ticket = BeginThrough(second, buffer, 2);
@@ -243,7 +291,7 @@ void MultipleTargetsAndAliases()
 
 void ObserverSuccessBoundaries()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     auto buffer = AllocateThrough(device, 1);
     auto old = BeginThrough(device, buffer, 0);
     auto resource = Pin(old);
@@ -284,15 +332,19 @@ void ObserverSuccessBoundaries()
 // The independent observers pass Begin's flags on as the wDx12 wrapper does: the zero-motion probe reads them.
 void ObserverBeginFlagsReachTheTicket()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     auto buffer = AllocateThrough(device, 0);
     VkCommandBufferBeginInfo begin {};
     Check(Through<PFN_vkBeginCommandBuffer>(1, 0)(buffer, &begin) == VK_SUCCESS, "Begin must pass");
     Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Serial, "a Begin without SIMULTANEOUS_USE is serial");
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    Check(Through<PFN_vkBeginCommandBuffer>(1, 1)(buffer, &begin) == VK_SUCCESS, "one-time Begin must pass");
+    Check(R().Current(Key(device), Key(buffer))->oneTime, "one-time creation flag must reach the ticket");
     begin.flags = kSimultaneousUseBit;
     Check(Through<PFN_vkBeginCommandBuffer>(1, 1)(buffer, &begin) == VK_SUCCESS, "Begin must pass");
     Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Simultaneous,
           "a Begin with SIMULTANEOUS_USE is simultaneous");
+    Check(!R().Current(Key(device), Key(buffer))->oneTime, "a new Begin must not retain an old one-time flag");
     Check(Through<PFN_vkBeginCommandBuffer>(1, 0)(buffer, nullptr) == VK_SUCCESS, "Begin must pass");
     Check(R().Current(Key(device), Key(buffer))->reuse == Reuse::Unknown, "a Begin without its info stays unknown");
     Through<PFN_vkFreeCommandBuffers>(4, 0)(device, pool, 1, &buffer);
@@ -315,28 +367,146 @@ void InstallRemainsOptIn()
 void FailedDetourAndOwnAddresses()
 {
     commitResult = 42;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.empty() && g_attached.empty(), "failed transactions must not publish targets");
     auto buffer = AllocateThrough(device, 1);
     VkCommandBufferBeginInfo begin {};
     Through<PFN_vkBeginCommandBuffer>(1, 1)(buffer, &begin);
     Check(!R().Current(1, Key(buffer)), "unobserved allocation must stay inadmissible after detour failure");
     commitResult = NO_ERROR;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     buffer = AllocateThrough(device, 1);
     BeginThrough(device, buffer, 1);
     Check(installed.size() == 14, "later successful installation must recover all target slots");
     FreshInstall();
     ownBeginAddress = true;
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     Check(installed.count(reinterpret_cast<void*>(&OwnBegin)) == 0,
           "function lookup returning our module must not recursively detour its own observer");
     Check(installed.size() == 12, "other lifecycle functions must still install when Begin is unavailable");
 }
 
+// Characterization of the step-1 blocker, not a safe completion adapter. Successful Begin does
+// not certify that all retirement entrypoints installed. Keep this witness until admission has
+// a per-device coverage result, then replace it with an assertion that such admission is refused.
+void PartialInstallCannotCertifyRecordingLifetime()
+{
+    Config::Instance()->DlssNrPasses.value = 2;
+    rejectedOperation = 3; // both ResetCommandBuffer addresses fail; all other hooks install
+    const auto coverage = HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    Check(!coverage.Complete() && !g_chainState.load()->coverage.Ready(Key(device)),
+          "partial installation must deny chain admission");
+    Check(installed.size() == 12, "partial install must leave only reset unwatched in this witness");
+    auto buffer = AllocateThrough(device, 1);
+    auto ticket = BeginThrough(device, buffer, 1);
+    auto resource = Pin(ticket);
+    Check(Through<PFN_vkEndCommandBuffer>(2, 1)(buffer) == VK_SUCCESS, "End must succeed");
+    Check(Through<PFN_vkResetCommandBuffer>(3, 1)(buffer, 0) == VK_SUCCESS, "driver reset must succeed");
+    Check(calls[3][1] == 1 && !resource.expired(),
+          "a successful unobserved reset leaves a pin behind: pin presence is not coverage proof");
+    auto replacement = BeginThrough(device, buffer, 1);
+    Check(replacement.epoch != ticket.epoch && resource.expired(),
+          "the next observed Begin eventually retires it, but cannot retroactively certify coverage");
+}
+
+void AllocationLevelReachesTicket()
+{
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    for (int level : { 0, 1, 42 }) // unknown must never default to primary
+    {
+        VkCommandBufferAllocateInfo info {};
+        info.commandPool = pool;
+        info.commandBufferCount = 1;
+        info.level = level;
+        VkCommandBuffer buffer = nullptr;
+        Check(Through<PFN_vkAllocateCommandBuffers>(0, 1)(device, &info, &buffer) == VK_SUCCESS,
+              "primary/secondary allocation must succeed");
+        auto ticket = BeginThrough(device, buffer, 1);
+        Check(ticket.reuse == Reuse::Serial, "level does not change reuse flags");
+        Check(ticket.level == LevelOf(level), "allocation level must reach the exact recording ticket");
+        auto resource = Pin(ticket);
+        Check(!resource.expired(), "level metadata must not change legacy pin admission");
+        Through<PFN_vkFreeCommandBuffers>(4, 1)(device, pool, 1, &buffer);
+        Check(resource.expired(), "witness cleanup must retire the observed recording");
+    }
+}
+
+void DefaultInstallationMatchesBase()
+{
+    coverQueues = true;
+    BaselineHookDevice(device);
+    const auto baselineTargets = installed;
+    const auto baselineLookups = lookups;
+    FreshInstall();
+    coverQueues = true;
+    // Request is captured before the real create call. A concurrent config edit cannot change it.
+    Config::Instance()->DlssNrPasses.value = 2;
+    HookDevice(device, false);
+    Check(installed == baselineTargets && lookups == baselineLookups,
+          "unrequested device must install exactly the baseline detours and perform the same lookups");
+    Check(!g_chainState.load() && !g_chainOwner,
+          "unrequested device must not construct chain tables or observer mutexes");
+    failAllocation.store(true);
+    const auto refused = EnsureChainState();
+    failAllocation.store(false);
+    Check(!refused && !g_chainState.load(), "failed chain-state allocation must remain absent");
+}
+
+void CoverageCertificates()
+{
+    coverQueues = true;
+    const auto legacy = HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    Check(!legacy.Complete() && !(legacy.installed & DlssNr::VkChain::HookCoverage::CreatePool) && !g_chainState.load(),
+          "one pass must neither install the chain pool hook nor publish a new certificate");
+    Config::Instance()->DlssNrPasses.value = 2;
+    const auto complete = HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
+    Check(complete.Complete() && g_chainState.load()->coverage.Ready(1),
+          "complete required hooks must certify this device");
+    Check(!g_chainState.load()->coverage.Ready(2), "coverage must not cross devices");
+    failAllocation.store(true);
+    const bool readyWithoutHeap = g_chainState.load()->coverage.Ready(1);
+    failAllocation.store(false);
+    Check(readyWithoutHeap, "certificate admission must not allocate");
+    g_chainState.load()->coverage.Forget(1);
+    Check(!g_chainState.load()->coverage.Ready(1), "device retirement revokes its certificate");
+    Check(g_chainState.load()->coverage.Publish(1, {}) && !g_chainState.load()->coverage.Publish(1, complete) &&
+              !g_chainState.load()->coverage.Ready(1),
+          "a partial live-device certificate cannot be upgraded after observation was lost");
+    for (uint64_t d = 2; d <= 16; ++d)
+        Check(g_chainState.load()->coverage.Publish(d, complete),
+              "bounded certificate slots must admit within capacity");
+    Check(!g_chainState.load()->coverage.Publish(17, complete) && !g_chainState.load()->coverage.Ready(17),
+          "capacity exhaustion must deny admission");
+}
+
+void TransactionFailuresCannotCertify()
+{
+    for (auto* failed : { &beginResult, &updateResult, &attachResult })
+    {
+        FreshInstall();
+        coverQueues = true;
+        Config::Instance()->DlssNrPasses.value = 2;
+        *failed = 42;
+        Check(!HookDevice(device, Config::Instance()->DlssNrPasses.value > 1).Complete() &&
+                  !g_chainState.load()->coverage.Ready(1) && installed.empty(),
+              "every transaction phase must succeed before coverage is certified");
+    }
+}
+
+void TargetSaturationCannotCertify()
+{
+    Targets<PFN_vkVoidFunction> targets;
+    const std::array<void*, kTargets> hooks {};
+    std::lock_guard lock(g_installMutex);
+    for (size_t i = 0; i < 4; ++i)
+        Check(AttachTarget(targets, hooks, extraAddresses[i], "fixture"), "first four distinct targets must install");
+    Check(!AttachTarget(targets, hooks, extraAddresses[4], "fixture"), "fifth target must report failure");
+    Check(AttachTarget(targets, hooks, extraAddresses[0], "fixture"), "a known alias still has coverage at capacity");
+}
+
 void ObserverAllocationFailure()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     VkCommandBufferAllocateInfo info {};
     info.commandPool = pool;
     info.commandBufferCount = 1;
@@ -377,7 +547,7 @@ void ObserverAllocationFailure()
 
 void ObserverHandleReuseAfterOutOfMemory()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     auto buffer = AllocateThrough(device, 1);
     const auto old = BeginThrough(device, buffer, 1);
     auto resource = Pin(old);
@@ -431,7 +601,7 @@ void ObserverHandleReuseAfterOutOfMemory()
 
 void ObserverBulkFreePreservesReentrantAllocation()
 {
-    HookDevice(device);
+    HookDevice(device, Config::Instance()->DlssNrPasses.value > 1);
     const std::array<VkCommandBuffer, 2> buffers { AllocateThrough(device, 1), AllocateThrough(device, 1) };
     const auto firstTicket = BeginThrough(device, buffers[0], 1);
     auto oldSecond = Pin(BeginThrough(device, buffers[1], 1));
@@ -472,6 +642,12 @@ int main()
         { "observer-begin-flags-reach-ticket", ObserverBeginFlagsReachTheTicket },
         { "host-install-opt-in", InstallRemainsOptIn },
         { "detour-failure-own-address", FailedDetourAndOwnAddresses },
+        { "partial-install-is-not-lifetime-proof", PartialInstallCannotCertifyRecordingLifetime },
+        { "allocation-level-reaches-ticket", AllocationLevelReachesTicket },
+        { "default-installation-matches-base", DefaultInstallationMatchesBase },
+        { "per-device-coverage-certificates", CoverageCertificates },
+        { "transaction-phase-failures", TransactionFailuresCannotCertify },
+        { "target-capacity-refusal", TargetSaturationCannotCertify },
         { "observer-allocation-failure", ObserverAllocationFailure },
         { "observer-handle-reuse-after-oom", ObserverHandleReuseAfterOutOfMemory },
         { "observer-bulk-free-reentrant-reuse", ObserverBulkFreePreservesReentrantAllocation },

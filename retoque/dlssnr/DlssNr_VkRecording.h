@@ -37,12 +37,27 @@ constexpr Reuse ReuseOf(bool known, uint32_t usageFlags)
     return !known ? Reuse::Unknown : (usageFlags & kSimultaneousUseBit) != 0 ? Reuse::Simultaneous : Reuse::Serial;
 }
 
+enum class Level : uint8_t
+{
+    Unknown,
+    Primary,
+    Secondary,
+};
+
+// Vulkan's allocation levels; absent allocation metadata remains Unknown, never Primary.
+constexpr Level LevelOf(uint32_t level)
+{
+    return level == 0 ? Level::Primary : level == 1 ? Level::Secondary : Level::Unknown;
+}
+
 struct Ticket
 {
     Handle device = 0;
     Handle buffer = 0;
     uint64_t epoch = 0;
     Reuse reuse = Reuse::Unknown; // the recording's, not part of its identity
+    Level level = Level::Unknown; // allocation metadata, also not part of identity
+    bool oneTime = false;         // a completed creation cannot legally replay without a new Begin
 };
 
 // This registry observes successful Vulkan lifecycle calls; it never issues them. A recording keeps its pins
@@ -90,6 +105,8 @@ class Registry
         uint64_t epoch = 0;
         bool recording = false;
         Reuse reuse = Reuse::Unknown;
+        Level level = Level::Unknown;
+        bool oneTime = false;
         std::unique_ptr<PinBatch> pins;
     };
 
@@ -142,7 +159,7 @@ class Registry
         }
     }
 
-    void Allocate(Handle device, Handle pool, const std::vector<Handle>& buffers)
+    void Allocate(Handle device, Handle pool, const std::vector<Handle>& buffers, Level level = Level::Unknown)
     {
         if (device == 0 || pool == 0 || buffers.empty())
             return;
@@ -165,6 +182,8 @@ class Registry
                 record.epoch = 0;
                 record.recording = false;
                 record.reuse = Reuse::Unknown;
+                record.level = level;
+                record.oneTime = false;
             }
         }
         catch (const std::bad_alloc&)
@@ -174,7 +193,7 @@ class Registry
     }
 
     // `reuse` is what the Begin's flags said (ReuseOf); an observer that does not pass them on leaves it Unknown.
-    void Begin(Handle buffer, Reuse reuse = Reuse::Unknown)
+    void Begin(Handle buffer, Reuse reuse = Reuse::Unknown, bool oneTime = false)
     {
         RetiredPins retired;
         {
@@ -189,6 +208,7 @@ class Registry
             record.recording = _nextEpoch != 0;
             record.epoch = _nextEpoch;
             record.reuse = reuse;
+            record.oneTime = oneTime;
             // After the last representable epoch, refuse new recordings instead of reusing old ticket values.
             if (_nextEpoch != 0)
                 ++_nextEpoch;
@@ -286,7 +306,19 @@ class Registry
         const auto it = _records->find(buffer);
         if (it == _records->end() || it->second.device != device || !it->second.recording)
             return std::nullopt;
-        return Ticket { device, buffer, it->second.epoch, it->second.reuse };
+        return Ticket { device, buffer, it->second.epoch, it->second.reuse, it->second.level, it->second.oneTime };
+    }
+
+    std::optional<Handle> PoolOf(const Ticket& ticket) const
+    {
+        std::lock_guard lock(_mutex);
+        if (_closing || !_records)
+            return std::nullopt;
+        const auto it = _records->find(ticket.buffer);
+        if (it == _records->end() || it->second.device != ticket.device || it->second.epoch != ticket.epoch ||
+            !it->second.recording)
+            return std::nullopt;
+        return it->second.pool;
     }
 
     bool Pin(const Ticket& ticket, const std::vector<std::shared_ptr<void>>& pins)

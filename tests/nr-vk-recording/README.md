@@ -178,3 +178,30 @@ These cases demonstrate the after-upscale route's abandoned-device boundary.
 They do not execute an actual lost device or independently exercise the Vulkan
 present model's builder/transport abandonment. Host transport wiring and
 metadata-only pins remain the prerequisites of this contract.
+
+## Creation-observer prerequisites (2026-11-19)
+
+`install_test.py` has two additional characterization cases for the Vulkan pass-chain review:
+
+- `partial-install-is-not-lifetime-proof`: only the two reset detours fail. Production
+  allocation/Begin/End callbacks still admit and pin a recording; a successful unobserved
+  driver reset does not retire that pin until the next observed Begin. A ticket/live pin
+  therefore cannot certify full lifecycle-hook coverage.
+- `serial-secondary-is-not-primary-proof`: primary and secondary allocations both reach the
+  real registry as serial recordings and accept pins. Serial Begin flags do not prove level.
+
+These expose missing inputs to a future creation observer. They are not implementation or
+qualification of it, nor measurements of failures in a real game. When the adapter exists,
+replace the witnesses with its fail-closed admission assertions. The detailed continuation
+is in the [Vulkan pass-chain design](../../docs/dlssnr/design/nr-vk-passes.md).
+
+The follow-up implements a per-device installation certificate: partial installation, any failed
+Detours phase and target/certificate saturation deny chain admission. Certificate reads allocate
+nothing, and Passes=1 publishes no certificate. Allocation level is now retained in the ticket;
+`allocation-level-reaches-ticket` covers primary, secondary and unknown instead of the original
+missing-level witness. Legacy pin admission is unchanged; only chain creation requires Primary.
+
+The chain-closure installation test compares the production target/callback set and lookup count
+against `baseline_hook_device.inc` (the frozen `44ac22cb` body). A false startup request remains
+false after a live config change: no chain state, observer mutex or added detour is installed.
+This host fake does not prove native patch isolation between logical devices sharing an address.

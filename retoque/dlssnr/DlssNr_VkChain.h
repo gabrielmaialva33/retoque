@@ -86,7 +86,8 @@ class Creation
   public:
     Creation(VkRecording::Ticket ticket, uint64_t present) : _ticket(ticket), _present(present)
     {
-        if (ticket.device && ticket.buffer && ticket.epoch && present && ticket.reuse == VkRecording::Reuse::Serial)
+        if (ticket.device && ticket.buffer && ticket.epoch && present && ticket.reuse == VkRecording::Reuse::Serial &&
+            ticket.level == VkRecording::Level::Primary)
             _state = State::Recorded;
     }
 
