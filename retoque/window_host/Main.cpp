@@ -591,6 +591,7 @@ int wmain(int argc, wchar_t** argv)
     case Protocol::Mode::Catalog:
         return Catalog();
     case Protocol::Mode::Run:
+        outputMode = parsed.options.overlay ? "overlay" : "preview";
         try
         {
             winrt::init_apartment(winrt::apartment_type::multi_threaded);

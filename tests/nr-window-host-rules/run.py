@@ -72,6 +72,8 @@ assert 'Overlay::StartRefusal(cursorControl)' in capture, 'overlay requires curs
 assert 'capture.Start(source, devices.d3d11.Get(), !overlay' in main, 'real cursor only in overlay'
 assert 'AreDpiAwarenessContextsEqual' in main, 'overlay checks effective per-monitor-v2 awareness'
 assert run.index('OverlayUpdate(') < run.index('capture.Start('), 'geometry epoch precedes initial capture frame'
+startup = main[main.index('case Protocol::Mode::Run:'):]
+assert startup.index('outputMode =') < startup.index('winrt::init_apartment'), 'WinRT refusals also report output mode'
 for name in ('Overlay.h', 'Output.cpp'):
     text = (HOST / name).read_text()
     assert 'NeuRotic beae4eea' in text and 'Magpie 69d6105d' in text and 'GPL-3.0' in text, name
