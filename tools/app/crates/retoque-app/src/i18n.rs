@@ -251,6 +251,29 @@ pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static s
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    (
+        "shell.game_details",
+        "Details: files, versions and folder",
+        "Detalhes: arquivos, versões e pasta",
+    ),
+    (
+        "set.saved_summary",
+        "Saved settings for the next game launch.",
+        "Ajustes salvos para a próxima abertura do jogo.",
+    ),
+    ("set.tools", "Options", "Opções"),
+    ("cmp.actual_size", "Actual size (1:1)", "Tamanho real (1:1)"),
+    ("lib.attention_only", "Needs attention", "Precisam de atenção"),
+    (
+        "lib.attention_help",
+        "Updates, incomplete or old installs, and problems already found.",
+        "Atualizações, instalações incompletas ou antigas e problemas já encontrados.",
+    ),
+    (
+        "lib.no_attention",
+        "Nothing needs attention with these filters.",
+        "Nenhum jogo precisa de atenção com estes filtros.",
+    ),
     ("play.action", "Play", "Jogar"),
     ("play.command", "Play {game}", "Jogar {game}"),
     (

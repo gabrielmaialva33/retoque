@@ -304,6 +304,7 @@ impl RetoqueApp {
             egui::Panel::left("library")
                 .resizable(true)
                 .default_size(320.0)
+                .max_size((ui.available_width() * 0.32).clamp(180.0, 320.0))
                 .frame(
                     egui::Frame::new()
                         .fill(theme::SIDE)

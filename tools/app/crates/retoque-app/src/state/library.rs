@@ -79,6 +79,7 @@ pub(crate) struct LibraryState {
     pub status: HashMap<PathBuf, Status>,
     pub search: String,
     pub installed_only: bool,
+    pub attention_only: bool,
     pub migration: crate::folders_ui::FolderMigration,
     /// What uninstalled games left behind, from the last scan; the review modal and its job.
     pub leftovers: Vec<retoque_core::leftovers::Leftover>,
