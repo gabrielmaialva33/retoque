@@ -204,6 +204,7 @@ fn every_language_fits_the_main_views_in_a_small_window() {
             let home_controls = [
                 search,
                 inside(&home, size, Role::CheckBox, t(lang, "lib.installed_only"), &home_what),
+                inside(&home, size, Role::CheckBox, t(lang, "lib.attention_only"), &home_what),
                 inside(&home, size, Role::Button, t(lang, "lib.add_folder"), &home_what),
                 inside(&home, size, Role::Button, t(lang, "folders.title"), &home_what),
             ];
@@ -315,4 +316,614 @@ fn choosing_a_language_applies_at_once_and_is_saved() {
     assert_eq!(h.state().saved.lang, Some(Lang::De));
     h.get_by_label(t(Lang::De, "prefs.title"));
     assert_ne!(t(Lang::De, "prefs.title"), t(Lang::En, "prefs.title"));
+}
+
+/// Physical window sizes divided by zoom give egui's logical viewport. Exercise all translations, including
+/// the owner's 1.2 zoom and the minimum window at 1.5, without depending on a compositor or graphics driver.
+#[test]
+fn audited_banner_and_tiles_fit_at_every_zoom_and_language() {
+    let dir = tempfile::tempdir().unwrap();
+    let logo = dir.path().join("logo.png");
+    std::fs::write(&logo, include_bytes!("../assets/retoque-256.png")).unwrap();
+    for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+        for zoom in [1.0, 1.2, 1.5] {
+            for lang in Lang::ALL {
+                assert!(
+                    crate::fonts::can_show(lang),
+                    "layout qualification needs a font for {lang:?}"
+                );
+                for compact in [false, true] {
+                    let mut state = app();
+                    state.lang = lang;
+                    state.tab = if compact { Tab::Compare } else { Tab::Install };
+                    state.view.status = Some(Ok(Status {
+                        optiscaler_proxies: vec!["dxgi.dll".into()],
+                        proxy_version: Some("10.0.0.1".into()),
+                        forwarder_version: Some("10.0.0.1".into()),
+                        ..Default::default()
+                    }));
+                    state.library_state.art.insert(
+                        "steam:1".into(),
+                        retoque_discovery::Artwork {
+                            logo: Some(logo.clone()),
+                            ..Default::default()
+                        },
+                    );
+                    let game = game(dir.path());
+                    let mut h = Harness::builder()
+                        .with_size([size[0] / zoom, size[1] / zoom])
+                        .with_context_setup(move |ctx| {
+                            crate::theme::apply(ctx);
+                            crate::fonts::apply(ctx, lang);
+                            egui_extras::install_image_loaders(ctx);
+                        })
+                        .build_ui_state(
+                            move |ui, state: &mut RetoqueApp| {
+                                state.game_banner(ui, &game);
+                                state.feature_tiles(ui);
+                            },
+                            state,
+                        );
+                    h.run_steps(4);
+                    let banner = h
+                        .output()
+                        .shapes
+                        .iter()
+                        .find_map(|s| match &s.shape {
+                            egui::Shape::Rect(r)
+                                if r.fill == theme::CARD && r.rect.width() > 400. && r.rect.top() < 20. =>
+                            {
+                                Some(r.rect)
+                            }
+                            _ => None,
+                        })
+                        .expect("banner background");
+                    for button in h.query_all_by_role(Role::Button) {
+                        assert!(
+                            banner.expand(0.5).contains_rect(button.rect()),
+                            "{lang:?} {size:?} zoom={zoom} compact={compact}: button {:?} outside {banner:?}",
+                            button.rect()
+                        );
+                    }
+                    assert!(
+                        h.query_by_label("OptiScaler 10.0.0.1 · NR component 10.0.0.1")
+                            .is_none()
+                    );
+                    let tiles: Vec<_> = h
+                        .query_all_by_role(Role::Label)
+                        .filter(|n| n.rect().height() == 80.)
+                        .map(|n| n.rect())
+                        .collect();
+                    assert_eq!(tiles.len(), 5);
+                    let mut rows: Vec<Vec<egui::Rect>> = vec![];
+                    for tile in tiles {
+                        assert!(tile.top() >= banner.bottom());
+                        assert!(tile.right() <= size[0] / zoom);
+                        if rows.last().is_none_or(|row| row[0].top() != tile.top()) {
+                            rows.push(vec![]);
+                        }
+                        rows.last_mut().unwrap().push(tile);
+                    }
+                    assert!(rows.len() <= 2, "{lang:?} {size:?} zoom={zoom}: 5 or 3+2 tiles");
+                    for row in &rows {
+                        assert!(row.len() >= 2, "orphan tile");
+                        assert!(
+                            (row.last().unwrap().right() - banner.right()).abs() < 2.,
+                            "row does not fill width: {row:?} {banner:?}"
+                        );
+                        for tile in row {
+                            assert!((tile.width() - row[0].width()).abs() < 1.);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Explicit local visual review only. Reads the installed library, never applies a plan or persists app state.
+/// Images stay in the caller's scratch directory, not snapshots checked into the repository.
+#[cfg(feature = "visual-tests")]
+#[test]
+#[ignore = "manual read-only library render; requires RETOQUE_LOOK_SHOTS"]
+fn render_audited_library() {
+    let out = PathBuf::from(std::env::var("RETOQUE_LOOK_SHOTS").expect("scratch output folder"));
+    let phase = std::env::var("RETOQUE_LOOK_PHASE").unwrap_or_else(|_| "after".into());
+    let (games, _) = retoque_discovery::discover(&retoque_discovery::Config::default());
+    assert!(!games.is_empty(), "real library is required for this manual review");
+    let statuses: HashMap<_, _> = games
+        .iter()
+        .flat_map(|g| &g.targets)
+        .filter_map(|t| retoque_core::status(&t.path).ok().map(|s| (t.path.clone(), s)))
+        .collect();
+    for zoom in [1.0, 1.2] {
+        for (group, tab) in [
+            ("defects", Some(Tab::Install)),
+            ("identity", Some(Tab::Install)),
+            ("library", None),
+            ("attention-synthetic", None),
+            ("chrome", Some(Tab::Settings)),
+            ("minimum", Some(Tab::Install)),
+        ] {
+            let mut state = app();
+            state.lang = Lang::Pt;
+            state.tuning.gpus = Some(vec![]);
+            state.payload = std::env::var_os("RETOQUE_SOURCE_DIR").map(PathBuf::from);
+            state.library_state.games = games.clone();
+            state.library_state.status = statuses.clone();
+            if group == "attention-synthetic" {
+                // Extra visual fixture only: the real-library images above retain their on-disk states.
+                state.library_state.attention_only = true;
+                for (index, game) in games.iter().take(3).enumerate() {
+                    let path = &game.targets[0].path;
+                    if let Some(status) = state.library_state.status.get_mut(path) {
+                        if index == 0
+                            && let Some(receipt) = &mut status.receipt
+                        {
+                            receipt.status = ReceiptStatus::Partial;
+                        }
+                        if index == 1 {
+                            status.build_sha256 = Some("synthetic-other-build".into());
+                        }
+                    }
+                    if index == 2 {
+                        state.doctor_badges.insert(path.clone(), 1);
+                    }
+                }
+            }
+            for game in &games {
+                if let Runtime::Proton { app_id, .. } = game.runtime {
+                    state.library_state.art.insert(
+                        game.id.clone(),
+                        retoque_discovery::steam_artwork(app_id, dirs::home_dir().as_deref()),
+                    );
+                }
+            }
+            let game = games
+                .iter()
+                .find(|g| g.name.to_lowercase().contains("cyberpunk"))
+                .expect("review game");
+            let target = &game.targets[0].path;
+            state.payload_build = statuses.get(target).and_then(|s| s.build_sha256.clone()).map(Ok);
+            if let Some(tab) = tab {
+                state.selected = Some(game.id.clone());
+                state.tab = tab;
+                state.view.target = Some(target.clone());
+                state.view.status = statuses.get(target).cloned().map(Ok);
+                if let Ok(bytes) = std::fs::read(target.join("OptiScaler.ini")) {
+                    let ini = Ini::parse(&bytes);
+                    state.view.ini_values = crate::state::settings::IniValues::read(&ini);
+                    state.view.ini = Some(Ok(Some(ini)));
+                }
+            }
+            let mut h = Harness::builder()
+                .with_size(if group == "minimum" {
+                    [820. / zoom, 520. / zoom]
+                } else {
+                    [1280. / zoom, 800. / zoom]
+                })
+                .with_context_setup(|ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, Lang::Pt);
+                    egui_extras::install_image_loaders(ctx);
+                })
+                .build_ui_state(
+                    move |ui, state: &mut RetoqueApp| {
+                        state.context = ui.ctx().clone();
+                        if group == "chrome" {
+                            let mut edits = std::mem::take(&mut state.view.edits);
+                            let commands = state.cmd_tx.clone();
+                            state.settings_tab(ui, &mut edits, &commands);
+                            state.view.edits = edits;
+                        } else {
+                            state.window(ui);
+                        }
+                    },
+                    state,
+                );
+            // File-image loaders work asynchronously; advance frames until their textures are ready.
+            for _ in 0..30 {
+                h.run_steps(1);
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            if group != "chrome" {
+                let size = if group == "minimum" {
+                    [820. / zoom, 520. / zoom]
+                } else {
+                    [1280. / zoom, 800. / zoom]
+                };
+                top_bar_fits(&mut h, Lang::Pt, tab.is_some(), size);
+            }
+            h.render()
+                .expect("offscreen render")
+                .save(out.join(format!("app-look-{group}-{phase}-{zoom:.1}x.png")))
+                .unwrap();
+        }
+    }
+}
+
+#[test]
+fn audited_install_intent_precedes_information_and_versions_live_in_details() {
+    use retoque_data::doctor::{Finding, Severity};
+    let dir = tempfile::tempdir().unwrap();
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut state = app();
+            state.lang = lang;
+            state.view.target = Some(dir.path().into());
+            state.view.status = Some(Ok(Status::default()));
+            state.view.doctor = Some(crate::tabs::doctor::DoctorCard {
+                findings: vec![Finding {
+                    id: "informational",
+                    severity: Severity::Info,
+                    title_key: "tile.dlss",
+                    why_key: "tile.dlss_detail",
+                    evidence: vec![],
+                    repair: None,
+                }],
+            });
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(|ui, state: &mut RetoqueApp| state.install_tab(ui), state);
+            h.run_steps(2);
+            assert!(
+                h.get_by_label(t(lang, "inst.plan_title")).rect().top()
+                    < h.get_by_label(t(lang, "doctor.title")).rect().top()
+            );
+        }
+        let mut h = window(lang, dir.path(), true, Some(Tab::Install), [1280., 800.]);
+        let status = h.state_mut().view.status.as_mut().unwrap().as_mut().unwrap();
+        status.optiscaler_proxies.push("dxgi.dll".into());
+        status.proxy_version = Some("10.0.0.1".into());
+        status.forwarder_version = Some("10.0.0.1".into());
+        h.run_steps(2);
+        assert!(h.query_by_label_contains("10.0.0.1").is_none());
+        h.get_by_label(t(lang, "shell.game_details")).click();
+        h.run_steps(3);
+        h.get_by_label_contains("OptiScaler 10.0.0.1");
+        h.get_by_label(&format!(
+            "{} · {}",
+            store_name(lang, Store::Steam),
+            runtime_text(lang, &game(dir.path()).runtime)
+        ));
+    }
+}
+
+#[test]
+fn audited_sidebar_keeps_the_game_banner_inside_the_zoomed_window() {
+    let dir = tempfile::tempdir().unwrap();
+    for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+        for zoom in [1.0, 1.2, 1.5] {
+            let logical = [size[0] / zoom, size[1] / zoom];
+            for lang in Lang::ALL {
+                let mut h = window(lang, dir.path(), true, Some(Tab::Install), logical);
+                let rect = h
+                    .output()
+                    .shapes
+                    .iter()
+                    .find_map(|s| match &s.shape {
+                        egui::Shape::Rect(r)
+                            if r.fill == theme::CARD
+                                && r.rect.left() > logical[0] * 0.25
+                                && r.rect.top() < 160.
+                                && r.rect.width() > 100. =>
+                        {
+                            Some(r.rect)
+                        }
+                        _ => None,
+                    })
+                    .expect("game banner");
+                assert!(rect.right() <= logical[0], "{lang:?} {size:?} at {zoom}: {rect:?}");
+                top_bar_fits(&mut h, lang, true, logical);
+            }
+        }
+    }
+}
+
+#[test]
+fn audited_brand_mark_is_inside_the_named_home_button() {
+    let dir = tempfile::tempdir().unwrap();
+    for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+        for lang in Lang::ALL {
+            let mut h = window(lang, dir.path(), true, Some(Tab::Install), size);
+            let button = h.get_by_role_and_label(Role::Button, t(lang, "brand")).rect();
+            let mark = h
+                .output()
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Rect(r) if r.fill == theme::CANVAS && (r.rect.width() - 28.).abs() < 0.5 => {
+                        Some(r.rect)
+                    }
+                    _ => None,
+                })
+                .expect("Retoque mark is painted");
+            assert!(button.contains_rect(mark));
+            let text = h
+                .output()
+                .shapes
+                .iter()
+                .find_map(|s| match &s.shape {
+                    egui::Shape::Text(t) if t.galley.job.text == "Retoque" && t.pos.y < 60. => Some(t.pos),
+                    _ => None,
+                })
+                .unwrap();
+            assert!(mark.right() < text.x, "mark stays beside the word");
+            top_bar_fits(&mut h, lang, true, size);
+            h.get_by_role_and_label(Role::Button, t(lang, "brand")).click();
+            h.run_steps(2);
+            assert!(h.state().selected.is_none(), "whole brand remains the way home");
+        }
+    }
+}
+
+#[test]
+fn audited_attention_filter_combines_search_favorites_and_live_findings() {
+    let dir = tempfile::tempdir().unwrap();
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut state = app();
+            state.lang = lang;
+            state.payload_build = Some(Ok("build".into()));
+            for index in 0..6 {
+                let path = dir.path().join(index.to_string());
+                let mut g = game(&path);
+                g.id = format!("steam:{}", index + 1);
+                g.name = format!("Game {index}");
+                let status = Status {
+                    receipt: (index != 4 && index != 5).then(|| Receipt {
+                        status: if index == 1 {
+                            ReceiptStatus::Partial
+                        } else {
+                            ReceiptStatus::Complete
+                        },
+                        updated: String::new(),
+                        records: vec![],
+                    }),
+                    build_sha256: Some(if index == 3 { "old" } else { "build" }.into()),
+                    optiscaler_proxies: if index == 5 { vec!["dxgi.dll".into()] } else { vec![] },
+                    ..Default::default()
+                };
+                if index == 2 {
+                    state.doctor_badges.insert(path.clone(), 1);
+                }
+                if index == 4 {
+                    g.store = Store::Manual;
+                    g.runtime = Runtime::Unknown;
+                }
+                state.library_state.status.insert(path, status);
+                state.library_state.games.push(g);
+            }
+            state.saved.favorites.extend(["steam:1".into(), "steam:4".into()]);
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(
+                    |ui, state: &mut RetoqueApp| {
+                        ui.set_width(320.);
+                        state.library(ui);
+                    },
+                    state,
+                );
+            h.run_steps(2);
+            let metadata = format!(
+                "{} · {}",
+                store_name(lang, Store::Steam),
+                runtime_short(lang, &game(dir.path()).runtime)
+            );
+            let painted_context = |h: &Harness<'_, RetoqueApp>| {
+                h.output()
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.job.text == metadata))
+            };
+            assert!(painted_context(&h), "mixed list names its store/runtime");
+            h.get_by_label(t(lang, "lib.attention_only")).click();
+            h.run_steps(3);
+            let groups = h.state().library_groups();
+            assert_eq!(groups[0].1, [3], "quiet favorite is filtered too");
+            assert_eq!(groups[1].1, [1, 2, 5]);
+            assert!(groups[2].1.is_empty());
+            assert!(!painted_context(&h), "homogeneous filtered list omits repeated context");
+            h.state_mut().doctor_badges.clear();
+            h.run_steps(2);
+            assert_eq!(
+                h.state().library_groups()[1].1,
+                [1, 5],
+                "updated findings take effect without a rescan"
+            );
+            h.get_by_label(t(lang, "lib.installed_only")).click();
+            h.run_steps(2);
+            assert_eq!(h.state().library_groups()[0].1, [3]);
+            h.state_mut().library_state.search = "Game 0".into();
+            h.run_steps(2);
+            h.get_by_label(t(lang, "lib.no_attention"));
+            assert!(h.state().library_groups().iter().all(|(_, games)| games.is_empty()));
+        }
+    }
+}
+
+#[test]
+fn audited_library_titles_wrap_twice_and_only_attention_states_are_painted() {
+    let name = "A Very Long Game Name With An Edition And Subtitle";
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui(move |ui| {
+                    ui.set_width((size[0] * 0.32).clamp(180., 320.));
+                    widgets::game_row(
+                        ui,
+                        name,
+                        "",
+                        (t(lang, "st.current"), theme::GOOD),
+                        None,
+                        false,
+                        None,
+                        None,
+                        false,
+                    );
+                    widgets::game_row(
+                        ui,
+                        "Attention",
+                        "",
+                        (t(lang, "st.partial"), theme::BAD),
+                        None,
+                        false,
+                        None,
+                        None,
+                        true,
+                    );
+                    widgets::cover_card(ui, 160., name, None, (t(lang, "st.current"), theme::GOOD), None, false);
+                });
+            h.run_steps(2);
+            let titles: Vec<_> = h
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == name => Some(text),
+                    _ => None,
+                })
+                .collect();
+            assert!(titles.len() >= 2);
+            assert!(
+                titles.iter().all(|t| t.galley.rows.len() == 2),
+                "{lang:?}: row and card names wrap before ellipsis"
+            );
+            let painted = |key| {
+                h.output()
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Text(text) if text.galley.job.text == t(lang, key)))
+            };
+            assert!(!painted("st.current"), "quiet state has no repeated visual caption");
+            assert!(
+                painted("st.partial"),
+                "attention still has a word, not just a colored edge"
+            );
+            assert_eq!(
+                h.query_all_by_role_and_label(Role::Button, &format!("{name}, {}", t(lang, "st.current")))
+                    .count(),
+                2,
+                "both row and cover retain the full accessible name and state"
+            );
+        }
+    }
+}
+
+#[test]
+fn audited_settings_have_one_muted_line_and_one_toolbar_row() {
+    let dir = tempfile::tempdir().unwrap();
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.], [320., 800.]] {
+            let mut state = app();
+            state.lang = lang;
+            state.view.target = Some(dir.path().into());
+            state.view.ini = Some(Ok(Some(Ini::parse(b"[DlssNr]\nEnabled=true\n"))));
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(
+                    |ui, state: &mut RetoqueApp| {
+                        let mut edits = std::mem::take(&mut state.view.edits);
+                        let commands = state.cmd_tx.clone();
+                        state.settings_tab(ui, &mut edits, &commands);
+                        state.view.edits = edits;
+                    },
+                    state,
+                );
+            h.run_steps(2);
+            assert!(
+                h.query_by_label(t(lang, "set.saved_title")).is_none(),
+                "no explanation card"
+            );
+            let note = h.get_by_label(t(lang, "set.saved_summary")).rect();
+            assert!(note.height() <= 22., "one line even when narrow");
+            let search = h.get_by_role_and_label(Role::TextInput, t(lang, "set.filter")).rect();
+            assert!(search.width() >= 150.);
+            assert!(note.bottom() <= search.top());
+            let controls = if let Some(menu) = h.query_by_role_and_label(Role::Button, t(lang, "set.tools")) {
+                let rect = menu.rect();
+                menu.click();
+                h.run_steps(2);
+                h.get_by_label(t(lang, "set.only_changed"));
+                let undo = h.get_by_label(t(lang, "undo.title")).rect();
+                assert!(window_rect(size).contains_rect(undo), "overflow menu fits");
+                h.key_press(egui::Key::Escape);
+                h.run_steps(2);
+                vec![rect]
+            } else {
+                vec![
+                    h.get_by_label(t(lang, "set.only_changed")).rect(),
+                    h.get_by_label(t(lang, "undo.title")).rect(),
+                ]
+            };
+            for control in controls {
+                assert!(
+                    (search.center().y - control.center().y).abs() < 1.0,
+                    "toolbar stays on one row"
+                );
+                assert!(!search.intersects(control));
+                assert!(window_rect(size).contains_rect(control));
+            }
+        }
+    }
+}
+
+#[test]
+fn audited_compare_controls_have_descriptive_names_and_tooltips_in_every_language() {
+    use egui_kittest::kittest::NodeT as _;
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(
+                    move |ui, view: &mut crate::compare::CompareView| view.audit_toolbar(ui, lang),
+                    crate::compare::CompareView::default(),
+                );
+            h.run_steps(3);
+            for button in h.query_all_by_role(Role::Button) {
+                let label = button.accesskit_node().label().unwrap_or_default();
+                assert!(
+                    !label.trim().is_empty() && label != "0" && label != "…",
+                    "unnamed comparison control"
+                );
+                assert!(
+                    window_rect(size).contains_rect(button.rect()),
+                    "{lang:?} {size:?}: {label} leaves toolbar"
+                );
+            }
+            for key in ["cmp.actual_size", "exposure_reset", "cmp.tools", "cmp.expand"] {
+                h.get_by_role_and_label(Role::Button, t(lang, key)).hover();
+                h.run_steps(5);
+                assert!(
+                    h.output()
+                        .shapes
+                        .iter()
+                        .any(|s| matches!(&s.shape, egui::Shape::Text(text) if text.galley.job.text == t(lang, key))),
+                    "{lang:?} {size:?}: {key} has a visible tooltip"
+                );
+            }
+            h.get_by_role_and_label(Role::Slider, t(lang, "exposure"));
+        }
+    }
 }

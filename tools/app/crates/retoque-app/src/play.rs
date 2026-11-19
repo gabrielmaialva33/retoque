@@ -142,22 +142,53 @@ impl RetoqueApp {
         }
     }
 
+    /// Cached warnings/errors only: informational health-check notes never demand attention.
+    pub(crate) fn game_findings(&self, game: &Game) -> usize {
+        game.targets
+            .iter()
+            .filter_map(|target| self.doctor_badges.get(&target.path))
+            .copied()
+            .max()
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn game_attention(&self, index: usize) -> bool {
+        matches!(
+            self.library_state.derived.states[index],
+            InstallState::Update | InstallState::Partial | InstallState::Untracked
+        ) || self.game_findings(&self.library_state.games[index]) > 0
+    }
+
     /// Preserve filtering and each existing group's search order; favorites precede both install groups.
     pub(crate) fn library_groups(&self) -> [(&'static str, Vec<usize>); 3] {
         let favorite = |i: &usize| self.saved.favorites.contains(&self.library_state.games[*i].id);
+        let include = |i: &usize| !self.library_state.attention_only || self.game_attention(*i);
         let d = &self.library_state.derived;
         [
             (
                 "favorites.title",
-                d.installed.iter().chain(&d.others).copied().filter(favorite).collect(),
+                d.installed
+                    .iter()
+                    .chain(&d.others)
+                    .copied()
+                    .filter(|i| include(i) && favorite(i))
+                    .collect(),
             ),
             (
                 "lib.group_installed",
-                d.installed.iter().copied().filter(|i| !favorite(i)).collect(),
+                d.installed
+                    .iter()
+                    .copied()
+                    .filter(|i| include(i) && !favorite(i))
+                    .collect(),
             ),
             (
                 "lib.group_other",
-                d.others.iter().copied().filter(|i| !favorite(i)).collect(),
+                d.others
+                    .iter()
+                    .copied()
+                    .filter(|i| include(i) && !favorite(i))
+                    .collect(),
             ),
         ]
     }

@@ -25,36 +25,9 @@ impl RetoqueApp {
             }
             Some(Ok(Some(_))) => (),
         };
-        widgets::card(ui, |ui| {
-            widgets::card_title(ui, self.tr("set.saved_title"));
-            ui.label(self.tr("set.saved_notice"));
-        });
-        ui.add_space(theme::CARD_GAP);
-        ui.horizontal_wrapped(|ui| {
-            let label = ui.label(t(self.lang, "set.filter"));
-            let response = ui
-                .add(
-                    egui::TextEdit::singleline(&mut self.intuitive.settings.query)
-                        .id(egui::Id::unique("settings_filter")),
-                )
-                .labelled_by(label.id)
-                .on_hover_text("/");
-            if self.intuitive.settings.focus {
-                response.request_focus();
-                self.intuitive.settings.focus = false;
-            }
-            ui.checkbox(
-                &mut self.intuitive.settings.only_changed,
-                t(self.lang, "set.only_changed"),
-            );
-            if ui
-                .add_enabled(!self.busy(), egui::Button::new(t(self.lang, "undo.title")))
-                .clicked()
-                && let Some(target) = &self.view.target
-            {
-                commands.send(AppCommand::UndoSettings(target.clone()));
-            }
-        });
+        ui.add(egui::Label::new(RichText::new(self.tr("set.saved_summary")).small().color(theme::MUTED)).truncate())
+            .on_hover_text(self.tr("set.saved_notice"));
+        self.settings_toolbar(ui, commands);
         self.intuitive.settings.refresh(self.lang);
         let mut any = false;
         for (section, title) in [
@@ -86,6 +59,71 @@ impl RetoqueApp {
         }
         // Review and Discard live in the pending-changes footer (pending_footer), outside the scroll area.
         self.settings_plan(ui);
+    }
+
+    /// One row at every width. Secondary controls move into a named menu before the search gets cramped.
+    fn settings_toolbar(&mut self, ui: &mut egui::Ui, commands: &CommandSender) {
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let text_width = |key| {
+            ui.painter()
+                .layout_no_wrap(self.tr(key).into(), font.clone(), theme::TEXT)
+                .size()
+                .x
+        };
+        let gap = ui.spacing().item_spacing.x;
+        let undo_width = text_width("undo.title") + ui.spacing().button_padding.x * 2.0;
+        let changed_width = text_width("set.only_changed") + ui.spacing().icon_width + ui.spacing().icon_spacing;
+        let full = ui.available_width() >= undo_width + changed_width + gap * 2.0 + 160.0;
+        let tail = if full {
+            undo_width + changed_width + gap * 2.0
+        } else {
+            text_width("set.tools") + ui.spacing().button_padding.x * 2.0 + ui.spacing().icon_width + gap * 2.0
+        };
+        let search_width = (ui.available_width() - tail).max(40.0);
+        ui.horizontal(|ui| {
+            let response = ui
+                .add_sized(
+                    [search_width, 32.0],
+                    egui::TextEdit::singleline(&mut self.intuitive.settings.query)
+                        .id(egui::Id::unique("settings_filter"))
+                        .hint_text(t(self.lang, "set.filter")),
+                )
+                .on_hover_text(format!("{} · /", t(self.lang, "set.filter")));
+            response.widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::TextInput, ui.is_enabled(), t(self.lang, "set.filter"))
+            });
+            if self.intuitive.settings.focus {
+                response.request_focus();
+                self.intuitive.settings.focus = false;
+            }
+            if full {
+                ui.checkbox(
+                    &mut self.intuitive.settings.only_changed,
+                    t(self.lang, "set.only_changed"),
+                );
+                self.settings_undo(ui, commands);
+            } else {
+                ui.menu_button(t(self.lang, "set.tools"), |ui| {
+                    ui.checkbox(
+                        &mut self.intuitive.settings.only_changed,
+                        t(self.lang, "set.only_changed"),
+                    );
+                    if self.settings_undo(ui, commands) {
+                        ui.close();
+                    }
+                });
+            }
+        });
+    }
+
+    fn settings_undo(&self, ui: &mut egui::Ui, commands: &CommandSender) -> bool {
+        let clicked = ui
+            .add_enabled(!self.busy(), egui::Button::new(t(self.lang, "undo.title")))
+            .clicked();
+        if clicked && let Some(target) = &self.view.target {
+            commands.send(AppCommand::UndoSettings(target.clone()));
+        }
+        clicked
     }
 
     fn settings_section_matches(&self, section: &str, edits: &BTreeMap<(String, String), String>) -> bool {
@@ -481,9 +519,10 @@ mod tests {
                 h.state_mut().lang = lang;
                 h.state_mut().intuitive.settings.query = "Passes".into();
                 h.run_steps(2);
-                h.get_by_label(t(lang, "set.saved_title"));
-                h.get_by_label(t(lang, "set.saved_notice"));
                 h.get_by_label(t(lang, "set.restart_passes"));
+                h.get_by_label(t(lang, "set.saved_summary")).hover();
+                h.run_steps(5);
+                h.get_by_label(t(lang, "set.saved_notice"));
                 assert!(h.state().view.edits.is_empty());
             }
         }

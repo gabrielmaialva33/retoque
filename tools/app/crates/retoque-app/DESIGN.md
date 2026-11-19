@@ -98,3 +98,32 @@ and announces “Add to favorites: {game}” or “Remove from favorites: {game}
 Sidebar rows have no star control. On cards, paint the badge only for favorites or on hover/focus;
 it remains reachable by Tab even when not painted. Favorites form the first filtered library group. Library cards/rows still open the game page; they have no Play.
 The existing More actions menu holds game folder, settings file and captures folder, the latter two only if present.
+
+## Responsive game header
+
+The banner grows with its content at every zoom: its art and shade enclose the wrapped actions. Keep the game
+name or logo, installation state, primary action, Play and store/runtime here. Component versions and the store's
+raw identifier belong in game details. Before installation, the card explaining the primary action comes before
+informational health-check notes; a failed change still comes first.
+The five status tiles fill one row when there is room, otherwise two full-width rows of three and two. An extremely
+narrow page uses a readable vertical stack instead of leaving a single orphan below a two-column grid.
+
+The top bar keeps the Retoque mark at 28 points beside the word, in the same named home button. Reserve its
+width when choosing which actions move into the overflow menu; the brand itself never goes into that menu.
+
+## Library hierarchy
+
+Rows and cover titles get up to two lines before ellipsis; their accessible names and hovers keep the full name
+and installation state. A homogeneous visible list omits repeated store/runtime captions. A mixed list keeps
+that context, and the game page always names its store/runtime.
+Current and ordinary installed entries are quiet. Updates, incomplete or unregistered old installations, and
+cached warning/error findings show a status word plus an emphasized edge; information alone is not attention.
+“Needs attention” combines with search, “Installed only” and favorites, and keyboard navigation follows the same
+filtered groups. Its help says that it includes problems already found, not a new inspection of every game.
+
+### Page chrome
+
+Game details name their contents: files, versions and folder. The settings explanation is one muted line;
+its complete saved-versus-live explanation remains available on hover. Search and settings actions share
+one row; secondary controls move into a named Options menu when they would squeeze search below 160 points.
+Comparison controls with symbols or numeric shorthand have descriptive hover text and accessible names.
