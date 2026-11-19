@@ -65,11 +65,13 @@ GOG Galaxy (no launch URI verified in its own documentation) or Xbox (discovery 
 No direct executable launch or guessed protocol is used. Source references are beside the builder in [play.rs](crates/retoque-app/src/play.rs).
 These are protocol contracts tested with synthetic inputs; real launchers and native Windows still need qualification.
 
-A keyboard-accessible outlined/filled star on the page, sidebar and cards toggles **Favorites**, saved by game ID
+A keyboard-accessible outlined/filled star on the page and cards toggles **Favorites**, saved by game ID
 with the rest of app state. Favorites have their own first group in both lists, obey existing filters, and expose
-their state and action to screen readers. The heading disappears when the filtered list has no favorites.
+their state and action to screen readers. Sidebar rows retain the spoken favorite state but have no toggle.
+Non-favorite card badges appear only on hover or keyboard focus; the controls remain reachable by Tab. The heading disappears when the filtered list has no favorites.
 **More actions** adds **Open settings file** and **Open captures folder** only when `OptiScaler.ini` and
-`retoque-captures` exist in the selected executable folder. The game-folder action remains in that menu.
+`retoque-captures` exist in the selected executable folder, according to the latest INI/status job results. Drawing these actions
+performs no filesystem probes. The game-folder action remains in that menu.
 
 The feature idea came from the NeuRotic Hub comparison; implementation and text are independent.
 

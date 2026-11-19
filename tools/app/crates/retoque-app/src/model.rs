@@ -74,6 +74,7 @@ pub enum Outcome {
     Status {
         target: PathBuf,
         result: Result<Status, AppError>,
+        captures_dir_exists: bool,
     },
     /// The ini's actual path (its spelling may differ in case) and bytes, or None when the folder has none.
     Ini {
@@ -184,7 +185,12 @@ pub fn remove_leftovers(reviewed: Vec<retoque_core::leftovers::Leftover>) -> Out
 pub fn status(target: PathBuf) -> Outcome {
     let result = retoque_core::status(&target).map_err(|e| AppError::from(e).for_target(target.clone()));
     crate::state::library::remember_folder(&target);
-    Outcome::Status { target, result }
+    let captures_dir_exists = target.join("retoque-captures").is_dir();
+    Outcome::Status {
+        target,
+        result,
+        captures_dir_exists,
+    }
 }
 
 pub fn read_ini(target: PathBuf) -> Outcome {

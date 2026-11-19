@@ -81,6 +81,9 @@ pub(crate) struct GameView {
     pub(crate) target: Option<PathBuf>,
     pub(crate) status: Option<Result<Status, AppError>>,
     pub(crate) ini: Option<Result<Option<Ini>, AppError>>,
+    /// Actual on-disk spelling reported by the INI job; drawing never probes for this path.
+    pub(crate) ini_path: Option<PathBuf>,
+    pub(crate) captures_dir_exists: bool,
     pub(crate) edits: BTreeMap<(String, String), String>,
     pub(crate) options: InstallOptions,
     // The newest preview asked for; an older answer is dropped.

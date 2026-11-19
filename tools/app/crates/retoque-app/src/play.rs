@@ -111,7 +111,12 @@ impl RetoqueApp {
                 None,
                 false,
             ),
-            Err(error) => self.toast(self.tr("play.failed").into(), Some(error.into()), true),
+            Err(error) => self.toast(
+                self.tr("play.failed")
+                    .replace("{launcher}", store_name(self.lang, game.store)),
+                Some(error.into()),
+                true,
+            ),
         }
     }
 
@@ -161,20 +166,21 @@ impl RetoqueApp {
         let Some(target) = self.view.target.as_ref() else {
             return;
         };
-        for (key, path, exists) in [
-            (
-                "play.open_settings",
-                target.join("OptiScaler.ini"),
-                target.join("OptiScaler.ini").is_file(),
-            ),
+        let settings_path = matches!(&self.view.ini, Some(Ok(Some(_))))
+            .then_some(self.view.ini_path.as_ref())
+            .flatten();
+        let captures_path = target.join("retoque-captures");
+        for (key, path) in [
+            ("play.open_settings", settings_path),
             (
                 "play.open_captures",
-                target.join("retoque-captures"),
-                target.join("retoque-captures").is_dir(),
+                self.view.captures_dir_exists.then_some(&captures_path),
             ),
         ] {
-            if exists && ui.button(self.tr(key)).clicked() {
-                model::open_folder(&path);
+            if let Some(path) = path
+                && ui.button(self.tr(key)).clicked()
+            {
+                model::open_folder(path);
             }
         }
     }
@@ -182,39 +188,76 @@ impl RetoqueApp {
 
 /// A separate keyboard-focusable star, with a spoken verb and state; its outline/fill survives monochrome.
 pub(crate) fn favorite_button(ui: &mut egui::Ui, game: &Game, selected: bool, lang: Lang) -> egui::Response {
+    favorite_control(ui, game, selected, lang, None)
+}
+
+/// Always allocate the focusable control; only paint an idle card badge when it is already a favorite.
+pub(crate) fn card_favorite_button(
+    ui: &mut egui::Ui,
+    game: &Game,
+    selected: bool,
+    lang: Lang,
+    card: &egui::Response,
+) -> egui::Response {
+    let rect = egui::Rect::from_min_size(
+        egui::pos2(card.rect.right() - 40., card.rect.top() + 8.),
+        egui::vec2(32., 32.),
+    );
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    favorite_control(
+        &mut child,
+        game,
+        selected,
+        lang,
+        Some(card.hovered() || card.has_focus()),
+    )
+}
+
+fn favorite_control(
+    ui: &mut egui::Ui,
+    game: &Game,
+    selected: bool,
+    lang: Lang,
+    card_active: Option<bool>,
+) -> egui::Response {
     let label = t(lang, if selected { "favorites.remove" } else { "favorites.add" }).replace("{game}", &game.name);
     let response = ui
         .push_id((&game.id, "favorite"), |ui| {
             let (rect, response) = ui.allocate_exact_size(egui::vec2(32., 32.), egui::Sense::click());
-            let points: Vec<_> = (0..10)
-                .map(|i| {
-                    let angle = std::f32::consts::PI * (i as f32 / 5. - 0.5);
-                    rect.center() + egui::vec2(angle.cos(), angle.sin()) * if i % 2 == 0 { 11. } else { 5. }
-                })
-                .collect();
-            // One mesh avoids antialiased seams between the convex wedges of the star.
-            if selected {
-                let mut mesh = egui::Mesh::default();
-                mesh.colored_vertex(rect.center(), theme::TEXT_STRONG);
-                for point in &points {
-                    mesh.colored_vertex(*point, theme::TEXT_STRONG);
+            if selected || card_active.unwrap_or(true) || response.hovered() || response.has_focus() {
+                if card_active.is_some() {
+                    ui.painter().rect_filled(rect, 6, theme::SIDE);
                 }
-                for i in 0..points.len() as u32 {
-                    mesh.add_triangle(0, i + 1, (i + 1) % points.len() as u32 + 1);
+                let points: Vec<_> = (0..10)
+                    .map(|i| {
+                        let angle = std::f32::consts::PI * (i as f32 / 5. - 0.5);
+                        rect.center() + egui::vec2(angle.cos(), angle.sin()) * if i % 2 == 0 { 11. } else { 5. }
+                    })
+                    .collect();
+                // One mesh avoids antialiased seams between the convex wedges of the star.
+                if selected {
+                    let mut mesh = egui::Mesh::default();
+                    mesh.colored_vertex(rect.center(), theme::TEXT_STRONG);
+                    for point in &points {
+                        mesh.colored_vertex(*point, theme::TEXT_STRONG);
+                    }
+                    for i in 0..points.len() as u32 {
+                        mesh.add_triangle(0, i + 1, (i + 1) % points.len() as u32 + 1);
+                    }
+                    ui.painter().add(egui::Shape::mesh(mesh));
                 }
-                ui.painter().add(egui::Shape::mesh(mesh));
-            }
-            ui.painter().add(egui::Shape::closed_line(
-                points,
-                egui::Stroke::new(1.5, theme::TEXT_STRONG),
-            ));
-            if response.has_focus() || response.hovered() {
-                ui.painter().rect_stroke(
-                    rect.shrink(1.),
-                    4,
-                    egui::Stroke::new(2., theme::TEXT_STRONG),
-                    egui::StrokeKind::Inside,
-                );
+                ui.painter().add(egui::Shape::closed_line(
+                    points,
+                    egui::Stroke::new(1.5, theme::TEXT_STRONG),
+                ));
+                if response.has_focus() || response.hovered() {
+                    ui.painter().rect_stroke(
+                        rect.shrink(1.),
+                        4,
+                        egui::Stroke::new(2., theme::TEXT_STRONG),
+                        egui::StrokeKind::Inside,
+                    );
+                }
             }
             response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, ui.is_enabled(), selected, &label));
             response

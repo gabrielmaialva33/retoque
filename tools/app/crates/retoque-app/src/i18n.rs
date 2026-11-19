@@ -256,12 +256,12 @@ const TEXT: &[(&str, &str, &str)] = &[
     (
         "play.asked",
         "Asked {launcher} to start {game}",
-        "Solicitado ao {launcher} que inicie {game}",
+        "Pedimos ao {launcher} para abrir {game}",
     ),
     (
         "play.failed",
-        "Could not ask the launcher. Open the launcher and try again.",
-        "Não foi possível chamar o launcher. Abra o launcher e tente novamente.",
+        "Could not reach {launcher}. Open {launcher} and start the game there.",
+        "Não foi possível chamar o {launcher}. Abra o {launcher} e inicie o jogo por lá.",
     ),
     (
         "play.wait_write",

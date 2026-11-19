@@ -93,7 +93,8 @@ English text uses US spelling (catalog, optimize, center).
 
 Play is a plain secondary beside optimization, without “…”, and only for a verified launcher identifier.
 While a game-folder write runs, it is disabled with a visible reason; feedback says the launcher was asked.
-A star on the page, cards and sidebar is independently keyboard reachable, shows an outline/fill and focus ring,
+A star on the page and cards is independently keyboard reachable, shows an outline/fill and focus ring,
 and announces “Add to favorites: {game}” or “Remove from favorites: {game}” plus the row/card's favorite state.
-Favorites form the first filtered library group. Library cards/rows still open the game page; they have no Play.
+Sidebar rows have no star control. On cards, paint the badge only for favorites or on hover/focus;
+it remains reachable by Tab even when not painted. Favorites form the first filtered library group. Library cards/rows still open the game page; they have no Play.
 The existing More actions menu holds game folder, settings file and captures folder, the latter two only if present.

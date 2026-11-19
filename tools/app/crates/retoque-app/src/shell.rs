@@ -299,7 +299,6 @@ impl RetoqueApp {
         let mut clicked = None;
         let mut list_focus = false;
         let groups = self.library_groups();
-        let mut favorite_clicked = None;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             if let Some(key) = empty_filter {
                 ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
@@ -333,23 +332,16 @@ impl RetoqueApp {
                             spoken.map(|s| format!(", {s}")).unwrap_or_default()
                         ));
                     }
-                    let response = ui
-                        .horizontal(|ui| {
-                            if crate::play::favorite_button(ui, game, favorite, self.lang).clicked() {
-                                favorite_clicked = Some(game.id.clone());
-                            }
-                            widgets::game_row(
-                                ui,
-                                &game.name,
-                                detail,
-                                (self.tr(state.short_label()), state.color()),
-                                capsule,
-                                selected,
-                                hint,
-                                spoken.as_deref(),
-                            )
-                        })
-                        .inner;
+                    let response = widgets::game_row(
+                        ui,
+                        &game.name,
+                        detail,
+                        (self.tr(state.short_label()), state.color()),
+                        capsule,
+                        selected,
+                        hint,
+                        spoken.as_deref(),
+                    );
                     let response = crate::tabs::doctor::row_badge(ui, response, findings, self.lang);
                     list_focus |= response.has_focus();
                     if response.clicked() {
@@ -360,9 +352,6 @@ impl RetoqueApp {
             }
             self.skipped_note(ui);
         });
-        if let Some(id) = favorite_clicked {
-            self.toggle_favorite(&id);
-        }
         self.library_has_focus = list_focus;
         if let Some(id) = clicked {
             self.select_id(id);
@@ -765,13 +754,7 @@ impl RetoqueApp {
                                 )
                             });
                         }
-                        let star_rect = egui::Rect::from_min_size(
-                            egui::pos2(card.rect.right() - 40., card.rect.top() + 8.),
-                            egui::vec2(32., 32.),
-                        );
-                        ui.painter().rect_filled(star_rect, 6, theme::SIDE);
-                        let mut star_ui = ui.new_child(egui::UiBuilder::new().max_rect(star_rect));
-                        let star = crate::play::favorite_button(&mut star_ui, game, favorite, self.lang);
+                        let star = crate::play::card_favorite_button(ui, game, favorite, self.lang, &card);
                         if star.clicked() {
                             favorite_clicked = Some(game.id.clone());
                         } else if card.clicked() {
