@@ -1,4 +1,5 @@
 #include <dlssnr/DlssNr_AdvisorRuntime.h>
+#include <dlssnr/DlssNr_AdvisorPolicy.h>
 #include <cassert>
 #include <array>
 #include <sstream>
@@ -15,9 +16,11 @@ namespace ImGui
 {
 std::set<std::string> shown;
 std::string click, clipboard;
-void SeparatorText(const char*) {}
-template <class... T> void TextWrapped(const char*, T...) {}
-template <class... T> void Text(const char*, T...) {}
+unsigned drawn = 0;
+void SeparatorText(const char*) { ++drawn; }
+void TextUnformatted(const char*) { ++drawn; }
+template <class... T> void TextWrapped(const char*, T...) { ++drawn; }
+template <class... T> void Text(const char*, T...) { ++drawn; }
 bool Button(const char* s)
 {
     shown.insert(s);
@@ -52,16 +55,29 @@ struct Config
         unsigned Interval = 1;
     } timing;
     Timing GetDlssNrGpuTimingSettings() const { return timing; }
-    bool DlssNrDx11SceneStageAtStart() const { return false; }
+    bool scene = false;
+    bool DlssNrDx11SceneStageAtStart() const { return scene; }
+    void SetDlssNrGpuTimingEnabled(bool value)
+    {
+        timing.Enabled = value;
+        ++configWrites;
+    }
+    void SetDlssNrGpuTimingInterval(unsigned value)
+    {
+        timing.Interval = value;
+        ++configWrites;
+    }
     Setting<bool> DlssNrEnabled { true }, DlssNrUseProxy, DlssNrCadenceAdaptive, DlssNrPeripheryCompression,
         DlssNrHoldFrame;
     Setting<unsigned> DlssNrStage, DlssNrHookMethod, DlssNrCadence { 1 };
-    Setting<float> DlssNrWorkingScale { 1 };
+    Setting<float> DlssNrWorkingScale { 1 }, DlssNrRRWorkingScale { 1 };
 };
 Config config;
 namespace DlssNr
 {
 float WorkingScale() { return config.DlssNrWorkingScale.value; }
+float RRWorkingScale() { return config.DlssNrRRWorkingScale.value; }
+bool IsRunningVk() { return false; }
 } // namespace DlssNr
 
 namespace sl
@@ -76,10 +92,20 @@ struct FakeFG
     bool IsActive() const { return false; }
     bool IsPaused() const { return false; }
 };
+enum class API
+{
+    NotSelected,
+    Vulkan
+};
+struct FakeFeature
+{
+    bool IsWithDx12() const { return false; }
+};
 struct State
 {
     FakeFG* currentFG = nullptr;
-    unsigned api = 0;
+    API api = API::NotSelected;
+    FakeFeature* currentFeature = nullptr;
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
     unsigned DlssgDetectedInterpolationCount() const { return 0; }
     static State& Instance()

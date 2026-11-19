@@ -665,3 +665,28 @@ Wait for the original settings to settle, or run a new trial if the context chan
 Trial complete	Teste concluído
 Trial aborted	Teste interrompido
 Trial in progress	Teste em andamento
+
+# NR advisor round 2; English fallback pending native review outside pt-BR.
+Choose the after-upscaler stage to measure NR choices.	Escolha a etapa após o upscaler para medir as opções do NR.
+Turn off adaptive cadence for a repeatable trial.	Desative a cadência adaptativa para comparar as opções.
+Turn off peripheral compression before the trial.	Desative a compressão periférica antes do teste.
+Release the held frame before the trial.	Solte o quadro congelado antes do teste.
+GPU timing is needed to measure NR choices.	Ative a medição da GPU para comparar as opções do NR.
+The trial needs timing for every NR evaluation.	O teste precisa medir todas as avaliações do NR.
+Turn on GPU timing	Ativar medição da GPU
+Use detailed GPU timing	Usar medição detalhada da GPU
+Frame generation may be paused while this menu is open.	A geração de quadros pode ficar pausada enquanto este menu estiver aberto.
+Stage and pass count stay unchanged during the trial.	A etapa e o número de passes não mudam durante o teste.
+Waiting for a fresh, uncaptured NR timing sample at the current scale.	Aguardando uma nova medição do NR na escala atual, sem captura em andamento.
+Scale setting	Configuração da escala
+Slow tail: mean of the slowest five percent. The target uses mean base time and a tail limit of 1.5 frame budgets.	Cauda lenta: média dos cinco por cento mais lentos. A meta usa o tempo base médio e limita essa cauda a 1,5 vez o tempo por quadro desejado.
+Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame share | model / carried | reason	Escala / cadência | GPU mediana / média / cauda ms | base mediana / média / cauda ms | parte do quadro | modelo / reaproveitados | motivo
+Clock	Tempo
+Mean ms	Média ms
+Slow tail ms	Cauda ms
+GPU	GPU
+Base	Base
+%u model / %u carried	%u modelo / %u reaproveitados
+Share	Parte
+Refused	Recusado
+Second line: model / carried evaluations.	Segunda linha: avaliações do modelo / reaproveitadas.

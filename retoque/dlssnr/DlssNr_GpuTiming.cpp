@@ -453,7 +453,8 @@ void PollLocked()
                         if (slot.metadata.advisorToken)
                             AdvisorRuntime::Confirm({ slot.metadata.advisorToken, slot.id, slot.metadata.contractHash,
                                                       durations.totalMs, slot.metadata.advisorFrameMs, true,
-                                                      slot.metadata.modelReset, slot.metadata.captureActive });
+                                                      slot.metadata.modelReset, slot.metadata.captureActive,
+                                                      slot.metadata.carried });
                         ++snapshot.accepted;
                         if (!snapshot.valid || slot.id > snapshot.sampleId)
                         {

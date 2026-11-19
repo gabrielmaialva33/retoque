@@ -11,8 +11,14 @@ namespace DlssNr::AdvisorRuntime
 inline std::atomic<bool> active { false }, resultReady { false };
 inline std::mutex mutex;
 inline Advisor::Session session;
-inline uint64_t previousPresent = 0, previousToken = 0;
+inline uint64_t previousEvaluation = 0, previousToken = 0;
 inline double previousTime = 0;
+inline std::atomic<uint64_t> evaluations { 0 };
+// Count every attempted Dispatch while active, including early refusals: the next interval then has a gap.
+inline uint64_t BeginEvaluation()
+{
+    return active.load(std::memory_order_relaxed) ? evaluations.fetch_add(1, std::memory_order_relaxed) + 1 : 0;
+}
 inline double Now()
 {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -39,7 +45,7 @@ inline bool Start(Advisor::Settings original, double target)
     const bool started = session.Start(original, target, Now());
     if (started)
     {
-        previousPresent = previousToken = 0;
+        previousEvaluation = previousToken = 0;
         previousTime = 0;
     }
     Publish();
@@ -75,7 +81,7 @@ struct Decision
     uint64_t token = 0;
     double frameMs = 0;
 };
-inline Decision Frame(const Advisor::Context& context, uint64_t present, bool supported)
+inline Decision Frame(const Advisor::Context& context, uint64_t evaluation, bool supported)
 {
     if (!Active())
         return {};
@@ -87,16 +93,34 @@ inline Decision Frame(const Advisor::Context& context, uint64_t present, bool su
     session.Tick(now);
     Publish();
     Decision result { session.Override(), session.Token(), 0 };
-    if (result.token && result.token == previousToken && present == previousPresent + 1 && previousPresent)
+    if (result.token && result.token == previousToken && evaluation == previousEvaluation + 1 && previousEvaluation)
         result.frameMs = now - previousTime;
-    if (present != previousPresent || result.token != previousToken)
+    if (evaluation != previousEvaluation || result.token != previousToken)
     {
         previousTime = now;
-        previousPresent = present;
+        previousEvaluation = evaluation;
         previousToken = result.token;
     }
     return result;
 }
+inline void SkipEvaluation(uint64_t evaluation)
+{
+    if (!Active())
+        return;
+    std::lock_guard lock(mutex);
+    if (evaluation == previousEvaluation)
+        previousEvaluation = 0;
+}
+struct EvaluationScope
+{
+    uint64_t id = BeginEvaluation();
+    bool complete = false;
+    ~EvaluationScope()
+    {
+        if (id && !complete)
+            SkipEvaluation(id);
+    }
+};
 inline void Refuse(const char* reason, uint64_t token)
 {
     if (!Active())

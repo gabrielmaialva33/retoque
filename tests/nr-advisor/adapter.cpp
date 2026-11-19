@@ -8,6 +8,19 @@ int main()
     context.device = 1;
     context.width = 1920;
     context.height = 1080;
+    assert(AdvisorRuntime::Start({ 1, 1 }, 60));
+    uint64_t previous = 0;
+    {
+        AdvisorRuntime::EvaluationScope eval;
+        previous = eval.id;
+        AdvisorRuntime::Frame(context, eval.id, true);
+    } // a late refusal clears the interval even when no reportSkip ran
+    {
+        AdvisorRuntime::EvaluationScope eval;
+        assert(eval.id == previous + 1 && AdvisorRuntime::Frame(context, eval.id, true).frameMs == 0);
+        eval.complete = true;
+    }
+    AdvisorRuntime::Cancel(Advisor::Abort::Cancelled);
     for (unsigned trigger = 0; trigger < 8; ++trigger)
     {
         assert(AdvisorRuntime::Start({ 1, 1 }, 60));
@@ -16,7 +29,10 @@ int main()
         assert(AdvisorRuntime::Frame(context, 1, true).frameMs == 0);
         auto next = AdvisorRuntime::Frame(context, 2, true);
         assert(next.frameMs > 0 && next.token == decision.token);
-        assert(AdvisorRuntime::Frame(context, 4, true).frameMs == 0); // missing observed frame
+        assert(AdvisorRuntime::Frame(context, 4, true).frameMs == 0);
+        AdvisorRuntime::SkipEvaluation(4);
+        assert(AdvisorRuntime::Frame(context, 5, true).frameMs ==
+               0); // missing NR evaluation, independent of generated presents
         if (trigger == 0)
             AdvisorRuntime::Heartbeat(false, true, true);
         if (trigger == 1)

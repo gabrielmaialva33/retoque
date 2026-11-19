@@ -41,18 +41,21 @@ struct Context
     uintptr_t device = 0;
     uint32_t route = 0, width = 0, height = 0, renderWidth = 0, renderHeight = 0, passes = 1;
     Settings original {};
+    bool afterRR = false;
     bool operator==(const Context&) const = default;
 };
 struct Sample
 {
     uint64_t token = 0, id = 0, contract = 0;
     double gpuMs = 0, frameMs = 0;
-    bool confirmed = false, reset = false, capture = false;
+    bool confirmed = false, reset = false, capture = false, carried = false;
 };
 struct Result
 {
     Settings settings {};
     double medianMs = 0, worst5Ms = 0, share = 0, frameMs = 0;
+    double meanMs = 0, meanFrameMs = 0, frameWorst5Ms = 0;
+    size_t modelCount = 0, carriedCount = 0;
     size_t count = 0;
     uint64_t contract = 0;
     std::string reason;
@@ -60,12 +63,15 @@ struct Result
 inline std::vector<Settings> Candidates(Settings original)
 {
     std::vector<Settings> result { original };
-    for (float scale : { 0.75f, 0.5f, 0.25f })
+    for (float scale : { 0.75f, 0.5f })
         if (scale < original.scale)
             result.push_back({ scale, original.cadence });
-    for (uint32_t cadence : { 2u, 4u })
-        if (cadence > original.cadence)
-            result.push_back({ original.scale, cadence });
+    if (original.cadence < 2)
+        result.push_back({ original.scale, 2 });
+    if (original.scale > 0.25f)
+        result.push_back({ 0.25f, original.cadence });
+    if (original.cadence < 4)
+        result.push_back({ original.scale, 4 });
     return result;
 }
 inline double Median(std::vector<double> values)
@@ -75,6 +81,21 @@ inline double Median(std::vector<double> values)
     std::sort(values.begin(), values.end());
     const size_t middle = values.size() / 2;
     return values.size() % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+}
+inline double Mean(const std::vector<double>& values)
+{
+    double result = 0;
+    for (double value : values)
+        result += value;
+    return values.empty() ? 0 : result / values.size();
+}
+inline double SlowTail(std::vector<double> values)
+{
+    if (values.empty())
+        return 0;
+    std::sort(values.begin(), values.end(), std::greater<double>());
+    values.resize((values.size() + 19) / 20);
+    return Mean(values);
 }
 inline Result Summarize(Settings settings, const std::vector<Sample>& samples)
 {
@@ -89,24 +110,35 @@ inline Result Summarize(Settings settings, const std::vector<Sample>& samples)
     {
         gpu.push_back(sample.gpuMs);
         frame.push_back(sample.frameMs);
+        sample.carried ? ++result.carriedCount : ++result.modelCount;
     }
     result.medianMs = Median(gpu);
     result.frameMs = Median(frame);
-    result.share = 100 * result.medianMs / result.frameMs;
-    std::sort(gpu.begin(), gpu.end(), std::greater<double>());
-    const size_t tail = (gpu.size() + 19) / 20;
-    for (size_t i = 0; i < tail; ++i)
-        result.worst5Ms += gpu[i] / tail;
+    result.meanMs = Mean(gpu);
+    result.meanFrameMs = Mean(frame);
+    result.worst5Ms = SlowTail(gpu);
+    result.frameWorst5Ms = SlowTail(frame);
+    result.share = 100 * result.meanMs / result.meanFrameMs;
     return result;
 }
+// A target is met only by the whole window's mean, with a slow-tail cap of 1.5 frame budgets.
+// At least the scheduled model-frame share must have been observed; carried-only gaps cannot win.
+inline constexpr double TailBudgetMultiple = 1.5;
 inline std::optional<size_t> Recommend(const std::vector<Result>& results, double targetFps)
 {
     if (!std::isfinite(targetFps) || targetFps < 1 || targetFps > 1000)
         return {};
     for (size_t i = 0; i < results.size(); ++i)
-        if (results[i].reason.empty() && results[i].count == 60 && std::isfinite(results[i].frameMs) &&
-            results[i].frameMs > 0 && results[i].frameMs <= 1000 / targetFps)
+    {
+        const auto& result = results[i];
+        if (result.reason.empty() && result.count == 60 && result.settings.cadence >= 1 &&
+            result.settings.cadence <= 4 &&
+            result.modelCount >= (60 + result.settings.cadence - 1) / result.settings.cadence &&
+            std::isfinite(result.meanFrameMs) && result.meanFrameMs > 0 && std::isfinite(result.frameWorst5Ms) &&
+            result.frameWorst5Ms > 0 && result.meanFrameMs <= 1000 / targetFps &&
+            result.frameWorst5Ms <= TailBudgetMultiple * 1000 / targetFps)
             return i;
+    }
     return {};
 }
 class Session
@@ -218,7 +250,7 @@ class Session
         }
         if (value.device != context->device)
             Cancel(Abort::DeviceLost);
-        else if (value.route != context->route || value.passes != context->passes)
+        else if (value.route != context->route || value.passes != context->passes || value.afterRR != context->afterRR)
             Cancel(Abort::RouteChanged);
         else if (value.width != context->width || value.height != context->height ||
                  value.renderWidth != context->renderWidth || value.renderHeight != context->renderHeight)

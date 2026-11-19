@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix='nr-advisor-') as temp:
 print('PASS: candidate order, timing identity, statistics, recommendation, restoration and aborts')
 
 source = (root / 'retoque/dlssnr/DlssNr_Menu.cpp').read_text()
-menu = source[source.index('static void RenderAdvisor('):source.index('static bool DeferredSlider(')]
+menu = source[source.index('void AdvisorMenuTick('):source.index('static bool DeferredSlider(')]
 gpu = (root / 'retoque/dlssnr/DlssNr_GpuTiming.h').read_text()
 gpu = gpu[gpu.index('struct Metadata'):gpu.index('// Collection never waits')]
 with tempfile.TemporaryDirectory(prefix='nr-advisor-menu-') as temp:
@@ -45,7 +45,13 @@ assert 'advisor.settings ? advisor.settings->scale' in renderer
 assert 'advisor.settings ? advisor.settings->cadence' in renderer
 assert 'metadata.advisorToken = advisor.token' in renderer
 assert 'cadence.cadence == advisor.settings->cadence' in renderer
-assert 'AdvisorRuntime::Heartbeat' in (root / 'OptiScaler/menu/menu_common.cpp').read_text()
+common = (root / 'OptiScaler/menu/menu_common.cpp').read_text()
+assert common.count('DlssNr::AdvisorMenuTick(ctx.config, _isVisible);') == 1
+assert 'AdvisorRuntime::' not in common
+assert 'AdvisorPolicy::CheckConfig(cfg, false)' in renderer
+assert source.count('AdvisorPolicy::CheckConfig(*config, nativeVulkan)') == 2
+assert 'advisorEvaluation, supported' in renderer
+assert 'slot.metadata.carried' in collector
 for file in ('DlssNr_PresentHost.cpp', 'DlssNr_SwapchainColour.cpp'):
     assert 'AdvisorRuntime::Cancel(Advisor::Abort::Resized)' in (root / 'retoque/dlssnr' / file).read_text()
 print('PASS: override, provenance, confirmed-collector, close and resize source seams (static only)')

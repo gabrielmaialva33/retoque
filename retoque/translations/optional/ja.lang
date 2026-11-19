@@ -668,3 +668,28 @@ Wait for the original settings to settle, or run a new trial if the context chan
 Trial complete	Trial complete
 Trial aborted	Trial aborted
 Trial in progress	Trial in progress
+
+# NR advisor round 2; English fallback pending native review outside pt-BR.
+Choose the after-upscaler stage to measure NR choices.	Choose the after-upscaler stage to measure NR choices.
+Turn off adaptive cadence for a repeatable trial.	Turn off adaptive cadence for a repeatable trial.
+Turn off peripheral compression before the trial.	Turn off peripheral compression before the trial.
+Release the held frame before the trial.	Release the held frame before the trial.
+GPU timing is needed to measure NR choices.	GPU timing is needed to measure NR choices.
+The trial needs timing for every NR evaluation.	The trial needs timing for every NR evaluation.
+Turn on GPU timing	Turn on GPU timing
+Use detailed GPU timing	Use detailed GPU timing
+Frame generation may be paused while this menu is open.	Frame generation may be paused while this menu is open.
+Stage and pass count stay unchanged during the trial.	Stage and pass count stay unchanged during the trial.
+Waiting for a fresh, uncaptured NR timing sample at the current scale.	Waiting for a fresh, uncaptured NR timing sample at the current scale.
+Scale setting	Scale setting
+Slow tail: mean of the slowest five percent. The target uses mean base time and a tail limit of 1.5 frame budgets.	Slow tail: mean of the slowest five percent. The target uses mean base time and a tail limit of 1.5 frame budgets.
+Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame share | model / carried | reason	Scale / cadence | GPU median / mean / tail ms | base median / mean / tail ms | frame share | model / carried | reason
+Clock	Clock
+Mean ms	Mean ms
+Slow tail ms	Slow tail ms
+GPU	GPU
+Base	Base
+%u model / %u carried	%u model / %u carried
+Share	Share
+Refused	Refused
+Second line: model / carried evaluations.	Second line: model / carried evaluations.

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include <dlssnr/DlssNr_AdvisorRuntime.h>
+#include <dlssnr/DlssNr_AdvisorPolicy.h>
 #include <dlssnr/DlssNr_Dx11Scene.h>
 
 #include "DlssNr_Dx12_Internal.h"
@@ -756,6 +757,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const Config& cfg = *Config::Instance();
+    DlssNr::AdvisorRuntime::EvaluationScope advisorScope;
+    const uint64_t advisorEvaluation = advisorScope.id;
     DlssNr::AdvisorRuntime::Decision advisor;
     const auto reportSkip = [coverage, &advisor](const char* why)
     {
@@ -882,16 +885,13 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         context.renderWidth = frame.RenderSubrectWidth;
         context.renderHeight = frame.RenderSubrectHeight;
         context.passes = passSnapshot.Count;
-        context.original = { DlssNr::WorkingScale(), cfg.DlssNrCadence.value_or_default() };
-        const auto measurement = cfg.GetDlssNrGpuTimingSettings();
-        const bool supported =
-            cfg.DlssNrEnabled.value_or_default() && State::Instance().menuVisible && measurement.Enabled &&
-            measurement.Interval == 1 && colour == output && !frame.AfterRayReconstruction && !frame.NativeDx11Scene &&
-            !cfg.DlssNrUseProxy.value_or_default() && cfg.DlssNrStage.value_or_default() == 0 &&
-            !FrameGenerationActive() && !cfg.DlssNrCadenceAdaptive.value_or_default() &&
-            !cfg.DlssNrPeripheryCompression.value_or_default() && !cfg.DlssNrHoldFrame.value_or_default() &&
-            !g_capture.isActive() && !DlssNr::PairCapture::Wanted();
-        advisor = DlssNr::AdvisorRuntime::Frame(context, State::Instance().frameCount, supported);
+        context.afterRR = frame.AfterRayReconstruction;
+        context.original = { frame.AfterRayReconstruction ? DlssNr::RRWorkingScale() : DlssNr::WorkingScale(),
+                             cfg.DlssNrCadence.value_or_default() };
+        const bool supported = DlssNr::AdvisorPolicy::CheckConfig(cfg, false) == DlssNr::AdvisorPolicy::Gate::Ready &&
+                               State::Instance().menuVisible && colour == output && !frame.NativeDx11Scene &&
+                               !g_capture.isActive() && !DlssNr::PairCapture::Wanted();
+        advisor = DlssNr::AdvisorRuntime::Frame(context, advisorEvaluation, supported);
     }
     std::optional<DlssNr::Chain::RecordingLease> ownedRecording;
     if (!recording && WantsTrackedRecording(passSnapshot, frame.NativeDx11Scene))
@@ -3745,6 +3745,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     const bool timingComplete =
         carried ? timingMetadataReady && wrote && result == 1
                 : timingMetadataReady && wrote && result == 1 && chain.completed == passSnapshot.Count;
+    advisorScope.complete = timingComplete;
     timing.FinishOnScopeExit(carried ? 0u : chain.completed, timingComplete);
     DlssNr::Replay::NoteDispatch(wrote, carried, cadence.cadence, passSnapshot.Count, carried ? 0u : chain.completed,
                                  result);
