@@ -305,6 +305,12 @@ bool MultiQueue()
     return model.MultiQueue();
 }
 
+bool Serialized()
+{
+    std::lock_guard lock(stateMutex);
+    return model.Strict() || !model.Overlap();
+}
+
 namespace
 {
 // Under stateMutex. A list whose only remaining reference is ours was released by the game: nobody can execute it

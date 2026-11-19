@@ -5399,8 +5399,32 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     syncInputs.dlssgSeen = state.DlssgDetectedInterpolationCount() > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
     syncInputs.dlssgLoaded = dlssgLoaded;
     syncInputs.boundary = boundary;
-    const bool presentSync = DlssNr::PresentSyncWanted(cfg.DlssNrPresentSync, syncInputs);
+    // FSR-FG's own swapchain orders its game queue's work ahead of its own on the GPU (DlssNr_PresentSync.h): the
+    // FG hook hands this pass that queue, the one the FG object kept when the swapchain was created. A provider
+    // named in [FSRFG] Provider may bring another swapchain, and the answer is for FFX's and the fork's presenter.
+    syncInputs.fsrFgOutput = state.activeFgOutput == FGOutput::FSRFG;
+    syncInputs.fsrFgCustomProvider = !state.activeFsrFgProvider.empty();
+    syncInputs.onFgGameQueue = fgHook && state.currentFG != nullptr && state.currentFG->GetCommandQueue() == queue;
+    // Tracked recordings admitted one at a time are refused while the previous one runs (chain-in-flight.md): there
+    // the wait is also what lets the next frame's in. The untracked single pass never asks.
+    bool tracked = false;
+    {
+        std::lock_guard<std::mutex> lock(g_nrMutex);
+        tracked = g_tracked;
+    }
+    syncInputs.serialRecordings = tracked && DlssNr::Submission::Serialized();
+    const DlssNr::PresentSyncDecision sync = DlssNr::DecidePresentSync(cfg.DlssNrPresentSync, syncInputs);
+    const bool presentSync = sync.wait;
     DlssNr::g_presentSyncWaits.store(presentSync, std::memory_order_relaxed);
+
+    // Said when it changes: a present cpu window counts the waits, not which rule asked for them. Bounded, so two
+    // entries that took turns could not fill the log.
+    static std::atomic<const char*> loggedSync { nullptr };
+    static std::atomic<unsigned int> syncLines { 0 };
+    if (loggedSync.exchange(sync.why, std::memory_order_relaxed) != sync.why &&
+        syncLines.fetch_add(1, std::memory_order_relaxed) < 16)
+        LOG_INFO("DLSS-NR present: {} for its write-back before returning ({})",
+                 presentSync ? "waits" : "does not wait", sync.why);
 
     if (presentSync && g_presentList.fenceValue[slot] != 0 &&
         PresentFenceProgress(g_presentList.fenceValue[slot]) == DlssNr::FenceProgress::State::Pending)
