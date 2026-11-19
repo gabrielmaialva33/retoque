@@ -149,6 +149,7 @@ pub fn discover(manual: Vec<PathBuf>, libraries: Vec<PathBuf>) -> Outcome {
             game.install_dir = real;
         }
     }
+    crate::state::library::remember_scan(&games);
     let home = dirs::home_dir();
     let art = games
         .iter()
@@ -182,6 +183,7 @@ pub fn remove_leftovers(reviewed: Vec<retoque_core::leftovers::Leftover>) -> Out
 
 pub fn status(target: PathBuf) -> Outcome {
     let result = retoque_core::status(&target).map_err(|e| AppError::from(e).for_target(target.clone()));
+    crate::state::library::remember_folder(&target);
     Outcome::Status { target, result }
 }
 
