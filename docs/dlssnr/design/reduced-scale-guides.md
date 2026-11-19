@@ -91,8 +91,17 @@ pins them with the numbers of the cases they were written for.
 
 The single/master and chain paths require the complete colour scratch bundle: `output`, `colorCopy`,
 `hdrCopy`, and `colorSmall` whenever the working extent differs from the frame. A failed allocation
-refuses the frame before feature creation or colour processing. The partial bundle is parked through
-existing retirement, never immediately released, so a retry cannot inherit its old size or format.
+refuses the frame before feature creation or colour processing and preserves every successful member.
+Allocation retries back off by 8, 16, 32, 64, 128 and at most 240 observed presents; repeated calls in
+one counted frame do not shorten the wait. Without a present counter, eligible Dispatch calls advance
+it. Success, a size/format change, or a backwards frame counter resets the backoff; there is no permanent
+latch. The wait returns before admission/rebuild or allocation can churn the partial bundle.
+
+A partial bundle can exist before feature creation, when the ordinary resize retirement does not run.
+The format-swap helper also returns early if `output` is missing. Thus a changed contract checks each
+existing member's actual dimensions and format, parking only incompatible members through existing
+retirement. The contract is recorded only after this validation, so admission deferring a changed frame
+cannot accidentally mark old members compatible. Existing complete-generation retirement is unchanged.
 
 Guide selection uses `Game`, `Matched`, or `Refused`, as Vulkan does. Need is decided independently
 of bytecode availability. A needed resample that cannot initialize, allocate or dispatch refuses the
@@ -106,8 +115,9 @@ NR-off callers are unchanged. `MatchGuides=false` and guides no larger than the 
 the game-guide path without allocating a resample. Peripheral packing keeps its separate policy.
 
 `tests/nr-dispatch` fault-injects extracted production blocks with host fakes and ASan/UBSan: each
-colour allocation at native/reduced sizes on single/chain routes; absent bytecode, failed constructor,
-each matched-guide allocation, failed dispatch, and recovery. Source-order guards put refusal before
+colour allocation at native/reduced sizes on single/chain routes; persistent OOM, bounded retry,
+compatible-member retention, changed/deferred contracts, clock rollback and an unobserved frame counter;
+absent bytecode, failed constructor, each matched-guide allocation, failed dispatch, and recovery. Source-order guards put refusal before
 frame hold/model/resolve. These tests do not execute NGX, shaders or a native D3D12 driver.
 
 **A pass of its own, with optional bytecode.**

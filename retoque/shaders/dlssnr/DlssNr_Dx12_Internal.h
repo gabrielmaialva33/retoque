@@ -227,6 +227,16 @@ struct NrState
     // The frame shrunk for the model, when it is working below full resolution.
     ID3D12Resource* colorSmall = nullptr;
 
+    // Failed mandatory scratch allocations retry on eligible frames without discarding good members.
+    // Kept separately from the feature's dimensions: a partial bundle can exist before feature creation.
+    struct ScratchRetry
+    {
+        std::array<uint64_t, 5> contract {}; // frame W/H, working W/H, format
+        uint64_t frame = 0;
+        unsigned delay = 0;
+        unsigned remaining = 0;
+    } scratchRetry;
+
     // Supersampling (working scale > 1): the Output Scaling upsampler used to enlarge the proxy to the
     // model's larger-than-native working size with a real filter instead of the box minifier. Created
     // lazily on the first super-native frame, released in Shutdown; sizes from the resources each call,

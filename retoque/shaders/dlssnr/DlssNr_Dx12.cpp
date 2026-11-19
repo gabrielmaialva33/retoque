@@ -1384,6 +1384,26 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         return false;
     }
 
+    // Retry failed mandatory scratch before any admission/rebuild can churn the partial bundle.
+    const std::array<uint64_t, 5> scratchContract { width, height, workWidth, workHeight,
+                                                    static_cast<uint64_t>(desc.Format) };
+    auto& scratchRetry = g_nr.scratchRetry;
+    const bool scratchContractChanged = scratchRetry.contract != scratchContract;
+    if (scratchContractChanged || (observedFrame != 0 && observedFrame < scratchRetry.frame))
+        scratchRetry = {};
+    // Count observed presents, not repeated evaluates of one frame. Without a present counter,
+    // eligible Dispatch calls advance the wait so an unobserved route cannot remain refused forever.
+    const uint64_t retryElapsed = observedFrame != 0 ? observedFrame - scratchRetry.frame : 1;
+    scratchRetry.frame = observedFrame;
+    scratchRetry.remaining =
+        retryElapsed >= scratchRetry.remaining ? 0 : scratchRetry.remaining - static_cast<unsigned>(retryElapsed);
+    if (scratchRetry.remaining != 0)
+    {
+        reportSkip("mandatory NR scratch retry is backing off; frame kept unchanged");
+        device->Release();
+        return false;
+    }
+
     if (chainEnabled && (!g_nr.feature || g_nr.width != width || g_nr.height != height || g_nr.workWidth != workWidth ||
                          g_nr.workHeight != workHeight || g_nr.passBuilt[0] != firstSettings ||
                          (g_nr.output && g_nr.output->GetDesc().Format != desc.Format &&
@@ -1516,8 +1536,27 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
     }
 
-    // Each member may fail independently, including on the single/master route.
-    // Never overwrite a resource still in use when completing the bundle.
+    // Each member may fail independently, including before feature creation. The ordinary resize
+    // retirement requires a feature, and format retirement requires output: neither covers every
+    // partial bundle. On a changed contract, retire only members that actually no longer fit.
+    if (scratchContractChanged)
+    {
+        const auto retireMismatch = [&](ID3D12Resource*& resource, unsigned wantedWidth, unsigned wantedHeight)
+        {
+            if (resource == nullptr)
+                return;
+            const auto actual = resource->GetDesc();
+            if (actual.Width != wantedWidth || actual.Height != wantedHeight || actual.Format != desc.Format)
+                ParkNrResource(resource);
+        };
+        retireMismatch(g_nr.output, workWidth, workHeight);
+        retireMismatch(g_nr.colorCopy, width, height);
+        retireMismatch(g_nr.hdrCopy, width, height);
+        retireMismatch(g_nr.colorSmall, workWidth, workHeight);
+    }
+    // Publish only after validation: admission above can defer a changed contract for another frame.
+    scratchRetry.contract = scratchContract;
+
     if (g_nr.output == nullptr)
         g_nr.output = CreateScratch(device, desc.Format, workWidth, workHeight);
     if (g_nr.colorCopy == nullptr)
@@ -1536,17 +1575,15 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         g_nr.reset = true;
         for (auto& reset : g_nr.passReset)
             reset = true;
-        // A failed bundle has no feature contract of its own. Park all its pieces so a later
-        // retry (possibly another size/format) cannot inherit a partial generation. Parking keeps
-        // any earlier GPU references alive through the existing retirement mechanism.
-        ParkNrResource(g_nr.output);
-        ParkNrResource(g_nr.colorCopy);
-        ParkNrResource(g_nr.hdrCopy);
-        ParkNrResource(g_nr.colorSmall);
-        reportSkip("mandatory NR scratch initialization failed; frame kept unchanged, retry next frame");
+        // Keep every successful member: retiring it here would amplify a persistent OOM.
+        scratchRetry.delay = scratchRetry.delay == 0 ? 8 : std::min(scratchRetry.delay * 2, 240u);
+        scratchRetry.remaining = scratchRetry.delay;
+        reportSkip("mandatory NR scratch initialization failed; frame kept unchanged, retry with backoff");
         device->Release();
         return false;
     }
+
+    scratchRetry.delay = scratchRetry.remaining = 0;
 
     // The down-leg target is native (the answer is brought back to frame size before the resolve).
     if (workScale > 1.0f && g_nr.outputNative == nullptr)

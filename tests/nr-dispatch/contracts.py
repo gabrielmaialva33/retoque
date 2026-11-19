@@ -5,9 +5,17 @@ import tempfile
 
 
 def run_contracts(root, renderer):
-    scratch_start = renderer.index('    if (g_nr.output == nullptr)', renderer.index('bool DlssNr_Dx12::Dispatch('))
+    scratch_start = renderer.index('    // Each member may fail independently', renderer.index('bool DlssNr_Dx12::Dispatch('))
     scratch_end = renderer.index('    // The down-leg target', scratch_start)
-    scratch = renderer[scratch_start:scratch_end]
+    retry_marker = '    // Retry failed mandatory scratch before any admission/rebuild'
+    if retry_marker in renderer:
+        retry_start = renderer.index(retry_marker)
+        retry_end = renderer.index('    if (chainEnabled && (!g_nr.feature', retry_start)
+        retry = renderer[retry_start:retry_end]
+        assert retry_end < scratch_start
+    else:
+        retry = ''
+    scratch = retry + '\n    if (deferScratch) return false;\n' + renderer[scratch_start:scratch_end]
     guide_end = renderer.index('    RestoreResourceState depthMatchedRead', scratch_end)
     guide_start = renderer.rfind('    else\n    {', scratch_end, guide_end)
     if guide_start < 0:
@@ -26,9 +34,13 @@ def run_contracts(root, renderer):
     assert renderer.index('RestoreResourceState depthCloneRead') < guide_start
     assert renderer.index('RestoreResourceState motionCloneRead') < guide_start
     unit = (Path(__file__).parent / 'contracts_fakes.h').read_text()
-    unit += '\nbool scratch(bool chainEnabled, bool reduced) {\n'
-    unit += ' (void)chainEnabled; const unsigned width=1920, height=1080, workWidth=reduced?960:1920, workHeight=reduced?540:1080;\n'
-    unit += ' const Desc desc{0, width, height};\n' + scratch + '\n return true; }\n'
+    internal = (root / 'retoque/shaders/dlssnr/DlssNr_Dx12_Internal.h').read_text()
+    state_start = internal.find('    struct ScratchRetry\n')
+    state = '' if state_start < 0 else internal[state_start:internal.index('    } scratchRetry;', state_start) + len('    } scratchRetry;')]
+    unit = unit.replace('    // Production scratch retry state.', state)
+    unit += '\nbool scratch(bool chainEnabled, bool reduced, unsigned width=1920, unsigned height=1080, unsigned workWidth=0, unsigned workHeight=0, int format=0) {\n'
+    unit += ' (void)chainEnabled; if (!workWidth) workWidth=reduced?width/2:width; if (!workHeight) workHeight=reduced?height/2:height; const uint64_t observedFrame=frameNumber; (void)observedFrame;\n'
+    unit += ' const Desc desc{format, width, height};\n' + scratch + '\n return true; }\n'
     unit += r'''
 bool guides(bool enabled, bool available, unsigned workWidth=960, unsigned workHeight=540) {
     cfg.DlssNrMatchGuides.value=enabled; shaderAvailable=available;
