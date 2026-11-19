@@ -179,7 +179,15 @@ impl TaskHub {
         };
         let scoped = matches!(
             name,
-            "doctor" | "status" | "ini" | "logs" | "plan" | "autotune-plan" | "autotune-facts" | "model-inspection"
+            "safety"
+                | "doctor"
+                | "status"
+                | "ini"
+                | "logs"
+                | "plan"
+                | "autotune-plan"
+                | "autotune-facts"
+                | "model-inspection"
         );
         self.submit(lane, scoped, name, target, work);
     }

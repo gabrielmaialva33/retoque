@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_AdvisorMenu.h>
 #include <misc/Localization.h>
 #include <misc/MenuFonts.h>
 #include "menu_common.h"
@@ -11602,6 +11603,7 @@ bool MenuCommon::RenderMenu()
 
     // The GPU-time readbacks run only while the display that shows them is on screen.
     State::Instance().menuVisible = _isVisible;
+    DlssNr::AdvisorMenuTick(ctx.config, _isVisible);
 
     // 2) Prepare one-shot notifications and start a new ImGui frame only when needed.
     UpdateVersionAndStartupNotifications(ctx);

@@ -142,6 +142,12 @@ Linux uninstall leaves empty support directories in place. `_nvngx.dll` is disco
 with the same receipt and foreign-file rules as the other DLLs. No driver found means a visible warning.
 `--enable-nr` and `--keep-reshade` share one backup when both edit a preserved ini.
 
+Both installers also refuse **exit 7** when every readable direct PE executable is 32-bit (at least one), with no
+override. Select the 64-bit executable folder; Retoque cannot load into a 32-bit-only game. Mixed folders name
+the 32-bit files in a note. Missing/unreadable architecture is unknown. Uninstall remains available. Bounded
+anti-cheat filename/folder evidence produces plan warnings, never a compatibility verdict or refusal; the app
+alone requires and remembers an acknowledgment. [Detection contract and limits](app/README.md#executable-architecture-and-anti-cheat-evidence).
+
 `tests/deploy-safety` runs it against fake game directories.
 
 ## install-linux.sh

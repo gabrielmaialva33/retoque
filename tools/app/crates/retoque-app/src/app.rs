@@ -34,6 +34,10 @@ pub(crate) type Drafts = HashMap<PathBuf, BTreeMap<(String, String), String>>;
 /// What survives a restart.
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Saved {
+    #[serde(default)]
+    pub(crate) anti_cheat_acknowledged: std::collections::BTreeSet<String>,
+    #[serde(default)]
+    pub(crate) favorites: std::collections::BTreeSet<String>,
     pub(crate) lang: Option<Lang>,
     pub(crate) manual: Vec<PathBuf>,
     #[serde(default)]
@@ -76,9 +80,15 @@ pub(crate) enum PlanInputs {
 /// Everything about the selected game's chosen folder. Replaced whole when the selection changes.
 #[derive(Default)]
 pub(crate) struct GameView {
+    pub(crate) safety: Option<crate::safety_ui::Snapshot>,
+    pub(crate) safety_ack: Option<u64>,
+    pub(crate) safety_choose_folder: bool,
     pub(crate) target: Option<PathBuf>,
     pub(crate) status: Option<Result<Status, AppError>>,
     pub(crate) ini: Option<Result<Option<Ini>, AppError>>,
+    /// Actual on-disk spelling reported by the INI job; drawing never probes for this path.
+    pub(crate) ini_path: Option<PathBuf>,
+    pub(crate) captures_dir_exists: bool,
     pub(crate) edits: BTreeMap<(String, String), String>,
     pub(crate) options: InstallOptions,
     // The newest preview asked for; an older answer is dropped.

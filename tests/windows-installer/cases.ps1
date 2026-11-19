@@ -321,6 +321,55 @@ Add-Case 'release_package_and_refusals' {
     }
 }
 
+function New-Executable([int]$Machine) {
+    $data = New-Object byte[] 90
+    $data[0]=77; $data[1]=90; $data[60]=64; $data[64]=80; $data[65]=69
+    [Array]::Copy([BitConverter]::GetBytes([uint16]$Machine),0,$data,68,2)
+    $data[84]=2
+    $magic = if ($Machine -eq 332) { 267 } else { 523 }
+    [Array]::Copy([BitConverter]::GetBytes([uint16]$magic),0,$data,88,2)
+    return ,$data
+}
+Add-Case 'architecture_refusal_and_anti_cheat_evidence' {
+    param($tmp)
+    $src = New-Src $tmp 'v1'
+    $game = New-Game $tmp @{ 'Game.EXE'=(New-Executable 332) }
+    $before = Get-Snapshot $game
+    foreach ($flags in @(@(), @('-DryRun'), @('-ReplaceForeign', '-AllowSecondProxy'))) {
+        $r = Invoke-Installer $game $flags -Src $src
+        Expect ($r.Code -eq 7) '32-bit executable is refused with exit 7'
+        Expect (($r.Out + $r.Err).Contains('Game.EXE')) 'names the 32-bit executable'
+        Expect ((Get-SnapshotDiff $before (Get-Snapshot $game)).Count -eq 0) 'refusal writes nothing'
+    }
+    $r = Invoke-Installer $game @('-Uninstall')
+    Expect ($r.Code -ne 7) 'architecture does not refuse uninstall without a receipt'
+    [IO.File]::WriteAllBytes((Join-Path $game 'Game64.exe'), (New-Executable 34404))
+    $r = Install-Ok $game @('-DryRun') -Src $src
+    Expect ($r.Out.Contains('32-bit executables also present')) 'mixed folder is a note'
+    [void](Install-Ok $game -Src $src)
+    [IO.File]::Delete((Join-Path $game 'Game64.exe'))
+    [void](Uninstall-Ok $game)
+    Expect ((Get-SnapshotDiff $before (Get-Snapshot $game)).Count -eq 0) 'x86 does not block uninstall'
+    [IO.File]::WriteAllText((Join-Path $game 'Game.EXE'), 'not a PE')
+    foreach ($name in @('EasyAntiCheat','BattlEye','EAAntiCheat','GameGuard','XIGNCODE3','pb','AntiCheatExpert')) {
+        $dir = Join-Path $game $name
+        [void][IO.Directory]::CreateDirectory($dir)
+        $r = Install-Ok $game @('-DryRun') -Src $src
+        Expect ($r.Out.Contains($name) -and $r.Out.Contains('account ban')) 'anti-cheat is evidence, not refusal'
+        [IO.Directory]::Delete($dir)
+    }
+    [void][IO.Directory]::CreateDirectory((Join-Path $game 'BattlEye'))
+    [IO.File]::WriteAllText((Join-Path $game 'BattlEye/BEClient_x64.dll'), '')
+    [IO.File]::WriteAllText((Join-Path $game 'BEService.exe'), '')
+    $r = Install-Ok $game @('-DryRun') -Src $src
+    $notes = @($r.Out -split "`n" | Where-Object { $_.Contains('Anti-cheat evidence:') })
+    Expect ($notes.Count -eq 1) 'one note per product'
+    foreach ($path in @('BattlEye','BEClient_x64.dll','BEService.exe')) {
+        Expect ($notes[0].Contains($path)) 'grouped note retains each path'
+    }
+
+}
+
 Add-Case 'clean_install' {
     param($tmp)
     $src = New-Src $tmp 'v1'

@@ -729,6 +729,11 @@ KernelProfile=auto
 Use the in-game NR panel to capture and edit scan anchors. `UseProxy` selects an
 experimental driver path and is not evidence of equivalence with the forwarder.
 
+`[DlssNr] Passes` selects 1..10 sequential D3D12 model passes (default 1). Native Vulkan
+still uses one pass with master settings, including when `[DlssNr.PassN]` overrides are saved.
+The [Vulkan chain design](docs/dlssnr/design/nr-vk-passes.md) has implemented, host-tested
+decisions only; submission/completion and live heap-budget adapters are still missing.
+
 `ModelLoader` chooses which module calls the model on the D3D12 route. `forwarder` (the default)
 keeps `nvngx.dll_dlssnr.dll`. `direct` calls it from OptiScaler itself and answers the model's
 caller check through the model's own `GetModuleFileName` imports, so that route needs no helper

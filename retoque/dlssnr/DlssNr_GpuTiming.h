@@ -25,6 +25,9 @@ struct Metadata
     // records no model brackets, completes zero passes, and is its own kind of sample rather than a partial chain.
     uint32_t cadence = 1;
     bool carried = false;
+    // Advisor provenance is recorded with the GPU work, never inferred from current UI settings.
+    uint64_t advisorToken = 0;
+    double advisorFrameMs = 0;
 };
 
 struct DiscardCount

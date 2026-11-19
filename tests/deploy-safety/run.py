@@ -750,6 +750,62 @@ def pending_app_journal_refuses_every_legacy_operation(tmp):
             expect(snapshot(game) == before, f'pending {kind}: {flags} must write nothing')
 
 
+def pe_executable(machine):
+    data = bytearray(90)
+    data[:2] = b'MZ'
+    data[60] = 64
+    data[64:68] = b'PE\0\0'
+    data[68:70] = machine.to_bytes(2, 'little')
+    data[84] = 2
+    data[88:90] = (0x10b if machine == 0x14c else 0x20b).to_bytes(2, 'little')
+    return data
+
+
+@case
+def architecture_refusal_and_anti_cheat_evidence(tmp):
+    src = make_src(tmp, 'v1')
+    game = make_game(tmp, {'Game.EXE': pe_executable(0x14c)})
+    before = snapshot(game)
+    for flags in ((), ('--dry-run',), ('--replace-foreign', '--allow-second-proxy')):
+        result = run(game, *flags, src=src)
+        expect(result.returncode == 7, '32-bit refused with its own exit code')
+        expect('Game.EXE' in result.stdout + result.stderr and '64-bit' in result.stdout + result.stderr, 'names evidence and remedy')
+        expect(snapshot(game) == before, 'refusal writes nothing')
+    result = run(game, '--uninstall')
+    expect(result.returncode != 7, 'architecture does not refuse uninstall without a receipt')
+    (game / 'Game64.exe').write_bytes(pe_executable(0x8664))
+    result = deploy_ok(game, '--dry-run', src=src)
+    expect('32-bit executables also present' in result.stdout, 'mixed folder is a note')
+    deploy_ok(game, src=src)
+    (game / 'Game64.exe').unlink()
+    expect(run(game, '--uninstall').returncode == 0, 'x86-only uninstall succeeds')
+    expect(snapshot(game) == before, 'x86 cannot block removing an existing install')
+    (game / 'Game.EXE').write_bytes(b'not a PE')
+    deploy_ok(game, '--dry-run', src=src)
+    for name in ('EasyAntiCheat', 'BattlEye', 'EAAntiCheat', 'GameGuard', 'XIGNCODE3', 'pb', 'AntiCheatExpert'):
+        (game / name).mkdir()
+        result = deploy_ok(game, '--dry-run', src=src)
+        expect(name in result.stdout and 'account ban' in result.stdout, 'anti-cheat is named information, never refusal')
+        (game / name).rmdir()
+    (game / 'BattlEye').mkdir()
+    (game / 'BattlEye' / 'BEClient_x64.dll').write_bytes(b'')
+    (game / 'BEService.exe').write_bytes(b'')
+    result = deploy_ok(game, '--dry-run', src=src)
+    notes = [line for line in result.stdout.splitlines() if 'Anti-cheat evidence:' in line]
+    expect(len(notes) == 1, 'one note per product')
+    expect(all(name in notes[0] for name in ('BattlEye', 'BEClient_x64.dll', 'BEService.exe')), 'grouped note retains each path')
+    (game / 'BattlEye' / 'BEClient_x64.dll').unlink()
+    (game / 'BattlEye').rmdir()
+    (game / 'BEService.exe').unlink()
+    outside = tmp / 'outside'
+    outside.mkdir()
+    (outside / 'real.exe').write_bytes(pe_executable(0x14c))
+    (game / 'linked.exe').symlink_to(outside / 'real.exe')
+    (game / 'BattlEye').symlink_to(outside, target_is_directory=True)
+    result = deploy_ok(game, '--dry-run', src=src)
+    expect('Anti-cheat evidence' not in result.stdout, 'links do not supply evidence')
+
+
 def main():
     global IMPL
     parser = argparse.ArgumentParser(description=__doc__)

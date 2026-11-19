@@ -15,6 +15,7 @@ pub mod memo;
 pub mod pe_version;
 mod process;
 pub mod receipt;
+pub mod safety;
 pub use process::running_processes;
 
 /// The names OptiScaler answers to when a game loads it (dllmain.cpp, dllNames), lower case.
@@ -130,6 +131,10 @@ pub enum Step {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
     Usage(String),
+    /// Every readable direct PE executable is x86; the x64 proxy cannot load.
+    Executables32Bit {
+        names: Vec<String>,
+    },
     /// A process maps or holds a file in the game folder.
     GameRunning {
         processes: Vec<(u32, String)>,
@@ -156,6 +161,7 @@ pub enum Foreign {
 impl Refusal {
     pub fn exit_code(&self) -> i32 {
         match self {
+            Refusal::Executables32Bit { .. } => 7,
             Refusal::GameRunning { .. } => 3,
             Refusal::Foreign { .. } => 4,
             Refusal::SecondProxy { .. } => 5,

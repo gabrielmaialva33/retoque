@@ -279,9 +279,11 @@ impl RetoqueApp {
                 if self.busy() {
                     return;
                 } // apply always explicitly reloads its completed writes
-                if changes.status {
+                if changes.status || changes.captures {
                     let t = target.clone();
                     self.jobs.spawn("status", None, move |_| model::status(t));
+                }
+                if changes.status {
                     self.refresh_model_inspection();
                     self.autotune_refresh(target.clone());
                 }

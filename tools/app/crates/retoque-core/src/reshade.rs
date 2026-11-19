@@ -21,22 +21,10 @@ pub enum Build {
 }
 /// Minimum static architecture check; it never certifies that the DLL will load successfully.
 pub fn is_x64_dll(bytes: &[u8]) -> bool {
-    let Some(offset) = bytes
-        .get(60..64)
-        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
-    else {
-        return false;
-    };
-    let Some(header) = offset.checked_add(26).and_then(|end| bytes.get(offset..end)) else {
-        return false;
-    };
-    bytes.starts_with(b"MZ")
-        && header.starts_with(b"PE\0\0")
-        && header[4..6] == [0x64, 0x86]
-        && u16::from_le_bytes([header[20], header[21]]) >= 2
-        && u16::from_le_bytes([header[22], header[23]]) & 0x2000 != 0
-        && header[24..26] == [0x0b, 0x02]
+    crate::pe_version::read_header(&mut std::io::Cursor::new(bytes))
+        .is_some_and(|h| h.machine == crate::pe_version::Machine::X64 && h.dll)
 }
+
 pub fn build(bytes: &[u8]) -> Build {
     let has = |s: &[u8]| bytes.windows(s.len()).any(|w| w == s);
     match (has(b"LoadFromDllMain"), has(b"only limited add-on functionality")) {

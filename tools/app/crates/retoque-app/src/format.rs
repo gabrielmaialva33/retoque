@@ -2,6 +2,7 @@ use crate::app::*;
 
 pub(crate) fn refusal_text(lang: Lang, r: &Refusal) -> (&'static str, String) {
     match r {
+        Refusal::Executables32Bit { names } => ("ref.x86", names.join(", ")),
         Refusal::GameRunning { processes } => (
             "ref.running",
             processes

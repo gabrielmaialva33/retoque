@@ -251,6 +251,37 @@ pub fn choice_text(lang: Lang, en: &'static str, pt: &'static str) -> &'static s
 
 // (key, English, Portuguese)
 const TEXT: &[(&str, &str, &str)] = &[
+    ("play.action", "Play", "Jogar"),
+    ("play.command", "Play {game}", "Jogar {game}"),
+    (
+        "play.asked",
+        "Asked {launcher} to start {game}",
+        "Pedimos ao {launcher} para abrir {game}",
+    ),
+    (
+        "play.failed",
+        "Could not reach {launcher}. Open {launcher} and start the game there.",
+        "Não foi possível chamar o {launcher}. Abra o {launcher} e inicie o jogo por lá.",
+    ),
+    (
+        "play.wait_write",
+        "Wait until changes to this game finish.",
+        "Aguarde o fim das alterações neste jogo.",
+    ),
+    ("play.open_settings", "Open settings file", "Abrir arquivo de ajustes"),
+    ("play.open_captures", "Open captures folder", "Abrir pasta de capturas"),
+    ("favorites.title", "Favorites", "Favoritos"),
+    ("favorites.state", "Favorite", "Favorito"),
+    (
+        "favorites.add",
+        "Add to favorites: {game}",
+        "Adicionar aos favoritos: {game}",
+    ),
+    (
+        "favorites.remove",
+        "Remove from favorites: {game}",
+        "Remover dos favoritos: {game}",
+    ),
     ("lsfg.found", "Lossless Scaling found", "Lossless Scaling encontrado"),
     (
         "lsfg.preparing",
@@ -980,6 +1011,55 @@ const TEXT: &[(&str, &str, &str)] = &[
     ("inst.launch_label", "Launch option", "Opção de inicialização"),
     ("inst.copy", "Copy", "Copiar"),
     ("inst.copied", "Copied", "Copiado"),
+    (
+        "ref.x86",
+        "Only 32-bit executables found. Choose the folder containing the 64-bit executable. Retoque cannot be installed in a game that only exists in 32-bit:",
+        "Só foram encontrados executáveis de 32 bits. Escolha a pasta que contém o executável de 64 bits. Não é possível instalar o Retoque em um jogo que só existe em 32 bits:",
+    ),
+    (
+        "safety.ack_required",
+        "Read and acknowledge the anti-cheat warning before installing.",
+        "Leia e reconheça o aviso sobre anti-cheat antes de instalar.",
+    ),
+    ("safety.x64", "64-bit", "64 bits"),
+    ("safety.x86", "32-bit", "32 bits"),
+    ("safety.arm64", "64-bit (ARM64)", "64 bits (ARM64)"),
+    (
+        "safety.choose_folder",
+        "Choose executable folder",
+        "Escolher pasta do executável",
+    ),
+    (
+        "safety.choose_folder_help",
+        "Choose the 64-bit executable folder below. If it is not listed, add that folder from the library.",
+        "Escolha abaixo a pasta do executável de 64 bits. Se ela não aparecer, adicione essa pasta pela biblioteca.",
+    ),
+    (
+        "safety.anti_cheat",
+        "This game has anti-cheat files: {products}.",
+        "Este jogo tem arquivos de anti-cheat: {products}.",
+    ),
+    ("safety.evidence", "Evidence", "Evidências"),
+    (
+        "safety.anti_cheat_risk",
+        "A proxy DLL may trigger anti-cheat and an account ban in online play. Retoque cannot tell whether this game's anti-cheat allows it.",
+        "Uma DLL de carregamento pode acionar o anti-cheat e causar banimento da conta no modo online. O Retoque não sabe se o anti-cheat deste jogo permite seu uso.",
+    ),
+    (
+        "safety.acknowledge",
+        "I understand the risk of an account ban in online play and want to install.",
+        "Entendo o risco de banimento da conta no modo online e quero instalar.",
+    ),
+    (
+        "safety.reading",
+        "Checking executable and anti-cheat evidence",
+        "Verificando o executável e indícios de anti-cheat",
+    ),
+    (
+        "safety.mixed",
+        "32-bit executables also present: {names}. Choose the folder of the 64-bit game executable.",
+        "Também há executáveis de 32 bits: {names}. Escolha a pasta do executável de 64 bits do jogo.",
+    ),
     (
         "ref.running",
         "The game is running. Close it and try again:",
@@ -3200,9 +3280,31 @@ mod packs {
     }
 }
 
+/// Stable core/script note envelope; paths stay literal and are only shown as folded evidence in reviews.
+pub(crate) fn anti_cheat_evidence(message: &str) -> Option<(&str, &str)> {
+    message
+        .strip_prefix("Anti-cheat evidence: ")?
+        .split_once("). A proxy DLL")?
+        .0
+        .split_once(" (")
+}
+
 /// Translate known engine messages without changing filenames, configuration values or original log records.
 /// Unknown OS/driver/receipt diagnostics remain verbatim so a report retains the actual failure evidence.
 pub fn diagnostic(lang: Lang, message: &str) -> String {
+    if let Some((product, _)) = anti_cheat_evidence(message) {
+        return format!(
+            "{} {}",
+            t(lang, "safety.anti_cheat").replace("{products}", product),
+            t(lang, "safety.anti_cheat_risk")
+        );
+    }
+    if let Some(names) = message
+        .strip_prefix("32-bit executables also present: ")
+        .and_then(|s| s.strip_suffix(". Choose the folder of the 64-bit game executable."))
+    {
+        return t(lang, "safety.mixed").replace("{names}", names);
+    }
     crate::applog::shown_error(message);
     if lang.is_draft() {
         // retoque-data only knows English and Portuguese: translate its ReShade reasons through the pack.

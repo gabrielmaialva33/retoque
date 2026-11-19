@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "DlssNr_AdvisorRuntime.h"
 
 #include "DlssNr_PresentHost.h"
 #include "DlssNrFeature_Dx12.h"
@@ -124,6 +125,7 @@ PresentHost::~PresentHost()
 
 void PresentHost::Release()
 {
+    AdvisorRuntime::Cancel(Advisor::Abort::Resized);
     _ReleaseBuilt();
 
     if (_motion != nullptr)

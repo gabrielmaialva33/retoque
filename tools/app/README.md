@@ -51,6 +51,30 @@ Linux has no app installation/update controls. Packaging, recovery limits and Wi
   are the user's own files, kept in the app's data folder, chosen with `[DlssNr] ModelFile`.
 - Settings are written key by key into the ini on disk, so a change the in-game menu made to another key survives.
 
+## Play, favorites and quick actions
+
+The game page offers a plain **Play** button beside its optimization action and a **Play {game}** command in
+Ctrl+K. Steam, Heroic (Epic/GOG/Amazon) and Lutris use their own launch protocols; on Windows Epic uses its
+backwards-compatible artifact URI. Identifiers are validated/encoded by a pure builder, and all opening goes
+through the same OS association boundary as folders and files. The toast says the launcher was asked; only
+process inspection establishes that a game is running. A write anywhere under the game's folder disables Play
+with a visible explanation and temporarily removes its palette command. The Proton launch-option card stays.
+
+There is no Play for manual/unregistered folders, unknown identifiers, ambiguous numeric Lutris identifiers,
+GOG Galaxy (no launch URI verified in its own documentation) or Xbox (discovery has a path, not a Store/Title ID).
+No direct executable launch or guessed protocol is used. Source references are beside the builder in [play.rs](crates/retoque-app/src/play.rs).
+These are protocol contracts tested with synthetic inputs; real launchers and native Windows still need qualification.
+
+A keyboard-accessible outlined/filled star on the page and cards toggles **Favorites**, saved by game ID
+with the rest of app state. Favorites have their own first group in both lists, obey existing filters, and expose
+their state and action to screen readers. Sidebar rows retain the spoken favorite state but have no toggle.
+Non-favorite card badges appear only on hover or keyboard focus; the controls remain reachable by Tab. The heading disappears when the filtered list has no favorites.
+**More actions** adds **Open settings file** and **Open captures folder** only when `OptiScaler.ini` and
+`retoque-captures` exist in the selected executable folder, according to the latest INI/status job results. Drawing these actions
+performs no filesystem probes. The game-folder action remains in that menu.
+
+The feature idea came from the NeuRotic Hub comparison; implementation and text are independent.
+
 ## Languages
 
 The window speaks English and Brazilian Portuguese, plus German, Spanish, French, Japanese, Korean, Polish, Russian
@@ -338,8 +362,8 @@ at that receipt's directory**; uninstalling only the executable folder does not 
 A legacy partial uninstall may remove the root identity marker; preserve its receipt/backups and finish that same
 legacy uninstall at the root. The app refuses to guess ownership when the marker has been lost or changed.
 Concurrent external filesystem races retain the engine limitations documented in the core README.
-Anti-cheat/game compatibility is not inferred from successful download or installation; the UI shows a generic
-compatibility caution because discovery has no anti-cheat flag. Tests use synthetic files and injected transports,
+Anti-cheat/game compatibility is not inferred from successful download or installation. The game page and
+first install review show static anti-cheat evidence when found (see below). Tests use synthetic files and injected transports,
 never real games or network requests, and do not qualify native Windows, Proton, GPU behavior or image quality.
 
 ## Official Retoque payload releases (`gabrielmaialva33/retoque`)
@@ -437,3 +461,42 @@ the component sets `InputProcessing=1` in ReShade.ini (block only while the curs
 with its own undo state; uninstall restores the previous mode unless the user changed it since. For a ReShade that
 was already there, Doctor and the ReShade card offer the same reviewed edit. The legacy uninstallers leave that one
 setting in place.
+
+## Executable architecture and anti-cheat evidence
+
+Installation refuses with exit **7** when at least one direct `.exe` has a readable PE header and every readable
+PE executable is x86. Choose the folder with the 64-bit executable; a 32-bit-only game cannot load Retoque's x64
+proxy. There is no override. x64 plus x86 is allowed with a note naming the x86 files. Missing/unreadable headers,
+ARM64 and unknown machine types are never classified as x86. ARM64 is reported, not qualified or newly refused.
+Status, settings and uninstall do not apply this refusal. The folder picker shows known bitness in words.
+Core plans retain architecture evidence and recheck it at apply boundaries; a changed list needs a new review.
+
+A bounded static scan under the game installation names anti-cheat products and their relative file/folder
+indicators. It checks Easy Anti-Cheat, BattlEye, EA AntiCheat/Javelin, nProtect GameGuard, XIGNCODE3, PunkBuster
+and Anti-Cheat Expert, using independently authored exact names, case-insensitively. The idea of surfacing this
+before installation was motivated by the NeuRotic Hub comparison; no detection rules or source were copied.
+The scan examines at most 4096 entries through four directory levels below the root (entries at depth five),
+resolves the selected root's ancestors (so a linked library mount works), skips links/reparse points at the
+selected root or below it and never searches system folders or loads code. Limits and errors leave coverage
+incomplete. Even a complete scan with no finding is not proof that anti-cheat is absent or that online play is safe.
+
+The page shows one warning listing each product once, with paths under a closed Evidence fold. The review uses
+the same compact shape; core/CLI/scripts print one note per product, retaining all its paths. A first reviewed installation with findings requires an explicit checkbox;
+the controller also checks it, including Install and optimize. Confirming remembers the acknowledgment by game
+identity and installation path in app preferences, with a serde default for old saved state. Canceling alone does
+not save it. Later updates/settings do not ask again. A finding is not a ban verdict: proxy DLLs may trigger
+anti-cheat and an account ban online; Retoque cannot determine this game's policy. No finding adds no warning.
+
+CLI and both legacy scripts use the same exit 7 architecture refusal and anti-cheat plan notes, without an
+acknowledgment flag or new dependency. Their folder-only interface scans only the supplied executable folder
+and its descendants; the app knows the installation root and can also find evidence above a nested executable.
+Script checks occur during planning; the core additionally rechecks architecture when applying the sealed plan.
+The scripts' existing filesystem race limitations remain; these checks are not an OS transaction.
+
+Public references behind the indicator vocabulary and risk wording include
+[Epic's EAC integration documentation](https://dev.epicgames.com/docs/epic-online-services/trust-and-safety/anti-cheat-interfaces),
+[BattlEye's FAQ](https://www.battleye.com/support/faq/),
+[Even Balance's player FAQ](https://www.evenbalance.com/faq-players.html) and
+[Wellbia's XIGNCODE FAQ](https://faq.wellbia.com/index_en.html).
+These are filename heuristics, not signature verification or evidence that the product is currently running.
+Synthetic tests do not qualify native Windows reparse races, game launch, anti-cheat policy, GPU behavior or bans.

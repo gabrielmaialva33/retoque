@@ -32,6 +32,7 @@ pub(crate) struct Execution {
     user_ini: BTreeMap<usize, Option<ini::IniUndo>>,
     lifecycle_removal: bool,
     component_only: bool,
+    executable_evidence: Option<crate::safety::Executables>,
     process_roots: Vec<PathBuf>,
     component_completion: Option<ReceiptStatus>,
     proxy: Option<String>,
@@ -671,6 +672,22 @@ fn repository() -> Option<PathBuf> {
 
 pub(crate) fn plan_install(options: &InstallOptions) -> Result<Plan, Error> {
     let mut plan = new_plan(&options.game_dir, Operation::Install)?;
+    let exes = crate::safety::executables(&plan.game_dir);
+    plan.execution.executable_evidence = Some(exes.clone());
+    if exes.x86_only() {
+        plan.refusals.push(Refusal::Executables32Bit {
+            names: exes.names(crate::pe_version::Machine::X86),
+        });
+        return Ok(plan);
+    }
+    let x86 = exes.names(crate::pe_version::Machine::X86);
+    if !x86.is_empty() && !exes.names(crate::pe_version::Machine::X64).is_empty() {
+        plan.notes.push(format!(
+            "32-bit executables also present: {}. Choose the folder of the 64-bit game executable.",
+            x86.join(", ")
+        ));
+    }
+    plan.notes.extend(crate::safety::anti_cheat(&plan.game_dir).notes());
     let proxy = if options.proxy.is_empty() {
         "dxgi.dll"
     } else {
@@ -1196,6 +1213,13 @@ fn plan_processes(plan: &Plan) -> Vec<(u32, String)> {
 
 fn validate_snapshots(plan: &Plan, expected: &BTreeMap<PathBuf, Fingerprint>) -> Result<(), Error> {
     check_game_directory(&plan.game_dir)?;
+    if let Some(before) = &plan.execution.executable_evidence
+        && crate::safety::executables(&plan.game_dir) != *before
+    {
+        return Err(Error::StalePlan(
+            "executable architecture changed since planning; plan again".into(),
+        ));
+    }
     for root in &plan.execution.process_roots {
         check_game_directory(root)?;
     }
@@ -1686,6 +1710,18 @@ pub(crate) fn combine_installs(mut first: Plan, second: Plan) -> Result<Plan, Er
     }
     first.execution.observed_files.extend(second.execution.observed_files);
     first.execution.process_roots.extend(second.execution.process_roots);
+    if let Some(evidence) = second.execution.executable_evidence {
+        if first
+            .execution
+            .executable_evidence
+            .as_ref()
+            .is_some_and(|old| *old != evidence)
+        {
+            return Err(usage_error("install plans observe different executables"));
+        }
+        first.execution.executable_evidence = Some(evidence);
+    }
+    first.notes.extend(second.notes);
     first.steps.extend(second.steps);
     first.refusals.extend(second.refusals);
     // Preserve every original fingerprint. Resealing would bless source changes between the plans.

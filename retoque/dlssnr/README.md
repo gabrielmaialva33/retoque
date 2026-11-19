@@ -4,6 +4,10 @@ A self-contained module that drives NVIDIA's DLSS Neural Rendering model (`nvngx
 feature 18) over the frames OptiScaler already handles. Nothing in it is officially supported by
 NVIDIA; the model ships in driver packages and is not redistributed here.
 
+Native Vulkan sequential passes: [design and first safe slice](../../docs/dlssnr/design/nr-vk-passes.md).
+`DlssNr_VkChain.h` implements portable decisions only; it is not connected to the renderer. Vulkan
+continues to use one/master until the submission/completion and live heap-budget adapters exist.
+
 ## For maintainers: how to remove it
 
 There is no compile switch. There used to be one, `OPTI_DLSSNR`, and it was removed on purpose: once
@@ -63,6 +67,7 @@ experiment.
 | `DlssNr.h` | umbrella header; documents the call sites |
 | `DlssNrFeature_Dx12.h` | the namespace-level API the menu and the call sites use |
 | `DlssNr_Menu.cpp` | the settings panel |
+| `DlssNr_Advisor.h`, `DlssNr_AdvisorRuntime.h`, `DlssNr_AdvisorPolicy.h`, `DlssNr_AdvisorMenu.h` | Pure cost-trial policy and temporary Dispatch overrides, fed by confirmed GPU timing; [design](../../docs/dlssnr/design/nr-advisor.md), [host contracts](../../tests/nr-advisor/README.md). No image-quality judgment or game qualification. |
 | `DlssNr_Capture.h` | the raw burst: eight consecutive before/after frames as raw bytes, for temporal work |
 | `DlssNr_Readback.h` | the texture-to-readback copies both captures use: typed footprint, readback heap, states |
 | `DlssNr_PairCapture.h/.cpp`, `DlssNr_PairCaptureDx12.h` | the comparison capture: one frame as read and as written, copied on the pass's list, read back once the GPU is proven past the copies, written by a thread of its own into `retoque-captures/` with a provenance record; the pure half (state machine, names, cap, record, the menu button) is the header; `../../docs/dlssnr/design/comparison-capture.md`, tested by `tests/nr-capture` |

@@ -27,6 +27,23 @@ int main()
     run(true);
     assert(!ImGui::Saw("Requested passes###nrPassCount"));
     assert(c.writes == 0);
+    // The Vulkan chain's first slice is portable decisions only. Even saved D3D12 pass settings
+    // must not expose unavailable controls, rewrite the request or discard the saved overrides.
+    for (unsigned count = 1; count <= DlssNr::PassConfig::MaxPasses; ++count)
+    {
+        c.snapshot.Count = count;
+        c.snapshot.Individual = true;
+        c.overrides[9].Intensity = 0.25f;
+        ImGui::Reset();
+        run(true);
+        assert(!ImGui::Saw("Requested passes###nrPassCount"));
+        assert(!ImGui::Saw("Individual pass settings###nrIndividualPassSettings"));
+        assert(!ImGui::Saw("Edit pass###nrEditPass"));
+        assert(c.snapshot.Count == count && c.snapshot.Individual);
+        assert(c.overrides.at(9).Intensity == 0.25f && c.writes == 0);
+    }
+    c.snapshot = {};
+    c.overrides.clear();
     ImGui::Reset();
     c.DlssNrUseProxy.value = true;
     run();
