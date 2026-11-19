@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_AdvisorRuntime.h>
 #include <dlssnr/DlssNr_Dx11Scene.h>
 
 #include "DlssNr_Dx12_Internal.h"
@@ -755,10 +756,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const Config& cfg = *Config::Instance();
-    const auto reportSkip = [coverage](const char* why)
+    DlssNr::AdvisorRuntime::Decision advisor;
+    const auto reportSkip = [coverage, &advisor](const char* why)
     {
         if (coverage != nullptr)
             coverage->reason = why;
+        DlssNr::AdvisorRuntime::Refuse(why, advisor.token);
         ReportSkipOnce(why);
     };
 
@@ -788,6 +791,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (g_nr.failed || cmdList == nullptr || colour == nullptr || depth == nullptr || motion == nullptr ||
         output == nullptr)
     {
+        DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::Unsupported);
         reportSkip(g_nr.failed ? "it already failed this session" : "a resource was missing");
         return false;
     }
@@ -848,6 +852,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
          !DeviceChildBelongsTo(_device, static_cast<ID3D12Resource*>(frame.ExposureTexture))) ||
         !g_nrDeviceOwner.Accept(_device))
     {
+        DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::DeviceLost);
         reportSkip("NR device changed or inputs belong to another device; restart the process before enabling NR");
         return false;
     }
@@ -864,6 +869,30 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     auto passSnapshot = cfg.GetDlssNrPassSnapshot();
     if (frame.AfterRayReconstruction)
         passSnapshot.Count = DlssNr::PassConfig::BoundRRCount(cfg.DlssNrRRPasses.value_or_default());
+    // Trial values are local to this Dispatch. Config and its INI backing remain untouched.
+    if (DlssNr::AdvisorRuntime::Active())
+    {
+        const auto extent = output->GetDesc();
+        DlssNr::Advisor::Context context;
+        context.device = reinterpret_cast<uintptr_t>(_device);
+        context.route = (frame.PresentSource ? 1u : 0u) | (static_cast<uint32_t>(State::Instance().api) << 8) |
+                        (cfg.DlssNrHookMethod.value_or_default() << 16);
+        context.width = static_cast<uint32_t>(extent.Width);
+        context.height = extent.Height;
+        context.renderWidth = frame.RenderSubrectWidth;
+        context.renderHeight = frame.RenderSubrectHeight;
+        context.passes = passSnapshot.Count;
+        context.original = { DlssNr::WorkingScale(), cfg.DlssNrCadence.value_or_default() };
+        const auto measurement = cfg.GetDlssNrGpuTimingSettings();
+        const bool supported =
+            cfg.DlssNrEnabled.value_or_default() && State::Instance().menuVisible && measurement.Enabled &&
+            measurement.Interval == 1 && colour == output && !frame.AfterRayReconstruction && !frame.NativeDx11Scene &&
+            !cfg.DlssNrUseProxy.value_or_default() && cfg.DlssNrStage.value_or_default() == 0 &&
+            !FrameGenerationActive() && !cfg.DlssNrCadenceAdaptive.value_or_default() &&
+            !cfg.DlssNrPeripheryCompression.value_or_default() && !cfg.DlssNrHoldFrame.value_or_default() &&
+            !g_capture.isActive() && !DlssNr::PairCapture::Wanted();
+        advisor = DlssNr::AdvisorRuntime::Frame(context, State::Instance().frameCount, supported);
+    }
     std::optional<DlssNr::Chain::RecordingLease> ownedRecording;
     if (!recording && WantsTrackedRecording(passSnapshot, frame.NativeDx11Scene))
     {
@@ -1059,6 +1088,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         reportSkip("D3D12 device removed or hung");
         LOG_ERROR("DLSS-NR: D3D12 device removed or hung (reason: 0x{:08X})", (unsigned) removedReason);
         DlssNr::Dred::Report(device);
+        DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::DeviceLost);
         DlssNr::SessionGuardDeviceRemoved(); // evidence for the next launch, whatever the game does now
         device->Release();
         return false;
@@ -1309,7 +1339,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // Capped at 2x: cost grows with the area and NGX acceptance above native is what this probe tests.
     // WorkingScale=auto and RRWorkingScale=auto depend on the GPU this device is on; see DlssNr_WorkingScale.h.
     DlssNr::NoteAdapter(device->GetAdapterLuid());
-    const float configuredWorkScale = frame.AfterRayReconstruction ? DlssNr::RRWorkingScale() : DlssNr::WorkingScale();
+    const float configuredWorkScale =
+        advisor.settings ? advisor.settings->scale
+                         : (frame.AfterRayReconstruction ? DlssNr::RRWorkingScale() : DlssNr::WorkingScale());
     // The upper bound is 1.0 for a caller with no real motion: above native the model refuses zero
     // guides (see DlssNrFrameInfo::AllowSupersampling), so clamping here turns a would-be refusal of
     // the user's chosen scale into the nearest size that runs, silently and every frame.
@@ -1902,7 +1934,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // the model exactly as before.
     namespace Cadence = DlssNr::Cadence;
     Cadence::Inputs cadenceInputs {};
-    cadenceInputs.requested = Cadence::Requested(cfg.DlssNrCadence.value_or_default());
+    cadenceInputs.requested =
+        Cadence::Requested(advisor.settings ? advisor.settings->cadence : cfg.DlssNrCadence.value_or_default());
     cadenceInputs.driverProxy = useProxy;
     cadenceInputs.available = DlssNr_Cadence_Dx12::Available();
     cadenceInputs.presentsCounted = observedFrame != 0;
@@ -1925,6 +1958,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // Built only when the cadence would run, given back when it is off or cannot exist here, and otherwise kept
     // as it is, so a route or a toggle that comes and goes does not reallocate them (DlssNr_Cadence.h).
     const Cadence::Reason cadenceRefusal = Cadence::Refusal(cadenceInputs);
+    if (advisor.settings && Cadence::IsRefusal(cadenceRefusal))
+        DlssNr::AdvisorRuntime::Refuse(Cadence::Describe(cadenceRefusal, 1), advisor.token);
     if (Cadence::ReleasesSurfaces(cadenceRefusal))
     {
         ParkNrCadence(g_nr.cadence);
@@ -2060,11 +2095,19 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             bool modelReset = g_nr.reset;
             for (unsigned i = 1; i < passSnapshot.Count; ++i)
                 modelReset = modelReset || g_nr.passReset[i];
-            timing.SetMetadata(TimingMetadata(
+            auto metadata = TimingMetadata(
                 cfg, passSnapshot, initialTiming.evaluationId, observedFrame, beforeUpscale ? "before" : stageForTiming,
                 guideWidth, guideHeight, width, height, workWidth, workHeight, workScale, modelReset,
                 g_capture.isActive() || DlssNr::PairCapture::Wanted(), isHdrBuffer, static_cast<unsigned>(desc.Format),
-                cadence.cadence, carried, enlargePlan.transfer, DlssNr::Enlarge::Token(enlargePlan.why)));
+                cadence.cadence, carried, enlargePlan.transfer, DlssNr::Enlarge::Token(enlargePlan.why));
+            // A refused cadence is never measured as if the requested value actually ran.
+            if (advisor.settings && cadence.cadence == advisor.settings->cadence &&
+                std::abs(workScale - advisor.settings->scale) < 0.001f)
+            {
+                metadata.advisorToken = advisor.token;
+                metadata.advisorFrameMs = advisor.frameMs;
+            }
+            timing.SetMetadata(metadata);
             timingMetadataReady = true;
         }
         catch (...)
@@ -3925,6 +3968,7 @@ static std::atomic<bool> s_presentDeviceRemoved { false };
 
 static void NotePresentDeviceRemoved(const char* seen)
 {
+    DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::DeviceLost);
     if (!s_presentDeviceRemoved.exchange(true))
         LOG_WARN("DLSS-NR present: the device was removed ({}); the present lists and what they read are kept, not "
                  "released, and the present pass stops",
@@ -6975,6 +7019,7 @@ PulseStatus GetPulseStatus()
 
 void Shutdown()
 {
+    DlssNr::AdvisorRuntime::Cancel(DlssNr::Advisor::Abort::DeviceLost);
     // Before the locks: the transport takes its own lock and then g_nrMutex when it captures, so it is never asked
     // to while g_nrMutex is held.
     ShutdownNativeDx11Scene();

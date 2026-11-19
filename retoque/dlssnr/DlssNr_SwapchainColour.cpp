@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "DlssNr_AdvisorRuntime.h"
 
 #include "DlssNr_SwapchainColour.h"
 
@@ -73,6 +74,8 @@ void NoteColourSpace(IDXGISwapChain* swapchain, DXGI_COLOR_SPACE_TYPE colourSpac
 
 void NoteResized(IDXGISwapChain* swapchain, HRESULT result)
 {
+    if (SUCCEEDED(result))
+        AdvisorRuntime::Cancel(Advisor::Abort::Resized);
     if (FAILED(result) || !Watching())
         return;
 

@@ -22,7 +22,7 @@ header = (root / 'retoque/dlssnr/DlssNr_PresentHost.h').read_text()
 
 # The includes fakes.h stands in for. If production grows a new one, this suite has to learn it rather
 # than compile past it.
-expected = {'#include "pch.h"', '#include "DlssNr_PresentHost.h"', '#include "DlssNrFeature_Dx12.h"',
+expected = {'#include "DlssNr_AdvisorRuntime.h"', '#include "pch.h"', '#include "DlssNr_PresentHost.h"', '#include "DlssNrFeature_Dx12.h"',
             '#include "DlssNr_Identity.h"', '#include <shaders/format_transfer/FT_Dx12.h>', '#include <Config.h>',
             '#include <Logger.h>', '#include "DlssNr_ZeroGuides.h"', '#include <d3d12.h>', '#include <chrono>',
             '#include <cstdint>', '#include <memory>', '#include "DlssNr_PresentColour.h"',
@@ -52,6 +52,7 @@ assert book_includes == {'#include "DlssNr_PresentColour.h"', '#include <mutex>'
     book_includes
 
 unit = (here / 'fakes.h').read_text().replace('#pragma once\n', '', 1)
+unit += '\n#include <dlssnr/DlssNr_AdvisorRuntime.h>\n'
 unit += '\n' + strip_includes(colour)
 unit += '\n' + strip_includes(hdr_numbers)
 unit += '\n' + strip_includes(book)
@@ -66,5 +67,5 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-nr-present-host-') as direct
     path.write_text(unit)
     subprocess.run(['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
                     '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-                    str(path), '-o', str(binary)], check=True)
+                    '-I', str(root / 'retoque'), str(path), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

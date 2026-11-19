@@ -63,6 +63,7 @@ experiment.
 | `DlssNr.h` | umbrella header; documents the call sites |
 | `DlssNrFeature_Dx12.h` | the namespace-level API the menu and the call sites use |
 | `DlssNr_Menu.cpp` | the settings panel |
+| `DlssNr_Advisor.h`, `DlssNr_AdvisorRuntime.h` | Pure cost-trial policy and temporary Dispatch overrides, fed by confirmed GPU timing; [design](../../docs/dlssnr/design/nr-advisor.md), [host contracts](../../tests/nr-advisor/README.md). No image-quality judgment or game qualification. |
 | `DlssNr_Capture.h` | the raw burst: eight consecutive before/after frames as raw bytes, for temporal work |
 | `DlssNr_Readback.h` | the texture-to-readback copies both captures use: typed footprint, readback heap, states |
 | `DlssNr_PairCapture.h/.cpp`, `DlssNr_PairCaptureDx12.h` | the comparison capture: one frame as read and as written, copied on the pass's list, read back once the GPU is proven past the copies, written by a thread of its own into `retoque-captures/` with a provenance record; the pure half (state machine, names, cap, record, the menu button) is the header; `../../docs/dlssnr/design/comparison-capture.md`, tested by `tests/nr-capture` |

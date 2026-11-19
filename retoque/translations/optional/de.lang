@@ -640,3 +640,31 @@ Game's	Vom Spiel
 Game's present mode: %s	Present-Modus des Spiels: %s
 Flip the HUDless texture\nGames can also request it with the Opti.Hudless.Flip parameter	Spiegelt die HUD-lose Textur\nSpiele können es auch über den Parameter Opti.Hudless.Flip anfordern
 Overrides the game's Vulkan present mode, the game recreates its swapchain to apply it.\n\nImmediate: no V-Sync, tears.\nMailbox: no tearing, newest frame replaces the queued one.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, tears when below the refresh rate.\nFIFO Latest Ready: V-Sync, shows the newest ready frame at each refresh.\n\nMailbox and FIFO Latest Ready can drop generated frames above the refresh rate.\nOnly modes the display supports are listed.	Überschreibt den Vulkan-Present-Modus des Spiels; das Spiel erstellt seine Swapchain neu, um ihn anzuwenden.\n\nImmediate: kein V-Sync, Tearing.\nMailbox: kein Tearing, der neueste Frame ersetzt den wartenden.\nFIFO: V-Sync.\nFIFO Relaxed: V-Sync, Tearing unterhalb der Bildwiederholrate.\nFIFO Latest Ready: V-Sync, zeigt bei jeder Aktualisierung den neuesten fertigen Frame.\n\nMailbox und FIFO Latest Ready können generierte Frames oberhalb der Bildwiederholrate verwerfen.\nEs werden nur Modi aufgelistet, die das Display unterstützt.
+
+# NR cost advisor: authored independently; English fallback pending native review outside pt-BR.
+NR cost advisor	NR cost advisor
+Measures cost, not image quality. Keep the scene and camera repeatable.	Measures cost, not image quality. Keep the scene and camera repeatable.
+Stage and passes are not trialled. Vulkan stage changes need a restart.	Stage and passes are not trialled. Vulkan stage changes need a restart.
+Settling history	Settling history
+Collecting confirmed samples	Collecting confirmed samples
+Cancel trial	Cancel trial
+Target base FPS	Target base FPS
+Measure NR choices	Measure NR choices
+Trial unavailable. Use a running D3D12 Stage 0 route, no frame generation, adaptive cadence, capture or peripheral compression; enable GPU timing at interval 1.	Trial unavailable. Use a running D3D12 Stage 0 route, no frame generation, adaptive cadence, capture or peripheral compression; enable GPU timing at interval 1.
+Trial aborted; temporary overrides removed. Player settings are unchanged.	Trial aborted; temporary overrides removed. Player settings are unchanged.
+Scale / cadence | median ms | worst five percent ms | frame share | base frame ms | samples / reason	Scale / cadence | median ms | worst five percent ms | frame share | base frame ms | samples / reason
+Scale / cadence	Scale / cadence
+Median ms	Median ms
+Worst five percent ms	Worst five percent ms
+Frame share	Frame share
+Base frame ms / reason	Base frame ms / reason
+Measured choice: %.0f%% scale, cadence %u	Measured choice: %.0f%% scale, cadence %u
+Current settings met the target in this trial.	Current settings met the target in this trial.
+Apply measured choice	Apply measured choice
+No measured choice met the target. No recommendation.	No measured choice met the target. No recommendation.
+Copy trial report	Copy trial report
+No complete confirmed timing window	No complete confirmed timing window
+Wait for the original settings to settle, or run a new trial if the context changed.	Wait for the original settings to settle, or run a new trial if the context changed.
+Trial complete	Trial complete
+Trial aborted	Trial aborted
+Trial in progress	Trial in progress

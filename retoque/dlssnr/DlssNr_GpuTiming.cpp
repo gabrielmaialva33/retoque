@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "DlssNr_AdvisorRuntime.h"
 
 #include "DlssNr_GpuTiming.h"
 #include "DlssNr_GpuTimingModel.h"
@@ -71,6 +72,13 @@ void Drop(const char* reason, Slot* slot = nullptr)
         slot->reported = true;
     ++snapshot.discarded;
     snapshot.reason = reason;
+    if (slot && slot->metadata.advisorToken)
+    {
+        if (std::strcmp(reason, "device-lost") == 0)
+            AdvisorRuntime::Cancel(Advisor::Abort::DeviceLost);
+        else
+            AdvisorRuntime::Refuse(reason, slot->metadata.advisorToken);
+    }
     size_t index = snapshot.reasons.size() - 1;
     for (size_t i = 0; i + 1 < snapshot.reasons.size(); ++i)
     {
@@ -442,6 +450,10 @@ void PollLocked()
                         Drop("invalid-timestamps", &slot);
                     else
                     {
+                        if (slot.metadata.advisorToken)
+                            AdvisorRuntime::Confirm({ slot.metadata.advisorToken, slot.id, slot.metadata.contractHash,
+                                                      durations.totalMs, slot.metadata.advisorFrameMs, true,
+                                                      slot.metadata.modelReset, slot.metadata.captureActive });
                         ++snapshot.accepted;
                         if (!snapshot.valid || slot.id > snapshot.sampleId)
                         {

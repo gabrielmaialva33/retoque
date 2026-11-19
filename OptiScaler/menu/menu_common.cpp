@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_AdvisorRuntime.h>
 #include <misc/Localization.h>
 #include <misc/MenuFonts.h>
 #include "menu_common.h"
@@ -11602,6 +11603,19 @@ bool MenuCommon::RenderMenu()
 
     // The GPU-time readbacks run only while the display that shows them is on screen.
     State::Instance().menuVisible = _isVisible;
+    if (DlssNr::AdvisorRuntime::Active())
+    {
+        const auto timing = ctx.config->GetDlssNrGpuTimingSettings();
+        const bool supported = ctx.config->DlssNrStage.value_or_default() == 0 &&
+                               !ctx.config->DlssNrUseProxy.value_or_default() &&
+                               !ctx.config->DlssNrCadenceAdaptive.value_or_default() &&
+                               !ctx.config->DlssNrPeripheryCompression.value_or_default() &&
+                               !ctx.config->DlssNrHoldFrame.value_or_default();
+        const uint32_t hostRoute =
+            (static_cast<uint32_t>(ctx.state.api) << 8) | (ctx.config->DlssNrHookMethod.value_or_default() << 16);
+        DlssNr::AdvisorRuntime::Heartbeat(_isVisible, ctx.config->DlssNrEnabled.value_or_default(),
+                                          timing.Enabled && timing.Interval == 1, supported, hostRoute);
+    }
 
     // 2) Prepare one-shot notifications and start a new ImGui frame only when needed.
     UpdateVersionAndStartupNotifications(ctx);
