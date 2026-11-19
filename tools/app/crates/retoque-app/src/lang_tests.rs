@@ -204,6 +204,7 @@ fn every_language_fits_the_main_views_in_a_small_window() {
             let home_controls = [
                 search,
                 inside(&home, size, Role::CheckBox, t(lang, "lib.installed_only"), &home_what),
+                inside(&home, size, Role::CheckBox, t(lang, "lib.attention_only"), &home_what),
                 inside(&home, size, Role::Button, t(lang, "lib.add_folder"), &home_what),
                 inside(&home, size, Role::Button, t(lang, "folders.title"), &home_what),
             ];
@@ -440,6 +441,7 @@ fn render_audited_library() {
             ("defects", Some(Tab::Install)),
             ("identity", Some(Tab::Install)),
             ("library", None),
+            ("attention-synthetic", None),
             ("chrome", Some(Tab::Settings)),
             ("minimum", Some(Tab::Install)),
         ] {
@@ -449,6 +451,26 @@ fn render_audited_library() {
             state.payload = std::env::var_os("RETOQUE_SOURCE_DIR").map(PathBuf::from);
             state.library_state.games = games.clone();
             state.library_state.status = statuses.clone();
+            if group == "attention-synthetic" {
+                // Extra visual fixture only: the real-library images above retain their on-disk states.
+                state.library_state.attention_only = true;
+                for (index, game) in games.iter().take(3).enumerate() {
+                    let path = &game.targets[0].path;
+                    if let Some(status) = state.library_state.status.get_mut(path) {
+                        if index == 0
+                            && let Some(receipt) = &mut status.receipt
+                        {
+                            receipt.status = ReceiptStatus::Partial;
+                        }
+                        if index == 1 {
+                            status.build_sha256 = Some("synthetic-other-build".into());
+                        }
+                    }
+                    if index == 2 {
+                        state.doctor_badges.insert(path.clone(), 1);
+                    }
+                }
+            }
             for game in &games {
                 if let Runtime::Proton { app_id, .. } = game.runtime {
                     state.library_state.art.insert(
@@ -503,6 +525,14 @@ fn render_audited_library() {
             for _ in 0..30 {
                 h.run_steps(1);
                 std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            if group != "chrome" {
+                let size = if group == "minimum" {
+                    [820. / zoom, 520. / zoom]
+                } else {
+                    [1280. / zoom, 800. / zoom]
+                };
+                top_bar_fits(&mut h, Lang::Pt, tab.is_some(), size);
             }
             h.render()
                 .expect("offscreen render")
@@ -627,6 +657,168 @@ fn audited_brand_mark_is_inside_the_named_home_button() {
             h.get_by_role_and_label(Role::Button, t(lang, "brand")).click();
             h.run_steps(2);
             assert!(h.state().selected.is_none(), "whole brand remains the way home");
+        }
+    }
+}
+
+#[test]
+fn audited_attention_filter_combines_search_favorites_and_live_findings() {
+    let dir = tempfile::tempdir().unwrap();
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut state = app();
+            state.lang = lang;
+            state.payload_build = Some(Ok("build".into()));
+            for index in 0..6 {
+                let path = dir.path().join(index.to_string());
+                let mut g = game(&path);
+                g.id = format!("steam:{}", index + 1);
+                g.name = format!("Game {index}");
+                let status = Status {
+                    receipt: (index != 4 && index != 5).then(|| Receipt {
+                        status: if index == 1 {
+                            ReceiptStatus::Partial
+                        } else {
+                            ReceiptStatus::Complete
+                        },
+                        updated: String::new(),
+                        records: vec![],
+                    }),
+                    build_sha256: Some(if index == 3 { "old" } else { "build" }.into()),
+                    optiscaler_proxies: if index == 5 { vec!["dxgi.dll".into()] } else { vec![] },
+                    ..Default::default()
+                };
+                if index == 2 {
+                    state.doctor_badges.insert(path.clone(), 1);
+                }
+                if index == 4 {
+                    g.store = Store::Manual;
+                    g.runtime = Runtime::Unknown;
+                }
+                state.library_state.status.insert(path, status);
+                state.library_state.games.push(g);
+            }
+            state.saved.favorites.extend(["steam:1".into(), "steam:4".into()]);
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(
+                    |ui, state: &mut RetoqueApp| {
+                        ui.set_width(320.);
+                        state.library(ui);
+                    },
+                    state,
+                );
+            h.run_steps(2);
+            let metadata = format!(
+                "{} · {}",
+                store_name(lang, Store::Steam),
+                runtime_short(lang, &game(dir.path()).runtime)
+            );
+            let painted_context = |h: &Harness<'_, RetoqueApp>| {
+                h.output()
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Text(t) if t.galley.job.text == metadata))
+            };
+            assert!(painted_context(&h), "mixed list names its store/runtime");
+            h.get_by_label(t(lang, "lib.attention_only")).click();
+            h.run_steps(3);
+            let groups = h.state().library_groups();
+            assert_eq!(groups[0].1, [3], "quiet favorite is filtered too");
+            assert_eq!(groups[1].1, [1, 2, 5]);
+            assert!(groups[2].1.is_empty());
+            assert!(!painted_context(&h), "homogeneous filtered list omits repeated context");
+            h.state_mut().doctor_badges.clear();
+            h.run_steps(2);
+            assert_eq!(
+                h.state().library_groups()[1].1,
+                [1, 5],
+                "updated findings take effect without a rescan"
+            );
+            h.get_by_label(t(lang, "lib.installed_only")).click();
+            h.run_steps(2);
+            assert_eq!(h.state().library_groups()[0].1, [3]);
+            h.state_mut().library_state.search = "Game 0".into();
+            h.run_steps(2);
+            h.get_by_label(t(lang, "lib.no_attention"));
+            assert!(h.state().library_groups().iter().all(|(_, games)| games.is_empty()));
+        }
+    }
+}
+
+#[test]
+fn audited_library_titles_wrap_twice_and_only_attention_states_are_painted() {
+    let name = "A Very Long Game Name With An Edition And Subtitle";
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui(move |ui| {
+                    ui.set_width((size[0] * 0.32).clamp(180., 320.));
+                    widgets::game_row(
+                        ui,
+                        name,
+                        "",
+                        (t(lang, "st.current"), theme::GOOD),
+                        None,
+                        false,
+                        None,
+                        None,
+                        false,
+                    );
+                    widgets::game_row(
+                        ui,
+                        "Attention",
+                        "",
+                        (t(lang, "st.partial"), theme::BAD),
+                        None,
+                        false,
+                        None,
+                        None,
+                        true,
+                    );
+                    widgets::cover_card(ui, 160., name, None, (t(lang, "st.current"), theme::GOOD), None, false);
+                });
+            h.run_steps(2);
+            let titles: Vec<_> = h
+                .output()
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::Shape::Text(text) if text.galley.job.text == name => Some(text),
+                    _ => None,
+                })
+                .collect();
+            assert!(titles.len() >= 2);
+            assert!(
+                titles.iter().all(|t| t.galley.rows.len() == 2),
+                "{lang:?}: row and card names wrap before ellipsis"
+            );
+            let painted = |key| {
+                h.output()
+                    .shapes
+                    .iter()
+                    .any(|s| matches!(&s.shape, egui::Shape::Text(text) if text.galley.job.text == t(lang, key)))
+            };
+            assert!(!painted("st.current"), "quiet state has no repeated visual caption");
+            assert!(
+                painted("st.partial"),
+                "attention still has a word, not just a colored edge"
+            );
+            assert_eq!(
+                h.query_all_by_role_and_label(Role::Button, &format!("{name}, {}", t(lang, "st.current")))
+                    .count(),
+                2,
+                "both row and cover retain the full accessible name and state"
+            );
         }
     }
 }

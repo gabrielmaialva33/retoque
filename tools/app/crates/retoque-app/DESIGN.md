@@ -110,3 +110,13 @@ narrow page uses a readable vertical stack instead of leaving a single orphan be
 
 The top bar keeps the Retoque mark at 28 points beside the word, in the same named home button. Reserve its
 width when choosing which actions move into the overflow menu; the brand itself never goes into that menu.
+
+## Library hierarchy
+
+Rows and cover titles get up to two lines before ellipsis; their accessible names and hovers keep the full name
+and installation state. A homogeneous visible list omits repeated store/runtime captions. A mixed list keeps
+that context, and the game page always names its store/runtime.
+Current and ordinary installed entries are quiet. Updates, incomplete or unregistered old installations, and
+cached warning/error findings show a status word plus an emphasized edge; information alone is not attention.
+“Needs attention” combines with search, “Installed only” and favorites, and keyboard navigation follows the same
+filtered groups. Its help says that it includes problems already found, not a new inspection of every game.

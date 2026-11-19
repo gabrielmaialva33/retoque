@@ -312,6 +312,11 @@ impl RetoqueApp {
                 &mut self.library_state.installed_only,
                 t(self.lang, "lib.installed_only"),
             );
+            ui.checkbox(
+                &mut self.library_state.attention_only,
+                t(self.lang, "lib.attention_only"),
+            )
+            .on_hover_text(t(self.lang, "lib.attention_help"));
             // Wraps cleanly when long translations or a narrowed sidebar cannot fit both on one line.
             self.folders_button(ui);
         });
@@ -326,13 +331,17 @@ impl RetoqueApp {
         }
         self.library_keyboard(ui);
         self.refresh_library_cache();
-        let empty_filter = (!self.library_state.games.is_empty()
-            && self.library_state.derived.installed.is_empty()
-            && self.library_state.derived.others.is_empty())
-        .then(|| self.library_empty_filter_key());
+        let groups = self.library_groups();
+        let mixed_context = groups.iter().flat_map(|(_, games)| games).next().is_some_and(|first| {
+            groups
+                .iter()
+                .flat_map(|(_, games)| games)
+                .any(|index| self.library_state.derived.details[*index] != self.library_state.derived.details[*first])
+        });
+        let empty_filter = (!self.library_state.games.is_empty() && groups.iter().all(|(_, games)| games.is_empty()))
+            .then(|| self.library_empty_filter_key());
         let mut clicked = None;
         let mut list_focus = false;
-        let groups = self.library_groups();
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             if let Some(key) = empty_filter {
                 ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
@@ -346,17 +355,15 @@ impl RetoqueApp {
                     let game = &self.library_state.games[index];
                     let selected = self.selected.as_ref() == Some(&game.id);
                     let state = self.library_state.derived.states[index];
-                    let detail = &self.library_state.derived.details[index];
+                    let detail = if mixed_context {
+                        self.library_state.derived.details[index].as_str()
+                    } else {
+                        ""
+                    };
                     let capsule = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
                     let hint = (!game.registered).then(|| self.tr("folders.unregistered"));
                     // Cached Doctor findings for any of the game's folders; looked up by reference, no per-frame work.
-                    let findings = game
-                        .targets
-                        .iter()
-                        .filter_map(|t| self.doctor_badges.get(&t.path))
-                        .copied()
-                        .max()
-                        .unwrap_or(0);
+                    let findings = self.game_findings(game);
                     let mut spoken = crate::tabs::doctor::spoken_findings(findings, self.lang);
                     let favorite = self.saved.favorites.contains(&game.id);
                     if favorite {
@@ -370,11 +377,15 @@ impl RetoqueApp {
                         ui,
                         &game.name,
                         detail,
-                        (self.tr(state.short_label()), state.color()),
+                        (
+                            self.tr(state.short_label()),
+                            if findings > 0 { theme::WARN } else { state.color() },
+                        ),
                         capsule,
                         selected,
                         hint,
                         spoken.as_deref(),
+                        self.game_attention(index),
                     );
                     let response = crate::tabs::doctor::row_badge(ui, response, findings, self.lang);
                     list_focus |= response.has_focus();
@@ -700,7 +711,9 @@ impl RetoqueApp {
     }
 
     fn library_empty_filter_key(&self) -> &'static str {
-        if !self.library_state.search.trim().is_empty() {
+        if self.library_state.attention_only {
+            "lib.no_attention"
+        } else if !self.library_state.search.trim().is_empty() {
             "lib.no_match"
         } else if self.library_state.installed_only {
             "lib.no_installed"
@@ -726,7 +739,23 @@ impl RetoqueApp {
         }
         ui.add_space(12.0);
         // Search and its filters sit on one line when the search box keeps a comfortable width; otherwise stack.
-        if ui.available_width() >= 680.0 {
+        let font = egui::TextStyle::Button.resolve(ui.style());
+        let filters_width: f32 = [
+            "lib.installed_only",
+            "lib.attention_only",
+            "lib.add_folder",
+            "folders.title",
+        ]
+        .iter()
+        .map(|key| {
+            ui.painter()
+                .layout_no_wrap(self.tr(key).into(), font.clone(), theme::TEXT)
+                .size()
+                .x
+                + 32.0
+        })
+        .sum();
+        if ui.available_width() >= filters_width + 220.0 {
             ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     self.folders_button(ui);
@@ -737,6 +766,11 @@ impl RetoqueApp {
                         &mut self.library_state.installed_only,
                         t(self.lang, "lib.installed_only"),
                     );
+                    ui.checkbox(
+                        &mut self.library_state.attention_only,
+                        t(self.lang, "lib.attention_only"),
+                    )
+                    .on_hover_text(t(self.lang, "lib.attention_help"));
                     ui.add_space(6.0);
                     self.search_field(ui);
                 });
@@ -748,6 +782,11 @@ impl RetoqueApp {
                     &mut self.library_state.installed_only,
                     t(self.lang, "lib.installed_only"),
                 );
+                ui.checkbox(
+                    &mut self.library_state.attention_only,
+                    t(self.lang, "lib.attention_only"),
+                )
+                .on_hover_text(t(self.lang, "lib.attention_help"));
                 if ui.button(self.tr("lib.add_folder")).clicked() {
                     self.folders_open(FolderDialog::Add);
                 }
@@ -770,16 +809,17 @@ impl RetoqueApp {
             return;
         }
         self.refresh_library_cache();
-        let empty_filter = (self.library_state.derived.installed.is_empty()
-            && self.library_state.derived.others.is_empty())
-        .then(|| self.library_empty_filter_key());
+        let groups = self.library_groups();
+        let empty_filter = groups
+            .iter()
+            .all(|(_, games)| games.is_empty())
+            .then(|| self.library_empty_filter_key());
         let mut clicked = None;
         // A new scan reorders and resizes the grid; an offset kept from before would open it cut off at the top.
         let mut scroll = egui::ScrollArea::vertical().auto_shrink([false, false]);
         if std::mem::take(&mut self.library_state.scroll_to_top) {
             scroll = scroll.vertical_scroll_offset(0.0);
         }
-        let groups = self.library_groups();
         let mut favorite_clicked = None;
         scroll.show(ui, |ui| {
             if let Some(key) = empty_filter {
@@ -800,29 +840,28 @@ impl RetoqueApp {
                         let state = self.library_state.derived.states[index];
                         let art = self.library_state.art.get(&game.id).and_then(|a| a.capsule.as_deref());
                         let favorite = self.saved.favorites.contains(&game.id);
+                        let findings = self.game_findings(game);
+                        let issue = crate::tabs::doctor::spoken_findings(findings, self.lang);
                         let card = widgets::cover_card(
                             ui,
                             cover_w,
                             &game.name,
                             art,
-                            self.tr(state.label()),
-                            state.color(),
+                            (
+                                issue.as_deref().unwrap_or(self.tr(state.label())),
+                                if findings > 0 { theme::WARN } else { state.color() },
+                            ),
                             (!game.registered).then(|| self.tr("folders.unregistered")),
+                            self.game_attention(index),
                         );
-                        if favorite {
-                            card.widget_info(|| {
-                                egui::WidgetInfo::labeled(
-                                    egui::Role::Button,
-                                    ui.is_enabled(),
-                                    format!(
-                                        "{}, {}, {}",
-                                        game.name,
-                                        self.tr(state.label()),
-                                        self.tr("favorites.state")
-                                    ),
-                                )
-                            });
+                        let mut spoken = format!("{}, {}", game.name, self.tr(state.label()));
+                        if let Some(issue) = issue {
+                            spoken.push_str(&format!(", {issue}"));
                         }
+                        if favorite {
+                            spoken.push_str(&format!(", {}", self.tr("favorites.state")));
+                        }
+                        card.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), &spoken));
                         let star = crate::play::card_favorite_button(ui, game, favorite, self.lang, &card);
                         if star.clicked() {
                             favorite_clicked = Some(game.id.clone());

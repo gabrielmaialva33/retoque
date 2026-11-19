@@ -459,9 +459,26 @@ pub fn tabs(ui: &mut egui::Ui, labels: &[&str], current: usize) -> Option<usize>
     clicked
 }
 
-/// One library row: cover art (or a lettered placeholder), the name, and a second line with the install state (a
-/// dot and a word, in the state's colour) and the store. Screen readers hear "{name}, {state}", then `spoken_extra`
-/// (the Doctor's findings) when given.
+/// Titles use up to two lines before ellipsis, while accessibility always retains the complete name.
+fn two_line_title(
+    painter: &egui::Painter,
+    text: &str,
+    width: f32,
+    size: f32,
+    color: Color32,
+) -> std::sync::Arc<egui::Galley> {
+    let mut job = egui::text::LayoutJob::simple_singleline(text.into(), FontId::proportional(size), color);
+    job.wrap = egui::text::TextWrapping {
+        max_width: width,
+        max_rows: 2,
+        break_anywhere: false,
+        ..Default::default()
+    };
+    painter.layout_job(job)
+}
+
+/// A quiet library row becomes prominent only when there is something to do. Store/runtime context is supplied
+/// only for mixed lists; the full installation state remains in the spoken label and tooltip for every row.
 #[allow(clippy::too_many_arguments)]
 pub fn game_row(
     ui: &mut egui::Ui,
@@ -472,8 +489,14 @@ pub fn game_row(
     selected: bool,
     hint: Option<&str>,
     spoken_extra: Option<&str>,
+    attention: bool,
 ) -> egui::Response {
-    let height = if hint.is_some() { 82.0 } else { 64.0 };
+    let right_pad = if spoken_extra.is_some() { 30.0 } else { 8.0 };
+    let width = (ui.available_width() - 55.0 - right_pad).max(20.0);
+    let name_color = if selected { theme::TEXT_STRONG } else { theme::TEXT };
+    let name_galley = two_line_title(ui.painter(), name, width, 15.0, name_color);
+    let lines = usize::from(attention) + usize::from(!detail.is_empty()) + usize::from(hint.is_some());
+    let height = (name_galley.size().y + 16.0 + lines as f32 * 18.0).max(64.0);
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let painter = ui.painter_at(rect);
     if selected {
@@ -484,16 +507,20 @@ pub fn game_row(
             Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)),
             egui::StrokeKind::Inside,
         );
-    } else if response.hovered() {
+    } else if response.hovered() || attention {
         painter.rect_filled(rect, 8.0, theme::CARD);
     }
-    // Steam covers are 2:3.
-    let cover = Rect::from_min_size(pos2(rect.left() + 8.0, rect.top() + 6.0), vec2(35.0, 52.0));
+    if attention {
+        painter.rect_filled(
+            Rect::from_min_size(rect.min + vec2(0., 8.), vec2(3., height - 16.)),
+            2,
+            state.1,
+        );
+    }
+    let cover = Rect::from_min_size(pos2(rect.left() + 8.0, rect.center().y - 26.0), vec2(35.0, 52.0));
     match capsule {
         Some(path) => {
-            egui::Image::new(file_uri(path))
-                .corner_radius(CornerRadius::same(4))
-                .paint_at(ui, cover);
+            egui::Image::new(file_uri(path)).corner_radius(4).paint_at(ui, cover);
         }
         None => {
             painter.rect_filled(cover, 4.0, theme::CARD_EDGE);
@@ -513,30 +540,24 @@ pub fn game_row(
         }
     }
     let left = cover.right() + 12.0;
-    // Leave room for the Doctor's 18 px warning badge (`tabs::doctor::row_badge` at `right() - 16.0`) when present.
-    let right_pad = if spoken_extra.is_some() { 30.0 } else { 8.0 };
-    let width = (rect.right() - right_pad - left).max(20.0);
-    let name_color = if selected { theme::TEXT_STRONG } else { theme::TEXT };
-    let mut job = egui::text::LayoutJob::simple_singleline(name.to_string(), FontId::proportional(15.0), name_color);
-    job.wrap = egui::text::TextWrapping::truncate_at_width(width);
-    let name_galley = ui.painter().layout_job(job);
-    painter.galley(pos2(left, rect.top() + 13.0), name_galley, name_color);
-    let mut x = left;
-    let y = rect.top() + 37.0;
-    let (state, state_color) = state;
-    painter.circle_filled(pos2(x + 4.0, y + 7.0), 3.5, state_color);
-    x += 13.0;
-    let g = ui
-        .painter()
-        .layout_no_wrap(state.to_string(), FontId::proportional(12.5), state_color);
-    let w = g.size().x;
-    painter.galley(pos2(x, y), g, state_color);
-    x += w + 8.0;
-    let mut job =
-        egui::text::LayoutJob::simple_singleline(detail.to_string(), FontId::proportional(12.5), theme::MUTED);
-    job.wrap = egui::text::TextWrapping::truncate_at_width((rect.right() - right_pad - x).max(10.0));
-    let g = ui.painter().layout_job(job);
-    painter.galley(pos2(x, y), g, theme::MUTED);
+    let top = if lines == 0 {
+        rect.center().y - name_galley.size().y / 2.0
+    } else {
+        rect.top() + 7.0
+    };
+    let mut y = top + name_galley.size().y + 3.0;
+    painter.galley(pos2(left, top), name_galley, name_color);
+    for (text, color) in [
+        (attention.then_some(state.0), state.1),
+        ((!detail.is_empty()).then_some(detail), theme::MUTED),
+    ] {
+        if let Some(text) = text {
+            let mut job = egui::text::LayoutJob::simple_singleline(text.into(), FontId::proportional(12.5), color);
+            job.wrap = egui::text::TextWrapping::truncate_at_width(width);
+            painter.galley(pos2(left, y), painter.layout_job(job), color);
+            y += 18.0;
+        }
+    }
     if response.has_focus() {
         painter.rect_stroke(
             rect.shrink(1.0),
@@ -547,21 +568,25 @@ pub fn game_row(
     }
     if let Some(hint) = hint {
         ui.put(
-            Rect::from_min_size(pos2(left, rect.top() + 58.0), vec2(width, 18.0)),
-            egui::Label::new(RichText::new(hint).size(12.0).color(theme::MUTED)).truncate(),
+            Rect::from_min_size(pos2(left, y), vec2(width, 18.0)),
+            egui::Label::new(RichText::new(hint).size(12.5).color(theme::MUTED)).truncate(),
         );
     }
-    // Painted by hand, so tell accessibility (and the UI tests) what this row is and its state: the dot's colour
-    // means nothing to a screen reader.
     let spoken = match spoken_extra {
-        Some(extra) => format!("{name}, {state}, {extra}"),
-        None => format!("{name}, {state}"),
+        Some(extra) => format!("{name}, {}, {extra}", state.0),
+        None => format!("{name}, {}", state.0),
     };
     response.widget_info(|| egui::WidgetInfo::selected(egui::Role::Button, true, selected, &spoken));
-    response.on_hover_text(
-        hint.map(|hint| format!("{name}\n{hint}"))
-            .unwrap_or_else(|| name.into()),
-    )
+    response.on_hover_text(format!(
+        "{name}\n{}{}{}",
+        state.0,
+        if detail.is_empty() {
+            String::new()
+        } else {
+            format!("\n{detail}")
+        },
+        hint.map(|h| format!("\n{h}")).unwrap_or_default()
+    ))
 }
 
 /// A small heading between library groups.
@@ -789,12 +814,13 @@ pub fn cover_card(
     width: f32,
     name: &str,
     capsule: Option<&Path>,
-    state: &str,
-    color: Color32,
+    state: (&str, Color32),
     hint: Option<&str>,
+    attention: bool,
 ) -> egui::Response {
+    let (state, color) = state;
     let (rect, response) = ui.allocate_exact_size(
-        vec2(width, width * 1.5 + if hint.is_some() { 86.0 } else { 66.0 }),
+        vec2(width, width * 1.5 + if hint.is_some() { 108.0 } else { 86.0 }),
         Sense::click(),
     );
     let cover = Rect::from_min_size(rect.min, vec2(width, width * 1.5));
@@ -805,20 +831,22 @@ pub fn cover_card(
     if let Some(path) = capsule {
         egui::Image::new(file_uri(path)).corner_radius(12).paint_at(ui, cover);
     } else {
-        let title = ui.painter().layout(
-            name.to_owned(),
-            FontId::proportional(20.0),
-            theme::TEXT_STRONG,
-            width - 24.0,
-        );
+        let title = two_line_title(ui.painter(), name, width - 24.0, 20.0, theme::TEXT_STRONG);
         ui.painter()
             .galley(cover.min + vec2(12.0, 24.0), title, theme::TEXT_STRONG);
     }
-    if hover > 0.0 {
+    if attention || hover > 0.0 {
         ui.painter().rect_stroke(
             cover,
             12,
-            Stroke::new(1.5, theme::ACCENT.gamma_multiply(hover)),
+            Stroke::new(
+                if attention { 2.0 } else { 1.5 },
+                if attention {
+                    color
+                } else {
+                    theme::ACCENT.gamma_multiply(hover)
+                },
+            ),
             egui::StrokeKind::Inside,
         );
     }
@@ -830,22 +858,24 @@ pub fn cover_card(
             egui::StrokeKind::Outside,
         );
     }
-    let mut title = egui::text::LayoutJob::simple_singleline(name.into(), FontId::proportional(14.5), theme::TEXT);
-    title.wrap = egui::text::TextWrapping::truncate_at_width(width);
-    let title = ui.painter().layout_job(title);
+    let title = two_line_title(ui.painter(), name, width, 14.5, theme::TEXT);
     ui.painter()
         .galley(pos2(rect.left(), cover.bottom() + 8.0), title, theme::TEXT);
-    ui.painter()
-        .circle_filled(pos2(rect.left() + 4.0, cover.bottom() + 39.0), 3.5, color);
-    let mut status = egui::text::LayoutJob::simple_singleline(state.into(), FontId::proportional(12.5), color);
-    status.wrap = egui::text::TextWrapping::truncate_at_width(width - 14.0);
-    let status = ui.painter().layout_job(status);
-    ui.painter()
-        .galley(pos2(rect.left() + 14.0, cover.bottom() + 30.0), status, color);
+    if attention {
+        ui.painter()
+            .circle_filled(pos2(rect.left() + 4.0, cover.bottom() + 59.0), 3.5, color);
+        let mut status = egui::text::LayoutJob::simple_singleline(state.into(), FontId::proportional(12.5), color);
+        status.wrap = egui::text::TextWrapping::truncate_at_width(width - 14.0);
+        ui.painter().galley(
+            pos2(rect.left() + 14.0, cover.bottom() + 50.0),
+            ui.painter().layout_job(status),
+            color,
+        );
+    }
     if let Some(hint) = hint {
         ui.put(
-            Rect::from_min_size(pos2(rect.left(), cover.bottom() + 52.), vec2(width, 18.)),
-            egui::Label::new(RichText::new(hint).size(12.).color(theme::MUTED)).truncate(),
+            Rect::from_min_size(pos2(rect.left(), cover.bottom() + 74.0), vec2(width, 18.0)),
+            egui::Label::new(RichText::new(hint).size(12.0).color(theme::MUTED)).truncate(),
         );
     }
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, format!("{name}, {state}")));

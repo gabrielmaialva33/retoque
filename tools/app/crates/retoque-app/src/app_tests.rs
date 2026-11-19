@@ -463,6 +463,7 @@ pub(crate) mod shell_tests {
                 false,
                 None,
                 spoken.as_deref(),
+                true,
             );
             crate::tabs::doctor::row_badge(ui, row, 2, Lang::Pt);
             widgets::game_row(
@@ -474,6 +475,7 @@ pub(crate) mod shell_tests {
                 false,
                 None,
                 None,
+                false,
             );
         });
         harness.get_by_role_and_label(egui::Role::Button, "Synthetic game, Instalação antiga, 2 problemas");
