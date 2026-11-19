@@ -14,6 +14,12 @@ production (not a copy) and drives it.
 
 It asserts:
 
+- **Hardware architecture correction** (`retoque/gpu/NvidiaArchitecture.h`): PCI `0x2504` plus reported
+  Ada resolves to Ampere and automatic NR/RR scale 0.5, admits the cached probe gate and reaches the
+  foreign-loader diagnostic. RTX 20 reporting Blackwell and RTX 30 laptop names also demote; real
+  Ada/Blackwell, unspoofed Turing/Ampere, unknown identities, non-NVIDIA and lower/zero reported IDs
+  stay unchanged. Corrected Ampere is excluded from the automatic Ada kernel decision.
+
 - **The gate is first.** `RunModuleProbe` and `RunAdmissionProbe` take an injected environment. Off
   `[Turing, Ada)` — Ada (`0x190`), Blackwell (`0x1b0`), an id above it, Volta (`0x150`), an NVIDIA adapter
   whose architecture was never read (`0`, what `IdentifyGpu` reports when its NvAPI query cannot run), and a
