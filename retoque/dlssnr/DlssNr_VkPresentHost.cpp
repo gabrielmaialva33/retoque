@@ -665,7 +665,8 @@ VkCommandBuffer AllocateCommandBuffer(DeviceTransport& dev, uint32_t family)
         return VK_NULL_HANDLE;
     try
     {
-        DlssNr::VkRecording::Recordings().Allocate((uint64_t) dev.device, (uint64_t) pool, { (uint64_t) buffer });
+        DlssNr::VkRecording::Recordings().Allocate((uint64_t) dev.device, (uint64_t) pool, { (uint64_t) buffer },
+                                                   DlssNr::VkRecording::Level::Primary);
     }
     catch (const std::bad_alloc&)
     {
@@ -3368,7 +3369,8 @@ VkResult VKAPI_CALL hkRecordingAllocateCommandBuffers(VkDevice device, const VkC
             handles.reserve(info->commandBufferCount);
             for (uint32_t i = 0; i < info->commandBufferCount; ++i)
                 handles.push_back(H(buffers[i]));
-            DlssNr::VkRecording::Recordings().Allocate(H(device), H(info->commandPool), handles);
+            DlssNr::VkRecording::Recordings().Allocate(H(device), H(info->commandPool), handles,
+                                                       DlssNr::VkRecording::LevelOf(info->level));
         }
         catch (const std::bad_alloc&)
         {

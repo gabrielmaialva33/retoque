@@ -194,3 +194,9 @@ These expose missing inputs to a future creation observer. They are not implemen
 qualification of it, nor measurements of failures in a real game. When the adapter exists,
 replace the witnesses with its fail-closed admission assertions. The detailed continuation
 is in the [Vulkan pass-chain design](../../docs/dlssnr/design/nr-vk-passes.md).
+
+The follow-up implements a per-device installation certificate: partial installation, any failed
+Detours phase and target/certificate saturation deny chain admission. Certificate reads allocate
+nothing, and Passes=1 publishes no certificate. Allocation level is now retained in the ticket;
+`allocation-level-reaches-ticket` covers primary, secondary and unknown instead of the original
+missing-level witness. Legacy pin admission is unchanged; only chain creation requires Primary.

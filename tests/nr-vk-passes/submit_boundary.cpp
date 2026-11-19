@@ -66,7 +66,7 @@ Targets<PFN_vkQueueSubmit2> g_submit2 { { Submit2, Submit2 } };
 int main()
 {
     auto& registry = VkRecording::Recordings();
-    registry.Allocate(9, 8, { 7 });
+    registry.Allocate(9, 8, { 7 }, VkRecording::Level::Primary);
     registry.Begin(7, VkRecording::Reuse::Serial);
     const auto ticket = *registry.Current(9, 7);
     auto pin = std::make_shared<int>(0);

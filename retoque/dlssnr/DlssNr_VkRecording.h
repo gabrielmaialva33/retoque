@@ -37,12 +37,26 @@ constexpr Reuse ReuseOf(bool known, uint32_t usageFlags)
     return !known ? Reuse::Unknown : (usageFlags & kSimultaneousUseBit) != 0 ? Reuse::Simultaneous : Reuse::Serial;
 }
 
+enum class Level : uint8_t
+{
+    Unknown,
+    Primary,
+    Secondary,
+};
+
+// Vulkan's allocation levels; absent allocation metadata remains Unknown, never Primary.
+constexpr Level LevelOf(uint32_t level)
+{
+    return level == 0 ? Level::Primary : level == 1 ? Level::Secondary : Level::Unknown;
+}
+
 struct Ticket
 {
     Handle device = 0;
     Handle buffer = 0;
     uint64_t epoch = 0;
     Reuse reuse = Reuse::Unknown; // the recording's, not part of its identity
+    Level level = Level::Unknown; // allocation metadata, also not part of identity
 };
 
 // This registry observes successful Vulkan lifecycle calls; it never issues them. A recording keeps its pins
@@ -90,6 +104,7 @@ class Registry
         uint64_t epoch = 0;
         bool recording = false;
         Reuse reuse = Reuse::Unknown;
+        Level level = Level::Unknown;
         std::unique_ptr<PinBatch> pins;
     };
 
@@ -142,7 +157,7 @@ class Registry
         }
     }
 
-    void Allocate(Handle device, Handle pool, const std::vector<Handle>& buffers)
+    void Allocate(Handle device, Handle pool, const std::vector<Handle>& buffers, Level level = Level::Unknown)
     {
         if (device == 0 || pool == 0 || buffers.empty())
             return;
@@ -165,6 +180,7 @@ class Registry
                 record.epoch = 0;
                 record.recording = false;
                 record.reuse = Reuse::Unknown;
+                record.level = level;
             }
         }
         catch (const std::bad_alloc&)
@@ -286,7 +302,7 @@ class Registry
         const auto it = _records->find(buffer);
         if (it == _records->end() || it->second.device != device || !it->second.recording)
             return std::nullopt;
-        return Ticket { device, buffer, it->second.epoch, it->second.reuse };
+        return Ticket { device, buffer, it->second.epoch, it->second.reuse, it->second.level };
     }
 
     bool Pin(const Ticket& ticket, const std::vector<std::shared_ptr<void>>& pins)

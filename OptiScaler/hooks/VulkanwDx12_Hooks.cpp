@@ -7025,7 +7025,7 @@ VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkComm
             for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i)
                 buffers.push_back((uint64_t) pCommandBuffers[i]);
             DlssNr::VkRecording::Recordings().Allocate((uint64_t) device, (uint64_t) pAllocateInfo->commandPool,
-                                                       buffers);
+                                                       buffers, DlssNr::VkRecording::LevelOf(pAllocateInfo->level));
         }
         catch (const std::bad_alloc&)
         {

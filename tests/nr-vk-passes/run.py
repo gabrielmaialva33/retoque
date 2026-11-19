@@ -31,6 +31,8 @@ with tempfile.TemporaryDirectory(prefix='nr-vk-passes-') as directory:
          'void Invalidate() {}', '!creation.Ready(22)'),
         ('headroom omitted', 'std::max<uint64_t>(512ull << 20, budget / 5)', 'uint64_t(0)',
          '!Admit(1024 * MiB, 128 * MiB + 1, 0, 0)'),
+        ('secondary creation admitted', 'ticket.level == VkRecording::Level::Primary', 'true',
+         '!refused.Submitted(nonPrimary, 1)'),
         ('failure latch erased', 'return _failed && *_failed == settings;',
          'return _failed && *_failed != settings;', 'failure.Refused(tuning)'),
     ]

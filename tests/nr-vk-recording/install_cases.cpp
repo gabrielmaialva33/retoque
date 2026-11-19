@@ -403,10 +403,10 @@ void PartialInstallCannotCertifyRecordingLifetime()
           "the next observed Begin eventually retires it, but cannot retroactively certify coverage");
 }
 
-void SerialSecondaryIsNotPrimaryEvidence()
+void AllocationLevelReachesTicket()
 {
     HookDevice(device);
-    for (int level : { 0, 1 }) // primary and secondary have the same serial Begin flags
+    for (int level : { 0, 1, 42 }) // unknown must never default to primary
     {
         VkCommandBufferAllocateInfo info {};
         info.commandPool = pool;
@@ -416,9 +416,10 @@ void SerialSecondaryIsNotPrimaryEvidence()
         Check(Through<PFN_vkAllocateCommandBuffers>(0, 1)(device, &info, &buffer) == VK_SUCCESS,
               "primary/secondary allocation must succeed");
         auto ticket = BeginThrough(device, buffer, 1);
-        Check(ticket.reuse == Reuse::Serial, "serial reuse alone cannot distinguish primary from secondary");
+        Check(ticket.reuse == Reuse::Serial, "level does not change reuse flags");
+        Check(ticket.level == LevelOf(level), "allocation level must reach the exact recording ticket");
         auto resource = Pin(ticket);
-        Check(!resource.expired(), "existing registry accepts both levels, so it cannot certify primary creation");
+        Check(!resource.expired(), "level metadata must not change legacy pin admission");
         Through<PFN_vkFreeCommandBuffers>(4, 1)(device, pool, 1, &buffer);
         Check(resource.expired(), "witness cleanup must retire the observed recording");
     }
@@ -610,7 +611,7 @@ int main()
         { "host-install-opt-in", InstallRemainsOptIn },
         { "detour-failure-own-address", FailedDetourAndOwnAddresses },
         { "partial-install-is-not-lifetime-proof", PartialInstallCannotCertifyRecordingLifetime },
-        { "serial-secondary-is-not-primary-proof", SerialSecondaryIsNotPrimaryEvidence },
+        { "allocation-level-reaches-ticket", AllocationLevelReachesTicket },
         { "per-device-coverage-certificates", CoverageCertificates },
         { "transaction-phase-failures", TransactionFailuresCannotCertify },
         { "target-capacity-refusal", TargetSaturationCannotCertify },

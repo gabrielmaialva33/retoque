@@ -46,7 +46,7 @@ int main()
         assert(plan.refusal != Refusal::None && plan.count == 0 && !plan.legacy);
     }
 
-    const VkRecording::Ticket ticket { 1, 2, 3, VkRecording::Reuse::Serial };
+    const VkRecording::Ticket ticket { 1, 2, 3, VkRecording::Reuse::Serial, VkRecording::Level::Primary };
     Creation creation(ticket, 20);
     assert(!creation.Ready(21));           // elapsed presents are not submission
     assert(!creation.Complete(ticket, 7)); // a completion without successful submission
@@ -81,6 +81,15 @@ int main()
         assert(!unknown.Submitted(invalid, 1));
         assert(!unknown.Ready(2));
     }
+    for (auto level : { VkRecording::Level::Unknown, VkRecording::Level::Secondary })
+    {
+        auto nonPrimary = ticket;
+        nonPrimary.level = level;
+        Creation refused(nonPrimary, 1);
+        assert(!refused.Submitted(nonPrimary, 1));
+        assert(!refused.Complete(nonPrimary, 1));
+        assert(!refused.Ready(2));
+    }
     Creation noPresent(ticket, 0);
     assert(!noPresent.Submitted(ticket, 1));
     Creation noSerial(ticket, 1);
@@ -89,7 +98,7 @@ int main()
 
     // Exercise the REAL registry, not a replacement model: retired pins cannot prove a creation executed.
     VkRecording::Registry recordings;
-    recordings.Allocate(1, 10, { 2 });
+    recordings.Allocate(1, 10, { 2 }, VkRecording::Level::Primary);
     recordings.Begin(2, VkRecording::Reuse::Serial);
     auto pin = std::make_shared<int>(0);
     auto current = *recordings.Current(1, 2);

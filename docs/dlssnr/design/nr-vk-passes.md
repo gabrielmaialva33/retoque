@@ -94,8 +94,10 @@ lifecycle, queue retrieval and submit/submit2/KHR entrypoint must attach success
 missing pointers and target saturation deny chain admission. Repeating installation cannot upgrade
 a partial certificate on a live device. `Passes=1` does not publish or consult it; the submit
 wrappers are unchanged. A request above one without coverage now stands down before NR recording.
-The certificate records installation only, not primary level, submission or completion. Step 1b
-and the owned-completion adapter remain pending; no multipass feature is available.
+Step 1b now retains allocation level in the recording ticket (including the independent observer,
+w/Dx12 and host-owned allocation paths). Creation evidence refuses secondary and unknown levels.
+The certificate and level do not prove submission or completion; the owned-completion adapter
+remains pending and no multipass feature is available.
 
 The certificate has 16 process-wide slots, no map or lazy heap initialization. It is published
 under the existing installation lock, read with atomics, and cleared at device destruction.
