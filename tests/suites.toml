@@ -270,6 +270,14 @@ tier = "host"
 timeout = 600
 summary = "The real portable .lang parser and the repository ImGui hash; every shipped pack's keys, printf directives and glyphs; the menu CJK font decision."
 
+[menu-preview]
+path = "menu-preview"
+domain = "tooling"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Real NR panel and Dear ImGui, CPU rasterization, PNG validity, glyph pixels and deterministic named fixtures (FreeType required)."
+
 [nr-menu]
 path = "nr-menu"
 domain = "nr"

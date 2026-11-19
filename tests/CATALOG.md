@@ -168,6 +168,7 @@ This is a coverage index, not evidence that any suite or hardware passed.
 | Suite | Tier | Requirements | Evidence contract | Summary |
 |---|---|---|---|---|
 | [build-lifecycle](build-lifecycle/README.md) | host | python | process exit (see suite limits) | Compiler-prefix exclusion, owned subprocess supervision, signals and complete output publication; no Wine. |
+| [menu-preview](menu-preview/README.md) | host | python, cxx | process exit (see suite limits) | Real NR panel and Dear ImGui, CPU rasterization, PNG validity, glyph pixels and deterministic named fixtures (FreeType required). |
 | [nr-forwarder-version](nr-forwarder-version/README.md) | host | python, cxx | process exit (see suite limits) | Forwarder resource shares OptiScaler's numeric file/product version, follows a synthetic version bump, and is wired into MSBuild and MSVC CMake; four source controls. No PE execution. |
 | [release-evidence](release-evidence/README.md) | host | python | process exit (see suite limits) | Archive identity and sanitized same-commit complete-host evidence; rejects partial claims and unsafe ZIPs. |
 | [rendering-orchestration](rendering-orchestration/README.md) | host | python | process exit (see suite limits) | Strict serial rendering evidence, binary identity, terminal reports and owned nested loopback cleanup; no GPU. |
