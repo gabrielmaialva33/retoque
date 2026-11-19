@@ -54,7 +54,7 @@ pub(crate) fn show(
     session: &ReviewSession,
     lang: Lang,
     stale: bool,
-    busy: bool,
+    blocked: Option<&'static str>,
     confirm_label: &'static str,
     commands: &CommandSender,
 ) {
@@ -178,6 +178,8 @@ pub(crate) fn show(
                     .notes()
                     .iter()
                     .filter(|n| !(model_named && n.starts_with(MODEL_NOT_INCLUDED)))
+                    // The safety notice above the review owns this warning and its folded evidence.
+                    .filter(|n| !n.starts_with(retoque_core::safety::ANTI_CHEAT_NOTE))
                     .collect();
                 if !notes.is_empty() {
                     ui.add_space(12.0);
@@ -206,16 +208,15 @@ pub(crate) fn show(
             };
             let allowed = session.allowed();
             let refused = session.plans.iter().any(|p| !p.refusals().is_empty());
-            let response = ui.add_enabled(allowed && !busy, button).on_disabled_hover_text(t(
-                lang,
-                if refused {
-                    "shell.resolve"
+            let response = ui
+                .add_enabled(allowed && blocked.is_none(), button)
+                .on_disabled_hover_text(if refused {
+                    t(lang, "shell.resolve")
                 } else if !allowed {
-                    "inst.nothing"
+                    t(lang, "inst.nothing")
                 } else {
-                    "inst.working"
-                },
-            ));
+                    blocked.unwrap_or(t(lang, "inst.working"))
+                });
             if response.clicked() {
                 commands.send(AppCommand::ConfirmReview(session.request_id));
             }

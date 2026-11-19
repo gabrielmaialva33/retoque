@@ -75,6 +75,20 @@ impl RetoqueApp {
     pub(crate) fn load_target(&mut self, t: PathBuf) {
         self.jobs.advance_epoch();
         self.autotune_refresh(t.clone());
+        self.view.safety = None;
+        let root = self
+            .selected_game()
+            .map(|g| g.install_dir.clone())
+            .unwrap_or_else(|| t.clone());
+        let targets = self
+            .selected_game()
+            .map(|g| g.targets.iter().map(|t| t.path.clone()).collect())
+            .unwrap_or_else(|| vec![t.clone()]);
+        let safety_target = t.clone();
+        self.jobs.spawn("safety", None, move |_| Outcome::Safety {
+            target: safety_target,
+            snapshot: crate::safety_ui::Snapshot::read(root, targets),
+        });
         self.view.inspection = None;
         self.view.doctor = None;
         self.view.intelligence.latest_log = None;
@@ -187,6 +201,7 @@ impl RetoqueApp {
             let current = self.view.target.clone();
             let ours = |t: &Path| current.as_deref() == Some(t);
             match outcome {
+                Outcome::Safety { target, snapshot } if ours(&target) => self.view.safety = Some(snapshot),
                 Outcome::UpdateAll(event) => self.update_all_event(event),
                 Outcome::DropClassified { request, paths } => self.intuitive.drop.receive(request, paths),
                 Outcome::HistoryWritten(Err(error)) => {
@@ -300,7 +315,12 @@ impl RetoqueApp {
                         self.open_target(None);
                     }
                 }
-                Outcome::Status { target, result } if ours(&target) => {
+                Outcome::Status {
+                    target,
+                    result,
+                    captures_dir_exists,
+                } if ours(&target) => {
+                    self.view.captures_dir_exists = captures_dir_exists;
                     if let Ok(s) = &result {
                         self.library_state.status.insert(target.clone(), s.clone());
                         if let Some(proxy) = installed_proxy(s) {
@@ -317,6 +337,11 @@ impl RetoqueApp {
                     self.view.status = Some(result);
                 }
                 Outcome::Ini { target, result } if ours(&target) => {
+                    self.view.ini_path = result
+                        .as_ref()
+                        .ok()
+                        .and_then(|o| o.as_ref())
+                        .map(|(path, _)| path.clone());
                     self.view.ini = Some(result.map(|o| o.map(|(_, b)| Ini::parse(&b))));
                     self.view.ini_values = self
                         .view
@@ -778,10 +803,11 @@ impl RetoqueApp {
             return;
         }
         let Some(Ok(review)) = self.review.as_ref() else { return };
-        if review.request_id != request || !review.allowed() {
+        if review.request_id != request || !review.allowed() || !self.safety_allowed(review) {
             return;
         }
         let review = review.clone();
+        self.remember_safety_ack(&review);
         match review.kind {
             ReviewKind::Standard(kind) => {
                 // Measurement's own toast ("Measurement turned on"), not the generic "Settings saved".
@@ -824,6 +850,7 @@ impl RetoqueApp {
             .frame(widgets::modal_frame())
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 740.0));
+                self.safety_review(ui);
                 match &self.review {
                     Some(Ok(review)) => {
                         let installed = matches!(&self.view.status, Some(Ok(s)) if s.receipt.is_some());
@@ -863,7 +890,8 @@ impl RetoqueApp {
                             review,
                             self.lang,
                             self.review_stale(),
-                            self.busy(),
+                            self.safety_blocked_reason(review)
+                                .or_else(|| self.busy().then(|| self.tr("inst.working"))),
                             label,
                             &self.cmd_tx,
                         );
@@ -960,6 +988,11 @@ pub(crate) fn first_proxy(r: &retoque_core::receipt::Receipt) -> Option<String> 
 impl RetoqueApp {
     pub(crate) fn remediate(&mut self, remedy: Remedy, target: Option<PathBuf>) {
         match remedy {
+            Remedy::ChooseExecutableFolder => {
+                self.review_open = false;
+                self.tab = Tab::Install;
+                self.view.safety_choose_folder = true;
+            }
             Remedy::OpenFolder(path) => model::open_folder(&path),
             Remedy::ChoosePayloadDir => {
                 if let Some(dir) = rfd::FileDialog::new().pick_folder() {

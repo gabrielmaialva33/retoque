@@ -16,6 +16,7 @@ pub(crate) const TABS: [(Tab, &str, &str); 5] = [
 #[derive(Clone)]
 pub(crate) enum Destination {
     Game(String),
+    Play(String),
     Tab(Tab),
     Setting(&'static str),
     Action(PaletteAction),
@@ -33,8 +34,8 @@ pub(crate) struct Palette {
     pub query: String,
     pub entries: Vec<Entry>,
     pub results: Vec<usize>,
-    /// Library generation, language and the main action's current name.
-    pub catalog_key: Option<(u64, Lang, &'static str)>,
+    /// Library generation, language, main action name, selected game and its launch write guard.
+    pub catalog_key: Option<(u64, Lang, &'static str, Option<String>, bool)>,
     query_key: Option<String>,
     selected: usize,
     focus: bool,

@@ -23,6 +23,10 @@ runner a failure instead.
 
 Cases:
 
+- header-only x86 refusal (exit 7) with no-write dry runs and no override, mixed x86/x64 note,
+  unknown PE headers, uninstall after the executable becomes x86, and all seven anti-cheat families as
+  named warning evidence without a refusal; Bash/core parity also excludes linked evidence;
+
 - `-EnableNR` with a new or preserved CRLF ini, combined with ReShade, repeat installation and restoration;
 - package assembly with fake binaries under PowerShell: extract the zip, verify installers/line endings,
   attribution, Home menu key and NR off; run the extracted Linux wrapper; refuse a nested model, an enabled
