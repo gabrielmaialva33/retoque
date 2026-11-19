@@ -11,23 +11,41 @@ namespace Localization
 const char* Tr(const char* s) { return s; }
 const char* Label(const char* s) { return s; }
 } // namespace Localization
-constexpr int ImGuiTableFlags_Borders = 1, ImGuiTableFlags_RowBg = 2;
+constexpr int ImGuiTableFlags_Borders = 1, ImGuiTableFlags_RowBg = 2, ImGuiTableFlags_SizingStretchSame = 4;
 namespace ImGui
 {
 std::set<std::string> shown;
 std::string click, clipboard;
 unsigned drawn = 0;
+int tableColumns = 0;
+std::set<std::string> text;
 void SeparatorText(const char*) { ++drawn; }
-void TextUnformatted(const char*) { ++drawn; }
-template <class... T> void TextWrapped(const char*, T...) { ++drawn; }
-template <class... T> void Text(const char*, T...) { ++drawn; }
+void TextUnformatted(const char* s)
+{
+    ++drawn;
+    text.insert(s);
+}
+template <class... T> void TextWrapped(const char* s, T...)
+{
+    ++drawn;
+    text.insert(s);
+}
+template <class... T> void Text(const char* s, T...)
+{
+    ++drawn;
+    text.insert(s);
+}
 bool Button(const char* s)
 {
     shown.insert(s);
     return click == s;
 }
 bool SliderInt(const char*, int*, int, int) { return false; }
-bool BeginTable(const char*, int, int) { return true; }
+bool BeginTable(const char*, int columns, int)
+{
+    tableColumns = columns;
+    return true;
+}
 void TableSetupColumn(const char*) {}
 void TableHeadersRow() {}
 void TableNextRow() {}
@@ -114,3 +132,8 @@ struct State
         return s;
     }
 };
+
+namespace DlssNr::MenuLayout
+{
+const char* FieldLabel(const char* label) { return label; }
+} // namespace DlssNr::MenuLayout

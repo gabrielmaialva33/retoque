@@ -46,9 +46,22 @@ not instrumentation of a real game. No timestamps or host paths enter the PNG.
 | `advisor-rr-done-pt-BR` | After-RR results identifying RRWorkingScale |
 | `advisor-timing-off-pt-BR` | One missing condition and timing recovery action |
 | `advisor-hidden-off` | NR off, no advisor heading or text (Portuguese) |
+| `model-missing-narrow`, `model-missing-pt-BR-narrow` | Wrapped recovery at 420 px |
+| `present-hdr-pt-BR-narrow`, `native-vulkan-narrow` | Narrow HDR/exposure guidance |
+| `individual-passes-pt-BR-narrow` | Inherited/explicit attribute rows at 420 px |
+| `simple-comparison-pt-BR` | Wipe, held frame and capture refusal in the player view |
+| `advisor-eligible-en-narrow` | English start controls at 420 px |
+| `advisor-running-en-narrow`, `advisor-running-pt-BR-narrow` | Plain progress in both languages |
+| `advisor-done-en-narrow`, `advisor-done-pt-BR-narrow`, `advisor-rr-done-pt-BR-narrow` | Wrapped result table, GPU/Base units and explicit Apply |
+| `advisor-aborted-pt-BR` | Stopped trial, unchanged saved settings |
+| `guard-simple-pt-BR`, `guard-full-pt-BR` | Actionable guard/recovery in both views; numeric crash diagnostics only in full |
 
-The fixed canvas is 560 x 560 for simple states and 560 x 2600 for full states.
-Advisor fixtures use 560 x 1000, or 560 x 1300 for result tables; the hidden state uses 560 x 560. This is an isolated,
+The fixed canvas is 560 x 900 for simple states and 560 x 4200 for full states.
+Narrow model-missing states in both languages use 420 x 1100; HDR pt-BR uses 420 x 4200,
+and native Vulkan uses 480 x 4200. These pressure widths cover the shell sidebar consuming panel space.
+Advisor full fixtures use 560 x 4200; the hidden state uses 560 x 900.
+English/Portuguese narrow advisor states use 420 x 5200 (eligible/results/aborted) or 420 x 1200 (running).
+The narrow individual-pass editor is 420 x 4200; the simple comparison is 420 x 1400. This is an isolated,
 long-form panel view at scale 1, with a synthetic title/watermark and enough height to inspect all sections.
 It does **not** reproduce the main window's sidebar, footer, card border, viewport clipping or actual available
 width (which varies with translated tab labels). Long unwrapped text can be clipped horizontally exactly as
@@ -93,8 +106,11 @@ The [suite](../../tests/menu-preview/README.md) verifies the rasterizer's edge/a
 checks every PNG, requires font texture coverage and bright panel text, rejects vertical clipping, and compares
 two fresh-process renders byte for byte. Exact bytes are promised for repeat runs of the **same build and
 FreeType version**, not across compiler, font-engine or upstream ImGui upgrades. There are no checked-in goldens.
+The binary also accepts `--layout-test`: real ImGui synthetic input checks wrapped checkbox box/caption clicks,
+disabled refusal and original active IDs for bare/##/### labels. Each render separately verifies field IDs
+and wrapped coloured text. This sends no OS input and exercises no Config/runtime object.
 
 A preview is **not a game run**: no GPU state, real values, timing, image quality, performance, driver behavior,
-HDR output correctness or native Windows validation is implied. These fixtures do not test clicking, hovering,
+HDR output correctness or native Windows validation is implied. Apart from a dedicated synthetic checkbox input test, these fixtures do not test clicking, hovering,
 scrolling, capture/clipboard actions, or every conditional panel state; use the existing host contracts and
 runtime validation separately. The whole panel compiles unchanged, so no production seam is needed for it.

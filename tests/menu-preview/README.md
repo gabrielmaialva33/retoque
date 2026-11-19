@@ -6,11 +6,15 @@ error, never a silent PASS or a fallback to another rasterizer. Host execution i
 
 The suite builds [the preview tool](../../tools/menu-preview/README.md), which compiles the complete production
 NR panel body against fixture Config/State/runtime getters and the repository's real Dear ImGui. It renders all
-sixteen named states twice in fresh processes into temporary directories, then independently decodes PNG chunks,
+thirty-one named states twice in fresh processes into temporary directories, then independently decodes PNG chunks,
 checks CRCs/zlib/scanline lengths/dimensions, rejects flat pictures, requires bright text inside the panel and
 font-atlas-covered pixels, and compares the two PNG byte streams. Text transcripts check that the final full-view
 control was submitted; measured content height rejects vertical clipping. English/Portuguese and materially
 different fixtures must produce different images. Advisor transcripts check eligible/running/done/after-RR states, timing recovery and absence when NR is off.
+The dedicated real-ImGui input check covers wrapped checkbox box/caption clicks, disabled refusal and active IDs.
+Advisor table columns must retain at least 50 px of content width in result fixtures.
+Field labels also assert unchanged IDs, and coloured recovery text must wrap. Narrow fixtures exercise
+420/480 px widths; captions and statistics remain synthetic.
 An unknown state must fail without creating output.
 
 A small sanitized raster test independently checks a shared triangle edge (no double blend or crack), clipping,
@@ -18,6 +22,6 @@ source-over blending and bilinear font alpha. This is not an image-quality bench
 The existing [nr-menu suite](../nr-menu/README.md) retains its scripted-event coverage.
 
 The pictures contain synthetic values only. Passing proves this fixture tool produces reproducible pictures,
-not that the menu's decisions, live GPU values, timing, input, native Windows behavior or in-game appearance
+not that the menu's decisions, live GPU values, timing, general interaction, native Windows behavior or in-game appearance
 are correct. No pictures or compiled artifacts are tracked. Pixel repeatability is local to one compiler,
 ImGui/font version and FreeType build; no cross-platform golden image is claimed.

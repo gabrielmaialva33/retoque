@@ -188,6 +188,70 @@ out is the game's own NR setting, and the pass comes back 5 s after it is turned
 
 ---
 
+### 2.7 Panel layout and readable recovery
+
+| State | Presentation contract |
+|---|---|
+| Failure reason, retry allowed | Complete wrapped reason; Retry on its own line, with its original ID/action |
+| Driver refusal or latched out-of-date | Same wrapped reason; no Retry (section 2.5) |
+| Long text in English or a loaded dictionary | Wrap at the panel content edge, including coloured/disabled guidance |
+| Field label plus editor exceeds available width | Wrapped label above its editor; original ImGui ID, range and Config write |
+| White-point source/HDR, route and capture states | Every availability row in sections 2.1–2.6 remains unchanged |
+
+The shell is at most 680 scaled pixels, minus the translated sidebar, padding, card and indent.
+The CPU fixtures include 420- and 480-pixel canvases as width pressure, in addition to 560 pixels;
+they are isolated panels, not a shell/game qualification. `FieldLabel` is only for single-call fields,
+never a begin/end popup pair. Real ImGui assertions verify the original item ID in both layout modes.
+
+### 2.8 Simple and full views
+
+| State | Visible/reachable controls |
+|---|---|
+| Simple, normal | Enable, short status, Look, Detail strength, grouped comparison (Apply, Hold, Compare, capture under section 2.3), Show all settings last |
+| Simple, NR off | Short Off status; model-retention note belongs to full view |
+| Simple, failure/guard/unsupported route | Same actionable notices and recovery gates as sections 2.2, 2.5, 2.6; never hide a refusal; raw crash codes and elapsed time are full-view diagnostics |
+| Full | All existing settings, diagnostics, profile, model statistics, rebuild notes and advisor |
+| Trial active | Advisor progress and cancellation remain reachable; other edits stay hidden as before |
+| View toggle clicked | Same ShowAllSettings key; next frame shows the chosen view; hidden saved values are untouched |
+
+### 2.9 Appearance, comparison and pass editor
+
+| State | Presentation and unchanged meaning |
+|---|---|
+| Full view | Comparison near the top, before Processing route; Model appearance adjacent to Result strength |
+| Model appearance | Look is a recipe; preset is a weight set; style is a model variant; intensity is internal model strength |
+| Result strength | Detail blends original/model output; colour controls colour transfer; values/ranges unchanged |
+| Per-pass inherited field | One attribute row: name, unchecked Inherited state, current master value |
+| Per-pass explicit field | Same row: name, checked Explicit state, editable value; clear state restores live inheritance |
+| One weight set / skin mask off | Preset remains absent / skin strength remains disabled, as before |
+| Compare off / side by side / wipe | No split or zoom / zoom only / split only; side options only when comparing |
+| Capture availability | Exactly section 2.3 in either view; capture is now after comparison choices |
+
+The pass editor keeps the existing selected-pass and field ID scopes; rows add no table/window scopes.
+Model setters, deferred release, sparse overrides and all range limits are unchanged.
+
+### 2.10 Words and units
+
+| Value/state | Display contract |
+|---|---|
+| Completed pass count or timing sample count = 1 | Singular pass / passe |
+| Count = 0 or greater than 1 | Plural passes / passes; no change to the numeric value |
+| Residual limit = 0 / greater than 0 | Localized Off / unchanged value in stops (EV in pt-BR) |
+| Preset, style, intensity, detail and colour | Terms follow the translations README glossary; IDs and Config values unchanged |
+
+### 2.11 Advisor presentation
+
+| State | Display and action |
+|---|---|
+| Ineligible/hidden route | Existing gate and recovery action; no new control or eligibility rule |
+| Settling / sampling | Option N of total; Preparing the image + prepared frames / Measuring frame times + collected samples; Cancel |
+| Aborted | Test stopped; saved settings unchanged; existing retry/start eligibility |
+| Results | Five wrapped columns: option, median ms, mean ms, slowest 5% ms, NR share; GPU/Base rows are distinct |
+| Per-option counts/refusals | Model/reused counts and refusal reasons below the table; also retained in copied report |
+| Completed / stale context | Existing recommendation and explicit Apply only under the same context guard; no automatic settings write |
+
+Table layout and words do not change candidate order, sampling, statistics, thresholds, cancellation or apply policy.
+
 ## 3. Per-change-type review (run BEFORE deploy)
 
 Match the change to its type and run that review — as an adversarial pass (a subagent given the diff

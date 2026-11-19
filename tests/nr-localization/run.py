@@ -41,6 +41,9 @@ def printf_directives(text):
 
 pack_text = (OPTIONAL / "pt-BR.lang").read_text(encoding="utf-8")
 reference = entries("pt-BR")
+for key, translated in reference.items():
+    if "Neural Rendering" in key and not key.startswith("Can be toggled with a key"):
+        assert "Neural Rendering" not in translated, "pt-BR feature name must follow the NR glossary"
 for translated in reference.values():
     # With UseHQFont=false the menu draws ProggyClean, which has Latin-1 only; pt-BR keeps to it.
     assert all(ord(char) <= 255 for char in translated), "pt-BR needs glyphs outside default Latin range"
