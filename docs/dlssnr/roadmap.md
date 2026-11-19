@@ -48,6 +48,12 @@ Host coverage does not validate the clipboard result in a running game.
 
 ## In progress
 
+Character inspection and per-object rules, reopened by the owner 2026-11-19: **design under review** in
+[character-inspector](design/character-inspector.md). The source audit distinguishes NeuRotic's active detection/
+overlay rules from its inactive regional NR requests. The recommendation starts with default-off observation of
+existing protections; no detector, runtime implementation or regional image change is authorized by this note.
+This supersedes the earlier decision not to promote character inspection merely for reference-fork parity.
+
 Real depth without an upscaler, reopened 2026-11-19: [step 0](design/present-depth-without-upscaler.md) is a
 D3D12 `PresentDepth=log` observer only, with independent ranking/refusal/comparison host contracts. No depth is
 supplied to the model. The four diagnostic-contract amendments were accepted by the lead, owner confirmation
@@ -63,8 +69,9 @@ The tested adaptive cadence and half-rate look model were not promoted; preserve
 The guide-fidelity probe is designed and parked, not implemented. Its temporal pairing, ordering, source continuity
 and recording/readback lifetime contracts must close before implementation; see
 [guide-fidelity-probe](design/guide-fidelity-probe.md). It supplies no current guide-quality verdict.
-Unrelated capture/character-inspector features and closed reference DLLs are not adopted simply because another
-project advertises them. Ten-pass chains were parked on that ground until the owner asked for them on 2026-11-11:
+Other unrelated capture features and closed reference DLLs are not adopted simply because another project
+advertises them. Character inspection moved to design review above on 2026-11-19. Ten-pass chains were parked
+on that ground until the owner asked for them on 2026-11-11:
 `Passes` now goes to ten (default one, RR route still three), with the cost said under the control and in
 [bounded-chain](design/bounded-chain.md) ("Ten passes"); its memory and time at ten on an RTX 3060 and a 4090 are
 not measured yet.
