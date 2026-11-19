@@ -14,6 +14,7 @@
 #include <dlssnr/DlssNrFeature_Dx12.h>
 #include <dlssnr/DlssNr_VkModelOwner.h>
 #include <dlssnr/DlssNr_VkRecording.h>
+#include <dlssnr/DlssNr_VkPresentHost.h>
 #include <dlssnr/DlssNr_VkMeterReadback.h>
 #include <dlssnr/DlssNr_VkMotionProbe.h>
 #include <dlssnr/DlssNr_VkPresentBuild.h>
@@ -1606,6 +1607,11 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         }
         return;
     }
+
+    // Admission preflight only until the independent chain generation is integrated. A refused
+    // device keeps the existing one/master route; Passes=1 never calls this observer.
+    if (cfg.DlssNrPasses.value_or_default() > 1)
+        VkPresentHost::ChainRecordingAllowed(device, *recording);
 
     if (g_vk.failed)
         return;
@@ -4160,6 +4166,7 @@ void ShutdownVk(bool deviceAlive)
 {
     if (!deviceAlive)
     {
+        VkPresentHost::AbandonCreationObserver(g_vk.device);
         PairCapture::DeviceGoneVkLocked(g_vk.device, false);
         ForgetMeterReadback();
         ForgetMotionProbe();
@@ -4300,6 +4307,8 @@ void CancelAfterUpscaleHandBack(VkDevice device)
 
 void AfterUpscaleDeviceGone(VkDevice device, bool forgetOnly, std::vector<std::string>& lines)
 {
+    if (forgetOnly)
+        VkPresentHost::AbandonCreationObserver(device);
     // The route's lock may be waited for here: the route never takes the host's transport lock or a queue's present
     // lock, and vkDestroyDevice holds no queue's submit lock.
     {

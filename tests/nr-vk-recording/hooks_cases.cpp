@@ -1,3 +1,4 @@
+#include "pch.h"
 #include <dlssnr/DlssNr_VkRecording.h>
 
 #include <array>
@@ -13,6 +14,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+template <class Device, class Pool> void ForgetChainPool(Device, Pool) {} // chain-specific hook tested separately
 
 // Fail notification-side allocation without changing the driver's result. Free must require no allocation.
 std::atomic<bool> failAllocation = false;

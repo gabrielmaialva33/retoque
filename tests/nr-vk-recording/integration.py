@@ -113,7 +113,7 @@ def run(root, directory, compilers):
             executable = directory/(unit.stem+'-'+Path(command[0]).name)
             flags = ['-std=c++20','-O1','-g','-Wall','-Wextra','-Werror','-pthread',
                      '-fsanitize=address,undefined','-fno-omit-frame-pointer','-fno-pie','-no-pie',
-                     '-I'+str(HERE/'stubs'), '-I'+str(vulkan), '-I'+str(root/'retoque'),
+                     '-I'+str(HERE), '-I'+str(HERE/'stubs'), '-I'+str(vulkan), '-I'+str(root/'retoque'),
                      '-I'+str(root/'retoque/shaders/dlssnr')]
             built = subprocess.run(command+flags+[str(unit),'-o',str(executable)], check=False)
             if built.returncode:

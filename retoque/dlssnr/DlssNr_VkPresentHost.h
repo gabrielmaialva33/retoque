@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DlssNr_VkRecording.h"
+#include "DlssNr_VkBudget.h"
 #include <windows.h>
 #include <optional>
 #include <vulkan/vulkan.h>
@@ -44,6 +46,18 @@ namespace DlssNr::VkPresentHost
 // From VulkanHooks::Hook, on every call (startup, and each later load of vulkan-1.dll through the loader hook), before
 // its own [Vulkan] SkipHooks / marker check. Installs once; a no-op unless the configuration above holds.
 void Install(HMODULE vulkan1);
+
+// No allocation or lock. False after partial/missing installation or device retirement.
+bool ChainCoverageReady(VkDevice device);
+bool ChainRecordingAllowed(VkDevice device, const VkRecording::Ticket& ticket);
+uint64_t WatchCreation(VkDevice device, const VkRecording::Ticket& ticket, uint64_t present);
+bool CreationReady(VkDevice device, uint64_t serial, uint64_t present);
+void CancelCreation(VkDevice device, uint64_t serial);
+void AbandonCreationObserver(VkDevice device);
+VkChain::BudgetDecision AdmitChainBudget(VkDevice device, VkChain::BudgetGate& gate, VkChain::BudgetKey key,
+                                         uint64_t estimatedModelBytes,
+                                         std::span<const VkChain::TextureReservation> textures);
+VkChain::BudgetSample SampleChainBudget(VkDevice device);
 
 // Called once by VulkanHooks::DestroyDevice, shared by both detour layers. Stops/drains NR,
 // or drains an untracked device under the host's transport/known-queue locks. False requires

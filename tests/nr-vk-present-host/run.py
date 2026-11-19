@@ -273,7 +273,7 @@ assert 'LOG_' not in code(function(host, 'bool DrainForDestroy('))
 
 # Nothing that can reach Vulkan, or OptiScaler's delay-loaded import of vulkan-1.dll (whose first use runs the loader
 # hook and Install, which takes the same lock), is called with g_installMutex held.
-for name in ('void HookDevice(VkDevice device)', 'void HookPresent(VkDevice device)\n{'):
+for name in ('DlssNr::VkChain::HookCoverage HookDevice(VkDevice device, bool chainRequested)', 'void HookPresent(VkDevice device)\n{'):
     held = code(function(host, name))
     held = held[held.index('std::lock_guard lock(g_installMutex);'):]
     for forbidden in ('GetDeviceProcAddr(', 'QueueCall(device', 'get("', 'GetProcAddress_'):
@@ -791,7 +791,7 @@ print('PASS: stage-4 guards (frame generation decided before the transport; unto
 # The present hook goes in at a device's swapchain creation, after the bundle's own (installed in its vkCreateDevice),
 # so it runs first: application -> NR -> overlay -> present.
 assert 'HookPresent(device);' in code(function(host, 'VkResult OnCreateSwapchain('))
-assert 'vkQueuePresentKHR' not in code(function(host, 'void HookDevice(VkDevice device)'))
+assert 'vkQueuePresentKHR' not in code(function(host, 'DlssNr::VkChain::HookCoverage HookDevice(VkDevice device, bool chainRequested)'))
 
 # Config: the key, its four points, and an ini comment that says what it does today.
 assert 'CustomOptional<bool> DlssNrVulkanPresentHost { false };' in config_h

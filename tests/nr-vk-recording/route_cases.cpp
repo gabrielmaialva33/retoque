@@ -1,3 +1,4 @@
+#include "pch.h"
 #include <vulkan/vulkan.h>
 #include "SysUtils.h"
 #include <dlssnr/DlssNr_VkRecording.h>
@@ -15,6 +16,10 @@
 #include <vector>
 
 namespace VkRecording = DlssNr::VkRecording;
+namespace VkPresentHost
+{
+void AbandonCreationObserver(VkDevice) {}
+} // namespace VkPresentHost
 constexpr uint32_t kMeterSlots = 4;
 
 template <class T> T H(uint64_t value) { return (T) (uintptr_t) value; }

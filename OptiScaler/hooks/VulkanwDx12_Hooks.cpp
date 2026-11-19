@@ -6919,7 +6919,8 @@ VkResult Vulkan_wDx12::hk_vkBeginCommandBuffer(VkCommandBuffer commandBuffer,
     if (result == VK_SUCCESS)
         DlssNr::VkRecording::Recordings().Begin(
             (uint64_t) commandBuffer,
-            DlssNr::VkRecording::ReuseOf(pBeginInfo != nullptr, pBeginInfo != nullptr ? pBeginInfo->flags : 0));
+            DlssNr::VkRecording::ReuseOf(pBeginInfo != nullptr, pBeginInfo != nullptr ? pBeginInfo->flags : 0),
+            pBeginInfo != nullptr && (pBeginInfo->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);
     return result;
 }
 
@@ -7025,7 +7026,7 @@ VkResult Vulkan_wDx12::hk_vkAllocateCommandBuffers(VkDevice device, const VkComm
             for (uint32_t i = 0; i < pAllocateInfo->commandBufferCount; ++i)
                 buffers.push_back((uint64_t) pCommandBuffers[i]);
             DlssNr::VkRecording::Recordings().Allocate((uint64_t) device, (uint64_t) pAllocateInfo->commandPool,
-                                                       buffers);
+                                                       buffers, DlssNr::VkRecording::LevelOf(pAllocateInfo->level));
         }
         catch (const std::bad_alloc&)
         {
