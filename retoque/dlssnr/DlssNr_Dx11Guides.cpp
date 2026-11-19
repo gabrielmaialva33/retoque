@@ -307,22 +307,27 @@ bool EnsureOwnDepth(OwnDepth& own, ID3D11Device* d3d11, ID3D12Device* d3d12, con
 }
 
 // Waits, bounded, for the transport's last list. True when it has completed, so its objects may be released. Zero
-// only looks: nothing on the game's thread waits for the GPU.
+// only looks: nothing on the game's thread waits for the GPU. A removed device is never drained: its fence reads
+// UINT64_MAX and its waiters are woken with nothing having run (DlssNr_FenceProgress.h), so its objects stay alive.
 bool DrainLocked(Transport& t, DWORD timeoutMs)
 {
-    if (t.fence == nullptr || t.fenceValue == 0 || t.fence->GetCompletedValue() >= t.fenceValue)
+    if (t.fence == nullptr || t.fenceValue == 0)
         return true;
+
+    const auto progress = FenceProgress::Classify(t.fence->GetCompletedValue(), t.fenceValue);
+    if (progress != FenceProgress::State::Pending)
+        return progress == FenceProgress::State::Completed;
 
     HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (event == nullptr)
         return false;
 
-    bool done = false;
     if (timeoutMs != 0 && SUCCEEDED(t.fence->SetEventOnCompletion(t.fenceValue, event)))
-        done = WaitForSingleObject(event, timeoutMs) == WAIT_OBJECT_0;
+        WaitForSingleObject(event, timeoutMs);
 
     CloseHandle(event);
-    return done || t.fence->GetCompletedValue() >= t.fenceValue;
+    // The fence's value, not the wait's result: a removal sets the event too.
+    return FenceProgress::Completed(t.fence->GetCompletedValue(), t.fenceValue);
 }
 
 // The D3D12 objects, released only once nothing the GPU may still run uses them; abandoned (left alive) otherwise.

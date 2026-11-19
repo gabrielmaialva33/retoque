@@ -24,6 +24,9 @@ uint64_t Clock();
 bool Strict();
 // Tracked work was submitted on more than one queue: overlap is refused for the session.
 bool MultiQueue();
+// A new chain recording is refused while an earlier one is unfinished: strict mode, or no single queue established
+// yet (or a second one seen). Whoever stops waiting for a recording to finish asks this first.
+bool Serialized();
 // May a new tracked recording into list start? Prunes the lifetime set first: Ready and cancelled epochs, and
 // completed ones once aged out of the replay window.
 Detail::Admission Admit(Usage& usage, ID3D12GraphicsCommandList* list);

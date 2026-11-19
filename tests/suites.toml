@@ -196,7 +196,15 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 60
-summary = "PresentSync=auto: the D3D12 present pass waits for its write-back only when frame generation could be involved."
+summary = "PresentSync=auto: the D3D12 present pass waits for its write-back only when frame generation could be involved, and not under FSR-FG's own swapchain at the FG hook (FFX's or the fork's presenter, no DLSS-G, no custom provider, the swapchain's game queue, multi-pass recordings not admitted one at a time); mutants of each condition and source guards on the hook, the FG queue, both swapchains' fences and the admission rule."
+
+[nr-present-fence]
+path = "nr-present-fence"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "The D3D12 present lists when their fence cannot prove completion (DlssNr_FenceProgress.h): the verbatim list, submit, idle-wait and HDR-retire helpers against fake D3D12 objects under ASan/UBSan. A removed device (UINT64_MAX, a wait woken by the removal, a refused Signal) never resets an allocator or releases what the lists read, and says so once; a live device behaves as before. Mutation controls and source guards. No GPU."
 
 [nr-uimask-rule]
 path = "nr-uimask-rule"

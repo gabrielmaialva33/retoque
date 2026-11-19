@@ -93,6 +93,7 @@
 #include <menu/menu_overlay_base.h>
 #include <dlssnr/DlssNr_PresentGuideIdentity.h>
 #include <dlssnr/DlssNr_UntrackedRetire.h>
+#include <dlssnr/DlssNr_FenceProgress.h>
 #include <resource_tracking/ResTrack_dx12.h>
 
 namespace DlssNr::Dx12Internal
@@ -3833,6 +3834,37 @@ DXGI_FORMAT Dx12Internal::g_bbCopyFormat = DXGI_FORMAT_UNKNOWN;
 // releases what it holds once the present lists have finished.
 DlssNr::SynthMotionGuide* Dx12Internal::g_presentMotion = nullptr;
 
+// The device the present lists were made on was removed. Latched for these lists: once it is, no list is handed out,
+// no allocator is reset and nothing the lists read is released. They are kept, and the present pass stops.
+static std::atomic<bool> s_presentDeviceRemoved { false };
+
+static void NotePresentDeviceRemoved(const char* seen)
+{
+    if (!s_presentDeviceRemoved.exchange(true))
+        LOG_WARN("DLSS-NR present: the device was removed ({}); the present lists and what they read are kept, not "
+                 "released, and the present pass stops",
+                 seen);
+}
+
+// Every look at the present lists' fence. UINT64_MAX is a removed device's answer, not a value a list reached
+// (DlssNr_FenceProgress.h): it is said once, and it is the answer from then on.
+static UINT64 ReadPresentFence()
+{
+    if (s_presentDeviceRemoved.load(std::memory_order_relaxed))
+        return UINT64_MAX;
+
+    const UINT64 completed = g_presentList.fence->GetCompletedValue();
+    if (completed == UINT64_MAX)
+        NotePresentDeviceRemoved("the present fence reads UINT64_MAX");
+
+    return completed;
+}
+
+static DlssNr::FenceProgress::State PresentFenceProgress(UINT64 wanted)
+{
+    return DlssNr::FenceProgress::Classify(ReadPresentFence(), wanted);
+}
+
 static void ResetPresentList()
 {
     for (unsigned int i = 0; i < PresentList::kSlots; ++i)
@@ -3866,6 +3898,7 @@ static void ResetPresentList()
     }
 
     g_presentFenceValue = 0;
+    s_presentDeviceRemoved = false;
 }
 
 static bool EnsurePresentList(ID3D12Device* device)
@@ -3925,8 +3958,10 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
 
     if (!g_presentList.dirty[slot])
     {
-        if (g_presentList.fenceValue[slot] != 0 &&
-            g_presentList.fence->GetCompletedValue() < g_presentList.fenceValue[slot])
+        // Zero for a slot that never submitted: nothing to wait for, and still no list on a removed device.
+        auto progress = PresentFenceProgress(g_presentList.fenceValue[slot]);
+
+        if (progress == DlssNr::FenceProgress::State::Pending)
         {
             if (SUCCEEDED(g_presentList.fence->SetEventOnCompletion(g_presentList.fenceValue[slot],
                                                                     g_presentList.fenceEvent)))
@@ -3942,7 +3977,10 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
                     LOG_WARN("DLSS-NR present: allocator wait returned {} (slot {})", (unsigned) wait, slot);
             }
 
-            if (g_presentList.fence->GetCompletedValue() < g_presentList.fenceValue[slot])
+            // The wait returning is not the answer: a removal sets the event as well.
+            progress = PresentFenceProgress(g_presentList.fenceValue[slot]);
+
+            if (progress == DlssNr::FenceProgress::State::Pending)
             {
                 static bool s_loggedBusy[PresentList::kSlots] = {};
                 if (!s_loggedBusy[slot])
@@ -3953,6 +3991,10 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
                 return nullptr;
             }
         }
+
+        // The lists this allocator recorded were dropped, not run: it is never reset again (said once, above).
+        if (progress == DlssNr::FenceProgress::State::Removed)
+            return nullptr;
 
         HRESULT hr = g_presentList.allocator[slot]->Reset();
         if (FAILED(hr))
@@ -3974,6 +4016,27 @@ static ID3D12GraphicsCommandList* GetPresentCommandList(ID3D12Device* device, un
     return g_presentList.list[slot];
 }
 
+// A completion signal the queue refused. With the device gone that is a removal like any other. On a live device
+// the slot's value is never reached, so the slot and whatever is retired against it stay in use until a later
+// signal on the queue passes it.
+static void NotePresentSignalFailed(HRESULT result, unsigned int slot)
+{
+    if (result == DXGI_ERROR_DEVICE_REMOVED)
+        NotePresentDeviceRemoved("its queue refused the completion signal");
+
+    if (PresentFenceProgress(0) == DlssNr::FenceProgress::State::Removed)
+        return;
+
+    static bool s_logged = false;
+    if (!s_logged)
+    {
+        s_logged = true;
+        LOG_WARN("DLSS-NR present: the completion signal failed on slot {} (HRESULT {:08X}); the slot stays in use "
+                 "until a later signal passes it",
+                 slot, (unsigned) result);
+    }
+}
+
 // Whether the list was executed, which is the answer anything recorded on it is owed.
 static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
 {
@@ -3986,7 +4049,10 @@ static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
     {
         queue->ExecuteCommandLists(1, (ID3D12CommandList**) &g_presentList.list[slot]);
         g_presentList.fenceValue[slot] = ++g_presentFenceValue;
-        queue->Signal(g_presentList.fence, g_presentList.fenceValue[slot]);
+        // The list is the queue's whether or not the signal is: executed, with nothing yet proven about it.
+        const HRESULT signalled = queue->Signal(g_presentList.fence, g_presentList.fenceValue[slot]);
+        if (FAILED(signalled))
+            NotePresentSignalFailed(signalled, slot);
         executed = true;
     }
 
@@ -3994,20 +4060,23 @@ static bool SubmitPresentList(ID3D12CommandQueue* queue, unsigned int slot)
     return executed;
 }
 
-// Every present list submitted so far has finished on the GPU. Bounded; false on a timeout, in which
-// case whatever those lists read is kept, not released.
+// Every present list submitted so far has finished on the GPU. Bounded; false on a timeout and on a removed
+// device, in which case whatever those lists read is kept, not released.
 static bool WaitPresentListsIdle(DWORD timeoutMs)
 {
-    if (g_presentList.fence == nullptr || g_presentFenceValue == 0 ||
-        g_presentList.fence->GetCompletedValue() >= g_presentFenceValue)
-    {
+    if (g_presentList.fence == nullptr || g_presentFenceValue == 0)
         return true;
-    }
+
+    const auto progress = PresentFenceProgress(g_presentFenceValue);
+    if (progress != DlssNr::FenceProgress::State::Pending)
+        return progress == DlssNr::FenceProgress::State::Completed;
 
     if (FAILED(g_presentList.fence->SetEventOnCompletion(g_presentFenceValue, g_presentList.fenceEvent)))
         return false;
 
-    return WaitForSingleObject(g_presentList.fenceEvent, timeoutMs) == WAIT_OBJECT_0;
+    // The event is set by a removal too, and can be left set by an earlier wait that timed out: the fence answers.
+    return WaitForSingleObject(g_presentList.fenceEvent, timeoutMs) == WAIT_OBJECT_0 &&
+           PresentFenceProgress(g_presentFenceValue) == DlssNr::FenceProgress::State::Completed;
 }
 
 // The present route's synthesized motion is owed the same answer as the list it was recorded on.
@@ -4084,15 +4153,16 @@ static void RetirePresentHdrTexture(ID3D12Resource*& resource)
 }
 
 // Under g_nrMutex, once per present: the retired textures the GPU is done with. Nothing pending, nothing done.
+// On a removed device none of them is: the fence proves nothing about the lists that used them, so they are kept.
 static void CollectPresentHdrRetired()
 {
     if (g_hdrRetired.empty() || g_presentList.fence == nullptr)
         return;
 
-    const UINT64 completed = g_presentList.fence->GetCompletedValue();
+    const UINT64 completed = ReadPresentFence();
     for (size_t i = 0; i < g_hdrRetired.size();)
     {
-        if (g_hdrRetired[i].fenceValue <= completed)
+        if (DlssNr::FenceProgress::Completed(completed, g_hdrRetired[i].fenceValue))
         {
             g_hdrRetired[i].resource->Release();
             g_hdrRetired[i] = g_hdrRetired.back();
@@ -5329,11 +5399,35 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     syncInputs.dlssgSeen = state.DlssgDetectedInterpolationCount() > 0 || state.dlssgLastSetMode != sl::DLSSGMode::eOff;
     syncInputs.dlssgLoaded = dlssgLoaded;
     syncInputs.boundary = boundary;
-    const bool presentSync = DlssNr::PresentSyncWanted(cfg.DlssNrPresentSync, syncInputs);
+    // FSR-FG's own swapchain orders its game queue's work ahead of its own on the GPU (DlssNr_PresentSync.h): the
+    // FG hook hands this pass that queue, the one the FG object kept when the swapchain was created. A provider
+    // named in [FSRFG] Provider may bring another swapchain, and the answer is for FFX's and the fork's presenter.
+    syncInputs.fsrFgOutput = state.activeFgOutput == FGOutput::FSRFG;
+    syncInputs.fsrFgCustomProvider = !state.activeFsrFgProvider.empty();
+    syncInputs.onFgGameQueue = fgHook && state.currentFG != nullptr && state.currentFG->GetCommandQueue() == queue;
+    // Tracked recordings admitted one at a time are refused while the previous one runs (chain-in-flight.md): there
+    // the wait is also what lets the next frame's in. The untracked single pass never asks.
+    bool tracked = false;
+    {
+        std::lock_guard<std::mutex> lock(g_nrMutex);
+        tracked = g_tracked;
+    }
+    syncInputs.serialRecordings = tracked && DlssNr::Submission::Serialized();
+    const DlssNr::PresentSyncDecision sync = DlssNr::DecidePresentSync(cfg.DlssNrPresentSync, syncInputs);
+    const bool presentSync = sync.wait;
     DlssNr::g_presentSyncWaits.store(presentSync, std::memory_order_relaxed);
 
+    // Said when it changes: a present cpu window counts the waits, not which rule asked for them. Bounded, so two
+    // entries that took turns could not fill the log.
+    static std::atomic<const char*> loggedSync { nullptr };
+    static std::atomic<unsigned int> syncLines { 0 };
+    if (loggedSync.exchange(sync.why, std::memory_order_relaxed) != sync.why &&
+        syncLines.fetch_add(1, std::memory_order_relaxed) < 16)
+        LOG_INFO("DLSS-NR present: {} for its write-back before returning ({})",
+                 presentSync ? "waits" : "does not wait", sync.why);
+
     if (presentSync && g_presentList.fenceValue[slot] != 0 &&
-        g_presentList.fence->GetCompletedValue() < g_presentList.fenceValue[slot])
+        PresentFenceProgress(g_presentList.fenceValue[slot]) == DlssNr::FenceProgress::State::Pending)
     {
         const auto waitStart = std::chrono::steady_clock::now();
         const UINT64 done = g_presentList.fenceValue[slot];
