@@ -20,8 +20,5 @@ inline std::vector<std::string>& Lines()
 #define LOG_WARN(...) TestLog::Lines().push_back(std::format(__VA_ARGS__))
 #define LOG_ERROR(...) TestLog::Lines().push_back(std::format(__VA_ARGS__))
 
-class ScopedInternalResourceCreation
-{
-  public:
-    static bool Active() { return false; }
-};
+// The internal-creation scope is the production class: run.py writes it here from OptiScaler/State.h.
+#include "internal_scope.h"

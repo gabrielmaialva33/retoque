@@ -239,6 +239,9 @@ int main()
             assert(g_pre.width == 2558 && g_pre.height == 1439 && f.params.typed["Color"] == g_pre.scratch);
         }
         assert(f.device.allocations == 1);
+        // The copy is a UAV surface made through the game's device: created inside the scope the exposure scan skips,
+        // and the scope is closed again afterwards.
+        assert(f.device.unscopedAllocations == 0 && !ScopedInternalResourceCreation::Active());
         f.Restored();
         ++checks;
     }
@@ -294,6 +297,8 @@ int main()
             assert(!p.Swapped());
         }
         assert(f.device.allocations == 1 && f.params.sets == 0);
+        // A refused allocation was asked for inside the scope as well, and does not leave it open.
+        assert(f.device.unscopedAllocations == 0 && !ScopedInternalResourceCreation::Active());
         ++checks;
     }
     {

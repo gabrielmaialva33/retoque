@@ -575,6 +575,9 @@ bool MfgSwapChainDX12::verifyBackbufferDuplicateResources()
             {
                 if (replacementSwapBuffers[i].resource == nullptr)
                 {
+                    // Ours, not the game's: the resource heuristics watching the device skip it (State.h).
+                    ScopedInternalResourceCreation internalResources {};
+
                     // create game render output resource
                     if (FAILED(device->CreateCommittedResource(&heapProperties, heapFlags, &bufferDesc,
                                                                D3D12_RESOURCE_STATE_PRESENT, &clearValue,
@@ -634,6 +637,9 @@ bool MfgSwapChainDX12::verifyInterpolationOutputs(uint32_t set, uint32_t count)
         ID3D12Resource*& output = outputSets[set].resource[k];
         if (output != nullptr)
             continue;
+
+        // Ours, not the game's: a UAV the DLSS-NR exposure scan would otherwise report (State.h).
+        ScopedInternalResourceCreation internalResources {};
 
         if (FAILED(device->CreateCommittedResource(&heapProperties, heapFlags, &bufferDesc,
                                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS, &clearValue,
@@ -816,6 +822,9 @@ void MfgSwapChainDX12::createTiming()
     bufferDesc.Height = bufferDesc.DepthOrArraySize = bufferDesc.MipLevels = 1;
     bufferDesc.SampleDesc.Count = 1;
     bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+    // Ours, not the game's: the resource heuristics watching the device skip it (State.h).
+    ScopedInternalResourceCreation internalResources {};
 
     void* mapped = nullptr;
     if (FAILED(presentInfo.device->CreateQueryHeap(&queryDesc, IID_PPV_ARGS(&presentInfo.timingQueries))) ||
@@ -1553,6 +1562,9 @@ bool MfgSwapChainDX12::verifyUiDuplicateResource()
                 heapFlags &= ~D3D12_HEAP_FLAG_DENY_RT_DS_TEXTURES;
                 heapFlags &= ~D3D12_HEAP_FLAG_DENY_BUFFERS;
                 heapFlags &= ~D3D12_HEAP_FLAG_ALLOW_DISPLAY;
+
+                // Ours, not the game's: the resource heuristics watching the device skip it (State.h).
+                ScopedInternalResourceCreation internalResources {};
 
                 // create game render output resource
                 if (FAILED(device->CreateCommittedResource(&heapProperties, heapFlags, &uiResourceDesc,

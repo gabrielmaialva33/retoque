@@ -256,6 +256,18 @@ model file at startup; it does not select the caller module.
 - **One lock.** Every caller is on the game's render thread now, but the D3D11-on-D3D12 bridge
   enters from its own call site, and the lock is CPU-side on a path that already records command
   lists. It was added after a period of crashes that looked random and were not.
+- **Ours is not the game's.** What the module creates through the game's D3D12 device passes the same
+  creation hooks as the game's own resources, and the exposure scan looks there for a small UAV shaped
+  like an exposure. `ScopedInternalResourceCreation` (`OptiScaler/State.h`: a counter on the creating
+  thread, no lock, read only by the scan) marks ours. `Dispatch` holds it from its admission checks to
+  its end, which covers the meter, the passes it builds, the model's `CreateFeature` and
+  `EvaluateFeature` and every view made per frame; the allocators other routes reach open their own
+  (`CreateScratch`, `CreatePreUpscaleScratch`, `ZeroGuides`, the MFG presenter). Before 2026-11-19 only
+  the periphery and UI-mask passes did: a PCSX2 session with no UAV of its own spent 32 of its 40
+  near-miss lines on them, and the enlargement's 1x1 exposure texel and cadence smoothing's 4x1 light
+  state and 16x16 light grid pass the scan's filter. A new allocation belongs inside a scope;
+  `tests/nr-exposure-scan` guards the sites. Host-tested only; a library's own allocations when the
+  game calls it directly (FFX's swapchain) are still outside any scope.
 - **Temporal filtering of the model's answer was measured to be a dead end** (twice, including with
   a trained DLAA pass): the model re-decides detail with the framing, so old answers do not belong
   to new frames. There is no accumulator; the composition is re-anchored to the model every frame

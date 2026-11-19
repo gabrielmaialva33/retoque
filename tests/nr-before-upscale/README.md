@@ -20,7 +20,9 @@ restored even if the caller throws; no replacement occurs without a successful
 composition; pre/post routing runs at most once; configured input states are restored;
 nested scopes do not borrow the same scratch; unsupported contracts are rejected;
 1000 failed-allocation attempts cause one allocation; 1000 changing DRS evaluations
-cause none. Checks also cover the 500 ms threshold and format-change debounce.
+cause none; the scratch is allocated inside `ScopedInternalResourceCreation` (the
+production class from `OptiScaler/State.h`), granted or refused, and the scope is closed
+afterwards, so the exposure scan does not take the pass's own surface for the game's. Checks also cover the 500 ms threshold and format-change debounce.
 
 These tests **do not run D3D12, the composition shader, the NVIDIA model, a real
 upscaler, or a game**. The fake composition reports success/failure to exercise the

@@ -176,6 +176,9 @@ struct ID3D12Device
 {
     int failResourceAt = -1, failHeapAt = -1;
     unsigned resources = 0, heaps = 0;
+    // Resources and views asked for outside ScopedInternalResourceCreation (the production class; run.py puts it
+    // ahead of this file). The creation hooks hand those to the exposure scan as if the game had made them.
+    unsigned unscoped = 0;
     std::vector<std::unique_ptr<ID3D12Resource>> ownedResources;
     std::vector<std::unique_ptr<ID3D12DescriptorHeap>> ownedHeaps;
 
@@ -188,6 +191,7 @@ struct ID3D12Device
     HRESULT CreateCommittedResource(const D3D12_HEAP_PROPERTIES* heap, D3D12_HEAP_FLAGS, const D3D12_RESOURCE_DESC* d,
                                     D3D12_RESOURCE_STATES initial, void*, ID3D12Resource** out)
     {
+        unscoped += !ScopedInternalResourceCreation::Active();
         assert(heap->Type == D3D12_HEAP_TYPE_DEFAULT);
         assert(d->Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D && d->MipLevels == 1);
         assert(d->DepthOrArraySize == 1 && d->SampleDesc.Count == 1);
@@ -247,6 +251,7 @@ struct ID3D12Device
     void CreateUnorderedAccessView(ID3D12Resource* resource, void* counter, const D3D12_UNORDERED_ACCESS_VIEW_DESC* v,
                                    D3D12_CPU_DESCRIPTOR_HANDLE where)
     {
+        unscoped += !ScopedInternalResourceCreation::Active();
         assert(counter == nullptr);
         assert(v != nullptr && v->ViewDimension == D3D12_UAV_DIMENSION_TEXTURE2D);
         // An untyped view over a guide would be read differently by the clear and by the model.

@@ -201,7 +201,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
   exposure, recreation before a feature release, an exposure kept across one, attribution by id after a list
   change and a late completion, integer and quiet candidates giving way, waiting overflow, failed, unanswered,
   device-removed and discarded recordings, a freed address reused, a placed resource whose heap the game frees,
-  view candidates at the boundary, and the inert paths; source guards on the call sites. No D3D12 runtime or GPU.
+  view candidates at the boundary, the inert paths, and OptiScaler's own creations skipped inside
+  `ScopedInternalResourceCreation` on the creating thread only; source guards on the call sites and on the scopes
+  at Retoque's own allocation sites (the NR pass, its scratch, the zero guides, the MFG presenter). No D3D12
+  runtime or GPU.
 - `nr-present-boundary` — the present pass under the game's own DLSS-G (`DlssNr_PresentBoundary.h`):
   `HookMethod=2` declines on the wrapped entry below DLSS-G, Auto stays upscaled for the session once it has seen
   it, `HookMethod=1` and OptiScaler's own frame generation are untouched; source guards that `RunPresentPass` and

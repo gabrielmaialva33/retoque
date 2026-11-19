@@ -5,6 +5,7 @@ import subprocess
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
 from nr_sources import renderer_with_internal_types as renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from internal_scope import scope_class  # noqa: E402  ScopedInternalResourceCreation as State.h defines it
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -45,7 +46,10 @@ funnel = ('#include <retoque/dlssnr/DlssNr_Funnel.h>\n'
           'namespace DlssNr::CrashNote { inline void InstallOnce() {} }\n'
           # No other neural producer in a host test (DlssNr_Consumers.h scans Win32 modules; tests/nr-consumers).
           'namespace DlssNr::Consumers { inline bool HandOverIfCompeting() { return false; } }\n')
-unit = '#include "fakes.h"\n' + funnel + owner + 'NrDeviceOwner g_nrDeviceOwner;\n' + child_owner + coverage + allocation + resources
+# CreatePreUpscaleScratch allocates inside the internal-creation scope: the production class, ahead of the fakes so
+# the fake device can see whether an allocation was made inside it.
+unit = (scope_class() + '#include "fakes.h"\n' + funnel + owner + 'NrDeviceOwner g_nrDeviceOwner;\n' + child_owner +
+        coverage + allocation + resources)
 spatial = between(source, 'void ReportSpatialContract(', 'DlssNrFrameInfo GatherGuideFrame(')
 unit += '\nnamespace DlssNr {\n' + declaration + spatial + compose + views + after + scope + '\n}\n#include "cases.h"\n'
 (OUT / 'boundary.cpp').write_text(unit)

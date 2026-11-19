@@ -2,10 +2,13 @@
 """Exercise the production zero-guide provider against strict host D3D12 fakes."""
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 here = Path(__file__).resolve().parent
 root = here.parents[1]
+sys.path.insert(0, str(here.parent / '_support'))
+from internal_scope import scope_class  # noqa: E402  ScopedInternalResourceCreation as State.h defines it
 source = (root / 'retoque/dlssnr/DlssNr_ZeroGuides.cpp').read_text()
 header = (root / 'retoque/dlssnr/DlssNr_ZeroGuides.h').read_text()
 
@@ -18,7 +21,9 @@ for line in ('#include "pch.h"', '#include "DlssNr_ZeroGuides.h"', '#include <Lo
 def strip_includes(text):
     return '\n'.join(l for l in text.splitlines() if not l.startswith('#include') and l != '#pragma once')
 
-unit = (here / 'fakes.h').read_text().replace('#pragma once\n', '', 1)
+# The scope the provider allocates inside comes from pch.h in production (Config.h includes State.h); here it is the
+# same class, ahead of the fakes, so the fake device can see whether a creation was made inside it.
+unit = scope_class() + (here / 'fakes.h').read_text().replace('#pragma once\n', '', 1)
 unit += '\n' + strip_includes(header)
 unit += '\n' + strip_includes(source)
 unit += '\n' + (here / 'cases.h').read_text()

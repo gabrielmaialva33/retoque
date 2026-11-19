@@ -20,10 +20,12 @@
 #include <cstring>
 #include <deque>
 #include <functional>
+#include <future>
 #include <limits>
 #include <map>
 #include <new>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -1107,6 +1109,163 @@ void Inert(const char* how)
         Expect(Scan::Examined() == 0, "nothing examined with NR off");
 }
 
+// ---- OptiScaler's own creations (ScopedInternalResourceCreation, OptiScaler/State.h)
+// -------------------------------
+//
+// The pass's scratch and meter, the model's buffers, the zero guides and the frame-generation presenter's outputs are
+// created through the game's device, so the creation hooks see them like anything else. What marks them is the scope
+// open on the creating thread, and the class here is the production one (run.py takes it from State.h).
+
+D3D12_RESOURCE_DESC TextureDesc(DXGI_FORMAT format, unsigned width, unsigned height)
+{
+    D3D12_RESOURCE_DESC d {};
+    d.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    d.Width = width;
+    d.Height = height;
+    d.DepthOrArraySize = 1;
+    d.MipLevels = 1;
+    d.Format = format;
+    d.SampleDesc.Count = 1;
+    d.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    d.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    return d;
+}
+
+unsigned Logged(const char* text)
+{
+    unsigned n = 0;
+    for (const auto& line : TestLog::Lines())
+        n += line.find(text) != std::string::npos;
+    return n;
+}
+
+// What the pass itself makes, in the shapes the scan takes or reports. Three are shaped like a number: the
+// enlargement's 1x1 exposure texel, and cadence smoothing's 4x1 light state and 16x16 light grid. Two are not, and
+// were the near-miss lines of a session with no game UAV at all: a working-size scratch surface and a model buffer.
+// The last is a small buffer met only through its view, the way the scan meets what the creation hooks did not see.
+struct Made
+{
+    Resource* texel = nullptr;
+    Resource* lightState = nullptr;
+    Resource* lightGrid = nullptr;
+    Resource* scratch = nullptr;
+    Resource* modelBuffer = nullptr;
+    Resource* viewed = nullptr;
+
+    unsigned Held() const
+    {
+        return texel->ScanRefs() + lightState->ScanRefs() + lightGrid->ScanRefs() + scratch->ScanRefs() +
+               modelBuffer->ScanRefs() + viewed->ScanRefs();
+    }
+};
+
+constexpr unsigned kMadeNotes = 6;      // creations and views in MakeAll
+constexpr unsigned kMadeNumbers = 4;    // of them, shaped like a number
+constexpr unsigned kMadeNearMisses = 2; // and UAVs the filter rejects at creation
+
+Made MakeAll(const std::string& whose)
+{
+    Made m;
+    m.texel = Create(whose + " 1x1 exposure texel", 1.0f, TextureDesc(DXGI_FORMAT_R32_FLOAT, 1, 1));
+    m.lightState = Create(whose + " 4x1 light state", 0.5f, TextureDesc(DXGI_FORMAT_R32_FLOAT, 4, 1));
+    m.lightGrid = Create(whose + " 16x16 light grid", 0.5f, TextureDesc(DXGI_FORMAT_R32G32_FLOAT, 16, 16));
+    m.scratch = Create(whose + " 960x540 scratch", 0.0f, TextureDesc(DXGI_FORMAT_R8G8B8A8_UNORM, 960, 540));
+    m.modelBuffer = Create(whose + " model buffer", 0.0f, BufferDesc(113907200));
+    m.viewed = Make(whose + " viewed buffer", 2.0f);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav {};
+    Scan::NoteUav(m.viewed, &uav);
+    return m;
+}
+
+// Inside the scope nothing is examined, reported, referenced or copied; the same shapes outside it are the game's.
+void Internal()
+{
+    Begin();
+    Made ours;
+    Resource* late = nullptr;
+    {
+        ScopedInternalResourceCreation pass {};
+        Expect(ScopedInternalResourceCreation::Active(), "the scope is open on the thread that opened it");
+        ours = MakeAll("ours:");
+        {
+            // A helper with a scope of its own, inside the pass's.
+            ScopedInternalResourceCreation helper {};
+            Create("ours: nested", 1.0f);
+        }
+        Expect(ScopedInternalResourceCreation::Active(), "a nested scope closing leaves the outer one open");
+        late = Create("ours: after the nested scope", 1.0f);
+    }
+    Expect(!ScopedInternalResourceCreation::Active(), "the scope closes with its block");
+
+    Expect(Scan::Examined() == 0,
+           "nothing created inside the scope is examined (" + std::to_string(Scan::Examined()) + ")");
+    Expect(Logged("near-miss") == 0, "nor reported as a near-miss");
+    Expect(Logged("exposure scan: candidate") == 0, "nor announced as a candidate");
+    Expect(ours.Held() == 0 && late->ScanRefs() == 0, "nor referenced");
+    for (int f = 0; f < 10; ++f)
+        Frame();
+    Expect(g_copiesRecorded == 0, "nor copied (" + std::to_string(g_copiesRecorded) + ")");
+    Expect(Best().value == 0.0f, "nor offered as the exposure");
+
+    // The scope is the only difference: the same shapes created after it are taken and reported as before.
+    const Made game = MakeAll("game:");
+    Expect(Scan::Examined() == kMadeNotes,
+           "outside the scope every creation and view is examined (" + std::to_string(Scan::Examined()) + ")");
+    Expect(game.Held() == kMadeNumbers,
+           "and the ones shaped like a number are held (" + std::to_string(game.Held()) + ")");
+    Expect(game.scratch->ScanRefs() == 0 && game.modelBuffer->ScanRefs() == 0, "a picture and a large buffer are not");
+    Expect(Logged("near-miss") == kMadeNearMisses,
+           "and are the near-misses (" + std::to_string(Logged("near-miss")) + ")");
+    Expect(ours.Held() == 0, "what was made inside the scope stays untouched");
+}
+
+// The scope is the creating thread's alone. The pass holds it for a whole Dispatch and the frame-generation presenter
+// on its own threads, while the game goes on creating on others.
+void InternalThreads()
+{
+    Begin();
+
+    // This thread inside its scope: another thread's creation is still the game's.
+    {
+        ScopedInternalResourceCreation pass {};
+        Resource* game = nullptr;
+        bool openThere = true;
+        std::thread other(
+            [&]
+            {
+                openThere = ScopedInternalResourceCreation::Active();
+                game = Create("game: on its own thread", 1.0f);
+            });
+        other.join();
+        Expect(!openThere, "a thread is not inside another thread's scope");
+        Expect(game != nullptr && game->ScanRefs() == 1, "what the game creates on another thread meanwhile is held");
+        Expect(Create("ours: on the scoped thread", 1.0f)->ScanRefs() == 0, "what this thread creates is not");
+    }
+
+    // Another thread inside its scope, and still inside it: this thread's creation is the game's.
+    {
+        std::promise<void> opened, release;
+        bool openThere = false;
+        std::thread holder(
+            [&]
+            {
+                ScopedInternalResourceCreation presenter {};
+                openThere = ScopedInternalResourceCreation::Active();
+                opened.set_value();
+                release.get_future().wait();
+            });
+        opened.get_future().wait();
+        Expect(!ScopedInternalResourceCreation::Active(), "a scope open on another thread is not open here");
+        Resource* game = Create("game: while another thread is scoped", 1.0f);
+        release.set_value();
+        holder.join();
+        Expect(openThere, "the holder was inside its scope");
+        Expect(game->ScanRefs() == 1, "a scope open on another thread hides nothing created on this one");
+    }
+
+    Expect(Scan::Examined() == 2, "two examined, both the game's (" + std::to_string(Scan::Examined()) + ")");
+}
+
 // ---- [DlssNr] ScanMatch (docs/dlssnr/design/exposure-scan-match.md)
 // --------------------------------------------------
 //
@@ -1331,6 +1490,8 @@ int main(int argc, char** argv)
         { "inert-off", [] { Inert("off"); } },
         { "inert-unwanted", [] { Inert("unwanted"); } },
         { "untracked", [] { Inert("untracked"); } },
+        { "internal", Internal },
+        { "internal-threads", InternalThreads },
         { "match-off", MatchOff },
         { "match-on", MatchOn },
         { "match-eased", MatchEased },
