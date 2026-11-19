@@ -179,6 +179,9 @@ struct OptionalFloat
 struct Config
 {
     OptionalBool DlssNrShowAllSettings;
+    OptionalBool DlssNrApplyModel, DlssNrHoldFrame, DlssNrCompareSwap, DlssNrCompareTags;
+    OptionalU32 DlssNrCompare { 0 };
+    OptionalFloat DlssNrTagScale, DlssNrCompareZoom, DlssNrCompareSplit;
     OptionalFloat DlssNrTransferStrength;
     OptionalFloat DlssNrMinRatio;
     OptionalFloat DlssNrColourStrength;
@@ -268,10 +271,19 @@ const char* CadenceStatus() { return DlssNr::Cadence::Describe(DlssNr::Cadence::
 
 namespace DlssNr::MenuLayout
 {
-const char* FieldLabel(const char* label) { return label; }
+const char* FieldLabel(const char* label, bool = false) { return label; }
 } // namespace DlssNr::MenuLayout
 
 namespace DlssNr::MenuLayout
 {
-inline bool Checkbox(const char* label, bool* value) { return ImGui::Checkbox(label, value); }
+inline bool Checkbox(const char* label, bool* value, const char* = nullptr) { return ImGui::Checkbox(label, value); }
+} // namespace DlssNr::MenuLayout
+
+namespace DlssNr::MenuLayout
+{
+struct AttributeRow
+{
+    explicit AttributeRow(const char*) {}
+    void Value() {}
+};
 } // namespace DlssNr::MenuLayout

@@ -702,6 +702,110 @@ static void RenderGpuTiming(Config* config, bool nativeVulkan)
     RenderGpuTimingReadout();
 }
 
+static void RenderComparison(Config* config, bool nativeVulkan)
+{
+    ImGui::SeparatorText(Localization::Tr("Compare"));
+    bool applyModel = config->DlssNrApplyModel.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Apply the model"), &applyModel))
+        config->DlssNrApplyModel = applyModel;
+
+    HelpMarker("Whether the model's edit is applied. Off shows the clean upscaler frame while the"
+               "\npass keeps running -- so with Hold frame (under Compare) you can freeze a"
+               "\nframe and toggle this to see the same frozen frame with and without Neural"
+               "\nRendering. Leave it on for normal use.");
+
+    // Freeze the frame the model works on, so a setting change re-renders it in place -- the only
+    // clean way to A/B our own settings (a moving scene confounds every other comparison). See
+    // docs/dlssnr/design/frame-hold.md.
+    bool held = config->DlssNrHoldFrame.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Hold frame"), &held))
+        config->DlssNrHoldFrame = held;
+
+    HelpMarker("Freezes the frame the model works on. While held, change paper white, the"
+               "\nstrengths, the reversible mode, the model preset -- anything below the"
+               "\nupscaler -- and only that setting moves; the scene does not."
+               "\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream"
+               "\n(the upscaler is not re-run on a held frame), and the game's own HUD and"
+               "\npost-processing, which run after this pass and keep updating. The white"
+               "\npoint stops being measured and holds its value while frozen, so it cannot"
+               "\ndrift and confound the comparison."
+               "\n\nHide the menu and it stays held. Untoggle to resume.");
+
+    static const char* compareNames[] = { Localization::Label("Off"), Localization::Label("Side by side"),
+                                          Localization::Label("Wipe") };
+    int compare = (int) config->DlssNrCompare.value_or_default();
+    if (ImGui::Combo(MenuLayout::FieldLabel(Localization::Label("Compare")), &compare, compareNames,
+                     IM_ARRAYSIZE(compareNames)))
+        config->DlssNrCompare = (uint32_t) compare;
+
+    HelpMarker("Shows the pass against itself, so the two can be seen at once rather than"
+               "\ntoggled and remembered."
+               "\n\nSide by side puts the whole frame in each half, untouched on the left and"
+               "\nedited on the right. Both halves are squeezed horizontally to fit, so it is"
+               "\nfor looking at rather than playing in."
+               "\n\nWipe cuts a single frame at the split and resamples nothing, so the picture"
+               "\nis the right shape and can be played normally. Drag the split below; it is a"
+               "\nstored setting and stays put once the menu is closed."
+               "\n\nNeither needs the menu open to keep working. A hairline marks the join.");
+
+    if (compare != 0)
+    {
+        bool swap = config->DlssNrCompareSwap.value_or_default();
+        if (MenuLayout::Checkbox(Localization::Label("Swap sides"), &swap))
+            config->DlssNrCompareSwap = swap;
+
+        bool tags = config->DlssNrCompareTags.value_or_default();
+        if (MenuLayout::Checkbox(Localization::Label("Label the sides"), &tags))
+            config->DlssNrCompareTags = tags;
+
+        HelpMarker("Writes which side is which onto the frame itself, so a screenshot still"
+                   "\nsays so after it has left this machine. Drawn into the picture's own"
+                   "\nplane: in the wipe the split reveals and hides the label exactly as it"
+                   "\ndoes the images, and there is nothing to drag. Swap sides moves the"
+                   "\nlabels with their pictures.");
+
+        if (tags)
+        {
+            float tagScale = config->DlssNrTagScale.value_or_default();
+            if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Label size")), &tagScale, 0.5f, 5.0f,
+                                   "%.1fx"))
+                config->DlssNrTagScale = std::clamp(tagScale, 0.5f, 5.0f);
+        }
+
+        HelpMarker("Puts the edited frame on the other side."
+                   "\n\nWorth doing once you have decided which you prefer: the eye is not"
+                   "\neven-handed about left and right, and a difference can read as an"
+                   "\nimprovement purely from where it sits. If the same side still wins after"
+                   "\nswapping, it is the pass you are seeing and not the placement.");
+    }
+
+    if (compare == 1)
+    {
+        float zoom = config->DlssNrCompareZoom.value_or_default();
+        if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Zoom")), &zoom, 1.0f, 2.0f, "%.2f"))
+            config->DlssNrCompareZoom = std::clamp(zoom, 1.0f, 2.0f);
+
+        HelpMarker("How much of the frame each half shows."
+                   "\n\nA half is half as wide as the frame and just as tall, so the frame"
+                   "\ncannot fill it and keep its shape."
+                   "\n\nAt 1 the whole frame is there at its right proportions, with bars above"
+                   "\nand below. At 2 the half is filled and the sides are cropped away"
+                   "\ninstead. Anything between trades one for the other.");
+    }
+
+    if (compare == 2)
+    {
+        float split = config->DlssNrCompareSplit.value_or_default();
+        if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Split")), &split, 0.0f, 1.0f, "%.2f"))
+            config->DlssNrCompareSplit = std::clamp(split, 0.0f, 1.0f);
+
+        HelpMarker("Where the wipe cuts. Left of it is the frame as the upscaler produced it,"
+                   "\nright of it is the frame the model edited.");
+    }
+
+    RenderPairCapture(config, nativeVulkan);
+}
+
 void AdvisorMenuTick(Config* config, bool visible)
 {
     if (!AdvisorRuntime::Active())
@@ -941,7 +1045,7 @@ static bool DeferredSlider(const char* label, float* current, float mn, float mx
     float value = it != pending.end() ? it->second : *current;
     bool changed = false;
 
-    if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label(label)), &value, mn, mx, fmt))
+    if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label(label), !showReset), &value, mn, mx, fmt))
         pending[id] = value;
 
     if (ImGui::IsItemDeactivatedAfterEdit())
@@ -978,8 +1082,11 @@ static bool DeferredSlider(const char* label, float* current, float mn, float mx
 static bool PassFloat(const char* label, std::optional<float>& field, float master, float minimum)
 {
     ImGui::PushID(label);
+    MenuLayout::AttributeRow row(Localization::Tr(label));
     bool overrideValue = field.has_value();
-    bool changed = MenuLayout::Checkbox(Localization::Label("Override###override"), &overrideValue);
+    bool changed = MenuLayout::Checkbox(Localization::Label("Override###override"), &overrideValue,
+                                        Localization::Tr(overrideValue ? "Explicit" : "Inherited"));
+    row.Value();
     if (changed)
         field = overrideValue ? std::optional<float>(master) : std::nullopt;
     if (field)
@@ -992,7 +1099,7 @@ static bool PassFloat(const char* label, std::optional<float>& field, float mast
         }
     }
     else
-        ImGui::Text(Localization::Tr("%s: inherit %.2f"), Localization::Tr(label), master);
+        ImGui::Text("%.2f", master);
     ImGui::PopID();
     return changed;
 }
@@ -1001,22 +1108,24 @@ static bool PassChoice(const char* label, std::optional<uint32_t>& field, uint32
                        int count)
 {
     ImGui::PushID(label);
+    MenuLayout::AttributeRow row(Localization::Tr(label));
     bool overrideValue = field.has_value();
-    bool changed = MenuLayout::Checkbox(Localization::Label("Override###override"), &overrideValue);
+    bool changed = MenuLayout::Checkbox(Localization::Label("Override###override"), &overrideValue,
+                                        Localization::Tr(overrideValue ? "Explicit" : "Inherited"));
+    row.Value();
     if (changed)
         field = overrideValue ? std::optional<uint32_t>(master) : std::nullopt;
     if (field)
     {
         int value = static_cast<int>(*field);
-        if (ImGui::Combo(MenuLayout::FieldLabel(label), &value, names, count))
+        if (ImGui::Combo(MenuLayout::FieldLabel(label, true), &value, names, count))
         {
             field = static_cast<uint32_t>(value);
             changed = true;
         }
     }
     else
-        ImGui::Text(Localization::Tr("%s: inherit %s"), Localization::Tr(label),
-                    names[std::min(master, uint32_t(count - 1))]);
+        ImGui::TextWrapped("%s", names[std::min(master, uint32_t(count - 1))]);
     ImGui::PopID();
     return changed;
 }
@@ -1080,7 +1189,8 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
     auto sparse = config->GetDlssNrPassOverrides(pass);
     const auto master = config->GetDlssNrMasterSettings();
     ImGui::PushID(selected);
-    ImGui::TextUnformatted(Localization::Tr("Uncheck Override to inherit the live master value."));
+    ImGui::TextUnformatted(
+        Localization::Tr("Check a field to set it for this pass; uncheck it to inherit the master value."));
     bool changed = false;
     changed |= PassFloat("Intensity", sparse.Intensity, master.Intensity, 0.0f);
     changed |= PassFloat("Local structure", sparse.LocalStructure, master.LocalStructure, 0.0f);
@@ -1097,25 +1207,31 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
     if (DlssNr::ModelLog::ConfigCount() != 1)
         changed |= PassChoice("Model preset", sparse.Preset, master.Preset, presets, IM_ARRAYSIZE(presets));
     changed |= PassChoice("Style", sparse.Style, master.Style, styles, IM_ARRAYSIZE(styles));
-    ImGui::PushID("autoMask");
-    bool maskOverride = sparse.AutoMask.has_value();
-    if (MenuLayout::Checkbox(Localization::Label("Override auto skin mask###nrMaskOverride"), &maskOverride))
     {
-        sparse.AutoMask = maskOverride ? std::optional<bool>(master.AutoMask) : std::nullopt;
-        changed = true;
-    }
-    if (sparse.AutoMask)
-    {
-        bool mask = *sparse.AutoMask;
-        if (MenuLayout::Checkbox(Localization::Label("Auto skin mask###nrPassMask"), &mask))
+        ImGui::PushID("autoMask");
+        MenuLayout::AttributeRow row(Localization::Tr("Auto skin mask"));
+        bool maskOverride = sparse.AutoMask.has_value();
+        if (MenuLayout::Checkbox(Localization::Label("Override auto skin mask###nrMaskOverride"), &maskOverride,
+                                 Localization::Tr(maskOverride ? "Explicit" : "Inherited")))
         {
-            sparse.AutoMask = mask;
+            sparse.AutoMask = maskOverride ? std::optional<bool>(master.AutoMask) : std::nullopt;
             changed = true;
         }
+        row.Value();
+        if (sparse.AutoMask)
+        {
+            bool mask = *sparse.AutoMask;
+            if (MenuLayout::Checkbox(Localization::Label("Auto skin mask###nrPassMask"), &mask,
+                                     Localization::Tr(mask ? "on" : "off")))
+            {
+                sparse.AutoMask = mask;
+                changed = true;
+            }
+        }
+        else
+            ImGui::TextUnformatted(Localization::Tr(master.AutoMask ? "on" : "off"));
+        ImGui::PopID();
     }
-    else
-        ImGui::Text(Localization::Tr("Auto skin mask: inherit %s"), Localization::Tr(master.AutoMask ? "on" : "off"));
-    ImGui::PopID();
     if (sparse != DlssNrPassSettings {} &&
         ImGui::SmallButton(Localization::Label("Inherit all master settings###nrClearPass")))
     {
@@ -1325,7 +1441,7 @@ static void RenderLooks(Config* config)
                "\nWith individual pass settings on, a pass's own overrides still win for that pass.");
 }
 
-// Returns true when the simple view consumed the panel; full view continues at Source below.
+// Returns true when the simple view consumed the panel; full view continues at Processing route below.
 static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResScale)
 {
     bool showAll = config->DlssNrShowAllSettings.value_or_default();
@@ -1341,7 +1457,7 @@ static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResSca
     RenderDetailStrength(config);
     ImGui::PopItemWidth();
     ImGui::Spacing();
-    RenderPairCapture(config, nativeVulkan);
+    RenderComparison(config, nativeVulkan);
     ImGui::Spacing();
     if (MenuLayout::Checkbox(Localization::Label("Show all settings"), &showAll))
         config->DlssNrShowAllSettings = showAll;
@@ -1438,15 +1554,6 @@ void RenderMenu(Config* config, float menuResScale)
                 enabled = true;
             }
         }
-
-        bool applyModel = config->DlssNrApplyModel.value_or_default();
-        if (MenuLayout::Checkbox(Localization::Label("Apply the model"), &applyModel))
-            config->DlssNrApplyModel = applyModel;
-
-        HelpMarker("Whether the model's edit is applied. Off shows the clean upscaler frame while the"
-                   "\npass keeps running -- so with Hold frame (under Compare) you can freeze a"
-                   "\nframe and toggle this to see the same frozen frame with and without Neural"
-                   "\nRendering. Leave it on for normal use.");
 
         // Either backend. The two keep separate state, and on a native Vulkan game the D3D12 side
         // is never touched -- so asking only that one reports "waiting for the upscaler" over a pass
@@ -1574,6 +1681,8 @@ void RenderMenu(Config* config, float menuResScale)
         if (RenderSimpleView(config, nativeVulkan, menuResScale))
             return;
 
+        RenderComparison(config, nativeVulkan);
+
         // The toggle can be bound to a key, and nobody would think to look for it under Keybinds
         // unless told. Dimmed, because it is a note rather than a setting.
         ImGui::TextDisabled(
@@ -1585,7 +1694,7 @@ void RenderMenu(Config* config, float menuResScale)
             return;
 
         ImGui::Spacing();
-        ImGui::SeparatorText(Localization::Tr("Source"));
+        ImGui::SeparatorText(Localization::Tr("Processing route"));
 
         {
             const bool vkOnly = DlssNr::IsRunningVk();
@@ -2082,7 +2191,70 @@ void RenderMenu(Config* config, float menuResScale)
             }
         }
 
-        ImGui::SeparatorText(Localization::Tr("How much of it lands"));
+        ImGui::SeparatorText(Localization::Tr("Model appearance"));
+
+        ImGui::TextWrapped(
+            "%s", Localization::Tr("Look sets a group of appearance values. Custom means you changed that recipe."));
+        RenderLooks(config);
+        ImGui::TextWrapped("%s",
+                           Localization::Tr("Model preset chooses the weight set. Style chooses the model variant."));
+        RenderModelPreset(config);
+
+        auto master = config->GetDlssNrMasterSettings();
+
+        static const char* nrStyleNames[] = { Localization::Label("Model A (Default)"),
+                                              Localization::Label("Model B (Natural)"),
+                                              Localization::Label("Model C (Cinematic)") };
+        int style = (int) master.Style;
+
+        if (style > 2)
+            style = 2;
+
+        if (ImGui::Combo(MenuLayout::FieldLabel(Localization::Label("Style")), &style, nrStyleNames,
+                         IM_ARRAYSIZE(nrStyleNames)))
+            config->SetDlssNrMasterSetting(&Config::DlssNrStyle, (uint32_t) style);
+
+        HelpMarker("Neural Rendering Model selection (DLSSNR.Style):"
+                   "\n\nModel A (Default): standard reference neural model with default local tone and structure."
+                   "\n\nModel B (Natural): subtle contrast (-0.25) and saturation (-0.10) compensation. Preserves "
+                   "natural skin tones and softens harsh highlights."
+                   "\n\nModel C (Cinematic): gentle saturation adjustment (-0.15) for filmic presentation."
+                   "\n\nTuning changes apply instantly on the live frame with seamless temporal reset.");
+
+        ImGui::TextWrapped("%s", Localization::Tr("Intensity is the strength requested inside the model."));
+        if (DeferredSlider("Intensity", &master.Intensity, 0.0f, 2.0f, 1.0f))
+            config->SetDlssNrMasterSetting(&Config::DlssNrIntensity, master.Intensity);
+
+        HelpMarker("The model's own strength control, applied inside it. Distinct from detail"
+                   "\nstrength above, which scales the result afterwards.");
+
+        if (DeferredSlider("Local structure", &master.LocalStructure, 0.0f, 2.0f, 1.0f))
+            config->SetDlssNrMasterSetting(&Config::DlssNrLocalStructure, master.LocalStructure);
+
+        if (DeferredSlider("Local tone", &master.LocalTone, 0.0f, 2.0f, 1.0f))
+            config->SetDlssNrMasterSetting(&Config::DlssNrLocalTone, master.LocalTone);
+
+        bool autoMask = master.AutoMask;
+        if (MenuLayout::Checkbox(Localization::Label("Auto skin mask"), &autoMask))
+            config->SetDlssNrMasterSetting(&Config::DlssNrAutoMask, autoMask);
+
+        HelpMarker("Lets the model find skin itself rather than treating the frame uniformly.");
+
+        // With the mask off the model sets its effective skin strength to -1 whatever it is given
+        // (310.8, read in its own parameter handling), so the slider would edit nothing. Above the
+        // slider now, since the slider depends on it.
+        ImGui::BeginDisabled(!autoMask);
+        if (DeferredSlider("Skin structure", &master.SkinStructure, -1.0f, 2.0f, -1.0f))
+            config->SetDlssNrMasterSetting(&Config::DlssNrSkinStructure, master.SkinStructure);
+        ImGui::EndDisabled();
+
+        HelpMarker("-1 means follow local structure, and is the model's own default -- it is not a"
+                   "\nstrength of zero. 0 and above set skin independently of the rest of the frame."
+                   "\n\nRead only with the auto skin mask on; with it off the model ignores this.");
+
+        ImGui::SeparatorText(Localization::Tr("Result strength"));
+        ImGui::TextWrapped("%s", Localization::Tr("Detail strength blends the result: 0 is the original frame, 1 is "
+                                                  "the model answer. Colour strength adjusts colour transfer."));
 
         RenderDetailStrength(config);
 
@@ -2165,62 +2337,6 @@ void RenderMenu(Config* config, float menuResScale)
                    "\nstable. If you love the Replace look but the flicker bothers you, use this."
                    "\n\nOff is byte-identical to before.");
 
-        ImGui::SeparatorText(Localization::Tr("Model"));
-
-        RenderModelPreset(config);
-        RenderLooks(config);
-
-        auto master = config->GetDlssNrMasterSettings();
-
-        static const char* nrStyleNames[] = { Localization::Label("Model A (Default)"),
-                                              Localization::Label("Model B (Natural)"),
-                                              Localization::Label("Model C (Cinematic)") };
-        int style = (int) master.Style;
-
-        if (style > 2)
-            style = 2;
-
-        if (ImGui::Combo(MenuLayout::FieldLabel(Localization::Label("Style")), &style, nrStyleNames,
-                         IM_ARRAYSIZE(nrStyleNames)))
-            config->SetDlssNrMasterSetting(&Config::DlssNrStyle, (uint32_t) style);
-
-        HelpMarker("Neural Rendering Model selection (DLSSNR.Style):"
-                   "\n\nModel A (Default): standard reference neural model with default local tone and structure."
-                   "\n\nModel B (Natural): subtle contrast (-0.25) and saturation (-0.10) compensation. Preserves "
-                   "natural skin tones and softens harsh highlights."
-                   "\n\nModel C (Cinematic): gentle saturation adjustment (-0.15) for filmic presentation."
-                   "\n\nTuning changes apply instantly on the live frame with seamless temporal reset.");
-
-        if (DeferredSlider("Intensity", &master.Intensity, 0.0f, 2.0f, 1.0f))
-            config->SetDlssNrMasterSetting(&Config::DlssNrIntensity, master.Intensity);
-
-        HelpMarker("The model's own strength control, applied inside it. Distinct from detail"
-                   "\nstrength above, which scales the result afterwards.");
-
-        if (DeferredSlider("Local structure", &master.LocalStructure, 0.0f, 2.0f, 1.0f))
-            config->SetDlssNrMasterSetting(&Config::DlssNrLocalStructure, master.LocalStructure);
-
-        if (DeferredSlider("Local tone", &master.LocalTone, 0.0f, 2.0f, 1.0f))
-            config->SetDlssNrMasterSetting(&Config::DlssNrLocalTone, master.LocalTone);
-
-        bool autoMask = master.AutoMask;
-        if (MenuLayout::Checkbox(Localization::Label("Auto skin mask"), &autoMask))
-            config->SetDlssNrMasterSetting(&Config::DlssNrAutoMask, autoMask);
-
-        HelpMarker("Lets the model find skin itself rather than treating the frame uniformly.");
-
-        // With the mask off the model sets its effective skin strength to -1 whatever it is given
-        // (310.8, read in its own parameter handling), so the slider would edit nothing. Above the
-        // slider now, since the slider depends on it.
-        ImGui::BeginDisabled(!autoMask);
-        if (DeferredSlider("Skin structure", &master.SkinStructure, -1.0f, 2.0f, -1.0f))
-            config->SetDlssNrMasterSetting(&Config::DlssNrSkinStructure, master.SkinStructure);
-        ImGui::EndDisabled();
-
-        HelpMarker("-1 means follow local structure, and is the model's own default -- it is not a"
-                   "\nstrength of zero. 0 and above set skin independently of the rest of the frame."
-                   "\n\nRead only with the auto skin mask on; with it off the model ignores this.");
-
         RenderPassControls(config, nativeVulkan);
         RenderGpuTiming(config, nativeVulkan);
 
@@ -2258,7 +2374,7 @@ void RenderMenu(Config* config, float menuResScale)
 
         RenderCadenceControls(config, nativeVulkan);
 
-        ImGui::SeparatorText(Localization::Tr("Colour"));
+        ImGui::SeparatorText(Localization::Tr("Brightness and exposure"));
 
         if (RenderPresentHdr(config))
         {
@@ -2556,9 +2672,9 @@ void RenderMenu(Config* config, float menuResScale)
                     float trim = ofScan ? config->DlssNrScanTrim.value_or_default()
                                         : config->DlssNrWhitePointTrim.value_or_default();
 
-                    if (ImGui::SliderFloat(
-                            Localization::Label(ofScan ? "Trim (x the scan)" : "Trim (x the game's exposure)"), &trim,
-                            0.01f, 4.0f, "%.2fx", ImGuiSliderFlags_Logarithmic))
+                    if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label(
+                                               ofScan ? "Trim (x the scan)" : "Trim (x the game's exposure)")),
+                                           &trim, 0.01f, 4.0f, "%.2fx", ImGuiSliderFlags_Logarithmic))
                     {
                         if (ofScan)
                             config->DlssNrScanTrim = std::clamp(trim, 0.01f, 4.0f);
@@ -2925,27 +3041,8 @@ void RenderMenu(Config* config, float menuResScale)
             }
         }
 
-        ImGui::SeparatorText(Localization::Tr("Compare"));
+        ImGui::SeparatorText(Localization::Tr("Measurements and diagnostics"));
 
-        // Freeze the frame the model works on, so a setting change re-renders it in place -- the only
-        // clean way to A/B our own settings (a moving scene confounds every other comparison). See
-        // docs/dlssnr/design/frame-hold.md.
-        bool held = config->DlssNrHoldFrame.value_or_default();
-        if (MenuLayout::Checkbox(Localization::Label("Hold frame"), &held))
-            config->DlssNrHoldFrame = held;
-
-        HelpMarker("Freezes the frame the model works on. While held, change paper white, the"
-                   "\nstrengths, the reversible mode, the model preset -- anything below the"
-                   "\nupscaler -- and only that setting moves; the scene does not."
-                   "\n\nWhat it CANNOT show: DLSS/FSR/XeSS upscaler presets or anything upstream"
-                   "\n(the upscaler is not re-run on a held frame), and the game's own HUD and"
-                   "\npost-processing, which run after this pass and keep updating. The white"
-                   "\npoint stops being measured and holds its value while frozen, so it cannot"
-                   "\ndrift and confound the comparison."
-                   "\n\nHide the menu and it stays held. Untoggle to resume.");
-
-        // The comparison capture, beside Hold frame: the A/B tools frame-hold.md gathered here.
-        RenderPairCapture(config, nativeVulkan);
         RenderReplayRecorder(config, nativeVulkan);
 
         // "Measure detail" (D3D12 only, under Compare)
@@ -3028,78 +3125,6 @@ void RenderMenu(Config* config, float menuResScale)
                         ImGui::TextWrapped("%s", pStatus.words.c_str());
                 }
             }
-        }
-
-        static const char* compareNames[] = { Localization::Label("Off"), Localization::Label("Side by side"),
-                                              Localization::Label("Wipe") };
-        int compare = (int) config->DlssNrCompare.value_or_default();
-        if (ImGui::Combo(MenuLayout::FieldLabel(Localization::Label("Compare")), &compare, compareNames,
-                         IM_ARRAYSIZE(compareNames)))
-            config->DlssNrCompare = (uint32_t) compare;
-
-        HelpMarker("Shows the pass against itself, so the two can be seen at once rather than"
-                   "\ntoggled and remembered."
-                   "\n\nSide by side puts the whole frame in each half, untouched on the left and"
-                   "\nedited on the right. Both halves are squeezed horizontally to fit, so it is"
-                   "\nfor looking at rather than playing in."
-                   "\n\nWipe cuts a single frame at the split and resamples nothing, so the picture"
-                   "\nis the right shape and can be played normally. Drag the split below; it is a"
-                   "\nstored setting and stays put once the menu is closed."
-                   "\n\nNeither needs the menu open to keep working. A hairline marks the join.");
-
-        if (compare != 0)
-        {
-            bool swap = config->DlssNrCompareSwap.value_or_default();
-            if (MenuLayout::Checkbox(Localization::Label("Swap sides"), &swap))
-                config->DlssNrCompareSwap = swap;
-
-            bool tags = config->DlssNrCompareTags.value_or_default();
-            if (MenuLayout::Checkbox(Localization::Label("Label the sides"), &tags))
-                config->DlssNrCompareTags = tags;
-
-            HelpMarker("Writes which side is which onto the frame itself, so a screenshot still"
-                       "\nsays so after it has left this machine. Drawn into the picture's own"
-                       "\nplane: in the wipe the split reveals and hides the label exactly as it"
-                       "\ndoes the images, and there is nothing to drag. Swap sides moves the"
-                       "\nlabels with their pictures.");
-
-            if (tags)
-            {
-                float tagScale = config->DlssNrTagScale.value_or_default();
-                if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Label size")), &tagScale, 0.5f, 5.0f,
-                                       "%.1fx"))
-                    config->DlssNrTagScale = std::clamp(tagScale, 0.5f, 5.0f);
-            }
-
-            HelpMarker("Puts the edited frame on the other side."
-                       "\n\nWorth doing once you have decided which you prefer: the eye is not"
-                       "\neven-handed about left and right, and a difference can read as an"
-                       "\nimprovement purely from where it sits. If the same side still wins after"
-                       "\nswapping, it is the pass you are seeing and not the placement.");
-        }
-
-        if (compare == 1)
-        {
-            float zoom = config->DlssNrCompareZoom.value_or_default();
-            if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Zoom")), &zoom, 1.0f, 2.0f, "%.2f"))
-                config->DlssNrCompareZoom = std::clamp(zoom, 1.0f, 2.0f);
-
-            HelpMarker("How much of the frame each half shows."
-                       "\n\nA half is half as wide as the frame and just as tall, so the frame"
-                       "\ncannot fill it and keep its shape."
-                       "\n\nAt 1 the whole frame is there at its right proportions, with bars above"
-                       "\nand below. At 2 the half is filled and the sides are cropped away"
-                       "\ninstead. Anything between trades one for the other.");
-        }
-
-        if (compare == 2)
-        {
-            float split = config->DlssNrCompareSplit.value_or_default();
-            if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Split")), &split, 0.0f, 1.0f, "%.2f"))
-                config->DlssNrCompareSplit = std::clamp(split, 0.0f, 1.0f);
-
-            HelpMarker("Where the wipe cuts. Left of it is the frame as the upscaler produced it,"
-                       "\nright of it is the frame the model edited.");
         }
 
         // The last entry only while peripheral compression is switched on, on D3D12: without it there is no packed

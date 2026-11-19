@@ -693,3 +693,15 @@ Base	Base
 Share	Share
 Refused	Refused
 Second line: model / carried evaluations.	Second line: model / carried evaluations.
+Measurements and diagnostics	Measurements and diagnostics
+Model appearance	Model appearance
+Look sets a group of appearance values. Custom means you changed that recipe.	Look sets a group of appearance values. Custom means you changed that recipe.
+Model preset chooses the weight set. Style chooses the model variant.	Model preset chooses the weight set. Style chooses the model variant.
+Intensity is the strength requested inside the model.	Intensity is the strength requested inside the model.
+Result strength	Result strength
+Detail strength blends the result: 0 is the original frame, 1 is the model answer. Colour strength adjusts colour transfer.	Detail strength blends the result: 0 is the original frame, 1 is the model answer. Colour strength adjusts colour transfer.
+Inherited	Inherited
+Explicit	Explicit
+Check a field to set it for this pass; uncheck it to inherit the master value.	Check a field to set it for this pass; uncheck it to inherit the master value.
+Processing route	Processing route
+Brightness and exposure	Brightness and exposure

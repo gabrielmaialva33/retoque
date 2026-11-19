@@ -207,11 +207,27 @@ never a begin/end popup pair. Real ImGui assertions verify the original item ID 
 
 | State | Visible/reachable controls |
 |---|---|
-| Simple, normal | Enable, short status, Apply the model, Look, Detail strength, capture under section 2.3, Show all settings last |
+| Simple, normal | Enable, short status, Look, Detail strength, grouped comparison (Apply, Hold, Compare, capture under section 2.3), Show all settings last |
 | Simple, failure/guard/unsupported route | Same actionable notices and recovery gates as sections 2.2, 2.5, 2.6; never hide a refusal |
 | Full | All existing settings, diagnostics, profile, model statistics, rebuild notes and advisor |
 | Trial active | Advisor progress and cancellation remain reachable; other edits stay hidden as before |
 | View toggle clicked | Same ShowAllSettings key; next frame shows the chosen view; hidden saved values are untouched |
+
+### 2.9 Appearance, comparison and pass editor
+
+| State | Presentation and unchanged meaning |
+|---|---|
+| Full view | Comparison near the top, before Processing route; Model appearance adjacent to Result strength |
+| Model appearance | Look is a recipe; preset is a weight set; style is a model variant; intensity is internal model strength |
+| Result strength | Detail blends original/model output; colour controls colour transfer; values/ranges unchanged |
+| Per-pass inherited field | One attribute row: name, unchecked Inherited state, current master value |
+| Per-pass explicit field | Same row: name, checked Explicit state, editable value; clear state restores live inheritance |
+| One weight set / skin mask off | Preset remains absent / skin strength remains disabled, as before |
+| Compare off / side by side / wipe | No split or zoom / zoom only / split only; side options only when comparing |
+| Capture availability | Exactly section 2.3 in either view; capture is now after comparison choices |
+
+The pass editor keeps the existing selected-pass and field ID scopes; rows add no table/window scopes.
+Model setters, deferred release, sparse overrides and all range limits are unchanged.
 
 ## 3. Per-change-type review (run BEFORE deploy)
 

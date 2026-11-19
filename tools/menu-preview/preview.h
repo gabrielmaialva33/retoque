@@ -62,6 +62,11 @@ void Compare()
     c->DlssNrCompareTags = true;
     c->DlssNrCompareSplit = 0.45f;
 }
+void SimpleCompare()
+{
+    Compare();
+    Config::Instance()->DlssNrShowAllSettings = false;
+}
 void AdvisorEligible()
 {
     Full();
@@ -158,7 +163,9 @@ const Scene scenes[] = { { "nr-off", Off, false, 900 },
                          { "model-missing-pt-BR-narrow", Missing, true, 1100, 420 },
                          { "model-missing-narrow", Missing, false, 1100, 420 },
                          { "present-hdr-pt-BR-narrow", Hdr, true, 4200, 420 },
-                         { "native-vulkan-narrow", Vulkan, false, 4200, 480 } };
+                         { "native-vulkan-narrow", Vulkan, false, 4200, 480 },
+                         { "individual-passes-pt-BR-narrow", Passes, true, 4200, 420 },
+                         { "simple-comparison-pt-BR", SimpleCompare, true, 1400, 420 } };
 } // namespace Preview
 int main(int argc, char** argv)
 {

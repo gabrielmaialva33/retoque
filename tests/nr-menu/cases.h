@@ -282,7 +282,8 @@ int main()
     assert(view());
     assert(ImGui::Saw("Show all settings") && ImGui::Saw("Detail strength"));
     assert(!ImGui::Saw("Model preset") && !ImGui::Saw("Requested passes###nrPassCount"));
-    assert(DlssNr::pairCaptureCalls == 1 && simple.writes == 0 && ImGui::sections.empty());
+    assert(DlssNr::pairCaptureCalls == 1 && simple.writes == 0 &&
+           ImGui::sections == std::vector<std::string> { "Compare" });
     ImGui::Reset();
     ImGui::actions["Detail strength"] = 0.65;
     assert(view() && simple.DlssNrTransferStrength.value == 0.65f);
@@ -307,6 +308,22 @@ int main()
     ImGui::Reset();
     ImGui::actions["Reset##detail"] = true;
     assert(view() && simple.DlssNrTransferStrength.value == 1.0f);
+    simple.DlssNrUseProxy = false;
+    ImGui::Reset();
+    ImGui::actions["Apply the model"] = false;
+    ImGui::actions["Hold frame"] = true;
+    ImGui::actions["Compare"] = 2;
+    ImGui::actions["Split"] = 0.4;
+    assert(view() && !simple.DlssNrApplyModel.value && simple.DlssNrHoldFrame.value);
+    assert(simple.DlssNrCompare.value == 2 && simple.DlssNrCompareSplit.value == 0.4f);
+    assert(ImGui::Saw("Split") && !ImGui::Saw("Zoom"));
+    ImGui::Reset();
+    ImGui::actions["Compare"] = 1;
+    ImGui::actions["Zoom"] = 1.6;
+    assert(view() && simple.DlssNrCompareZoom.value == 1.6f && !ImGui::Saw("Split"));
+    ImGui::Reset();
+    ImGui::actions["Compare"] = 0;
+    assert(view() && !ImGui::Saw("Split") && !ImGui::Saw("Zoom"));
     // The look table itself: every value inside its control's range, every look distinct and found as itself.
     for (size_t i = 0; i < DlssNr::Looks::kLooks.size(); ++i)
     {

@@ -18,7 +18,7 @@ retry = menu[menu.index('if (!DlssNr::DriverGate::Refuses())'):menu.index('DlssN
 assert 'SameLine' not in retry, 'recovery action must have its own line'
 
 assert 'if (RenderSimpleView(config, nativeVulkan, menuResScale))' in menu
-assert menu.index('GameProfiles::Summary()') < menu.index('if (RenderSimpleView(') < menu.index('Localization::Tr("Source")')
+assert menu.index('GameProfiles::Summary()') < menu.index('if (RenderSimpleView(') < menu.index('Localization::Tr("Processing route")')
 assert re.search(r'if \(RenderSimpleView\(config, nativeVulkan, menuResScale\)\)\s*return;', menu)
 start = source.index('static bool DeferredSlider(')
 end = source.index('void RenderMenu(', start)
@@ -28,7 +28,8 @@ timing = source[source.index('static void RenderGpuTimingReadout('):source.index
 gpu = (root / 'retoque/dlssnr/DlssNr_GpuTiming.h').read_text()
 gpu = gpu[gpu.index('struct Metadata'):gpu.index('// Collection never waits')]
 gpu = 'namespace DlssNr::GpuTiming {\n' + gpu + '\nSnapshot snapshot; unsigned reads=0; Snapshot GetSnapshot() { ++reads; return snapshot; }\n}\n'
-actual = weight + timing + actual
+comparison = source[source.index('static void RenderComparison('):source.index('void AdvisorMenuTick(')]
+actual = weight + timing + comparison + actual
 # Both branches reuse a single implementation; simple does not copy the advanced control body.
 for helper in ('RenderDetailStrength(config);', 'RenderModelPreset(config);'):
     assert menu.count(helper) == 1
@@ -41,7 +42,9 @@ for field in ('Preset', 'Style', 'Intensity', 'LocalStructure', 'LocalTone', 'Sk
     assert f'config->SetDlssNrMasterSetting(&Config::DlssNr{field},' in source, field
 assert 'RetryAfterFailure' not in actual
 # The before/after capture the app's comparison asks for is in the simple view, not only behind Show all settings.
-assert source.count('RenderPairCapture(config, nativeVulkan);') >= 2
+assert source.count('RenderComparison(config, nativeVulkan);') == 2
+assert comparison.count('RenderPairCapture(config, nativeVulkan);') == 1
+assert menu.index('RenderComparison(config, nativeVulkan);') < menu.index('Localization::Tr("Processing route")')
 # Register the runtime translation units, once, in both project files.
 for name in ('OptiScaler.vcxproj', 'OptiScaler.vcxproj.filters'):
     tree = ET.parse(root / 'OptiScaler' / name)

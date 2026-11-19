@@ -690,3 +690,15 @@ Base	Base
 Share	Parte
 Refused	Recusado
 Second line: model / carried evaluations.	Segunda linha: avaliações do modelo / reaproveitadas.
+Measurements and diagnostics	Medições e diagnóstico
+Model appearance	Aparência do modelo
+Look sets a group of appearance values. Custom means you changed that recipe.	Visual define um conjunto de ajustes de aparência. Personalizado indica que você alterou essa combinação.
+Model preset chooses the weight set. Style chooses the model variant.	Perfil do modelo escolhe o conjunto de pesos. Estilo escolhe a variante do modelo.
+Intensity is the strength requested inside the model.	Intensidade é a força solicitada dentro do modelo.
+Result strength	Força do resultado
+Detail strength blends the result: 0 is the original frame, 1 is the model answer. Colour strength adjusts colour transfer.	Força dos detalhes mistura o resultado: 0 é o quadro original, 1 é a resposta do modelo. Força das cores ajusta a transferência de cor.
+Inherited	Herdado
+Explicit	Definido
+Check a field to set it for this pass; uncheck it to inherit the master value.	Marque um campo para definir seu valor neste passe; desmarque para herdar o ajuste geral.
+Processing route	Rota de processamento
+Brightness and exposure	Brilho e exposição
