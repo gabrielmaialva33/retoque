@@ -639,10 +639,13 @@ static void RenderGpuTimingReadout()
     ImGui::TextWrapped(
         Localization::Tr("Last confirmed sample: %.3f ms dispatch = %.3f ms model + %.3f ms outside model"),
         sample.totalMs, sample.modelMs, sample.otherMs);
-    ImGui::TextWrapped(Localization::Tr("Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u passes"),
-                       static_cast<unsigned long long>(sample.sampleId), sample.sampleAgeMs / 1000.0,
-                       sample.metadata.stage, sample.metadata.modelWidth, sample.metadata.modelHeight,
-                       sample.actualPasses);
+    ImGui::TextWrapped(
+        sample.actualPasses == 1
+            ? Localization::Tr("Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u pass")
+            : Localization::Tr("Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u passes"),
+        static_cast<unsigned long long>(sample.sampleId), sample.sampleAgeMs / 1000.0,
+        Localization::Tr(sample.metadata.stage), sample.metadata.modelWidth, sample.metadata.modelHeight,
+        sample.actualPasses);
     ImGui::TextWrapped(Localization::Tr("Sample contract %llu, evaluation %llu, run %llu; interval was %u evaluations"),
                        static_cast<unsigned long long>(sample.metadata.settingsGeneration),
                        static_cast<unsigned long long>(sample.metadata.evaluationId),
@@ -1154,7 +1157,10 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
     if (snapshot.Count > 1)
         ImGui::TextDisabled(Localization::Tr("Cost: %ux the model's GPU time and %u model instances in video memory."),
                             snapshot.Count, snapshot.Count);
-    ImGui::Text(Localization::Tr("Last evaluation: %u successful model passes"), DlssNr::ActivePassCount());
+    const auto completedPasses = DlssNr::ActivePassCount();
+    ImGui::Text(completedPasses == 1 ? Localization::Tr("Last evaluation: %u successful model pass")
+                                     : Localization::Tr("Last evaluation: %u successful model passes"),
+                completedPasses);
     ImGui::TextWrapped("%s", Localization::Tr(DlssNr::MultipassStatus()));
     HelpMarker("Each extra pass processes the previous answer and has its own model history. "
                "Every pass is a full model evaluation: the model's GPU time and video memory grow with the "
@@ -1685,8 +1691,7 @@ void RenderMenu(Config* config, float menuResScale)
 
         // The toggle can be bound to a key, and nobody would think to look for it under Keybinds
         // unless told. Dimmed, because it is a note rather than a setting.
-        ImGui::TextDisabled(
-            Localization::Tr("Can be toggled with a key -- bind it under Keybinds, \"Neural Rendering\"."));
+        ImGui::TextDisabled(Localization::Tr("A key can toggle NR; assign it in Keybinds."));
 
         RenderDiagnosticExport(config);
         RenderAdvisor(config, nativeVulkan);
@@ -2287,7 +2292,8 @@ void RenderMenu(Config* config, float menuResScale)
         {
             float residualLimit = DlssNr::ResidualLimitStops(config->DlssNrResidualLimit.value_or_default());
             if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Residual limit")), &residualLimit, 0.0f,
-                                   kDlssNrResidualLimitMax, residualLimit > 0.0f ? "%.2f stops" : "off"))
+                                   kDlssNrResidualLimitMax,
+                                   residualLimit > 0.0f ? Localization::Tr("%.2f stops") : Localization::Tr("Off")))
                 config->DlssNrResidualLimit = DlssNr::ResidualLimitStops(residualLimit);
 
             ImGui::SameLine();

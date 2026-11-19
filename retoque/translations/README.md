@@ -108,3 +108,35 @@ first parser; those English strings may simply be omitted from the pack.
 The optional-dictionary idea was inspired by Moeblack's localization work in
 [PR #26](https://github.com/Dagherbou/OptiScaler_DLSSNR/pull/26). The loader, validation and ID
 policy here are a separate implementation adapted to this repository's invariants.
+
+## NR wording glossary
+
+Use one term per quantity. The menu look pass used NeuRotic's three menu screenshots as visual
+references for grouping; it copied no code, strings, translation tables or assets. These terms
+name Retoque's existing controls and preserve their Config/ImGui identities.
+
+| English | Brazilian Portuguese | Meaning / unit |
+|---|---|---|
+| Neural Rendering / NR | renderização neural / NR | The feature; keep NVIDIA file names and API identifiers literal |
+| Look | Visual | Recipe for several appearance values; Custom / Personalizado when values differ |
+| Model preset | Perfil do modelo | Weight-set selection, distinct from a game's profile |
+| Style | Estilo | Model A/B/C variant |
+| Intensity | Intensidade do modelo | Strength requested inside the model; dimensionless |
+| Detail strength | Força dos detalhes | Blend toward the model result; 0 original, 1 model, above 1 extrapolates |
+| Colour strength | Força das cores | Colour transfer; dimensionless |
+| Result strength | Força do resultado | Group for the composition controls |
+| Pass / passes | passe / passes | One complete model evaluation; requested is distinct from completed |
+| Inherited / Explicit | Herdado / Definido | Live master value / sparse per-pass value; checkbox changes that state |
+| Present | Apresentação | Presentation route; literal API/function names remain technical identifiers |
+| Hold frame | Congelar quadro | Reuse the captured model input for comparison |
+| Compare | Comparar | Side-by-side or wipe display, distinct from capture |
+| Model cadence | Cadência do modelo | One model evaluation every N frames; not a count of passes |
+| GPU time / base frame time | tempo de GPU / tempo do quadro base | Milliseconds (ms); never frame-generation FPS |
+| Multiplier | multiplicador | `x`; paper white and brightness controls retain their existing meaning |
+| Exposure stop | EV | One step doubles/halves light; residual-limit display uses EV in pt-BR |
+
+Plural messages select singular only for exactly one, including confirmed timing samples.
+The shortcut hint refers to Atalhos without inventing a translated name for the upstream
+keybinding button, which still renders its original English name. New entries in the eight
+unreviewed packs use English placeholders where no reviewed translation exists, retaining the
+suite's equal-key-set contract; those placeholders are not claimed as native translations.

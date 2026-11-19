@@ -705,3 +705,11 @@ Explicit	Explicit
 Check a field to set it for this pass; uncheck it to inherit the master value.	Check a field to set it for this pass; uncheck it to inherit the master value.
 Processing route	Processing route
 Brightness and exposure	Brightness and exposure
+Last evaluation: %u successful model pass	Last evaluation: %u successful model pass
+Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u pass	Historical sample %llu, %.1f s since recording; %s, model %ux%u, %u pass
+A key can toggle NR; assign it in Keybinds.	A key can toggle NR; assign it in Keybinds.
+%.2f stops	%.2f stops
+after	after
+after-rr	after-rr
+before	before
+present	present

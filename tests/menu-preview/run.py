@@ -88,6 +88,14 @@ with tempfile.TemporaryDirectory(prefix='menu-preview-test-') as temporary:
             assert 'Requested passes' not in text and 'Passes solicitados' not in text
             assert 'Copy NR diagnostics' not in text and 'Copiar diagnóstico do NR' not in text
             assert 'NR cost advisor' not in text and 'Assistente de custo do NR' not in text
+        if state == 'd3d12-full':
+            assert 'Last evaluation: 1 successful model pass' in text
+            assert '1 successful model passes' not in text
+        if state == 'present-hdr-pt-BR':
+            assert '1 passe bem-sucedido' in text and '1 passes' not in text
+            assert 'Força dos detalhes' in text and 'Apresentação' in text
+        if state == 'individual-passes':
+            assert '3 successful model passes' in text
         if state == 'advisor-hidden-off':
             assert 'Assistente de custo do NR' not in text
         elif state in ADVISOR_HEIGHTS:

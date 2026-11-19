@@ -229,6 +229,15 @@ never a begin/end popup pair. Real ImGui assertions verify the original item ID 
 The pass editor keeps the existing selected-pass and field ID scopes; rows add no table/window scopes.
 Model setters, deferred release, sparse overrides and all range limits are unchanged.
 
+### 2.10 Words and units
+
+| Value/state | Display contract |
+|---|---|
+| Completed pass count or timing sample count = 1 | Singular pass / passe |
+| Count = 0 or greater than 1 | Plural passes / passes; no change to the numeric value |
+| Residual limit = 0 / greater than 0 | Localized Off / unchanged value in stops (EV in pt-BR) |
+| Preset, style, intensity, detail and colour | Terms follow the translations README glossary; IDs and Config values unchanged |
+
 ## 3. Per-change-type review (run BEFORE deploy)
 
 Match the change to its type and run that review — as an adversarial pass (a subagent given the diff
