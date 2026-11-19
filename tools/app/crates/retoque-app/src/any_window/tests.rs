@@ -3,7 +3,9 @@ use crate::{
     i18n::{Lang, t},
     theme,
 };
-use std::{io::Cursor, time::Duration};
+use std::io::Cursor;
+#[cfg(unix)]
+use std::time::Duration;
 
 fn settings() -> Settings {
     Settings {
@@ -270,7 +272,15 @@ fn model() -> retoque_data::models::Model {
         compatibility: Default::default(),
     }
 }
+#[cfg(feature = "visual-tests")]
 fn screen(lang: Lang, phase: Phase) -> egui_kittest::Harness<'static, Screen> {
+    screen_appearance(lang, phase, theme::Appearance::Dark)
+}
+fn screen_appearance(
+    lang: Lang,
+    phase: Phase,
+    appearance: theme::Appearance,
+) -> egui_kittest::Harness<'static, Screen> {
     let mut screen = Screen {
         available: true,
         draft: settings(),
@@ -299,10 +309,24 @@ fn screen(lang: Lang, phase: Phase) -> egui_kittest::Harness<'static, Screen> {
         }
     }
     egui_kittest::Harness::builder()
+        .with_theme(if appearance == theme::Appearance::Light {
+            egui::Theme::Light
+        } else {
+            egui::Theme::Dark
+        })
         .with_size(egui::vec2(1024., 900.))
         .build_ui_state(
             move |ui, state: &mut Screen| {
                 theme::apply(ui.ctx());
+                appearance.apply(ui.ctx());
+                assert_eq!(
+                    theme::palette(ui).BG,
+                    if appearance == theme::Appearance::Light {
+                        theme::LIGHT.BG
+                    } else {
+                        theme::DARK.BG
+                    }
+                );
                 egui::CentralPanel::default().show(ui, |ui| {
                     let _ = state.draw(ui, lang, &[model()], false);
                 });
@@ -314,34 +338,36 @@ fn screen(lang: Lang, phase: Phase) -> egui_kittest::Harness<'static, Screen> {
 #[test]
 fn screen_states_in_english_and_portuguese() {
     use egui_kittest::kittest::Queryable;
-    for lang in [Lang::En, Lang::Pt] {
-        for phase in [
-            Phase::Idle,
-            Phase::Catalog,
-            Phase::Starting,
-            Phase::Capturing,
-            Phase::Running,
-            Phase::Paused,
-            Phase::Stopping,
-            Phase::Stopped,
-            Phase::Failed,
-            Phase::RestartRequired,
-        ] {
-            let mut h = screen(lang, phase);
+    for appearance in [theme::Appearance::Dark, theme::Appearance::Light] {
+        for lang in [Lang::En, Lang::Pt] {
+            for phase in [
+                Phase::Idle,
+                Phase::Catalog,
+                Phase::Starting,
+                Phase::Capturing,
+                Phase::Running,
+                Phase::Paused,
+                Phase::Stopping,
+                Phase::Stopped,
+                Phase::Failed,
+                Phase::RestartRequired,
+            ] {
+                let mut h = screen_appearance(lang, phase, appearance);
+                h.run_steps(4);
+                h.get_by_label(t(lang, "any.title"));
+                assert!(h.get_all_by_label(t(lang, phase.key())).next().is_some());
+            }
+            let mut h = screen_appearance(lang, Phase::Idle, appearance);
             h.run_steps(4);
-            h.get_by_label(t(lang, "any.title"));
-            assert!(h.get_all_by_label(t(lang, phase.key())).next().is_some());
+            h.get_by_label(t(lang, "any.start_review")).click();
+            h.run_steps(4);
+            assert!(h.state().review.is_some());
+            h.get_by_label(t(lang, "any.review_body"));
+            // Exercise the controller helpers in the portable harness too.
+            h.state_mut().stop();
+            h.state_mut().poll();
+            assert!(h.state().open);
         }
-        let mut h = screen(lang, Phase::Idle);
-        h.run_steps(4);
-        h.get_by_label(t(lang, "any.start_review")).click();
-        h.run_steps(4);
-        assert!(h.state().review.is_some());
-        h.get_by_label(t(lang, "any.review_body"));
-        // Exercise the controller helpers in the portable harness too.
-        h.state_mut().stop();
-        h.state_mut().poll();
-        assert!(h.state().open);
     }
 }
 #[cfg(feature = "visual-tests")]

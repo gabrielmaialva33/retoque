@@ -211,7 +211,11 @@ impl RetoqueApp {
                 |ui| {
                     ui.label(RichText::new(format!("SHA-256: {}", record.sha256)).small().monospace());
                     if !record.ignored.is_empty() {
-                        ui.label(RichText::new(self.tr("sm86.ignored")).small().color(theme::MUTED));
+                        ui.label(
+                            RichText::new(self.tr("sm86.ignored"))
+                                .small()
+                                .color(theme::palette(ui).MUTED),
+                        );
                         for name in &record.ignored {
                             ui.label(RichText::new(name).small().monospace());
                         }

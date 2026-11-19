@@ -137,24 +137,19 @@ impl RetoqueApp {
         let lang = self.lang;
         let before = self.saved.install_defaults.clone();
         let mut close = false;
-        let scroll = cfg!(windows) || ctx.content_rect().height() < 680.0;
         let modal = egui::Modal::new(egui::Id::unique("preferences"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
                 // The dialog's own title sits above its section headers, as in "Retoque files".
                 ui.heading(t(lang, "prefs.title"));
                 ui.add_space(8.0);
 
-                if scroll {
-                    egui::ScrollArea::vertical()
-                        .id_salt("prefs_scroll")
-                        .auto_shrink([false, true])
-                        .max_height((ctx.content_rect().height() - 190.0).max(160.0))
-                        .show(ui, |ui| self.prefs_body(ui, lang));
-                } else {
-                    self.prefs_body(ui, lang);
-                }
+                egui::ScrollArea::vertical()
+                    .id_salt("prefs_scroll")
+                    .auto_shrink([false, true])
+                    .max_height((ctx.content_rect().height() - 190.0).max(160.0))
+                    .show(ui, |ui| self.prefs_body(ui, lang));
 
                 ui.add_space(12.0);
                 close = ui.button(t(lang, "close")).clicked();
@@ -177,7 +172,7 @@ impl RetoqueApp {
             egui::Label::new(
                 RichText::new(t(lang, "prefs.language_help"))
                     .small()
-                    .color(theme::MUTED),
+                    .color(theme::palette(ui).MUTED),
             )
             .wrap(),
         );
@@ -186,7 +181,7 @@ impl RetoqueApp {
                 egui::Label::new(
                     RichText::new(t(lang, "prefs.language_draft"))
                         .small()
-                        .color(theme::MUTED),
+                        .color(theme::palette(ui).MUTED),
                 )
                 .wrap(),
             );
@@ -195,11 +190,33 @@ impl RetoqueApp {
         if !missing.is_empty() {
             let names: Vec<&str> = missing.iter().map(|l| language_name(lang, *l)).collect();
             let note = t(lang, "prefs.language_no_font").replace("{languages}", &names.join(", "));
-            ui.add(egui::Label::new(RichText::new(note).small().color(theme::MUTED)).wrap());
+            ui.add(egui::Label::new(RichText::new(note).small().color(theme::palette(ui).MUTED)).wrap());
         }
 
+        ui.horizontal(|ui| {
+            let label = ui.label(t(lang, "prefs.appearance"));
+            let before = self.saved.appearance;
+            egui::ComboBox::from_id_salt("appearance")
+                .selected_text(t(lang, before.label()))
+                .show_ui(ui, |ui| {
+                    for choice in [
+                        theme::Appearance::System,
+                        theme::Appearance::Dark,
+                        theme::Appearance::Light,
+                    ] {
+                        ui.selectable_value(&mut self.saved.appearance, choice, t(lang, choice.label()));
+                    }
+                })
+                .response
+                .labelled_by(label.id);
+            if self.saved.appearance != before {
+                self.saved.appearance.apply(ui.ctx());
+                ui.ctx().request_repaint();
+            }
+        });
+
         widgets::section_header(ui, t(lang, "prefs.installs"));
-        ui.add(egui::Label::new(RichText::new(t(lang, "prefs.installs_help")).color(theme::MUTED)).wrap());
+        ui.add(egui::Label::new(RichText::new(t(lang, "prefs.installs_help")).color(theme::palette(ui).MUTED)).wrap());
         ui.add_space(4.0);
         let defaults = &mut self.saved.install_defaults;
         ui.checkbox(&mut defaults.enable_nr, t(lang, "inst.enable_nr"));
@@ -219,7 +236,11 @@ impl RetoqueApp {
                 .response
                 .labelled_by(label.id);
         });
-        ui.label(RichText::new(t(lang, "inst.proxy_help")).small().color(theme::MUTED));
+        ui.label(
+            RichText::new(t(lang, "inst.proxy_help"))
+                .small()
+                .color(theme::palette(ui).MUTED),
+        );
         ui.horizontal(|ui| {
             let label = ui.label(t(lang, "inst.menu_language"));
             let mut choices = vec![MenuLanguagePref::SameAsApp, MenuLanguagePref::English];
@@ -244,7 +265,7 @@ impl RetoqueApp {
             egui::Label::new(
                 RichText::new(t(lang, "prefs.menu_lang_help"))
                     .small()
-                    .color(theme::MUTED),
+                    .color(theme::palette(ui).MUTED),
             )
             .wrap(),
         );
@@ -266,7 +287,12 @@ impl RetoqueApp {
             }
         });
         if let Some(dir) = &dir {
-            ui.label(RichText::new(short_path(dir)).small().monospace().color(theme::MUTED));
+            ui.label(
+                RichText::new(short_path(dir))
+                    .small()
+                    .monospace()
+                    .color(theme::palette(ui).MUTED),
+            );
         }
         let cleaned = match self.prefs.cleaned {
             Some(c) if c.removed > 0 => t(lang, "prefs.cleaned")
@@ -274,7 +300,7 @@ impl RetoqueApp {
                 .replace("{size}", &size_text(lang, c.bytes)),
             _ => t(lang, "prefs.clean").to_owned(),
         };
-        ui.add(egui::Label::new(RichText::new(cleaned).small().color(theme::MUTED)).wrap());
+        ui.add(egui::Label::new(RichText::new(cleaned).small().color(theme::palette(ui).MUTED)).wrap());
     }
 
     /// Switch the app's language: the text changes on the next frame and the choice is saved.

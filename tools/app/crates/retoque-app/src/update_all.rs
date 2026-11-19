@@ -254,7 +254,7 @@ impl RetoqueApp {
         if ui
             .add_enabled(
                 self.writing.is_empty() && self.payload.is_some(),
-                theme::primary(self.tr("update_all.open")),
+                theme::primary(ui, self.tr("update_all.open")),
             )
             .clicked()
         {
@@ -399,7 +399,7 @@ impl RetoqueApp {
         let mut close = false;
         let busy = state.preparing || state.running;
         let response = egui::Modal::new(egui::Id::unique("update_all_review"))
-            .frame(widgets::modal_frame())
+            .frame(widgets::modal_frame(ctx))
             .show(ctx, |ui| {
                 ui.set_width(640.0_f32.min(ctx.content_rect().width() - 48.0));
                 ui.heading(t(lang, "update_all.title"));
@@ -434,14 +434,14 @@ impl RetoqueApp {
                                 ui.label(RichText::new(&row.name).strong());
                                 ui.label(format!("{} -> {}", row.current.label(lang), row.new.label(lang)));
                                 let (key, color) = match &row.result {
-                                    RowResult::Ready => ("update_all.ready", theme::TEXT),
-                                    RowResult::Updating => ("shell.progress_update", theme::MUTED),
-                                    RowResult::Updated => ("shell.updated_done", theme::GOOD),
+                                    RowResult::Ready => ("update_all.ready", theme::palette(ui).TEXT),
+                                    RowResult::Updating => ("shell.progress_update", theme::palette(ui).MUTED),
+                                    RowResult::Updated => ("shell.updated_done", theme::palette(ui).GOOD),
                                     RowResult::Skipped(skip) if skip.key == "update_all.current" => {
-                                        ("update_all.current_status", theme::MUTED)
+                                        ("update_all.current_status", theme::palette(ui).MUTED)
                                     }
-                                    RowResult::Skipped(_) => ("update_all.skipped", theme::WARN),
-                                    RowResult::Failed(_) => ("shell.failed", theme::BAD),
+                                    RowResult::Skipped(_) => ("update_all.skipped", theme::palette(ui).WARN),
+                                    RowResult::Failed(_) => ("shell.failed", theme::palette(ui).BAD),
                                 };
                                 ui.colored_label(color, t(lang, key));
                                 if matches!(row.result, RowResult::Updating)
@@ -486,7 +486,7 @@ impl RetoqueApp {
                                                 ui.label(diagnostic(lang, note));
                                             }
                                             for step in plan.steps() {
-                                                let (verb, text, _) = step_text(lang, step);
+                                                let (verb, text, _) = step_text(theme::palette(ui), lang, step);
                                                 ui.label(format!("{verb}: {text}"));
                                             }
                                         }
@@ -522,7 +522,7 @@ impl RetoqueApp {
                         )
                         .replace("{count}", &count.to_string());
                         confirm = ui
-                            .add_enabled(!busy && count > 0 && state.error.is_none(), theme::primary(&label))
+                            .add_enabled(!busy && count > 0 && state.error.is_none(), theme::primary(ui, &label))
                             .clicked();
                     }
                 });

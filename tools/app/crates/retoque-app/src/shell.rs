@@ -22,19 +22,19 @@ fn brand_mark<'a>() -> egui::Atom<'a> {
     egui::Atom::paint(egui::Vec2::splat(BRAND_MARK), |ui, args| {
         let p = ui.painter();
         let point = |x: f32, y: f32| args.rect.min + egui::vec2(x, y) * (BRAND_MARK / 256.0);
-        p.rect_filled(args.rect, 6, theme::CANVAS);
+        p.rect_filled(args.rect, 6, theme::palette(ui).CANVAS);
         for (x, y) in [(24., 24.), (68., 24.), (112., 24.), (24., 68.), (68., 68.), (24., 112.)] {
             p.rect_filled(
                 egui::Rect::from_min_max(point(x, y), point(x + 38., y + 38.)),
                 1,
-                theme::MUTED.gamma_multiply(0.5),
+                theme::palette(ui).MUTED.gamma_multiply(0.5),
             );
         }
         p.add(egui::epaint::CubicBezierShape::from_points_stroke(
             [point(30., 226.), point(92., 178.), point(150., 116.), point(226., 30.)],
             false,
-            Color32::TRANSPARENT,
-            egui::Stroke::new(3.7, theme::ACCENT),
+            crate::theme::CLEAR,
+            egui::Stroke::new(3.7, theme::palette(ui).ACCENT),
         ));
         for points in [
             [(162., 178.), (190., 171.), (218., 178.), (190., 185.)],
@@ -42,7 +42,7 @@ fn brand_mark<'a>() -> egui::Atom<'a> {
         ] {
             p.add(egui::Shape::convex_polygon(
                 points.map(|(x, y)| point(x, y)).to_vec(),
-                theme::ACCENT,
+                theme::palette(ui).ACCENT,
                 egui::Stroke::NONE,
             ));
         }
@@ -90,7 +90,7 @@ impl RetoqueApp {
                         RichText::new(self.tr("brand"))
                             .size(theme::DISPLAY)
                             .strong()
-                            .color(theme::ACCENT),
+                            .color(theme::palette(ui).ACCENT),
                     ))
                     .frame(false),
                 )
@@ -118,7 +118,7 @@ impl RetoqueApp {
                 }
             }
             if layout.tagline {
-                ui.label(RichText::new(self.tr("app.tagline")).color(theme::MUTED));
+                ui.label(RichText::new(self.tr("app.tagline")).color(theme::palette(ui).MUTED));
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if !layout.overflow.is_empty() {
@@ -183,7 +183,7 @@ impl RetoqueApp {
         let pad = 2.0 * spacing.button_padding.x;
         let text = |text: &str, font: egui::FontId| {
             ui.painter()
-                .layout_no_wrap(text.to_owned(), font, Color32::PLACEHOLDER)
+                .layout_no_wrap(text.to_owned(), font, crate::theme::PLACEHOLDER)
                 .size()
                 .x
         };
@@ -354,7 +354,7 @@ impl RetoqueApp {
             return;
         }
         if self.library_state.games.is_empty() {
-            ui.label(RichText::new(self.tr("lib.empty")).color(theme::MUTED));
+            ui.label(RichText::new(self.tr("lib.empty")).color(theme::palette(ui).MUTED));
         }
         self.library_keyboard(ui);
         self.refresh_library_cache();
@@ -371,7 +371,7 @@ impl RetoqueApp {
         let mut list_focus = false;
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             if let Some(key) = empty_filter {
-                ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
+                ui.label(RichText::new(self.tr(key)).color(theme::palette(ui).MUTED));
             }
             for (title, games) in &groups {
                 if games.is_empty() {
@@ -406,7 +406,11 @@ impl RetoqueApp {
                         detail,
                         (
                             self.tr(state.short_label()),
-                            if findings > 0 { theme::WARN } else { state.color() },
+                            if findings > 0 {
+                                theme::palette(ui).WARN
+                            } else {
+                                state.color(theme::palette(ui))
+                            },
                         ),
                         capsule,
                         selected,
@@ -438,7 +442,7 @@ impl RetoqueApp {
         let header = format!("{} ({})", self.tr("lib.skipped"), self.skipped.len());
         widgets::collapsible(ui, "skipped_entries", &header, widgets::Fold::Details, |ui| {
             for entry in &self.skipped {
-                ui.label(RichText::new(entry).small().color(theme::MUTED));
+                ui.label(RichText::new(entry).small().color(theme::palette(ui).MUTED));
             }
         });
     }
@@ -507,12 +511,12 @@ impl RetoqueApp {
         }
         if game.runtime == Runtime::NativeLinux {
             ui.add_space(8.0);
-            ui.colored_label(theme::WARN, self.tr("game.native"));
+            ui.colored_label(theme::palette(ui).WARN, self.tr("game.native"));
             return false;
         }
         if game.targets.is_empty() {
             ui.add_space(8.0);
-            ui.colored_label(theme::WARN, self.tr("game.no_target"));
+            ui.colored_label(theme::palette(ui).WARN, self.tr("game.no_target"));
             return false;
         }
         if self.tab != Tab::Compare {
@@ -530,7 +534,11 @@ impl RetoqueApp {
                     ));
                     self.target_picker(ui, game);
                     if let Some(target) = game.targets.iter().find(|t| Some(&t.path) == self.view.target.as_ref()) {
-                        ui.label(RichText::new(target.dlss.join(" · ")).small().color(theme::MUTED));
+                        ui.label(
+                            RichText::new(target.dlss.join(" · "))
+                                .small()
+                                .color(theme::palette(ui).MUTED),
+                        );
                     }
                 },
             );
@@ -755,13 +763,13 @@ impl RetoqueApp {
         self.refresh_library_cache();
         let installed = self.library_state.derived.installed_count;
         let updates = self.library_state.derived.updates;
-        ui.label(RichText::new(self.home_count_line(installed, updates)).color(theme::MUTED));
+        ui.label(RichText::new(self.home_count_line(installed, updates)).color(theme::palette(ui).MUTED));
         self.update_all_button(ui);
         if self.library_pending {
             ui.label(
                 RichText::new(self.tr("shell.library_checking"))
                     .small()
-                    .color(theme::MUTED),
+                    .color(theme::palette(ui).MUTED),
             );
         }
         ui.add_space(12.0);
@@ -776,7 +784,7 @@ impl RetoqueApp {
         .iter()
         .map(|key| {
             ui.painter()
-                .layout_no_wrap(self.tr(key).into(), font.clone(), theme::TEXT)
+                .layout_no_wrap(self.tr(key).into(), font.clone(), theme::palette(ui).TEXT)
                 .size()
                 .x
                 + 32.0
@@ -830,7 +838,7 @@ impl RetoqueApp {
                 } else {
                     widgets::card_title(ui, self.tr("lib.empty"));
                 }
-                ui.label(RichText::new(self.tr("shell.home_help")).color(theme::MUTED));
+                ui.label(RichText::new(self.tr("shell.home_help")).color(theme::palette(ui).MUTED));
             });
             self.skipped_note(ui);
             return;
@@ -850,7 +858,7 @@ impl RetoqueApp {
         let mut favorite_clicked = None;
         scroll.show(ui, |ui| {
             if let Some(key) = empty_filter {
-                ui.label(RichText::new(self.tr(key)).color(theme::MUTED));
+                ui.label(RichText::new(self.tr(key)).color(theme::palette(ui).MUTED));
                 ui.add_space(theme::CARD_GAP);
             }
             for (title, games) in &groups {
@@ -876,7 +884,11 @@ impl RetoqueApp {
                             art,
                             (
                                 issue.as_deref().unwrap_or(self.tr(state.label())),
-                                if findings > 0 { theme::WARN } else { state.color() },
+                                if findings > 0 {
+                                    theme::palette(ui).WARN
+                                } else {
+                                    state.color(theme::palette(ui))
+                                },
                             ),
                             (!game.registered).then(|| self.tr("folders.unregistered")),
                             self.game_attention(index),
@@ -917,13 +929,21 @@ impl RetoqueApp {
         // Lay out the content first. Background slots precede the controls in paint order, but get their
         // final bounds only after wrapping (including zoom and long translations) has determined the height.
         let mut frame = egui::Frame::new()
-            .fill(theme::CARD)
+            .fill(if art.hero.is_some() {
+                theme::DARK.CARD
+            } else {
+                theme::palette(ui).CARD
+            })
             .corner_radius(12)
             .inner_margin(16)
             .begin(ui);
         let background = ui.painter().add(egui::Shape::Noop);
         let shade = ui.painter().add(egui::Shape::Noop);
         let child = &mut frame.content_ui;
+        // Art keeps a dark local surface in either appearance; labels and controls resolve this scope too.
+        if art.hero.is_some() {
+            child.style_mut().visuals = ui.ctx().style_of(egui::Theme::Dark).visuals.clone();
+        }
         child.set_width(child.available_width());
         let title_width = (child.available_width() - 44.0).max(1.0);
         let star_rect = egui::Rect::from_min_size(
@@ -958,9 +978,9 @@ impl RetoqueApp {
                         .and_then(|r| r.as_ref().ok())
                         .map(String::as_str),
                 );
-                child.label(RichText::new(self.tr(state.label())).color(theme::TEXT_STRONG));
+                child.label(RichText::new(self.tr(state.label())).color(theme::palette(child).TEXT_STRONG));
                 if status.version_mismatch() {
-                    child.colored_label(theme::WARN, self.tr("ver.mismatch"));
+                    child.colored_label(theme::palette(child).WARN, self.tr("ver.mismatch"));
                 }
             }
             Some(Err(error)) => {
@@ -987,7 +1007,7 @@ impl RetoqueApp {
                     _ => "shell.progress_install",
                 };
                 child.horizontal_wrapped(|ui| {
-                    ui.add_enabled(false, theme::primary(&format!("{} {done}/{total}", self.tr(key))));
+                    ui.add_enabled(false, theme::primary(ui, &format!("{} {done}/{total}", self.tr(key))));
                     self.play_button(ui, game);
                 });
                 child.ctx().request_repaint_after(std::time::Duration::from_millis(100));
@@ -1008,7 +1028,7 @@ impl RetoqueApp {
                     // the same review. Every other action sits in "More actions" beside it.
                     if state == Some(InstallState::Partial) {
                         if ui
-                            .add(theme::primary(self.tr("shell.resume")))
+                            .add(theme::primary(ui, self.tr("shell.resume")))
                             .on_hover_text(self.tr("shell.review_shortcut"))
                             .clicked()
                         {
@@ -1020,7 +1040,7 @@ impl RetoqueApp {
                         let response = ui
                             .add_enabled(
                                 state.is_some() && ready && (only_optimize || self.payload.is_some()),
-                                theme::primary(self.tr(key)),
+                                theme::primary(ui, self.tr(key)),
                             )
                             .on_hover_text(self.tr(if only_optimize {
                                 "shell.optimize_hint"
@@ -1064,7 +1084,7 @@ impl RetoqueApp {
                     runtime_short(self.lang, &game.runtime)
                 ))
                 .small()
-                .color(theme::MUTED),
+                .color(theme::palette(child).MUTED),
             );
         }
         let rect = frame.end(ui).rect;
@@ -1081,7 +1101,7 @@ impl RetoqueApp {
                 );
                 ui.painter().set(
                     background,
-                    egui::epaint::RectShape::filled(rect, 12, Color32::WHITE).with_texture(texture.id, uv),
+                    egui::epaint::RectShape::filled(rect, 12, crate::theme::IMAGE_TINT).with_texture(texture.id, uv),
                 );
                 ui.painter().set(shade, widgets::hero_shade_shape(rect, 12.0));
             }
@@ -1157,7 +1177,7 @@ impl RetoqueApp {
                 ui.label(format!("{count} {}", self.tr("shell.pending")));
                 let review = self.tr("set.save").to_owned();
                 if ui
-                    .add_enabled(!invalid && !self.busy(), theme::primary(&review))
+                    .add_enabled(!invalid && !self.busy(), theme::primary(ui, &review))
                     .clicked()
                 {
                     let edits = self
@@ -1180,7 +1200,7 @@ impl RetoqueApp {
                 }
             });
             if invalid {
-                ui.colored_label(theme::BAD, self.tr("set.invalid"));
+                ui.colored_label(theme::palette(ui).BAD, self.tr("set.invalid"));
             }
             ui.add_space(4.0);
         });
@@ -1204,7 +1224,11 @@ impl RetoqueApp {
                         // The message and its close control share the first line; Details, when there are any,
                         // is an ordinary button under it.
                         ui.horizontal(|ui| {
-                            let color = if toast.failed { theme::BAD } else { theme::GOOD };
+                            let color = if toast.failed {
+                                theme::palette(ui).BAD
+                            } else {
+                                theme::palette(ui).GOOD
+                            };
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if widgets::close_button(ui, t(lang, "dismiss.help")).clicked() {
                                     remove = Some(i);

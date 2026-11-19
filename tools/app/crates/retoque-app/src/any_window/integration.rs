@@ -68,7 +68,7 @@ impl RetoqueApp {
         }
         if self.any_window_models {
             let modal = egui::Modal::new(egui::Id::unique("any-window-models"))
-                .frame(crate::widgets::modal_frame())
+                .frame(crate::widgets::modal_frame(ui.ctx()))
                 .show(ui.ctx(), |ui| {
                     ui.set_max_width(560.0);
                     ui.heading(self.tr("any.models_title"));

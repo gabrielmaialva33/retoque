@@ -72,13 +72,13 @@ impl RetoqueApp {
     pub(crate) fn drop_sheet(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
             let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("drop_hover")));
-            painter.rect_filled(ctx.content_rect(), 0., Color32::from_black_alpha(210));
+            painter.rect_filled(ctx.content_rect(), 0., crate::theme::IMAGE_SCRIM);
             painter.text(
                 ctx.content_rect().center(),
                 egui::Align2::CENTER_CENTER,
                 self.tr("drop.hover"),
                 egui::FontId::proportional(24.),
-                Color32::WHITE,
+                crate::theme::IMAGE_INK,
             );
         }
         if self.review_open
@@ -123,7 +123,7 @@ impl RetoqueApp {
                 // Still checking, or nothing the app can import: information, not a choice.
                 let mut close = false;
                 let modal = egui::Modal::new(egui::Id::unique("drop_review"))
-                    .frame(widgets::modal_frame())
+                    .frame(widgets::modal_frame(ctx))
                     .show(ctx, |ui| {
                         ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
                         ui.label(RichText::new(t(lang, "drop.title")).size(theme::TITLE).strong());

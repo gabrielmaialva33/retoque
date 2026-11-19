@@ -86,7 +86,7 @@ impl RetoqueApp {
                 _ => None,
             };
             if let Some(note) = note {
-                ui.add(egui::Label::new(RichText::new(t(lang, note)).color(theme::MUTED)).wrap());
+                ui.add(egui::Label::new(RichText::new(t(lang, note)).color(theme::palette(ui).MUTED)).wrap());
                 ui.add_space(6.0);
             }
             let action = match on {
@@ -121,22 +121,22 @@ fn result(ui: &mut egui::Ui, lang: Lang, timing: &NrTiming, fps: Option<f64>) {
             w,
             t(lang, "measure.per_frame"),
             &millis(lang, timing.median_ms),
-            theme::TEXT_STRONG,
+            theme::palette(ui).TEXT_STRONG,
         );
         widgets::stat_tile_width(
             ui,
             w,
             t(lang, "sess.low"),
             &millis(lang, timing.worst_ms),
-            theme::TEXT_STRONG,
+            theme::palette(ui).TEXT_STRONG,
         );
         if let Some(fps) = fps {
             let value = format!("{} fps", fps.round() as u32);
-            widgets::stat_tile_width(ui, w, t(lang, "sess.base"), &value, theme::TEXT_STRONG);
+            widgets::stat_tile_width(ui, w, t(lang, "sess.base"), &value, theme::palette(ui).TEXT_STRONG);
         }
         if let Some(share) = share {
             let value = format!("{}%", (share * 100.0).round() as u32);
-            widgets::stat_tile_width(ui, w, t(lang, "measure.share"), &value, theme::TEXT_STRONG);
+            widgets::stat_tile_width(ui, w, t(lang, "measure.share"), &value, theme::palette(ui).TEXT_STRONG);
         }
     });
     let detail = t(lang, "measure.detail")
@@ -144,10 +144,10 @@ fn result(ui: &mut egui::Ui, lang: Lang, timing: &NrTiming, fps: Option<f64>) {
         .replace("{passes}", &timing.passes.to_string())
         .replace("{samples}", &timing.samples.to_string());
     ui.add_space(4.0);
-    ui.add(egui::Label::new(RichText::new(detail).small().color(theme::MUTED)).wrap());
+    ui.add(egui::Label::new(RichText::new(detail).small().color(theme::palette(ui).MUTED)).wrap());
     if timing.cadence > 1 {
         let text = t(lang, "measure.cadence").replace("{n}", &timing.cadence.to_string());
-        ui.add(egui::Label::new(RichText::new(text).small().color(theme::MUTED)).wrap());
+        ui.add(egui::Label::new(RichText::new(text).small().color(theme::palette(ui).MUTED)).wrap());
     }
 }
 

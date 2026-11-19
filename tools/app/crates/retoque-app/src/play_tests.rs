@@ -328,7 +328,7 @@ fn card_badge_is_unpainted_when_idle_but_tab_hover_and_favorites_reveal_it() {
         !h.output()
             .shapes
             .iter()
-            .any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.rect == rect && r.fill == crate::theme::SIDE)),
+            .any(|s| matches!(&s.shape, egui::Shape::Rect(r) if r.rect == rect && r.fill == crate::theme::DARK.SIDE)),
         "idle non-favorite card must not paint a badge background"
     );
     h.key_press(egui::Key::Tab);
