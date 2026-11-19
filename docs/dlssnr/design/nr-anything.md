@@ -4,12 +4,14 @@ Design study, 2026-11-11. Retoque baseline `3c53db9a`; NeuRotic Alpha 0.9.9 `bea
 GPL-3.0). NeuRotic paths below are relative to that clone's root. Retoque paths are relative to this repository. Line
 numbers are at the two commits named above.
 
-**Status (2026-11-11): in progress, not qualified.** The owner answered the open questions the same day
+**Status (2026-11-19): in progress, not qualified.** The owner answered the initial open questions on 2026-11-11
 ([Decisions](#decisions-2026-11-11)) and phases 0, 1 and 2 are implemented ([Implementation](#implementation-phases-0-2)):
 the capture probe, the gated `RetoqueWindow_*` export in the production DLL, and `RetoqueWindowHost.exe` with its
 preview window. All of it builds here (MSVC under Wine) and its pure rules and the DLL seam pass host tests. **None of
-it has run on Windows, on a GPU or with the model**; the first native run on the RTX 3060 is described below. The app
-screen (phase 4) and the overlay (phase 3) do not exist yet.
+it has run on Windows, on a GPU or with the model**; the first native run on the RTX 3060 is described below.
+Phase 3 is now implemented and host contracts are built/tested
+([Implementation (phase 3)](#implementation-phase-3)); its integrated MSVC build is pending lead integration.
+The app screen (phase 4) does not exist yet. No Windows run, GPU qualification or latency claim for either output.
 
 ## The answer
 
@@ -492,6 +494,90 @@ has the command line, the JSON-lines contract and the first-run steps.
 - **Not in phase 2:** the overlay, the interaction pause policy (menus, dialogs, move-size), HDR capture (an HDR
   desktop is captured as BGRA8, SDR), any history reset sent to the pass on a new stream (version 1 has no way to ask;
   the trace says when one starts), the app screen, and the measurements (they need Windows).
+
+## Implementation (phase 3)
+
+2026-11-19, independently implemented from the approved phase 3 scope before the first native run, as the owner
+requested. **Implemented, host contracts built/tested only; integrated MSVC build and Windows/RTX 3060 run pending.**
+No source, tables, strings, shader or model data copied from NeuRotic. The reference was its `InteractionPolicy.h`
+and overlay mechanics in `CaptureHost.cpp` at `beae4eea`, with its Magpie `69d6105d` provenance; comments and
+`Licenses/NRAnything_ATTRIBUTION.txt` identify the derivation.
+
+- `--run` is still preview; `--run --overlay` selects composition. Each run JSON event names `output`. `started`
+  reports the recorder option and hotkey; `status` reports visibility. No INI changes or new in-game controls.
+- `Output.cpp` creates a flip-sequential composition swapchain on the existing D3D12 direct queue, a DComp desktop
+  device/target/visual and the owned `WS_POPUP`, all before loading the production DLL. Its layered, transparent,
+  no-activate, tool-window styles, hit-test and mouse-activation answers leave input to the source. It never raises
+  itself to topmost. It is initially hidden and follows physical client coordinates at maintenance ticks and frames.
+- `Overlay.h` holds the pure interaction table and visibility state machine. Disabled source, visible owned popup,
+  menu, move-size, minimized, cloaked, hidden or unreadable state pauses and hides; focus loss by itself does not.
+  Source identity is rechecked before polling and immediately before reveal. Any rectangle change (even a same-size
+  move), pause or crop mismatch invalidates the accepted image. A successfully presented frame with the current
+  rectangle/extent and a timestamp after the last invalidation is required to show it. The initial geometry epoch is set before capture starts, so a static source can use its first frame. After
+  a pause or mismatch, no new WGC frame means no reveal (a static source may stay uncovered until it redraws). This gates the host's reveal decision, not a claim of atomicity with another process's window movement.
+- The real cursor stays visible; overlay capture explicitly disables WGC's cursor and refuses if the API cannot
+  control it. Ctrl+Alt+F10 is mandatory, global while the overlay runs, and stops it; registration failure refuses
+  startup. Shutdown hides and disconnects the owner before draining, so restoring the source cannot reshow a stopped
+  popup. DComp objects join the existing abandon path when GPU completion cannot be proved.
+- Effective per-monitor-v2 awareness is verified. `--exclude-from-capture` requests `WDA_EXCLUDEFROMCAPTURE`, only
+  for overlay and **off by default**. A failed requested affinity is a refusal. The owner still decides whether
+  recorders should see processed pixels; this implements the choice without resolving open question 3.
+- The DLL seam already refuses wrapped swapchains. An overlay now stops and emits `refused` with that outcome;
+  preview retains its prior handling. No second NR host, shader or lifetime policy was introduced.
+- Exclusive fullscreen guard: Windows' `SHQueryUserNotificationState` reports `QUNS_RUNNING_D3D_FULL_SCREEN` for
+  exclusive Direct3D fullscreen. The guard checks before creation and while running, refuses on that signal and
+  pauses on an unknown query. It is system-wide: another exclusive app can cause a conservative refusal. It cannot
+  inspect a foreign swapchain and is not claimed as an exhaustive detector for every graphics API or Windows
+  fullscreen optimization. Borderless geometry alone never triggers it. Topmost sources (or inherited topmost
+  output) are also refused, because ownership can otherwise violate the non-topmost contract; the source is never
+  demoted. Relevant API contracts: [notification state](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ne-shellapi-query_user_notification_state),
+  [composition swapchain](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgifactory2-createswapchainforcomposition),
+  [DComp device](https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nf-dcomp-dcompositioncreatedevice2).
+- Evidence: `nr-window-host-rules` compiles shipping pure headers with ASan/UBSan and extends its Windows source
+  contracts. These prove policy and wiring only. MinGW syntax checks cover `Output`, `Sources`, `Devices`, `Transport`
+  and `NrSeam`; `Main` is checked separately with a syntax-only stand-in for WinRT apartment initialization. Capture's
+  C++/WinRT source is not compiled here. None is a native build or a compositor/GPU/input test.
+
+### Checklist do overlay no Windows (RTX 3060)
+
+**Ainda não testado no Windows.** Peça ao responsável a pasta do host compilada na integração, com os arquivos da
+seção abaixo e seu modelo já configurado. Use essa pasta separada, nunca a pasta de um jogo. Não precisa compilar.
+Marque cada item como “passou”, “falhou” ou “não testado”; informe a versão do Windows, driver, build e monitores.
+
+1. Abra um programa simples com movimento (por exemplo, um vídeo sem proteção em uma janela). Na pasta recebida,
+   abra o Terminal/PowerShell pela barra de endereço do Explorador. Cole:
+   `./RetoqueWindowHost.exe --run --countdown 5 --overlay --no-nr --trace > overlay-sem-nr.jsonl`.
+   Nos cinco segundos seguintes, clique na janela do vídeo. O primeiro teste confere a captura sem usar o modelo.
+   Se houver recusa, o arquivo `overlay-sem-nr.jsonl` traz `reason`; envie-o ao responsável após revisar títulos e
+   caminhos pessoais. Não contorne uma recusa de captura protegida.
+2. Clique nos botões, digite em um campo e use a roda do mouse. Tudo deve chegar ao programa original. Deve existir
+   só um cursor, sem uma cópia atrasada. Aperte **Ctrl+Alt+F10**: a camada deve desaparecer e o comando deve terminar.
+   Se não encerrar, feche somente `RetoqueWindowHost.exe` pelo Gerenciador de Tarefas e marque como falha.
+3. Rode novamente sem `--no-nr`, gravando em `overlay-nr.jsonl`. Aguarde o modelo carregar. Confira que não aparece
+   uma janela preta por cima do programa antes do primeiro frame compatível. O evento `nr` deve informar a situação
+   real; a existência da camada, sozinha, não prova que o modelo está trabalhando.
+4. Abra menus e uma caixa de diálogo; arraste e redimensione a janela. A camada deve sumir durante a interação e
+   retornar apenas alinhada, sem imagem antiga esticada. Minimize/restaure; troque de área de trabalho virtual.
+   Confirme o mesmo comportamento. Feche o programa original: o host deve terminar sem deixar a camada.
+5. Use Alt+Tab. Coloque outra janela na frente e clique nela. Ela deve cobrir a camada, receber input e manter foco.
+   A camada não deve virar uma janela extra no Alt+Tab. Pressione Ctrl+Alt+F10 com outro app em foco para testar a saída.
+6. Se tiver dois monitores, configure escalas diferentes (por exemplo 100% e 150%) e mova a janela entre eles.
+   Confira todas as bordas e os cliques após cada movimento. Se não tiver dois, marque este item “não testado”.
+7. Teste um jogo em **janela sem bordas**. Deve preencher apenas o cliente, mantendo os testes de input e Alt+Tab.
+   Uma fonte “sempre por cima” será recusada (`source-topmost`); desative essa opção no próprio programa se houver.
+   Depois teste o modo **tela cheia exclusiva**: espere recusa `exclusive-fullscreen`, saída e nenhuma camada.
+   Se o Windows converter esse modo para sem bordas, anote isso; não conte como teste de exclusividade.
+8. Para comparar atraso, faça duas execuções com a mesma cena em movimento: preview
+   `./RetoqueWindowHost.exe --run --countdown 5 --trace --max-frames 600 > preview.jsonl`, depois overlay
+   `./RetoqueWindowHost.exe --run --countdown 5 --overlay --trace --max-frames 600 > overlay.jsonl`.
+   Ao final, o responsável compara `age_p50_ms` e `age_p95_ms` de `stopped` (captura até Present), com a mesma resolução,
+   modelo e VSync. Esses números não medem clique até imagem na tela; registre também qualquer atraso perceptível.
+9. Só para o teste de gravação escolhido pelo dono: compare uma gravação de tela com a opção padrão e com
+   `--exclude-from-capture`. Confira se a camada some da gravação quando solicitado e se o original permanece;
+   verifique também ausência de realimentação/“espelho infinito”. Não declare isso validado só porque a opção iniciou.
+10. Envie o checklist e os logs revisados. Falhas de criação de DComp, hotkey ocupada, DPI, cursor-control ausente,
+    seam/wrapped-swapchain e `restart-required` são casos separados a reproduzir pelo responsável. Não provoque perda
+    de dispositivo ou altere drivers para testá-los sozinho.
 
 ### First run on native Windows (RTX 3060)
 

@@ -1,10 +1,10 @@
 #include "pch.h"
 
 // RetoqueWindowHost: NR on any window, by capture, with no hook in the captured program
-// (docs/dlssnr/design/nr-anything.md, phase 2: preview output). It captures one top-level window with Windows Graphics
-// Capture, carries each frame from D3D11 to D3D12 through shared textures and fences, copies it into a swapchain of its
-// own, and hands that swapchain to the production OptiScaler.dll's present pass through the RetoqueWindow_* seam before
-// each Present. The command line, exit codes and JSON lines are Protocol.h's.
+// (docs/dlssnr/design/nr-anything.md, phases 2-3: preview and overlay output). It captures one top-level window with
+// Windows Graphics Capture, carries each frame from D3D11 to D3D12 through shared textures and fences, copies it into a
+// swapchain of its own, and hands that swapchain to the production OptiScaler.dll's present pass through the
+// RetoqueWindow_* seam before each Present. The command line, exit codes and JSON lines are Protocol.h's.
 //
 // Lifetime: a GPU object is released only after the fence that proves its last use has completed. If that cannot be
 // proved within the timeouts, or the device is lost, the host abandons every object, says "restart-required" and ends
@@ -34,7 +34,14 @@ namespace RetoqueWindowHost
 namespace
 {
 namespace Pr = Protocol;
-using Pr::Event;
+// Every run event, including refusals, names the selected output. Catalog/help keep their existing shape.
+const char* outputMode = nullptr;
+std::string HostEvent(const char* name, std::vector<Pr::Field> fields = {})
+{
+    if (outputMode != nullptr)
+        fields.push_back({ "output", outputMode });
+    return Pr::Event(name, fields);
+}
 using Pr::Exit;
 
 constexpr DWORD kDrainMs = 2000;
@@ -122,20 +129,20 @@ int Catalog()
     size_t refused = 0;
     const auto entries = Sources::Catalog(refused);
     for (const auto& e : entries)
-        Emit(Event("window", { { "hwnd", Pr::HandleText(e.identity.hwnd) },
-                               { "pid", uint64_t(e.identity.pid) },
-                               { "title", e.title },
-                               { "class", e.identity.className },
-                               { "executable", e.identity.executable },
-                               { "width", int64_t(e.width) },
-                               { "height", int64_t(e.height) } }));
-    Emit(Event("catalog", { { "windows", uint64_t(entries.size()) }, { "excluded", uint64_t(refused) } }));
+        Emit(HostEvent("window", { { "hwnd", Pr::HandleText(e.identity.hwnd) },
+                                   { "pid", uint64_t(e.identity.pid) },
+                                   { "title", e.title },
+                                   { "class", e.identity.className },
+                                   { "executable", e.identity.executable },
+                                   { "width", int64_t(e.width) },
+                                   { "height", int64_t(e.height) } }));
+    Emit(HostEvent("catalog", { { "windows", uint64_t(entries.size()) }, { "excluded", uint64_t(refused) } }));
     return int(Exit::Ok);
 }
 
 int Refuse(Exit code, const char* stage, const std::string& why)
 {
-    Emit(Event("refused", { { "stage", stage }, { "reason", why }, { "exit", int64_t(code) } }));
+    Emit(HostEvent("refused", { { "stage", stage }, { "reason", why }, { "exit", int64_t(code) } }));
     return int(code);
 }
 
@@ -160,13 +167,36 @@ std::vector<Pr::Field> Summary(const Counters& c)
              { "age_p95_ms", c.ages.Percentile(95) } };
 }
 
+int64_t NowTicks()
+{
+    LARGE_INTEGER now {}, frequency {};
+    QueryPerformanceCounter(&now);
+    QueryPerformanceFrequency(&frequency);
+    return Pacing::QpcToTicks(now.QuadPart, frequency.QuadPart);
+}
+
+// Recheck immediately before revealing as well as before polling: resize, dialogs or identity can change while
+// the GPU/latency wait runs. Geometry and interaction failures hide even when no new WGC frame arrives.
+bool OverlayUpdate(HWND source, const Policy::Identity& identity, bool itemClosed, Output& output,
+                   Policy::Decision& decision, std::string& why)
+{
+    decision = Policy::DecideSource(Sources::SourceState(source, identity, itemClosed));
+    if (decision.action != Policy::Action::Stop)
+        decision = Overlay::Decide(Sources::ReadInteraction(source, output.Window()));
+    Geometry::CropInputs current;
+    if (decision.action == Policy::Action::Run &&
+        (!Sources::CropInputs(source, current) || !Overlay::Usable(current.client)))
+        decision = { Policy::Action::Pause, "source-geometry-unavailable" };
+    return output.FollowOverlay(current.client, decision.action == Policy::Action::Run, NowTicks(), why);
+}
+
 // Abandon, never release: the GPU may still use what the host would free.
 [[noreturn]] void RestartRequired(const std::string& why, Capture& capture, Transport& transport, Output& output,
                                   const Counters& counters)
 {
     auto fields = Summary(counters);
     fields.insert(fields.begin(), Pr::Field { "reason", why });
-    Emit(Event("restart-required", fields));
+    Emit(HostEvent("restart-required", fields));
     capture.Abandon();
     transport.Abandon();
     output.Abandon();
@@ -179,7 +209,12 @@ std::vector<Pr::Field> Summary(const Counters& c)
 
 int RunCapture(const Pr::Options& options)
 {
+    const bool overlay = options.overlay;
+    outputMode = overlay ? "overlay" : "preview";
     std::string why;
+    if (overlay &&
+        !AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+        return Refuse(Exit::Unsupported, "dpi", "overlay requires per-monitor-v2 DPI awareness");
     if (!Capture::Supported(why))
         return Refuse(Exit::Unsupported, "capture", why);
 
@@ -188,7 +223,7 @@ int RunCapture(const Pr::Options& options)
     {
         for (int left = options.countdown; left > 0; --left)
         {
-            Emit(Event("countdown", { { "seconds", int64_t(left) } }));
+            Emit(HostEvent("countdown", { { "seconds", int64_t(left) } }));
             Sleep(1000);
         }
         source = GetForegroundWindow();
@@ -200,6 +235,12 @@ int RunCapture(const Pr::Options& options)
     if (!Sources::ReadIdentity(source, identity))
         return Refuse(Exit::SourceRefused, "source", "the window's process could not be identified");
     const std::string title = Sources::Title(source);
+    if (overlay)
+    {
+        const auto interaction = Overlay::Decide(Sources::ReadInteraction(source, nullptr));
+        if (interaction.action == Policy::Action::Stop)
+            return Refuse(Exit::SourceRefused, "overlay", interaction.reason);
+    }
 
     // Every DXGI and D3D object the host will use exists before OptiScaler.dll is loaded (Phase 1 audit).
     Devices devices;
@@ -224,9 +265,23 @@ int RunCapture(const Pr::Options& options)
         !transport.EnsureExtent(width, height, why))
         return Refuse(Exit::DeviceFailed, "transport", why);
     Output output;
-    if (!output.Create(devices.factory.Get(), devices.d3d12.Get(), devices.queue.Get(), width, height,
-                       L"Retoque: NR on any window (preview) - " + Widen(title), why))
-        return Refuse(Exit::DeviceFailed, "preview", why);
+    if (!output.Create(
+            devices.factory.Get(), devices.d3d12.Get(), devices.queue.Get(), width, height,
+            (overlay ? L"Retoque: NR on any window (overlay) - " : L"Retoque: NR on any window (preview) - ") +
+                Widen(title),
+            why, overlay ? source : nullptr, options.excludeFromCapture))
+        return Refuse(Exit::DeviceFailed, overlay ? "overlay" : "preview", why);
+
+    // Establish the geometry epoch before WGC can publish its initial frame. Otherwise a static source's one
+    // initial frame could predate the first loop tick and remain hidden until the source next redraws.
+    if (overlay)
+    {
+        Policy::Decision initial;
+        if (!OverlayUpdate(source, identity, false, output, initial, why))
+            return Refuse(Exit::DeviceFailed, "overlay", why);
+        if (initial.action == Policy::Action::Stop)
+            return Refuse(Exit::SourceRefused, "overlay", initial.reason);
+    }
 
     NrSeam seam;
     if (!options.noNr && !seam.Load(why))
@@ -235,21 +290,23 @@ int RunCapture(const Pr::Options& options)
     // Never closed: a FrameArrived callback racing the capture's revoke may still signal it.
     HANDLE wake = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     Capture capture;
-    if (wake == nullptr || !capture.Start(source, devices.d3d11.Get(), true, wake, why))
+    if (wake == nullptr || !capture.Start(source, devices.d3d11.Get(), !overlay, wake, why))
         return Refuse(Exit::SourceRefused, "capture", why.empty() ? std::string("no wake event") : why);
 
     Commands commands;
     commands.Start();
-    Emit(Event("started", { { "protocol", uint64_t(Pr::kProtocolVersion) },
-                            { "window", Pr::HandleText(identity.hwnd) },
-                            { "pid", uint64_t(identity.pid) },
-                            { "title", title },
-                            { "executable", identity.executable },
-                            { "adapter", adapter.name },
-                            { "width", uint64_t(width) },
-                            { "height", uint64_t(height) },
-                            { "nr", seam.Loaded() },
-                            { "dll", Sources::Narrow(seam.Path()) } }));
+    Emit(HostEvent("started", { { "protocol", uint64_t(Pr::kProtocolVersion) },
+                                { "window", Pr::HandleText(identity.hwnd) },
+                                { "pid", uint64_t(identity.pid) },
+                                { "title", title },
+                                { "executable", identity.executable },
+                                { "adapter", adapter.name },
+                                { "width", uint64_t(width) },
+                                { "height", uint64_t(height) },
+                                { "nr", seam.Loaded() },
+                                { "exclude_from_capture", options.excludeFromCapture },
+                                { "disengage_hotkey", overlay ? "Ctrl+Alt+F10" : "Escape in preview" },
+                                { "dll", Sources::Narrow(seam.Path()) } }));
 
     LARGE_INTEGER frequency {};
     QueryPerformanceFrequency(&frequency);
@@ -264,10 +321,12 @@ int RunCapture(const Pr::Options& options)
     auto status = [&](bool haveRevision, uint64_t revision)
     {
         auto fields = Summary(counters);
-        fields.insert(fields.begin(), { { "state", paused ? "paused" : "running" }, { "nr_status", nrStatus } });
+        fields.insert(fields.begin(), { { "state", paused ? "paused" : "running" },
+                                        { "nr_status", nrStatus },
+                                        { "overlay_visible", output.OverlayVisible() } });
         if (haveRevision)
             fields.insert(fields.begin(), Pr::Field { "rev", revision });
-        Emit(Event("status", fields));
+        Emit(HostEvent("status", fields));
     };
 
     while (stopReason.empty())
@@ -289,39 +348,48 @@ int RunCapture(const Pr::Options& options)
             else if (request.command == Pr::Command::Stop)
                 stopReason = "stopped by a command";
             else
-                Emit(Event("command-refused",
-                           { { "cmd", request.name },
-                             { "reason", request.command == Pr::Command::Unknown ? std::string("unknown command")
-                                                                                 : request.error } }));
+                Emit(HostEvent("command-refused",
+                               { { "cmd", request.name },
+                                 { "reason", request.command == Pr::Command::Unknown ? std::string("unknown command")
+                                                                                     : request.error } }));
         }
         if (!stopReason.empty())
             break;
         if (output.CloseRequested())
         {
-            stopReason = "the preview window was closed";
+            stopReason = overlay ? "overlay disengaged" : "the preview window was closed";
             break;
         }
         if (devices.Lost())
             RestartRequired("the device was lost", capture, transport, output, counters);
         capture.Retire(transport.CapturedCompleted());
 
-        const Policy::Decision decision =
-            Policy::DecideSource(Sources::SourceState(source, identity, capture.ItemClosed()));
+        Policy::Decision decision;
+        if (!overlay)
+            decision = Policy::DecideSource(Sources::SourceState(source, identity, capture.ItemClosed()));
+        if (overlay && !OverlayUpdate(source, identity, capture.ItemClosed(), output, decision, why))
+        {
+            stopReason = why;
+            exitCode = Refuse(Exit::DeviceFailed, "overlay", why);
+            break;
+        }
         if (decision.action == Policy::Action::Stop)
         {
             stopReason = decision.reason;
+            if (overlay && (stopReason == "exclusive-fullscreen" || stopReason == "source-topmost"))
+                exitCode = Refuse(Exit::SourceRefused, "overlay", stopReason);
             break;
         }
         if (decision.action == Policy::Action::Pause)
         {
             if (!paused)
-                Emit(Event("paused", { { "reason", decision.reason } }));
+                Emit(HostEvent("paused", { { "reason", decision.reason } }));
             paused = true;
             continue;
         }
         if (paused)
         {
-            Emit(Event("resumed"));
+            Emit(HostEvent("resumed"));
             paused = false;
             resumed = true;
         }
@@ -350,6 +418,7 @@ int RunCapture(const Pr::Options& options)
             crop.reason = "the window's geometry could not be read";
         if (!crop.ok)
         {
+            output.HideOverlay(NowTicks());
             ++counters.dropped;
             if (cropWait.Failed(GetTickCount64()))
                 continue;
@@ -370,9 +439,9 @@ int RunCapture(const Pr::Options& options)
         if (pace.verdict == Pacing::Verdict::TakeNewStream)
         {
             ++counters.streams;
-            Emit(Event("stream", { { "reason", pace.reason },
-                                   { "width", uint64_t(crop.box.Width()) },
-                                   { "height", uint64_t(crop.box.Height()) } }));
+            Emit(HostEvent("stream", { { "reason", pace.reason },
+                                       { "width", uint64_t(crop.box.Width()) },
+                                       { "height", uint64_t(crop.box.Height()) } }));
         }
 
         const uint32_t w = crop.box.Width(), h = crop.box.Height();
@@ -391,7 +460,7 @@ int RunCapture(const Pr::Options& options)
                 exitCode = int(Exit::DeviceFailed);
                 break;
             }
-            Emit(Event("resized", { { "width", uint64_t(w) }, { "height", uint64_t(h) } }));
+            Emit(HostEvent("resized", { { "width", uint64_t(w) }, { "height", uint64_t(h) } }));
         }
 
         const uint64_t serial = transport.Submit(frame.texture, crop.box);
@@ -409,20 +478,63 @@ int RunCapture(const Pr::Options& options)
         if (seam.Loaded())
         {
             const bool entered = seam.Present(output.Swapchain(), devices.queue.Get(), outcome);
+            if (overlay && !entered)
+            {
+                output.HideOverlay(NowTicks());
+                stopReason = outcome.status;
+                exitCode = Refuse(Exit::SeamRefused, "nr", stopReason);
+                break;
+            }
             counters.nrEntered += entered ? 1 : 0;
             counters.nrRecorded += outcome.recorded;
             if (outcome.status != nrStatus)
             {
                 nrStatus = outcome.status;
-                Emit(Event("nr", { { "entered", entered },
-                                   { "running", outcome.running != 0 },
-                                   { "passes", outcome.passesRecorded },
-                                   { "status", nrStatus } }));
+                Emit(HostEvent("nr", { { "entered", entered },
+                                       { "running", outcome.running != 0 },
+                                       { "passes", outcome.passesRecorded },
+                                       { "status", nrStatus } }));
             }
         }
         const HRESULT presented = output.Present(options.vsync);
         if (presented == DXGI_ERROR_DEVICE_REMOVED || presented == DXGI_ERROR_DEVICE_RESET || devices.Lost())
             RestartRequired("the device was lost at Present", capture, transport, output, counters);
+        if (overlay)
+        {
+            if (FAILED(presented))
+            {
+                output.HideOverlay(NowTicks());
+                stopReason = "the overlay Present failed";
+                exitCode = Refuse(Exit::DeviceFailed, "overlay", stopReason);
+                break;
+            }
+            Policy::Decision after;
+            if (!OverlayUpdate(source, identity, capture.ItemClosed(), output, after, why))
+            {
+                stopReason = why;
+                exitCode = Refuse(Exit::DeviceFailed, "overlay", why);
+                break;
+            }
+            if (after.action == Policy::Action::Stop)
+            {
+                stopReason = after.reason;
+                if (stopReason == "exclusive-fullscreen" || stopReason == "source-topmost")
+                    exitCode = Refuse(Exit::SourceRefused, "overlay", stopReason);
+                break;
+            }
+            if (after.action == Policy::Action::Run && presented == S_OK)
+                output.AcceptOverlayFrame(inputs.client, { int32_t(w), int32_t(h) }, frame.time);
+            else
+            {
+                output.HideOverlay(NowTicks());
+                if (after.action == Policy::Action::Pause)
+                {
+                    if (!paused)
+                        Emit(HostEvent("paused", { { "reason", after.reason } }));
+                    paused = true;
+                }
+            }
+        }
         ++counters.presented;
 
         LARGE_INTEGER now {};
@@ -430,15 +542,16 @@ int RunCapture(const Pr::Options& options)
         const double ageMs = double(Pacing::QpcToTicks(now.QuadPart, frequency.QuadPart) - frame.time) / 10'000.0;
         counters.ages.Add(ageMs);
         if (options.trace)
-            Emit(Event("frame", { { "serial", serial },
-                                  { "time", int64_t(frame.time) },
-                                  { "age_ms", ageMs },
-                                  { "nr_recorded", outcome.recorded != 0 },
-                                  { "present_hr", int64_t(presented) } }));
+            Emit(HostEvent("frame", { { "serial", serial },
+                                      { "time", int64_t(frame.time) },
+                                      { "age_ms", ageMs },
+                                      { "nr_recorded", outcome.recorded != 0 },
+                                      { "present_hr", int64_t(presented) } }));
         if (options.maxFrames != 0 && counters.presented >= options.maxFrames)
             stopReason = "--max-frames reached";
     }
 
+    output.EndInteraction();
     // Teardown: no new frames, then every queue and copy proved complete before anything is released.
     capture.Stop();
     if (!output.Drain(kDrainMs) || !transport.WaitIdle(kDrainMs))
@@ -447,7 +560,7 @@ int RunCapture(const Pr::Options& options)
     seam.End();
     auto fields = Summary(counters);
     fields.insert(fields.begin(), { { "reason", stopReason }, { "exit", int64_t(exitCode) } });
-    Emit(Event("stopped", fields));
+    Emit(HostEvent("stopped", fields));
     return exitCode;
 }
 } // namespace RetoqueWindowHost
@@ -478,6 +591,7 @@ int wmain(int argc, wchar_t** argv)
     case Protocol::Mode::Catalog:
         return Catalog();
     case Protocol::Mode::Run:
+        outputMode = parsed.options.overlay ? "overlay" : "preview";
         try
         {
             winrt::init_apartment(winrt::apartment_type::multi_threaded);

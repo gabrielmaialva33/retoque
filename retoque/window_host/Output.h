@@ -1,8 +1,10 @@
 // The preview: an ordinary window with a D3D12 flip-model HWND swapchain the size of the source's client area,
 // stretched to whatever size the user gives the window. Each frame copies the transported slot into the backbuffer;
 // the NR pass then runs on that backbuffer through the seam, before Present, exactly where a game's Present would
-// run it. (The click-through overlay over the source is phase 3.)
+// run it. An optional owned overlay uses a DirectComposition swapchain on that same queue.
 #pragma once
+
+#include "Overlay.h"
 
 #include <array>
 #include <string>
@@ -15,8 +17,17 @@ class Output
     static constexpr UINT kBuffers = 3;
     static constexpr UINT kLists = 3;
 
+    ~Output();
     bool Create(IDXGIFactory2* factory, ID3D12Device* device, ID3D12CommandQueue* queue, uint32_t width,
-                uint32_t height, const std::wstring& title, std::string& why);
+                uint32_t height, const std::wstring& title, std::string& why, HWND overlaySource = nullptr,
+                bool excludeFromCapture = false);
+
+    // Non-GPU operations. Hide immediately on mismatch/pause; reveal only after a successful matching Present.
+    bool FollowOverlay(const Geometry::Rect& client, bool allowed, int64_t now, std::string& why);
+    void AcceptOverlayFrame(const Geometry::Rect& capturedClient, Geometry::Size size, int64_t time);
+    void HideOverlay(int64_t now);
+    void EndInteraction();
+    bool OverlayVisible() const { return visibility_.Visible(); }
 
     HWND Window() const { return window_; }
     bool CloseRequested() const { return closeRequested_; }
@@ -51,6 +62,11 @@ class Output
     ID3D12CommandQueue* queue_ = nullptr;
     HWND window_ = nullptr;
     bool closeRequested_ = false;
+    bool overlay_ = false, hotkey_ = false;
+    Overlay::Visibility visibility_;
+    ComPtr<IDCompositionDesktopDevice> composition_;
+    ComPtr<IDCompositionTarget> target_;
+    ComPtr<IDCompositionVisual2> visual_;
     ComPtr<IDXGISwapChain3> swapchain_;
     HANDLE latency_ = nullptr;
     std::array<ComPtr<ID3D12CommandAllocator>, kLists> allocators_;

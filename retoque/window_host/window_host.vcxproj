@@ -54,7 +54,7 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>windowsapp.lib;d3d11.lib;d3d12.lib;dxgi.lib;dwmapi.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>windowsapp.lib;d3d11.lib;d3d12.lib;dxgi.lib;dwmapi.lib;dcomp.lib;shell32.lib;user32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -91,6 +91,7 @@
     <ClInclude Include="Geometry.h" />
     <ClInclude Include="NrSeam.h" />
     <ClInclude Include="Output.h" />
+    <ClInclude Include="Overlay.h" />
     <ClInclude Include="Pacing.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Policy.h" />
