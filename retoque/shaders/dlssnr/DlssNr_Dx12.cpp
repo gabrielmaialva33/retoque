@@ -1,6 +1,7 @@
 #include "pch.h"
 #include <dlssnr/DlssNr_AdvisorRuntime.h>
 #include <dlssnr/DlssNr_AdvisorPolicy.h>
+#include <dlssnr/DlssNr_PresentDepthDx12.h>
 #include <dlssnr/DlssNr_Dx11Scene.h>
 
 #include "DlssNr_Dx12_Internal.h"
@@ -4848,6 +4849,18 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     if (!boundary)
         DlssNr::SlBoundaryProbe::NoteWrappedPresent(queue, fgHook);
 
+    DlssNr::PresentDepthDx12::Observation depthObservation(
+        DlssNr::PresentDepthDx12::Active() &&
+            !(!fgHook && State::Instance().activeFgInput == FGInput::Synthesized &&
+              (State::Instance().swapchainInteropApi == SwapchainInteropApi::Dx11wDx12 ||
+               State::Instance().currentFGSwapchain != nullptr)) &&
+            (boundary || !BoundaryLive()) &&
+            !(!fgHook && !boundary && g_lastFgFlip != 0 && (g_presentFlip - g_lastFgFlip) < kFgHookTimeout) &&
+            DlssNr::PresentBoundary::Decide(BoundaryInputs(cfg.DlssNrHookMethod.value_or_default(), fgHook, boundary),
+                                            g_temporalValid.load()) == DlssNr::PresentBoundary::PresentVerdict::Run,
+        swapchain, queue);
+    DlssNr::PresentDepthDx12::InternalScope depthInternal;
+
     if (g_nr.failed || swapchain == nullptr || queue == nullptr)
         return;
 
@@ -5155,6 +5168,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     // slot is never tracked or read. Rule 6 (lag) is enforced at the game's own Present only, where it was measured.
     const GuideAsk guides = AskPresentPassGuides(device, presenter, width, height, pickedSlot, boundary);
     const size_t usableSlot = guides.decision.slot;
+    DlssNr::PresentDepthDx12::Eligible(usableSlot);
 
     DlssNr::Submission::Usage savedReadUsage {};
     DlssNr::Submission::Usage savedPresentReadUsage {};
@@ -5723,6 +5737,7 @@ static Pictures::Role PictureRole(NVSDK_NGX_Parameter* params)
 void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Parameter* params,
                           ID3D12CommandQueue* timingQueue, bool preUpscaleDeclined, bool isRayReconstruction)
 {
+    DlssNr::PresentDepthDx12::InternalScope depthInternal;
     const Config& cfg = *Config::Instance();
     // Before any gate of our own can decline first and name a different reason: another neural producer in the
     // process (a ReShade add-on) gets NR for the session, and Enabled is now off (DlssNr_Consumers.h).
@@ -6348,6 +6363,7 @@ bool EvaluateAtPresent(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* colou
                        ID3D12Resource* motion, const DlssNrFrameInfo& frame, ID3D12CommandQueue* timingQueue,
                        const char** outReason, DlssNr::GpuTiming::Region* route)
 {
+    DlssNr::PresentDepthDx12::InternalScope depthInternal;
     const auto answer = [outReason](bool recorded, const char* reason)
     {
         if (outReason != nullptr)

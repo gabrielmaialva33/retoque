@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_PresentDepthDx12.h>
 
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/DlssNr_Submission.h>
@@ -152,6 +153,7 @@ void __stdcall ResTrack_Dx12::ResourceDestroyed(void* data)
         return;
 
     auto* resource = static_cast<ID3D12Resource*>(data);
+    DlssNr::PresentDepthDx12::Destroyed(resource);
     auto toClean = _trackedResources.Take(resource);
 
     Hudfix_Dx12::RemoveResourceFromTracking(resource);
@@ -693,6 +695,7 @@ void ResTrack_Dx12::hkCreateUnorderedAccessView(ID3D12Device* This, ID3D12Resour
 void ResTrack_Dx12::hkExecuteCommandLists(ID3D12CommandQueue* This, UINT NumCommandLists,
                                           ID3D12CommandList* const* ppCommandLists)
 {
+    DlssNr::PresentDepthDx12::Submission depthObservation(This, NumCommandLists, ppCommandLists);
     DlssNr::Submission::Batch nrSubmission(This, NumCommandLists, ppCommandLists);
     DlssNr::SlBoundaryProbe::NoteExecute(This, NumCommandLists, ppCommandLists);
     o_ExecuteCommandLists(This, NumCommandLists, ppCommandLists);

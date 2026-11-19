@@ -1073,6 +1073,10 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\misc\MenuFonts.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_GpuTiming.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_Submission.cpp" />
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_PresentDepthDx12.cpp" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentDepthDx12.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentDepth.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentDepthTables.h" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCapture.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.cpp" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.h" />

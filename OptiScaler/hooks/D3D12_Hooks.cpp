@@ -2,6 +2,7 @@
 #include "D3D12_Hooks.h"
 #include <dlssnr/DlssNr_ExposureScan.h>
 #include <dlssnr/DlssNr_Dred.h>
+#include <dlssnr/DlssNr_PresentDepthDx12.h>
 #include "Sampler_Overrides.h"
 
 #include <Util.h>
@@ -1731,6 +1732,7 @@ static ULONG D3D12DeviceRelease(IUnknown* device, PFN_Release original)
 
     if (result == 0)
     {
+        DlssNr::PresentDepthDx12::DeviceDestroyed(device);
         State::Instance().RemoveD3D12Device(device);
         ReflexHooks::deviceDestroyed(device);
         FSR2Dx12DeviceDestroyed(device);
@@ -1885,7 +1887,10 @@ static HRESULT hkCreateCommittedResource(ID3D12Device* device, const D3D12_HEAP_
     // Where the exposure scan sees the game's resources. Silent and cheap for everything that does
     // not match, and it does nothing at all unless Neural Rendering is running.
     if (SUCCEEDED(created) && ppvResource != nullptr)
+    {
         DlssNr::ExposureScan::NoteResource(pDesc, (ID3D12Resource*) *ppvResource);
+        DlssNr::PresentDepthDx12::Created(device, pDesc, (ID3D12Resource*) *ppvResource, InitialResourceState);
+    }
 
     return created;
 }
@@ -1920,7 +1925,10 @@ static HRESULT hkCreatePlacedResource(ID3D12Device* device, ID3D12Heap* pHeap, U
         o_CreatePlacedResource(device, pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue, riid, ppvResource);
 
     if (SUCCEEDED(created) && ppvResource != nullptr)
+    {
         DlssNr::ExposureScan::NoteResource(pDesc, (ID3D12Resource*) *ppvResource, pHeap);
+        DlssNr::PresentDepthDx12::Created(device, pDesc, (ID3D12Resource*) *ppvResource, InitialState, pHeap);
+    }
 
     return created;
 }
@@ -2520,6 +2528,7 @@ static void HookToDevice(ID3D12Device* InDevice)
     }
 
     HookToCommandList(InDevice);
+    DlssNr::PresentDepthDx12::Install(InDevice);
 
     if (State::Instance().activeFgInput == FGInput::Upscaler &&
         !Config::Instance()->FGDisableHUDFix.value_or_default() &&
@@ -2558,6 +2567,7 @@ static void HookToDevice(ID3D12Device* InDevice)
 
 static void UnhookDevice()
 {
+    DlssNr::PresentDepthDx12::Stop();
     LOG_FUNC();
 
     DetourTransactionBegin();
@@ -2652,6 +2662,7 @@ void D3D12Hooks::HookAgility(HMODULE module)
 
 void D3D12Hooks::Unhook()
 {
+    DlssNr::PresentDepthDx12::Stop();
     if (o_D3D12CreateDevice == nullptr)
         return;
 

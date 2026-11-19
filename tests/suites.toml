@@ -1280,3 +1280,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Cost advisor policy: candidate order, confirmed timing identity, statistics, recommendation and restoration."
+
+[nr-present-depth]
+path = "nr-present-depth"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "Log-only D3D12 depth: independent rankings, refusals, identities, bounded recordings, atomic lookup, log windows and hook/config guards."

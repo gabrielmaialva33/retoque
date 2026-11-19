@@ -1,9 +1,13 @@
 # The game's own depth for the present pass, in titles that call no upscaler
 
-Status: design for review, 2026-10-14. Nothing here is built and nothing has run in a game. Step 0, a log-only
-observer, is the first slice proposed. Written against `27f89456` on `feat/neurotic-parity`; line numbers are into
-that tree. NeuRotic line numbers are into its clone at `7132a103`, the tip present-real-guides.md and nr-before-dlssg.md
-reviewed; it was read, not built and not run, and nothing is copied.
+Status: **step 0 implemented, log only; game/native qualification pending**, 2026-11-19.
+The owner reopened this work on this date. The revalidation below is against `6972e2d7`; the original design
+was written on 2026-10-14 against `27f89456`. This slice supplies no depth to NR. Step 0b is specified only,
+not built or run. Step 1 still waits for the game's measurements.
+
+Retoque source anchors below refer to `6972e2d7`. The NeuRotic comparison is explicitly historical, against
+`7132a103`; it is not a claim about that project's current implementation. Ideas only were studied; no source,
+tables or strings from that project are adopted.
 
 Read first: [present-real-guides.md](present-real-guides.md) (the guide ring, its identity rules and the boundary count
 this note reuses), [nr-present-hook.md](nr-present-hook.md) (the present host),
@@ -13,21 +17,145 @@ stepped note), [nr-dx11-bridge-host.md](nr-dx11-bridge-host.md) (the D3D11 host)
 [reduced-scale-guides.md](reduced-scale-guides.md) (guide formats and sizes, and the native-Windows lesson) and
 [DEVELOPMENT.md](DEVELOPMENT.md).
 
+## Revalidated 2026-11-19
+
+The heuristic in option (a) remains an experiment worth measuring. The current tree does **not** establish its
+precision or make observed depth safe to use. This audit did not find a later implementation of the scanner.
+It found specification choices that prevented implementing the original step 0 literally; the lead accepted
+the amendments below on 2026-11-19, **with owner confirmation at review**. These are
+separate from the source moves below: the missing no-upscaler clock also existed at the original baseline.
+They must not be described as a new renderer regression or as proof that heuristic discovery is impossible.
+
+### What moved and what no longer holds
+
+| Original assumption / anchor | Current source and correction |
+|---|---|
+| All present-guide code in `DlssNr_Dx12.cpp` | Cloning, capture, stamping and identity moved to `retoque/shaders/dlssnr/DlssNr_Dx12_PresentGuides.cpp`: `CreatePresentGuideClone` at 92, `StampPresentGuide` at 170, `AskGuideIdentity` at 230, commit at 823 and `CaptureTemporal` at 842. `ReadableGuide` moved to `DlssNr_Dx12_Resources.cpp:405`; `GatherGuideFrame`/`GatherFrame` to `DlssNr_Dx12_Inputs.cpp:102`/156. |
+| The bridge's zero-guide paragraph | It describes only the fallback. `retoque/dlssnr/DlssNr_PresentHost.cpp:704` asks `CapturedPresentGuides`; accepted pairs replace both zeros at 722. The native D3D11 guide transport exists too; it is not heuristic DSV discovery. |
+| All motion estimation is FidelityFX | The default software estimator still exists, but D3D12 also selects NVIDIA Optical Flow and can share synthesized-FG estimates (`DlssNr_Dx12.cpp:5961`, 6028). Both leave fallback depth zero. |
+| No tag hooks outside FG input | No longer true. `OptiScaler/hooks/Streamline_Hooks.cpp:2634` arms the tag inventory with NR enabled; 2655-2665 attaches note-only tag hooks without a Streamline FG input. Constants outside that input are still not observed by this branch. Step 0c is partly superseded, not fully implemented. |
+| Every stale capture forces a skip | No longer true at the game's own boundary with optional guides. `DlssNr_Dx12.cpp:5127` keeps the old skip only below the boundary or with `RequireDlss`; the boundary can continue on zero/synthesized guides. The existing ring still must not be overloaded with depth-only captures. |
+| Status latches on the first capture | Routing still uses `g_temporalValid`; status does not. `DlssNr_Dx12.cpp:4412` uses recent guide status and gives the own-Present boundary precedence. There is no universal status string that proves zero upscaler captures. |
+| Step 0 creates no D3D12 objects | It must record no GPU command and create no GPU work/resources for observation. Obtaining optional command-list interface vtables may need temporary allocator/list objects; `D3D12_Hooks.cpp:1065` already uses that installation technique. Reuse that setup where possible and document any extra installation objects. Native Windows must check hook correctness, forwarding and coexistence, not merely absence of a crash. |
+| Step 0b with real motion tests synthesized motion | It isolates depth with **real** motion. It cannot settle the model's acceptance of real depth plus synthesized motion, nor the all-zero-guide case. Separate factorial arms are needed for that question. |
+
+### Contract amendments accepted for step 0
+
+1. **A frame clock that exists without an upscaler.** `AskGuideIdentity` returns at
+   `DlssNr_Dx12_PresentGuides.cpp:236` before `Tracker::AtPresent` whenever the ring has never recorded.
+   `Tracker::AtPresent` (`DlssNr_PresentGuideIdentity.h:414`) is the only increment of its epoch. Thus the
+   exact target arm in this design has no advancing identity boundary. The present route also returns before
+   its pick on warm-up, stand-down or allocation/admission failure. Merely reading `Tracker::Epoch()` would
+   combine multiple frames into one interval. Accepted: a **log-only boundary clock**, advanced at the owning
+   real-present entry after duplicate/FG stand-down and before optional NR work, carrying the existing identity
+   epoch as separate metadata when available. Changing the identity tracker's existing clock instead needs
+   explicit tests that its captured-guide lag/consumption behavior remains unchanged. This is a diagnostic
+   contract choice, not permission to alter the pass's pairing rules.
+2. **Unknown touched set.** An `ExecuteCommandLists` containing a list recorded before installation provides
+   the list and queue, not its resource references. The existing hook (`ResTrack_dx12.cpp:693`) does not retain
+   commands. The rule “only the resources it touched” cannot apply when that set is unknown. Accepted: preserve
+   the observed candidates, but reject the interval as `unobserved` on an unknown list on its presenting queue;
+   apply resource-local refusals only where the touched set is actually known. A skipped/unknown recording must
+   never improve the apparent precision by silently disappearing. Internal lists need positive identity, not a
+   thread flag at submission time, and bounded record/descriptor overflow needs the same refusal.
+3. **R1 and R2 are different decisions.** “Would pick” currently means R1 after all rules, including R2's tie
+   margin. The requested ground-truth field contains only one score, yet the decision to keep draw hooks asks
+   to compare **R1 precision with R2 precision**. Accepted: compute each ranking/refusal independently, report
+   `r1 matches / r1 eligible comparisons`, `r2 matches / r2 eligible comparisons`, and their agreement. Retain
+   the total ring-commit count separately. `matches / captures` is not precision: multiple captures, refused
+   identities and frames with no eligible comparison must not enter that denominator. Original resource
+   identity must accompany each committed slot; neither a clone pointer nor the latest unsubmitted evaluate
+   is ground truth. DSV view/subresource identity must also agree before an equal resource pointer is counted.
+4. **The diagnostic must refuse missing lifetime identity.** The old fallback to raw pointer identity on a
+   missing destruction notifier can count an address reused by a different resource as a match. Accepted:
+   `unobserved` unless an object generation is known; do not silently claim the same confidence as a tracked
+   object. This remains log only and retains no game resource. Resource and descriptor-heap reuse, Reset/Close
+   failures, replayed lists and partial hook installation need explicit contracts before reporting scores.
+
+These amendments were accepted by the lead on 2026-11-19, with the owner confirming at review. The implementation
+keeps the existing identity epoch, lag, consumption and pairing rules unchanged. The diagnostic is not an input
+to the model. Step 1 remains blocked on both valid step-0 measurements and step 0b.
+
+### Step 0 as implemented (2026-11-19)
+
+The portable contracts are `retoque/dlssnr/DlssNr_PresentDepth.h` (ranking, refusals, generations, recording and
+window) and `DlssNr_PresentDepthTables.h` (bounded atomic descriptor/address lookup). The D3D12 adapter is
+`DlssNr_PresentDepthDx12.cpp`. [The host suite](../../../tests/nr-present-depth/README.md) exercises these rules
+and guards the call sites. A full DLL build is the integration lead's job; host and syntax checks are not game
+qualification, hook coexistence evidence, image-quality evidence, or native Windows validation.
+
+- **Off path:** only normalized `log` (the config reader lowercases it) with NR enabled and `HookMethod=2` at first device-hook invocation requests
+  installation. Auto/constant, invalid and future `observed` values do not install an observer or allocate its
+  storage. Existing hooks merely encounter dormant entry guards. Config declaration/read/save/INI/reference
+  all carry the key. There is no menu control. No existing identity-tracker code is edited.
+- **Owning boundary:** the new diagnostic asks the present route's existing duplicate/FG ownership predicates
+  before optional NR work and before the failure latch. Its own counter advances even with an empty ring and
+  when the model cannot run. The late accepted-guide slot only supplies comparison metadata, never changes the
+  diagnostic choice or the model's choice. A slot must retain the original resource generation, lifetime proof,
+  explicitly full-size zero-origin region and accepted identity (unspecified subrect metadata is not scored). Ring commits are counted separately from comparisons.
+- **Recording:** device `CreateCommandList` and optional `CreateCommandList1` mark the initial recording; Reset
+  marks subsequent generations and Close their result. A private CPU GUID token prevents a reused list address
+  from replaying another object's history. These two creation hooks and `EndRenderPass` are additions to the
+  original inventory required to close first-recording and binding-lifetime gaps. Every observed list method
+  forwards its original arguments exactly once. No observer records a GPU command, copy, fence, queue wait or
+  model call. Installation creates only temporary allocator/list objects for vtable discovery (and the existing
+  submission hook may create a temporary queue).
+- **Depth identity:** the existing ResTrack destruction notifier is required. No observer keeps a strong game
+  resource reference. Destroying a resource invalidates its generation; its bound tombstone survives through
+  the next diagnostic boundary so disappearance is a refusal, not a false success. A missing notifier is
+  `unobserved`, never a raw-pointer match. Queue and presenter identity also use private CPU generation tokens;
+  a destroyed/reused address cannot masquerade as the earlier object. Device destruction disables observation.
+- **State:** observed creation state plus whole-resource, flag-free, before-matching transitions only. Missing
+  creation, mismatched before, split/partial barriers and enhanced texture barriers leave state unknown. Partial
+  clears lose direction. A full render-pass beginning clear is observed; resolve/discard/suspend/resume and other
+  unhandled pass modes refuse that candidate. Indirect, mesh and bundle draws into the bound depth are
+  `unobserved`; ordinary draw calls, not vertex counts, are R2's weight.
+- **Unknown recording/overlap:** keep candidates but refuse the interval. Because unseen commands may also have
+  changed state or clear direction, clear those facts conservatively; a later full clear can restore direction,
+  but the unknown state is not guessed back into existence. Any unknown queue submission can affect candidate
+  state. Concurrent submissions and a present reached with a submission in progress are also unobserved.
+  Already-known cross-queue use is sticky for that resource generation. There is no cross-queue wait.
+- **Internal work:** thread-local scopes suppress NR's recording events. Lists privately created/reset in those
+  scopes receive a positive internal marker so exclusion at submission does not depend on the submitting
+  thread. A game list temporarily visited by NR remains a game list. Unknown third-party/internal work is
+  conservatively unobserved; no callback is assumed to be harmless from its address alone.
+- **Bounds and cost:** 512 resources, 512 command-list address slots, 1,024 events per recording (consecutive draws
+  coalesce), 8,192 descriptor slots, 8,192 resource-address slots and 32 queue generations. Recording methods
+  use bounded atomic lookup and recorder-owned storage: no mutex or allocation per bind/draw/clear/barrier.
+  Device metadata updates and submission reduction take a leaf mutex, released before a real game call.
+  Overflow refuses subsequent intervals rather than evicting a live identity. Lookup keys are retained, so a
+  very long session can exhaust the tables; the `unobserved` count includes this bound. Distinct-target window
+  counters cap at 2,048 and explicitly say when saturated. The cost estimate samples one of 64 observed hook/submission/present callbacks (a render-pass hook counts once);
+  it excludes original game calls and logger output, and is CPU time, not GPU time.
+- **Ranks and logs:** R1 is the latest writable full-size single-sample binding. R2 is the largest direct-draw
+  count with a runner-up at most half; R1 is not conditioned on R2's tie refusal. Each reports its own accepted
+  comparisons/matches/direction agreements. The window starts at two seconds and holds up to thirty when its
+  categorical refusal/coverage/accuracy signature and target counts are unchanged. No line before any depth
+  was bound. The detail line changes with resource/shape/view/direction/state/source. The count collapses a
+  same-shaped A/B resource alternation after its first change; detail lines still identify changes, so this
+  opt-in diagnostic can produce many lines for a ping-pong engine.
+
+The observer admits one presenting stream for its first device implementation. Another presenter refuses,
+rather than mixing its samples. Unsupported runtime wrappers, optional-interface variants and detour chains
+need actual game/native runs. The diagnostic deliberately sacrifices coverage when proof is absent. Low
+coverage, especially persistent unknown state after an unobserved list, is a reason to extend observation or
+reject the heuristic, never a reason to ignore refusals in a precision claim.
+
 ## The problem
 
 A title that calls no upscaler never hands OptiScaler a depth buffer or motion vectors. The present pass still runs
-there (`HookMethod=2` on D3D12, and always on the D3D11 bridge), but on guides it made up:
+there (`HookMethod=2` on D3D12, or an admitted D3D11 bridge host), but on guides it made up:
 
-- **Depth is a constant.** `RunPresentPass` (`retoque/shaders/dlssnr/DlssNr_Dx12.cpp:6964`) takes the zero-guide branch
-  when the ring offers nothing: `s_dummyGuides.RecordClear` (`:7338`) and `PresentFrameDefaults`, which says
-  `DepthInverted = false` (`:8406`). The model sees the whole frame at depth zero, uninverted, every frame.
-- **Motion is zero, or synthesized.** With `[DlssNr] SynthMotion` the FidelityFX optical-flow port
-  (`retoque/shaders/synth_motion/`) estimates it from `g_bbCopy` (`:7414-7425`). Without it, motion is zero and
-  `ZeroGuideReset` (`:7352`) is the opt-in answer to the ghosting that causes.
-- **Supersampling is clamped to native** on that branch (`frame.AllowSupersampling = false`, `:7348`), because the
+- **Depth is a constant.** `RunPresentPass` (`retoque/shaders/dlssnr/DlssNr_Dx12.cpp:4788`) takes the zero-guide branch
+  when the ring offers nothing: `s_dummyGuides.RecordClear` (`:5276`) and `PresentFrameDefaults`, which says
+  `DepthInverted = false` (`:6260`). The model sees the whole frame at depth zero, uninverted, every frame.
+- **Motion is zero, or synthesized.** With `[DlssNr] SynthMotion` the selected estimator
+  (`retoque/shaders/synth_motion/`) estimates it from `g_bbCopy` (`DlssNr_Dx12.cpp:5354`). Without it, motion is zero and
+  `ZeroGuideReset` (`:5290`) is the opt-in answer to the ghosting that causes.
+- **Supersampling is clamped to native** on that branch (`frame.AllowSupersampling = false`, `DlssNr_Dx12.cpp:5286`), because the
   model refuses zero guides above 1.0. Whether real depth plus synthesized motion would lift that refusal is
   synthesized-motion.md's §9 question 1, still open.
-- The D3D11 bridge's host does the same with its own zeros (`retoque/dlssnr/DlssNr_PresentHost.cpp:515-575`).
+- The D3D11 bridge's host does the same with its own zeros (`retoque/dlssnr/DlssNr_PresentHost.cpp:692-758`).
 
 The question is whether the game's real depth can be found without an upscaler's parameter block, and whether motion
 can come with it cheaply. Two things are not known and decide everything below:
@@ -42,14 +170,14 @@ can come with it cheaply. Two things are not known and decide everything below:
 
 | Hook | Installed when | Sees depth? |
 |---|---|---|
-| `CreateCommittedResource`, `CreatePlacedResource` (`OptiScaler/hooks/D3D12_Hooks.cpp:1870`, `:1911`; vtable 27 and 29, `:2251-2252`) | `[DlssNr] Enabled` at device creation (`:2295-2337`) | Every resource made through those two methods, for `DlssNr::ExposureScan::NoteResource` only (`:1903`, `:1938`). Not `CreateCommittedResource1/2/3`, `CreatePlacedResource1/2` or reserved resources. |
-| `CreateDepthStencilView` | never: the slot is commented out (`OptiScaler/resource_tracking/ResTrack_dx12.cpp:2722`) | No. Nothing maps a DSV handle to a resource. |
-| `OMSetRenderTargets` (`ResTrack_dx12.cpp:1853`) | only with `FGInput=upscaler` and the HUD fix on, no interop (`D3D12_Hooks.cpp:2343-2348`; attach at `ResTrack_dx12.cpp:2541`) | No. It forwards `pDepthStencilDescriptor` untouched (`:1885`, `:1897`, `:1997`). |
-| Draws, `ClearDepthStencilView`, `ResourceBarrier`, `BeginRenderPass`, `ExecuteIndirect` | draws with the HUD fix only; the rest never | No. |
-| `ExecuteCommandLists` (`ResTrack_dx12.cpp:736-737`) | NR submission tracking (`EnableNrSubmissionTracking`, `:2642`) | Every list and queue, no contents. |
-| `slSetTag`, `slSetTagForFrame`, `slSetConstants` | only `FGInput` `dlssg` or `nvngx` (`OptiScaler/hooks/Streamline_Hooks.cpp:2303-2313`) | A game's `kBufferTypeDepth` tag, when attached (`Streamline_Inputs.cpp:289`). |
-| DLSS-G's NGX `FrameGeneration` evaluate (`OptiScaler/inputs/NVNGX_DLSS_Dx12.cpp:1196-1201`) | always, when the game runs DLSS-G | Its parameter block holds `DLSSG.Depth`, `DLSSG.MVecs`, `DLSSG.DepthInverted`; only the nvngx FG route reads them (`framegen/nvngx/Nvngx_FFX.cpp:253-262`). |
-| D3D11 device and context | `CreateSamplerState` and `Release` only (`OptiScaler/hooks/D3D11_Hooks.cpp:30-34`, `:110-119`) | No. |
+| `CreateCommittedResource`, `CreatePlacedResource` (`OptiScaler/hooks/D3D12_Hooks.cpp:1855`, 1896; slots 27/29 at 2421/2422) | NR enabled or Unreal atomics spoof at device hook time (2474-2499) | Resource descriptions/pointers and placed heap reach `ExposureScan::NoteResource` (1888, 1924). No observer receives initial state or placement offset. Newer creation variants and reserved resources are not captured here. The spoof's early-return branches bypass these notes. |
+| `CreateDepthStencilView` | Never attached by ResTrack: slot 21 is commented out (`ResTrack_dx12.cpp:2738`) | No DSV-to-resource map. |
+| `OMSetRenderTargets` (`ResTrack_dx12.cpp:1833`) | HUD fix under `FGInput=upscaler`, no interop (`D3D12_Hooks.cpp:2524`; attach at `ResTrack_dx12.cpp:2535`) | Depth argument is forwarded at 1866, 1878 and 1978, not interpreted. |
+| Draws, `ClearDepthStencilView`, `ResourceBarrier`, `BeginRenderPass`, `ExecuteIndirect` | Direct draw hooks with HUD fix (`ResTrack_dx12.cpp:2544-2547`); no depth observer for the others | No scene-depth event stream. Calling a barrier helper is not hooking the game's barriers. |
+| `ExecuteCommandLists` (`ResTrack_dx12.cpp:693`) | NR submission tracking (`EnableNrSubmissionTracking`, 2628), or HUD tracking | Lists/queues and submission evidence, no recorded depth contents. |
+| `slSetTag`, `slSetTagForFrame`, `slSetConstants` | FG input `dlssg`/`nvngx`; note-only tag hooks additionally with NR enabled (`Streamline_Hooks.cpp:2634-2665`) | FG input reads depth tags (`inputs/FG/Streamline_Inputs.cpp:326`). The NR inventory records declarations and shape, not usable resource/state/queue rights; no note-only constants hook in this branch. |
+| DLSS-G NGX evaluate (`inputs/NVNGX_DLSS_Dx12.cpp:1254`) | When a game's intercepted feature is FrameGeneration | The probe is fed at 1270. The nvngx FG route reads `DLSSG.Depth`, motion and inversion (`framegen/nvngx/Nvngx_FFX.cpp:408-414`); this is not a present-depth capture. |
+| D3D11 device/context (`hooks/D3D11_Hooks.cpp`) | Device sampler and Release hooks, plus existing bridge/guide integrations | No heuristic DSV/bind/clear observer. Native upscaler guide transport is a distinct, already implemented path. |
 
 **A correction to nr-without-game-dlss.md.** Its table says `ResTrack_dx12.cpp` "already *sees* every depth-stencil
 descriptor the game binds", so only the heuristic is missing. Read from the code, that is not so. The hook is attached
@@ -57,7 +185,7 @@ only for the HUD fix under `FGInput=upscaler`, it never reads the depth argument
 hook the descriptor would name nothing anyway. Discovery needs new hooks: DSV creation, descriptor copies, binds,
 clears, barriers and probably draws.
 
-## Prior art: NeuRotic's built-in capture
+## Historical prior art: NeuRotic at `7132a103`
 
 Below, **claim** marks what a comment or document says and **read** marks what the code does. Neither is evidence
 that the result looks right in a game.
@@ -92,7 +220,7 @@ depth.
 - **Per command list** (`:133-147`): a bind sets the list's current depth. A draw while it is bound adds
   *vertices x instances* (not draws, and not filtered by depth write, which D3D12 keeps in the PSO). A full clear (no
   rects) to 0 records "reversed", to 1 "forward", anything else "unknown". A transition barrier on a depth-stencil
-  resource records its state, and is "known" only for whole-resource, flag-free barriers. An aliasing barrier, a bundle,
+  resource records its state, and is "known" for flag-free barriers on subresource 0 **or** the whole resource. An aliasing barrier, a bundle,
   an enhanced barrier, a render pass or more than 256 events marks the whole list unsupported (`:145`, `:150-153`).
 - **At submission** (`:155-168`): only DIRECT queues on the observed device. Events apply in order to a per-resource
   candidate. A clear zeroes the count. A barrier's state is trusted only if its "before" matches the last known state,
@@ -186,8 +314,8 @@ and an unknown state, and the D3D11 depth-write filter. Do not take:
 
 - Device `CreateDepthStencilView` and `CopyDescriptors`/`CopyDescriptorsSimple` for DSV heaps: a map from DSV handle to
   resource, with the view's format, mip, slice and read-only flags. This is the only way to name what a bind names.
-- The creation hooks that exist (`D3D12_Hooks.cpp:1870`, `:1911`) give the initial state, and heap plus offset for
-  placed resources.
+- The creation hooks that exist (`D3D12_Hooks.cpp:1855`, `:1896`) receive the initial state, and heap plus offset for
+  placed resources. Their current exposure notes do not retain state or offset; the step-0 adapter now retains initial state and the heap identity; offset is not used by the conservative whole-heap alias refusal.
 - List `OMSetRenderTargets` and `BeginRenderPass` (writable binds; a render pass's `CLEAR` beginning access is a clear),
   `ClearDepthStencilView`, `ResourceBarrier` (transitions and aliasing), List7 `Barrier` (noted, not followed), `Reset`
   and `Close`.
@@ -202,7 +330,7 @@ item 1), so that under the game's DLSS-G it is the interval between the game's o
   extent, bound writable in this interval, on lists executed on the presenting queue.
 - **Rank** two ways, and log both in step 0:
   - R1, **the last full-size depth bound writable before present**, the rule this option is named for.
-  - R2, **the most draws while bound writable since its last clear**, NeuRotic's.
+  - R2, **the most draws while bound writable since its last clear**, inspired by NeuRotic's geometry-weighted ranking; counting draw calls here is a separate policy, not its vertices-times-instances score.
 - **Direction**: a full clear to 0 means inverted, to 1 not inverted; anything else is unknown.
 - **State**: the creation state, then every barrier in execution order on the presenting queue. Unknown if a barrier
   ran on another queue, if an enhanced barrier touched it, or if it was never seen.
@@ -216,10 +344,10 @@ against what (see "Steps").
 
 1. a transition of the pick from its tracked state to `COPY_SOURCE`;
 2. `CopyTextureRegion` of subresource 0 (plane 0) into an owned clone of the same format, made the way
-   `CreatePresentGuideClone` makes them (`DlssNr_Dx12.cpp:6047`);
+   `CreatePresentGuideClone` makes them (`DlssNr_Dx12_PresentGuides.cpp:92`);
 3. the transition back.
 
-The pass then reads the clone through `ReadableGuide` (`:2438`) as it reads a typeless upscaler guide, with
+The pass then reads the clone through `ReadableGuide` (`DlssNr_Dx12_Resources.cpp:405`) as it reads a typeless upscaler guide, with
 `DepthInverted` from the direction, the full extent and no subrect. The present list runs on the presenting queue after
 everything the game submitted there before `Present`, so the copy is ordered by the queue alone. It needs no wait, and
 the capture belongs to this frame by construction.
@@ -238,9 +366,11 @@ the capture belongs to this frame by construction.
 - an unobserved construct on the pick (a bundle drawing into it, an enhanced barrier, a list recorded before the
   hooks).
 
-Unlike NeuRotic, an unobservable list costs only the resources it touched, not the whole interval.
+For an event whose touched resources are known, refusal stays resource-local. The original promise that **any**
+unobservable list costs only its touched resources is not implementable for a list whose contents were never
+observed. The conservative interval refusal was accepted in the revalidation section and is implemented.
 
-**Cost.** Hooks on every bind, clear and barrier, and on every draw if R2 is kept: one lookup in a per-list record owned
+**Proposed cost contract, not a measurement.** Hooks on every bind, clear and barrier, and on every draw if R2 is kept: one lookup in a per-list record owned
 by the recording thread, no lock, no allocation. Execute merges the records under a short leaf lock that is never held
 across the game's call or any wait. At present there is one copy of about 20 MB at 3440x1440 for `R32` depth (40 MB for
 D32S8). That is half of the two copies nr-present-hook.md already costs per processed present.
@@ -255,15 +385,16 @@ Some titles that run no upscaler still hand someone their depth.
   - The capture is `CaptureTemporal`'s pattern: copy on the tag call's command list, stamp, commit. For `eOnlyValidNow`
     that is required; for `eValidUntilPresent` it can wait for present.
   - This is the only route that brings **real motion** with the depth.
-  - It needs the tag hooks attached outside `FGInput=dlssg` (`Streamline_Hooks.cpp:2303-2313`), which
-    nr-before-dlssg.md's H2 and H3 need too (its open question 4).
+  - The note-only tag hooks already attach outside the FG-input route (`Streamline_Hooks.cpp:2634-2665`).
+    Using tags would still require a separate capture/lifecycle contract and constants observation. The inventory
+    is not permission to dereference a tag later at present (also relevant to nr-before-dlssg.md's H2/H3).
 - **(b2) DLSS-G's NGX evaluate parameters.** `DLSSG.Depth`, `DLSSG.MVecs` and `DLSSG.DepthInverted` reach our evaluate
   hook on every DLSS-G frame. **Rejected:** nr-before-dlssg.md step 0 and 0b measured that DLSS-G evaluates from
   another thread, on a queue of its own, after the game's `Present` has returned. Frame N's guides arrive after
   present N has been edited, so they could only guide frame N+1, which is the pairing rule 6 of present-real-guides.md
   exists to refuse.
 - **(b3) FSR-FG or XeFG inputs** of a game that runs frame generation without upscaling (`inputs/FG/FfxApi_Dx12_FG.cpp`,
-  `XeFG_Inputs_Dx12.cpp`). This is the same shape as (b1). Those routes are wired only when OptiScaler takes the game's
+  `inputs/FG/XeFG_Inputs_Dx12.cpp`). This is the same shape as (b1). Those routes are wired only when OptiScaler takes the game's
   FG as its input.
 
 (b1) is robust where it applies, and it applies to few titles: those with an FG integration whose user turned the
@@ -307,10 +438,10 @@ answer is known. Take (b1) first wherever a title tags depth.**
 **Copy at present (step 1 of (a)): not the ring.** The ring is the upscaler's, and three things say keep the observed
 depth out of it:
 
-- **The skip rule.** `RunPresentPass` skips any present when no capture newer than the last one exists
-  (`DlssNr_Dx12.cpp:7243`). Today that never fires in a title with no upscaler, because the ring is empty there. A
-  depth-only capture in the ring would arm it, and a present whose depth the observer refused would show the game's
-  frame unedited in the middle of edited ones: the flicker nr-before-dlssg.md just removed.
+- **The skip rule.** Below the game's own boundary, and at the boundary with `RequireDlss`, no newer capture
+  still skips (`DlssNr_Dx12.cpp:5127`). At the own boundary with optional guides this no longer happens. A
+  depth-only capture must not arm the remaining upscaler-specific skip paths or change the capture/identity
+  history; the empty-ring baseline is still important.
 - **Slots hold pairs.** A ring slot is a depth and motion pair (`PresentGuideClone`), and the motion here is made at
   present from the same frame.
 - **No identity question.** A copy recorded on the present list at the present has lag 0 and is the present's own.
@@ -319,7 +450,7 @@ depth out of it:
   subrect to check.
 
 The observed depth takes an owned clone per present-list slot, retired by submission evidence like `g_bbCopy`. The
-stamp is the identity Tracker's boundary count (`DlssNr_PresentGuideIdentity.h:378`), so the identity log can count
+stamp is the identity Tracker's boundary count (`DlssNr_PresentGuideIdentity.h:414`; subject to the no-upscaler clock decision above), so the identity log can count
 "observed depth" as a third source beside the two consumers.
 
 **Copy at the bind point (step 3, only if step 0 shows the depth cleared or aliased before present).** That is "a
@@ -336,7 +467,7 @@ capture made at a bind point with a boundary count":
   alone.
 - Copies are illegal inside a render pass and in a bundle, so such a pick is refused, not copied.
 
-**(b1) tags: the existing ring, unchanged.** A tag capture is an upscaler capture in every respect the ring knows:
+**(b1) tags: proposed reuse of the existing ring.** Once a tag capture meets its lifecycle and identity rules, it would be shaped like an upscaler capture:
 depth and motion, copied on the game's list, stamped, committed, and picked by `PickForPresent` and the eight rules.
 `g_temporalValid` would latch on it as it does on an evaluate, and the status line would say "temporal inputs", which
 is true.
@@ -353,13 +484,13 @@ what shows it.
   margin and step 0's ground-truth score are the defence. A refusal costs a frame on constant depth; a wrong pick costs
   the picture. When in doubt, refuse.
 - **Reversed-Z.** Direction is inferred from a full clear to exactly 0 or 1. A game that never clears depth (it
-  overwrites with a full-screen pass), clears with rects, or clears through a render pass beginning access gives no
-  direction, or a different one.
+  overwrites with a full-screen pass), clears with rects, or uses an unobserved render pass gives no
+  direction. A fully observed render-pass beginning clear to 0 or 1 must count like the explicit clear.
   - Step 0 counts each case and compares with the ground truth.
   - The PSO's depth comparison function would be a second source. It needs pipeline-state tracking (`SetPipelineState`
-    is already hooked for root restore, `D3D12_Hooks.cpp:238`), and is not proposed until step 0 shows the clear
+    is already hooked for root restore, `D3D12_Hooks.cpp:1091`), and is not proposed until step 0 shows the clear
     insufficient.
-  - No linearization: the model takes device depth with an inverted flag, as from DLSS (`GatherFrame`, `:7625`).
+  - No linearization: the model takes device depth with an inverted flag, as from DLSS (`GatherGuideFrame`, `DlssNr_Dx12_Inputs.cpp:110`).
 - **MSAA depth.** It cannot be copied to a single-sample clone, and an averaging resolve is meaningless for depth.
   Refused in v1; a resolve pass (min, max or sample 0) is a new shader with its own native-Windows check.
 - **Typeless and planar depth.** The resource can be `R32_TYPELESS`, `R24G8_TYPELESS`, `R32G8X24_TYPELESS` or
@@ -382,8 +513,8 @@ what shows it.
   `hkCopyDescriptors*` are already attached. Detours stacks a second attach, but the combination needs a run (the test
   plan has one).
 - **Lifetime.** Step 0 holds no reference to a game resource: entries are pointers with a description copied at DSV
-  creation, dropped through `ID3DDestructionNotifier` as `ResTrack_dx12.cpp:195-205` does. Step 1 references only the
-  pick, from recording its copy until the present list is known complete (`ParkNrResource`, `TickNrRetired`). A game
+  creation, dropped through `ID3DDestructionNotifier` as `ResTrack_dx12.cpp:166-203` does. Step 1 references only the
+  pick, from recording its copy until the present list is known complete (`DlssNr_Dx12_Lifetime.cpp:436`, `:549`). A game
   may release its depth on resize while our copy is in flight; the reference covers that.
 
 ## The D3D11 bridge (Divinity, The Witcher 3 DX11)
@@ -422,8 +553,9 @@ D3D11 removes two of the D3D12 risks and adds one transport.
 ## Proton, vkd3d-proton and native Windows
 
 - **Proton is not a D3D12 validator** (reduced-scale-guides.md, "Native Windows"; `13f10d60`).
-  - Step 0 creates no D3D12 object and records no command. Its only native-Windows question is that the hooks do not
-    crash.
+  - Step 0 records no GPU command. Hook installation may need temporary objects to discover interface vtables.
+    Native Windows must verify installation, exact forwarding and coexistence with existing detours as well as
+    absence of a crash; host ranking tests do not establish those properties.
   - Step 1 transitions a game resource from a state we tracked. A wrong "before" state is accepted by vkd3d-proton, and
     is the kind of fault native Windows answers with corruption or removal. On AMD it can damage the game's own depth
     compression, harming the game and not only NR.
@@ -431,12 +563,14 @@ D3D11 removes two of the D3D12 risks and adds one transport.
     resource states at execution: Rafael's RTX 3060.
 - **Descriptor handles.** Under vkd3d-proton, CPU DSV handles are host pointers into its heaps. Games copy DSVs between
   heaps, which is why the descriptor-copy hooks are needed on both platforms.
-- **Queues.** vkd3d-proton can put several D3D12 queues on one `VkQueue` (`with_dx12/dx11_with_dx12.cpp:243`). It does
+- **Queues.** vkd3d-proton can put several D3D12 queues on one `VkQueue` (`OptiScaler/with_dx12/dx11_with_dx12.cpp:244`). It does
   not matter here, since nothing waits across queues.
 - **D24S8.** Native on this machine's NVIDIA driver. On AMD, vkd3d-proton backs it with another format. A copy between
   two resources of the same D3D12 format stays consistent; this is noted, not tested.
-- **`ID3DDestructionNotifier`** under vkd3d-proton: `ResTrack_dx12.cpp:199` already logs when it is missing. If it is
-  missing there, step 0 falls back to pointer identity, which can mislabel a reused address in the log, never in a copy.
+- **`ID3DDestructionNotifier`** under vkd3d-proton: `ResTrack_dx12.cpp:183` already logs when it is missing.
+  The original proposed raw-pointer fallback could mislabel a reused address even in the log. The accepted
+  replacement is an `unobserved` refusal when generation/lifetime identity cannot be established; see the accepted
+  amendment above. Never count that case as a confident ground-truth match.
 
 ## Inert when off, default-identical, config
 
@@ -444,7 +578,7 @@ D3D11 removes two of the D3D12 risks and adds one transport.
 (where motion comes from) and of `RequireDlss` (whether the upscaler's guides are required):
 
 ```
-; Present hosts with no upscaler to take depth from (a D3D12 title on HookMethod=2, the D3D11 bridge):
+; D3D12 present diagnostic at HookMethod=2; D3D11 discovery is not implemented:
 ; constant: the depth guide is a constant, as always. log: watch the game's depth buffers and write to the
 ; log which one would be used and why; nothing is used (diagnostic). Read at start-up.
 ; constant or log - Default (auto) is constant
@@ -456,8 +590,8 @@ PresentDepth=auto
   `Config.cpp`, the text above in `OptiScaler.ini`, and `Config.md`. `nr-invariants` checks the round trip for every
   `DlssNr` key.
 - **Gate.** The observer's detours are installed at device creation only with `Enabled=true`, `HookMethod=2` and
-  `PresentDepth` not `constant`, all read at start-up. Otherwise there is no detour, no allocation and no lock: the
-  default is byte-identical, and `HookMethod=1` users, `HookMethod=2` users who did not ask, and the non-NR paths pay
+  `PresentDepth=log`, all read at start-up. Unknown values must remain inert; `observed` is not accepted in step 0.
+  Otherwise there is no detour, no allocation and no lock: the default is byte-identical, and `HookMethod=1` users, `HookMethod=2` users who did not ask, and the non-NR paths pay
   nothing.
 - **Menu (rule 2).** Nothing in step 0. From step 1, one selector under the present controls, shown only with the
   present route active, `RequireDlss` off and a host that supports it, labelled "applies after a restart" (the pattern
@@ -484,20 +618,22 @@ PresentDepth=auto
 
 ### Step 0: log only (D3D12)
 
-The observer above, behind `PresentDepth=log`, ranking and refusing exactly as step 1 would, and handing nothing to the
-pass. Both consumers' intervals use the identity Tracker's boundary count. If the title has an upscaler, it also
+The implemented observer, behind `PresentDepth=log`, ranks and refuses without handing anything to the pass.
+The original requirement to use the identity Tracker's boundary count did not work on the no-upscaler arm;
+the accepted amendment supplies a separate log-only clock without changing that tracker. Step 0 is D3D12 only;
+D3D11 remains step 2. If the title has an upscaler, it also
 compares its pick with the upscaler's depth (`DLSS.Depth` / `NVSDK_NGX_Parameter_Depth`, already read by
-`CaptureTemporal`, `:6292`) and its direction with the create flags.
+`CaptureTemporal`, `DlssNr_Dx12_PresentGuides.cpp:848`) and its direction with the create flags.
 
-**One line per window**, written by the windowing rule of the identity log (at least 2 s; held up to 30 s while
+**One scan line per window**, with independent R1/R2 comparison fields as implemented above, written by the windowing rule of the identity log (at least 2 s; held up to 30 s while
 unchanged; the first window is always written; nothing when no depth target was ever bound). Counts made up:
 
 ```
-DLSS-NR present depth, candidate scan (log only, nothing used), D3D12 present: 120 presents in 2.0 s, 0 upscaler captures | depth targets bound 5, 2 at the backbuffer's extent | would pick 112, last bound and most draws agree 110 | would refuse 8: none 2, extent 0, multisampled 0, tie 1, direction 0, state 3, cleared 2, aliased 0, other-queue 0, unobserved 0 | pick changed 1 | observer 6214 calls a frame, 0.09 ms a frame (sampled)
+DLSS-NR present depth, candidate scan (log only, nothing used), D3D12 present: 120 presents in 2.0 s, 0 upscaler captures | depth targets bound 5, 2 at the backbuffer's extent (committed 3, placed 2, unknown placement 0) | would pick 112, last bound and most draws agree 110 | would refuse 8: none 2, extent 0, multisampled 0, tie 0, direction 0, state 4, cleared 2, aliased 0, other-queue 0, unobserved 0 | R2 would pick 110, refuse: none 2 extent 0 multisampled 0 tie 2 direction 0 state 4 cleared 2 aliased 0 other-queue 0 unobserved 0 | pick changed 1 | observer 6214 calls a frame, 0.090 ms a frame (sampled, 11651 calls)
 ```
 
 When the window had upscaler captures, a field follows the capture count:
-`| the upscaler's depth: picked 116 of 118, direction agrees 116`.
+`| the upscaler's depth: R1 picked 110 of 112 eligible comparisons, direction agrees 110; R2 picked 109 of 110 eligible comparisons, direction agrees 109`.
 
 **And one line per change of pick** (resource, extent, format, direction or state source):
 
@@ -507,10 +643,10 @@ DLSS-NR present depth, would pick 3440x1440 R32_TYPELESS (DSV D32_FLOAT), commit
 
 The fields:
 
-- `presents`: presents that reached the pick in the window.
+- `presents`: owning real-present boundaries seen by the independent observer clock in the window.
 - `upscaler captures`: commits to the guide ring in the window. Zero is the title with no upscaler.
 - `depth targets bound`: distinct DSV-backed resources bound writable in the window, and how many at the backbuffer's
-  extent.
+  extent; committed, placed and unknown-placement counts are also distinct resources in that window.
 - `would pick`: presents where R1 found a candidate that passes every rule. `agree`: of those, how many R2 named the
   same resource.
 - `would refuse`: by first failing reason, in this order:
@@ -525,18 +661,22 @@ The fields:
   - `other-queue`;
   - `unobserved`: a bundle, a list from before the hooks, a render pass the hooks could not follow.
 - `pick changed`: changes of picked resource. Alternation between two identical buffers is counted once.
-- `observer`: hooked calls per frame, and their cost from a 1-in-64 sample.
+- `observer`: observed hook/submission/present callbacks per frame, and their CPU bookkeeping cost from a
+  1-in-64 sample. Original calls and logger output are excluded; this is not total frame overhead.
 - `the upscaler's depth`: of presents with a pick and an eligible capture, how often the pick is the resource the
   upscaler was handed, and how often the inferred direction equals `DepthInverted`. A game that hands its upscaler a
   separate copy of depth reads as a miss here; the pick line's extent and format show it.
 
-The string `candidate scan (log only` is in the DLL when the slice is linked in.
+The string `candidate scan (log only` is in the observer source and must appear in the integration DLL once
+this slice is linked in. A host check is not proof that a deployed DLL contains it.
 
 **How to read it for step 1:**
 
-- **Precision.** In a DLAA arm, `picked / captures` is the heuristic's precision, and `direction agrees` the
-  direction's. Below 99% in any title, step 1 does not go ahead for that ranking. A miss pattern (menus, cutscenes)
-  is read from the pick lines.
+- **Precision.** In a DLAA arm, score matches against **eligible comparisons for each ranking**. Total ring
+  commits are a separate coverage count, not the denominator. The original sample line cannot supply both
+  rankings' precision; the implemented fields above do. Below 99% in any title, step 1 does not go ahead
+  for that ranking. Keep coverage and refusals beside precision so a nearly-always-refusing observer cannot
+  appear successful from a tiny selected subset. A miss pattern (menus, cutscenes) is read from the pick lines.
 - **R1 against R2.** If `agree` is close to `would pick` and R1's precision equals R2's, the draw hooks go. If R2 is
   clearly better, they stay, and their measured cost is the price.
 - **Which risks are real.** `state`, `cleared`, `aliased` and `other-queue` say which engines need step 3 or more
@@ -545,26 +685,81 @@ The string `candidate scan (log only` is in the DLL when the slice is linked in.
 - **The design's own test.** If, across a session that looks right, the target arm refuses most frames or the DLAA arm
   scores low, the heuristic is not good enough and this note is rewritten before step 1.
 
-### Step 0b: is depth worth finding? (a scratch build, never merged)
+### Step 0b: is depth worth finding? (specified, not built; scratch builds never merged)
 
-In Crimson Desert with DLAA at `HookMethod=2`, the ring carries real depth and motion. Build two variants:
+**Question isolated by A/B:** real motion with real depth versus the **same real motion** with constant depth.
+This experiment does not test a depth observer and does not prove anything about its ranking. It also does not
+answer whether synthesized motion plus real depth lifts the clamp; that needs separate arms after this pair.
 
-- **A:** today's build.
-- **B:** the captured real motion with the constant depth in place of the captured depth.
+**Build contents.** The integration owner builds two isolated scratch variants from one reviewed source ref,
+with the same compiler, embedded shaders, config and model:
 
-Compare the same scenes:
+- **A, control:** unmodified present route. Only a guide pair accepted by the existing ring and identity checks
+  is eligible for comparison. Record build stamp, source ref and SHA-256 of the deployed proxy and model.
+- **B, depth ablation:** at the D3D12 present consumer only, **after** the same pair has passed identity and
+  submission checks, replace the selected cloned depth with an owned, same-extent `R32_FLOAT` zero guide in
+  its known readable state. Preserve the selected motion pointer, scale, encoding, subrect and capture identity,
+  and the real frame's inversion flag. Keeping inversion unchanged isolates spatial depth content; a separate
+  optional arm may test the exact fallback's `DepthInverted=false`, clearly labelled as changing two inputs.
+  The depth's own metadata must describe its real size, origin and state. Refuse the experimental frame if the
+  constant cannot be safely prepared; never label a silent real-depth fallback as B. Use the existing tracked
+  present recording/retirement mechanism for the owned guide; no new private queue, CPU wait or borrowed
+  resource lifetime. Clear only on initialization. With no accepted pair, run the ordinary path and count the
+  frame as **excluded**, not a B sample.
+- A and B must keep history, cadence, hold, HDR/colour, motion and reset policy identical. B must not take the
+  ordinary zero-motion fallback or its forced `AllowSupersampling=false`, since either would confound the
+  experiment. Add a scratch diagnostic that says A/B, eligible/excluded frames, guide extent, working extent,
+  inversion, identity refusal and model acceptance. Do not log addresses or personal paths.
+- The scratch patch must have its own source diff and binaries. No new production setting, shader, installer or
+  distributed model is part of this task. The lead reviews/builds it under the shared-prefix rules; nothing in
+  the present task ran the compiler or produced either binary.
 
-- Hold frame plus the comparison capture ([comparison-capture.md](comparison-capture.md)) on a still view, and on a
-  fast camera pan.
-- `WorkingScale=1.5` on both. B's refusal or acceptance answers synthesized-motion.md §9 question 1.
+**Owner's Crimson Desert procedure:**
 
-If B cannot be told from A, the depth is not worth a heuristic: (a) stops at step 0 as a diagnostic and (c) is the
-answer. Two builds rather than a switch, as nr-before-dlssg.md did for H1 and H2.
+1. Close the game. Select a fixed save, location, camera starting point and time/weather when possible. Record
+   GPU, driver, OS/Proton, output resolution, game version, model SHA-256 and model/pass settings. Keep the game
+   at **DLAA**, render scale 100%, dynamic resolution off, game DLSS-G off for the primary pair. Restart after
+   changing those options. DLAA deliberately supplies real guides; it is not the no-upscaler arm.
+2. Install A with the existing receipt-based installer while the game is closed. In the selected game's INI set
+   `[DlssNr] Enabled=true`, `HookMethod=2`, `RequireDlss=true`, `WorkingScale=1.0`, `Passes=1`, `Cadence=1`,
+   `UseProxy=false`, `Compare=0`, `DebugView=0`, `HoldFrame=false`. Keep every remaining key identical between
+   arms and retain a sanitized copy with the private evidence. Leave `PresentDepth` at its default once that
+   key exists: the scanner is not part of this ablation. No runtime hook-method toggle substitutes for startup.
+3. Start the game and verify A's actual loaded proxy/build stamp. Wait for the selected scene and the model's
+   warm-up. Check the recent guides line and scratch counters: only frames with an identity-accepted real pair
+   are eligible. If the pass never receives such a pair, stop the experiment; the scene cannot answer this question.
+4. Capture a stationary view using **Hold frame**, then **Capture original and processed**, with Compare and
+   DebugView still off. Wait for the capture's saved result; keep both images and its provenance JSON. Release
+   Hold frame before changing the camera. This is a spatial sample of one held frame, not temporal evidence.
+5. Repeat a fixed-duration pan/orbit from the recorded starting view with Hold frame **off**. Keep a video or
+   an authorized temporal capture plus logs, since one PNG cannot establish ghosting or stability. Repeat the
+   same route through gameplay, inventory/menu and a cutscene. Keep the same settings and duration for B.
+6. Exit completely. Install B through the same receipt mechanism, verify its different binary hash and stamp,
+   and repeat steps 3-5 from the same save and view. Do not overwrite a DLL while the game is running. Repeat
+   A once more to distinguish a reproducible difference from scene variation; label the sequence A/B/A.
+7. With the game closed between installations, repeat the paired sequence at `WorkingScale=1.5`. The scratch
+   diagnostic must show the **actual** working extent and model acceptance/refusal in each arm: a control that
+   was silently clamped to native is not a supersampling result. If the 1.0 pair already fails eligibility, do
+   not reinterpret the 1.5 failure as evidence about depth.
+8. Compare like-for-like originals first, then processed edges, disocclusions, fine detail, text/HUD, and the pan's
+   temporal behavior. Record excluded/eligible counts, acceptance/refusal, CPU/GPU timing with their stream
+   names, and any resets; do not report FPS alone as image-quality evidence. Nonidentical game frames limit
+   visual inference even at the same save. Retain the raw captures/logs privately, outside Git.
+9. Restore the known-good receipt/build while the game is closed. Record the restored hash and any unresolved
+   difference. Native Windows and Proton results are separate observations.
 
-### Step 0c: the tag probe (log only)
+A repeatable visible benefit from real depth supports continuing the scanner experiment, not using its picks.
+If the two arms cannot be distinguished, record **no demonstrated benefit in these scenes**; that is not proof
+that depth never matters. Step 1 still waits for valid step-0 precision/coverage numbers in two DLAA titles and
+acceptable hook cost. Real-depth/synthesized-motion and constant-depth/synthesized-motion arms are later, separate
+experiments; the A/B above cannot answer that interaction.
 
-Under the same gate, when `FGInput` is not `dlssg` or `nvngx`: attach the Streamline tag and constants hooks in
-forward-only mode, and count per window the depth and motion tags (lifecycle, declared state, extent, format),
+### Step 0c: the tag probe (partly superseded, log only)
+
+Since the original design, [sl-tag-inventory.md](sl-tag-inventory.md) implements note-only tag inventory with NR
+on even outside `FGInput=dlssg|nvngx`. Do not install a competing second tag observer. That inventory does not
+establish state, queue ownership, frame identity or inversion constants. A separately authorized extension would
+count per window the depth and motion tags (lifecycle, declared state, extent, format),
 HUD-less tags, the constants (depth inverted, motion scale) and whether an upscaler evaluate also ran:
 
 ```
@@ -601,7 +796,7 @@ Its own log-only slice, then use, as in "The D3D11 bridge".
 
 - **New: `tests/nr-present-depth`**, registered in `tests/suites.toml` and indexed in `tests/README.md`. It builds a
   standard-library decision header, `retoque/dlssnr/DlssNr_PresentDepth.h` (the pattern of
-  `DlssNr_PresentGuideIdentity.h`), which the hooks feed and both hosts ask. Event streams:
+  `DlssNr_PresentGuideIdentity.h`), which the D3D12 observer feeds and asks; D3D11 remains unimplemented. Event streams:
   - **Candidates against the scene depth:** a shadow-cascade array beside the scene depth; a first-person pass with its
     own full-size depth; an inventory 3D preview bound last during a menu; two identical buffers alternating every
     frame; a depth-only copy pass.
@@ -615,8 +810,8 @@ Its own log-only slice, then use, as in "The D3D11 bridge".
   - **The log:** the window, both lines and their fields.
   - **Source guards:** in step 0 the observed resource never reaches `EvaluateAtPresent`, and the detours are installed
     only under the gate.
-- **`nr-invariants`**: the key's four points (automatic), and its value set equal in `Config.cpp`, the ini and
-  `Config.md`.
+- **`nr-invariants`**: the key's four points (automatic). The new suite also checks the startup value gate
+  and the declaration/read/save/INI/reference wiring; unknown values stay inert.
 - **Unchanged, as regressions:** `nr-present-guides`, `nr-present-guide-identity`, `nr-present-boundary`,
   `nr-present-host`, `nr-zero-guides`, `bridge-lifetime`, `repo-privacy`.
 - **What these cannot show:** that a real engine's stream looks like the fakes, that the copy is legal on a real
@@ -634,7 +829,7 @@ direction and a readback of the copy. Serial, like the rest of the tier.
 | Crimson Desert, **no upscaler**, DLSS-G off, `HookMethod=2`, `PresentDepth=log` | The target arm: `0 upscaler captures`, the refusal mix, pick stability, cost. |
 | Crimson Desert, no upscaler, **DLSS-G on** (if the menu allows it) | The interval at the boundary (one window per game present, not per DLSS-G present); step 0c's tag line. |
 | Cyberpunk 2077, DLAA then TAA with no upscaler | A second engine for both arms; Ray Reconstruction off. |
-| PCSX2 (`~/Games/pcsx2-nr-test/run.sh`, D3D12 present) | An emulator's depth use: expect `extent` or `tie`, never a confident wrong pick; the observer's cost. |
+| PCSX2 (D3D12 present) | An emulator's depth use: expect `extent` or `tie`, never a confident wrong pick; the observer's cost. |
 | The Witcher 3 DX11, Divinity | Until step 2: nothing installed on the D3D11 device, no line. |
 | DOOM Eternal (Vulkan) | Unchanged: nothing runs. |
 | Any title at `HookMethod=1`, or `PresentDepth=constant` | No detour, no line. |
@@ -649,12 +844,9 @@ direction and a readback of the copy. Serial, like the rest of the tier.
 - Confirm from the log, not from the menu:
   - the identity line (`identity check (log only`, `identity applied` since present-real-guides.md's step 1) never
     appears, since a ring that never recorded logs nothing;
-  - the status line reads `present: active, presentation backbuffer with dummy temporal inputs` (`HookStatus`,
-    `DlssNr_Dx12.cpp:6949`), not "with DLSS temporal inputs". That text latches on the first capture, so one at the
-    title screen spoils the arm; restart the game after changing the setting. (Since present-real-guides.md's step 1
-    the status no longer latches: off the boundary it reads `present: active, zero guides (no motion)` or
-    `synthesized motion`, and the menu's guides line says the same; the routing latch is unchanged, so restart
-    anyway);
+  - inspect the recent guides line for zero/synthesized fallback. `HookStatus` (`DlssNr_Dx12.cpp:4412`)
+    gives the own-Present boundary precedence, so its route text alone is not proof of guide provenance;
+    routing still uses a latch, so restart after changing the game's upscaler setting;
   - the scan line shows `0 upscaler captures` in every window.
 - `HookMethod=2` must be in the ini before start-up, both for the boundary under DLSS-G and for the observer's gate.
 - If the game offers no such mode, Crimson Desert is the DLAA arm only, and Cyberpunk 2077 carries the target arm.
@@ -662,7 +854,7 @@ direction and a readback of the copy. Serial, like the rest of the tier.
 ## Open questions
 
 1. **Is depth worth it?** Step 0b answers, and nothing past step 0 should be built before it does.
-2. **Does real depth with synthesized motion lift the native clamp above `WorkingScale=1`?** Step 0b's 1.5 run.
+2. **Does real depth with synthesized motion lift the native clamp above `WorkingScale=1`?** Still open: step 0b's 1.5 A/B uses real motion, so separate synthesized-motion arms are needed.
 3. **R1 or R2?** Is "last full-size depth bound" enough, or are per-draw hooks needed, and does any engine need the
    PSO's depth state?
 4. **Does Crimson Desert offer DLSS-G without an upscaler, and does it still tag depth and motion then?** That decides
@@ -670,9 +862,8 @@ direction and a readback of the copy. Serial, like the rest of the tier.
 5. **How common are scene depths cleared or aliased before present** (render-graph engines), that is, is step 3 needed?
 6. **What observer cost is acceptable**, in calls and milliseconds a frame, and measured on which CPU besides this
    workstation's (Rafael's PC is the slower one we can reach)?
-7. **The key**: `PresentDepth` with `constant|log|observed`, or no key and the gate on `Enabled` and `HookMethod=2`
-   alone? The latter puts hot-path detours on every `HookMethod=2` user, including Crimson Desert's boundary users who
-   did not ask for them.
+7. **The key is decided for step 0 (2026-11-19):** `PresentDepth=log`, default `constant`/`auto`, plus
+   `Enabled` and `HookMethod=2`. The key and log-only observer are implemented in step 0. `observed` remains future work.
 8. **A depth smaller than the backbuffer** (a game's own spatial upscaler or dynamic resolution): refused here. Should
    a proportional extent be accepted as the ordinary render-size guide contract (reduced-scale-guides.md)?
 9. **A user override for direction**, as NeuRotic has: a control that is right only for some titles, and dead when the
