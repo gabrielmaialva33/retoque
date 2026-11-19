@@ -258,6 +258,10 @@ Install options (proxy name, NR on, previews) sit closed at the end of the tab; 
 holds one button naming the Retoque files in use (with “New release available” beside it when there is one), which
 opens the “Retoque files” dialog with the payload sources and official releases.
 
+A Wine or Proton prefix inside a scanned folder (a portable emulator kept with its own prefix), or added as a
+folder itself, contributes the games installed in it but never its `drive_c/windows` tree (Wine's programs, DXVK's
+and vkd3d's `dxgi.dll` / `d3d12.dll`) nor Steam's client stub as a folder to install into.
+
 A store's uninstall removes only the files it installed, so a game folder can outlive its game with Retoque's
 files in it. Discovery reports unregistered Steam folders with no executable and a Retoque marker
 (`retoque_discovery::leftover`); the home screen offers them under “Left behind by uninstalled games”, and the

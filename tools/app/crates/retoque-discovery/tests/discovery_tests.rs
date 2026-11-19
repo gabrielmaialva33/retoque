@@ -1080,6 +1080,93 @@ fn roots3_emulators_pcsx2_and_skip_games_iso_folder() {
     assert_eq!(emu_games[0].targets[0].executables, vec!["pcsx2-qt.exe"]);
 }
 
+/// A Wine or Proton prefix as Proton lays it out: `drive_c/windows` with Wine's programs and, in `system32` and
+/// `syswow64`, the DXVK and vkd3d `dxgi.dll` / `d3d12.dll`; and Steam's stub client under Program Files (x86).
+fn build_wine_prefix(prefix: &Path) {
+    let windows = prefix.join("drive_c/windows");
+    for dir in ["system32", "syswow64"] {
+        fs::create_dir_all(windows.join(dir)).unwrap();
+        for name in ["dxgi.dll", "d3d12.dll", "version.dll", "winmm.dll"] {
+            fs::write(windows.join(dir).join(name), b"MZ wine builtin or dxvk").unwrap();
+        }
+        fs::write(windows.join(dir).join("notepad.exe"), b"MZ wine").unwrap();
+    }
+    fs::write(windows.join("rundll.exe"), b"MZ wine").unwrap();
+    fs::write(windows.join("winhelp.exe"), b"MZ wine").unwrap();
+    let steam = prefix.join("drive_c/Program Files (x86)/Steam");
+    fs::create_dir_all(&steam).unwrap();
+    fs::write(steam.join("steam.exe"), b"MZ proton stub").unwrap();
+    fs::write(prefix.join("system.reg"), b"WINE REGISTRY Version 2\n").unwrap();
+}
+
+#[test]
+fn prefix1_a_prefix_inside_an_emulator_folder_adds_no_game_folders() {
+    // A portable PCSX2 kept with its own Proton prefix beside it (the layout of a real folder, 2026-11-19): the
+    // prefix's `windows/syswow64` was offered as a folder of the emulator, DXVK's dxgi.dll and d3d12.dll in it.
+    let tmp = TempDir::new("prefix1-emu");
+    let pcsx2 = tmp.path().join("pcsx2-portable");
+    fs::create_dir_all(&pcsx2).unwrap();
+    fs::write(pcsx2.join("pcsx2-qt.exe"), b"MZ-pcsx2").unwrap();
+    build_wine_prefix(&pcsx2.join("pfx/pfx"));
+
+    let found = targets(&pcsx2);
+    assert_eq!(
+        found.iter().map(|t| t.path.clone()).collect::<Vec<_>>(),
+        vec![pcsx2.clone()],
+        "only the emulator's own folder"
+    );
+    assert!(found[0].proxies_present.is_empty());
+
+    let config = Config {
+        manual: vec![pcsx2.clone()],
+        libraries: vec![],
+        home: Some(tmp.path().join("no-home")),
+    };
+    let (games, skipped) = discover(&config);
+    assert!(skipped.is_empty());
+    assert_eq!(games.len(), 1);
+    assert_eq!(games[0].name, "PCSX2");
+    assert_eq!(games[0].targets.len(), 1);
+}
+
+#[test]
+fn prefix2_a_game_installed_inside_a_prefix_is_found_without_wines_own_folders() {
+    // A prefix added as a folder (a game installed with its own Wine prefix, outside any store).
+    let tmp = TempDir::new("prefix2-game");
+    let prefix = tmp.path().join("Jogos do João/prefixo");
+    build_wine_prefix(&prefix);
+    let game = prefix.join("drive_c/Program Files/Ação & Aventura");
+    fs::create_dir_all(&game).unwrap();
+    fs::write(game.join("Aventura.exe"), vec![0u8; 2 * 1024 * 1024]).unwrap();
+    fs::write(game.join("nvngx_dlss.dll"), b"MZ dlss").unwrap();
+
+    let found = targets(&prefix);
+    assert_eq!(
+        found.iter().map(|t| t.path.clone()).collect::<Vec<_>>(),
+        vec![game.clone()]
+    );
+    assert_eq!(found[0].executables, vec!["Aventura.exe"]);
+    assert_eq!(found[0].dlss, vec!["nvngx_dlss.dll"]);
+
+    // The same when the folder added is drive C itself.
+    let found = targets(&prefix.join("drive_c"));
+    assert_eq!(found.iter().map(|t| t.path.clone()).collect::<Vec<_>>(), vec![game]);
+
+    // A game folder that only happens to be called "windows" is still a game folder.
+    let plain = tmp.path().join("Collection");
+    fs::create_dir_all(plain.join("windows")).unwrap();
+    fs::write(plain.join("windows/Game.exe"), b"MZ").unwrap();
+    assert_eq!(targets(&plain).len(), 1);
+}
+
+#[test]
+fn prefix3_steam_client_is_not_a_game_executable() {
+    assert!(is_ignored_exe("steam.exe", Path::new("")));
+    assert!(is_ignored_exe("Steam.exe", Path::new("Program Files (x86)/Steam")));
+    assert!(!is_ignored_exe("SteamWorld Dig.exe", Path::new("")));
+    assert!(!is_ignored_exe("steamworld.exe", Path::new("")));
+}
+
 #[test]
 fn roots_fix1_xbox_ignores_appdata_root_and_non_content_children() {
     let tmp = TempDir::new("roots-fix1-xbox");
