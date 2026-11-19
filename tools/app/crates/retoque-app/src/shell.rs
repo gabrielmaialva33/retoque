@@ -492,7 +492,7 @@ impl RetoqueApp {
             widgets::collapsible(
                 ui,
                 "game_details",
-                self.tr("shell.details"),
+                self.tr("shell.game_details"),
                 widgets::Fold::Details,
                 |ui| {
                     self.status_chips(ui, true);

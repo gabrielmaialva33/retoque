@@ -715,6 +715,42 @@ impl CompareView {
             CaptureNow::Idle => {}
         }
     }
+    /// Synthetic HDR toolbar for layout/accessibility checks. No scanner, game capture or worker is started.
+    #[cfg(test)]
+    pub(crate) fn audit_toolbar(&mut self, ui: &mut egui::Ui, lang: Lang) {
+        if self.loaded.is_none() {
+            let texture = ui.ctx().load_texture(
+                "audit",
+                ColorImage::filled([1, 1], Color32::BLACK),
+                TextureOptions::default(),
+            );
+            self.loaded = Some(Loaded {
+                original: texture.clone(),
+                processed: texture.clone(),
+                diff: texture,
+                size: Vec2::splat(1.0),
+                stats: Stats {
+                    psnr: f64::INFINITY,
+                    mean_absolute_difference: 0.0,
+                    changed_percent: 0.0,
+                },
+                exposure: 1.0,
+                elapsed: Duration::ZERO,
+                ev: 0.0,
+            });
+            self.pairs.push(Pair {
+                stem: "synthetic".into(),
+                original: "original.pfm".into(),
+                processed: "processed.pfm".into(),
+                sidecar: None,
+                hdr: true,
+                provenance: vec![],
+            });
+            self.selected = Some(0);
+        }
+        self.toolbar(ui, lang, Path::new("synthetic"));
+    }
+
     fn toolbar(&mut self, ui: &mut egui::Ui, lang: Lang, target: &Path) -> bool {
         let compact = ui.available_width() < 850.0;
         let loaded = self.loaded.is_some();
@@ -743,7 +779,11 @@ impl CompareView {
                     if fit.clicked() {
                         self.transform = Transform::default();
                     }
-                    if ui.button(t(lang, "one")).clicked() {
+                    let one = ui.button(t(lang, "one")).on_hover_text(t(lang, "cmp.actual_size"));
+                    one.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), t(lang, "cmp.actual_size"))
+                    });
+                    if one.clicked() {
                         self.one_to_one(ui.ctx());
                     }
                 }
@@ -803,7 +843,11 @@ impl CompareView {
                         self.transform = Transform::default();
                         ui.close();
                     }
-                    if ui.button(t(lang, "one")).clicked() {
+                    let one = ui.button(t(lang, "one")).on_hover_text(t(lang, "cmp.actual_size"));
+                    one.widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::Role::Button, ui.is_enabled(), t(lang, "cmp.actual_size"))
+                    });
+                    if one.clicked() {
                         self.one_to_one(ui.ctx());
                         ui.close();
                     }
@@ -1451,7 +1495,7 @@ mod tests {
         harness.drop_at(canvas.center() - Vec2::new(30.0, 0.0));
         harness.run();
         assert!(harness.state().divider < 0.5);
-        harness.get_by_label("1:1").click();
+        harness.get_by_label("Actual size (1:1)").click();
         harness.run();
         assert!(!harness.state().transform.fit);
         harness.get_by_label("Fit").click();

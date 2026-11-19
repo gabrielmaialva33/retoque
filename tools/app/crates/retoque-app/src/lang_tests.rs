@@ -582,7 +582,7 @@ fn audited_install_intent_precedes_information_and_versions_live_in_details() {
         status.forwarder_version = Some("10.0.0.1".into());
         h.run_steps(2);
         assert!(h.query_by_label_contains("10.0.0.1").is_none());
-        h.get_by_label(t(lang, "shell.details")).click();
+        h.get_by_label(t(lang, "shell.game_details")).click();
         h.run_steps(3);
         h.get_by_label_contains("OptiScaler 10.0.0.1");
         h.get_by_label(&format!(
@@ -819,6 +819,111 @@ fn audited_library_titles_wrap_twice_and_only_attention_states_are_painted() {
                 2,
                 "both row and cover retain the full accessible name and state"
             );
+        }
+    }
+}
+
+#[test]
+fn audited_settings_have_one_muted_line_and_one_toolbar_row() {
+    let dir = tempfile::tempdir().unwrap();
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.], [320., 800.]] {
+            let mut state = app();
+            state.lang = lang;
+            state.view.target = Some(dir.path().into());
+            state.view.ini = Some(Ok(Some(Ini::parse(b"[DlssNr]\nEnabled=true\n"))));
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(
+                    |ui, state: &mut RetoqueApp| {
+                        let mut edits = std::mem::take(&mut state.view.edits);
+                        let commands = state.cmd_tx.clone();
+                        state.settings_tab(ui, &mut edits, &commands);
+                        state.view.edits = edits;
+                    },
+                    state,
+                );
+            h.run_steps(2);
+            assert!(
+                h.query_by_label(t(lang, "set.saved_title")).is_none(),
+                "no explanation card"
+            );
+            let note = h.get_by_label(t(lang, "set.saved_summary")).rect();
+            assert!(note.height() <= 22., "one line even when narrow");
+            let search = h.get_by_role_and_label(Role::TextInput, t(lang, "set.filter")).rect();
+            assert!(search.width() >= 150.);
+            assert!(note.bottom() <= search.top());
+            let controls = if let Some(menu) = h.query_by_role_and_label(Role::Button, t(lang, "set.tools")) {
+                let rect = menu.rect();
+                menu.click();
+                h.run_steps(2);
+                h.get_by_label(t(lang, "set.only_changed"));
+                let undo = h.get_by_label(t(lang, "undo.title")).rect();
+                assert!(window_rect(size).contains_rect(undo), "overflow menu fits");
+                h.key_press(egui::Key::Escape);
+                h.run_steps(2);
+                vec![rect]
+            } else {
+                vec![
+                    h.get_by_label(t(lang, "set.only_changed")).rect(),
+                    h.get_by_label(t(lang, "undo.title")).rect(),
+                ]
+            };
+            for control in controls {
+                assert!(
+                    (search.center().y - control.center().y).abs() < 1.0,
+                    "toolbar stays on one row"
+                );
+                assert!(!search.intersects(control));
+                assert!(window_rect(size).contains_rect(control));
+            }
+        }
+    }
+}
+
+#[test]
+fn audited_compare_controls_have_descriptive_names_and_tooltips_in_every_language() {
+    use egui_kittest::kittest::NodeT as _;
+    for lang in Lang::ALL {
+        for size in [[1280., 800.], [1024., 768.], [820., 520.]] {
+            let mut h = Harness::builder()
+                .with_size(size)
+                .with_context_setup(move |ctx| {
+                    crate::theme::apply(ctx);
+                    crate::fonts::apply(ctx, lang);
+                })
+                .build_ui_state(
+                    move |ui, view: &mut crate::compare::CompareView| view.audit_toolbar(ui, lang),
+                    crate::compare::CompareView::default(),
+                );
+            h.run_steps(3);
+            for button in h.query_all_by_role(Role::Button) {
+                let label = button.accesskit_node().label().unwrap_or_default();
+                assert!(
+                    !label.trim().is_empty() && label != "0" && label != "…",
+                    "unnamed comparison control"
+                );
+                assert!(
+                    window_rect(size).contains_rect(button.rect()),
+                    "{lang:?} {size:?}: {label} leaves toolbar"
+                );
+            }
+            for key in ["cmp.actual_size", "exposure_reset", "cmp.tools", "cmp.expand"] {
+                h.get_by_role_and_label(Role::Button, t(lang, key)).hover();
+                h.run_steps(5);
+                assert!(
+                    h.output()
+                        .shapes
+                        .iter()
+                        .any(|s| matches!(&s.shape, egui::Shape::Text(text) if text.galley.job.text == t(lang, key))),
+                    "{lang:?} {size:?}: {key} has a visible tooltip"
+                );
+            }
+            h.get_by_role_and_label(Role::Slider, t(lang, "exposure"));
         }
     }
 }

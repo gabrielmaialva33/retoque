@@ -120,3 +120,10 @@ Current and ordinary installed entries are quiet. Updates, incomplete or unregis
 cached warning/error findings show a status word plus an emphasized edge; information alone is not attention.
 “Needs attention” combines with search, “Installed only” and favorites, and keyboard navigation follows the same
 filtered groups. Its help says that it includes problems already found, not a new inspection of every game.
+
+### Page chrome
+
+Game details name their contents: files, versions and folder. The settings explanation is one muted line;
+its complete saved-versus-live explanation remains available on hover. Search and settings actions share
+one row; secondary controls move into a named Options menu when they would squeeze search below 160 points.
+Comparison controls with symbols or numeric shorthand have descriptive hover text and accessible names.
