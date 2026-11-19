@@ -174,6 +174,38 @@ fixture, and that unchanged refusals do not query/allocate each frame. Compare a
 with the intentional over-estimate; do not call the aggregate model statistic a per-pass delta.
 No GPU run was performed here.
 
+## Step-3 admission review: stopped before the runtime loop, 2026-11-19
+
+The next unproved premise is `Prerequisites::orderedQueue`, before recording an evaluation.
+The after-upscale `VkRecording::Ticket` carries identity, level and reuse flags, but not its pool's
+queue family. The new certificate does not certify `vkCreateCommandPool`. The pre-stage observer
+has pool/family facts, but its startup/continuous gate is Stage 1; it is not evidence for Stage 0.
+The w/Dx12 private pool map is likewise not a certificate covering the independent native route.
+
+The executable creation fixture now completes creation A on queue 1, then forwards a different
+primary ONE_TIME_SUBMIT recording B on queue 2. A remains Ready; no marker observes B. This is
+correct for the creation adapter and proves it cannot be reused as an evaluation ordering claim.
+No model/evaluation commands are issued by this synthetic witness.
+
+The current route creates [exclusive images](https://docs.vulkan.org/refpages/latest/refpages/source/VkSharingMode.html),
+and its barriers use QUEUE_FAMILY_IGNORED. [Pipeline barriers alone](https://docs.vulkan.org/spec/latest/chapters/synchronization.html)
+do not create inter-queue dependencies. A pass loop cannot infer affinity/order from primary,
+serial, ONE_TIME_SUBMIT, a prior present, or A's fence. In particular, a game may legally use
+different queues for different buffers. This is not an assertion that DOOM does so.
+
+There is also an off-transition constraint: pending chain resources cannot simply be published
+into `g_vk.feature` or reused as the legacy generation. A switch to Passes=1 must leave legacy
+forwarding and recording unchanged; adding a wait/submit or a new lock to that path to repair a
+chain dependency is prohibited. Recording pins protect lifetime, not ordering or ownership.
+The runtime loop and menu therefore remain unimplemented.
+
+To continue conservatively, the lead must settle the admitted queue shape and off-transition
+ownership: e.g. a certified single-queue logical device plus pool-family provenance, with pending
+features kept separate from the legacy slot, or independent evaluation completion/handoff evidence
+and isolated chain resources for multiple queues. The former is an additional proposed device-shape
+restriction, not an assumption about the user's game. This review makes no relaxation of the
+accepted heap policy and does not substitute a host test for native GPU qualification.
+
 ## Historical step-2 attribution review (resolved by the restricted policy above), 2026-11-19
 
 At this historical review, step 1a/1b/1c was implemented and host-tested. Step 2 was **not** implemented; steps 3/4 were not

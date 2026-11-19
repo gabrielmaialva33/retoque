@@ -212,6 +212,25 @@ int main()
     assert(observer.Ready(second, 2) && !observer.Ready(first, 2));
     Clean(observer);
 
+    // Step-3 boundary: creation completion is not evaluation queue affinity or completion.
+    // A later, unwatched primary recording can be forwarded on another queue while the
+    // original creation remains Ready. Its serial says nothing about that new work.
+    assert(observer.Initialize(device, functions));
+    const auto createdOnFirst = observer.Watch(Begin(7), 1, registry);
+    registry.End(7);
+    Submit(observer, 1, { 7 });
+    fences.begin()->second.signalled = true;
+    assert(observer.Ready(createdOnFirst, 2));
+    const auto laterRecording = Begin(8);
+    assert(laterRecording.level == VkRecording::Level::Primary && laterRecording.oneTime);
+    registry.End(8);
+    const auto beforeLater = markers;
+    Submit(observer, 2, { 8 });
+    assert(markers == beforeLater && fences.empty());
+    assert(observer.Ready(createdOnFirst, 3));
+    Clean(observer);
+    std::cout << "PASS: creation readiness does not establish later evaluation queue ownership/order\n";
+
     // Discard/free/reuse cannot turn an old marker into proof for a replacement recording.
     for (int discard = 0; discard < 5; ++discard)
     {

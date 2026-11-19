@@ -57,3 +57,10 @@ queries, overflow, device reuse/loss, effective-settings refusal latching and tw
 slots including permanent abandonment. The real host admission body is compiled in the submit
 fixture; Passes=1 forbids heap allocation and proves no query, log or observer lock. This does not
 exercise a driver budget or allocate a chain generation.
+
+## Step-3 queue boundary
+
+The creation fixture also proves that A can be Ready on one queue while a later unwatched
+primary ONE_TIME_SUBMIT recording B is forwarded on another queue, without a completion marker
+for B. A's creation evidence therefore does not establish B's ordering or queue-family ownership.
+This is a boundary witness, not a failure of the creation observer or an executed GPU hazard.
