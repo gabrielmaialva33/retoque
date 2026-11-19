@@ -805,9 +805,11 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
                  ID3D12Resource* target, ID3D12Resource* input, bool wrote, uint32_t width, uint32_t height,
                  uint32_t format, uint32_t cadenceRequested, bool cadenceSmoothing, float residualLimit, float minRatio,
                  uint32_t cadenceInEffect, bool carried, uint64_t present, int64_t nowMs);
+bool BeginMeterDispatch(ID3D12GraphicsCommandList* cmdList);
 void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound);
 void ConsumeMeterReadback();
 void InvalidateExposureMeter();
+void ShutdownExposureMeter();
 float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,
                         bool scanInverted, float scanTrim);
 void ReportSkipOnce(const char* reason);

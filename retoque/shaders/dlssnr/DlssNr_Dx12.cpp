@@ -2054,7 +2054,10 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     g_nr.gamePreExposure = DlssNr::Exposure::PreExposure(frame.PreExposure);
 
-    if (g_nr.meter != nullptr && wantExposure)
+    if (exposureSettingOn && !holdingColor)
+        ConsumeMeterReadback();
+
+    if (g_nr.meter != nullptr && wantExposure && BeginMeterDispatch(cmdList))
     {
         DlssNrConstants meterParams {};
         meterParams.Mode = DlssNrMode_Meter;
@@ -2080,7 +2083,6 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 
         CopyMeterToReadback(cmdList, device, true);
-        ConsumeMeterReadback();
     }
 
     float whitePoint =
@@ -7015,11 +7017,7 @@ void Shutdown()
     }
     g_cadence.Drop();
 
-    if (g_nr.meter != nullptr)
-    {
-        g_nr.meter->Release();
-        g_nr.meter = nullptr;
-    }
+    ShutdownExposureMeter();
 
     if (g_nr.calib != nullptr)
     {
@@ -7042,26 +7040,6 @@ void Shutdown()
     g_nr.calibSteadiness = 0.0f;
     g_nr.calibUsable = false;
     g_nr.calibWhy = "measuring...";
-
-    for (auto& rb : g_nr.meterReadback)
-    {
-        if (rb != nullptr)
-        {
-            rb->Release();
-            rb = nullptr;
-        }
-    }
-
-    // The slots these flags describe have just been released, so nothing may vouch for what the next
-    // buffers happen to contain. gameExposure is deliberately NOT cleared here: a recreate is a
-    // transition within the same scene, and dropping to the slider for a few frames would be the
-    // flicker the held value exists to prevent. The user switching the option off is the case where
-    // the held value has to go, and that is handled at the edge in Dispatch.
-    for (bool& valid : g_nr.meterExposureValid)
-        valid = false;
-
-    g_nr.meterFrames = 0;
-    g_nr.exposureLatch.Reset();
 
     if (g_nr.depthClone != nullptr)
     {
