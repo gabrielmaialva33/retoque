@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DlssNr_VkChain.h"
+#include "DlssNr_VkBudget.h"
 #include <vulkan/vulkan.h>
 #include <array>
 #include <atomic>
@@ -49,6 +50,7 @@ template <class Mutex = std::mutex> class CreationObserver
     std::atomic<uint64_t> _offEpoch { 0 };
     inline static std::atomic<uint64_t> _nextSerial { 1 }; // shared across slots and device-handle reuse
     CompletionFunctions _fn;
+    BudgetSource _budget;
     Mutex _mutex;
     std::array<Entry, 10> _entries {};
 
@@ -87,6 +89,12 @@ template <class Mutex = std::mutex> class CreationObserver
     }
 
   public:
+    void ConfigureBudget(VkPhysicalDevice physical, bool enabledAndSupported,
+                         PFN_vkGetPhysicalDeviceMemoryProperties2 query)
+    {
+        _budget.Configure(physical, enabledAndSupported, query, BudgetNowMs, &_lost);
+    }
+    const BudgetSource& Budget() const { return _budget; }
     VkDevice Device() const { return _device.load(std::memory_order_acquire); }
     // Before the device is exposed to application callbacks; serialized by the existing install lock.
     bool Initialize(VkDevice device, CompletionFunctions functions)
@@ -94,6 +102,7 @@ template <class Mutex = std::mutex> class CreationObserver
         if (Device() || !device || !functions.Valid())
             return false;
         _fn = functions;
+        _budget = {};
         _lost.store(false, std::memory_order_relaxed);
         _offEpoch.store(0, std::memory_order_relaxed);
         _overflow.store(false, std::memory_order_relaxed);

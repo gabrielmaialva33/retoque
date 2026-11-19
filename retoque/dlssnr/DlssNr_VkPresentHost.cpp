@@ -3950,6 +3950,7 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT
     };
     bool edited = false;
+    bool chainBudgetEnabled = false;
     if (!internal && info != nullptr)
     {
         std::vector<std::string> asked;
@@ -3986,7 +3987,12 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
             }
         }
 
-        extensions = PlanDeviceExtensions(asked, SupportedDeviceExtensions(physical), facts);
+        const auto supported = SupportedDeviceExtensions(physical);
+        extensions = PlanDeviceExtensions(asked, supported, facts);
+        chainBudgetEnabled =
+            DlssNr::VkChain::EnableBudgetExtension(Config::Instance()->DlssNrEnabled.value_or_default() &&
+                                                       Config::Instance()->DlssNrPasses.value_or_default() > 1,
+                                                   properties2, asked, supported, extensions.add);
 
         // The feature the model's allocations need, only where its extension will be there: on a device the model
         // cannot use anyway, nothing is added for it.
@@ -4116,6 +4122,20 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
         }
 
         RegisterCreationObserver(*device, info, below);
+        if (auto* observer = CreationObserverFor(*device))
+        {
+            PFN_vkGetPhysicalDeviceMemoryProperties2 query = nullptr;
+            if (chainBudgetEnabled && g_getInstanceProcAddr && instance)
+            {
+                const bool core =
+                    VK_API_VERSION_MAJOR(instanceApiVersion) > 1 ||
+                    (VK_API_VERSION_MAJOR(instanceApiVersion) == 1 && VK_API_VERSION_MINOR(instanceApiVersion) >= 1);
+                query = reinterpret_cast<PFN_vkGetPhysicalDeviceMemoryProperties2>(
+                    g_getInstanceProcAddr(instance, core ? "vkGetPhysicalDeviceMemoryProperties2"
+                                                         : "vkGetPhysicalDeviceMemoryProperties2KHR"));
+            }
+            observer->ConfigureBudget(physical, chainBudgetEnabled, query);
+        }
         TransportLock lock;
         if (DeviceTransport* dev = FindDevice(*device); dev != nullptr && below != nullptr)
             dev->fn.queueSubmit = below;
@@ -4359,4 +4379,37 @@ void DlssNr::VkPresentHost::AbandonCreationObserver(VkDevice device)
 {
     if (auto* observer = CreationObserverFor(device))
         observer->Lost();
+}
+
+DlssNr::VkChain::BudgetDecision
+DlssNr::VkPresentHost::AdmitChainBudget(VkDevice device, VkChain::BudgetGate& gate, VkChain::BudgetKey key,
+                                        uint64_t estimatedModelBytes,
+                                        std::span<const VkChain::TextureReservation> textures)
+{
+    if (key.count <= 1 || !Config::Instance()->DlssNrEnabled.value_or_default() ||
+        Config::Instance()->DlssNrPasses.value_or_default() <= 1)
+    {
+        VkChain::BudgetDecision out;
+        out.legacy = true;
+        return out;
+    }
+    const auto* observer = CreationObserverFor(device);
+    const VkChain::BudgetSource missing;
+    const auto& source = observer ? observer->Budget() : missing;
+    key.device = (uint64_t) device;
+    key.deviceGeneration = source.Generation();
+    auto result = gate.Check(key, source, estimatedModelBytes, textures);
+    if (result.log)
+        LOG_INFO("DLSS-NR Vulkan chain budget: {} requested {} heap {} budget {} used {} model estimate {} textures {}",
+                 VkChain::BudgetText(result.reason), key.count, result.sample.heap, result.sample.budget,
+                 result.sample.used, estimatedModelBytes, result.textures);
+    return result;
+}
+DlssNr::VkChain::BudgetSample DlssNr::VkPresentHost::SampleChainBudget(VkDevice device)
+{
+    if (!Config::Instance()->DlssNrEnabled.value_or_default() ||
+        Config::Instance()->DlssNrPasses.value_or_default() <= 1)
+        return {};
+    const auto* observer = CreationObserverFor(device);
+    return observer ? observer->Budget().Read() : VkChain::BudgetSample {};
 }

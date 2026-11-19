@@ -175,6 +175,8 @@ template <class Pfn> bool Resolve(VkDevice, const char* name, Pfn& out)
     return true;
 }
 
+#define LOG_INFO(...) (++budgetLogs)
+unsigned budgetLogs = 0;
 // @production@
 
 int main()
@@ -204,6 +206,26 @@ int main()
     assert(resolves == 3 && CreationObserverFor(device));
     RegisterCreationObserver(device, &deviceInfo, OwnSubmit);
     assert(resolves == 3); // duplicate notification cannot allocate another observer slot
+    VkChain::BudgetGate budgetGate;
+    VkChain::BudgetKey budgetKey;
+    budgetKey.count = 2;
+    Config::Instance()->DlssNrPasses.value = 1;
+    const auto beforeBudget = ObserverMutex::calls;
+    forbidHeap = true;
+    assert(AdmitChainBudget(device, budgetGate, budgetKey, 0, {}).legacy);
+    assert(SampleChainBudget(device).reason == VkChain::BudgetReason::Query);
+    assert(ObserverMutex::calls == beforeBudget && budgetLogs == 0);
+    std::vector<std::string> extensionNames;
+    assert(!VkChain::EnableBudgetExtension(false, true, extensionNames, extensionNames, extensionNames));
+    forbidHeap = false;
+    Config::Instance()->DlssNrPasses.value = 2;
+    assert(AdmitChainBudget(device, budgetGate, budgetKey, 0, {}).reason == VkChain::BudgetReason::Extension);
+    assert(budgetLogs == 1);
+    assert(AdmitChainBudget(device, budgetGate, budgetKey, 0, {}).reason == VkChain::BudgetReason::Extension);
+    assert(budgetLogs == 1);
+    ++budgetKey.width;
+    assert(AdmitChainBudget(device, budgetGate, budgetKey, 0, {}).reason == VkChain::BudgetReason::Extension);
+    assert(budgetLogs == 2);
     CreationObserverFor(device)->Destroy(true);
     g_chainCoverage.Forget(20);
 

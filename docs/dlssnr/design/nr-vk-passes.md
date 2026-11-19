@@ -73,7 +73,7 @@ budget, all ten output positions and settings retry. The real recording registry
 both submitted-unknown and never-submitted recordings can drop their pins on Reset. Source guards
 hold the current renderer and menu to one pass while this slice is the only implementation.
 
-Implementation sequence (step 1 is implemented below; steps 2–4 remain):
+Implementation sequence (steps 1–2 adapters are implemented below; steps 3–4 remain):
 
 1. Observe successful submit/submit2/KHR of the exact primary creation buffer, with an owned completion
    primitive and identity protected against fence reuse. Cover entrypoint aliases, failed submits,
@@ -132,9 +132,51 @@ A refusal is logged once at publication; global capacity exhaustion logs once an
 all additional devices until slots retire. Native queue functions hidden behind an unqualified
 own-module wrapper are conservatively uncertified. The existing host install opt-in remains.
 
-## Step-2 attribution review: stopped before implementation, 2026-11-19
+## Step 2: restricted live heap budget, 2026-11-19
 
-Step 1a/1b/1c is implemented and host-tested. Step 2 is **not** implemented; steps 3/4 were not
+The lead approved the unique-device-local-heap policy after the attribution review below.
+`DlssNr_VkBudget.h` now queries `vkGetPhysicalDeviceMemoryProperties2` with
+`VK_EXT_memory_budget`, enabled at successful device creation only for a requested chain and
+only when supported with the properties2 dependency. Without that opt-in/certificate the source
+is unavailable. The query is performed anew for each admitted attempt; zero/unwritten/invalid
+output, backwards time, a query taking more than 100 ms, a sample older than 100 ms or device loss
+refuses. A query does not promise an allocation will succeed: budget and usage are driver estimates.
+
+Exactly one DEVICE_LOCAL heap is required. Every chain texture reservation must have a known
+actual allocation type on that heap and nonzero `VkMemoryRequirements::size` (or a proved larger
+bound). Different/unknown/nonlocal types refuse. The **whole** estimated model byte count is charged
+to this heap; existing texture storage may also be counted again on top of usage. This is an
+intentional over-estimate, allowed only by this restricted policy. It is not model allocation
+telemetry and never infers a heap from the model's stats. Multiple local heaps are refused.
+Overflow-safe headroom remains max(512 MiB, 20%) plus 150% of max(model estimate, 256 MiB) plus all
+texture reservations.
+
+`BudgetGate` latches a named refusal until device generation, dimensions/format/filter, pass count
+or effective tuning changes. Clock, budget fluctuations, recording resets, inactive pass overrides
+and inheritance switches with identical resolved tuning do not retry. `AdmitChainBudget` logs the
+reason once per such change. Passes=1 returns before source lookup/query or latch mutation. The
+device-create extension helper does not allocate or alter the extension list when unrequested.
+
+`RetainedGenerations` supplies two fixed slots for the step-3 owner, including abandoned generations.
+A slot can be released only after both recording retirement and live drain; abandoned slots never
+return. The generation integration must reserve **before** allocating/recording and preserve this
+owner across changes. These metadata tokens themselves release no GPU resource.
+
+The host configures the live budget source alongside the creation observer and exposes admission
+and post-create sampling. The single-feature renderer still does not call them; there is no chain
+generation yet. This is the step-2 adapter, not an operational multipass renderer.
+
+The native fixture and RTX 4090 DOOM run must log heap index, live budget and usage immediately
+before and after **each** created pass, together with full model estimate and texture reservation.
+Record before/after both success and failure, and show that the next attempt uses a fresh query.
+Demonstrate refusal for two local heaps/missing extension/stale query/mixed textures in the fake
+fixture, and that unchanged refusals do not query/allocate each frame. Compare actual usage deltas
+with the intentional over-estimate; do not call the aggregate model statistic a per-pass delta.
+No GPU run was performed here.
+
+## Historical step-2 attribution review (resolved by the restricted policy above), 2026-11-19
+
+At this historical review, step 1a/1b/1c was implemented and host-tested. Step 2 was **not** implemented; steps 3/4 were not
 started. The unresolved contract is what proves the relevant heap for the opaque model's
 allocations before the first chain feature can be created. This is an attribution boundary,
 not a failure of Vulkan's live budget query.

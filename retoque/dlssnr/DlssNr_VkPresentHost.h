@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DlssNr_VkRecording.h"
+#include "DlssNr_VkBudget.h"
 #include <windows.h>
 #include <optional>
 #include <vulkan/vulkan.h>
@@ -52,6 +53,10 @@ uint64_t WatchCreation(VkDevice device, const VkRecording::Ticket& ticket, uint6
 bool CreationReady(VkDevice device, uint64_t serial, uint64_t present);
 void CancelCreation(VkDevice device, uint64_t serial);
 void AbandonCreationObserver(VkDevice device);
+VkChain::BudgetDecision AdmitChainBudget(VkDevice device, VkChain::BudgetGate& gate, VkChain::BudgetKey key,
+                                         uint64_t estimatedModelBytes,
+                                         std::span<const VkChain::TextureReservation> textures);
+VkChain::BudgetSample SampleChainBudget(VkDevice device);
 
 // Called once by VulkanHooks::DestroyDevice, shared by both detour layers. Stops/drains NR,
 // or drains an untracked device under the host's transport/known-queue locks. False requires

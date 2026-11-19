@@ -20,6 +20,13 @@ production = 'thread_local unsigned g_creationSubmitDepth = 0;\nthread_local VkQ
     'template <size_t S>\nVkResult VKAPI_CALL hkQueueSubmit(',
     'template <size_t S>\nVkResult VKAPI_CALL hkQueueSubmit2(',
 ))
+for signature, qualified, local in (
+    ('DlssNr::VkChain::BudgetDecision\nDlssNr::VkPresentHost::AdmitChainBudget(',
+     'DlssNr::VkPresentHost::AdmitChainBudget', 'AdmitChainBudget'),
+    ('DlssNr::VkChain::BudgetSample DlssNr::VkPresentHost::SampleChainBudget(',
+     'DlssNr::VkPresentHost::SampleChainBudget', 'SampleChainBudget'),
+):
+    production += '\n' + function(source, signature).replace(qualified, local, 1)
 # The shared callback is tested via both slots; real Detours alias installation is NOT exercised here.
 assert 'AttachQueueCall(submit2Khr, g_submit2, kSubmit2Hooks, "vkQueueSubmit2KHR")' in source
 with tempfile.TemporaryDirectory(prefix='nr-vk-submit-boundary-') as temporary:
