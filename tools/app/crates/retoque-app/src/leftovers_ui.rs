@@ -37,8 +37,7 @@ impl RetoqueApp {
                     self.library_state.leftovers_review = true;
                 }
                 if busy {
-                    ui.spinner();
-                    ui.label(RichText::new(self.tr("left.removing")).small());
+                    widgets::busy(ui, self.lang, self.tr("left.removing"), None, None);
                 }
             });
         });
@@ -46,6 +45,9 @@ impl RetoqueApp {
     }
 
     pub(crate) fn leftovers_modal(&mut self, ctx: &egui::Context) {
+        self.library_state
+            .leftovers_focus
+            .sync(ctx, self.library_state.leftovers_review);
         if !self.library_state.leftovers_review {
             return;
         }
@@ -53,55 +55,58 @@ impl RetoqueApp {
         let mut confirm = false;
         let mut cancel = false;
         let bytes: u64 = self.library_state.leftovers.iter().map(|l| l.remove_bytes()).sum();
-        let response = egui::Modal::new(egui::Id::unique("leftovers_review")).show(ctx, |ui| {
-            ui.set_max_width(640.0_f32.min(ctx.content_rect().width() - 48.0));
-            ui.heading(t(lang, "left.review_title"));
-            ui.add(egui::Label::new(RichText::new(t(lang, "left.review_note")).small().color(theme::MUTED)).wrap());
-            ui.add_space(8.0);
-            egui::ScrollArea::vertical()
-                .max_height((ctx.content_rect().height() - 260.0).max(160.0))
-                .show(ui, |ui| {
-                    for leftover in &self.library_state.leftovers {
-                        ui.push_id(&leftover.dir, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(RichText::new(folder_name(&leftover.dir)).strong());
-                                ui.label(
-                                    RichText::new(
-                                        t(lang, "left.folder_line")
-                                            .replace("{files}", &leftover.remove.len().to_string())
-                                            .replace("{size}", &size_text(lang, leftover.remove_bytes())),
-                                    )
-                                    .color(theme::TEXT),
-                                );
-                            });
-                            ui.label(
-                                RichText::new(crate::format::display_path(&leftover.dir))
-                                    .small()
-                                    .monospace()
-                                    .color(theme::MUTED),
-                            );
-                            if !leftover.keep.is_empty() {
-                                let keeps = t(lang, "left.keeps").replace("{count}", &leftover.keep.len().to_string());
-                                widgets::collapsible(ui, "keeps", &keeps, widgets::Fold::Details, |ui| {
-                                    for path in leftover.keep.iter().take(12) {
-                                        ui.label(RichText::new(path).small().monospace());
-                                    }
-                                    if leftover.keep.len() > 12 {
-                                        ui.label(RichText::new("…").small());
-                                    }
+        let response = egui::Modal::new(egui::Id::unique("leftovers_review"))
+            .frame(widgets::modal_frame())
+            .show(ctx, |ui| {
+                ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 640.0));
+                ui.heading(t(lang, "left.review_title"));
+                ui.add(egui::Label::new(RichText::new(t(lang, "left.review_note")).small().color(theme::MUTED)).wrap());
+                ui.add_space(8.0);
+                egui::ScrollArea::vertical()
+                    .max_height((ctx.content_rect().height() - 260.0).max(160.0))
+                    .show(ui, |ui| {
+                        for leftover in &self.library_state.leftovers {
+                            ui.push_id(&leftover.dir, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new(folder_name(&leftover.dir)).strong());
+                                    ui.label(
+                                        RichText::new(
+                                            t(lang, "left.folder_line")
+                                                .replace("{files}", &leftover.remove.len().to_string())
+                                                .replace("{size}", &size_text(lang, leftover.remove_bytes())),
+                                        )
+                                        .color(theme::TEXT),
+                                    );
                                 });
-                            }
-                            ui.add_space(8.0);
-                        });
-                    }
+                                ui.label(
+                                    RichText::new(crate::format::display_path(&leftover.dir))
+                                        .small()
+                                        .monospace()
+                                        .color(theme::MUTED),
+                                );
+                                if !leftover.keep.is_empty() {
+                                    let keeps =
+                                        t(lang, "left.keeps").replace("{count}", &leftover.keep.len().to_string());
+                                    widgets::collapsible(ui, "keeps", &keeps, widgets::Fold::Details, |ui| {
+                                        for path in leftover.keep.iter().take(12) {
+                                            ui.label(RichText::new(path).small().monospace());
+                                        }
+                                        if leftover.keep.len() > 12 {
+                                            ui.label(RichText::new("…").small());
+                                        }
+                                    });
+                                }
+                                ui.add_space(8.0);
+                            });
+                        }
+                    });
+                ui.separator();
+                ui.horizontal(|ui| {
+                    cancel = ui.button(t(lang, "cancel")).clicked();
+                    let label = t(lang, "left.confirm").replace("{size}", &size_text(lang, bytes));
+                    confirm = ui.add(theme::danger(&label)).clicked();
                 });
-            ui.separator();
-            ui.horizontal(|ui| {
-                cancel = ui.button(t(lang, "cancel")).clicked();
-                let label = t(lang, "left.confirm").replace("{size}", &size_text(lang, bytes));
-                confirm = ui.add(theme::danger(&label)).clicked();
             });
-        });
         if response.should_close() {
             cancel = true;
         }
@@ -113,6 +118,7 @@ impl RetoqueApp {
                 .spawn("leftovers", None, move |_| crate::model::remove_leftovers(reviewed));
         } else if cancel {
             self.library_state.leftovers_review = false;
+            self.library_state.leftovers_focus.closed(ctx);
         }
     }
 }

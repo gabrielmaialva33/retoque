@@ -554,8 +554,7 @@ impl RetoqueApp {
     }
 
     pub(crate) fn library_keyboard(&mut self, ui: &egui::Ui) {
-        if self.review_open || self.folder_dialog.is_some() || self.intuitive.palette.open || self.intuitive.drop.open()
-        {
+        if self.modal_open(ui.ctx()) {
             return;
         }
         let search_focus = ui.memory(|m| m.has_focus(egui::Id::unique("library_search")));

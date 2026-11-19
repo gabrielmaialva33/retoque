@@ -108,6 +108,44 @@ fn tab_shortcuts_and_slash_respect_modals_and_text_entry() {
         assert!(h.state().tab == Tab::Logs);
     }
 }
+
+#[test]
+fn open_dialogs_block_palette_tab_search_and_library_arrow_shortcuts() {
+    let mut h = navigation(Lang::Pt);
+    h.state_mut().tab = Tab::Logs;
+    h.state_mut().focus_search = false;
+
+    for set_modal in [
+        |app: &mut RetoqueApp| app.prefs.open = true,
+        |app: &mut RetoqueApp| {
+            app.prefs.open = false;
+            app.payload_ui.files_open = true;
+        },
+        |app: &mut RetoqueApp| {
+            app.payload_ui.files_open = false;
+            app.library_state.leftovers_review = true;
+        },
+        |app: &mut RetoqueApp| {
+            app.library_state.leftovers_review = false;
+            app.process_notice = Some(vec![(42, "game.exe".into())]);
+        },
+        |app: &mut RetoqueApp| {
+            app.process_notice = None;
+            app.tuning.dlss.consent = true;
+        },
+    ] {
+        set_modal(h.state_mut());
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::K);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::Num1);
+        h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::F);
+        h.key_press(egui::Key::Slash);
+        h.key_press(egui::Key::ArrowDown);
+        h.run_steps(2);
+        assert!(!h.state().intuitive.palette.open);
+        assert!(h.state().tab == Tab::Logs);
+        assert!(h.state().selected.is_none());
+    }
+}
 #[test]
 fn settings_filter_only_changed_reset_and_composite_accessibility_both_languages() {
     for lang in [Lang::En, Lang::Pt] {

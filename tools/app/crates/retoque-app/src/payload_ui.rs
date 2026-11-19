@@ -62,6 +62,7 @@ pub struct State {
     /// The "Retoque files" dialog (where the files come from and official releases), opened from the status bar's
     /// one button.
     pub files_open: bool,
+    pub focus: widgets::FocusRestore,
 }
 
 impl RetoqueApp {
@@ -349,6 +350,7 @@ impl RetoqueApp {
     /// "Retoque files": the current files, where they come from, and official releases. Downloads still ask first
     /// (`payload_dialog`), and no game changes from here.
     fn payload_files_modal(&mut self, ctx: &egui::Context) {
+        self.payload_ui.focus.sync(ctx, self.payload_ui.files_open);
         if !self.payload_ui.files_open {
             return;
         }
@@ -358,40 +360,52 @@ impl RetoqueApp {
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 560.0));
                 ui.heading(self.tr("app.payload"));
-                ui.add(egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::MUTED)).wrap());
-                ui.add_space(8.0);
-                match self.payload.clone() {
-                    Some(p) => {
-                        if let Some(name) = self.payload_name() {
-                            ui.label(RichText::new(name).strong());
-                        }
-                        ui.label(RichText::new(short_path(&p)).small().monospace().color(theme::MUTED))
-                            .on_hover_text(crate::format::display_path(&p));
-                    }
-                    None => {
+                egui::ScrollArea::vertical()
+                    .id_salt("payload_files_scroll")
+                    .max_height((ctx.content_rect().height() - 190.0).max(160.0))
+                    .show(ui, |ui| {
                         ui.add(
-                            egui::Label::new(
-                                RichText::new(format!("{} {}", self.tr("app.payload"), self.tr("app.payload.none")))
-                                    .color(theme::WARN),
-                            )
-                            .wrap(),
+                            egui::Label::new(RichText::new(self.tr("payload.files_note")).color(theme::MUTED)).wrap(),
                         );
-                    }
-                }
+                        ui.add_space(8.0);
+                        match self.payload.clone() {
+                            Some(p) => {
+                                if let Some(name) = self.payload_name() {
+                                    ui.label(RichText::new(name).strong());
+                                }
+                                ui.label(RichText::new(short_path(&p)).small().monospace().color(theme::MUTED))
+                                    .on_hover_text(crate::format::display_path(&p));
+                            }
+                            None => {
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(format!(
+                                            "{} {}",
+                                            self.tr("app.payload"),
+                                            self.tr("app.payload.none")
+                                        ))
+                                        .color(theme::WARN),
+                                    )
+                                    .wrap(),
+                                );
+                            }
+                        }
 
-                widgets::section_header(ui, self.tr("payload.files_source"));
-                ui.horizontal_wrapped(|ui| self.payload_source_buttons(ui));
+                        widgets::section_header(ui, self.tr("payload.files_source"));
+                        ui.horizontal_wrapped(|ui| self.payload_source_buttons(ui));
 
-                widgets::section_header(ui, self.tr("payload.files_updates"));
-                ui.horizontal_wrapped(|ui| self.payload_release_controls(ui));
-                if let Some(error) = &self.payload_ui.error {
-                    crate::error::body(ui, error, self.lang, &self.cmd_tx);
-                }
+                        widgets::section_header(ui, self.tr("payload.files_updates"));
+                        ui.horizontal_wrapped(|ui| self.payload_release_controls(ui));
+                        if let Some(error) = &self.payload_ui.error {
+                            crate::error::body(ui, error, self.lang, &self.cmd_tx);
+                        }
+                    });
                 ui.add_space(12.0);
                 close = ui.button(self.tr("close")).clicked();
             });
         if close || modal.should_close() {
             self.payload_ui.files_open = false;
+            self.payload_ui.focus.closed(ctx);
         }
     }
 

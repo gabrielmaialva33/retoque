@@ -31,7 +31,7 @@ pub struct State {
     rows: Vec<String>,
     cached_label: String,
     language: Option<Lang>,
-    consent: bool,
+    pub(crate) consent: bool,
     busy: bool,
     error: Option<AppError>,
 }

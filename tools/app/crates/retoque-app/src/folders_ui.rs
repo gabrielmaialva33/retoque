@@ -182,18 +182,12 @@ impl RetoqueApp {
         }
         let Some(dialog) = self.folder_dialog else { return };
         let modal = egui::Modal::new(egui::Id::unique("user_folders"))
-            .frame(
-                egui::Frame::new()
-                    .fill(theme::CARD)
-                    .stroke(egui::Stroke::new(1., theme::CARD_EDGE))
-                    .corner_radius(12)
-                    .inner_margin(20),
-            )
+            .frame(widgets::modal_frame())
             .show(ctx, |ui| {
                 ui.set_width((ctx.content_rect().width() - 64.).clamp(260., 620.));
                 match dialog {
                     FolderDialog::Add => {
-                        ui.heading(self.tr("lib.add_folder"));
+                        ui.heading(self.tr("lib.add_folder").trim_end_matches('…'));
                         ui.add(egui::Label::new(self.tr("folders.question")).wrap());
                         ui.add_space(12.);
                         if ui.button(self.tr("folders.game")).clicked() {
@@ -226,7 +220,7 @@ impl RetoqueApp {
                             .max_height((ctx.content_rect().height() - 250.).clamp(120., 420.))
                             .show(ui, |ui| {
                                 if self.saved.manual.is_empty() && self.saved.libraries.is_empty() {
-                                    ui.label(self.tr("folders.empty"));
+                                    ui.label(RichText::new(self.tr("folders.empty")).color(theme::MUTED));
                                 }
                                 for (kind, paths) in [
                                     (FolderKind::Game, &self.saved.manual),

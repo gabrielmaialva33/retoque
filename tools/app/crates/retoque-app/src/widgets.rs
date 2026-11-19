@@ -132,6 +132,64 @@ pub fn modal_frame() -> egui::Frame {
         .inner_margin(20)
 }
 
+/// Remembers which widget held keyboard focus when a dialog opened, and restores focus to it for two frames after the
+/// dialog closes so keyboard users never lose their place.
+#[derive(Clone, Copy, Default)]
+pub struct FocusRestore {
+    was_open: bool,
+    origin: Option<egui::Id>,
+    frames: u8,
+}
+
+impl FocusRestore {
+    pub fn sync(&mut self, ctx: &egui::Context, open: bool) {
+        if open {
+            if !self.was_open {
+                self.was_open = true;
+                self.origin = ctx.memory(|m| m.focused());
+                self.frames = 0;
+            }
+            return;
+        }
+        if self.was_open {
+            self.was_open = false;
+            if self.origin.is_some() {
+                self.frames = 2;
+            }
+        }
+        if self.frames > 0 {
+            if let Some(id) = self.origin {
+                ctx.memory_mut(|m| m.request_focus(id));
+            }
+            self.frames -= 1;
+            ctx.request_repaint();
+        }
+    }
+
+    pub fn closed(&mut self, ctx: &egui::Context) {
+        if self.was_open {
+            self.was_open = false;
+            if self.origin.is_some() {
+                self.frames = 2;
+                ctx.request_repaint();
+            }
+        }
+    }
+}
+
+/// Convenience wrapper storing [`FocusRestore`] in egui temporary data by `id`.
+pub fn sync_modal_focus(ctx: &egui::Context, id: egui::Id, open: bool) {
+    let mut state = ctx.data(|d| d.get_temp::<FocusRestore>(id)).unwrap_or_default();
+    state.sync(ctx, open);
+    ctx.data_mut(|d| d.insert_temp(id, state));
+}
+
+pub fn close_modal_focus(ctx: &egui::Context, id: egui::Id) {
+    let mut state = ctx.data(|d| d.get_temp::<FocusRestore>(id)).unwrap_or_default();
+    state.closed(ctx);
+    ctx.data_mut(|d| d.insert_temp(id, state));
+}
+
 /// A heading between cards that groups the cards below it (a tab's sections).
 pub fn section_header(ui: &mut egui::Ui, text: &str) {
     ui.add_space(8.0);
