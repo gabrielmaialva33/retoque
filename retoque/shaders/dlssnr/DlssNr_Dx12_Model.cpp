@@ -12,6 +12,7 @@
 #include <State.h>
 #include <Util.h>
 #include <dxgi1_4.h>
+#include <charconv>
 #include <cstdio>
 
 namespace DlssNr::Dx12Internal
@@ -389,28 +390,33 @@ void ReportScalingRatios()
 
     static const char* kNames[] = { "MaxPerf", "Balanced", "MaxQuality", "UltraPerformance", "UltraQuality", "DLAA" };
 
-    char line[512] = {};
-    size_t used = 0;
+    std::string line;
     bool any = false;
 
     for (unsigned int q = 0; q < 6; ++q)
     {
         float ratio = -1.0f;
         const int rc = g_nr.queryRatio(snippet->wstring().c_str(), g_nr.capabilityParams, q, &ratio);
-        int written = 0;
 
         if (rc == 1)
         {
             any = true;
-            written = snprintf(line + used, sizeof(line) - used, "%s=%.4f ", kNames[q], ratio);
+            char number[64];
+            const auto [end, error] =
+                std::to_chars(number, number + sizeof(number), ratio, std::chars_format::fixed, 4);
+            line += kNames[q];
+            line += '=';
+            if (error == std::errc())
+                line.append(number, end);
+            else
+                line += "unknown";
+            line += ' ';
         }
         else if (rc == -1)
         {
-            written = snprintf(line + used, sizeof(line) - used, "%s=refused ", kNames[q]);
+            line += kNames[q];
+            line += "=refused ";
         }
-
-        if (written > 0)
-            used += (size_t) written;
     }
 
     if (any)

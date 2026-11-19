@@ -11,12 +11,14 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <cmath>
 #include <cstring>
 #include <deque>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
 namespace DlssNr
@@ -1917,31 +1919,65 @@ float AnchoredWhitePoint(float scanNow, bool inverted, float trim)
 
 void LoadAnchors(const std::string& serialized)
 {
+    auto parseAnchorFloat = [](std::string_view str, float& value)
+    {
+        while (!str.empty() &&
+               (str.front() == ' ' || str.front() == '\t' || str.front() == '\r' || str.front() == '\n'))
+            str.remove_prefix(1);
+        while (!str.empty() && (str.back() == ' ' || str.back() == '\t' || str.back() == '\r' || str.back() == '\n'))
+            str.remove_suffix(1);
+
+        const bool hadPlus = str.starts_with('+');
+        if (hadPlus)
+            str.remove_prefix(1);
+        if (str.empty() || (hadPlus && str.starts_with('-')))
+            return false;
+
+        std::string normalized;
+        if (str.find('.') == std::string_view::npos)
+        {
+            const size_t comma = str.find(',');
+            if (comma != std::string_view::npos && str.find(',', comma + 1) == std::string_view::npos)
+            {
+                normalized.assign(str);
+                normalized[comma] = '.';
+                str = normalized;
+            }
+        }
+
+        float out = 0.0f;
+        const auto [end, error] = std::from_chars(str.data(), str.data() + str.size(), out);
+        if (error != std::errc() || end != str.data() + str.size() || !std::isfinite(out))
+            return false;
+
+        value = out;
+        return true;
+    };
+
     std::vector<AnchorPoint> parsed;
     size_t i = 0;
 
     while (i < serialized.size() && parsed.size() < 8)
     {
         size_t semi = serialized.find(';', i);
-        std::string tok = serialized.substr(i, semi == std::string::npos ? std::string::npos : semi - i);
+        std::string_view tok =
+            std::string_view(serialized).substr(i, semi == std::string::npos ? std::string_view::npos : semi - i);
         i = semi == std::string::npos ? serialized.size() : semi + 1;
 
         const size_t colon = tok.find(':');
-        if (colon == std::string::npos)
+        if (colon == std::string_view::npos)
             continue;
 
-        try
-        {
-            const float v = std::stof(tok.substr(0, colon));
-            const float w = std::stof(tok.substr(colon + 1));
-
-            if (v > kFloor && v < kCeiling && w > 1e-6f)
-                parsed.push_back({ v, w });
-        }
-        catch (...)
+        float v = 0.0f;
+        float w = 0.0f;
+        if (!parseAnchorFloat(tok.substr(0, colon), v) || !parseAnchorFloat(tok.substr(colon + 1), w))
         {
             // A malformed token is skipped rather than aborting the whole table.
+            continue;
         }
+
+        if (v > kFloor && v < kCeiling && w > 1e-6f)
+            parsed.push_back({ v, w });
     }
 
     std::lock_guard<std::mutex> lock(g_scanMutex);
@@ -1953,13 +1989,23 @@ std::string SerializeAnchors()
 {
     std::lock_guard<std::mutex> lock(g_scanMutex);
 
+    auto formatAnchor = [](float value)
+    {
+        char buf[32];
+        const auto [end, error] = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::general, 6);
+        return error == std::errc() ? std::string(buf, end) : std::string("0");
+    };
+
     std::string out;
-    char buf[64];
 
     for (const AnchorPoint& p : g_anchors)
     {
-        snprintf(buf, sizeof(buf), "%.6g:%.6g;", p.scan, p.white);
-        out += buf;
+        if (!std::isfinite(p.scan) || !std::isfinite(p.white))
+            continue;
+        out += formatAnchor(p.scan);
+        out += ':';
+        out += formatAnchor(p.white);
+        out += ';';
     }
 
     return out;

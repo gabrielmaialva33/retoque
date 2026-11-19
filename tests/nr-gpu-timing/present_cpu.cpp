@@ -3,6 +3,7 @@
 #include "retoque/dlssnr/DlssNr_PresentCpuTiming.h"
 
 #include <cassert>
+#include <clocale>
 #include <iostream>
 #include <string>
 
@@ -53,7 +54,20 @@ int main()
         assert(text.find("present_sync_wait attempted=0 mean_ms=0.000") != std::string::npos);
         assert(text.find("failures=") != std::string::npos && text.find("timeouts=") == std::string::npos);
         assert(text.find("clock=steady") != std::string::npos && text.find("not-gpu") != std::string::npos);
-        ++cases; // One self-describing line; no total that adds overlapping parts.
+        assert(text.find(',') == std::string::npos);
+        const char* savedLocale = std::setlocale(LC_NUMERIC, nullptr);
+        const std::string priorLocale = savedLocale != nullptr ? savedLocale : "C";
+        for (const char* candidate : { "pt_BR.UTF-8", "pt_BR.utf8", "de_DE.UTF-8", "de_DE.utf8" })
+        {
+            if (std::setlocale(LC_NUMERIC, candidate) != nullptr)
+            {
+                assert(Format(closed, 7) == text);
+                break;
+            }
+        }
+        std::setlocale(LC_NUMERIC, priorLocale.c_str());
+        ++cases; // One self-describing line with dot decimals under any LC_NUMERIC; no total that adds overlapping
+                 // parts.
     }
 
     {

@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -93,24 +94,35 @@ struct Window
 };
 
 // The INFO line for a closed window. Mean/max over the window's presents; waits over the presents that waited.
+// std::to_chars keeps dot decimals when the host process sets a comma LC_NUMERIC.
 inline std::string Format(const Window& window, uint64_t run)
 {
-    char line[512] {};
-    int used = std::snprintf(line, sizeof(line),
-                             "DLSS-NR present cpu window: run=%llu presents=%llu seconds=%.1f record_ms mean=%.3f "
-                             "max=%.3f submit_ms mean=%.3f max=%.3f",
-                             static_cast<unsigned long long>(run), static_cast<unsigned long long>(window.presents),
-                             window.seconds, window.record.MeanMs(), window.record.maxMs, window.submit.MeanMs(),
-                             window.submit.maxMs);
-    for (size_t i = 0; i < window.waits.size() && used > 0 && static_cast<size_t>(used) < sizeof(line); ++i)
+    auto uintText = [](uint64_t value)
+    {
+        char buf[32];
+        const auto [end, error] = std::to_chars(buf, buf + sizeof(buf), value);
+        return error == std::errc() ? std::string(buf, end) : std::string("0");
+    };
+    auto fixedText = [](double value, int precision)
+    {
+        char buf[64];
+        const auto [end, error] = std::to_chars(buf, buf + sizeof(buf), value, std::chars_format::fixed, precision);
+        return error == std::errc() ? std::string(buf, end) : std::string("0");
+    };
+
+    std::string text =
+        "DLSS-NR present cpu window: run=" + uintText(run) + " presents=" + uintText(window.presents) +
+        " seconds=" + fixedText(window.seconds, 1) + " record_ms mean=" + fixedText(window.record.MeanMs(), 3) +
+        " max=" + fixedText(window.record.maxMs, 3) + " submit_ms mean=" + fixedText(window.submit.MeanMs(), 3) +
+        " max=" + fixedText(window.submit.maxMs, 3);
+    for (size_t i = 0; i < window.waits.size(); ++i)
     {
         const auto& w = window.waits[i];
-        used += std::snprintf(line + used, sizeof(line) - static_cast<size_t>(used),
-                              " %s attempted=%llu mean_ms=%.3f max_ms=%.3f failures=%llu",
-                              WaitLabel(static_cast<Wait>(i)), static_cast<unsigned long long>(w.waited.count),
-                              w.waited.MeanMs(), w.waited.maxMs, static_cast<unsigned long long>(w.failures));
+        text += ' ';
+        text += WaitLabel(static_cast<Wait>(i));
+        text += " attempted=" + uintText(w.waited.count) + " mean_ms=" + fixedText(w.waited.MeanMs(), 3) +
+                " max_ms=" + fixedText(w.waited.maxMs, 3) + " failures=" + uintText(w.failures);
     }
-    std::string text(line);
     text += " clock=steady unit=submitted-presents overlapping=record-contains-synth_idle_wait;"
             "present_sync_wait-after-submit not-gpu";
     return text;

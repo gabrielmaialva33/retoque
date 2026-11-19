@@ -13,11 +13,14 @@ int main()
     assert(!UInt("+", 3) && !UInt("0x", 3) && !UInt("auto", 3) && !UInt(nullptr, 3));
     assert(UInt("+0x3", 3) == 3 && UInt("02", 3) == 2);
     CASE("strict unsigned parsing rejects malformed and overflowing inputs");
-    for (const char* text : { "nan", "NaN", "inf", "-inf", "1e99", "1e-999", "1x", "+-1", "++1", "", "auto" })
+    for (const char* text :
+         { "nan", "NaN", "inf", "-inf", "1e99", "1e-999", "1x", "+-1", "++1", "", "auto", "1,000,000", "1.0,5",
+           "1,0.5", "," })
         assert(!Float(text, -1.0f, 2.0f));
     assert(Float("+1.25", 0, 2) == 1.25f && Float("-1", -1, 2) == -1.0f);
-    assert(!Float("-0.1", 0, 2) && !Float("2.01", 0, 2));
-    CASE("finite bounded float parsing rejects NaN, infinity, underflow and trailing input");
+    assert(Float("0,500000", 0, 2) == 0.5f && Float("+1,25", 0, 2) == 1.25f && Float("-0,5", -1, 2) == -0.5f);
+    assert(!Float("-0.1", 0, 2) && !Float("2.01", 0, 2) && !Float("-0,1", 0, 2) && !Float("2,01", 0, 2));
+    CASE("finite bounded float parsing recovers single-comma decimals and rejects ambiguous or non-finite input");
     static_assert(MaxPasses == 10 && MaxRRPasses == 3);
     assert(Count("0") == 1 && Count("7") == 7 && Count("11") == 10 && Count("4294967295") == 10);
     assert(!Count("4294967296") && !Count("-1") && !Count("auto") && !Count("1.5") && !Count("") && !Count(nullptr));

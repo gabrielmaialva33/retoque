@@ -10,6 +10,9 @@
 
 #include <SimpleIni.h>
 
+#include <charconv>
+#include <cmath>
+
 static CSimpleIniA ini;
 
 // Plugins can read and write the ini from their own threads
@@ -37,10 +40,38 @@ static inline bool isUInt(const std::string& str, uint32_t& value)
     return (iss >> value) && iss.eof();
 }
 
-static inline bool isFloat(const std::string& str, float& value)
+static inline bool isFloat(std::string_view str, float& value)
 {
-    std::istringstream iss(str);
-    return (iss >> value) && iss.eof();
+    while (!str.empty() && (str.front() == ' ' || str.front() == '\t' || str.front() == '\n' || str.front() == '\r' ||
+                            str.front() == '\f' || str.front() == '\v'))
+        str.remove_prefix(1);
+
+    const bool hadPlus = str.starts_with('+');
+    if (hadPlus)
+        str.remove_prefix(1);
+
+    if (str.empty() || (hadPlus && str.starts_with('-')))
+        return false;
+
+    std::string normalized;
+    if (str.find('.') == std::string_view::npos)
+    {
+        const size_t comma = str.find(',');
+        if (comma != std::string_view::npos && str.find(',', comma + 1) == std::string_view::npos)
+        {
+            normalized.assign(str);
+            normalized[comma] = '.';
+            str = normalized;
+        }
+    }
+
+    float parsed = 0.0f;
+    const auto [end, error] = std::from_chars(str.data(), str.data() + str.size(), parsed);
+    if (error != std::errc() || end != str.data() + str.size() || !std::isfinite(parsed))
+        return false;
+
+    value = parsed;
+    return true;
 }
 
 // [DlssNr] ModelFile: nullopt for auto (also empty or blank), the value as written otherwise.
@@ -1211,10 +1242,12 @@ template <typename T> std::string GetIntValue(std::optional<T> value, bool getHe
 
 std::string GetFloatValue(std::optional<float> value)
 {
-    if (!value.has_value())
+    if (!value.has_value() || !std::isfinite(*value))
         return "auto";
 
-    return std::to_string(value.value());
+    char buf[64];
+    const auto [end, error] = std::to_chars(buf, buf + sizeof(buf), *value, std::chars_format::fixed, 6);
+    return error == std::errc() ? std::string(buf, end) : "auto";
 }
 
 // How a key's value is packed in a settings code
@@ -1433,7 +1466,9 @@ static void PackOverlayValue(std::string& data, OverlayValueType type, const cha
 
     case OverlayValueType::Float:
     {
-        const float number = std::strtof(value, nullptr);
+        float number = 0.0f;
+        if (value != nullptr)
+            isFloat(value, number);
         data.append(reinterpret_cast<const char*>(&number), sizeof(number));
         break;
     }
