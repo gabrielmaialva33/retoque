@@ -8,15 +8,15 @@
 <div align="center">
   <a href="https://github.com/gabrielmaialva33/retoque/actions/workflows/nr-tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/gabrielmaialva33/retoque/nr-tests.yml?branch=dlss-neural-rendering&style=for-the-badge&logo=githubactions&logoColor=white&label=tests" alt="Tests"></a>
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-2ea44f?style=for-the-badge&logo=linux&logoColor=white" alt="Linux and Windows">
-  <img src="https://img.shields.io/badge/API-D3D12%20%7C%20D3D11%20%7C%20Vulkan-7b5cff?style=for-the-badge" alt="D3D12, D3D11 and Vulkan">
+  <img src="https://img.shields.io/badge/API-D3D12%20%7C%20D3D11%20%7C%20Vulkan-404959?style=for-the-badge" alt="D3D12, D3D11 and Vulkan">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge" alt="GPL-3.0"></a>
   <a href="https://github.com/optiscaler/OptiScaler"><img src="https://img.shields.io/badge/built%20on-OptiScaler-5865F2?style=for-the-badge&logo=github&logoColor=white" alt="Built on OptiScaler"></a>
 </div>
 <div align="center">
-  <a href="https://github.com/gabrielmaialva33/retoque/releases"><img src="https://img.shields.io/badge/Download-Releases-18a99d?style=for-the-badge&logo=github&logoSize=auto" alt="Releases"></a>
-  <a href="https://github.com/gabrielmaialva33/retoque/releases/tag/nightly"><img src="https://img.shields.io/badge/Download-Nightly-7b5cff?style=for-the-badge&logo=github&logoSize=auto" alt="Nightly build"></a>
-  <a href="docs/README.md"><img src="https://img.shields.io/badge/Documentation-blue?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Documentation"></a>
-  <a href="#known-issues"><img src="https://img.shields.io/badge/Known%20issues-ff7a45?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Known issues"></a>
+  <a href="https://github.com/gabrielmaialva33/retoque/releases"><img src="https://img.shields.io/badge/Download-Releases-F0A845?style=for-the-badge&logo=github&logoSize=auto" alt="Releases"></a>
+  <a href="https://github.com/gabrielmaialva33/retoque/releases/tag/nightly"><img src="https://img.shields.io/badge/Download-Nightly-404959?style=for-the-badge&logo=github&logoSize=auto" alt="Nightly build"></a>
+  <a href="docs/README.md"><img src="https://img.shields.io/badge/Documentation-404959?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Documentation"></a>
+  <a href="#known-issues"><img src="https://img.shields.io/badge/Known%20issues-E07F2C?style=for-the-badge&logo=gitbook&logoColor=white&logoSize=auto" alt="Known issues"></a>
 </div>
 <br />
 
@@ -122,7 +122,7 @@ flowchart LR
     nr2 --> fg["Frame generation<br/>DLSS-G / FSR-FG"]
     fg --> screen["Screen"]
 
-    classDef nr fill:#7b5cff,stroke:#5a3ee0,color:#ffffff
+    classDef nr fill:#F0A845,stroke:#E07F2C,color:#1A140A
     class nr1,nr2 nr
 ```
 
@@ -151,7 +151,7 @@ flowchart LR
     comp --> mix["Transfer strength<br/>0 = the game's frame, bit for bit"]
     mix --> out["Back into the frame"]
 
-    classDef nr fill:#7b5cff,stroke:#5a3ee0,color:#ffffff
+    classDef nr fill:#F0A845,stroke:#E07F2C,color:#1A140A
     class model nr
 ```
 

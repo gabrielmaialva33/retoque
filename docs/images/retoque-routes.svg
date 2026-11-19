@@ -1,47 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="960" height="1010" viewBox="0 0 960 1010" role="img" aria-label="What your game has, and where Retoque runs DLSS 5 Neural Rendering on it">
   <!-- The same layout as OptiScaler's inputs-and-outputs picture, for Retoque's routes. Text only: no third-party
-       logos. Colours follow retoque-banner.svg. -->
+       logos. Colours follow retoque-banner.svg: the app's theme (tools/app/crates/retoque-app/src/theme.rs) and the
+       amber of its icon; the upscaler names keep their vendors' colours. -->
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#10131a"/>
-      <stop offset="1" stop-color="#1b2030"/>
+      <stop offset="0" stop-color="#121418"/>
+      <stop offset="1" stop-color="#1C2026"/>
     </linearGradient>
     <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#18d2c4"/>
-      <stop offset="0.55" stop-color="#7b5cff"/>
-      <stop offset="1" stop-color="#ff7a45"/>
+      <stop offset="0" stop-color="#E07F2C"/>
+      <stop offset="1" stop-color="#F8C66C"/>
     </linearGradient>
     <linearGradient id="node" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2a3042"/>
-      <stop offset="1" stop-color="#1d2231"/>
+      <stop offset="0" stop-color="#252A32"/>
+      <stop offset="1" stop-color="#1C2026"/>
     </linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 Z" fill="#8a93a8"/>
+      <path d="M0 0 L10 5 L0 10 Z" fill="#8E97A4"/>
     </marker>
     <style>
       text { font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif; }
       .head { font-size: 26px; font-weight: 800; letter-spacing: 1px; }
       .sub { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; }
-      .section { font-size: 15px; font-weight: 700; letter-spacing: 2px; fill: #b4bccc; }
+      .section { font-size: 15px; font-weight: 700; letter-spacing: 2px; fill: #D6DBE2; }
       .big { font-size: 34px; font-weight: 800; }
-      .mid { font-size: 22px; font-weight: 700; fill: #e9ecf3; }
-      .out { font-size: 20px; font-weight: 700; fill: #ffffff; }
-      .note { font-size: 12.5px; font-style: italic; fill: #8a93a8; }
-      .key { font-size: 12.5px; font-family: "Cascadia Code", "DejaVu Sans Mono", monospace; fill: #18d2c4; }
-      .nodet { font-size: 17px; font-weight: 700; fill: #ffffff; }
-      .nodes { font-size: 12.5px; fill: #b4bccc; }
-      .flow { fill: none; stroke: #8a93a8; stroke-width: 3; }
-      .rule { stroke: #3a4150; stroke-width: 2; }
+      .mid { font-size: 22px; font-weight: 700; fill: #F5F7FA; }
+      .out { font-size: 20px; font-weight: 700; fill: #F5F7FA; }
+      .note { font-size: 12.5px; font-style: italic; fill: #8E97A4; }
+      .key { font-size: 12.5px; font-family: "Cascadia Code", "DejaVu Sans Mono", monospace; fill: #F0A845; }
+      .nodet { font-size: 17px; font-weight: 700; fill: #F5F7FA; }
+      .nodes { font-size: 12.5px; fill: #D6DBE2; }
+      .flow { fill: none; stroke: #8E97A4; stroke-width: 3; }
+      .rule { stroke: #2A2F37; stroke-width: 2; }
     </style>
   </defs>
 
   <rect width="960" height="1010" rx="22" fill="url(#bg)"/>
 
   <!-- Header -->
-  <text x="36" y="52" class="head" fill="#9b87ff">INPUT</text>
-  <text x="36" y="76" class="sub" fill="#9b87ff">WHAT YOUR GAME HAS</text>
-  <text x="924" y="52" class="head" fill="#18d2c4" text-anchor="end">OUTPUT</text>
-  <text x="924" y="76" class="sub" fill="#18d2c4" text-anchor="end">WHERE NEURAL RENDERING RUNS</text>
+  <text x="36" y="52" class="head" fill="#D6DBE2">INPUT</text>
+  <text x="36" y="76" class="sub" fill="#D6DBE2">WHAT YOUR GAME HAS</text>
+  <text x="924" y="52" class="head" fill="#F0A845" text-anchor="end">OUTPUT</text>
+  <text x="924" y="76" class="sub" fill="#F0A845" text-anchor="end">WHERE NEURAL RENDERING RUNS</text>
   <line x1="24" y1="96" x2="936" y2="96" class="rule"/>
 
   <!-- 1. Games with an upscaler -->
@@ -68,7 +68,7 @@
 
   <!-- 2. Direct3D 11 -->
   <text x="455" y="402" class="section" text-anchor="middle">DIRECT3D 11 GAMES</text>
-  <text x="40" y="464" class="big" fill="#e9ecf3">Direct3D 11</text>
+  <text x="40" y="464" class="big" fill="#F5F7FA">Direct3D 11</text>
   <text x="40" y="484" class="note">with or without an upscaler</text>
   <path d="M250 455 L 327 455" class="flow" marker-end="url(#arrow)"/>
   <rect x="335" y="420" width="240" height="70" rx="14" fill="url(#node)" stroke="url(#brand)" stroke-width="2"/>
@@ -117,8 +117,8 @@
   <text x="650" y="862" class="out" style="fill:#3b8fe0">XeFG</text>
 
   <!-- Footer: the model -->
-  <rect x="24" y="890" width="912" height="96" rx="16" fill="#151925" stroke="#3a4150" stroke-width="2"/>
-  <text x="48" y="922" class="sub" fill="#b4bccc">EVERY ROUTE ENDS IN THE SAME MODEL</text>
+  <rect x="24" y="890" width="912" height="96" rx="16" fill="#171A1F" stroke="#2A2F37" stroke-width="2"/>
+  <text x="48" y="922" class="sub" fill="#D6DBE2">EVERY ROUTE ENDS IN THE SAME MODEL</text>
   <text x="48" y="952" class="mid">nvngx_dlssnr.dll</text>
   <text x="48" y="972" class="note">DLSS 5 NR model, supplied by you</text>
   <path d="M248 946 L 318 946" class="flow" marker-end="url(#arrow)"/>
