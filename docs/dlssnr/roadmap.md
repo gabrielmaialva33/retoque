@@ -36,6 +36,12 @@ Then decide between qualifying existing Windows window capture and measuring x64
 through the Vulkan host. Native adapters, an x86-to-x64 helper and native Linux GL remain separate proposals.
 Owner-selected games, output mode and latency budgets are pending; no implementation is approved by this entry.
 
+The [common frame-transport proposal](design/frame-transport.md) adds an unwired host-tested protocol core
+(2026-11-20), not a renderer or supported route. Next gates are authenticated x86/x64 transport fixtures,
+a separately reviewed offscreen NR seam, and native per-adapter lifetime/copy/latency evidence. D3D10 relay
+can exceed the one-copy-per-direction bar; Wine GL direct D3D12 imports are not assumed. Existing window-host
+behavior and capability claims stay unchanged. No runtime integration is authorized by this roadmap entry.
+
 ## Implemented paths with remaining coverage work
 
 Native D3D11 guide transport is not still waiting for its first implementation: step 3 and the historical

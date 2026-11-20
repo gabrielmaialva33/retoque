@@ -12,6 +12,7 @@ log of the attempt to drop it is [../history/FORWARDER_INVESTIGATION.md](../hist
 
 - [roadmap.md](roadmap.md): current priorities, blockers and next evidence decisions; the earlier fork comparison is archived.
 - [Capabilities and evidence](../capabilities.md): implementation state separated from dated validation, with code and suite links.
+- [frame-transport.md](design/frame-transport.md): proposed common GPU-frame contract for legacy producers; isolated host-tested protocol core only, no shipped caller or new compatibility.
 
 ## Rules and review
 

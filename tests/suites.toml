@@ -1288,3 +1288,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 180
 summary = "Log-only D3D12 depth: independent rankings, refusals, identities, bounded recordings, atomic lookup, log windows and hook/config guards."
+
+[frame-transport]
+path = "frame-transport"
+domain = "transport"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Unwired GPU frame protocol: bounded framing, negotiation, identity/ownership and abandonment under sanitizers; ten independently rejected mutants. No GPU or IPC."
