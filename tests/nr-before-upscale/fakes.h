@@ -290,6 +290,7 @@ struct DlssNrFrameInfo
     bool AfterRayReconstruction = false;
     unsigned DisplayWidth = 0, DisplayHeight = 0;
     bool MotionVectorsLowResolution = false;
+    bool AfterUpscaleRecording = false;
 };
 // The log-only present depth observer's scope (DlssNr_PresentDepthDx12.h): an entry point holds it so the observer
 // does not take what the pass records on the game's list for the game's own work. The observer never runs in a host

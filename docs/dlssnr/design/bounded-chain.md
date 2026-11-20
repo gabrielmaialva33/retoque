@@ -24,7 +24,9 @@ the original codec/proxy rather than importing either stale shader pipeline.
 - Native Vulkan and driver proxy remain one/master. Opting in after any legacy untracked
   NR work requires restart; it cannot retroactively create lifetime evidence. Startup with
   one/master installs no new submission tracking and preserves original model arguments.
-  Once activated, tracking stays active even if count returns to one.
+  Once activated, tracking stays active even if count returns to one. (Amended 2026-11-19 and 2026-11-20 by
+  [chain-in-flight](chain-in-flight.md): a private present history migrates, and a history made only on the
+  upscaler's output leaves its generation in video memory and starts tracking fresh. Other routes still restart.)
 
 ## Resource evidence and limits
 

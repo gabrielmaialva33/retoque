@@ -190,6 +190,9 @@ constexpr uint64_t AgeOutTicks = 128;
 }
 } // namespace DlssNr::Submission
 
+// The production parking cap (DlssNr_Chain.h), cut out by run.py.
+#include "artifacts/chain_slice.inc"
+
 namespace
 {
 struct FakePresentFence
@@ -431,11 +434,95 @@ void TestProductionLifetimeSlice()
         TickNrRetired(true);
     assert(sdRes.releases == 1 && g_fakeFence.queries == 0);
 }
+
+// What a live opt-in from the upscaler's output leaves behind (chain-in-flight.md): the production move out of the
+// retirement list, then the production collector and both parking caps over what remains.
+void TestLeftBehindGeneration()
+{
+    // 7. Everything the untracked path parked leaves the list, the generation and what an earlier rebuild parked
+    //    alike. A present-guide clone stays, on its transport rule and in that ring's budget; a tracked entry stays.
+    ResetHarness();
+    s_leftBehind.clear();
+    ID3D12Resource surface {}, earlier {}, cloneRes {}, trackedRes {};
+    ID3D12Resource* surfacePtr = &surface;
+    ID3D12Resource* earlierPtr = &earlier;
+    ID3D12Resource* clonePtr = &cloneRes;
+    ID3D12Resource* trackedPtr = &trackedRes;
+    void* const modelId = reinterpret_cast<void*>(0x77);
+    void* model = modelId; // parking takes the owner's pointer
+    g_fakeFence.nextSerial = 5;
+    ParkNrResource(earlierPtr); // parked by an earlier rebuild
+    g_presentGuideClones[0].depth = clonePtr;
+    g_presentGuideClones[0].depthBytes = 4096;
+    ParkNrClone(clonePtr, DlssNr::Submission::Usage {}, false);
+    g_presentGuideClones[0] = {};
+    g_tracked = true;
+    ParkNrResource(trackedPtr);
+    g_tracked = false;
+    ParkNrResource(surfacePtr); // the generation's own
+    ParkNrFeature(model);
+    assert(g_nrRetired.size() == 5);
+    LeaveUntrackedBehind();
+    assert(g_nrRetired.size() == 2 && s_leftBehind.size() == 3);
+    for (const auto& entry : g_nrRetired)
+        assert(entry.resource == &cloneRes ? entry.cloneBytes == 4096 && !entry.tracked : entry.tracked);
+    unsigned leftSurfaces = 0, leftModels = 0;
+    for (const auto& entry : s_leftBehind)
+    {
+        assert(!entry.tracked && !entry.requiresPresentFence);
+        leftSurfaces += entry.resource == &surface || entry.resource == &earlier;
+        leftModels += entry.feature == modelId;
+    }
+    assert(leftSurfaces == 2 && leftModels == 1);
+
+    // 8. No count, completed fence, tracked pass, count-only fallback or shutdown reaches what was left behind; the
+    //    clone beside it still goes on its own rule.
+    g_fakeFence.completedValue = 1000;
+    for (int tick = 0; tick < 1000; ++tick)
+        TickNrRetired(false);
+    assert(cloneRes.releases == 1 && g_nrRetired.size() == 1);
+    g_tracked = true; // tracking is on from the same call that left it behind
+    for (int tick = 0; tick < 1000; ++tick)
+        TickNrRetired(false);
+    g_fakeFence.hasFence = false;
+    for (int tick = 0; tick < 1000; ++tick)
+        TickNrRetired(false);
+    for (int tick = 0; tick < 1000; ++tick)
+        TickNrRetired(true);
+    assert(surface.releases == 0 && earlier.releases == 0 && g_releasedFeatures == 0 && trackedRes.releases == 0);
+    assert(s_leftBehind.size() == 3 && g_nrRetired.size() == 1);
+
+    // 9. A generation is some thirty entries. Out of the list, it holds neither parking cap: the tracked path's
+    //    rebuilds and the guide capture count only what is still on its way out, 32 as before.
+    ResetHarness();
+    s_leftBehind.clear();
+    g_fakeFence.completedValue = 0; // nothing below can drain during the checks
+    ID3D12Resource generation[40] {}, ordinary[32] {};
+    for (auto& resource : generation)
+    {
+        ID3D12Resource* ptr = &resource;
+        ParkNrResource(ptr);
+    }
+    LeaveUntrackedBehind();
+    g_tracked = true;
+    assert(g_nrRetired.empty() && s_leftBehind.size() == 40 && RetiredCapacity() && PresentGuideRetirementCapacity());
+    for (int i = 0; i < 31; ++i)
+    {
+        ID3D12Resource* ptr = &ordinary[i];
+        ParkNrResource(ptr);
+    }
+    assert(RetiredCapacity() && PresentGuideRetirementCapacity());
+    ID3D12Resource* last = &ordinary[31];
+    ParkNrResource(last);
+    assert(!RetiredCapacity() && !PresentGuideRetirementCapacity());
+    s_leftBehind.clear();
+}
 } // namespace
 
 int main()
 {
     TestPureDecisionRule();
     TestProductionLifetimeSlice();
+    TestLeftBehindGeneration();
     return 0;
 }

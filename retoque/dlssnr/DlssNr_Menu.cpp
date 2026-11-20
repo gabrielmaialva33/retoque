@@ -1172,6 +1172,11 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
                                      : Localization::Tr("Last evaluation: %u successful model passes"),
                 completedPasses);
     ImGui::TextWrapped("%s", Localization::Tr(DlssNr::MultipassStatus()));
+    // A statement, not a control (DEVELOPMENT.md 2.12): what raising the passes without a restart costs, for as long
+    // as it costs it, because the status line above moves on.
+    if (DlssNr::PreviousModelRetained())
+        ImGui::TextWrapped("%s", Localization::Tr("Passes were changed without a restart, so the previous model's "
+                                                  "video memory stays in use until the game closes."));
     HelpMarker("Each extra pass processes the previous answer and has its own model history. "
                "Every pass is a full model evaluation: the model's GPU time and video memory grow with the "
                "count, and ten passes cost about ten times one. Extra passes are built one at a time, half a "
@@ -1179,9 +1184,11 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
                "keeps the last successful answer. Requested passes are not proof of completed work; check the "
                "last evaluation and INFO log."
                "\n\nAfter single-pass NR on private D3D12 present lists, enabling this pauses NR while the old "
-               "generation retires, then builds fresh tracked resources. If earlier NR used game or bridge "
-               "lists, restart the application. An unavailable completion fence keeps NR paused; Retry cannot "
-               "supply missing GPU evidence. Unsupported submission paths refuse extra passes.");
+               "generation retires, then builds fresh tracked resources. After single-pass NR on the upscaler's "
+               "output, it switches at once and the previous model's video memory stays in use until the game "
+               "closes; when that does not fit, one pass keeps running. If earlier NR ran before the upscaler or "
+               "on a bridge's lists, restart the application. An unavailable completion fence keeps NR paused; "
+               "Retry cannot supply missing GPU evidence. Unsupported submission paths refuse extra passes.");
 
     if (!showIndividualSettings)
         return;

@@ -255,7 +255,10 @@ model file at startup; it does not select the caller module.
   feature creation uses its existing queue/fence discipline. Since 2026-11-18 (host-tested only) the
   present lists' own fence follows the same rule (`DlssNr_FenceProgress.h`): a removed device is not a
   finished list, so no present allocator is reset and no retired HDR texture or synthesized-motion
-  estimator is released on it; they are kept, said once, and the present pass stops. See
+  estimator is released on it; they are kept, said once, and the present pass stops. Since 2026-11-20
+  (host-tested only) raising the passes after one-pass NR on the upscaler's output frees nothing either:
+  that generation has no submission evidence, so it leaves the retirement list and stays in video memory
+  until the process ends, and tracking starts on fresh objects. See
   [chain-in-flight](../../docs/dlssnr/design/chain-in-flight.md) and
   [submission tracking](../../docs/dlssnr/design/submission-tracking.md); elapsed frames alone
   must not be treated as proof that tracked GPU work is done.

@@ -1079,7 +1079,7 @@ domain = "nr"
 requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
-summary = "Untracked D3D12 NR retirement's present-queue fence gate (DlssNr_UntrackedRetire.h) and verbatim ParkNr*/TickNrRetired slices under ASan/UBSan: 32-tick count gate plus completed >= parkedSerial + 1, UINT64_MAX/device-removed retention, saturation, live-device count-only fallback logged once, and Present call-site guards. No GPU."
+summary = "Untracked D3D12 NR retirement's present-queue fence gate (DlssNr_UntrackedRetire.h) and verbatim ParkNr*/TickNrRetired slices under ASan/UBSan: 32-tick count gate plus completed >= parkedSerial + 1, UINT64_MAX/device-removed retention, saturation, live-device count-only fallback logged once, and Present call-site guards. Also the production tracking opt-in: the private present migration, and the live opt-in from the upscaler's output that leaves the one-pass generation in video memory (Passes=1 makes no tracker call, lock, adapter query or allocation; 23 mutants must fail). No GPU."
 
 [mfg-provider-capacity]
 path = "mfg-provider-capacity"

@@ -56,7 +56,7 @@ def contracts(files):
     assert evaluate.index('if (nvResult != NVSDK_NGX_Result_Success)') < evaluate.index('EvaluateNativeDx11Scene(') < evaluate.index('LOG_TRACE')
     assert 'routeNotice = scene;' in menu and 'in.dx11Route = scene;' in menu
     assert 'WantsTrackedRecording(passSnapshot, frame.NativeDx11Scene)' in renderer
-    assert 'TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene, frame.PrivatePresentRecording)' in renderer
+    assert 'TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene, recordingRoute)' in renderer
     assert 'if (mandatory)\n                return false;' in lifetime and 'optIn = mandatory ||' in lifetime
     assert renderer.index('ShutdownNativeDx11Scene();') < renderer.index('ShutdownNativeDx11Guides();')
 

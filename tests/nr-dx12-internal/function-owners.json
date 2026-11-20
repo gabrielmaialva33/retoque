@@ -82,7 +82,7 @@
       "const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission)\n{",
       "bool AdaptiveCadenceRequested()\n{",
       "bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory)\n{",
-      "bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,\n                      DlssNr::Chain::RecordingLease* lease, bool mandatory, bool privatePresent)\n{",
+      "bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,\n                      DlssNr::Chain::RecordingLease* lease, bool mandatory, NrRecordingRoute route)\n{",
       "bool VideoMemory(ID3D12Device* device, DXGI_QUERY_VIDEO_MEMORY_INFO& memory)\n{",
       "void ParkNrFeature(void*& feature)\n{",
       "void ParkNrResource(ID3D12Resource*& res)\n{",

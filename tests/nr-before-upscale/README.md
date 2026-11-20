@@ -148,3 +148,7 @@ class. The fake counts the scopes open on the thread, and one more case holds th
 asked to record and that no evaluate of the run left one open; with the scope removed from the entry the case fails.
 The observer itself is not compiled here (`tests/nr-present-depth` has its rules), and the Stage 1 scope opens none:
 the observer installs only under the Present hook method, where that scope declines.
+
+Since 2026-11-20 three more cases hold the route mark of chain-in-flight.md's "Live opt-in from the upscaler's
+output" on the production entry points: `EvaluateAfterUpscale` hands the pass a frame with
+`AfterUpscaleRecording` set, after Ray Reconstruction too, and `ScopedPreUpscale` never does.

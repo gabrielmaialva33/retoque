@@ -437,6 +437,10 @@ bool ObservedRayReconstructionRoute();
 unsigned int ActivePassCount();
 const char* MultipassStatus();
 
+// Whether raising the passes in this session left the one-pass model in video memory until the process ends
+// (docs/dlssnr/design/chain-in-flight.md, "Live opt-in from the upscaler's output"). One relaxed load.
+bool PreviousModelRetained();
+
 // What model cadence is doing, for the line under its control: running, or the reason the model runs every
 // frame. A string literal from DlssNr::Cadence::Describe. docs/dlssnr/design/model-cadence.md.
 const char* CadenceStatus();

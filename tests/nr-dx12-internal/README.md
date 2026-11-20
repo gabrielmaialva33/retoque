@@ -63,3 +63,7 @@ The 2026-11-19 observer (`12a23174`) adds `PresentDepthDx12::InternalScope` at
 hash is recorded as an explicit update; stripping exactly those two additions
 must still match the previous hash. Guide selection, copies, retirement and
 submission tracking remain pinned, including all seven negative controls.
+
+The 2026-11-20 live opt-in changes `TrackNrRecording`'s last parameter from a private-present flag to
+`NrRecordingRoute`; its owner entry carries the new signature. No extern state was added or reordered: the
+opt-in's own state is file-local in `DlssNr_Dx12_Lifetime.cpp`, and `NrRetired` is unchanged.

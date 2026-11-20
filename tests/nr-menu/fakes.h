@@ -264,6 +264,7 @@ namespace DlssNr
 void HelpMarker(const char*) {}
 unsigned ActivePassCount() { return 0; }
 const char* MultipassStatus() { return "Restart required"; }
+bool PreviousModelRetained() { return false; }
 bool cadenceAvailable = true;
 bool CadenceAvailable() { return cadenceAvailable; }
 const char* CadenceStatus() { return DlssNr::Cadence::Describe(DlssNr::Cadence::Reason::Carried, 2); }

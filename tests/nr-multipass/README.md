@@ -18,6 +18,11 @@ real memory-budget accounting or GPU timing. Partial failure here tests selectio
 not a real NGX failure. The submission suite separately exercises tracker replays and
 unknown/failed fence submissions. No host pass is evidence of in-game correctness.
 
+The budget rule of the live opt-in that leaves the one-pass generation in video memory
+(`Chain::AdmitBesideRetained`, `Chain::GenerationSurfaceBytes`; chain-in-flight.md, 2026-11-20) is checked here:
+it is `Admit` over the larger model figure, and over a sweep of adapter usage it never admits where the tracked
+path's own admission of the fresh generation would refuse. The adapter query itself is not run.
+
 INFO logs `DLSS-NR chain` report requested/completed passes, stage, present, initialization,
 headroom refusal and individual evaluation return codes. Per-pass `CPU-call-ms` measures
 host time spent inside the forwarder, **not GPU execution**. The existing NGX GPU interval

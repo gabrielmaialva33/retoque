@@ -900,7 +900,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         ownedRecording.emplace(g_recordings, reinterpret_cast<uintptr_t>(cmdList));
         recording = &*ownedRecording;
     }
-    if (!TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene, frame.PrivatePresentRecording))
+    // Where this recording is made, for what an opt-in can later do with an untracked history. Each route names
+    // itself on the frame; one that does not is not assumed to be either.
+    const NrRecordingRoute recordingRoute = frame.PrivatePresentRecording ? NrRecordingRoute::PrivatePresent
+                                            : frame.AfterUpscaleRecording ? NrRecordingRoute::AfterUpscale
+                                                                          : NrRecordingRoute::Other;
+    if (!TrackNrRecording(cmdList, passSnapshot, recording, frame.NativeDx11Scene, recordingRoute))
     {
         reportSkip(g_chainStatus.load());
         return false;
@@ -5933,6 +5938,8 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
     coverage.sample.height = desc.Height;
     funnel.Recording();
     auto compose = AcquireCompose();
+    // After the capture for the present above, which copies the frame: only this recording carries the mark.
+    frame.AfterUpscaleRecording = true;
     coverage.sample.applied =
         compose && compose->Dispatch(cmdList, target, depth, motion, target, frame, timingQueue, &coverage.sample);
     if (coverage.sample.applied)
@@ -6934,6 +6941,7 @@ bool ObservedRayReconstructionRoute()
 }
 unsigned int ActivePassCount() { return g_activePasses.load(); }
 const char* MultipassStatus() { return g_chainStatus.load(); }
+bool PreviousModelRetained() { return GenerationRetained(); }
 const char* CadenceStatus() { return g_cadenceStatus.load(); }
 bool CadenceAvailable() { return DlssNr_Cadence_Dx12::Available(); }
 bool BufferIsLinearHdr() { return g_lastLinearHdr.load(); }

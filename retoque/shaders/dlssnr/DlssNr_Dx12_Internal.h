@@ -453,6 +453,15 @@ struct PreUpscaleState
     DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 };
 
+// Where an untracked recording was made, which decides what a later opt-in into tracked recording can do with that
+// history (docs/dlssnr/design/chain-in-flight.md).
+enum class NrRecordingRoute : uint8_t
+{
+    Other,          // the before-upscale scope, a bridge's or a window's present host: restart, as before
+    PrivatePresent, // RunPresentPass's own lists: migrated on their submission fence
+    AfterUpscale,   // EvaluateAfterUpscale, in the caller's list: left in video memory, tracking starts fresh
+};
+
 struct NrRetired
 {
     void* feature = nullptr;
@@ -861,10 +870,15 @@ bool PausedWithoutFrameGen(const Config& cfg);
 void AdvanceNrClock();
 const char* AdmissionRefusal(DlssNr::Submission::Detail::Admission admission);
 bool AdaptiveCadenceRequested();
+bool DriverProxyRequested();
 bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory = false);
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
-                      DlssNr::Chain::RecordingLease* lease, bool mandatory = false, bool privatePresent = false);
+                      DlssNr::Chain::RecordingLease* lease, bool mandatory = false,
+                      NrRecordingRoute route = NrRecordingRoute::Other);
 bool TrackingTransitionPending();
+bool GenerationRetained();
+bool SecondGenerationFits(ID3D12GraphicsCommandList* cmd);
+void RetainUntrackedGeneration(ID3D12GraphicsCommandList* cmd);
 bool UntrackedPresentFenceMatches(ID3D12CommandQueue* queue);
 void EndUntrackedPresent(ID3D12GraphicsCommandList* cmd, ID3D12CommandQueue* queue, ID3D12Fence* fence, uint64_t value);
 void ParkTrackingDiagnostics();

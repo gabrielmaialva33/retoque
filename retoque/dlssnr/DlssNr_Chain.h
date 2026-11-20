@@ -134,4 +134,22 @@ inline bool Admit(uint64_t budget, uint64_t used, uint64_t measuredModel, uint64
     const uint64_t required = reserve + model + model / 2 + textureBytes;
     return required <= budget - used;
 }
+
+// What a generation's surfaces take, as Dispatch counts them for the admission above: 48 bytes a pixel at the
+// working size and at the frame's, and 16 a pixel of the uniform grid while peripheral compression unpacks onto it.
+inline uint64_t GenerationSurfaceBytes(uint64_t width, uint64_t height, uint64_t workWidth, uint64_t workHeight,
+                                       uint64_t gridPixels)
+{
+    return workWidth * workHeight * 48 + width * height * 48 + gridPixels * 16;
+}
+
+// A live opt-in that leaves the untracked generation in video memory for the session (chain-in-flight.md, "Live
+// opt-in from the upscaler's output"): whether a second generation fits beside it. `used` still counts the first.
+// The rule is Admit's, with the model's own figure (0: none) when that is the larger, so the generation the tracked
+// path builds next passes the admission it is then asked.
+inline bool AdmitBesideRetained(uint64_t budget, uint64_t used, uint64_t measuredModel, uint64_t modelOwnCount,
+                                uint64_t textureBytes)
+{
+    return Admit(budget, used, std::max(measuredModel, modelOwnCount), textureBytes);
+}
 } // namespace DlssNr::Chain

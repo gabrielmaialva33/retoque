@@ -210,6 +210,10 @@ non-mandatory opt-ins retain the previous single/master fallback. A scene-stage 
 is unchanged. A mandatory scene-stage request may migrate an exclusively private-present legacy history;
 the restriction concerns the old work, not the new tracked destination. Vulkan is unchanged. Supporting those other legacy routes requires their own completion AND
 no-late-submission/replay argument; the generic present fence alone is not one.
+(Amended 2026-11-20: a history made only on the upscaler's output no longer needs a restart. It is not migrated,
+because that argument still does not exist for it; its generation is left in video memory instead. See "Live opt-in
+from the upscaler's output" below. The before-upscale scope, the bridge's present host, mixed histories and
+mandatory `Dx11SceneStage` keep the restart status.)
 
 ### Transition and resource inventory
 
@@ -269,3 +273,137 @@ Required runtime follow-up: native Windows and Proton on the route matrix; one -
 individual/adaptive enable, rapid setting changes, outstanding asynchronous present work, deliberate signal/
 device loss and NR shutdown during draining. Confirm requested/completed counts, history restart and unchanged
 default pixels/commands. No visual, performance or GPU correctness claim follows from the host tests.
+
+## Live opt-in from the upscaler's output (2026-11-20)
+
+Host-tested only. Not built, not run on a GPU, not run in a game.
+
+### What was asked, and what was not done
+
+The owner asked on 2026-11-20 that raising `Passes` in the menu take effect without restarting the game. The
+session that prompted it (native Windows, RTX 3060, Dying Light: The Beast, release `d3bd1ea6`) started at one pass
+after the upscaler and answered "Restart required: prior untracked NR is not confined to private present lists".
+
+The migration above cannot serve that route: the recordings are in the game's own command list, the module never
+sees them submitted, and nothing can say afterwards that they ran. Two ways to get that evidence were weighed and
+not taken:
+
+- **Track every recording from the first frame.** This is real evidence, but it enrolls the default path. The
+  tracker detours `ExecuteCommandLists` and command-list `Reset` for the process and takes one mutex in both, on
+  every thread that resets or submits; the batch carrying NR holds a second mutex across the driver's
+  `ExecuteCommandLists` and an added `Signal`. At one pass it would also bring the chain's admission, which can
+  skip frames. None of that exists at `Passes=1` today (unless GPU timing or another tracked diagnostic is on).
+- **The untracked path's own rule** (32 ticks and a completed present fence). Rejected for a migration on
+  2026-11-19, and still rejected: it is not a submission argument for a list the game owns.
+
+### The rule
+
+The old generation is not proven finished, so it is not freed. It is detached, taken out of the retirement list
+and kept until the process ends; tracking starts on fresh objects.
+
+It applies only when all of these hold, under `g_nrMutex`, in `TrackNrRecording`:
+
+- the request is an opt-in (`Passes` or `RRPasses` above one, individual settings, adaptive cadence) and not
+  mandatory `Dx11SceneStage`;
+- every untracked recording of the session was made by `EvaluateAfterUpscale` (after the upscaler or after Ray
+  Reconstruction), and the recording that carries the request is one too. Each route names itself:
+  `DlssNrFrameInfo::AfterUpscaleRecording` is set in that one function, after the copy it captures for the present,
+  as `PrivatePresentRecording` is set in `RunPresentPass`. A recording that names neither is `Other`;
+- the driver proxy is off (it runs one pass whatever is asked, and its feature is outside NR retirement);
+- no other recording scope holds the lease;
+- a second generation fits beside the first (below);
+- the tracker accepts this command list (a probe `Submission::Track`, before anything is detached);
+- no generation was left behind earlier in the session.
+
+When the route or the history disqualifies it, the status and behaviour are the ones from before. When one of the
+other conditions fails, one pass keeps running untracked and the status says which: "Not enough video memory to
+add passes without a restart: ...", "Passes cannot be added here: this runtime's command lists cannot be
+followed. ...", the proxy's line, or "transition deferred". The adapter and the tracker are asked again after 128
+NR ticks, not on every frame the request stands.
+
+### The switch
+
+1. `SecondGenerationFits` asks the adapter (`VideoMemory`) and applies `Chain::AdmitBesideRetained`: the admission
+   `Dispatch` applies to a new chain generation, with the usage that still counts the first generation, the
+   surfaces `Dispatch` counts (`Chain::GenerationSurfaceBytes`, from the live generation's sizes) and the larger of
+   the measured model figure and the model's own count. It is never more permissive than the admission the tracked
+   path asks next, so passing here means the fresh generation is admitted unless the adapter's usage grew in
+   between.
+2. `RetainUntrackedGeneration` runs the migration's detach (`ParkUntrackedGeneration`, the same inventory) without
+   its fence gate, then `LeaveUntrackedBehind` moves every untracked entry out of `g_nrRetired` into a list nothing
+   else reads. That includes what earlier rebuilds parked: the tracked path would otherwise step their countdown
+   faster than the path that parked them. Present-guide clones stay in `g_nrRetired` on their transport rule,
+   because their bytes are in that ring's budget; tracked entries stay.
+3. In the same call: `g_legacyRecorded = false`, `g_tracked = true`, status "Switching to tracked passes; the
+   previous model stays in video memory until the game closes", and the call returns false. It records nothing:
+   the `Dispatch` running it belongs to the composition object just detached.
+4. The next call finds no composition, builds one, and is an ordinary tracked recording: 500 ms of settling, the
+   first model created and waited for across a present, extra passes one per stable present.
+
+Arming in the detaching call, not the next one, is what makes it once per session: there is no state in which the
+generation is gone and a return to one pass could resume untracked recording. `s_generationRetained` refuses a
+second one independently.
+
+Nothing frees what was left behind. The collector, both parking caps (the chain's and the guide capture's),
+`MakeRoomForGeneration` and `Shutdown` walk `g_nrRetired` only, so they are unchanged and cannot reach it. The
+entries are raw owners, so static teardown destroys no GPU object.
+
+### What the old lists can still reference
+
+Audited on 2026-11-20 for the after-upscale and after-RR routes, from every command `Dispatch` and
+`EvaluateAfterUpscale` record.
+
+| Object | Lifetime rule | After the switch |
+|---|---|---|
+| Model feature, pass features; `colorCopy`, `output`, `hdrCopy`, `colorSmall`, `outputNative`, `passPing`, the alternate-format set, `heldColor`; `depthClone`, `motionClone`, `depthConstant`, `depthMatched`, `motionMatched`; `unpackedProxy`, `unpackedAnswer`; meter and calibration textures and readbacks | NR retirement (`ParkNr*`, by `g_tracked`) | left behind; the new generation allocates its own |
+| Composition object (descriptor heaps, mapped constants), both scalers, stabilizer, UI mask, cadence store, guide match, periphery, enlarger bundle, detail-measure pass and copies, pulse pass, motion probe | NR retirement | left behind; rebuilt on demand |
+| GPU timing slots, kernel profile slots, exposure scan slots and adopted buffers, comparison capture, replay recorder, guide clones captured for the present | each slot's own `Submission` usage, in every mode | unchanged; a slot is reused when its own usage says so |
+| Capture readbacks (`g_capture`) | their own frame count, in every mode | unchanged |
+| The game's output, depth, motion and exposure | the game's | unchanged |
+| The driver proxy's feature | its own size check, in every mode | not used at the switch (the proxy must be off) |
+
+Nothing whose lifetime follows `g_tracked` is shared between the two generations. Three objects that do follow it
+are not in the inventory, and each is excluded by the route rule instead: the before-upscale scratch exists only
+after a recording of that scope, which makes the history `Other`; the present pass's backbuffer copy and the
+bridge's surfaces are read by NR only in present-route recordings, which make it private or `Other`. The forwarder
+entry points, the capability parameter block and the device owner are session-owned CPU state.
+
+### What it costs
+
+- **Video memory.** One model instance and its surfaces stay allocated until the game closes, at most once per
+  session. The INFO line at the switch gives the model's own count (when the loader reports one) and the adapter's
+  size for the surfaces; helper passes are in neither. An instance measured 578 to 767 MiB at a 2292x960 working
+  size on an RTX 4090 ([model-vram-stats](model-vram-stats.md)); it is not measured at 864x486. That memory counts
+  against the budget that admits the extra passes, so fewer may fit than after a restart. The menu says so under
+  the chain status for the rest of the session.
+- **A pause.** About the chain's settling and creation ramp without NR, then pass one, then the rest.
+- **The model's own count** shown in the menu includes the instance left behind from then on.
+- **One pass at `Passes=1` gains nothing** until the request: the provenance flags, one bool on the frame, and no
+  tracker call, lock, wait, allocation, adapter query or log line (`tests/nr-untracked-retire` counts them over the
+  production body).
+
+### Residual risk, stated
+
+- If the adapter's usage grows between the check and the fresh generation's own admission, that admission refuses
+  with nothing to make room from and latches the failure until Retry. One pass does not come back in that session.
+- The tracker's probe is a real `Track`: on a runtime it refuses, the queue hook may stay installed and inert.
+  That happens only after the request, never at `Passes=1` before it.
+- The old lists may still be unsubmitted when tracked recording starts. Their objects are alive and private to
+  them; what they write is the game's output of their own frame, ordered by the game, as on any frame.
+- Tracking stays on for the session, with the admission rules above, even after returning to one pass.
+
+### Validation boundary
+
+`tests/nr-untracked-retire` runs the production `TrackNrRecording` for every case above (20 mutants, among them
+enrolling `Passes=1`, skipping the budget or tracker check, allowing the bridge or a private history, retaining
+twice, not arming with the detach), the production `LeaveUntrackedBehind`, collector and both caps (3 mutants,
+among them leaving the generation where the collector frees it), and source guards on the detach, the route mark
+and the one-pass branch. `tests/nr-multipass` holds the budget rule, `tests/nr-model-stats` the log line,
+`tests/nr-before-upscale` the route mark on the production entry points.
+
+Not shown by any of it. A run on native Windows (RTX 3060, Dying Light: The Beast, started at `Passes=1` after the
+upscaler, GPU timing off and on) must record: no "Restart required" on raising to 2, then 10, then back to 1;
+the INFO line with the retained bytes; `requested=N completed=N`, or the "Additional pass refused" status with its
+admission line; `model_failed=0`, no device removal, no DRED or crash note; the adapter's usage before and after;
+the budget refusal leaving one pass running (forced on a full adapter); a resolution change and a pause after the
+switch; and at `Passes=1` before any change, the same coverage line and presents per window as `4a740a36`.

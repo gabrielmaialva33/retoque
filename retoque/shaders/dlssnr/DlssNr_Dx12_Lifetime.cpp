@@ -18,6 +18,7 @@
 #include "DlssNr_GuideMatch_Dx12.h"
 #include "DlssNr_Periphery_Dx12.h"
 #include <dlssnr/DlssNr_UntrackedRetire.h>
+#include <dlssnr/DlssNr_ModelStats.h>
 #include <algorithm>
 #include <optional>
 #include <utility>
@@ -156,12 +157,27 @@ bool AdaptiveCadenceRequested()
            DlssNr::Cadence::Requested(config.DlssNrCadence.value_or_default()) > 1;
 }
 
+bool DriverProxyRequested() { return Config::Instance()->DlssNrUseProxy.value_or_default(); }
+
 namespace
 {
 // Under g_nrMutex. Provenance only: the default path installs no hooks and issues no additional GPU work.
 bool s_legacyExternalRecording = false;
+// Which routes the untracked history used (NoteUntrackedRecording). One made only on the upscaler's output can be
+// left behind whole at opt-in; anything else in it keeps the restart status.
+bool s_legacyAfterUpscale = false;
+bool s_legacyPrivatePresent = false;
+bool s_legacyOtherRoute = false;
 bool s_trackingTransition = false;
 bool s_generationParked = false;
+// Set once, with sticky tracking, when an untracked generation is left in video memory for the session. Read by the
+// menu without the lock.
+std::atomic<bool> s_generationRetained { false };
+// Why the last attempt to leave it kept the one-pass path instead, and the NR tick it was decided on: the adapter
+// budget and the tracker are asked again only after kRetainRetryTicks, not on every frame the request stands.
+const char* s_retainRefusal = nullptr;
+uint64_t s_retainRefusedAt = 0;
+constexpr uint64_t kRetainRetryTicks = 128;
 std::array<ID3D12GraphicsCommandList*, PresentList::kSlots> s_legacyPending {};
 // Held for process lifetime, like the present-fence registry. A lost device is never torn down here.
 ID3D12CommandQueue* s_legacyQueue = nullptr;
@@ -170,6 +186,7 @@ uint64_t s_legacyFenceValue = 0;
 } // namespace
 
 bool TrackingTransitionPending() { return s_trackingTransition; }
+bool GenerationRetained() { return s_generationRetained.load(std::memory_order_relaxed); }
 
 // Called only for the private present host, under g_nrMutex after submission/cancellation calls return.
 void EndUntrackedPresent(ID3D12GraphicsCommandList* cmd, ID3D12CommandQueue* queue, ID3D12Fence* fence, uint64_t value)
@@ -196,9 +213,13 @@ void EndUntrackedPresent(ID3D12GraphicsCommandList* cmd, ID3D12CommandQueue* que
     *pending = nullptr; // A dropped private list is never replayed; a submitted one has its fence above.
 }
 
-static void NoteUntrackedRecording(ID3D12GraphicsCommandList* cmd, bool privatePresent)
+static void NoteUntrackedRecording(ID3D12GraphicsCommandList* cmd, NrRecordingRoute route)
 {
+    const bool privatePresent = route == NrRecordingRoute::PrivatePresent;
     s_legacyExternalRecording |= !privatePresent;
+    s_legacyAfterUpscale |= route == NrRecordingRoute::AfterUpscale;
+    s_legacyPrivatePresent |= privatePresent;
+    s_legacyOtherRoute |= route == NrRecordingRoute::Other;
     if (!privatePresent)
         return;
     // Re-entering the same open list, or more pending recordings than the private host has slots, cannot
@@ -229,7 +250,9 @@ static bool UntrackedPresentCompleted()
 // Detach the entire NR generation while it is STILL untracked. No GPU object is destroyed here.
 // Input/output transport (backbuffer, HDR, synthesized/zero/captured guides) retains its own lifetime gates;
 // it is not part of the NR generation and is not reclassified as tracked by this operation.
-static void ParkUntrackedGeneration()
+// migrating: the generation drains on the private present fence. False for the live opt-in that leaves it in video
+// memory instead (RetainUntrackedGeneration), which gates nothing because it frees nothing.
+static void ParkUntrackedGeneration(bool migrating = true)
 {
     ParkNrFeature(g_nr.feature);
     for (void*& feature : g_nr.passFeature)
@@ -260,9 +283,10 @@ static void ParkUntrackedGeneration()
     shaders.periphery = std::exchange(g_nr.periphery, nullptr);
     g_nrRetired.push_back(shaders);
     // Also protect objects parked before the request, without inventing tracked usage for them.
-    for (auto& retired : g_nrRetired)
-        if (!retired.tracked)
-            retired.requiresPresentFence = true;
+    if (migrating)
+        for (auto& retired : g_nrRetired)
+            if (!retired.tracked)
+                retired.requiresPresentFence = true;
 
     g_nr.width = g_nr.height = g_nr.workWidth = g_nr.workHeight = 0;
     g_nr.scratchRetry = {};
@@ -287,6 +311,91 @@ static void ParkUntrackedGeneration()
     g_resetOnReturn = true;
 }
 
+// Whether a second generation fits beside the one a live opt-in is about to leave in video memory
+// (docs/dlssnr/design/chain-in-flight.md, "Live opt-in from the upscaler's output"): the admission Dispatch applies
+// to a new chain generation, asked while the adapter's usage still counts the first, with the model's own figure when
+// it gave one. False when the adapter cannot be asked. Under g_nrMutex; reads the live generation, changes nothing.
+bool SecondGenerationFits(ID3D12GraphicsCommandList* cmd)
+{
+    ID3D12Device* device = nullptr;
+    if (cmd == nullptr || FAILED(cmd->GetDevice(IID_PPV_ARGS(&device))) || device == nullptr)
+        return false;
+    DXGI_QUERY_VIDEO_MEMORY_INFO budget {};
+    const bool asked = VideoMemory(device, budget);
+    device->Release();
+    if (!asked)
+        return false;
+
+    uint64_t gridPixels = 0;
+    if (g_nr.unpackedProxy != nullptr)
+    {
+        const auto grid = g_nr.unpackedProxy->GetDesc();
+        gridPixels = grid.Width * grid.Height;
+    }
+    const uint64_t ownCount = DlssNr::ModelStats::Known(g_nr.modelVramBytes) ? g_nr.modelVramBytes : 0;
+    return DlssNr::Chain::AdmitBesideRetained(
+        budget.Budget, budget.CurrentUsage, g_nr.measuredModelBytes, ownCount,
+        DlssNr::Chain::GenerationSurfaceBytes(g_nr.width, g_nr.height, g_nr.workWidth, g_nr.workHeight, gridPixels));
+}
+
+namespace
+{
+// What a live opt-in left in video memory (docs/dlssnr/design/chain-in-flight.md, "Live opt-in from the upscaler's
+// output"). Under g_nrMutex. Nothing reads these entries again: no collector, cap or shutdown walks this list, so
+// nothing in it is ever released. Raw owners, like the retirement list's, so static teardown destroys no GPU object.
+std::vector<NrRetired> s_leftBehind;
+} // namespace
+
+// Takes everything the untracked path parked out of the retirement list, for good: the generation just detached and
+// what earlier rebuilds parked, whose countdown the tracked path would otherwise step. A present-guide clone stays
+// where it is, on its own transport rule, with its bytes still in that ring's budget; tracked entries are not ours.
+static void LeaveUntrackedBehind()
+{
+    for (size_t i = 0; i < g_nrRetired.size();)
+    {
+        if (g_nrRetired[i].tracked || g_nrRetired[i].cloneBytes != 0)
+        {
+            ++i;
+            continue;
+        }
+        s_leftBehind.push_back(std::move(g_nrRetired[i]));
+        g_nrRetired[i] = std::move(g_nrRetired.back());
+        g_nrRetired.pop_back();
+    }
+}
+
+// The live opt-in's detach: the whole untracked generation is parked as in the migration above and then leaves the
+// retirement list. Nothing is destroyed, here or later: no fence of ours saw the caller's lists that used these
+// objects run, so no rule could say when they are done with. One INFO line says what stays.
+void RetainUntrackedGeneration(ID3D12GraphicsCommandList* cmd)
+{
+    const unsigned long long modelBytes = g_nr.feature != nullptr ? g_nr.modelVramBytes : 0ull;
+    const size_t before = s_leftBehind.size();
+    ParkUntrackedGeneration(false);
+    LeaveUntrackedBehind();
+
+    unsigned long long surfaceBytes = 0;
+    unsigned int surfaces = 0;
+    ID3D12Device* device = nullptr;
+    if (cmd != nullptr && SUCCEEDED(cmd->GetDevice(IID_PPV_ARGS(&device))) && device != nullptr)
+    {
+        for (size_t i = before; i < s_leftBehind.size(); ++i)
+        {
+            const auto& retired = s_leftBehind[i];
+            if (retired.resource == nullptr)
+                continue;
+            const D3D12_RESOURCE_DESC desc = retired.resource->GetDesc();
+            const D3D12_RESOURCE_ALLOCATION_INFO info = device->GetResourceAllocationInfo(0, 1, &desc);
+            if (info.SizeInBytes == UINT64_MAX)
+                continue;
+            surfaceBytes += info.SizeInBytes;
+            ++surfaces;
+        }
+        device->Release();
+    }
+    LOG_INFO("{}", DlssNr::ModelStats::RetainedLine(modelBytes, surfaceBytes, surfaces));
+}
+
 bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory)
 {
     return mandatory || g_tracked || s_trackingTransition || requested.Count > 1 || requested.Individual ||
@@ -294,11 +403,53 @@ bool WantsTrackedRecording(const DlssNrPassSnapshot& requested, bool mandatory)
 }
 
 bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& requested,
-                      DlssNr::Chain::RecordingLease* lease, bool mandatory, bool privatePresent)
+                      DlssNr::Chain::RecordingLease* lease, bool mandatory, NrRecordingRoute route)
 {
     const bool optIn = mandatory || requested.Count > 1 || requested.Individual || AdaptiveCadenceRequested();
     if (!g_tracked && g_legacyRecorded && (optIn || s_trackingTransition))
     {
+        // A history made only on the upscaler's output (docs/dlssnr/design/chain-in-flight.md, "Live opt-in from the
+        // upscaler's output"). No fence of ours saw those lists run, so nothing here proves them finished: the old
+        // generation is detached and kept in video memory for the session, never freed, and tracking starts on
+        // fresh objects. Anything that speaks against it keeps the one-pass path running and says why.
+        if (!s_trackingTransition && !mandatory && route == NrRecordingRoute::AfterUpscale && s_legacyAfterUpscale &&
+            !s_legacyPrivatePresent && !s_legacyOtherRoute && !s_generationRetained)
+        {
+            const char* kept = nullptr;
+            if (!lease || !lease->Valid(g_recordings, reinterpret_cast<uintptr_t>(cmd)))
+                kept = "Another NR recording scope owns the resources; transition deferred";
+            else if (DriverProxyRequested())
+                kept = "Driver proxy uses one pass and master settings; overrides are inactive";
+            else if (s_retainRefusal != nullptr && g_nrTicks - s_retainRefusedAt < kRetainRetryTicks)
+                kept = s_retainRefusal;
+            else
+            {
+                // Before anything is detached: the second generation must fit beside the first, which stays, and
+                // the tracker must be able to follow this list. Refused, the one-pass path is still whole.
+                DlssNr::Submission::Usage probe;
+                s_retainRefusal = nullptr;
+                if (!SecondGenerationFits(cmd))
+                    s_retainRefusal = "Not enough video memory to add passes without a restart: the current model "
+                                      "would stay loaded beside the new one. One pass keeps running";
+                else if (!DlssNr::Submission::Track(cmd, probe, false))
+                    s_retainRefusal = "Passes cannot be added here: this runtime's command lists cannot be followed. "
+                                      "One pass keeps running";
+                s_retainRefusedAt = g_nrTicks;
+                kept = s_retainRefusal;
+            }
+            if (kept)
+            {
+                ChainStatus(kept);
+                NoteUntrackedRecording(cmd, route);
+                return true;
+            }
+            RetainUntrackedGeneration(cmd); // Detached while g_tracked is still false; no GPU object is destroyed.
+            s_generationRetained = true;
+            g_legacyRecorded = false;
+            g_tracked = true; // Sticky from the same call: a later return to one pass cannot retain a second one.
+            ChainStatus("Switching to tracked passes; the previous model stays in video memory until the game closes");
+            return false; // Never record with the generation this call detached; the next call builds fresh objects.
+        }
         if (!s_trackingTransition && s_legacyExternalRecording)
         {
             ChainStatus(mandatory ? "Dx11SceneStage: PriorUntrackedRecording on an unsupported route; restart required"
@@ -306,7 +457,7 @@ bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& 
             if (mandatory)
                 return false;
             // Unsupported routes retain the existing single/master fallback, without tracking old resources.
-            NoteUntrackedRecording(cmd, privatePresent);
+            NoteUntrackedRecording(cmd, route);
             return true;
         }
         if (!lease || !lease->Valid(g_recordings, reinterpret_cast<uintptr_t>(cmd)))
@@ -355,7 +506,7 @@ bool TrackNrRecording(ID3D12GraphicsCommandList* cmd, const DlssNrPassSnapshot& 
     if (!g_tracked)
     {
         g_legacyRecorded = true;
-        NoteUntrackedRecording(cmd, privatePresent);
+        NoteUntrackedRecording(cmd, route);
         return true;
     }
     if (!lease || !lease->Valid(g_recordings, reinterpret_cast<uintptr_t>(cmd)))
