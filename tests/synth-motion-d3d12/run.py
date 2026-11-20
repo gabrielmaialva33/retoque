@@ -52,6 +52,18 @@ NVOFA_SHADERS = ('SynthMotion_NvofaPrep_Shader.h', 'SynthMotion_NvofaExpand_Shad
 #   scene cut            the field must be zero at the cut frame (FFX writes zero vectors there);
 #                        SceneCut(), read back from the GPU, must be raised within ReadbackSlots (4)
 #                        frames of the cut, and never on any frame of any other sequence
+#   scene-change value   what decides a cut is FidelityFX's formula, evaluated on the host from the
+#                        frames the estimator is given (sequences.h, SceneChangeReference; the harness
+#                        reports it per frame): SceneCut() exactly where it crosses FidelityFX's 0.45
+#                        past the warm-up, on every sequence. `cut` must cross at its cut frame and
+#                        nowhere else; `partial` (a quarter of the frame changing, 0.398) must not
+#                        cross, so it raises nothing. No frame of the fixture may sit within 0.03 of
+#                        the threshold, so the oracle is never a coin toss. A report that carries the
+#                        GPU's own value and history bit (the Vulkan suite's; the D3D12 estimator
+#                        exposes neither) must match the formula within 2e-5 or 1%, and bit for bit.
+#                        Before 2026-11-20 FidelityFX's divergence pass summed with too few barriers
+#                        and the value depended on how the GPU scheduled a wave's threads
+#                        (docs/linux-proton/synth-motion-false-scene-cut-20261120.md).
 #   abandon              the frame after an abandoned recording must measure two steps of motion
 #                        (history not advanced), within 1 px; the frames after that, one step
 #   static overlay       a crosshair, a HUD panel and outlined glyphs held still over a background
@@ -145,6 +157,9 @@ OVERLAY_SMEARED, ELEMENT_SMEARED, OVERLAY_EPE = 0.02, 0.05, 0.5
 OVERLAY_ELEMENTS = ('crosshair', 'panel', 'text')
 CUT_FRAME, ABANDON_FRAME = 8, 8
 CUT_WINDOW = 4  # SynthMotion::Estimator_Dx12::ReadbackSlots
+SCENE_CHANGE_WARMUP = 5  # FFX's warm-up frames: their bits are not scene cuts to either estimator
+SCENE_CHANGE_MARGIN = 0.03  # the fixture's own frames stay this far from the threshold
+SCENE_CHANGE_ABS, SCENE_CHANGE_REL = 2e-5, 0.01  # the GPU's value against the formula's
 MIN_READY = 4
 SCORED_FROM = 6  # timing: past the warm-up
 
@@ -300,6 +315,66 @@ def region(frame, name):
 
 def mean(values):
     return sum(values) / len(values) if values else float('nan')
+
+
+def judge_scene_change(report, detects_cuts=True):
+    """Every sequence: SceneCut() where FidelityFX's own formula, evaluated on the host from the frames the estimator
+    was given, crosses its threshold past the warm-up, and nowhere else; and the GPU's value, where the report carries
+    it, is the formula's. `cut` is the exception for its flags, which judge() holds to its window."""
+    failures, notes = [], []
+
+    def check(cond, message):
+        if not cond:
+            failures.append(message)
+
+    compared, worst = 0, (-1.0, None)
+    for s in report['sequences']:
+        name = s['name']
+        raised = [f['t'] for f in s['frames'] if f['scene_cut_after_record'] or f['scene_cut_after_confirm']]
+        referred = [f for f in s['frames'] if f.get('scd_reference', -1) >= 0 and not f['abandoned']]
+        crossing = {f['t']: f['scd_reference'] for f in referred if f['scd_reference'] > f['cut_threshold']}
+        expected = [t for t in crossing if t > SCENE_CHANGE_WARMUP] if detects_cuts else []
+        near = [f'{f["t"]} ({f["scd_reference"]:.3f})' for f in referred
+                if abs(f['scd_reference'] - f['cut_threshold']) < SCENE_CHANGE_MARGIN]
+        check(not near, f'{name}: the fixture\'s own content is within {SCENE_CHANGE_MARGIN} of the scene-change '
+                        f'threshold at t={near}; the oracle needs a margin')
+        if name == 'cut':
+            # Its flags and its window are judged above; here, that the formula agrees this is the cut.
+            if referred:
+                check(sorted(crossing) == [CUT_FRAME], f'cut: FidelityFX\'s formula crosses its threshold at '
+                                                       f't={sorted(crossing)}, not at the cut alone')
+        else:
+            windows = {t for e in expected for t in range(e, e + CUT_WINDOW + 1)}
+            stray = [t for t in raised if t not in windows]
+            highest = max((f['scd_reference'] for f in referred), default=None)
+            if referred and not expected and highest >= 0.05:
+                notes.append(f'{name}: FidelityFX\'s formula peaks at {highest:.3f}, under its '
+                             f'{referred[0]["cut_threshold"]}: a change that is not a scene cut')
+            check(not stray, f'{name}: SceneCut() raised at {stray} with no cut in the content'
+                             + (f' (FidelityFX\'s formula peaks at {highest:.3f}, threshold '
+                                f'{referred[0]["cut_threshold"]})' if referred and not expected else ''))
+            for e in expected:
+                check(any(e <= t <= e + CUT_WINDOW for t in raised),
+                      f'{name}: FidelityFX\'s formula makes t={e} a scene change ({crossing[e]:.3f}) and SceneCut() '
+                      f'was not raised within {CUT_WINDOW} frames (raised at {raised})')
+        wrong = []
+        for f in referred:
+            if 'cut_metric' not in f:
+                continue
+            reference, value = f['scd_reference'], f['cut_metric']
+            difference = abs(value - reference)
+            compared += 1
+            if difference > worst[0]:
+                worst = (difference, f'{name} t={f["t"]}')
+            bit = bool(f['cut_history'] & 1)
+            if difference > max(SCENE_CHANGE_ABS, SCENE_CHANGE_REL * reference) or bit != (reference > f['cut_threshold']):
+                wrong.append(f't={f["t"]}: {value:.6f}{" (scene change)" if bit else ""} for {reference:.6f}')
+        check(not wrong, f'{name}: the GPU\'s scene-change value is not FidelityFX\'s formula on {len(wrong)} of '
+                         f'{len(referred)} frames: ' + ', '.join(wrong[:4]) + (', ...' if len(wrong) > 4 else ''))
+    if compared:
+        notes.append(f'scene-change value: the GPU\'s against FidelityFX\'s formula on the host over {compared} '
+                     f'frames, largest difference {worst[0]:.1e} ({worst[1]})')
+    return failures, notes
 
 
 def judge(report):
@@ -458,11 +533,9 @@ def judge(report):
                      f'|v| at cut {zero["epe_mean"]:.2f}' if zero else '-', '-',
                      f'raised at {raised}' + (f' (+{first - CUT_FRAME} frames)' if first is not None else ''),
                      f'{mean([f["gpu_ms"] for f in steady]):.3f}'))
-    for s in report['sequences']:
-        if s['name'] == 'cut':
-            continue
-        stray = [f['t'] for f in s['frames'] if f['scene_cut_after_record'] or f['scene_cut_after_confirm']]
-        check(not stray, f'{s["name"]}: SceneCut() raised at {stray} with no cut in the content')
+    scene_failures, scene_notes = judge_scene_change(report, detects_cuts)
+    failures += scene_failures
+    notes += scene_notes
 
     # Abandon: history must not advance on an abandoned recording. The field that measures the pair
     # across it arrives lag frames later.

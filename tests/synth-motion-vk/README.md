@@ -4,7 +4,8 @@ Run `python3 tests/synth-motion-vk/run.py` outside a build window (it refuses wh
 `dxc.exe` is running; with other agents on the machine, under `flock -o "$XDG_RUNTIME_DIR/msvc-prefix.lock"`).
 `--build-only` and `--run-only` split compilation from execution; `--run-only` refuses sources changed since the
 build. Output goes to the ignored `artifacts/`: `run.log` (per-frame lines), `run/synth-motion-report.json` (every
-measurement) and `result.json` (PASS/FAIL/SKIP with reasons).
+measurement), `rounds.log` and `run/synth-motion-rounds.json` (the second run, below) and `result.json`
+(PASS/FAIL/SKIP with reasons).
 
 ## What it runs
 
@@ -35,13 +36,29 @@ numbers: the uniform pans and each axis' sign, the moving object, the static fra
 overlay (clear overlay pixels still, smear limits per element, the background held to the small-pan thresholds), and
 GPU time at 1920x1080 and 3440x1440. The `hud_*` sequences are the D3D12 suite's HUD mask's and do not run here.
 
+What decides a scene cut is FidelityFX's formula, which the harness evaluates on the host from the bytes of every
+frame (`SceneChangeReference` in `sequences.h`) and reports beside what the GPU's pass left for that frame: its value,
+its history bits and its group counter, copied out behind the frame's own fence. That judgement holds the GPU's value
+to the formula's within 2e-5 or 1%, the history bit to the crossing of the threshold, and `SceneCut()` to exactly the
+frames that cross it. `partial` is the `cut` sequence's change over a quarter of the frame, which the formula puts at
+0.398, under its 0.45: no cut. Until 2026-11-20 the pass's sums depended on how the GPU scheduled a wave's threads and
+this sequence read 0.518 ([the record](../../docs/linux-proton/synth-motion-false-scene-cut-20261120.md)).
+
+Each frame's report also carries what identifies it: its ticket, the last frame seen complete when it was recorded,
+a hash of the colour uploaded and of the colour copied back from the GPU after the estimator read it (a difference
+fails the run), and the history bits of the estimator's eight read-back slots when `Completed` read them.
+
 On top of that judgement:
 
 - the validation layer ran: a deliberately invalid fence flag must reach the application's messenger with its VUID and
   be refused; and its synchronization checks ran: two clears of one image with no barrier between them (recorded, never
   submitted) must be reported as a `SYNC-HAZARD-*`;
 - it reported no error over the whole run;
-- every field is at the colour's extent.
+- every field is at the colour's extent;
+- a second run, `--fast --only time_1080p,pan_+4x_inflight,cut_inflight --repeat 25`: the three sequences 25 times
+  over, each frame uploaded from a buffer of its own with nothing of the host's between frames, so that frames really
+  are on the GPU together (the report counts those still there when their objects came round). Every round must leave
+  the scene-change output the first one left, bit for bit, and the first one's must be the formula's.
 
 `SceneCut()` is raised one frame after the cut here (it is read when the cut frame's fence is seen), three frames after
 it in flight and on D3D12 (read from a slot old enough to have landed). All are inside the judged window. `cut_inflight`
@@ -52,6 +69,16 @@ GPU time is the estimator's recording bracketed by timestamps, the first written
 the RTX 4090 (driver 615.78.08), 2026-10-15, it varied run to run: 0.80 to 1.08 ms at 1920x1080 and 1.79 to 3.13 ms at
 3440x1440; the D3D12 estimator's suite, the same hour, unlocked: 0.86 and 2.63 ms.
 
+## Investigating
+
+The harness takes, besides `--report`: `--only a,b` (those sequences), `--repeat N` (the selected sequences N times;
+the report holds the first round, every later round is compared with it and a difference is logged as
+`ROUND MISMATCH` with the wall-clock time), `--fast` (frames rendered once, no hashing, no scoring), `--pace N`
+(N ms of idle host before each frame) and `--depth N` (frames in flight). Compiled with `/DSYNTH_SCD_STATE` against a
+copy of `SynthMotion_Vk.cpp` whose `CreateTexture` adds `VK_IMAGE_USAGE_TRANSFER_SRC_BIT`, it also copies out the
+estimator's histograms and reports the sum of each stored one, which is 1 for a normalised histogram. The record above
+has the commands and what they showed.
+
 ## SKIP
 
 Exit 0, `"status": "SKIP"` in `result.json`, when `SynthMotion::VkUnsupported` refuses the device (an instance or device
@@ -60,6 +87,7 @@ descriptors, a format without the storage the estimator needs). The reason is in
 
 ## Limits
 
-Synthetic content, integer motion, SDR RGBA8 input, one device and queue, frames never overlapping on the GPU. It says
+Synthetic content, integer motion, SDR RGBA8 input, one device and queue; in the judged run the host's own work
+between frames leaves the GPU idle, and only the second run has frames on it together. It says
 the Vulkan estimator measures what the D3D12 one does and that its commands are valid and synchronised; what the model
 makes of the field is `tests/vulkan-present-host`'s `nr-synth-motion` case, and a game's.

@@ -69,7 +69,8 @@ enum class Kind
     Cut,
     Abandon,
     Overlay,
-    Hud, // Overlay, with the 1 px frame and the translucent panel besides (the HUD mask's own sequences)
+    Hud,     // Overlay, with the 1 px frame and the translucent panel besides (the HUD mask's own sequences)
+    Partial, // Cut, over part of the frame only: a change FidelityFX's scene-change value puts under its threshold
 };
 
 bool HasOverlay(Kind kind) { return kind == Kind::Overlay || kind == Kind::Hud; }
@@ -94,6 +95,11 @@ constexpr int kObjX = 400, kObjY = 260, kObjW = 256, kObjH = 192;
 // The estimator produces no field for FFX's five warm-up frames after a reset, so the events below
 // happen well after that. Kind::Cut changes content (and its brightness distribution) at this frame.
 constexpr int kCutFrame = 8;
+// Kind::Partial changes content at kCutFrame too, but only in one 64 px tile of every kPartialTiles (a checker of
+// diagonals), and by less: the luma histograms move and FidelityFX's formula gives 0.398 at 1280x720, under its
+// 0.45 (SceneChangeReference below), so this is not a scene cut and none may be raised.
+constexpr int kPartialTiles = 4;
+constexpr float kPartialGain = 0.6f;
 // Kind::Abandon records this frame and throws the list away instead of executing it.
 constexpr int kAbandonFrame = 8;
 
@@ -337,6 +343,12 @@ void ScenePixel(const Sequence& s, int t, int ix, int iy, uint8_t* p)
             Shade(0x1234u, ix - t * s.dx, iy - t * s.dy, 1.0f, p);
         else
             Shade(0xBEEF5u, ix - t * s.dx, iy - t * s.dy, 0.35f, p); // new content, much darker
+        break;
+    case Kind::Partial:
+        if (t >= kCutFrame && FloorMod(FloorDiv(ix, 64) + FloorDiv(iy, 64), kPartialTiles) == 0)
+            Shade(0xBEEF5u, ix - t * s.dx, iy - t * s.dy, kPartialGain, p);
+        else
+            Shade(0x1234u, ix - t * s.dx, iy - t * s.dy, 1.0f, p);
         break;
     case Kind::Object:
     {
@@ -666,6 +678,104 @@ std::vector<Score> ScoreFrame(const Sequence& s, int t, const Field& f)
     case Kind::Hud: // never scored: the hud_* sequences are the HUD mask's
         scores = ScoreOverlayFrame(s, t, f);
         break;
+    case Kind::Partial: // the scene-change value is what this one is for; its field is not scored
+        break;
     }
     return scores;
 }
+
+// ---------------------------------------------------------------------------------------------
+// The scene-change value by FidelityFX's own formula, on the host, from the frames the estimator is given
+// (ffx_opticalflow_prepare_luma.h, ffx_opticalflow_generate_scd_histogram.h, ffx_opticalflow_compute_scd_divergence.h):
+// the 8-bit luma, its histogram over each of nine strata, each filtered and normalised, the symmetric divergence from
+// the previous frame's at three one-bin shifts, and the smallest of the three sums. What the GPU's divergence pass
+// must leave in its output, and so what decides whether a frame is a scene change: an oracle that does not depend on
+// how the GPU schedules the pass's threads (docs/linux-proton/synth-motion-false-scene-cut-20261120.md).
+// ---------------------------------------------------------------------------------------------
+constexpr float kSceneChangeThreshold = 0.45f; // synth_motion_callbacks.h, CrossedSceneChangeThreshold
+
+struct SceneChangeReference
+{
+    static constexpr int kStrata = 9, kBins = 256;
+    std::vector<float> previous; // kStrata x kBins: the last executed frame's, unshifted
+    bool hasPrevious = false;
+
+    // The history starts over: the estimator's reset clears its previous histogram.
+    void Reset() { hasPrevious = false; }
+
+    // One executed frame. `rgba`: its bytes; `channel[b]`: what the estimator's colour holds for byte b (b / 255 in
+    // UNORM, that rounded to a half float in the Vulkan host's working format). Returns the frame's value, or -1 for
+    // the first frame after a reset, which has nothing to be compared with.
+    float Frame(const uint8_t* rgba, UINT width, UINT height, UINT rowPitch, const float* channel)
+    {
+        static const float kernel[6] = { 0.0088122291f, 0.027143577f, 0.065114059f,
+                                         0.12164907f,   0.17699835f,  0.20056541f };
+        const UINT divX = width / 3, divY = height / 3;
+        const UINT columns = (((width / 4) / 3 + 31) / 32) * 32; // the histogram pass's threads across a stratum
+        std::vector<float> current((size_t) kStrata * kBins);
+        uint32_t sums[3] = {};
+        for (int stratum = 0; stratum < kStrata; ++stratum)
+        {
+            const UINT startX = divX * (stratum % 3), startY = divY * (stratum / 3);
+            uint32_t histogram[kBins] = {};
+            for (UINT column = 0; column < columns && startX + 4 * column < startX + divX; ++column)
+            {
+                for (UINT y = startY; y < startY + divY; ++y)
+                {
+                    for (UINT i = 0; i < 4; ++i)
+                    {
+                        const UINT x = startX + 4 * column + i;
+                        uint32_t luma = 0; // outside the image a load reads zero
+                        if (x < width && y < height)
+                        {
+                            const uint8_t* px = rgba + (size_t) y * rowPitch + (size_t) x * 4;
+                            const float fY =
+                                0.2126f * channel[px[0]] + 0.7152f * channel[px[1]] + 0.0722f * channel[px[2]];
+                            luma = std::min((uint32_t) (fY * 255.0f), 255u);
+                        }
+                        ++histogram[luma];
+                    }
+                }
+            }
+
+            float value[kBins];
+            for (int i = 0; i < kBins; ++i)
+            {
+                float v = 0.0f;
+                for (int k = 0; k <= 10; ++k)
+                    v += kernel[k <= 5 ? k : 10 - k] * (float) histogram[std::clamp(i - 5 + k, 0, kBins - 1)];
+                value[i] = v + 1.0f;
+            }
+            for (int shift = 0; shift < 3; ++shift)
+            {
+                float filtered[kBins];
+                for (int i = 0; i < kBins; ++i)
+                {
+                    const int from = i + 1 - shift; // shift 0 moves the histogram one bin down, 2 one bin up
+                    filtered[i] = (from < 0 || from >= kBins) ? 1.0f : value[from];
+                }
+                double total = 0.0;
+                for (float v : filtered)
+                    total += v;
+                double forward = 0.0, backward = 0.0;
+                for (int i = 0; i < kBins; ++i)
+                {
+                    filtered[i] = (float) (filtered[i] / total);
+                    if (shift == 1)
+                        current[(size_t) stratum * kBins + i] = filtered[i];
+                    if (!hasPrevious)
+                        continue;
+                    const double now = filtered[i], before = previous[(size_t) stratum * kBins + i];
+                    forward += now * std::log(now / before);
+                    backward += before * std::log(before / now);
+                }
+                const double result = 1.0 - std::exp(-(std::abs(forward) + std::abs(backward)));
+                sums[shift] += (uint32_t) ((result / kStrata) * 1000000.0);
+            }
+        }
+        const bool compared = hasPrevious;
+        previous = std::move(current);
+        hasPrevious = true;
+        return compared ? (float) std::min(sums[0], std::min(sums[1], sums[2])) / 1000000.0f : -1.0f;
+    }
+};
