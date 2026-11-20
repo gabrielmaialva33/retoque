@@ -64,9 +64,12 @@ def build(folder: Path, helpers_text: str, collect_text: str, header_text: str |
         (folder / 'dlssnr/DlssNr_FenceProgress.h').write_text(header_text, encoding='utf-8')
         includes.append('-DNR_PRESENT_FENCE_MUTANT')  # the header's static_asserts off: a scenario has to notice
     binary = folder / 'cases'
+    # The removal latch now cancels an advisor trial. Compile the real portable runtime;
+    # these scenarios leave it idle, so the existing fence assertions also cover its off path.
     subprocess.run(
         ['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
          '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
+         '-include', str(ROOT / 'retoque/dlssnr/DlssNr_AdvisorRuntime.h'),
          *includes, '-I' + str(ROOT / 'retoque'), str(HERE / 'cases.cpp'), '-o', str(binary)],
         check=True,
     )
