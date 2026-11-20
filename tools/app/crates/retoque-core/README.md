@@ -218,3 +218,12 @@ dictionaries untouched. The bounded Rust parser in `menu_pack` mirrors the runti
 bytes to the sealed source hash and rechecks that source at apply. This API does not write a game during planning
 or bypass running-process checks. The app supplies a generated revision in its data folder; edited dictionaries
 remain data, never executable format strings in the editor preview. Native Windows and in-game use are unqualified.
+
+## Explicit metadata inspection
+
+`legacy_probe::inspect(None)` performs no work. The CLI-only `Some(Request)` path observes one explicit executable
+or PID, with optional explicitly supplied launcher file and same-directory existing log. Without a log selector,
+it checks only conventional OptiScaler logs beside that executable, newest first with shared bounds. It shares the bounded
+PE header/import parser and regular-file safety checks, without using the installer's system-wide process scan.
+The serializable report has only fixed module basenames, hashes and structured facts/reasons. See the
+[diagnostic contract](../../LEGACY-PROBE.md) for bounds, deadline ownership and unqualified Windows behavior.

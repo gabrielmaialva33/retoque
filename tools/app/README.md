@@ -574,3 +574,14 @@ Native Windows capture, child/job lifetime, keyboard/mouse pass-through, GPU/mod
 latency remain **not qualified**. See [phase 4 implementation and Windows checklist](../../docs/dlssnr/design/nr-anything.md#implementation-phase-4).
 The screen idea and requested-versus-applied distinction came from the NeuRotic Hub comparison; no Hub source,
 text or data was copied.
+
+## Explicit legacy API inspection
+
+`retoque legacy-probe --exe <game executable>` (or `--pid <game PID>`) reads metadata for that single selection.
+The default gives four answer lines and a hint; `--details` expands the evidence and route matrix, `--json` keeps
+the complete bounded, redacted report, and `--lang en|pt-BR` selects explanations. Executable/process/launcher
+bitness, imports, loaded modules and historical log callbacks stay separate. Without `--log`, only conventional
+OptiScaler logs beside the selected executable are checked, newest first within fixed limits. Nothing is activated
+or installed; partial evidence lowers confidence, with the full decision refusals retained in details/JSON.
+See [usage, bounds and verification limits](LEGACY-PROBE.md). This diagnostic adds no main-view control or new
+runtime route; native Windows inspection and memory cost still need qualification.

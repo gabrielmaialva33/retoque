@@ -1,6 +1,11 @@
 //! The `OptiScaler.ini` keys the app edits. Every key here must exist in the shipped OptiScaler.ini (a test
 //! checks it); values are written through `retoque_core::ini::Ini::set`, never appended beside an existing key.
 
+/// Shared route values, also used by read-only recommendations. These do not add app controls.
+pub const NR_AFTER_UPSCALER: (&str, &str, &str) = ("DlssNr", "Stage", "0");
+pub const NR_AT_PRESENT: (&str, &str, &str) = ("DlssNr", "HookMethod", "2");
+pub const NR_VULKAN_PRESENT: (&str, &str, &str) = ("DlssNr", "VulkanPresentHost", "true");
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     Bool,
@@ -36,14 +41,14 @@ impl Setting {
             (_, _, "auto") => ("Automatic", "Automático"),
             (_, _, "true") => ("On", "Ligado"),
             (_, _, "false") => ("Off", "Desligado"),
-            ("DlssNr", "Stage", "0") => ("After the upscaler", "Depois da ampliação"),
+            NR_AFTER_UPSCALER => ("After the upscaler", "Depois da ampliação"),
             ("DlssNr", "Stage", "1") => (
                 "Before the upscaler (experimental)",
                 "Antes da ampliação (experimental)",
             ),
             ("DlssNr", "HookMethod", "0") => ("Automatic route", "Rota automática"),
             ("DlssNr", "HookMethod", "1") => ("Upscaled image", "Imagem ampliada"),
-            ("DlssNr", "HookMethod", "2") => ("At presentation", "Na apresentação"),
+            NR_AT_PRESENT => ("At presentation", "Na apresentação"),
             ("DlssNr", "Transfer", "0") => ("Classic", "Clássica"),
             ("DlssNr", "Transfer", "1") => ("Residual", "Residual"),
             ("DlssNr", "Transfer", "2") => ("Residual + DLSS", "Residual + DLSS"),

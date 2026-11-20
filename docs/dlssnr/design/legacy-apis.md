@@ -1,6 +1,10 @@
 # Legacy APIs and 32-bit games: design under review
 
-Date: 2026-11-20. **Proposal only; no implementation, new supported route or runtime qualification.**
+Date: 2026-11-20. **Renderer proposal only; no new supported route or runtime qualification.**
+
+The separately invoked [metadata CLI diagnostic](../../../tools/app/LEGACY-PROBE.md) now implements slice 0.
+The adapter/helper options below remain proposals; the original documentation-only verification boundary at
+the end of section 5 describes this design's initial delivery, not the later CLI implementation.
 This note recommends an observation-only slice before committing to a legacy renderer. It does not authorize
 an x86 DLL, a helper, new hooks, installation in games or changes to defaults. API and executable bitness are
 independent: D3D10 can be x64, and an x86 game can use a modern API.

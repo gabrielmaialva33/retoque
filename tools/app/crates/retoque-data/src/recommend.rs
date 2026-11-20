@@ -1026,3 +1026,34 @@ mod confidence_tests {
         }
     }
 }
+
+/// Present-day route guidance for metadata inspection, not a runtime qualification or write proposal.
+/// Keep the same static-match boundary as `Confidence::StaticMatchUntested`.
+pub fn metadata_route(
+    format: retoque_core::legacy_probe::Format,
+    architecture: retoque_core::legacy_probe::Architecture,
+    api: Option<&str>,
+) -> (&'static str, Option<(&'static str, &'static str, &'static str)>) {
+    use crate::settings;
+    use retoque_core::legacy_probe::{Architecture, Format};
+    if format == Format::Elf {
+        return ("probe.short.elf", None);
+    }
+    if format != Format::Pe {
+        return ("probe.short.unknown_route", None);
+    }
+    if architecture == Architecture::X86 {
+        return ("probe.short.x86", None);
+    }
+    if architecture != Architecture::X64 {
+        return ("probe.short.unknown_route", None);
+    }
+    match api {
+        Some("vulkan") => ("probe.short.vulkan", Some(settings::NR_VULKAN_PRESENT)),
+        Some("d3d12") => ("probe.short.d3d12", Some(settings::NR_AT_PRESENT)),
+        Some("d3d11") => ("probe.short.d3d11", Some(settings::NR_AT_PRESENT)),
+        Some("d3d10") => ("probe.short.d3d10", None),
+        Some("opengl") => ("probe.short.opengl", None),
+        _ => ("probe.short.unknown_route", None),
+    }
+}
