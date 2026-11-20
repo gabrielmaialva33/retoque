@@ -115,8 +115,9 @@ A game's page says what the game has (graphics card, Retoque, Neural Rendering, 
 files) above five tabs: Overview, Settings, Components, Before / after and Logs.
 
 > [!NOTE]
-> Both pictures are the real window on Linux, not mock-ups. No published release carries the app yet: run it
-> from a checkout with `cd tools/app && cargo run -p retoque-app`. [`tools/app/README.md`](tools/app/README.md)
+> Both pictures are the real window on Linux, not mock-ups. The app ships in the
+> [releases](https://github.com/gabrielmaialva33/retoque/releases) from `retoque-v0.3.0` on, for Windows and Linux,
+> and runs from a checkout with `cd tools/app && cargo run -p retoque-app`. [`tools/app/README.md`](tools/app/README.md)
 > has the build, the rules the app keeps and what its tests do not prove.
 
 ## How it works
@@ -191,6 +192,26 @@ Optional stages, all off or neutral by default:
 - **Highlight recovery** (from RTX Remix) keeps bright highlights closer to the game's frame.
 
 ## Status
+
+What Retoque covers, by the API the game renders with. "Measured" means it ran in the games listed further
+down; everything else says what it is. [Capabilities and evidence](docs/capabilities.md) has the record behind
+each line.
+
+| The game renders with | It has an upscaler (DLSS, FSR or XeSS inputs) | Where the pass runs | State |
+|---|---|---|---|
+| Direct3D 12 | yes | on the upscaler's output (`HookMethod=1`, the default) | Measured, with ray reconstruction and DLSS-G |
+| Direct3D 12 | no | at present (`HookMethod=2`) | Measured; no game depth or motion there |
+| Direct3D 11 | yes | through the D3D11-to-D3D12 bridge (a "w/Dx12" upscaler) | Measured |
+| Direct3D 11 | yes, native DLSS kept | on native DLSS's output (`Dx11SceneStage`) | Experimental, off by default |
+| Direct3D 11 | no | on the bridge's own swapchain (`HookMethod=2`) | Implemented |
+| Vulkan | yes | on the upscaler's output | Measured |
+| Vulkan | no | at present (`VulkanPresentHost`) | Experimental, off by default |
+| Direct3D 9, Direct3D 10, OpenGL | | no route of their own; under Proton, DXVK turns Direct3D 9 to 11 into Vulkan, which the experimental Vulkan present host is meant for | Not covered on Windows; not measured under Proton |
+| Any API, 32-bit game | | | Not covered: the app refuses to install into a 32-bit game |
+| Any window, with no hook in the game | | a separate capture program (Windows only) | Experimental; built, not yet run on Windows |
+
+Two things depend on the route. Sequential passes (`Passes`, up to 10) run on Direct3D 12; native Vulkan
+runs one. The menu's cost advisor covers the Direct3D 12 routes and the D3D11 bridge, not native Vulkan.
 
 Measured working on Linux (Proton, RTX 4090):
 
@@ -291,6 +312,16 @@ ToggleKey=0x76    ; F7 switches the pass on and off (no key by default)
 > * With `[Log] LogToFile=true`, `OptiScaler.log` beside the game says which route the pass took and
 >   why, and carries the model's own messages as `DLSS-NR model:` lines.
 
+<div align="center">
+  <img src="docs/images/retoque-menu-simple.png" alt="The Neural Rendering panel of the in-game menu in its simple view: Enable Neural Rendering ticked, the status line 'Running.', a Look preset, a Detail strength slider, and a Compare group with Apply the model, Hold frame, a Compare mode and 'Capture original and processed'." width="48%">
+  <img src="docs/images/retoque-menu-advisor.png" alt="The same panel with all settings shown and the NR cost advisor finished: a target base FPS, a table of scale and cadence options with median, mean and slowest GPU times and NR's share of the frame, the measured choice and an 'Apply measured choice' button." width="36%">
+</div>
+
+The menu's Neural Rendering panel: the simple view on the left, and on the right the cost advisor, which
+tries a few working scales and cadences in the running game and proposes the cheapest one that holds your
+target. Both pictures are the production panel drawn by [`tools/menu-preview`](tools/menu-preview/README.md)
+with made-up values and no game, as their header says; the advisor has not been run in a game yet.
+
 Every key lives under `[DlssNr]` and ships as `auto`; the table says what `auto` means.
 [`Config.md`](Config.md) and the comments in the ini are the full reference.
 
@@ -329,6 +360,9 @@ Every key lives under `[DlssNr]` and ships as `auto`; the table says what `auto`
   `[DlssNr] HdrPresent` (D3D12 and the D3D11 bridge); other HDR formats are always left alone.
 - **The Vulkan present host** (`VulkanPresentHost`, for Vulkan games without an upscaler and D3D games under
   DXVK/vkd3d-proton) is an experiment: off by default, and it stands down while frame generation runs.
+- **DOOM Eternal on NVIDIA's Linux driver 620.73.04** stops with a GPU fault (Xid 13, sometimes Xid 109)
+  about a minute in, with or without Retoque loaded (RTX 4090, 2026-11-20). It ran on 615.78; nothing in
+  Retoque changes it.
 - **Windows** is tested on one RTX 3060. Proton accepts calls that native D3D12 rejects, so a Windows
   report is worth more than another Linux one.
 
