@@ -47,6 +47,12 @@ restoring the output; the creation frame never evaluating; the release after the
 Vulkan resolve's only read of `Transfer` going through the map; the menu's table, its status line
 having a text for every reason, and Retry only on failure.
 
+The timing guard follows the local `TimingMetadata` value through the advisor's
+tags to `SetMetadata`. Three source mutants must still reject a wrong transfer,
+a wrong refusal reason, or publication of a different metadata value.
+The status/retry guard extracts its complete conditional body, independent of the
+next menu section's title, preserving every reason and the failure-only Retry check.
+
 ## What it does not cover
 
 No GPU, no NGX, no shader runs. Nothing here says the carrier survives DLSS, what DLSS does with it,
