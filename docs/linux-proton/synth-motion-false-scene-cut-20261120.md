@@ -21,16 +21,19 @@ reductions over 256 threads. Down to 64 partial sums every step has a group barr
 not. Thread 0 reads its neighbours' partial sums before they are complete, so:
 
 - the histogram is normalised by a part of its mass, never by all of it. The previous histogram the pass stores
-  should sum to 1; it summed to 3.12-3.30 (10 of the 32 partial sums: threads 0 and 1 run together and ahead of the
-  rest) or to 5.2-5.3 (6 of 32: thread 0 alone ahead), on every frame of every sequence;
+  should sum to 1; on every frame of every sequence it summed to between 3.1 and 4.8 (3.2 on most content) in one
+  state of the GPU and to between 5.0 and 5.5 in the other. Those are what 10 and 6 of the 32 partial sums give for
+  an evenly spread histogram (32/10, 32/6):
+  threads 0 and 1 running together ahead of the rest, or thread 0 alone. That reading of the two numbers is an
+  inference from them, not something observed inside the GPU;
 - the divergence is a partial sum too, so the value is not FidelityFX's formula. Against that formula evaluated on
   the host from the same frames, the shipped pass was outside 1% on 273 of the suite's 294 judged frames (a median
   of 1.9 times the formula's value, up to 18 times; too high on 95% of them);
 - which of the two ways the threads run is the GPU's scheduling, and it changes. A frame normalised one way,
   compared with a previous histogram normalised the other way, differs from it by a constant factor of about 1.6 in
   every bin, which the divergence reads as a scene change: 0.36, 0.45, 0.80, 0.85 on unchanged content, against 0.0001
-  to 0.003 on the same frames otherwise, with a threshold of 0.45. The next frame is normal again. That is the failure:
-  two changes of scheduling two frames apart.
+  to 0.003 on the same frames otherwise, with a threshold of 0.45. The next frame is normal again. The failing run
+  kept no such evidence, but its two flags are what two changes of scheduling two frames apart produce.
 
 The fixture fed the estimator what it claimed. On the frames with a wrong value the colour read back from the GPU
 after the estimator had read it hashed equal to the frame uploaded, the tickets and completion order were the
@@ -94,7 +97,9 @@ What changes for a game:
   change just under the threshold that used to reset the history no longer does. A real cut is unchanged: 0.99971
   for the formula's 0.99971 on the fixture's.
 - Cost: ten more group synchronisations in one 27-group dispatch per frame. Not measurable in the suite's timings,
-  which are unlocked and vary more than that run to run.
+  which are unlocked and vary more than that run to run: the whole estimator at 3440x1440, median, 3.932 ms with
+  the shipped pass and 3.906, 3.911 and 3.977 ms with the fixed one; at 1920x1080, 1.585 against 1.590, 1.574 and
+  1.633 ms.
 
 Two things in the same pass were left as FidelityFX has them. The groups at shift 0 and 2 read the histogram and
 the previous histogram that the shift-1 groups of the same stratum overwrite at their end; the result is the
