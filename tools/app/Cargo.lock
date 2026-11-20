@@ -3333,7 +3333,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "retoque-app"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "dirs",
  "eframe",
@@ -3360,7 +3360,7 @@ dependencies = [
 
 [[package]]
 name = "retoque-cli"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "retoque-core",
  "retoque-data",
@@ -3371,7 +3371,7 @@ dependencies = [
 
 [[package]]
 name = "retoque-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "divan",
@@ -3388,7 +3388,7 @@ dependencies = [
 
 [[package]]
 name = "retoque-data"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "cap-fs-ext",
  "cap-std",
@@ -3414,7 +3414,7 @@ dependencies = [
 
 [[package]]
 name = "retoque-discovery"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "divan",
  "proptest",
