@@ -167,6 +167,7 @@ inline float RRWorkingScale() { return 1; }
 inline const char* BeforeUpscaleStatus() { return ""; }
 inline unsigned ActivePassCount() { return running ? Config::Instance()->DlssNrPasses.value_or_default() : 0; }
 inline const char* MultipassStatus() { return ""; }
+inline bool PreviousModelRetained() { return false; }
 inline const char* CadenceStatus() { return ""; }
 inline bool CadenceAvailable() { return true; }
 inline std::atomic_bool g_presentSyncWaits { false };

@@ -87,6 +87,36 @@ int main()
     assert(!DlssNr::Chain::Admit(8*GiB, 7*GiB, GiB, 0));
     assert(DlssNr::Chain::Admit(24*GiB, 8*GiB, GiB, 100ull << 20)); ++cases;
 
+    // A live opt-in that leaves the one-pass generation in video memory (chain-in-flight.md, "Live opt-in from the
+    // upscaler's output"): a second generation is admitted by the same rule while `used` still counts the first,
+    // with the model's own figure when that is the larger, over the surfaces Dispatch counts for a generation.
+    {
+        using DlssNr::Chain::Admit;
+        using DlssNr::Chain::AdmitBesideRetained;
+        using DlssNr::Chain::GenerationSurfaceBytes;
+        constexpr uint64_t MiB = 1ull << 20;
+        assert(GenerationSurfaceBytes(1920, 1080, 864, 486, 0) == (1920ull * 1080 + 864ull * 486) * 48);
+        assert(GenerationSurfaceBytes(1920, 1080, 864, 486, 960ull * 540) ==
+               (1920ull * 1080 + 864ull * 486) * 48 + 960ull * 540 * 16);
+        const uint64_t surfaces = GenerationSurfaceBytes(1920, 1080, 864, 486, 0);
+        // An 11 GiB budget reserves 2.2 GiB; a 700 MiB model asks for 1050 MiB; the surfaces are about 114 MiB.
+        assert(AdmitBesideRetained(11 * GiB, 7 * GiB, 0, 700 * MiB, surfaces));
+        assert(!AdmitBesideRetained(11 * GiB, 8 * GiB, 0, 700 * MiB, surfaces));
+        assert(!AdmitBesideRetained(0, 0, 0, 0, 0) && !AdmitBesideRetained(8 * GiB, 8 * GiB, 0, 0, 0));
+        for (uint64_t used = 0; used <= 11 * GiB; used += 64 * MiB)
+        {
+            // No figure from the model: exactly the tracked path's rule. The larger of the two figures decides.
+            assert(AdmitBesideRetained(11 * GiB, used, 0, 0, surfaces) == Admit(11 * GiB, used, 0, surfaces));
+            assert(AdmitBesideRetained(11 * GiB, used, 2 * GiB, 700 * MiB, surfaces) ==
+                   Admit(11 * GiB, used, 2 * GiB, surfaces));
+            // Never more permissive than the admission the tracked path then asks of the new generation, whose
+            // measured figure starts at zero: passing here means that one passes too.
+            for (const uint64_t own : { uint64_t(0), 100 * MiB, 700 * MiB, 2 * GiB })
+                assert(!AdmitBesideRetained(11 * GiB, used, 0, own, surfaces) || Admit(11 * GiB, used, 0, surfaces));
+        }
+        ++cases;
+    }
+
     // Actual completion model, composed with the observed-present requirement.
     namespace S = DlssNr::Submission::Detail;
     uint64_t completed = 0;

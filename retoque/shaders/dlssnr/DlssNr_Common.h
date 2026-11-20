@@ -253,6 +253,11 @@ struct DlssNrFrameInfo
 
     // Set only by RunPresentPass for its private, serially submitted lists (never replayed by the game).
     bool PrivatePresentRecording = false;
+
+    // Set only by EvaluateAfterUpscale, for the recording it makes on the upscaler's (or Ray Reconstruction's)
+    // output in the caller's list. An untracked history made only of these can be left behind whole when passes
+    // are raised (docs/dlssnr/design/chain-in-flight.md, "Live opt-in from the upscaler's output").
+    bool AfterUpscaleRecording = false;
 };
 
 struct alignas(256) DlssNrConstants

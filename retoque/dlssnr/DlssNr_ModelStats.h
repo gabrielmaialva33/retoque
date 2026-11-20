@@ -53,6 +53,26 @@ inline std::string InfoLine(unsigned long long bytes, bool firstBuild)
            " at this build; a feature still being retired may be in it)";
 }
 
+// The INFO line when a live opt-in leaves the one-pass generation in video memory (docs/dlssnr/design/
+// chain-in-flight.md, "Live opt-in from the upscaler's output"). modelBytes is the model's own count at its last
+// build (kUnknown: it gave none; 0: no model instance was live); surfaceBytes is what the adapter says the parked
+// textures and buffers take. The helper passes' own heaps and histories are in neither figure.
+inline std::string RetainedLine(unsigned long long modelBytes, unsigned long long surfaceBytes, unsigned int surfaces)
+{
+    std::string model;
+    if (!Known(modelBytes))
+        model = "its model (size not reported by this loader)";
+    else if (modelBytes == 0)
+        model = "no model instance";
+    else
+        model = "its model, " + MiBText(modelBytes) + " (" + std::to_string(modelBytes) +
+                " bytes, its own count at its last build)";
+    return "DLSS-NR chain: passes now change without a restart. The one-pass generation stays in video memory until "
+           "the game closes: " +
+           model + ", and " + MiBText(surfaceBytes) + " in " + std::to_string(surfaces) + " surfaces (" +
+           std::to_string(surfaceBytes) + " bytes); helper passes not counted";
+}
+
 // The DEBUG line when there is no figure. rc is the query's answer (1, 0, -1) or kNoQuery; lastResult the callback's.
 inline std::string Unreported(int rc, int lastResult)
 {

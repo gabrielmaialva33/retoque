@@ -398,6 +398,34 @@ int main()
         assert(infoLogs.back().find("stage=after calls=1") != std::string::npos);
         ++checks;
     }
+    // Each route names its own recording (chain-in-flight.md, "Live opt-in from the upscaler's output"): the
+    // after-upscale entry marks the frame it hands the pass, after Ray Reconstruction too; the before-upscale scope
+    // never does, so an untracked history it took part in stays a restart.
+    {
+        Fixture f;
+        f.cfg.DlssNrStage = 0;
+        DlssNr_Dx12::lastFrame = {};
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false);
+        assert(DlssNr_Dx12::lastFrame.AfterUpscaleRecording && !DlssNr_Dx12::lastFrame.AfterRayReconstruction);
+        ++checks;
+    }
+    {
+        Fixture f;
+        f.cfg.DlssNrStage = 0;
+        f.cfg.DlssNrApplyAfterRR = true;
+        DlssNr_Dx12::lastFrame = {};
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false, true);
+        assert(DlssNr_Dx12::lastFrame.AfterUpscaleRecording && DlssNr_Dx12::lastFrame.AfterRayReconstruction);
+        ++checks;
+    }
+    {
+        Fixture f;
+        DlssNr_Dx12::lastFrame = {};
+        const unsigned before = DlssNr_Dx12::calls;
+        ScopedPreUpscale p(&f.cmd, &f.params, true);
+        assert(p.Swapped() && DlssNr_Dx12::calls == before + 1 && !DlssNr_Dx12::lastFrame.AfterUpscaleRecording);
+        ++checks;
+    }
     // Auto with guides captured but no present hook running (the D3D11 bridge, Vulkan): the pass must
     // run here, not be deferred to a hook that never comes.
     {

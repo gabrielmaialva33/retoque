@@ -536,6 +536,19 @@ void Lines()
         Require(line.rfind("DLSS-NR: no VRAM figure from the model (", 0) == 0 && line.back() == ')',
                 "every debug line has one shape: " + line);
 
+    // What a live opt-in leaves in video memory (chain-in-flight.md, "Live opt-in from the upscaler's output").
+    const auto left = MS::RetainedLine(bytes, 114ull * 1024 * 1024, 14);
+    Require(left == "DLSS-NR chain: passes now change without a restart. The one-pass generation stays in video "
+                    "memory until the game closes: its model, 812 MiB (851443712 bytes, its own count at its last "
+                    "build), and 114 MiB in 14 surfaces (119537664 bytes); helper passes not counted",
+            "the line for a generation left behind: " + left);
+    Require(MS::RetainedLine(MS::kUnknown, 0, 0).find("size not reported") != std::string::npos &&
+                MS::RetainedLine(MS::kUnknown, 0, 0).find("18446744073709551615") == std::string::npos,
+            "an unknown model figure is said, never printed as a number: " + MS::RetainedLine(MS::kUnknown, 0, 0));
+    Require(MS::RetainedLine(0, 1000, 1).find("no model instance") != std::string::npos &&
+                MS::RetainedLine(0, 1000, 1).find("under 1 MiB in 1 surfaces") != std::string::npos,
+            "a generation with no live model says so: " + MS::RetainedLine(0, 1000, 1));
+
     Require(!MS::Known(MS::kUnknown), "the unknown value is not a figure");
     Require(MS::Known(0) && MS::Known(kReported), "zero and large figures are figures");
 }

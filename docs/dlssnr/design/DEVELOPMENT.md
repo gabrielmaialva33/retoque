@@ -252,6 +252,20 @@ Model setters, deferred release, sparse overrides and all range limits are uncha
 
 Table layout and words do not change candidate order, sampling, statistics, thresholds, cancellation or apply policy.
 
+### 2.12 Passes → the retained model line (`DlssNr_Menu.cpp`, `PreviousModelRetained`)
+
+One read-only line under the chain status ([chain-in-flight.md](chain-in-flight.md), "Live opt-in from the upscaler's
+output"). `tests/nr-untracked-retire` holds the state it reads.
+
+| State | Line |
+|-------|------|
+| native Vulkan, or the passes controls hidden | **none** |
+| no generation left behind this session (started above one pass, never raised, migrated on the present route, or the switch was refused) | **none**; a refusal is the chain status itself |
+| raising the passes left the one-pass model in video memory | "Passes were changed without a restart, so the previous model's video memory stays in use until the game closes." for the rest of the session, whatever the count is now |
+
+Invariant checks against this table: a statement, never a control (rule 2): nothing frees that memory but closing the
+game, so there is nothing to offer. No new config key (rule 4).
+
 ## 3. Per-change-type review (run BEFORE deploy)
 
 Match the change to its type and run that review — as an adversarial pass (a subagent given the diff

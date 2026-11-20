@@ -17,7 +17,9 @@ UBSan and `-Werror`. About two seconds. Design: [model-vram-stats](../../docs/dl
    - refusing: -1, its code kept, no size read; silent (success, nothing written, a stale 777 in the block): -1;
    - faulting: -1, `kFaulted` kept, no size read, and the next query with a good callback does not enter the model.
 2. **`retoque/dlssnr/DlssNr_ModelStats.h`**, as it is: MiB rounding (halves up, no wrap at the top of the range,
-   "under 1 MiB"), the first build's INFO line and a later build's, every DEBUG line's reason and shape.
+   "under 1 MiB"), the first build's INFO line and a later build's, every DEBUG line's reason and shape, and the
+   INFO line for a generation a live opt-in leaves in video memory (`RetainedLine`: the model's own count, an
+   unknown count said rather than printed, no live model, the surfaces' bytes).
 3. **Source guards**: the declarations the harness supplies itself (callback type, getter/setter types, slots,
    `kFaulted`) are what both sources say, and `kStatsUnwritten` is `~0ull` in both; the query never populates, loads,
    creates, evaluates, releases or initialises, and calls the callback through `Guarded` into a `volatile` (no tail
