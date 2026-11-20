@@ -227,8 +227,8 @@ Post-packaging identity/evidence step, Python 3.11+ standard library. The PowerS
 without Python; a local zip by itself is not release qualification. The CI draft requires this step.
 
 ```bash
-python3 tools/release_manifest.py --archive release/Retoque-v0.3.0.zip --version retoque-v0.3.0
-python3 tools/release_manifest.py --archive release/Retoque-v0.3.0.zip --version retoque-v0.3.0 --host-report artifacts/host/summary.json --require-host
+python3 tools/release_manifest.py --archive release/Retoque-v0.3.1.zip --version retoque-v0.3.1
+python3 tools/release_manifest.py --archive release/Retoque-v0.3.1.zip --version retoque-v0.3.1 --host-report artifacts/host/summary.json --require-host
 ```
 
 Writes `<archive>.manifest.json` atomically after validation: SHA-256 and sizes for archive/members, packaging
