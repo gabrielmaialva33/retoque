@@ -12,6 +12,9 @@ completed value as completed, pending or removed, and every look at the present 
 The runner compiles that header and the verbatim production helpers from `DlssNr_Dx12.cpp` (the removal latch and
 `ReadPresentFence` through `WaitPresentListsIdle`, plus `RetirePresentHdrTexture` and `CollectPresentHdrRetired`)
 against fake D3D12 objects with g++ C++20, ASan/UBSan and `-Werror`, one scenario per process.
+The compilation also includes the real portable advisor runtime, left idle, for
+the removal latch's cancellation call; none of the eight fence mutants is replaced
+or skipped because of that dependency.
 
 ## What this covers
 

@@ -27,12 +27,15 @@
     "ResidentGuideBytes": "3ba731d4f7f7f09e556e87e3e349b57afba39dcf650f4ec3e5d5ae1416587f0e",
     "ParkedGuideBytes": "90e6c36b1db0ed04ea6da0f09ec9c5a14e1625a1f5ef2343aee3ee2e6defefe2",
     "NoteCaptureSkipUnlocked": "5c143cf00cca56339d14e48e9952a58e814ccf25c607fade34ec6e0f31ee7cca",
-    "CaptureGuides": "8dc612390c29321209cd383905adbbd3b0d5895e7295ebf0e8905a9a114ebe48",
+    "CaptureGuides": "da9d246d367c18a12a68f10dd851a8c7e52a84e3fca5987090d326daaaf1bfc2",
     "CaptureTemporal": "46a18402f220c95523ece0e54a8a3a6741e7b74887b385da013e7eec0f6d0b98",
     "CaptureBridgedGuides": "328ea6beb2b62c4d8d2ab8cfc952882e1994291da86f376c315c37d79ac6c6ca",
     "BridgePresentedExtent": "54f5070415377afeb4bed383139aaff83eb87ce8a3f10de293f5ec4b7eab86c3",
     "ReadCapturedGuides": "a506cd359707aee2d9666c034b27742de8124e52d84f285da043f296e380aa1c",
     "CapturedPresentGuides": "1f15450505924c33a513ae6e718eb1b0772b223665df81a3da2cdf80713a6a66",
     "AbandonCapturedGuides": "318ded03521048b5ad586a0f20a66e9157850f4765e39b0b54593adfda79a90c"
+  },
+  "updates": {
+    "CaptureGuides": "2026-11-19, 12a23174: add PresentDepthDx12::InternalScope at entry and Captured after CommitRecord. Observer-only bookkeeping; no guide selection, copy, retirement or submission-tracking change. The original body remains independently checked against its prior digest."
   }
 }

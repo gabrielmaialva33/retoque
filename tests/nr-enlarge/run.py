@@ -115,7 +115,34 @@ assert len(plans) == 1 and dispatch.count('PlanEnlarge(') == 1, \
 assert dispatch.index('const bool peripheryActive = periphery.active;') < plans[0].start()
 plan_at = plans[0].start()
 assert plan_at < dispatch.index('timing.SetMetadata(')
-once(dispatch, 'enlargePlan.transfer, DlssNr::Enlarge::Token(enlargePlan.why)));', 'timing contract')
+
+
+def timing_contract(source):
+    # The advisor adds tags to a local metadata value before publishing it. Follow that value,
+    # not the old nested TimingMetadata/SetMetadata closing parentheses.
+    begin = once(source, 'auto metadata = TimingMetadata(', 'timing metadata')
+    end = source.index(';', begin)
+    once(source[begin:end], 'enlargePlan.transfer, DlssNr::Enlarge::Token(enlargePlan.why))', 'timing contract')
+    publish = once(source, 'timing.SetMetadata(metadata);', 'timing publication')
+    assert source.index('const auto enlargePlan =') < begin < end < publish
+
+
+timing_contract(dispatch)
+for old, new in (
+    ('cadence.cadence, carried, enlargePlan.transfer, DlssNr::Enlarge::Token(enlargePlan.why)',
+     'cadence.cadence, carried, 1, DlssNr::Enlarge::Token(enlargePlan.why)'),
+    ('cadence.cadence, carried, enlargePlan.transfer, DlssNr::Enlarge::Token(enlargePlan.why)',
+     'cadence.cadence, carried, enlargePlan.transfer, DlssNr::Enlarge::Token(DlssNr::Enlarge::Why::NotSelected)'),
+    ('timing.SetMetadata(metadata);', 'timing.SetMetadata(initialTiming);'),
+):
+    once(dispatch, old, 'timing mutation anchor')
+    try:
+        timing_contract(dispatch.replace(old, new))
+    except (AssertionError, ValueError):
+        pass
+    else:
+        raise AssertionError('enlargement timing mutation escaped: ' + new)
+print('PASS: 3 enlargement timing metadata mutants rejected')
 once(dispatch, 'resolveParams.Transfer = enlargePlan.transfer;', 'resolve transfer')
 assert 'resolveParams.Transfer = cfg.DlssNrTransfer' not in dispatch, 'the resolve reads the key directly again'
 resolve_at = once(dispatch, 'wrote = DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer,', 'resolve')
@@ -151,8 +178,8 @@ once(vulkan, 'encode.Transfer = Enlarge::VulkanTransfer(cfg.DlssNrTransfer.value
 once(menu, 'int enlarge = Enlarge::MenuIndex(transfer);', 'menu index')
 once(menu, 'config->DlssNrTransfer = Enlarge::MenuTransfer(enlarge);', 'menu write')
 once(menu, 'Localization::Label("Matched residual + DLSS")', 'menu entry')
-status = between(menu, 'if (transfer == Enlarge::kTransferDlss && enabled && (nativeVk || DlssNr::IsRunning()))',
-                 'ImGui::SeparatorText(Localization::Tr("How much')
+# This conditional owns the complete status/retry UI; later section titles can move independently.
+status = definition(menu, 'if (transfer == Enlarge::kTransferDlss && enabled && (nativeVk || DlssNr::IsRunning()))')
 assert 'DlssNr::EnlargeStatus()' in status and 'Retry###nrEnlargeRetry' in status
 assert 'DlssNr::RetryEnlargement();' in status and 'RetryAfterFailure' not in status
 assert status.index('status.why == Enlarge::Why::Failed') < status.index('Retry###nrEnlargeRetry')

@@ -234,8 +234,8 @@ SOURCE_MUTANTS = {
                              '        g_nr.reset = true;\n        break;'),
     'dispatch: stale runs': ('dx12', '        reportSkip("a frame of a DLSS picture the game has since replaced as the one NR follows");\n        return false;\n',
                              '        reportSkip("a frame of a DLSS picture the game has since replaced as the one NR follows");\n        break;\n'),
-    'dispatch: before the lock': ('dx12', '    std::lock_guard<std::mutex> nrLock(g_nrMutex);\n    const Config& cfg = *Config::Instance();\n    const auto reportSkip',
-                                  '    const Config& cfg = *Config::Instance();\n    (void) g_pictureEpoch.Consume(frame.PictureEpoch);\n    std::lock_guard<std::mutex> nrLock(g_nrMutex);\n    const auto reportSkip'),
+    'dispatch: before the lock': ('dx12', '    std::lock_guard<std::mutex> nrLock(g_nrMutex);',
+                                  '    (void) g_pictureEpoch.Consume(frame.PictureEpoch);\n    std::lock_guard<std::mutex> nrLock(g_nrMutex);'),
     'vk: meter kept': ('vk', '        g_vk.reset = true;\n        g_vk.gameExposure = 0.0f;\n        g_vk.meterFrames = 0;\n        g_vk.meterPending.Invalidate();\n        g_vk.exposureLatch.Reset();\n        break;',
                        '        g_vk.reset = true;\n        break;'),
     'vk: stale runs': ('vk', '    case DlssNr::Pictures::Consumed::Stale:\n        return;\n', '    case DlssNr::Pictures::Consumed::Stale:\n        break;\n'),
@@ -254,6 +254,12 @@ for name, (which, old, new) in SOURCE_MUTANTS.items():
         # Existing post-stage mutants stay scoped to that preserved function; the new pre recorder shares rules.
         target = body(texts[which], 'void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* params,')
         assert target.count(old) == 1, f'source mutant {name!r} no longer applies to the post body'
+        texts[which] = texts[which].replace(target, target.replace(old, new), 1)
+    elif name.startswith('dispatch:'):
+        # Other helpers use the same lock spelling; mutate only the Dispatch body. The advisor's
+        # declarations between the lock and reportSkip do not affect the epoch's ordering rule.
+        target = body(texts[which], 'bool DlssNr_Dx12::Dispatch(')
+        assert target.count(old) == 1, f'source mutant {name!r} no longer applies to Dispatch'
         texts[which] = texts[which].replace(target, target.replace(old, new), 1)
     else:
         assert texts[which].count(old) == 1, f'source mutant {name!r} no longer applies'
