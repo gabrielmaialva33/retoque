@@ -6,6 +6,8 @@ cleanup before device destruction, abandonment of lost/undrained owners, refusal
 late enqueues, numeric-handle reuse, idle-device flushing without retiring the owner, and a collector/retirement race. A barrier pauses
 a collector after it detached its callbacks; retirement must wait until those callbacks
 finish before the device can die. Source guards hold the NR device hook to that order.
+The creation guard follows the startup chain argument to `HookDevice` and rejects both
+missing owner registration and registration moved after hook installation.
 
 This reproduces the fifth upstream merge's transitive `Shader_Vk` lifetime regression.
 It does not execute Vulkan or establish the safety of the upstream age/present heuristic.
