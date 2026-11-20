@@ -1,5 +1,13 @@
 //! RetoqueWindowHost protocol 1, independent of Windows and egui.
 //! The host supports status/stop only. Settings belong to a new session, never a pretend live command.
+
+/// What a launch copies into its session folder. The host is absent from payloads before 0.3.1.
+pub const HOST_FILES: [&str; 3] = ["RetoqueWindowHost.exe", "OptiScaler.dll", "nvngx.dll_dlssnr.dll"];
+
+/// True when the selected Retoque files can start "NR on any window"; otherwise the app offers no control for it.
+pub fn payload_has_host(payload: &std::path::Path) -> bool {
+    HOST_FILES.iter().all(|name| payload.join(name).is_file())
+}
 use serde::Deserialize;
 use std::{
     io::{self, BufRead},

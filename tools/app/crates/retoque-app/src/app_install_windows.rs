@@ -315,7 +315,7 @@ fn uninstall() -> io::Result<()> {
         Ok(())
     }
     check_tree(&p.install)?;
-    let ready = p.install.join(".retoque-uninstall-ready");
+    let ready = p.install.join(UNINSTALL_READY);
     plain_path(&ready)?;
     if ready.try_exists()? {
         fs::remove_file(&ready)?;
