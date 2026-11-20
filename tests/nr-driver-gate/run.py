@@ -140,9 +140,31 @@ require(driver_line in render, 'the menu does not say why NR is off for the driv
 require(before(render, 'if (driverBlocked)', driver_line), 'the driver line is not gated on the block')
 require('guard.action == SessionGuard::Action::Disable && !driverBlocked' in render,
         '"Enable anyway" must not be offered while the driver is blocked (it would be a dead control)')
-require(re.search(r'if \(!DlssNr::DriverGate::Refuses\(\)\)\s*\{\s*ImGui::SameLine\(\);\s*'
-                  r'if \(ImGui::SmallButton\(Localization::Label\("Retry"\)\)\)', render) is not None,
+def retry_guarded(text):
+    # Retry moved to its own line in the readable panel. Its availability/action, not SameLine,
+    # is the driver contract: the sole button and its action must stay inside the refusal guard.
+    guard = function_body(text, 'if (!DlssNr::DriverGate::Refuses())')
+    button = 'ImGui::SmallButton(Localization::Label("Retry"))'
+    action = 'DlssNr::RetryAfterFailure();'
+    return (text.count(button) == 1 and guard.count(button) == 1 and
+            re.search(r'if \(ImGui::SmallButton\(Localization::Label\("Retry"\)\)\)\s*'
+                      r'DlssNr::RetryAfterFailure\(\);', guard) is not None and action in guard)
+
+
+require(retry_guarded(render),
         '"Retry" must not be offered when the driver gate refuses the model (it would be a dead control)')
+retry_mutants = {
+    'unconditional retry': render.replace('if (!DlssNr::DriverGate::Refuses())', 'if (true)', 1),
+    'inverted refusal': render.replace('if (!DlssNr::DriverGate::Refuses())',
+                                       'if (DlssNr::DriverGate::Refuses())', 1),
+    'button outside guard': render.replace('if (!DlssNr::DriverGate::Refuses())',
+                                           'if (!DlssNr::DriverGate::Refuses()) {}', 1),
+    'missing retry action': render.replace('DlssNr::RetryAfterFailure();', ';', 1),
+    'duplicate unguarded button': render + '\nImGui::SmallButton(Localization::Label("Retry"));',
+}
+for name, mutated in retry_mutants.items():
+    require(mutated != render, 'Retry mutant did not apply: ' + name)
+    require(not retry_guarded(mutated), 'Retry guard accepted mutant: ' + name)
 require(re.search(r'if \(!enabled\)\s*\{\s*if \(!driverBlocked\)', render) is not None,
         'the "Off. The model stays loaded" line must give way to the driver line')
 require(driver_line in pack, 'the driver line has no pt-BR entry')
