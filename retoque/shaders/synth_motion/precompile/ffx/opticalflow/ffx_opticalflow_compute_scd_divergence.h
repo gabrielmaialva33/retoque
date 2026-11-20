@@ -20,6 +20,15 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+// Changed for Retoque's synthesized-motion estimator (2026-11-20): the last steps of the two 256-to-1 sums below had
+// no group barrier between them, on the assumption that the 32 threads of a wave run each statement together. They
+// do not on NVIDIA (RTX 4090, driver 620.73.04, Vulkan and vkd3d-proton): thread 0 reads its neighbours' partial sums
+// before they are complete, so the histogram was normalised by 6/32 or 10/32 of its mass (which of the two changed
+// with the GPU's scheduling) and the divergence was a partial sum. A frame normalised one way compared with a
+// previous histogram normalised the other read as a scene change on unchanged content. Every step now has its
+// barrier, marked "Retoque"; nothing else differs from the SDK's file
+// (docs/linux-proton/synth-motion-false-scene-cut-20261120.md).
+
 #ifndef FFX_OPTICALFLOW_COMPUTE_SCD_DIVERGENCE_H
 #define FFX_OPTICALFLOW_COMPUTE_SCD_DIVERGENCE_H
 
@@ -89,10 +98,15 @@ void ComputeSCDHistogramsDivergence(FfxInt32x3 iGlobalId, FfxInt32x2 iLocalId, F
     FFX_GROUP_MEMORY_BARRIER;
 
     if (iLocalIndex < 32) tempBuffer[iLocalIndex] += tempBuffer[iLocalIndex + 32];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 16) tempBuffer[iLocalIndex] += tempBuffer[iLocalIndex + 16];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 8 ) tempBuffer[iLocalIndex] += tempBuffer[iLocalIndex + 8];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 4 ) tempBuffer[iLocalIndex] += tempBuffer[iLocalIndex + 4];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 2 ) tempBuffer[iLocalIndex] += tempBuffer[iLocalIndex + 2];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 1 ) tempBuffer[iLocalIndex] += tempBuffer[iLocalIndex + 1];
     FFX_GROUP_MEMORY_BARRIER;
 
@@ -114,10 +128,15 @@ void ComputeSCDHistogramsDivergence(FfxInt32x3 iGlobalId, FfxInt32x2 iLocalId, F
     FFX_GROUP_MEMORY_BARRIER;
 
     if (iLocalIndex < 32) tempBuffer2[iLocalIndex] += tempBuffer2[iLocalIndex + 32];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 16) tempBuffer2[iLocalIndex] += tempBuffer2[iLocalIndex + 16];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 8 ) tempBuffer2[iLocalIndex] += tempBuffer2[iLocalIndex + 8];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 4 ) tempBuffer2[iLocalIndex] += tempBuffer2[iLocalIndex + 4];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
     if (iLocalIndex < 2 ) tempBuffer2[iLocalIndex] += tempBuffer2[iLocalIndex + 2];
+    FFX_GROUP_MEMORY_BARRIER; // Retoque
 
     if (iLocalIndex == 0)
     {

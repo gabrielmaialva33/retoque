@@ -132,8 +132,14 @@ Ported from the AMD FidelityFX SDK 2.3.0 (`external/FidelityFX-SDK-v2`, commit `
   `ffx_core_hlsl.h`, `ffx_core_gpu_common.h`, `ffx_core_gpu_common_half.h`, `ffx_core_portability.h`;
   `framegeneration/fsr3/include/gpu/spd/ffx_spd.h`; and
   `framegeneration/fsr3/include/gpu/opticalflow/ffx_opticalflow_` + `common`, `prepare_luma`,
-  `compute_luminance_pyramid`, `generate_scd_histogram`, `compute_scd_divergence`,
-  `compute_optical_flow_v5`, `filter_optical_flow_v5`, `scale_optical_flow_advanced_v5` `.h`.
+  `compute_luminance_pyramid`, `generate_scd_histogram`, `compute_optical_flow_v5`,
+  `filter_optical_flow_v5`, `scale_optical_flow_advanced_v5` `.h`.
+- **Copied and changed:** `ffx_opticalflow_compute_scd_divergence.h` (2026-11-20). Ten group barriers were added,
+  one after each step of its two 256-to-1 sums that had none; each is marked `// Retoque` and the file's header says
+  why. Without them the sums depend on the 32 threads of a wave running each statement together, which they do not
+  on NVIDIA: the scene-change value was not FidelityFX's formula, and changed with the GPU's scheduling into a scene
+  cut on unchanged content ([record](../../../docs/linux-proton/synth-motion-false-scene-cut-20261120.md)). Both
+  estimators compile this file.
 - **Derived (bindings changed, pass bodies unchanged):** `precompile/synth_motion_callbacks.h` from
   `ffx_opticalflow_callbacks_hlsl.h`, and the seven `synth_motion_*.hlsl` passes from
   `internal/shaders/ffx_opticalflow_*_pass(_v5).hlsl`. Each carries FFX's licence and says what changed.
