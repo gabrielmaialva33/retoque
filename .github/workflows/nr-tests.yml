@@ -3,7 +3,8 @@
 # Named nr-tests to keep it distinct from upstream's test.yml, which despite the
 # name runs no tests: it publishes the nightly release.
 #
-# Only the three submodules the host suites actually include are checked out.
+# Only the four submodules the host suites actually include are checked out
+# (external/nvapi for nr-drs-override's driver-settings header).
 # external/FidelityFX-SDK is deliberately left alone; it is large, slow, and the
 # build only ever needed twelve headers from it. See CLAUDE.md.
 
@@ -54,7 +55,10 @@ jobs:
       - name: Check out the submodules the suites include
         run: |
           git submodule update --init --depth 1 \
-            external/simpleini external/spdlog external/vulkan
+            external/simpleini external/spdlog external/vulkan external/nvapi
+
+      - name: FreeType for menu-preview
+        run: sudo apt-get update -q && sudo apt-get install -y -q libfreetype-dev
 
       - uses: actions/setup-python@v5
         with:

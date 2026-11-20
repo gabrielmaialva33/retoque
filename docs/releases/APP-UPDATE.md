@@ -39,11 +39,11 @@ an embedded version marker; the packager refuses a different release version or 
 Start with a payload archive produced by the existing script, then package the app:
 
 ```sh
-bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/app --version retoque-v0.1.0
+bash tools/app/scripts/make-payload-release.sh --build-dir x64/out --out release/app --version retoque-v0.3.0
 bash tools/app/scripts/make-app-release.sh \
   --exe tools/app/target/x86_64-pc-windows-gnu/release/retoque-app.exe \
-  --payload release/app/retoque-payload-0.1.0-x64.zip \
-  --out release/app --version retoque-v0.1.0
+  --payload release/app/retoque-payload-0.3.0-x64.zip \
+  --out release/app --version retoque-v0.3.0
 ```
 
 The second script verifies the payload's internal member checksums, rejects unsafe/forbidden files, adds the app,

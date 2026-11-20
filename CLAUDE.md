@@ -47,7 +47,7 @@ as automatic recovery; preserve evidence and establish process ownership. Redire
 Do not deploy a failed build. See [maintenance](docs/maintenance.md#build-and-toolchains).
 
 Do not run `git submodule update --init --recursive` blindly. The old FidelityFX SDK is deliberately partial.
-Host CI checks out only `external/simpleini`, `external/spdlog` and `external/vulkan`.
+Host CI checks out only `external/simpleini`, `external/spdlog`, `external/vulkan` and `external/nvapi`.
 Use clang-format **22**, not whichever version happens to be on PATH. Every C++ translation unit starts
 with `pch.h`; headers never include it. See upstream [CONTRIBUTING.md](CONTRIBUTING.md).
 

@@ -1,5 +1,8 @@
 # Retoque v0.1.0 (pre-release): desktop app
 
+> **Superseded, never published.** The first published release is `retoque-v0.3.0`
+> ([notes](retoque-v0.3.0.md)); this draft is kept as history.
+
 Retoque brings DLSS Neural Rendering (NR), Lossless Scaling frame generation and Proton fixes to games through
 OptiScaler. This pre-release adds the **Retoque desktop app** (Windows and Linux): one install engine shared by
 the app and the `retoque` CLI, with every change shown in a review before anything is written to a game.
