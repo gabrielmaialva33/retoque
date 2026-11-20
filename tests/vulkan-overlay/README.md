@@ -143,3 +143,7 @@ failed as required, and validation reported no unexpected errors.
 
 The baseline hash above predates the authorized commit-message amendment; the
 production source is unchanged by that amendment.
+
+The teardown instrumentation follows the full `DestroyVulkanObjectsLocked` definition, including
+`deviceDying` and `drainProof` added in `c9a4500a` (2026-11-09). It still requires exactly one matching
+body and counts its entry; drain-failure, allocation balance, cross-family and validation checks are unchanged.

@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 from _suite_result import result_run, write_result
+from _gpu_guard import guard_no_game
 OUT = HERE / 'artifacts'
 WORK = OUT / 'run'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
@@ -32,24 +33,7 @@ def sha(path):
 
 
 def guard():
-    for proc in Path('/proc').iterdir():
-        if not proc.name.isdigit():
-            continue
-        comm = ''
-        try:
-            comm = (proc / 'comm').read_text().strip().lower()
-            if comm in ('msbuild.exe', 'cl.exe', 'link.exe'):
-                raise RuntimeError('compiler prefix already in use')
-            mappings = (proc / 'maps').read_text()
-            if str(WORK) in mappings:
-                raise RuntimeError('an earlier provider fixture still maps its staged DLLs')
-            if '/steamapps/common/' in mappings:
-                raise RuntimeError('a Steam common application is mapped; close it before the GPU fixture')
-        except (FileNotFoundError, ProcessLookupError):
-            continue
-        except PermissionError:
-            if proc.exists() and proc.stat().st_uid == os.getuid() and comm not in ('systemd', '(sd-pam)'):
-                raise RuntimeError('cannot inspect an owned process for active game mappings')
+    guard_no_game(WORK)
 
 
 def execute(command, *, cwd, env, log, timeout):

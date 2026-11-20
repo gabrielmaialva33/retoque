@@ -39,3 +39,8 @@ are outside coverage. No model inference or generated-frame quality is claimed. 
 game runs remain useful for release acceptance and new routes; these deterministic regression
 checks do not require opening a game after every change. Wine cannot replace native Windows
 D3D12 validation when `DEBUG_LAYER=unavailable`.
+
+The shared `tests/_gpu_guard.py` refuses active compiler processes, game mappings and earlier staged
+fixtures. For unreadable same-user maps it checks a narrow native system-service identity (including
+capability-bearing tailscaled); unknown identities, Wine/Proton/game arguments and executable mismatches
+still refuse the run. Host rejection controls live in `tests/rendering-orchestration/test_gpu_guard.py`.

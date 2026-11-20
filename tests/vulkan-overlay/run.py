@@ -57,7 +57,7 @@ def instrument(ref):
                else 'void MenuOverlayVk::DestroyVulkanObjects(')
     for function, counter in [('void MenuOverlayVk::CreateSwapchain(', 'createCalls'),
                               (destroy, 'destroyCalls'),
-                              ('static bool DestroyVulkanObjectsLocked(bool shutdown)\n{', 'teardownCalls'),
+                              ('static bool DestroyVulkanObjectsLocked(bool shutdown, bool deviceDying, std::optional<bool> drainProof)\n{', 'teardownCalls'),
                               ('bool MenuOverlayVk::QueuePresent(', 'presentCalls')]:
         if source.count(function) != 1:
             raise RuntimeError(f'instrumentation anchor changed: {function}')

@@ -142,3 +142,8 @@ descendant's PID/start time and uses a pidfd only if that identity is still live
 does not signal a reused PID or a completed descendant. The three sequence tests use controlled
 Popen doubles and prohibit real signals; the full `--self-test` still needs native Linux for its
 separate actual process-cleanup control.
+
+The active-process guard is shared with the input and moving-loopback fixtures in `tests/_gpu_guard.py`.
+Unreadable same-user maps require a recognized native system-service identity; an unknown process or
+Wine/Proton/game evidence remains a refusal. This handles capability-bearing services without bypassing
+mapped-game or staged-provider checks; host rejection controls run in `rendering-orchestration`.

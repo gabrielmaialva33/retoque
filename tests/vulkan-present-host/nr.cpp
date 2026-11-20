@@ -12,7 +12,8 @@
 // Every presented image is read back when it comes round again, before anything is written to it, and compared with
 // what was presented: byte for byte, the mean and largest change of a colour channel, and alpha. What NR is expected
 // to have done is the runner's to judge from those facts against OptiScaler.log; this application asserts only that
-// the run is valid (validation active and clean, every call succeeding).
+// the run is valid (validation active and clean, every call succeeding); active-model cases may additionally
+// request a bounded minimum number of edited readbacks before ending the scene.
 //
 // With --route it is instead a game that turns its upscaler on and off (DOOM Eternal's shape, 2026-10-14): one
 // swapchain presented throughout; NGX initialised through OptiScaler's own NVSDK_NGX_VULKAN_* exports, as a game
@@ -307,6 +308,7 @@ struct PhaseFacts
     uint32_t readbacks = 0;
     uint32_t exact = 0;
     double maeSum = 0.0;
+    std::vector<uint32_t> acquired; // actual WSI order; never assume round-robin or two images
 };
 
 // OptiScaler's NGX exports, as a game reaches them.
@@ -341,6 +343,7 @@ struct App
     std::vector<VkSurfaceFormatKHR> offered;
     bool nvxOffered = false;
     uint32_t frames = 12;
+    uint32_t minChanged = 0; // bounded readiness for active-model cases only
     bool cross = false;
     bool route = false;
     bool wdx12 = false;
@@ -793,6 +796,8 @@ struct App
         const VkResult acquire =
             vkAcquireNextImageKHR(device, target.swapchain, UINT64_MAX, acquired, VK_NULL_HANDLE, &index);
         Require(acquire == VK_SUCCESS || acquire == VK_SUBOPTIMAL_KHR, "acquire failed");
+        if (phase != nullptr)
+            phase->acquired.push_back(index);
 
         VkCommandPoolCreateInfo poolInfo { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
         poolInfo.queueFamilyIndex = target.family;
@@ -887,8 +892,15 @@ struct App
     {
         // Enough frames that every image is read back at least once.
         const uint32_t count = std::max<uint32_t>(frames, static_cast<uint32_t>(target.images.size()) * 2 + 2);
-        for (uint32_t i = 0; i < count; ++i)
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        uint32_t made = 0;
+        while (made < count || (swapchains[target.facts].sdr &&
+                                swapchains[target.facts].readbacks - swapchains[target.facts].exact < minChanged))
+        {
+            Require(minChanged == 0 || std::chrono::steady_clock::now() < deadline, "model edit readiness timed out");
             Frame(target);
+            ++made;
+        }
     }
 
     // --- --route: the game's upscaler on, off, on, off ---------------------------------------------------------
@@ -1331,6 +1343,10 @@ struct App
         MakeDevice();
         ProbeValidation();
 
+        // Wine Wayland's first configure can tile the requested owned dialog at desktop size.
+        // Reassert the bounded fixture extent after its initial configure, just as the later odd-size case does.
+        if (hdr)
+            Resize(632, 446);
         Target target;
         const char* sdrNames[] = { "bgra8-unorm", "bgra8-srgb", "rgba8-unorm", "rgba8-srgb" };
         const VkFormat sdrFormats[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_UNORM,
@@ -1413,8 +1429,9 @@ struct App
         std::ostringstream out;
         // With --fg, FFX's frame-generation swapchain and OptiScaler's FG output report validation errors of their own
         // (validation.txt has every one): the runner tells them from the host's, so they do not fail the run here.
-        out << "{\n  \"status\": \"" << (validationErrors == 0 || fg ? "PASS" : "FAIL") << "\",\n  \"first_validation\": \""
-            << Escape(firstValidation) << "\",\n  \"validation_active\": " << (validationActive ? "true" : "false")
+        out << "{\n  \"status\": \"" << (validationErrors == 0 || fg ? "PASS" : "FAIL")
+            << "\",\n  \"first_validation\": \"" << Escape(firstValidation)
+            << "\",\n  \"validation_active\": " << (validationActive ? "true" : "false")
             << ",\n  \"validation_errors\": " << validationErrors
             << ",\n  \"wine_injected_extension_messages\": " << wineInjected
             << ",\n  \"model_messages\": " << modelMessages << ",\n  \"model_vuids\": \"" << Escape(modelVuids) << "\""
@@ -1449,7 +1466,10 @@ struct App
             out << (i ? ",\n    " : "\n    ") << "{\"name\": \"" << f.name << "\", \"presents\": " << f.presents
                 << ", \"evaluates\": " << f.evaluates << ", \"readbacks\": " << f.readbacks
                 << ", \"exact\": " << f.exact << ", \"mae_mean\": " << (f.readbacks ? f.maeSum / f.readbacks : 0.0)
-                << "}";
+                << ", \"acquired\": [";
+            for (size_t j = 0; j < f.acquired.size(); ++j)
+                out << (j ? ", " : "") << f.acquired[j];
+            out << "]}";
         }
         out << "]\n}\n";
         return out.str();
@@ -1481,6 +1501,8 @@ int main(int argc, char** argv)
                 app.slowBuild = true;
             else if (!strcmp(argv[i], "--fg"))
                 app.fg = true;
+            else if (!strcmp(argv[i], "--min-changed") && i + 1 < argc)
+                app.minChanged = static_cast<uint32_t>(std::atoi(argv[++i]));
             else if (!strcmp(argv[i], "--frames") && i + 1 < argc)
                 app.frames = static_cast<uint32_t>(std::atoi(argv[++i]));
             else if (!strcmp(argv[i], "--pan") && i + 1 < argc)
