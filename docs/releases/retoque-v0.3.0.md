@@ -14,22 +14,24 @@ never published; their notes are kept in git history.
 
 | File | What it is |
 |---|---|
-| `retoque-app-0.3.0-windows-x64.zip` | The app and CLI for Windows, with Microsoft's DXC compiler (for LSFG shaders) and licences |
-| `retoque-app-0.3.0-linux-x64.tar.gz` | The app and CLI for Linux (DXC is offered as a verified download on first use) |
-| `retoque-payload-0.3.0-x64.zip` | Retoque itself, as the app installs it: `OptiScaler.dll`, the NR forwarder, release `OptiScaler.ini`, licences, translations |
+| `retoque-app-0.3.0-windows-x64.zip` | The Windows app (`retoque-app.exe`) with the Retoque files it installs, licences and translations |
+| `retoque-app-0.3.0-linux-x64.tar.gz` | The Linux app and the `retoque` CLI with licences; Retoque's files come from the payload below. Built on Arch Linux: needs glibc 2.43 or newer (older distributions: build from source, `tools/app/README.md`) |
+| `retoque-payload-0.3.0-x64.zip` | Retoque itself, as the app installs it: `OptiScaler.dll`, the NR forwarder, OptiScaler's support folder (XeSS and FidelityFX libraries), release `OptiScaler.ini`, licences, translations |
 | `SHA256SUMS` | Checksums of the three files above |
 | `Retoque-v0.3.0.zip` | The same Retoque files with the script installers (`install-windows.cmd`, `install-linux.sh`), built by CI |
 | `Retoque-v0.3.0.zip.manifest.json` | CI's record of that zip: source commit, member hashes, host-test result |
 
-Nothing from NVIDIA, Lossless Scaling or dlssg_for_sm86 is in these files. `nvngx_dlssnr.dll` (the NR model) is
+The DLLs are the ones CI built for `Retoque-v0.3.0.zip`, so every asset carries the same `OptiScaler.dll`. Microsoft's
+DXC compiler (for the LSFG shaders) is offered by the app as a verified download when first needed. Nothing from
+NVIDIA, Lossless Scaling or dlssg_for_sm86 is in these files. `nvngx_dlssnr.dll` (the NR model) is
 never shipped: the app offers a compatible one from its source after you confirm, or you supply your own.
 
 ## Start playing
 
-**With the app (recommended).** Windows: extract `retoque-app-0.3.0-windows-x64.zip` with the payload beside it, open
-`retoque-app.exe` and, in Preferences, choose **Install Retoque on this computer…** to get Start menu and Desktop
+**With the app (recommended).** Windows: extract `retoque-app-0.3.0-windows-x64.zip` to a folder, open `retoque-app.exe`
+and, in Preferences, choose **Install Retoque on this computer…** to get Start menu and Desktop
 shortcuts and an entry in Apps & features. Pick a game, press the main button and confirm the review. Linux: extract
-the tarball and run `retoque-app`.
+the tarball and run `retoque-app`; it downloads Retoque's files from this release after you confirm.
 
 **With the scripts.** Extract `Retoque-v0.3.0.zip`, close the game, run `install-windows.cmd` (Windows) or
 `bash install-linux.sh` (Linux), select the executable folder and proxy name and accept **Turn Neural Rendering on?**
