@@ -91,6 +91,81 @@ pub fn read_header<R: Read + Seek>(r: &mut R) -> Option<PeHeader> {
         dll: u16_at(&coff, 22)? & 0x2000 != 0,
     })
 }
+/// Static normal imports only. A delay-import directory makes coverage partial.
+/// Shares the bounded COFF reader; names are data and never loaded.
+pub fn read_imports<R: Read + Seek>(r: &mut R) -> Option<(Vec<String>, bool)> {
+    let (pe, coff) = coff_header(r)?;
+    let sections = usize::from(u16_at(&coff, 6)?);
+    let optional_len = usize::from(u16_at(&coff, 20)?);
+    if sections == 0 || sections > 96 || optional_len > 4096 {
+        return None;
+    }
+    let optional = read_at(r, pe + 24, optional_len)?;
+    let dir = match u16_at(&optional, 0)? {
+        0x10b => 96,
+        0x20b => 112,
+        _ => return None,
+    };
+    let count = u32_at(&optional, dir - 4)?;
+    if count < 2 {
+        return None;
+    }
+    let delayed = count > 13 && u32_at(&optional, dir + 13 * 8)? != 0;
+    let rva = u32_at(&optional, dir + 8)?;
+    let size = u32_at(&optional, dir + 12)?;
+    if rva == 0 && size == 0 {
+        return Some((Vec::new(), !delayed));
+    }
+    if !(20..=20 * 257).contains(&size) {
+        return None;
+    }
+    let table = read_at(r, pe + 24 + optional_len as u64, sections * 40)?;
+    let offset = |rva: u32, len: u32| -> Option<u64> {
+        let mut found = None;
+        for s in table.as_chunks::<40>().0 {
+            let va = u32_at(s, 12)?;
+            let raw_size = u32_at(s, 16)?;
+            if let Some(delta) = rva.checked_sub(va)
+                && delta.checked_add(len).is_some_and(|end| end <= raw_size)
+            {
+                if found.is_some() {
+                    return None;
+                }
+                found = Some(u64::from(u32_at(s, 20)?) + u64::from(delta));
+            }
+        }
+        found
+    };
+    let descriptors = read_at(r, offset(rva, size)?, size as usize)?;
+    let mut names = Vec::new();
+    for d in descriptors.as_chunks::<20>().0.iter().take(257) {
+        if d.iter().all(|b| *b == 0) {
+            return Some((names, !delayed));
+        }
+        if names.len() == 256 {
+            return None;
+        }
+        let name_rva = u32_at(d, 12)?;
+        let mut name = Vec::new();
+        for i in 0..256u32 {
+            let mut byte = [0];
+            read_exact_at(r, offset(name_rva.checked_add(i)?, 1)?, &mut byte)?;
+            if byte[0] == 0 {
+                break;
+            }
+            if !(32..=126).contains(&byte[0]) {
+                return None;
+            }
+            name.push(byte[0]);
+        }
+        if name.is_empty() || name.len() == 256 {
+            return None;
+        }
+        names.push(String::from_utf8(name).ok()?);
+    }
+    None
+}
+
 pub fn file_header(path: &Path) -> Option<PeHeader> {
     if !crate::safety::unlinked(path) || !std::fs::symlink_metadata(path).ok()?.is_file() {
         return None;

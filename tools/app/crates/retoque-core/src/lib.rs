@@ -11,6 +11,7 @@ mod engine;
 pub use engine::reshade;
 pub mod ini;
 pub mod leftovers;
+pub mod legacy_probe;
 pub mod memo;
 pub mod menu_pack;
 pub mod pe_version;

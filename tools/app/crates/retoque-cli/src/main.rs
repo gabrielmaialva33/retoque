@@ -4,6 +4,7 @@ macro_rules! println {
 }
 mod autotune;
 mod doctor;
+mod legacy_probe;
 mod output;
 mod reshade;
 
@@ -14,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 fn usage() {
+    println!("       retoque legacy-probe (--exe FILE | --pid PID) [--json] [--lang en|pt-BR] [--log FILE]");
     println!(
         "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque doctor [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque unset [--dry-run] <game-dir> <Section> <Key>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
     );
@@ -183,6 +185,11 @@ fn show_status(game: &Path, json: bool) -> Result<(), Error> {
     Ok(())
 }
 fn run() -> Result<(), Error> {
+    // This diagnostic must not expose a non-Unicode path through std::env::args' panic text.
+    let mut raw = std::env::args_os().skip(1);
+    if raw.next().as_deref() == Some(std::ffi::OsStr::new("legacy-probe")) {
+        return legacy_probe::run_os(raw);
+    }
     let mut args = std::env::args().skip(1).peekable();
     let Some(command) = args.next() else {
         usage();
