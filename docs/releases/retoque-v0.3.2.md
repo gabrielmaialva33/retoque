@@ -50,8 +50,13 @@ Tagged commit and CI evidence are in `Retoque-v0.3.2.zip.manifest.json`. Before 
 - The fix's branch: full host tier (147, including the new `sl-own-fg-swapchain` suite and an `mfg-provider-capacity`
   case that runs the production `slDLSSGSetOptions` hook and fails without the fix), MSVC Release build, and GitHub
   Actions NR Tests and clang-format on the merge `000c754b`.
-- The release commit: app `cargo fmt`, `clippy -D warnings`, the app test suite, Windows and Linux app builds, and
-  the CI release workflow (strict host tier, Release build, manifest).
+- The release commit `51001a8f`: app `cargo fmt`, `clippy -D warnings`, the app test suite (650 passed), the tooling
+  suites, Windows and Linux app builds; the CI release workflow re-ran the strict host tier (147 PASS), built Release
+  with MSBuild 18.12.2.51402 and wrote the manifest (`dirty=false`, host PASS).
+- Shipped binaries (from the CI build): `OptiScaler.dll` `8e45cf336bad9daf9c5d90278655352ce2791af641ce78996eef236bc8f03878`,
+  `nvngx.dll_dlssnr.dll` forwarder `0e20230b88f81cd8597918220db0286190746eb54ef73dc0608f6c1ce7b4f7e9`,
+  `RetoqueWindowHost.exe` `a2a1d6b1764854000f48f4f171030f7df423f263bd1a49e86c63dc81343c8860`.
+- `SHA256SUMS` matches the three app assets as uploaded.
 
 **Not validated:** the fix in a game. Forza Horizon 6 is where janblade saw the crash and its fix on their fork; no
 game with its own DLSS-G was run with this build. Everything listed as not validated for v0.3.1 still is.
