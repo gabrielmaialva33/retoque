@@ -3,6 +3,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
+from observer_scope import off_scope
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 main = (ROOT/'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
@@ -16,6 +17,10 @@ def function(text, anchor):
         if depth==0:return text[start:i+1]+'\n'
     raise AssertionError(anchor)
 unit=(HERE/'fakes.h').read_text()+'\n#include <mutex>\n#include <type_traits>\n#include "retoque/dlssnr/DlssNr_Pictures.h"\n#include "retoque/dlssnr/DlssNr_PresentGuideIdentity.h"\n'
+# Use the real idle advisor, including its early-return gates, rather than no-op Cancel/Refuse fakes.
+unit+='#include "retoque/dlssnr/DlssNr_AdvisorRuntime.h"\n'
+# Compile the actual depth-observer scope against an off observer. No D3D12 hook is installed here.
+unit+=off_scope(ROOT, function)
 if 'struct NrDeviceOwner\n' in internal:
     unit+=function(internal,'struct NrDeviceOwner\n')+';\nNrDeviceOwner g_nrDeviceOwner;\n'
 for overload in ('bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)',
@@ -51,7 +56,7 @@ std::shared_ptr<DlssNr_Dx12> g_compose;
 anchor='static bool EnsureCompose(' if 'static bool EnsureCompose(' in main else 'static void EnsureCompose('
 unit+=function(main,anchor)
 dispatch=main[main.index('bool DlssNr_Dx12::Dispatch('):main.index('    g_activePasses = 0;',main.index('bool DlssNr_Dx12::Dispatch('))]
-unit+=dispatch+'    return true;\n}\n'
+unit+=dispatch+'    assert(advisorEvaluation == 0 && !advisor.settings && advisor.token == 0);\n    return true;\n}\n'
 unit+='struct GuideCapture { ID3D12Resource* depth=nullptr;ID3D12Resource* motion=nullptr; };\n'
 unit+='DlssNr::PresentGuideIdentity::ProducerReason g_lastSkipReason = DlssNr::PresentGuideIdentity::ProducerReason::Recorded;\n'
 unit+='static uint64_t ResidentGuideBytes() { return 0; }\n'
@@ -150,6 +155,9 @@ template<class F> bool Compose(F fn,ID3D12Device* d) {
 }
 int main(int argc,char**argv) {
     assert(argc==2); const std::string which=argv[1];
+    assert(!DlssNr::AdvisorRuntime::Active());
+    // Holding this mutex makes any unexpected advisor lock on the off path fail the suite timeout.
+    std::lock_guard advisorOffLock(DlssNr::AdvisorRuntime::mutex);
     ID3D12Device a,b,wrapper;
     wrapper.luid=a.luid;wrapper.wraps=&a;
     ID3D12GraphicsCommandList cmd;cmd.device=&a;
@@ -247,6 +255,10 @@ int main(int argc,char**argv) {
         assert(accepted==(which=="dispatch-valid"));assert(cmd.copies==0 && cmd.barriers==0);
     }
     g_compose.reset();
+    assert(!DlssNr::AdvisorRuntime::Active() && !DlssNr::AdvisorRuntime::resultReady);
+    assert(DlssNr::AdvisorRuntime::evaluations == 0);
+    assert(DlssNr::AdvisorRuntime::previousEvaluation == 0 && DlssNr::AdvisorRuntime::previousTime == 0);
+    assert(DlssNr::PresentDepthDx12::internal == 0);
 '''
 if 'struct NrDeviceOwner\n' in internal:unit+='    g_nrDeviceOwner.Reset();\n'
 unit+='    assert(a.refs==1 && b.refs==1 && wrapper.refs==1);\n}\n'
@@ -260,7 +272,7 @@ with tempfile.TemporaryDirectory(prefix='retoque-device-owner-') as temp:
                  'dispatch-wrapped','dispatch-wrapped-foreign','dispatch-wrapped-list',
                  'capture-cmd','capture-motion','capture-planes','capture-quality','capture-mips',
                  'capture-two-planes','capture-valid','capture-postallocation','capture-prepark-order'):
-        r=subprocess.run([str(binary),name])
+        r=subprocess.run([str(binary),name], timeout=15)
         if r.returncode:failures.append(name)
         else:print('PASS:',name,flush=True)
     if failures:raise SystemExit('FAIL: '+', '.join(failures))
