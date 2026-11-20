@@ -57,8 +57,14 @@ asking for a restart.
 
 Tagged commit and CI evidence are in `Retoque-v0.3.1.zip.manifest.json`. Before publication (2026-11-20):
 
-- Locally on the merge that became this release: full host tier, `check_docs`, app `cargo fmt`, `clippy -D
-  warnings`, the app test suite, and Windows and Linux app builds.
+- GitHub Actions on the tagged commit `ba355423`: the release workflow re-ran the strict host tier (146 PASS),
+  built Release with MSBuild 18.12.2.51402 and wrote the manifest (`dirty=false`, host PASS).
+- Locally on the same commit: full host tier (146/146), `check_docs`, app `cargo fmt`, `clippy -D warnings`, the
+  app test suite (650 passed), and Windows and Linux app builds.
+- Shipped binaries (from the CI build): `OptiScaler.dll` `2a4ab7fee79d46e55f4da75cb355dffbf9196dbc85a00772322a0474e936ba6d`,
+  `nvngx.dll_dlssnr.dll` forwarder `ab900f4f2d58501de3f78e8d427ac24e845b65fa4f541af3f28e6afb3a69c687`,
+  `RetoqueWindowHost.exe` `a73eecd2519eb2357d0d7cde15c4fe040f7bebea81f5b974aaee74c464a920ad`.
+- `SHA256SUMS` matches the three app assets as uploaded.
 - Live passes, on native Windows 11 (RTX 3060, driver 621.14), Dying Light: The Beast, model 310.9.16.0, with the
   build of the passes change alone (`7611a175`, `OptiScaler.dll` `09b93915…`; this release adds the merges listed
   above on top). Started at Passes=1 after DLSS, then changed in the menu to 2, 10, 1, 4 and 2 without restarting:
