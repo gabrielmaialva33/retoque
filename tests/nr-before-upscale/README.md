@@ -140,3 +140,11 @@ seams in both stages: from the second frame's second view no evaluate reaches th
 on, each owes a history reset and is counted, and the warning is said once; one view with a moving resolution never
 stands down. The multi-view region is extracted from production; a source without it gets the pre-detector stub, so
 the cases fail on behaviour.
+
+2026-11-19 (release review): `EvaluateAfterUpscale` holds the log-only present depth observer's scope for its whole
+body (`DlssNr::PresentDepthDx12::InternalScope`, merge `92c84780`), so with `PresentDepth=log` the observer does not
+count what the pass records on the game's list as the game's. The extracted boundary did not compile without that
+class. The fake counts the scopes open on the thread, and one more case holds that one is open when the pass is
+asked to record and that no evaluate of the run left one open; with the scope removed from the entry the case fails.
+The observer itself is not compiled here (`tests/nr-present-depth` has its rules), and the Stage 1 scope opens none:
+the observer installs only under the Present hook method, where that scope declines.

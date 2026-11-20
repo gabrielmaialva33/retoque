@@ -938,6 +938,18 @@ int main()
         ++checks;
     }
 
+    // The present depth observer's scope (DlssNr_PresentDepthDx12.h) around the after-upscale entry: one is open while
+    // the pass records on the game's list, and every evaluate above closed its own, whichever way it left.
+    {
+        Fixture f;
+        f.cfg.DlssNrStage = 0;
+        DlssNr_Dx12::observerScopes = 0;
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false);
+        assert(DlssNr_Dx12::calls == 1 && DlssNr_Dx12::observerScopes == 1);
+        assert(DlssNr::PresentDepthDx12::InternalScope::open == 0 && "an evaluate left the observer's scope open");
+        ++checks;
+    }
+
     assert(checks >= 56 && "ZERO COVERAGE");
     std::printf("PASS: %u boundary cases; allocation-failure and DRS loops: 1000 each\n", checks);
 }
