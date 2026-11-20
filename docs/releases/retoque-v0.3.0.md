@@ -83,8 +83,19 @@ image-quality improvement is promised. Games outside the profile list may still 
 
 ## Validation
 
-To be completed before publication with exact hashes: CI host tier on the tagged commit, Release build, Windows app
-install/uninstall and a game install on native Windows 11 (RTX 3060), game smoke tests on Linux/Proton (RTX 4090).
+Tagged commit `d3bd1ea6`, clean tree. What was checked before publication (2026-11-20):
+
+- GitHub Actions on the tagged commit: NR Tests (strict host tier) and clang-format pass; the release workflow
+  re-ran the host tier, built Release with MSBuild 18.11.1.51303 and wrote the manifest (`dirty=false`, host PASS).
+- Locally: host tier 144/144, `check_docs` PASS, app `cargo fmt`, `clippy -D warnings`, 604 tests, Windows and
+  Linux app builds.
+- Shipped DLLs (from the CI build): `OptiScaler.dll` `9460a52b12fe75c6873ca70afd18182d6cc3f2b77a3fb00aad5451ea8e7986f3`,
+  `nvngx.dll_dlssnr.dll` forwarder `05f6bd8073c6eafb3a4754a0fc739d0424e4f5e8babaa899530a5c188829c8f6`.
+- `SHA256SUMS` matches the digests GitHub reports for the three app assets.
+
+**Not validated for this release:** the app's self-install, game install and uninstall on native Windows; any GPU or
+game run of this exact build, on Windows or Linux/Proton. Earlier builds of the same features ran in games, but that
+does not qualify this one. Report problems in the issues.
 
 This combines ideas and fixes from OptiScaler, Dagherbou, scottmudge, janblade, wilsjo2, RenoDX and other
 contributors with this fork's own work and regression tests. See the README credits and the included licences.
