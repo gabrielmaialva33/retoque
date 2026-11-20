@@ -30,6 +30,7 @@ The pans with a single non-zero axis pin each axis' sign independently.
 | `object` | 256×192 patch moving (+8, +3) over a static background | patch interior (24 px inset) and background outside a 48 px band around both positions |
 | `static` | the same frame every time | zero |
 | `cut` | pan, then at t=8 different and much darker content, 18 frames | a zero field at t=8; `SceneCut()` within t=8..12 (it is read back from the GPU, `ReadbackSlots` late at most); steady frames scored as a pan |
+| `partial` | the `cut` sequence's change over one 64 px tile in four, and milder (gain 0.6) | no `SceneCut()`: FidelityFX's formula puts the change at 0.398, under its 0.45 |
 | `abandon` | pan (+4, 0); t=8 recorded and thrown away via `AbandonRecording()` | t=9 must read two steps (−8), later frames one step |
 | `overlay_+8x`, `overlay_+8+8` | a static crosshair, HUD panel and outlined glyphs over a background panning (+8, 0) and (+8, +8) | clear overlay pixels against zero; the background outside a 24 px band around each element against the pan |
 | `hud_+8x`, `hud_+3+2` | the same overlay plus a 1 px hollow frame with a drop shadow and a translucent panel, over pans of (+8, 0) and (+3, +2), 40 frames | the HUD mask and the UI layer's own mask only (below) |
@@ -38,6 +39,12 @@ The pans with a single non-zero axis pin each axis' sign independently.
 GPU time is `Record` bracketed by timestamps on the same list. It is reported, never judged, and
 labelled with the clock state: `sudo -n nvidia-smi -lgc 2100,2100 -lmc 10501` if available (reset
 afterwards), otherwise "UNLOCKED".
+
+What decides a scene cut is FidelityFX's formula, which the harness evaluates on the host from every frame's bytes
+(`SceneChangeReference` in `sequences.h`) and reports as `scd_reference`: `SceneCut()` must be raised exactly where it
+crosses the threshold past the warm-up, on every sequence. This estimator exposes neither the GPU's value nor its
+history bits, so the value itself is held to the formula only in `tests/synth-motion-vk`
+([the record](../../docs/linux-proton/synth-motion-false-scene-cut-20261120.md)).
 
 Only frames where `Ready()` is true are scored: the estimator yields no field for FFX's five warm-up
 frames after a reset. Thresholds and their reasons are in the comment block at the top of `run.py`.

@@ -530,6 +530,7 @@ struct FrameResult
     bool ready;
     bool sceneCutAfterRecord;
     bool sceneCutAfterConfirm;
+    float scdReference; // the frame's scene-change value by FidelityFX's formula on the host; -1 after a reset
     double gpuMs;
     UINT fieldW, fieldH;
     int fieldFormat;
@@ -634,13 +635,15 @@ void WriteSequence(const Sequence& s, const std::vector<FrameResult>& frames, bo
     for (size_t i = 0; i < frames.size(); ++i)
     {
         const auto& f = frames[i];
-        std::fprintf(g_report,
-                     "%s\n    {\"t\": %d, \"recorded\": %s, \"abandoned\": %s, \"ready\": %s, \"scene_cut_after_record\": %s, "
-                     "\"scene_cut_after_confirm\": %s, \"gpu_ms\": %.6f, \"field_width\": %u, \"field_height\": %u, "
-                     "\"field_format\": %d, \"scores\": [",
-                     i ? "," : "", f.t, f.recorded ? "true" : "false", f.abandoned ? "true" : "false",
-                     f.ready ? "true" : "false", f.sceneCutAfterRecord ? "true" : "false",
-                     f.sceneCutAfterConfirm ? "true" : "false", f.gpuMs, f.fieldW, f.fieldH, f.fieldFormat);
+        std::fprintf(
+            g_report,
+            "%s\n    {\"t\": %d, \"recorded\": %s, \"abandoned\": %s, \"ready\": %s, \"scene_cut_after_record\": %s, "
+            "\"scene_cut_after_confirm\": %s, \"gpu_ms\": %.6f, \"field_width\": %u, \"field_height\": %u, "
+            "\"field_format\": %d, \"scd_reference\": %.9g, \"cut_threshold\": %.2f, \"scores\": [",
+            i ? "," : "", f.t, f.recorded ? "true" : "false", f.abandoned ? "true" : "false",
+            f.ready ? "true" : "false", f.sceneCutAfterRecord ? "true" : "false",
+            f.sceneCutAfterConfirm ? "true" : "false", f.gpuMs, f.fieldW, f.fieldH, f.fieldFormat, f.scdReference,
+            kSceneChangeThreshold);
         for (size_t j = 0; j < f.scores.size(); ++j)
         {
             const auto& sc = f.scores[j];
@@ -777,10 +780,21 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, Estimator& estimator, SynthMotion
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT rb {};
     D3D12_RESOURCE_DESC fieldDesc {};
 
+    // FidelityFX's scene-change value for each executed frame (sequences.h, SceneChangeReference): RGBA8 UNORM reads
+    // as byte / 255. A frame recorded and never executed is not one.
+    SceneChangeReference reference;
+    float channel[256];
+    for (int b = 0; b < 256; ++b)
+        channel[b] = b / 255.0f;
+    std::vector<uint8_t> frame((size_t) s.width * s.height * 4);
+
     std::vector<FrameResult> results;
     for (int t = 0; t < s.frames; ++t)
     {
-        RenderFrame(s, t, uploadPtr + up.Offset, up.Footprint.RowPitch);
+        RenderFrame(s, t, frame.data(), s.width * 4);
+        for (UINT y = 0; y < s.height; ++y)
+            std::memcpy(uploadPtr + up.Offset + (size_t) y * up.Footprint.RowPitch,
+                        frame.data() + (size_t) y * s.width * 4, (size_t) s.width * 4);
         const D3D12_RESOURCE_STATES colourStateBeforeFrame = colourState;
 
         gpu.Begin();
@@ -800,6 +814,11 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, Estimator& estimator, SynthMotion
 
         FrameResult fr {};
         fr.t = t;
+        fr.scdReference = -1.0f;
+        if (t == 0)
+            reference.Reset();
+        if (!(s.kind == Kind::Abandon && t == kAbandonFrame))
+            fr.scdReference = reference.Frame(frame.data(), s.width, s.height, s.width * 4, channel);
         list->EndQuery(gpu.timestamps.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0);
         fr.recorded = estimator.Record(gpu.device.Get(), list, colour.Get(), colourState, t == 0);
         list->EndQuery(gpu.timestamps.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 1);
@@ -1059,6 +1078,8 @@ int main(int argc, char** argv)
         { "object", Kind::Object, 1280, 720, 8, 3, 14 },
         { "static", Kind::Static, 1280, 720, 0, 0, 14 },
         { "cut", Kind::Cut, 1280, 720, 4, 0, 18 },
+        // A change FidelityFX's own formula puts under its threshold: no scene cut, whatever the GPU's scheduling.
+        { "partial", Kind::Partial, 1280, 720, 4, 0, 18 },
         { "abandon", Kind::Abandon, 1280, 720, 4, 0, 14 },
         // The HUD over a pan, so the layer pass has a core to grow; the mask alone for the first half, then the layer.
         { "time_1080p", Kind::Hud, 1920, 1080, 4, 0, 32, true },

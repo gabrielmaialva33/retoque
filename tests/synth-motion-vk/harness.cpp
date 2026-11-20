@@ -16,6 +16,7 @@
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
+#include <map>
 #include <stdexcept>
 
 #include "SynthMotion_Vk.h"
@@ -24,6 +25,53 @@ namespace
 {
 FILE* g_report = nullptr;
 const char* g_reportPath = "synth-motion-report.json";
+
+// What run.py's judged run does not use (README, "Investigating"): a subset of the sequences, the sequences several
+// times over with every later round compared with the first, and frames with nothing of the host's between them.
+const char* g_only = nullptr; // --only a,b
+int g_rounds = 1;             // --repeat N
+int g_round = 0;
+bool g_fast = false;   // --fast: each frame rendered once into a buffer of its own; no hash, no score
+int g_paceMs = 0;      // --pace N: the host idle this long before each frame
+uint32_t g_depth = 0;  // --depth N: frames in flight, instead of each sequence's own
+int g_inFlight = 0;    // frames still on the GPU when their objects came round again
+int g_roundFrames = 0; // frames compared with the first round's
+int g_roundMismatches = 0;
+#ifdef SYNTH_SCD_STATE
+int g_unnormalised = 0; // frames that left a previous histogram that does not sum to one
+double g_sumLow = 1e30, g_sumHigh = -1e30;
+#endif
+
+// What a frame left in the estimator's scene-change output the first time round.
+std::map<std::string, std::vector<std::array<uint32_t, 3>>> g_firstRound;
+// Each frame's scene-change value by FidelityFX's formula, on the host (sequences.h, SceneChangeReference).
+std::map<std::string, std::vector<float>> g_reference;
+
+// FNV-1a: which bytes these were, not a checksum against anyone.
+uint64_t ContentHash(const void* data, size_t size)
+{
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    uint64_t hash = 14695981039346656037ull;
+    for (size_t i = 0; i < size; ++i)
+        hash = (hash ^ bytes[i]) * 1099511628211ull;
+    return hash;
+}
+
+bool Selected(const char* name)
+{
+    if (g_only == nullptr)
+        return true;
+    const size_t length = std::strlen(name);
+    for (const char* at = g_only; *at;)
+    {
+        const char* end = std::strchr(at, ',');
+        const size_t n = end ? (size_t) (end - at) : std::strlen(at);
+        if (n == length && std::strncmp(at, name, n) == 0)
+            return true;
+        at += n + (end ? 1 : 0);
+    }
+    return false;
+}
 
 std::atomic<unsigned> g_validationErrors { 0 };
 std::atomic<unsigned> g_wineInjected { 0 };
@@ -399,6 +447,14 @@ struct FrameResult
     bool ready = false;
     bool sceneCutAfterRecord = false;
     bool sceneCutAfterConfirm = false;
+    // A scene cut's evidence: which frame this was, what the estimator was given, what its scene-change pass made of
+    // it and what the host then read (docs/linux-proton/synth-motion-false-scene-cut-20261120.md).
+    uint64_t ticket = 0;
+    int completedBeforeRecord = -1;           // the last frame seen complete when this one was recorded
+    uint64_t inputHash = 0, gpuInputHash = 0; // the colour uploaded; the colour copied back after the estimator read it
+    uint32_t scd[3] = {};       // the GPU's scene-change output after this frame: value, history bits, groups counted
+    float scdReference = -1.0f; // the value by FidelityFX's formula on the host; -1 on the frame after a reset
+    uint32_t readbackHistory[SynthMotion::kVkReadbackSlots] = {}; // the estimator's slots when the fence was seen
     double gpuMs = 0.0;
     UINT fieldW = 0, fieldH = 0;
     std::vector<Score> scores;
@@ -417,10 +473,21 @@ void WriteSequence(const Sequence& s, const std::vector<FrameResult>& frames, bo
             g_report,
             "%s\n    {\"t\": %d, \"recorded\": %s, \"abandoned\": %s, \"ready\": %s, \"scene_cut_after_record\": "
             "%s, \"scene_cut_after_confirm\": %s, \"gpu_ms\": %.6f, \"field_width\": %u, \"field_height\": %u, "
-            "\"field_format\": %d, \"scores\": [",
+            "\"field_format\": %d, ",
             i ? "," : "", f.t, f.recorded ? "true" : "false", f.abandoned ? "true" : "false",
             f.ready ? "true" : "false", f.sceneCutAfterRecord ? "true" : "false",
             f.sceneCutAfterConfirm ? "true" : "false", f.gpuMs, f.fieldW, f.fieldH, (int) SynthMotion::kVkMotionFormat);
+        float value;
+        std::memcpy(&value, &f.scd[0], sizeof(value));
+        std::fprintf(g_report,
+                     "\"ticket\": %llu, \"completed_before_record\": %d, \"input_hash\": \"%016llx\", "
+                     "\"gpu_input_hash\": \"%016llx\", \"cut_metric\": %.9g, \"scd_reference\": %.9g, "
+                     "\"cut_threshold\": %.2f, \"cut_history\": %u, \"scd_groups\": %u, \"readback_history\": [",
+                     f.ticket, f.completedBeforeRecord, f.inputHash, f.gpuInputHash, value, f.scdReference,
+                     kSceneChangeThreshold, f.scd[1], f.scd[2]);
+        for (uint32_t slot = 0; slot < SynthMotion::kVkReadbackSlots; ++slot)
+            std::fprintf(g_report, "%s%u", slot ? ", " : "", f.readbackHistory[slot]);
+        std::fprintf(g_report, "], \"scores\": [");
         for (size_t j = 0; j < f.scores.size(); ++j)
         {
             const auto& sc = f.scores[j];
@@ -456,9 +523,15 @@ uint16_t ToHalf(float value)
     return static_cast<uint16_t>(half);
 }
 
+constexpr VkDeviceSize kScdBins = 256 * 9; // the scene-change histograms: nine strata of 256 bins
+
+// --fast: each frame's colour, rendered once into a buffer of its own and uploaded from there every round.
+std::map<std::string, std::vector<Gpu::HostBuffer>> g_rendered;
+
 // One frame's own objects, so frames can be in flight together: the colour it uploads (R16G16B16A16_SFLOAT, read in
 // GENERAL, as the present host hands the estimator its working colour), the host buffers, its command buffer and fence,
-// and its timestamp pair.
+// and its timestamp pair. `field` holds the field, then the colour as the GPU has it after the estimator read it, then
+// the estimator's scene-change output: all copied out in the frame's own command buffer, behind its fence.
 struct FrameSlot
 {
     VkImage colour = VK_NULL_HANDLE;
@@ -466,6 +539,9 @@ struct FrameSlot
     VkImageView colourView = VK_NULL_HANDLE;
     Gpu::HostBuffer upload;
     Gpu::HostBuffer field;
+#ifdef SYNTH_SCD_STATE
+    Gpu::HostBuffer scdState; // the histogram, the previous histogram and the temp, as the frame left them
+#endif
     VkCommandBuffer cmd = VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
     bool pending = false;
@@ -481,6 +557,7 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
 {
     const VkDevice device = gpu.device;
     const VkDeviceSize pixels = (VkDeviceSize) s.width * s.height;
+    const VkDeviceSize colourOffset = pixels * 4, scdOffset = pixels * 12; // in a slot's `field`
 
     std::vector<FrameSlot> slots(depth);
     VkQueryPool timestamps = VK_NULL_HANDLE;
@@ -500,7 +577,7 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
         info.arrayLayers = 1;
         info.samples = VK_SAMPLE_COUNT_1_BIT;
         info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
         Check(vkCreateImage(device, &info, nullptr, &slot.colour), "vkCreateImage colour");
         VkMemoryRequirements req {};
         vkGetImageMemoryRequirements(device, slot.colour, &req);
@@ -516,7 +593,10 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
         view.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
         Check(vkCreateImageView(device, &view, nullptr, &slot.colourView), "vkCreateImageView colour");
         slot.upload = gpu.Buffer(pixels * 8, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-        slot.field = gpu.Buffer(pixels * 4, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        slot.field = gpu.Buffer(scdOffset + 16, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+#ifdef SYNTH_SCD_STATE
+        slot.scdState = gpu.Buffer(kScdBins * 8 + 16, VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+#endif
         VkCommandBufferAllocateInfo cmdInfo { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
         cmdInfo.commandPool = gpu.pool;
         cmdInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -541,17 +621,108 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
 
     std::vector<FrameResult> results(s.frames);
     std::vector<uint8_t> rgba((size_t) pixels * 4);
+    std::vector<uint16_t> halves((size_t) pixels * 4);
+    int completedFrame = -1;
+
+    // FidelityFX's scene-change value for each executed frame, from its bytes and the half floats they become. A
+    // frame recorded and never executed is not one: the estimator's history is still the frame before's.
+    SceneChangeReference reference;
+    float channel[256];
+    for (int b = 0; b < 256; ++b)
+        channel[b] = HalfToFloat(ToHalf(b / 255.0f));
+    auto& referenceValues = g_reference[s.name];
+    referenceValues.resize(s.frames, -1.0f);
+    const auto refer = [&](int t)
+    {
+        if (t == 0)
+            reference.Reset();
+        if (!(s.kind == Kind::Abandon && t == kAbandonFrame))
+            referenceValues[t] = reference.Frame(rgba.data(), s.width, s.height, s.width * 4, channel);
+    };
 
     // A frame's fence seen: its scene-change bit read (Completed), its time and its field read and scored.
     const auto finish = [&](FrameSlot& slot)
     {
         if (!slot.pending)
             return;
+        if (vkGetFenceStatus(device, slot.fence) == VK_NOT_READY)
+            ++g_inFlight;
         Check(vkWaitForFences(device, 1, &slot.fence, VK_TRUE, 10ull * 1000 * 1000 * 1000), "vkWaitForFences");
         slot.pending = false;
-        estimator.Completed(slot.ticket, images);
 
         FrameResult& fr = results[slot.t];
+        // What Completed is about to read: the history bits of the estimator's eight slots.
+        for (uint32_t i = 0; i < SynthMotion::kVkReadbackSlots; ++i)
+            fr.readbackHistory[i] = images.readbackData[i * 4 + 1];
+        estimator.Completed(slot.ticket, images);
+        completedFrame = slot.t;
+
+        std::memcpy(fr.scd, slot.field.data + scdOffset, sizeof(fr.scd));
+        if (!g_fast)
+        {
+            // Copied out first: the buffer is the driver's host-visible memory, slow to read a byte at a time.
+            std::memcpy(halves.data(), slot.field.data + colourOffset, static_cast<size_t>(pixels * 8));
+            fr.gpuInputHash = ContentHash(halves.data(), static_cast<size_t>(pixels * 8));
+            if (fr.gpuInputHash != fr.inputHash)
+                Fail(std::string(s.name) + " t=" + std::to_string(slot.t) +
+                     ": the colour on the GPU is not the frame that was uploaded");
+        }
+
+        std::string detail;
+#ifdef SYNTH_SCD_STATE
+        // An investigation build: a normalised histogram sums to one, whatever the content.
+        {
+            const uint32_t* state = reinterpret_cast<const uint32_t*>(slot.scdState.data);
+            bool unnormalised = false;
+            for (int stratum = 0; stratum < 9; ++stratum)
+            {
+                double sum = 0.0;
+                for (int i = 0; i < 256; ++i)
+                {
+                    float bin;
+                    std::memcpy(&bin, &state[kScdBins + stratum * 256 + i], sizeof(bin));
+                    sum += bin;
+                }
+                g_sumLow = std::min(g_sumLow, sum);
+                g_sumHigh = std::max(g_sumHigh, sum);
+                unnormalised |= std::abs(sum - 1.0) > 1e-3;
+                if (stratum == 0)
+                    detail = ", previous histogram of stratum 0 sums to " + std::to_string(sum);
+            }
+            g_unnormalised += unnormalised ? 1 : 0;
+        }
+#endif
+
+        // Every round after the first must leave the scene-change output the first one left, bit for bit: the same
+        // frames through the same passes, whatever else the GPU was doing.
+        if (g_rounds > 1)
+        {
+            auto& first = g_firstRound[s.name];
+            first.resize(s.frames);
+            if (g_round == 0)
+                first[slot.t] = { fr.scd[0], fr.scd[1], fr.scd[2] };
+            else
+            {
+                ++g_roundFrames;
+                const auto& was = first[slot.t];
+                if (fr.scd[0] != was[0] || (fr.scd[1] & 1u) != (was[1] & 1u) || fr.scd[2] != was[2])
+                {
+                    ++g_roundMismatches;
+                    float now, before;
+                    std::memcpy(&now, &fr.scd[0], sizeof(now));
+                    std::memcpy(&before, &was[0], sizeof(before));
+                    SYSTEMTIME clock;
+                    GetLocalTime(&clock);
+                    Log("ROUND MISMATCH %02u:%02u:%02u.%03u round %d %s t=%d: scene-change value %.6f (first round "
+                        "%.6f, FidelityFX %.6f), history %u (first %u), groups %u%s",
+                        clock.wHour, clock.wMinute, clock.wSecond, clock.wMilliseconds, g_round, s.name, slot.t, now,
+                        before, fr.scdReference, fr.scd[1], was[1], fr.scd[2], detail.c_str());
+                }
+            }
+        }
+        if (g_fast)
+            return;
+
         const uint32_t pair = static_cast<uint32_t>(&slot - slots.data());
         uint64_t ticks[2] = {};
         if (vkGetQueryPoolResults(device, timestamps, pair * 2, 2, sizeof(ticks), ticks, sizeof(uint64_t),
@@ -601,10 +772,34 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
         finish(slot);
 
         // The frame as bytes, then as the half floats the host's working colour holds.
-        RenderFrame(s, t, rgba.data(), s.width * 4);
-        auto* halves = reinterpret_cast<uint16_t*>(slot.upload.data);
-        for (size_t i = 0; i < rgba.size(); ++i)
-            halves[i] = ToHalf(rgba[i] / 255.0f);
+        FrameResult& fr = results[t];
+        VkBuffer uploadFrom = slot.upload.buffer;
+        if (g_fast)
+        {
+            auto& rendered = g_rendered[s.name];
+            rendered.resize(s.frames);
+            if (rendered[t].buffer == VK_NULL_HANDLE)
+            {
+                RenderFrame(s, t, rgba.data(), s.width * 4);
+                refer(t);
+                rendered[t] = gpu.Buffer(pixels * 8, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+                auto* into = reinterpret_cast<uint16_t*>(rendered[t].data);
+                for (size_t i = 0; i < rgba.size(); ++i)
+                    into[i] = ToHalf(rgba[i] / 255.0f);
+            }
+            uploadFrom = rendered[t].buffer;
+        }
+        else
+        {
+            RenderFrame(s, t, rgba.data(), s.width * 4);
+            refer(t);
+            for (size_t i = 0; i < rgba.size(); ++i)
+                halves[i] = ToHalf(rgba[i] / 255.0f);
+            fr.inputHash = ContentHash(halves.data(), static_cast<size_t>(pixels * 8));
+            std::memcpy(slot.upload.data, halves.data(), static_cast<size_t>(pixels * 8));
+        }
+        if (g_paceMs > 0)
+            Sleep((DWORD) g_paceMs);
 
         const VkCommandBuffer cmd = slot.cmd;
         Check(vkResetCommandBuffer(cmd, 0), "vkResetCommandBuffer");
@@ -619,14 +814,16 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
         VkBufferImageCopy region {};
         region.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
         region.imageExtent = { s.width, s.height, 1 };
-        vkCmdCopyBufferToImage(cmd, slot.upload.buffer, slot.colour, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        vkCmdCopyBufferToImage(cmd, uploadFrom, slot.colour, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
         ImageBarrier(cmd, slot.colour, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL,
                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
 
-        FrameResult& fr = results[t];
         fr.t = t;
+        fr.completedBeforeRecord = completedFrame;
+        fr.scdReference = referenceValues[t];
         const uint64_t frameTicket = ++ticket;
+        fr.ticket = frameTicket;
         const uint32_t pair = t % depth;
         vkCmdResetQueryPool(cmd, timestamps, pair * 2, 2);
         // Once everything before it is done (the colour's upload above all, tens of megabytes from host memory at
@@ -646,6 +843,41 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
             out.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
             out.imageExtent = { images.width, images.height, 1 };
             vkCmdCopyImageToBuffer(cmd, images.motion.image, VK_IMAGE_LAYOUT_GENERAL, slot.field.buffer, 1, &out);
+            // The evidence: the colour as the GPU has it now the estimator has read it, and what its scene-change
+            // pass left for this frame, into the same buffer behind the same fence.
+            if (!g_fast)
+            {
+                ImageBarrier(cmd, slot.colour, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
+                             VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_TRANSFER_READ_BIT,
+                             VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+                out.bufferOffset = colourOffset;
+                out.imageExtent = { s.width, s.height, 1 };
+                vkCmdCopyImageToBuffer(cmd, slot.colour, VK_IMAGE_LAYOUT_GENERAL, slot.field.buffer, 1, &out);
+            }
+            out.bufferOffset = scdOffset;
+            out.imageExtent = { 3, 1, 1 };
+            vkCmdCopyImageToBuffer(cmd, images.scdOutput.image, VK_IMAGE_LAYOUT_GENERAL, slot.field.buffer, 1, &out);
+#ifdef SYNTH_SCD_STATE
+            // An investigation build only (README, "Investigating"): the estimator's scene-change images made with
+            // TRANSFER_SRC, which the shipped ones do not have.
+            const VkImage state[] = { images.scdHistogram.image, images.scdPreviousHistogram.image,
+                                      images.scdTemp.image };
+            for (uint32_t i = 0; i < 3; ++i)
+            {
+                out.bufferOffset = kScdBins * 4 * i;
+                out.imageExtent = { i < 2 ? (uint32_t) kScdBins : 3u, 1, 1 };
+                vkCmdCopyImageToBuffer(cmd, state[i], VK_IMAGE_LAYOUT_GENERAL, slot.scdState.buffer, 1, &out);
+            }
+            VkBufferMemoryBarrier stateToHost { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+            stateToHost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            stateToHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+            stateToHost.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            stateToHost.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            stateToHost.buffer = slot.scdState.buffer;
+            stateToHost.size = VK_WHOLE_SIZE;
+            vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1,
+                                 &stateToHost, 0, nullptr);
+#endif
             VkBufferMemoryBarrier toHost { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
             toHost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
@@ -689,6 +921,9 @@ std::vector<FrameResult> RunSequence(Gpu& gpu, const SynthMotion::VkPipelines& p
     {
         gpu.Free(slot.upload);
         gpu.Free(slot.field);
+#ifdef SYNTH_SCD_STATE
+        gpu.Free(slot.scdState);
+#endif
         vkDestroyImageView(device, slot.colourView, nullptr);
         vkDestroyImage(device, slot.colour, nullptr);
         vkFreeMemory(device, slot.colourMemory, nullptr);
@@ -706,6 +941,18 @@ int main(int argc, char** argv)
     {
         if (std::strcmp(argv[i], "--report") == 0 && i + 1 < argc)
             g_reportPath = argv[++i];
+        else if (std::strcmp(argv[i], "--only") == 0 && i + 1 < argc)
+            g_only = argv[++i];
+        else if (std::strcmp(argv[i], "--repeat") == 0 && i + 1 < argc)
+            g_rounds = std::clamp(std::atoi(argv[++i]), 1, 1000000);
+        else if (std::strcmp(argv[i], "--fast") == 0)
+            g_fast = true;
+        else if (std::strcmp(argv[i], "--pace") == 0 && i + 1 < argc)
+            g_paceMs = std::clamp(std::atoi(argv[++i]), 0, 5000);
+        else if (std::strcmp(argv[i], "--depth") == 0 && i + 1 < argc)
+            g_depth = (uint32_t) std::clamp(std::atoi(argv[++i]), 1, 4);
+        else
+            Fail(std::string("unknown argument ") + argv[i]);
     }
 
     Gpu gpu;
@@ -734,6 +981,8 @@ int main(int argc, char** argv)
         { "object", Kind::Object, 1280, 720, 8, 3, 14 },
         { "static", Kind::Static, 1280, 720, 0, 0, 14 },
         { "cut", Kind::Cut, 1280, 720, 4, 0, 18 },
+        // A change FidelityFX's own formula puts under its threshold: no scene cut, whatever the GPU's scheduling.
+        { "partial", Kind::Partial, 1280, 720, 4, 0, 18 },
         { "abandon", Kind::Abandon, 1280, 720, 4, 0, 14 },
         { "time_1080p", Kind::Hud, 1920, 1080, 4, 0, 32, true },
         { "time_3440", Kind::Hud, 3440, 1440, 4, 0, 32, true },
@@ -753,16 +1002,23 @@ int main(int argc, char** argv)
     uint64_t ticket = 0;
     int frames = 0;
     bool first = true;
-    for (const auto& s : sequences)
+    for (g_round = 0; g_round < g_rounds; ++g_round)
     {
-        // In flight too: the timing sequences, so the GPU is kept busy (and clocked up) as in a game, not idle between
-        // frames.
-        const uint32_t depth =
-            std::strstr(s.name, "_inflight") != nullptr || std::strncmp(s.name, "time_", 5) == 0 ? 3u : 1u;
-        const auto results = RunSequence(gpu, pipelines, s, ticket, depth);
-        frames += (int) results.size();
-        WriteSequence(s, results, first);
-        first = false;
+        for (const auto& s : sequences)
+        {
+            if (!Selected(s.name))
+                continue;
+            // In flight too: the timing sequences, so the GPU is kept busy (and clocked up) as in a game, not idle
+            // between frames.
+            const uint32_t depth =
+                std::strstr(s.name, "_inflight") != nullptr || std::strncmp(s.name, "time_", 5) == 0 ? 3u : 1u;
+            const auto results = RunSequence(gpu, pipelines, s, ticket, g_depth ? g_depth : depth);
+            frames += (int) results.size();
+            if (g_round > 0)
+                continue; // the report holds the first round; the later ones are compared with it
+            WriteSequence(s, results, first);
+            first = false;
+        }
     }
 
     Check(vkDeviceWaitIdle(gpu.device), "vkDeviceWaitIdle");
@@ -772,14 +1028,25 @@ int main(int argc, char** argv)
         c = (c == '"' || c == '\\' || c < ' ') ? '\'' : c;
     std::fprintf(g_report,
                  "\n], \"validation_errors\": %u, \"first_validation\": \"%s\", \"validation_active\": %s, "
-                 "\"sync_validation_active\": %s, \"wine_injected\": %u}\n",
+                 "\"sync_validation_active\": %s, \"wine_injected\": %u, \"rounds\": %d, \"round_frames\": %d, "
+                 "\"round_mismatches\": %d, \"frames_in_flight\": %d",
                  g_validationErrors.load(), firstText.c_str(), g_validationActive ? "true" : "false",
-                 g_syncActive ? "true" : "false", g_wineInjected.load());
+                 g_syncActive ? "true" : "false", g_wineInjected.load(), g_rounds, g_roundFrames, g_roundMismatches,
+                 g_inFlight);
+#ifdef SYNTH_SCD_STATE
+    std::fprintf(g_report, ", \"unnormalised_frames\": %d, \"previous_sum_low\": %.6f, \"previous_sum_high\": %.6f",
+                 g_unnormalised, g_sumLow, g_sumHigh);
+    Log("previous histograms: %d frame(s) left one that does not sum to 1; sums %.4f to %.4f", g_unnormalised, g_sumLow,
+        g_sumHigh);
+#endif
+    std::fprintf(g_report, "}\n");
     std::fclose(g_report);
     g_report = nullptr;
 
-    Log("SYNTH-MOTION-VK DONE sequences=%d frames=%d validation_errors=%u",
-        (int) (sizeof(sequences) / sizeof(sequences[0])), frames, g_validationErrors.load());
+    Log("SYNTH-MOTION-VK DONE sequences=%d frames=%d validation_errors=%u rounds=%d round_frames=%d "
+        "round_mismatches=%d frames_in_flight=%d",
+        (int) (sizeof(sequences) / sizeof(sequences[0])), frames, g_validationErrors.load(), g_rounds, g_roundFrames,
+        g_roundMismatches, g_inFlight);
     if (!g_firstValidation.empty())
         Log("first validation error: %s", g_firstValidation.c_str());
     return 0;

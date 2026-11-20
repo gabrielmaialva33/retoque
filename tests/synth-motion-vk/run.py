@@ -9,8 +9,14 @@ loads NGX, OptiScaler.dll or a game.
 
 On top of the D3D12 suite's judgement: the validation layer must have been active (a deliberately invalid fence flag
 reached the messenger with its VUID), its synchronization checks too (two unordered clears were reported as a hazard),
-and it must have reported no error; a pan and the cut also run three frames in flight. SKIP (exit 0) when the device cannot run the
-estimator (SynthMotion::VkUnsupported says why)."""
+and it must have reported no error; a pan and the cut also run three frames in flight. The harness reports the GPU's
+own scene-change value for every frame, which that judgement holds to FidelityFX's formula evaluated on the host.
+
+A second run (ROUNDS) puts the in-flight sequences and a timing one through the estimator 25 times with nothing of the
+host's between frames, so that frames really are on the GPU together: every round must leave the scene-change output
+the first one left, bit for bit, and the first one's must be the formula's.
+
+SKIP (exit 0) when the device cannot run the estimator (SynthMotion::VkUnsupported says why)."""
 import argparse
 import hashlib
 import importlib.util
@@ -30,6 +36,9 @@ TOOLCHAIN_PREFIX = Path(os.environ.get('WINEPREFIX', str(Path.home() / '.local/o
 ESTIMATOR = ROOT / 'retoque/shaders/synth_motion'
 D3D12_SUITE = ROOT / 'tests/synth-motion-d3d12'
 EXE = 'synth-motion-vk-harness.exe'
+ROUND_SEQUENCES = ('time_1080p', 'pan_+4x_inflight', 'cut_inflight')  # in the harness's order
+ROUND_COUNT = 25
+ROUNDS = ['--fast', '--only', ','.join(ROUND_SEQUENCES), '--repeat', str(ROUND_COUNT)]
 
 
 def d3d12_runner():
@@ -107,6 +116,32 @@ def runtime_env():
                 VK_LOADER_LAYERS_DISABLE='~implicit~', ENABLE_GAMESCOPE_WSI='0')
 
 
+def judge_rounds(report, runner):
+    """The second run: the rounds agree with the first, the first with FidelityFX's formula, frames were in flight."""
+    failures, notes = runner.judge_scene_change(report)
+    failures = [f'rounds: {f}' for f in failures]
+    names = [s['name'] for s in report['sequences']]
+    frames = sum(len(s['frames']) for s in report['sequences'])
+    if names != list(ROUND_SEQUENCES):
+        failures.append(f'rounds: ran {names}, not {list(ROUND_SEQUENCES)}')
+    if report.get('rounds') != ROUND_COUNT or report.get('round_frames') != frames * (ROUND_COUNT - 1):
+        failures.append(f'rounds: {report.get("round_frames")} frames compared over {report.get("rounds")} rounds, not '
+                        f'{frames * (ROUND_COUNT - 1)} over {ROUND_COUNT}')
+    if report.get('round_mismatches', 1) != 0:
+        failures.append(f'rounds: {report.get("round_mismatches")} of {report.get("round_frames")} frames left another '
+                        'scene-change value than the first round did; see artifacts/rounds.log')
+    if not report.get('frames_in_flight'):
+        failures.append('rounds: no frame was still on the GPU when its objects came round again, so none were in '
+                        'flight together')
+    if report.get('validation_errors', 1) != 0:
+        failures.append(f'rounds: {report.get("validation_errors")} validation error(s); see artifacts/rounds.log')
+    notes = [f'rounds: {n}' for n in notes]
+    notes.append(f'rounds: {report.get("round_frames")} frames over {ROUND_COUNT - 1} further rounds, '
+                 f'{report.get("round_mismatches")} differing from the first; {report.get("frames_in_flight")} of '
+                 f'{frames * ROUND_COUNT} still on the GPU when their objects came round')
+    return failures, notes
+
+
 def check_manifest():
     manifest = json.loads((OUT / 'manifest.json').read_text())
     if manifest['sources'] != sources():
@@ -133,10 +168,15 @@ def main():
 
     env = runtime_env()
     report_path = WORK / 'synth-motion-report.json'
+    rounds_path = WORK / 'synth-motion-rounds.json'
     report_path.unlink(missing_ok=True)
+    rounds_path.unlink(missing_ok=True)
     try:
-        command(['wine', WORK / EXE, '--report', 'synth-motion-report.json'], env=env, cwd=WORK,
-                logfile=OUT / 'run.log', timeout=900)
+        command(['wine', WORK / EXE, '--report', report_path.name], env=env, cwd=WORK, logfile=OUT / 'run.log',
+                timeout=900)
+        if not json.loads(report_path.read_text()).get('skipped'):
+            command(['wine', WORK / EXE, *ROUNDS, '--report', rounds_path.name], env=env, cwd=WORK,
+                    logfile=OUT / 'rounds.log', timeout=900)
     finally:
         subprocess.run(['wineserver', '-k'], env=env, stdin=subprocess.DEVNULL, capture_output=True)
 
@@ -163,6 +203,11 @@ def main():
         notes += [f'cut_inflight: {n}' for n in cut_notes]
     if not any(s['name'] == 'pan_+4x_inflight' for s in report['sequences']):
         failures.append('no pan_+4x_inflight sequence in the report')
+    for missing in {'partial', 'time_3440'} - {s['name'] for s in report['sequences']}:
+        failures.append(f'no {missing} sequence in the report')
+    round_failures, round_notes = judge_rounds(json.loads(rounds_path.read_text()), runner)
+    failures += round_failures
+    notes += round_notes
     if not report.get('validation_active'):
         failures.append('the validation layer was not active (the negative control never reached the messenger)')
     if not report.get('sync_validation_active'):
