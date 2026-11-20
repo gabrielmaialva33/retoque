@@ -72,8 +72,9 @@ Home opens the in-game menu.
   RTX 30 frame-generation x3 proposal.
 
 **Not active in this release.** The Vulkan multi-pass chain (admission and contracts only, off), the log-only present
-depth observer, and "NR on any window" on Windows (built and host-tested, not run on Windows) are present but are not
-something to rely on yet.
+depth observer, and "NR on any window" on Windows are present but are not something to rely on yet. "NR on any
+window" also cannot start from these downloads: `RetoqueWindowHost.exe` was left out of them, so the screen reports an
+incomplete payload (see Known issues).
 
 ## Limits to keep in mind
 
@@ -93,9 +94,32 @@ Tagged commit `d3bd1ea6`, clean tree. What was checked before publication (2026-
   `nvngx.dll_dlssnr.dll` forwarder `05f6bd8073c6eafb3a4754a0fc739d0424e4f5e8babaa899530a5c188829c8f6`.
 - `SHA256SUMS` matches the digests GitHub reports for the three app assets.
 
-**Not validated for this release:** the app's self-install, game install and uninstall on native Windows; any GPU or
-game run of this exact build, on Windows or Linux/Proton. Earlier builds of the same features ran in games, but that
-does not qualify this one. Report problems in the issues.
+After publication, on native Windows 11 (RTX 3060, driver 621.14), with the published
+`retoque-app-0.3.0-windows-x64.zip` (hash checked on the machine):
+
+- The app opened from the extracted zip, found the GPU and the games, and installed itself from Preferences:
+  program folder, Start menu and Desktop shortcuts, and the Apps & features entry at version 0.3.0. It restarted into
+  the installed copy.
+- "Update and optimize" on Dying Light: The Beast replaced the proxy, `OptiScaler.dll` and the forwarder with the
+  hashes above and added the OptiScaler support files. The game, started from the app, loaded this build (menu header
+  `d3bd1ea6`). NR ran on DLSS output at Passes=1, 960x540 render to 1920x1080, model 310.9.16.0: 7,332 applied
+  compositions, 0 model failures, about 11.1 ms of confirmed GPU time per evaluation, with frame generation x4 at
+  times. A few minutes only; image quality was not judged.
+- Uninstalling the previous app (0.1.0) from its Apps & features command removed the entry and the shortcuts but left
+  the program folder (see Known issues).
+
+**Not validated:** uninstalling 0.3.0 itself, other games, Linux/Proton runs of this build, and longer play.
+
+## Known issues
+
+- **Uninstall leaves the program folder behind** (Windows). The cleanup script is started without a console, where
+  `tasklist` prints nothing, so it gives up before removing `%LOCALAPPDATA%\Programs\Retoque`. The Apps & features
+  entry and the shortcuts are removed. Delete the folder by hand after uninstalling. Fixed in the next release.
+- **"NR on any window" cannot start**: `RetoqueWindowHost.exe` is missing from the downloads.
+- The app labels the bundled Retoque files "Local build" instead of 0.3.0, and its update checks skip pre-releases,
+  so it will not offer this version as an update. Download it from this page.
+
+Report problems in the issues.
 
 This combines ideas and fixes from OptiScaler, Dagherbou, scottmudge, janblade, wilsjo2, RenoDX and other
 contributors with this fork's own work and regression tests. See the README credits and the included licences.
