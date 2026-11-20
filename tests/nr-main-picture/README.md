@@ -30,5 +30,9 @@ history flags. `GatherGuideFrame` puts the picture epoch in the frame, and `Disp
 Vulkan route (under `g_vkMutex`) consume it: a newer picture restarts the history and invalidates the exposure meter,
 an older one is refused. Twenty-one source mutants must be rejected.
 
+Dispatch mutants are scoped to its own body. The before-lock mutant inserts an
+epoch consumption ahead of `nrLock`, independent of the advisor declarations
+between that lock and the skip reporter; the same lock-order guard must reject it.
+
 Not proved here: the feature layout of any real game (Neverness to Everness has not been run with this build), the
 picture NR follows after a takeover on a GPU, or anything on native Windows.

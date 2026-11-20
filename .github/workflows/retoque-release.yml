@@ -33,7 +33,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Host prerequisites only
-        run: git submodule update --init --depth 1 external/simpleini external/spdlog external/vulkan
+        run: |
+          git submodule update --init --depth 1 external/simpleini external/spdlog external/vulkan external/nvapi
+          sudo apt-get update -q && sudo apt-get install -y -q libfreetype-dev
       - name: Documentation and registry
         run: |
           python3 tools/check_docs.py

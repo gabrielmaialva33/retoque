@@ -27,6 +27,9 @@ def run(folder, mutants=True):
         'post ignores pending restart': ('if (g_vkResetOnReturn.exchange(false))', 'if (false && g_vkResetOnReturn.exchange(false))'),
         'model ignores reset': ('g_vk.reset ? 1 : 0', '0'),
         'post skips retirement': ('if (PreRecordingBusy())', 'if (false && PreRecordingBusy())'),
+        'one-pass consults chain': ('if (cfg.DlssNrPasses.value_or_default() > 1)', 'if (true)'),
+        'chain refusal skips master': ('VkPresentHost::ChainRecordingAllowed(device, *recording);',
+                                      'if (!VkPresentHost::ChainRecordingAllowed(device, *recording)) return;'),
     }
     variants = [('baseline', production)]
     if mutants:
@@ -53,14 +56,15 @@ def run(folder, mutants=True):
         result = subprocess.run(flags + [str(cpp), '-o', str(out)], capture_output=True, text=True)
         assert result.returncode == 0, name + ': ' + result.stderr
         failures = []
-        for scenario in ('post-only', 'equal-size', 'skipped-gap'):
+        for scenario in ('post-only', 'equal-size', 'skipped-gap', 'chain-refused', 'chain-allowed', 'chain-off'):
             result = subprocess.run([str(out), scenario], capture_output=True, text=True)
             if name == 'baseline':
                 assert result.returncode == 0, scenario + ': ' + result.stderr
             failures.append(result.returncode != 0 and 'Assertion' in result.stderr)
         if name != 'baseline':
             assert any(failures), 'survived: ' + name
-    print(f'PASS: actual model reset argument, equal-size retirement, skipped gap, post-only; {len(variants)-1} compiling mutants')
+    print(f'PASS: actual model reset argument, equal-size retirement, skipped gap, post-only, '
+          f'chain preflight/refusal/off; {len(variants)-1} compiling mutants')
 
 
 if __name__ == '__main__':

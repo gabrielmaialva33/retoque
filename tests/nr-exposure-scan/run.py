@@ -164,10 +164,30 @@ def sources(*trees):
                 yield path.relative_to(root).as_posix(), path.read_text(encoding='utf-8', errors='replace')
 
 
+# Two heuristics watch the game's creations and skip ours: the scan, and since 92c84780 the log-only present depth
+# observer (DlssNr_PresentDepthDx12.cpp), which leaves a scoped creation out of its candidates. A reader is harmless
+# to resource tracking and HUDfix only while it keeps what it learns to itself, so that half is checked directly: as
+# merged, the observer handed every depth resource it kept to ResTrack_Dx12::TrackResourceRelease, which put it in
+# resource tracking's index and sent its release through ResourceDestroyed into HUDfix, behind HUDfix's check lock.
+WATCHERS = ['retoque/dlssnr/DlssNr_ExposureScan.cpp', 'retoque/dlssnr/DlssNr_PresentDepthDx12.cpp']
 readers = [name for name, text in sources('OptiScaler', 'retoque')
            if 'ScopedInternalResourceCreation::Active()' in text]
-guard(lambda: readers == ['retoque/dlssnr/DlssNr_ExposureScan.cpp'],
-      f'only the exposure scan reads the scope, so resource tracking and HUDfix see what they saw ({readers})')
+guard(lambda: readers == WATCHERS,
+      f'only the exposure scan and the log-only present depth observer read the scope ({readers})')
+handing = [name for name in WATCHERS
+           if any(word in read(name) for word in ('TrackResourceRelease', '_trackedResources', 'Hudfix'))]
+guard(lambda: not handing,
+      f'neither registers a resource with resource tracking or calls HUDfix, so both see what they saw ({handing})')
+reached = sorted(set(re.findall(r'ResTrack_Dx12::(\w+)', read(WATCHERS[0]) + read(WATCHERS[1]))))
+guard(lambda: reached == ['EnableNrSubmissionTracking', 'NrRealObject'],
+      f'they reach ResTrack only for the NR queue hook and proxy unwrapping ({reached})')
+tracking = read('OptiScaler/resource_tracking/ResTrack_dx12.cpp')
+lifetime = [body(tracking, signature) for signature in (
+    'void __stdcall ResTrack_Dx12::ResourceDestroyed(void* data)',
+    'bool ResTrack_Dx12::TrackResourceRelease(ID3D12Resource* resource)')]
+guard(lambda: all(lifetime) and not any(word in text for text in lifetime
+                                        for word in ('DlssNr', 'ScopedInternalResourceCreation')),
+      'resource tracking\'s registration and destruction name neither the scope nor NR')
 
 
 def scoped(text, *creations):

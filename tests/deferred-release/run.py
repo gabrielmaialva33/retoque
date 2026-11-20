@@ -50,7 +50,26 @@ assert 'VulkanHooks::DestroyDevice(next, device, allocator);' in host
 assert 'destroyDeferred = false;' in host[host.index('std::string TeardownDevice('):]
 assert 'destroyDeferred = !unproven && !dev.leaked;' in host
 created = host[host.index('VkResult VKAPI_CALL hkCreateDevice('):]
-assert created.index('DeferredRelease::RegisterOwner(H(*device));') < created.index('HookDevice(*device);')
+register = 'DeferredRelease::RegisterOwner(H(*device));'
+hook = 'HookDevice(*device, chainRequested);'
+
+
+def registration_order(source):
+    assert source.count(register) == 1 and source.count(hook) == 1
+    assert source.index(register) < source.index(hook), 'owner must be registered before device hooks'
+
+
+registration_order(created)
+for name, mutant in (
+    ('registration omitted', created.replace(register, '', 1)),
+    ('registration after hooks', created.replace(register, '', 1).replace(hook, hook + '\n' + register, 1)),
+):
+    try:
+        registration_order(mutant)
+    except AssertionError:
+        print(f'PASS: device registration mutant rejected: {name}')
+    else:
+        raise AssertionError(f'device registration mutant survived: {name}')
 print('PASS: NR teardown retires the owner before destroying its device; creation reopens reused handles')
 
 menu = (ROOT / 'OptiScaler/menu/menu_overlay_vk.cpp').read_text()

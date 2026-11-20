@@ -36,8 +36,21 @@ def guards():
     assert 'if (!ok)' in install and 'DetourTransactionAbort()' in install
     assert install.index('DetourTransactionCommit()')<install.index('running.store(true')
     assert 'ScopedInternalResourceCreation::Active()' in block(glue,'void Created(')
-    assert 'TrackResourceRelease(resource)' in glue and 'r && r->lifetime ? id : 0' in glue
-    assert 'DeviceDestroyed(device)' in device and 'PresentDepthDx12::Destroyed(resource)' in track
+    # Lifetime proof is the observer's own destruction notice. It registers nothing in ResTrack's index and no release
+    # reaches HUDfix through it; ResTrack's two lifetime functions do not name NR (tests/restrack-resource-references).
+    notice=block(glue,'bool NoticeRelease('); released=block(glue,'void __stdcall Released(')
+    assert 'RegisterDestructionCallback(&Released, resource, &callback)' in notice
+    assert notice.index('GetPrivateData(kReleaseNotice')<notice.index('RegisterDestructionCallback(')<notice.index('SetPrivateData(kReleaseNotice')
+    assert 'isShuttingDown' in notice and 'isShuttingDown' in released
+    assert 'model.Forget(' in released and 'resources.Put(key, {})' in released
+    assert 'const bool lifetime = NoticeRelease(resource); // outside observer lock' in glue
+    assert glue.count('NoticeRelease(') == 2 and 'r && r->lifetime ? id : 0' in glue
+    for forbidden in ['TrackResourceRelease', '_trackedResources', 'Hudfix']:
+        assert forbidden not in glue, forbidden
+    assert sorted(set(re.findall(r'ResTrack_Dx12::(\w+)', glue))) == ['EnableNrSubmissionTracking', 'NrRealObject']
+    for signature in ['void __stdcall ResTrack_Dx12::ResourceDestroyed(', 'bool ResTrack_Dx12::TrackResourceRelease(']:
+        assert 'DlssNr' not in block(track, signature), signature
+    assert 'DeviceDestroyed(device)' in device and 'PresentDepthDx12::Destroyed' not in track
     assert 'tokens[i] == kInternal' in glue and 'r->Usable(tokens[i])' in glue
     submit=block(track,'void ResTrack_Dx12::hkExecuteCommandLists(')
     assert submit.index('PresentDepthDx12::Submission')<submit.index('o_ExecuteCommandLists(')
@@ -67,7 +80,7 @@ def guards():
     for name in names:
         assert glue.count(f'original{name}(') == 1, f'original forwarding count: {name}'
         assert f'ATTACH({name})' in glue and f'DETACH({name})' in glue and f'VALIDATE_MEMBER_HOOK(Hook{name}, {name}Fn)' in glue
-    print('PASS: startup gate, 18 hook signatures/attach/detach, forwarding seam, no GPU command, independent clock and config wiring')
+    print('PASS: startup gate, 18 hook signatures/attach/detach, forwarding seam, own release notice, no GPU command, independent clock and config wiring')
 
 guards()
 with tempfile.TemporaryDirectory(prefix='host-', dir=ARTIFACTS) as temp:
@@ -112,11 +125,11 @@ struct Config { static Config* Instance(); Option<bool> DlssNrEnabled; Option<un
 ''',
             'State.h':'''#pragma once
 enum class SwapchainInteropApi { None };
-struct State { static State& Instance(); SwapchainInteropApi swapchainInteropApi; };
+struct State { static State& Instance(); SwapchainInteropApi swapchainInteropApi; bool isShuttingDown; };
 struct ScopedInternalResourceCreation { static bool Active(); };
 ''',
             'resource_tracking/ResTrack_Dx12.h':'''#pragma once
-struct ResTrack_Dx12 { static IUnknown* NrRealObject(IUnknown*); static bool TrackResourceRelease(ID3D12Resource*); static bool EnableNrSubmissionTracking(ID3D12Device*); };
+struct ResTrack_Dx12 { static IUnknown* NrRealObject(IUnknown*); static bool EnableNrSubmissionTracking(ID3D12Device*); };
 ''',
         }
         for name,content in files.items():

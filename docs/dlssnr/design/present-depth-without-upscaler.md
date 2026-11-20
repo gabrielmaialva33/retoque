@@ -100,7 +100,13 @@ qualification, hook coexistence evidence, image-quality evidence, or native Wind
   forwards its original arguments exactly once. No observer records a GPU command, copy, fence, queue wait or
   model call. Installation creates only temporary allocator/list objects for vtable discovery (and the existing
   submission hook may create a temporary queue).
-- **Depth identity:** the existing ResTrack destruction notifier is required. No observer keeps a strong game
+- **Depth identity:** a destruction notice (`ID3DDestructionNotifier`, the mechanism ResTrack uses) is required.
+  Since 2026-11-19 (release review, host-tested only) the observer registers its own callback, once per resource
+  behind a private marker on that resource, instead of calling `ResTrack_Dx12::TrackResourceRelease`: that call
+  entered every depth resource in resource tracking's index, which its own filter never admits, and sent its
+  release through `ResourceDestroyed` into HUDfix's `RemoveResourceFromTracking`, behind HUDfix's check lock. A
+  log-only diagnostic must leave both as they were, so `ResourceDestroyed` no longer names the observer either
+  (`tests/nr-exposure-scan`, `tests/restrack-resource-references`). No observer keeps a strong game
   resource reference. Destroying a resource invalidates its generation; its bound tombstone survives through
   the next diagnostic boundary so disappearance is a refusal, not a false success. A missing notifier is
   `unobserved`, never a raw-pointer match. Queue and presenter identity also use private CPU generation tokens;

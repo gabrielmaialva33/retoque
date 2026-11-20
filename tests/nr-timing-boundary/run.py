@@ -5,6 +5,7 @@ import subprocess
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / '_support'))
 from nr_sources import renderer_source  # noqa: E402  every DlssNr_Dx12*.cpp unit, in a fixed order
+from cpp_source import function  # noqa: E402
 
 root = Path(__file__).resolve().parents[2]
 here = Path(__file__).resolve().parent
@@ -20,7 +21,8 @@ def between(source, start, end):
 
 # TimingContract and TimingMetadata, now in DlssNr_Dx12_Diagnostics.cpp (split step 6), up to the next helper there.
 metadata = between(renderer, 'std::string TimingContract(', '// Cleared once per run, so a session')
-controls = between(menu, 'static void RenderGpuTimingReadout(', '// A slider that only writes')
+# Neighbouring comparison/advisor helpers are not part of the timing boundary.
+controls = '\n'.join(function(menu, name) for name in ('RenderGpuTimingReadout', 'RenderGpuTiming'))
 dispatch = between(renderer, 'bool DlssNr_Dx12::Dispatch(', '\nnamespace DlssNr\n{')
 assert 'GpuTime_Dx12' not in renderer
 assert 'DLSS-NR cost:' not in renderer

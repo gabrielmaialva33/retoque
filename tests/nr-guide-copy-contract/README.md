@@ -19,6 +19,13 @@ mip-zero plane availability and single-sample quality. The owner is retained for
 process session. Changing device requires restarting the process: partial Shutdown does
 not authorize hot rebinding of residual capability and renderer caches.
 
+The owner fixture includes the real portable advisor runtime, left off. It holds
+the advisor mutex while running each case (a 15-second case timeout detects an
+unexpected acquisition), checks an empty decision on admitted Dispatch prefixes,
+and verifies that counters/clock state stay idle. Both capture-prefix fixtures
+compile the production depth-observer scope with only its activation gate faked
+off. They do not execute observer hooks or the post-commit `Captured` notification.
+
 Present capture intentionally copies mip zero of depth plane zero, not stencil. A donor
 may have extra mips or a stencil plane; numeric source indices of other planes are not
 used as destination indices. Full-resource typeless guide copies require identical whole

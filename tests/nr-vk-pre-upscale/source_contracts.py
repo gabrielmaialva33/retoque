@@ -7,9 +7,10 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[2]
 BODIES = (
     ('retoque/dlssnr/DlssNrFeature_Vk.cpp', 'EvaluateAfterUpscaleVk',
-     # The post body as the native Vulkan pair capture left it (it records its snapshots there); this branch
-     # does not change it.
-     'be9224959f59b3f8792db03a9f958c0203980177c8dec074f68ae70362e0ba3e'),
+     # Reviewed through 542f9339: the only delta from 8dce1c21 is the Passes>1
+     # ChainRecordingAllowed preflight after the recording gate. Refusal retains one/master;
+     # history_contracts.py exercises that boundary and the unchanged one-pass path.
+     '90e4cd1c8d23f030bd683360e7c9aee8d447281d8bd0406aac8bdc02bab770d1'),
 )
 
 

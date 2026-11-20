@@ -7,6 +7,7 @@ The prefix stops before allocation/recording, not before the replacement-capacit
 from pathlib import Path
 import subprocess
 import tempfile
+from observer_scope import off_scope
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -30,6 +31,7 @@ def function(text, anchor):
 
 def unit(guides):
     text = '#include "pch.h"\n' + (HERE / 'fakes.h').read_text()
+    text += off_scope(ROOT, function)
     text += '''
 #include <mutex>
 #include <optional>

@@ -57,3 +57,9 @@ with token boundaries preserved and linkage/formatting normalized. Each definiti
 must occur exactly once in the present-guide unit. Negative controls cover missing
 and duplicate definitions, decision and tracking changes; the state and resource
 hashes above remain independent and unchanged.
+
+The 2026-11-19 observer (`12a23174`) adds `PresentDepthDx12::InternalScope` at
+`CaptureGuides` entry and `Captured` after `CommitRecord`. Its reviewed full-body
+hash is recorded as an explicit update; stripping exactly those two additions
+must still match the previous hash. Guide selection, copies, retirement and
+submission tracking remain pinned, including all seven negative controls.

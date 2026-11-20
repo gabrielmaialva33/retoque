@@ -35,7 +35,7 @@ Keep `fetch.recurseSubmodules=no`. Do not blindly initialize all submodules recu
 separate. Host CI needs only:
 
 ```bash
-git submodule update --init external/simpleini external/spdlog external/vulkan
+git submodule update --init external/simpleini external/spdlog external/vulkan external/nvapi
 ```
 
 Follow the relevant build/merge record for a DLL build's complete prerequisites. A worktree is not automatically

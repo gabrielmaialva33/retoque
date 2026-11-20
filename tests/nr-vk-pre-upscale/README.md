@@ -23,8 +23,10 @@ intentional observation gaps. The full host gate and runtime qualification belon
 release. `recording.cpp` covers the canonical ticket, failed/repeated/missing/late Begin observations, mismatched
 device/buffer/reuse and retirement. The adapter fake exercises real `VkRecording::Recordings()` with early,
 missing, late and duplicate lifecycle callbacks. These are host ordering contracts, not proof of live hook order.
-`source_contracts.py` hashes the preserved post-upscale body against HEAD and the baseline; a synthetic body
+`source_contracts.py` hashes the preserved post-upscale body against HEAD and the reviewed baseline; a synthetic body
 change must be detected. Nine additional source mutants exercise placement, completion, layout and lifetime guards. It also rejects new lifetime-registry mutations in the passive adapter.
+The baseline includes `542f9339`'s `Passes>1` recording preflight: that is the only body delta from `8dce1c21`.
+The preflight cannot skip the existing one/master evaluation on refusal; one-pass never calls the observer.
 
 The revised step 3 uses the official NGX evaluate-window state contract: no binding replay. `scope_contracts.py`
 extracts the production scope class, constructor/destructor and resource admission into a host fixture with fake
@@ -56,8 +58,10 @@ Review regressions (`runtime_contracts.py` and `history_contracts.py`, both incl
   real model-call tails. Shader/allocation preparation and model execution are fake; the fake captures the actual
   reset argument, same feature identity and equal 100x50 dimensions. Real recording-registry pins cover a busy
   recording, End without retirement, legal Reset and re-Begin. The first post call must get reset=1, the second
-  reset=0, including skipped unknown-recording, Aside and preparation gaps; post-only stays unchanged. Four
-  compiling mutants cover forgotten publication, ignored consumption/model reset and bypassed retirement.
+  reset=0, including skipped unknown-recording, Aside and preparation gaps; post-only stays unchanged. Six
+  compiling mutants cover forgotten publication, ignored consumption/model reset, bypassed retirement,
+  one-pass consulting the chain and a chain refusal skipping the master. Three extra scenarios exercise
+  chain allowed/refused/off with the exact recording ticket and no observer calls for Aside or unknown recordings.
   Source guards also require publication under the pre route lock and preserve the post body's hash.
 
 These checks prove the host control flow and arguments, not GPU retirement, NGX temporal quality or live Detours

@@ -52,6 +52,9 @@ Run: `python3 tests/nr-vk-zero-motion/run.py` (needs `g++` with C++20, ASan and 
    dropped verdict keeping its pending probes, a failed layout create's output stored), and seven
    that must make a guard fail (consume or plan without the key, the reservation after the first command, a wait in
    consume, `ShutdownVk` keeping the probe, two push fields swapped, the policy reset in the game's counter).
+   Six additional guard mutants replace the reuse or one-time metadata in each of the three Begin observers;
+   each must fail its own observer's guard. The shutdown guard includes the creation observer's CPU-only abandonment
+   before the existing capture, meter and probe abandonment sequence.
 
 What it does not cover: the shader on a device, a real readback, the game's layouts, Proton or native Windows, a game.
 Those are the GPU harness and the in-game checks named in the design note.
