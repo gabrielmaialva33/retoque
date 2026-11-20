@@ -17,7 +17,7 @@ struct Option
 struct Config
 {
     Option DlssNrEnabled, DlssNrIntensity, DlssNrStyle, DlssNrLocalStructure, DlssNrLocalTone, DlssNrSkinStructure,
-        DlssNrAutoMask;
+        DlssNrAutoMask, DlssNrPasses;
     static Config* Instance()
     {
         static Config c;
@@ -84,6 +84,21 @@ Inventory Instance() { return {}; }
 int NowMs() { return 0; }
 } // namespace DlssNr::SlTagInventory
 using namespace DlssNr;
+namespace DlssNr::VkPresentHost
+{
+unsigned chainCalls = 0;
+bool chainAllowed = false;
+bool ChainRecordingAllowed(VkDevice device, const VkRecording::Ticket& ticket)
+{
+    assert(reinterpret_cast<uintptr_t>(device) == 1);
+    const auto current = VkRecording::Recordings().Current(1, 20);
+    assert(current && current->device == ticket.device && current->buffer == ticket.buffer &&
+           current->epoch == ticket.epoch && current->reuse == ticket.reuse && current->level == ticket.level &&
+           current->oneTime == ticket.oneTime);
+    ++chainCalls;
+    return chainAllowed;
+}
+} // namespace DlssNr::VkPresentHost
 struct Invalidatable
 {
     void Invalidate() {}
@@ -177,6 +192,31 @@ int main(int argc, char** argv)
         post();
         post();
         assert((modelResets == std::vector<int> { 0, 0 }));
+        assert(VkPresentHost::chainCalls == 0);
+        return 0;
+    }
+    if (scenario == "chain-refused" || scenario == "chain-allowed" || scenario == "chain-off")
+    {
+        Config::Instance()->DlssNrPasses.value = 2;
+        VkPresentHost::chainAllowed = scenario == "chain-allowed";
+        if (scenario == "chain-off")
+        {
+            Config::Instance()->DlssNrEnabled.value = 0;
+            post();
+            assert(modelResets.empty() && VkPresentHost::chainCalls == 0);
+            return 0;
+        }
+        Pictures::aside = true;
+        post();
+        Pictures::aside = false;
+        r.Reset(20);
+        post();
+        assert(modelResets.empty() && VkPresentHost::chainCalls == 0);
+        r.Begin(20, VkRecording::Reuse::Serial);
+        post();
+        post();
+        assert(VkPresentHost::chainCalls == 2);
+        assert((modelResets == std::vector<int> { 0, 0 })); // refusal still runs one/master
         return 0;
     }
     auto pre = [&]

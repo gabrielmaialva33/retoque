@@ -253,9 +253,9 @@ def guards(t):
               'switched on again, pending probes are discarded and the verdict starts over')
 
     shutdown = re.sub(r'\s+', ' ', code_mask(body_of(feature, r'^void\s+ShutdownVk\s*\(')))
-    # The pair capture is told the device is gone first (it invalidates before anything is forgotten), then the meter
-    # and the probe are forgotten without a call.
-    check('if (!deviceAlive) { PairCapture::DeviceGoneVkLocked(g_vk.device, false); ForgetMeterReadback(); '
+    # The creation observer now drops its CPU readiness first; capture, meter and probe still abandon in order.
+    check('if (!deviceAlive) { VkPresentHost::AbandonCreationObserver(g_vk.device); '
+          'PairCapture::DeviceGoneVkLocked(g_vk.device, false); ForgetMeterReadback(); '
           'ForgetMotionProbe();' in shutdown,
           'ShutdownVk(false) forgets the probe without a call')
     gone = re.sub(r'\s+', ' ', code_mask(body_of(feature, r'^void\s+AfterUpscaleDeviceGone\s*\(')))
@@ -274,12 +274,16 @@ def guards(t):
 
     # The registry's Begin observers pass the flags on.
     check('Recordings().Begin( (uint64_t) commandBuffer, DlssNr::VkRecording::ReuseOf(pBeginInfo != nullptr, '
-          'pBeginInfo != nullptr ? pBeginInfo->flags : 0));' in re.sub(r'\s+', ' ', t[BRIDGE]),
+          'pBeginInfo != nullptr ? pBeginInfo->flags : 0), '
+          'pBeginInfo != nullptr && (pBeginInfo->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);'
+          in re.sub(r'\s+', ' ', t[BRIDGE]),
           'the wDx12 Begin wrapper passes Begin\'s flags on')
     host = re.sub(r'\s+', ' ', t[HOST])
     check('Recordings().Begin( H(buffer), DlssNr::VkRecording::ReuseOf(info != nullptr, info != nullptr ? info->flags '
-          ': 0));' in host, 'the present host\'s Begin observer passes the flags on')
-    check('Recordings().Begin((uint64_t) buffer, DlssNr::VkRecording::ReuseOf(true, begin.flags));' in host,
+          ': 0), info != nullptr && (info->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);' in host,
+          'the present host\'s Begin observer passes the flags on')
+    check('Recordings().Begin((uint64_t) buffer, DlssNr::VkRecording::ReuseOf(true, begin.flags), '
+          '(begin.flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0);' in host,
           'the present host\'s own Begin says what it began with')
 
     # The project, once each.
@@ -373,6 +377,24 @@ def main():
         print('PASS: source guards (shader VK_MODE block and D3D12 text, push block == ProbeParams == Params, '
               'bindings, optional SPIR-V, every probe step behind ZeroGuideReset in the V-06 order, no CPU wait, '
               'the three ends, Begin flags passed on, project)')
+
+    # Each observer must preserve both simultaneous-reuse and one-time metadata, independently.
+    for path, reuse, one_time, message in (
+        (BRIDGE, 'DlssNr::VkRecording::ReuseOf(pBeginInfo != nullptr, pBeginInfo != nullptr ? pBeginInfo->flags : 0)',
+         'pBeginInfo != nullptr && (pBeginInfo->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0',
+         "the wDx12 Begin wrapper passes Begin's flags on"),
+        (HOST, 'DlssNr::VkRecording::ReuseOf(info != nullptr, info != nullptr ? info->flags : 0)',
+         'info != nullptr && (info->flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0',
+         "the present host's Begin observer passes the flags on"),
+        (HOST, 'DlssNr::VkRecording::ReuseOf(true, begin.flags)',
+         '(begin.flags & VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) != 0',
+         "the present host's own Begin says what it began with"),
+    ):
+        for old, new in ((reuse, 'DlssNr::VkRecording::Reuse::Serial'), (one_time, 'false')):
+            mutated = dict(baseline)
+            mutated[path] = mutate(baseline[path], old, new)
+            assert message in guards(mutated), f'Begin metadata mutant survived: {message}: {old}'
+            print(f'PASS: Begin metadata mutant caught: {message}: {old}')
 
     route_mutants = {'consume without the key', 'reserve after the first command', "policy in the game's counter",
                      'prepare without the key'}
