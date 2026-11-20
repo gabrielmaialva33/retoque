@@ -265,7 +265,8 @@ model file at startup; it does not select the caller module.
 - **Ours is not the game's.** What the module creates through the game's D3D12 device passes the same
   creation hooks as the game's own resources, and the exposure scan looks there for a small UAV shaped
   like an exposure. `ScopedInternalResourceCreation` (`OptiScaler/State.h`: a counter on the creating
-  thread, no lock, read only by the scan) marks ours. `Dispatch` holds it from its admission checks to
+  thread, no lock, read only by the scan and the log-only present depth observer, neither of which
+  registers anything with resource tracking or HUDfix) marks ours. `Dispatch` holds it from its admission checks to
   its end, which covers the meter, the passes it builds, the model's `CreateFeature` and
   `EvaluateFeature` and every view made per frame; the allocators other routes reach open their own
   (`CreateScratch`, `CreatePreUpscaleScratch`, `ZeroGuides`, the MFG presenter). Before 2026-11-19 only

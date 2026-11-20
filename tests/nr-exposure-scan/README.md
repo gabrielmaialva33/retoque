@@ -75,7 +75,8 @@ sweeps, and the boundary releases view candidates without forgetting the rest.
 good as the scopes at the places Retoque creates through the game's device, so the guards also read those sites:
 the scope is a thread-local counter with no lock or shared state, and `NoteResource` and `NoteUav` leave a scoped
 creation before they take the scan's lock or count it (a scope therefore removes lock acquisitions and adds none);
-nothing but the scan reads the scope, so resource tracking and HUDfix see what they saw; `CreateScratch` and
+nothing but the scan and the log-only present depth observer reads the scope, and neither hands what it learns to
+resource tracking or HUDfix, so those see what they saw (below); `CreateScratch` and
 `CreatePreUpscaleScratch` allocate inside it; `DlssNr_Dx12::Dispatch` opens it once at function level, after its
 admission checks and before anything it creates, with every `g_nr.create` and `g_nr.evaluate` of the renderer and
 the meter, cadence, pulse, motion probe, enlargement and proxy calls inside; the zero guides and their clear views
@@ -86,6 +87,22 @@ each caught: the pass's scope removed, nested in a block, or opened after the mo
 cadence build outside `Dispatch`; a scratch allocated before its scope; the presenter's outputs unscoped and a new
 allocation elsewhere in it; `NoteResource` or `NoteUav` ignoring the scope (the cases) or checking it under the
 lock (the guard); the zero guides' views made after the scope closed (`nr-zero-guides`).
+
+**A second reader** (release review, 2026-11-19). The present depth observer (`92c84780`,
+`retoque/dlssnr/DlssNr_PresentDepthDx12.cpp`, `PresentDepth=log` only) is the second heuristic that watches the
+game's creations, and it skips a scoped one like the scan does. "Only the scan reads the scope" was the evidence
+for "resource tracking and HUDfix see what they saw", and the merged observer broke the conclusion, not just the
+wording: it passed every depth resource it kept to `ResTrack_Dx12::TrackResourceRelease`, so resource tracking's
+index held depth resources its own filter (`CheckResource`) never admits, their release ran `ResourceDestroyed`
+and HUDfix's `RemoveResourceFromTracking` behind HUDfix's check lock, and the scope decided which resources that
+happened to. The observer now registers its own destruction notice and `ResourceDestroyed` is the code it was
+before the merge. The guards hold that directly: exactly these two files read the scope; neither names
+`TrackResourceRelease`, the index or HUDfix; the only `ResTrack_Dx12` entry points they reach are the NR queue hook
+and proxy unwrapping; and resource tracking's registration and destruction name neither the scope nor NR. Four
+mutations were each caught: a third reader (in `ResTrack_dx12.cpp`), the observer calling `TrackResourceRelease`
+again, the observer calling HUDfix, and `ResourceDestroyed` calling the observer again (which also stops
+`restrack-resource-references` compiling). Source guards only: no run shows what a D3D12 runtime does with the
+observer's callback, and the default path never installs it.
 
 The review cases (`b0f73a5e`) failed against `0c527c43`, the first version of this change: 6 of them (`budget`,
 `cost`, `off-after-on`, `placed-boundary`, `replay-prune`, `replay-slot`); `prune-model` and `boundary-probe` were

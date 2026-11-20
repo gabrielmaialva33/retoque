@@ -11,7 +11,6 @@ void Stop();
 void DeviceDestroyed(IUnknown* device);
 void Created(ID3D12Device* device, const D3D12_RESOURCE_DESC* desc, ID3D12Resource* resource,
              D3D12_RESOURCE_STATES state, ID3D12Heap* heap = nullptr);
-void Destroyed(ID3D12Resource* resource);
 void Captured(size_t slot, ID3D12Resource* source, bool inverted, bool fullExtent);
 void Eligible(size_t slot);
 // A scope suppresses only this thread's own recording. Its lists carry a private CPU marker at Close;

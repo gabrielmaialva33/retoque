@@ -291,12 +291,28 @@ struct DlssNrFrameInfo
     unsigned DisplayWidth = 0, DisplayHeight = 0;
     bool MotionVectorsLowResolution = false;
 };
+// The log-only present depth observer's scope (DlssNr_PresentDepthDx12.h): an entry point holds it so the observer
+// does not take what the pass records on the game's list for the game's own work. The observer never runs in a host
+// test, so the fake only counts the scopes open on this thread, which is what the production class counts while the
+// observer is installed.
+namespace DlssNr::PresentDepthDx12
+{
+struct InternalScope
+{
+    static inline unsigned open = 0;
+    InternalScope() { ++open; }
+    ~InternalScope() { --open; }
+    InternalScope(const InternalScope&) = delete;
+    InternalScope& operator=(const InternalScope&) = delete;
+};
+} // namespace DlssNr::PresentDepthDx12
 struct DlssNr_Dx12
 {
     static inline bool writes = true;
     static inline bool modelCalled = true;
     static inline int modelResult = 1;
     static inline unsigned calls = 0;
+    static inline unsigned observerScopes = 0; // the observer's scopes open when the pass was last asked to record
     static inline DlssNrFrameInfo lastFrame;
     static inline ID3D12Device* createdOn = nullptr;
     DlssNr_Dx12(const char*, ID3D12Device* device) { createdOn = device; }
@@ -305,6 +321,7 @@ struct DlssNr_Dx12
                   DlssNr::Detail::CoverageSample* coverage = nullptr, DlssNr::Chain::RecordingLease* = nullptr)
     {
         ++calls;
+        observerScopes = DlssNr::PresentDepthDx12::InternalScope::open;
         lastFrame = frame;
         if (coverage && modelCalled)
             coverage->ModelResult(modelResult, 1280, 720);
