@@ -94,6 +94,7 @@ Where the pass runs. Reading order for the present-host family:
 
 Related, outside that sequence:
 
+- [legacy-apis.md](design/legacy-apis.md): 32-bit, D3D10 and OpenGL reach; source audit, Windows capture versus API/helper options, and a default-off metadata-only slice (2026-11-20 proposal, not approved implementation).
 - [nr-before-upscale.md](design/nr-before-upscale.md): optional NR before the upscaler (Stage=1).
 - [dx12-robustness.md](design/dx12-robustness.md): the device taken from the command list under a wrapper layer (ReShade), the stand-down for several views in one colour allocation, and Stage 1 declining multi-mip colour (2026-10-30, host-tested only).
 - [streamline-native-nr.md](design/streamline-native-nr.md): standing down on every route while the game runs its own NR through Streamline's `sl.dlss_nr` (feature 1004, Streamline 2.14), with the panel saying so (2026-10-30, host-tested only).

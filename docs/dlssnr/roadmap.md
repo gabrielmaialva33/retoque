@@ -28,6 +28,14 @@ Do not overwrite a newer field record with this planning snapshot; link the new 
 | 3 | Evaluate RR scale 0.75 on Ada | Extend the [retention study](design/working-scale-detail-retention.md) beyond one clip; A/A calibration, visual review, non-RR and varied motion. Pin and record the RR provider and preset: SDK 310.9.1 made RR Preset F the default. Defaults stay unchanged |
 | 4 | Additional temporal / private-reconstruction ideas | Compare against existing Stage/Transfer behavior and [rejected measurements](design/look-model-half-rate.md); only a demonstrated gap earns a new experiment |
 
+## Legacy API coverage proposal
+
+32-bit executables, D3D10 and OpenGL: [design under review](design/legacy-apis.md), 2026-11-20.
+Proposed first step is a default-off, metadata-only diagnostic with no hooks, GPU work or visible change.
+Then decide between qualifying existing Windows window capture and measuring x64 D3D10/DXVK reachability
+through the Vulkan host. Native adapters, an x86-to-x64 helper and native Linux GL remain separate proposals.
+Owner-selected games, output mode and latency budgets are pending; no implementation is approved by this entry.
+
 ## Implemented paths with remaining coverage work
 
 Native D3D11 guide transport is not still waiting for its first implementation: step 3 and the historical
