@@ -14,9 +14,127 @@ pub fn text(key: &str, language: Language) -> &str {
 }
 pub const TEXT: &[(&str, &str, &str)] = &[
     (
+        "probe.short.mixed_sources",
+        "loaded now / imported",
+        "carregada agora / importada",
+    ),
+    ("probe.short.x86_bits", "x86 (32-bit)", "x86 (32 bits)"),
+    ("probe.short.x64_bits", "x64 (64-bit)", "x64 (64 bits)"),
+    ("probe.short.arm_bits", "ARM64 (64-bit)", "ARM64 (64 bits)"),
+    ("probe.short.imported", "imported", "importada"),
+    ("probe.short.loaded", "loaded now", "carregada agora"),
+    ("probe.short.past", "seen in a past log", "vista em log anterior"),
+    ("probe.short.partial", "partial inspection", "inspeção parcial"),
+    ("probe.short.mixed", "multiple APIs", "várias APIs"),
+    (
+        "probe.short.vulkan",
+        "Today: NR after DLSS/FSR/XeSS; without an upscaler, experimental Vulkan presentation",
+        "Hoje: NR após DLSS/FSR/XeSS; sem ampliador, apresentação Vulkan experimental",
+    ),
+    (
+        "probe.short.d3d12",
+        "Today: NR after DLSS/FSR/XeSS; without an upscaler, D3D12 presentation",
+        "Hoje: NR após DLSS/FSR/XeSS; sem ampliador, apresentação D3D12",
+    ),
+    (
+        "probe.short.d3d11",
+        "Today: NR after DLSS/FSR/XeSS; without an upscaler, the D3D11-to-D3D12 presentation bridge",
+        "Hoje: NR após DLSS/FSR/XeSS; sem ampliador, ponte de apresentação D3D11 para D3D12",
+    ),
+    (
+        "probe.short.x86",
+        "Today: no in-game NR in a 32-bit game; the alternative is experimental external capture on Windows.",
+        "Hoje: sem NR dentro de jogos de 32 bits; a alternativa é a captura externa experimental no Windows.",
+    ),
+    (
+        "probe.short.d3d10",
+        "Today: no in-game NR through D3D10; the alternative is experimental external capture on Windows.",
+        "Hoje: sem NR dentro do jogo via D3D10; a alternativa é a captura externa experimental no Windows.",
+    ),
+    (
+        "probe.short.opengl",
+        "Today: no in-game NR through OpenGL; the alternative is experimental external capture on Windows.",
+        "Hoje: sem NR dentro do jogo via OpenGL; a alternativa é a captura externa experimental no Windows.",
+    ),
+    (
+        "probe.short.elf",
+        "Today: this Linux executable has no in-game Retoque route; check for a Windows edition to run with Proton.",
+        "Hoje: este executável Linux não tem rota do Retoque dentro do jogo; verifique se há uma edição Windows para usar com Proton.",
+    ),
+    (
+        "probe.short.unknown_route",
+        "Today: the in-game NR route is still unknown; identify the game executable and API first.",
+        "Hoje: a rota de NR dentro do jogo ainda é desconhecida; falta identificar o executável do jogo e a API.",
+    ),
+    (
+        "probe.short.next_pid",
+        "Next: rerun with --pid while the game is running.",
+        "Próximo: rode de novo com --pid enquanto o jogo estiver aberto.",
+    ),
+    (
+        "probe.short.next_log",
+        "Next: inspect a new NR session log with --log to check which route ran.",
+        "Próximo: use --log com o registro de uma nova sessão com NR para conferir a rota usada.",
+    ),
+    (
+        "probe.short.next_exe",
+        "Next: select the actual game executable with --exe.",
+        "Próximo: escolha o executável do jogo com --exe.",
+    ),
+    (
+        "probe.short.next_elf",
+        "Next: if using Proton, select the Windows game executable with --exe, together with --pid.",
+        "Próximo: se usa Proton, indique o executável Windows do jogo com --exe, junto de --pid.",
+    ),
+    (
+        "probe.short.next_capture",
+        "Next: check the experimental external-capture requirements on Windows.",
+        "Próximo: confira os requisitos da captura externa experimental no Windows.",
+    ),
+    (
+        "probe.short.hint",
+        "More: --details for the full report; --json for tools.",
+        "Mais: --details mostra o relatório completo; --json serve para ferramentas.",
+    ),
+    (
+        "probe.short.log_vk_upscaled",
+        "Vulkan upscaler route recorded in a past log",
+        "rota Vulkan após ampliação registrada em log anterior",
+    ),
+    (
+        "probe.short.log_vk_present",
+        "Vulkan presentation route recorded in a past log",
+        "rota de apresentação Vulkan registrada em log anterior",
+    ),
+    (
+        "probe.short.log_vk_created",
+        "Vulkan route created in a past log",
+        "rota Vulkan criada em log anterior",
+    ),
+    (
+        "probe.short.log_dx12",
+        "D3D12 presentation route recorded in a past log",
+        "rota de apresentação D3D12 registrada em log anterior",
+    ),
+    (
+        "probe.short.log_dx11",
+        "D3D11 bridge created in a past log",
+        "ponte D3D11 criada em log anterior",
+    ),
+    (
+        "probe.log_search_partial",
+        "Local log search reached its entry, file, read or time limit; older evidence may be missing.",
+        "A busca de logs na pasta atingiu seu limite; registros anteriores podem ter ficado de fora.",
+    ),
+    (
+        "probe.log.vk_upscaled",
+        "Historical Vulkan upscaler pass recording",
+        "Registro anterior do passe Vulkan após ampliação",
+    ),
+    (
         "probe.log_complete",
-        "Entire supplied log inspected",
-        "Log informado inspecionado por completo",
+        "Entire selected log inspected",
+        "Log selecionado inspecionado por completo",
     ),
     (
         "probe.name.windows_capture",
@@ -64,8 +182,8 @@ pub const TEXT: &[(&str, &str, &str)] = &[
     ),
     (
         "probe.usage",
-        "Use legacy-probe --exe FILE or --pid PID; optional --launcher-exe FILE, --log FILE, --json, --lang en or pt-BR, --runtime windows/proton/linux, --mode windowed/borderless/exclusive, --output overlay/in-game.",
-        "Use legacy-probe --exe ARQUIVO ou --pid PID; opcionais: --launcher-exe ARQUIVO, --log ARQUIVO, --json, --lang en ou pt-BR, --runtime windows/proton/linux, --mode windowed/borderless/exclusive, --output overlay/in-game.",
+        "Use legacy-probe --exe FILE or --pid PID; optional --launcher-exe FILE, --log FILE, --details, --json, --lang en or pt-BR, --runtime windows/proton/linux, --mode windowed/borderless/exclusive, --output overlay/in-game.",
+        "Use legacy-probe --exe ARQUIVO ou --pid PID; opcionais: --launcher-exe ARQUIVO, --log ARQUIVO, --details, --json, --lang en ou pt-BR, --runtime windows/proton/linux, --mode windowed/borderless/exclusive, --output overlay/in-game.",
     ),
     (
         "probe.worker",

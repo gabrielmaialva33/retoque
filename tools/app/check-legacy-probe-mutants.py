@@ -6,6 +6,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parent
 CORE = ROOT / 'crates/retoque-core/src/legacy_probe/mod.rs'
 CLI = ROOT / 'crates/retoque-cli/src/legacy_probe.rs'
+RECOMMEND = ROOT / 'crates/retoque-data/src/recommend.rs'
 PE = ROOT / 'crates/retoque-core/src/pe_version.rs'
 PLATFORM = ROOT / 'crates/retoque-core/src/legacy_probe/platform.rs'
 # Each mutant must compile and fail the named behavioral test, not merely an unrelated check.
@@ -32,6 +33,26 @@ MUTANTS = [
     ('output-cap', CLI, [('if out.len() + 1 > legacy_probe::OUTPUT_LIMIT {', 'if false {')], 'output_limit_rejects_an_oversized_report'),
 ]
 
+MUTANTS += [
+    ('short-translation-conflict', CLI, [('if source == "probe.short.loaded" {', 'if false {')], 'short_loaded_translation_does_not_replace_the_imported_api'),
+    ('short-vulkan', RECOMMEND, [('("probe.short.vulkan", Some(settings::NR_VULKAN_PRESENT))', '("probe.short.unknown_route", None)')], 'short_x64_vulkan'),
+    ('short-d3d12', RECOMMEND, [('("probe.short.d3d12", Some(settings::NR_AT_PRESENT))', '("probe.short.unknown_route", None)')], 'short_x64_d3d12'),
+    ('short-d3d11', RECOMMEND, [('("probe.short.d3d11", Some(settings::NR_AT_PRESENT))', '("probe.short.unknown_route", None)')], 'short_x64_d3d11'),
+    ('short-d3d10', RECOMMEND, [('("probe.short.d3d10", None)', '("probe.short.unknown_route", None)')], 'short_d3d10_only'),
+    ('short-opengl', RECOMMEND, [('("probe.short.opengl", None)', '("probe.short.unknown_route", None)')], 'short_opengl_only'),
+    ('short-x86', RECOMMEND, [('if architecture == Architecture::X86 {', 'if false {')], 'short_x86_any_api'),
+    ('short-elf', RECOMMEND, [('if format == Format::Elf {', 'if false {')], 'short_elf'),
+    ('short-unknown', RECOMMEND, [('if format != Format::Pe {', 'if false {')], 'short_unknown'),
+    ('log-newest', CORE, [('b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1))', 'a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1))')], 'automatic_logs_are_newest_first_and_explicit_log_wins'),
+    ('log-names', CORE, [('log_name(n, "OptiScaler")', '{ let _ = n; true }')], 'automatic_logs_never_follow_other_folders_names_or_links'),
+    ('log-shared-bytes', CORE, [('let evidence = read_log_budget(&path, deadline, &mut remaining);', 'let evidence = read_log_budget(&path, deadline, &mut (READ_LIMIT + 1));')], 'automatic_log_read_and_file_budgets_are_shared'),
+    ('log-file-cap', CORE, [('if count >= 16 || remaining == 0', 'if count >= 32 || remaining == 0')], 'automatic_log_read_and_file_budgets_are_shared'),
+    ('log-entry-cap', CORE, [('if count >= INVENTORY_LIMIT || Instant::now() >= deadline', 'if count >= INVENTORY_LIMIT * 2 || Instant::now() >= deadline')], 'automatic_log_directory_budget_is_fail_closed'),
+    ('short-history', CLI, [('source = "probe.short.past";', 'source = "probe.short.loaded";')], 'short_evidence_is_ranked_and_past_never_becomes_current'),
+    ('short-privacy', CLI, [('let mut evidence = format!("API: {api_name} ({})", t(source, lang));', 'let mut evidence = format!("API: {api_name} ({}) {}", t(source, lang), r.executable.sha256.as_deref().unwrap_or(""));')], 'short_privacy_bounds_and_detail_switch'),
+    ('short-default', CLI, [('} else if !details {', '} else if false {')], 'short_privacy_bounds_and_detail_switch'),
+]
+
 def cargo(crate, test):
     result = subprocess.run(['cargo', 'test', '-j', '4', '-p', crate, test, '--', '--nocapture'], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return result
@@ -43,7 +64,7 @@ for name, path, replacements, test in MUTANTS:
         if changed.count(old) != 1:
             raise SystemExit(f'{name}: source anchor drift')
         changed = changed.replace(old, new, 1)
-    crate = 'retoque-cli' if path == CLI else 'retoque-core'
+    crate = 'retoque-cli' if path in (CLI, RECOMMEND) else 'retoque-core'
     try:
         path.write_text(changed)
         result = cargo(crate, test)

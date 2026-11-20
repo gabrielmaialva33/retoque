@@ -57,18 +57,7 @@ pub struct Summary {
 }
 
 fn log_name(name: &str, stem: &str) -> bool {
-    let name = name.to_ascii_lowercase();
-    let stem = stem.to_ascii_lowercase();
-    if name == format!("{stem}.log") || name == format!("{stem}.previous.log") {
-        return true;
-    }
-    let Some(rest) = name.strip_prefix(&format!("{stem}_")) else {
-        return false;
-    };
-    let Some(number) = rest.strip_suffix(".previous.log").or_else(|| rest.strip_suffix(".log")) else {
-        return false;
-    };
-    !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+    retoque_core::legacy_probe::log_name(name, stem)
 }
 
 fn configured_log(target: &Path) -> Option<PathBuf> {

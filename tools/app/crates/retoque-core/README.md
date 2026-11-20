@@ -222,7 +222,8 @@ remain data, never executable format strings in the editor preview. Native Windo
 ## Explicit metadata inspection
 
 `legacy_probe::inspect(None)` performs no work. The CLI-only `Some(Request)` path observes one explicit executable
-or PID, with optional explicitly supplied launcher file and same-directory existing log. It shares the bounded
+or PID, with optional explicitly supplied launcher file and same-directory existing log. Without a log selector,
+it checks only conventional OptiScaler logs beside that executable, newest first with shared bounds. It shares the bounded
 PE header/import parser and regular-file safety checks, without using the installer's system-wide process scan.
 The serializable report has only fixed module basenames, hashes and structured facts/reasons. See the
 [diagnostic contract](../../LEGACY-PROBE.md) for bounds, deadline ownership and unqualified Windows behavior.

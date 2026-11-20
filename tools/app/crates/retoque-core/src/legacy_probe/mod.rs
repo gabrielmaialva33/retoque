@@ -121,6 +121,7 @@ pub struct LogEvidence {
     pub complete: bool,
     pub vulkan_creation: Fact,
     pub vulkan_present: Fact,
+    pub vulkan_upscaled: Fact,
     pub d3d11_bridge_creation: Fact,
     pub d3d12_present: Fact,
     /// Existing logs contain no binding to the inspected executable's digest/start identity.
@@ -216,7 +217,7 @@ impl Source for Local {
             inventory.launcher_only = request.classify_launcher.is_some_and(|check| check(exe));
             inventory.executable = image(exe, deadline);
             if let Some(log) = &request.log {
-                // Do not accept a log from another game, linked file or directory scan.
+                // Explicit logs must stay beside the selected executable.
                 let same_parent = exe
                     .parent()
                     .and_then(|p| p.canonicalize().ok())
@@ -227,6 +228,8 @@ impl Source for Local {
                 } else {
                     inventory.issues.push("probe.log_scope");
                 }
+            } else {
+                inventory.log = discover_log(exe, deadline, &mut inventory.issues);
             }
         }
         if let Some(launcher) = &request.launcher {
@@ -592,16 +595,98 @@ fn elf_architecture(b: &[u8]) -> Architecture {
         _ => Architecture::Unknown,
     }
 }
+/// Conventional OptiScaler rotation names; shared with the app log finder.
+pub fn log_name(name: &str, stem: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    let stem = stem.to_ascii_lowercase();
+    if name == format!("{stem}.log") || name == format!("{stem}.previous.log") {
+        return true;
+    }
+    let Some(rest) = name.strip_prefix(&format!("{stem}_")) else {
+        return false;
+    };
+    let Some(number) = rest.strip_suffix(".previous.log").or_else(|| rest.strip_suffix(".log")) else {
+        return false;
+    };
+    !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+}
+fn has_route(e: &LogEvidence) -> bool {
+    [
+        e.vulkan_creation,
+        e.vulkan_present,
+        e.vulkan_upscaled,
+        e.d3d11_bridge_creation,
+        e.d3d12_present,
+    ]
+    .contains(&Fact::Observed)
+}
+fn discover_log(exe: &Path, deadline: Instant, issues: &mut Vec<&'static str>) -> LogEvidence {
+    let parent = exe
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    if !crate::safety::unlinked(parent) {
+        return LogEvidence::default();
+    }
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return LogEvidence::default();
+    };
+    let mut logs = Vec::new();
+    for (count, entry) in entries.enumerate() {
+        if count >= INVENTORY_LIMIT || Instant::now() >= deadline {
+            issues.push("probe.log_search_partial");
+            return LogEvidence::default(); // Cannot promise newest-first after an incomplete directory scan.
+        }
+        let Ok(entry) = entry else {
+            issues.push("probe.log_search_partial");
+            return LogEvidence::default();
+        };
+        if !entry.file_name().to_str().is_some_and(|n| log_name(n, "OptiScaler")) {
+            continue;
+        }
+        if !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        let Ok(modified) = entry.metadata().and_then(|m| m.modified()) else {
+            continue;
+        };
+        // Store each basename once, not 1024 copies of a potentially long Windows parent path.
+        logs.push((modified, entry.file_name()));
+    }
+    logs.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    let mut remaining = READ_LIMIT + 1;
+    let mut newest = LogEvidence::default();
+    for (count, (_, name)) in logs.iter().enumerate() {
+        if count >= 16 || remaining == 0 || Instant::now() >= deadline {
+            issues.push("probe.log_search_partial");
+            break;
+        }
+        let path = parent.join(name);
+        let evidence = read_log_budget(&path, deadline, &mut remaining);
+        if has_route(&evidence) {
+            return evidence;
+        }
+        if count == 0 {
+            newest = evidence;
+        }
+    }
+    newest
+}
 fn read_log(path: &Path, deadline: Instant) -> LogEvidence {
+    read_log_budget(path, deadline, &mut (READ_LIMIT + 1))
+}
+fn read_log_budget(path: &Path, deadline: Instant, remaining: &mut usize) -> LogEvidence {
     let Some(mut f) = open_regular(path) else {
         return LogEvidence::default();
     };
     let Ok(meta) = f.metadata() else {
         return LogEvidence::default();
     };
-    // Head only: bounded and no misleading claim that a tail digest hashes the file.
+    // Shared head-read allowance across the automatic search, never one MiB per file.
     let mut b = Vec::new();
-    if f.by_ref().take(READ_LIMIT as u64 + 1).read_to_end(&mut b).is_err() || Instant::now() >= deadline {
+    let result = f.by_ref().take(*remaining as u64).read_to_end(&mut b);
+    *remaining = remaining.saturating_sub(b.len());
+    if result.is_err() || Instant::now() >= deadline {
         return LogEvidence::default();
     }
     let complete = b.len() <= READ_LIMIT && meta.len() == b.len() as u64;
@@ -619,6 +704,8 @@ fn log_evidence(b: &[u8]) -> LogEvidence {
             continue;
         };
         // Do not export a raw log line, address, title or path.
+        e.vulkan_upscaled =
+            observed(e.vulkan_upscaled == Fact::Observed || line.contains("DLSS-NR Vulkan: running natively at "));
         e.vulkan_creation = observed(
             e.vulkan_creation == Fact::Observed
                 || line.contains("DLSS-NR Vulkan present host: device ") && line.contains(" created by "),

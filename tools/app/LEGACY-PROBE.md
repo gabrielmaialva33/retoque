@@ -7,6 +7,7 @@ The scope idea originated in the NeuRotic comparison; no foreign source, rules, 
 
 ```sh
 retoque legacy-probe --exe '<game executable>' --lang pt-BR
+retoque legacy-probe --exe '<game executable>' --details
 retoque legacy-probe --pid 1234 --runtime windows --mode borderless --output overlay
 retoque legacy-probe --exe '<game executable>' --pid 1234 --runtime proton --mode windowed --output in-game --json
 retoque legacy-probe --exe '<game executable>' --launcher-exe '<launcher executable>' --log '<existing game log>'
@@ -23,8 +24,25 @@ is a game. An owner-selected edition still needs to be recorded separately befor
 Only SHA-256 identities and a fixed allowlist of graphics module basenames leave the collector. Arbitrary executable
 names, paths, command lines, window titles, raw errors, log lines and memory addresses are never serialized.
 `--lang en|pt-BR` (or `RETOQUE_LANG`) chooses readable explanations; JSON has stable enum values/reason keys plus
-localized explanations. All new prose lives in the shared data message table. There is no automatic log search:
-`--log` must name a regular, unlinked file beside the selected executable, and only its first MiB is read.
+localized explanations. The default is four answer lines (format/bitness, API and evidence source, today's route
+and its key, next step) plus a `--details`/`--json` hint. `--details` retains the full API table, hypothesis matrix,
+identities, historical markers and caveats after that answer. JSON retains every structured field; `--details`
+does not change JSON. Incomplete inspection lowers confidence in the answer instead of replacing it with a refusal.
+A module observation says "loaded now", not that it is the active renderer. Imports say "imported", and logs say
+"seen in a past log". Multiple API candidates remain ambiguous, including a loaded translation backend that
+conflicts with the imported game API. The pure route guidance lives in `recommend`,
+uses `settings` route keys, and does not grant runtime qualification or perform configuration writes.
+
+All new prose lives in the shared data message table. Without `--log`, the collector looks only in the selected
+executable's own folder for conventional `OptiScaler.log`, `OptiScaler.previous.log`, `OptiScaler_N.log` and
+`OptiScaler_N.previous.log` names (case-insensitive, numeric N). It shares the app log-name predicate but does not
+read INI-configured paths, recurse, or follow linked files/directories. It checks at most 1024 directory entries,
+then orders by modification time newest-first (path order breaks ties internally). An incomplete directory scan
+returns no log rather than pretending its subset is newest. It reads up to 16 files with a **shared** first-MiB
+budget plus one overflow byte, stopping at the first log with a recognized route marker. If none has a marker,
+it retains the newest inspected log's metadata. A search limit is reported in the detailed/JSON issues.
+`--log` overrides discovery and must name a regular, unlinked file beside the selected executable; only its first
+MiB is read. A selected log's digest identifies that file alone, never a combination of historical sessions.
 Existing log callback lines are historical observations, with **unknown current-process binding**. Module/import
 presence never becomes active-renderer evidence, and neither a route key nor a creation line qualifies a game.
 
@@ -33,7 +51,7 @@ presence never becomes active-renderer evidence, and neither a route key nor a c
 PE machine and ordinary imports share `pe_version`'s bounded COFF parser. PE delay imports and ELF dependencies are
 explicitly partial; ELF class/machine/header length are checked without loading the image. Unknown machine,
 unreadable/truncated file, access denial, PID reuse/exit, executable mismatch, launcher selection and budget
-exhaustion keep a named refusal. A failed identity recheck discards process-derived facts. The process start stamp
+exhaustion keep a named refusal in the detailed/JSON decision fields. A failed identity recheck discards process-derived facts. The process start stamp
 is checked before and after inspection; a snapshot is still an observation, not an OS transaction or proof that
 file bytes equal a previously mapped image. No process memory is read to hash the loaded code.
 
@@ -54,7 +72,7 @@ DXVK implementation/loader reachability cannot be established from a pair of DLL
 
 One invocation takes one selected-process module inventory. Windows uses a fixed 1024-handle module buffer;
 Linux reads at most 1 MiB of maps and 1024 mapping rows. Window enumeration stops at 1024 handles. Logs are capped
-at 1 MiB; PE imports at 96 sections, 256 descriptors and 255 bytes per name. SHA-256 streams files up to 256 MiB
+at 1 MiB total across the automatic search (plus one overflow byte); PE imports at 96 sections, 256 descriptors and 255 bytes per name. SHA-256 streams files up to 256 MiB
 through a 64 KiB buffer; larger or unfinished hashes stay unknown. No file is loaded as executable code.
 
 The CLI has a two-second receive deadline around an in-process worker with a 512 KiB stack. On expiry it emits a
@@ -80,5 +98,5 @@ a killed mutant. The whole workspace and host tier are separate required integra
 
 Native Windows process permissions, cross-bitness module enumeration, capture availability, window ownership
 races and peak working set remain unqualified until measured there. Synthetic tests and cross compilation prove
-no game/GPU behavior, image quality, latency, anti-cheat acceptance or compatibility. No real game was invoked
-or modified to validate this slice.
+no game/GPU behavior, image quality, latency, anti-cheat acceptance or compatibility. This worker invoked or modified no real game. The lead separately reported a read-only DOOM Eternal/Proton
+check of the first-round binary; that is not qualification of this revision or of native Windows inspection.

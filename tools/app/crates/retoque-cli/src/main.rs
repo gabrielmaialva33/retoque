@@ -15,7 +15,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 fn usage() {
-    println!("       retoque legacy-probe (--exe FILE | --pid PID) [--json] [--lang en|pt-BR] [--log FILE]");
+    println!(
+        "       retoque legacy-probe (--exe FILE | --pid PID) [--details | --json] [--lang en|pt-BR] [--log FILE]"
+    );
     println!(
         "Usage: retoque install [--dry-run] [--source-dir DIR] [--enable-nr] [--keep-reshade]\n       [--replace-foreign] [--allow-second-proxy] [--no-nvngx] <game-dir> [proxy]\n       retoque uninstall [--dry-run] <game-dir>\n       retoque status [--json] <game-dir>\n       retoque doctor [--json] <game-dir>\n       retoque set [--dry-run] <game-dir> <Section> <Key> <Value>\n       retoque unset [--dry-run] <game-dir> <Section> <Key>\n       retoque gpu [--json]\n       retoque games [--json] [--home DIR]\n       retoque component install|uninstall [--dry-run] <game-dir> <component-dir-or-id>"
     );

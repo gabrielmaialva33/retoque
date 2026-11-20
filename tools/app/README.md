@@ -578,8 +578,10 @@ text or data was copied.
 ## Explicit legacy API inspection
 
 `retoque legacy-probe --exe <game executable>` (or `--pid <game PID>`) reads metadata for that single selection.
-Text is the default; `--json` emits a bounded, redacted report, and `--lang en|pt-BR` selects explanations.
-Executable/process/launcher bitness, static imports, module candidates and explicitly supplied historical log
-callbacks are kept separate. Nothing is activated or installed; incomplete evidence refuses a renderer decision.
+The default gives four answer lines and a hint; `--details` expands the evidence and route matrix, `--json` keeps
+the complete bounded, redacted report, and `--lang en|pt-BR` selects explanations. Executable/process/launcher
+bitness, imports, loaded modules and historical log callbacks stay separate. Without `--log`, only conventional
+OptiScaler logs beside the selected executable are checked, newest first within fixed limits. Nothing is activated
+or installed; partial evidence lowers confidence, with the full decision refusals retained in details/JSON.
 See [usage, bounds and verification limits](LEGACY-PROBE.md). This diagnostic adds no main-view control or new
 runtime route; native Windows inspection and memory cost still need qualification.

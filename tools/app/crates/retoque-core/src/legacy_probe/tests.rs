@@ -363,3 +363,98 @@ fn capture_availability_is_not_inferred_from_the_requested_os() {
         );
     }
 }
+
+fn write_dated(path: &Path, bytes: &[u8], seconds: u64) {
+    std::fs::write(path, bytes).unwrap();
+    File::options()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(seconds))
+        .unwrap();
+}
+const VK_UPSCALED: &[u8] = b"DLSS-NR Vulkan: running natively at private/path/0x123";
+#[test]
+fn automatic_logs_are_newest_first_and_explicit_log_wins() {
+    let temp = tempfile::tempdir().unwrap();
+    let exe = temp.path().join("game.exe");
+    std::fs::write(&exe, pe(0x8664)).unwrap();
+    let older = temp.path().join("OptiScaler.previous.log");
+    let newer = temp.path().join("OptiScaler_2.log");
+    write_dated(&older, b"Dx11wDx12SC 1 created, real: 0x123", 1);
+    write_dated(&newer, VK_UPSCALED, 2);
+    let mut q = Request {
+        executable: Some(exe),
+        ..Default::default()
+    };
+    let r = inspect(Some(&q)).unwrap();
+    assert_eq!(r.log.vulkan_upscaled, Fact::Observed);
+    assert_eq!(r.log.d3d11_bridge_creation, Fact::Unknown);
+    assert_eq!(r.log.current_process_binding, Fact::Unknown);
+    assert_eq!(r.log.file_sha256, Some(digest(VK_UPSCALED)));
+    q.log = Some(older.clone());
+    assert_eq!(inspect(Some(&q)).unwrap().log.d3d11_bridge_creation, Fact::Observed);
+    q.log = None;
+    write_dated(&newer, b"no route evidence", 2);
+    assert_eq!(inspect(Some(&q)).unwrap().log.d3d11_bridge_creation, Fact::Observed);
+    let text = serde_json::to_string(&inspect(Some(&q)).unwrap()).unwrap();
+    assert!(!text.contains("private/path") && !text.contains("0x123"));
+}
+#[test]
+fn automatic_logs_never_follow_other_folders_names_or_links() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = root.path().join("game");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::create_dir(folder.join("nested")).unwrap();
+    let exe = folder.join("game.exe");
+    std::fs::write(&exe, pe(0x8664)).unwrap();
+    for path in [
+        root.path().join("OptiScaler.log"),
+        folder.join("nested/OptiScaler.log"),
+        folder.join("Other.log"),
+        folder.join("OptiScaler_bad.log"),
+    ] {
+        std::fs::write(path, VK_UPSCALED).unwrap();
+    }
+    std::fs::write(folder.join("OptiScaler.ini"), b"[Log]\nFile=../OptiScaler.log\n").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(root.path().join("OptiScaler.log"), folder.join("OptiScaler.log")).unwrap();
+    let q = Request {
+        executable: Some(exe),
+        ..Default::default()
+    };
+    assert_eq!(inspect(Some(&q)).unwrap().log.vulkan_upscaled, Fact::Unknown);
+}
+#[test]
+fn automatic_log_read_and_file_budgets_are_shared() {
+    let temp = tempfile::tempdir().unwrap();
+    let exe = temp.path().join("game.exe");
+    write_dated(&temp.path().join("OptiScaler.log"), &vec![b'x'; READ_LIMIT + 1], 100);
+    write_dated(&temp.path().join("OptiScaler.previous.log"), VK_UPSCALED, 1);
+    let mut issues = Vec::new();
+    let e = discover_log(&exe, Instant::now() + TIME_LIMIT, &mut issues);
+    assert_eq!(e.vulkan_upscaled, Fact::Unknown);
+    assert!(issues.contains(&"probe.log_search_partial") && !e.complete && e.file_sha256.is_none());
+    std::fs::remove_file(temp.path().join("OptiScaler.log")).unwrap();
+    for n in 0..16 {
+        write_dated(&temp.path().join(format!("OptiScaler_{n}.log")), b"", n + 2);
+    }
+    issues.clear();
+    assert_eq!(
+        discover_log(&exe, Instant::now() + TIME_LIMIT, &mut issues).vulkan_upscaled,
+        Fact::Unknown
+    );
+    assert!(issues.contains(&"probe.log_search_partial"));
+}
+#[test]
+fn automatic_log_directory_budget_is_fail_closed() {
+    let temp = tempfile::tempdir().unwrap();
+    for n in 0..INVENTORY_LIMIT {
+        std::fs::write(temp.path().join(format!("entry{n}")), b"").unwrap();
+    }
+    std::fs::write(temp.path().join("OptiScaler.log"), VK_UPSCALED).unwrap();
+    let mut issues = Vec::new();
+    let e = discover_log(&temp.path().join("game.exe"), Instant::now() + TIME_LIMIT, &mut issues);
+    assert_eq!(e.vulkan_upscaled, Fact::Unknown);
+    assert!(issues.contains(&"probe.log_search_partial"));
+}
