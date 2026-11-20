@@ -13,8 +13,10 @@ pub mod windows;
 
 pub const EXE: &str = app_release::EXE;
 pub const OLD_EXE: &str = "retoque-app.old.exe";
+/// Written by the uninstaller after it removed the shortcuts and the Apps & features entry.
+pub const UNINSTALL_READY: &str = ".retoque-uninstall-ready";
 pub const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Retoque";
-pub const ROOTS: [&str; 7] = [
+pub const ROOTS: [&str; 8] = [
     EXE,
     "OptiScaler.dll",
     "nvngx.dll_dlssnr.dll",
@@ -22,6 +24,7 @@ pub const ROOTS: [&str; 7] = [
     "Licenses",
     "translations",
     "OptiScaler",
+    payload_fetch::WINDOW_HOST,
 ];
 /// The packager checks this embedded marker against the requested release version.
 pub fn version() -> &'static str {
@@ -43,7 +46,7 @@ impl Paths {
             return Err(io::Error::other("Windows known folder must be absolute"));
         }
         Ok(Self {
-            install: local.join("Programs/Retoque"),
+            install: local.join("Programs").join("Retoque"),
             shortcuts: [programs.join("Retoque.lnk"), desktop.join("Retoque.lnk")],
         })
     }
@@ -167,7 +170,8 @@ impl InstallPlan {
         let source = exe.parent().ok_or_else(|| io::Error::other("missing app parent"))?;
         let mut files = vec![record(exe, EXE)?];
         for root in &ROOTS[1..] {
-            if *root == "OptiScaler" && !source.join(root).try_exists()? {
+            // Optional members: the support folder and the window host ("NR on any window") may be absent.
+            if matches!(*root, "OptiScaler" | payload_fetch::WINDOW_HOST) && !source.join(root).try_exists()? {
                 continue;
             }
             collect(source, root, &mut files)?;
@@ -188,7 +192,7 @@ impl InstallPlan {
     pub fn check_destination(&self) -> io::Result<()> {
         for path in std::iter::once(&self.paths.install).chain(self.paths.shortcuts.iter()) {
             plain_path(path)?;
-            if path.try_exists()? {
+            if path.try_exists()? && !(path == &self.paths.install && uninstall_leftover(path)?) {
                 return Err(io::Error::new(
                     io::ErrorKind::AlreadyExists,
                     "app destination already exists",
@@ -228,9 +232,42 @@ impl InstallPlan {
             }
         }
         self.check_destination()?;
+        if uninstall_leftover(&self.paths.install)? {
+            if self.files.iter().any(|f| f.source.starts_with(&self.paths.install)) {
+                return Err(io::Error::other(
+                    "run the downloaded app, not the copy left by an uninstall",
+                ));
+            }
+            remove_tree(&self.paths.install)?;
+        }
         fs::rename(stage.path(), &self.paths.install)?;
         Ok(())
     }
+}
+
+/// A program folder whose uninstall finished everything but the folder removal (retoque-v0.3.0 started its cleanup
+/// script without a console, so it never removed the folder). Only such a folder may be replaced by a new install.
+pub fn uninstall_leftover(install: &Path) -> io::Result<bool> {
+    plain_path(install)?;
+    let ready = install.join(UNINSTALL_READY);
+    plain_path(&ready)?;
+    Ok(fs::symlink_metadata(install).is_ok_and(|m| m.is_dir())
+        && fs::symlink_metadata(&ready).is_ok_and(|m| m.is_file()))
+}
+
+/// Remove a tree after refusing a link or junction anywhere in it.
+pub fn remove_tree(path: &Path) -> io::Result<()> {
+    fn check(path: &Path) -> io::Result<()> {
+        plain_path(path)?;
+        if fs::symlink_metadata(path)?.is_dir() {
+            for item in fs::read_dir(path)? {
+                check(&item?.path())?;
+            }
+        }
+        Ok(())
+    }
+    check(path)?;
+    fs::remove_dir_all(path)
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -337,7 +374,7 @@ mod tests {
     fn paths_registry_and_install_review() {
         let t = tempfile::tempdir().unwrap();
         let paths = Paths::new(t.path(), &t.path().join("start"), &t.path().join("desktop")).unwrap();
-        assert_eq!(paths.install, t.path().join("Programs/Retoque"));
+        assert_eq!(paths.install, t.path().join("Programs").join("Retoque"));
         assert_ne!(paths.install, t.path().join("Retoque"));
         assert_eq!(version(), env!("CARGO_PKG_VERSION"));
         let values = registry_values(&paths, "1.2.3", 1025);
@@ -350,12 +387,50 @@ mod tests {
         );
         let source = t.path().join("portable");
         fixture(&source);
+        // The window host is optional (0.3.0 bundles lack it) but copied when the bundle has it.
+        let without = InstallPlan::prepare(paths.clone(), &source.join(EXE)).unwrap();
+        assert!(!without.files.iter().any(|f| f.name == payload_fetch::WINDOW_HOST));
+        fs::write(source.join(payload_fetch::WINDOW_HOST), b"host").unwrap();
         let plan = InstallPlan::prepare(paths.clone(), &source.join(EXE)).unwrap();
         assert!(!paths.install.exists());
         plan.copy().unwrap();
         assert!(paths.is_installed(&paths.exe()));
+        assert_eq!(
+            fs::read(paths.install.join(payload_fetch::WINDOW_HOST)).unwrap(),
+            b"host"
+        );
         assert!(plan.copy().is_err());
         assert!(!t.path().join("Retoque").exists());
+    }
+    #[test]
+    fn uninstall_leftover_is_replaced_only_with_its_marker() {
+        let t = tempfile::tempdir().unwrap();
+        let source = t.path().join("portable");
+        fixture(&source);
+        let paths = Paths::new(t.path(), &t.path().join("start"), &t.path().join("desktop")).unwrap();
+        // An occupied folder without the uninstall marker is never replaced.
+        fs::create_dir_all(&paths.install).unwrap();
+        fs::write(paths.install.join("OptiScaler.dll"), b"old").unwrap();
+        assert!(InstallPlan::prepare(paths.clone(), &source.join(EXE)).is_err());
+        // What retoque-v0.3.0's uninstall left behind: the marker and the old files, nothing registered.
+        fs::create_dir_all(paths.install.join("Licenses")).unwrap();
+        fs::write(paths.install.join("Licenses/old.txt"), b"old").unwrap();
+        fs::write(paths.install.join(UNINSTALL_READY), b"1").unwrap();
+        let plan = InstallPlan::prepare(paths.clone(), &source.join(EXE)).unwrap();
+        assert!(
+            paths.install.join("Licenses/old.txt").exists(),
+            "review must not change anything"
+        );
+        plan.copy().unwrap();
+        assert!(paths.is_installed(&paths.exe()));
+        assert!(!paths.install.join(UNINSTALL_READY).exists());
+        assert!(!paths.install.join("Licenses/old.txt").exists());
+        assert_eq!(fs::read(paths.install.join("OptiScaler.dll")).unwrap(), b"original");
+        // Installing from the leftover itself would delete its own source.
+        fs::write(paths.install.join(UNINSTALL_READY), b"1").unwrap();
+        let from_leftover = InstallPlan::prepare(paths.clone(), &paths.exe()).unwrap();
+        assert!(from_leftover.copy().is_err());
+        assert!(paths.exe().exists());
     }
     #[test]
     fn stale_review_and_missing_payload_refuse_without_installing() {

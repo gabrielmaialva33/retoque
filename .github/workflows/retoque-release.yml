@@ -162,7 +162,9 @@ jobs:
             // This workflow has no publish/update/delete operation. Approval and publication are manual.
             const {data: release} = await github.rest.repos.createRelease({
               ...repo, tag_name: version, target_commitish: process.env.RELEASE_COMMIT,
-              name: `Retoque ${version}`, body, draft: true, prerelease: true
+              // A suffixed tag (retoque-v0.4.0-rc1) is a pre-release. A plain one is not: the app's update check
+              // skips pre-releases, so marking every release one hid v0.3.0 from it.
+              name: `Retoque ${version.replace(/^retoque-/, '')}`, body, draft: true, prerelease: version.includes('-', 'retoque-'.length)
             });
             if (!release.draft) throw new Error('Expected a draft release');
             for (const [assetName, bytes, contentType] of [

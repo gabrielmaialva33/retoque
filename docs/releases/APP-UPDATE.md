@@ -6,7 +6,7 @@ Menu and Desktop shortcuts and the current-user Apps & features registration. Th
 installing Retoque into a game remains a separate reviewed operation. Linux shows none of these controls.
 
 The complete payload must be beside the running executable: `OptiScaler.dll`, `nvngx.dll_dlssnr.dll`,
-`OptiScaler.ini`, `Licenses/`, `translations/` and optional `OptiScaler/`. The app copies only the release allowlist,
+`OptiScaler.ini`, `Licenses/`, `translations/`, optional `OptiScaler/` and optional `RetoqueWindowHost.exe`. The app copies only the release allowlist,
 checks source hashes again after review and verifies its staged copies. It refuses an occupied destination,
 existing shortcuts/registration and linked paths. Use the installed copy's update control for an existing install;
 a portable copy never overwrites it. Native `IShellLinkW` creates the shortcuts, using Windows known folders

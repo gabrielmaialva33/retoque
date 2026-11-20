@@ -417,3 +417,16 @@ fn linux_product_has_no_window_capture_entry() {
     h.run_steps(3);
     assert!(h.query_by_label(t(Lang::Pt, "any.title")).is_none());
 }
+
+#[test]
+fn any_window_is_offered_only_with_the_host_beside_the_pair() {
+    use crate::any_window::protocol::{HOST_FILES, payload_has_host};
+    let t = tempfile::tempdir().unwrap();
+    for name in &HOST_FILES[1..] {
+        std::fs::write(t.path().join(name), b"x").unwrap();
+    }
+    // A retoque-v0.3.0 payload: the DLL pair without RetoqueWindowHost.exe.
+    assert!(!payload_has_host(t.path()));
+    std::fs::write(t.path().join(HOST_FILES[0]), b"MZ").unwrap();
+    assert!(payload_has_host(t.path()));
+}

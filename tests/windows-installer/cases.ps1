@@ -277,6 +277,10 @@ Add-Case 'release_package_and_refusals' {
     }
     $script = Join-Path $packageRoot 'tools/package_release.ps1'
     $args = @('-NoProfile', '-NonInteractive', '-File', $script, '-SkipBuild', '-Version', 'retoque-v0.3.0')
+    # v0.3.0 shipped without the any-window host; its absence is now refused.
+    $r = Invoke-Tool $Pwsh $args
+    Expect ($r.Code -ne 0 -and $r.Out.Contains('RetoqueWindowHost.exe')) "package without the window host refused: $($r.Out)"
+    Write-Files (Join-Path $packageRoot 'x64/Release/window_host') @{ 'RetoqueWindowHost.exe' = 'window host fixture' }
     $r = Invoke-Tool $Pwsh $args
     Expect ($r.Code -eq 0) "package dry fixture exits 0: $($r.Err)"
     $zip = Join-Path $packageRoot 'release/Retoque-v0.3.0.zip'
@@ -284,7 +288,7 @@ Add-Case 'release_package_and_refusals' {
     $extract = Join-Path $tmp 'extracted'
     Expand-Archive -LiteralPath $zip -DestinationPath $extract
     foreach ($rel in @('install-linux.sh', 'deploy-to-game.sh', 'install-windows.cmd', 'install-windows.ps1',
-                        'README.md', 'Licenses/RenoDX_ATTRIBUTION.txt', 'OptiScaler/libxess.dll')) {
+                        'README.md', 'Licenses/RenoDX_ATTRIBUTION.txt', 'OptiScaler/libxess.dll', 'RetoqueWindowHost.exe')) {
         Expect ([IO.File]::Exists((Join-Path $extract $rel))) "$rel in zip"
     }
     foreach ($rel in @('install-linux.sh', 'deploy-to-game.sh')) {

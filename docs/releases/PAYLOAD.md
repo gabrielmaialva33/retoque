@@ -25,6 +25,8 @@ The archive contains only the files `retoque-core` and the app require to instal
   `ru` and `zh-CN` (inactive optional menu dictionaries; never an active `OptiScaler.lang` at the archive root). The
   app requires only `pt-BR.lang`, so payloads published before the other packs still import
 - `OptiScaler/` (optional support directory when present in the build output)
+- `RetoqueWindowHost.exe` (the "NR on any window" capture component, Windows; required by the packager since
+  0.3.1, optional for the app so that 0.3.0 payloads still import; never copied into a game)
 - `SHA256SUMS` (member checksums inside the archive, in addition to the release-level `SHA256SUMS` asset)
 
 ## Forbidden files

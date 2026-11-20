@@ -89,6 +89,15 @@ foreach ($d in @("Licenses", "OptiScaler")) {
 
 Copy-Item $forwarder "$stage/nvngx.dll_dlssnr.dll" -Force
 
+# The "NR on any window" helper, from its own output folder (window_host.vcxproj OutDir). The app takes it from
+# here; the script installers never copy it into a game. v0.3.0 shipped without it, so its absence is refused.
+$windowHost = "$root/x64/Release/window_host/RetoqueWindowHost.exe"
+if (-not (Test-Path $windowHost)) {
+    Write-Host "REFUSING: $windowHost is missing; NR on any window would ship broken"
+    exit 1
+}
+Copy-Item $windowHost "$stage/RetoqueWindowHost.exe" -Force
+
 # The Windows installer ships beside the DLLs it installs (tools/README.md). It is source, not build output,
 # so it comes from tools/ as checked out, and a release without it is refused rather than shipped. The .cmd
 # is written with CRLF whatever the checkout's line ends: cmd.exe can miss a label in a batch file with LF.

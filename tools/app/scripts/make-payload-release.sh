@@ -110,6 +110,8 @@ require_regular_file() {
 
 require_regular_file "${OUT_DIR}/OptiScaler.dll" "OptiScaler.dll"
 require_regular_file "${OUT_DIR}/nvngx.dll_dlssnr.dll" "nvngx.dll_dlssnr.dll"
+# "NR on any window" (Windows). build-local publishes it to x64/out beside the pair; v0.3.0 shipped without it.
+require_regular_file "${OUT_DIR}/RetoqueWindowHost.exe" "RetoqueWindowHost.exe"
 require_regular_file "${REPO_ROOT}/OptiScaler.ini" "OptiScaler.ini"
 require_regular_file "${REPO_ROOT}/Licenses/RenoDX_ATTRIBUTION.txt" "Licenses/RenoDX_ATTRIBUTION.txt"
 # Optional menu text packs, all inactive (retoque/translations/README.md). A fixed list: a stray .lang never ships.
@@ -316,6 +318,7 @@ mkdir -p "$STAGE_DIR/Licenses" "$STAGE_DIR/translations/optional"
 
 cp -f "${OUT_DIR}/OptiScaler.dll" "$STAGE_DIR/OptiScaler.dll"
 cp -f "${OUT_DIR}/nvngx.dll_dlssnr.dll" "$STAGE_DIR/nvngx.dll_dlssnr.dll"
+cp -f "${OUT_DIR}/RetoqueWindowHost.exe" "$STAGE_DIR/RetoqueWindowHost.exe"
 
 sed -E \
     -e 's/^LogToFile=auto/LogToFile=true/' \

@@ -5,7 +5,10 @@ actually exercised those bytes. None may silently stand in for another. Publicat
 
 ## Artifact contract
 
-A distributable CI draft contains `Retoque-vX.Y.Z.zip` and `Retoque-vX.Y.Z.zip.manifest.json`.
+A distributable CI draft contains `Retoque-vX.Y.Z.zip` and `Retoque-vX.Y.Z.zip.manifest.json`. The zip carries
+`RetoqueWindowHost.exe` (since 0.3.1) and the manifest refuses an archive without it. A plain `retoque-vX.Y.Z` tag
+makes a normal draft; only a suffixed tag (`-rc1`) makes a pre-release, because the app's update check skips
+pre-releases.
 For the desktop app's payload-only release asset (`retoque-payload-<version>-x64.zip` and `SHA256SUMS`), see
 [PAYLOAD.md](PAYLOAD.md).
 The version-1 `retoque-release-manifest` sidecar records:

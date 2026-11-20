@@ -315,7 +315,7 @@ fn uninstall() -> io::Result<()> {
         Ok(())
     }
     check_tree(&p.install)?;
-    let ready = p.install.join(".retoque-uninstall-ready");
+    let ready = p.install.join(UNINSTALL_READY);
     plain_path(&ready)?;
     if ready.try_exists()? {
         fs::remove_file(&ready)?;
@@ -335,7 +335,10 @@ fn uninstall() -> io::Result<()> {
         .env("RETOQUE_UNINSTALL_DIR", &p.install)
         .env("RETOQUE_UNINSTALL_PID", std::process::id().to_string())
         .current_dir(std::env::var_os("SystemRoot").ok_or_else(|| io::Error::other("missing SystemRoot"))?)
-        .creation_flags(0x08000000 | 0x00000008)
+        // CREATE_NO_WINDOW only: a hidden console. With DETACHED_PROCESS the script has no console at all, tasklist
+        // prints nothing, the wait loop reads that as "app gone" before the ready marker exists, and the folder stays
+        // (retoque-v0.3.0 on Windows 11, 2026-11-20).
+        .creation_flags(0x08000000)
         .spawn();
     if let Err(e) = spawn {
         let _ = fs::remove_file(script);

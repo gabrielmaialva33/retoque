@@ -26,6 +26,9 @@ pub const MAX_DOWNLOAD: u64 = 256 * 1024 * 1024;
 const MAX_UNPACKED: u64 = 512 * 1024 * 1024;
 const MAX_ENTRIES: usize = 2048;
 
+/// The "NR on any window" helper (Windows). Optional in the contract: payloads before 0.3.1 do not carry it.
+pub const WINDOW_HOST: &str = "RetoqueWindowHost.exe";
+
 pub const REQUIRED_FILES: [&str; 6] = [
     "OptiScaler.dll",
     "nvngx.dll_dlssnr.dll",
@@ -539,7 +542,10 @@ pub fn is_allowed_payload_path(path: &str) -> bool {
     if !safe_zip_path(path) || path.ends_with('/') || is_forbidden_path(path) {
         return false;
     }
-    if matches!(path, "OptiScaler.dll" | "nvngx.dll_dlssnr.dll" | "OptiScaler.ini") {
+    if matches!(
+        path,
+        "OptiScaler.dll" | "nvngx.dll_dlssnr.dll" | "OptiScaler.ini" | WINDOW_HOST
+    ) {
         return true;
     }
     let parts: Vec<&str> = path.split('/').collect();
@@ -1562,16 +1568,25 @@ pub(crate) mod tests {
         std::fs::write(out_dir.join("nvngx.dll_dlssnr.dll"), &fwd).unwrap();
         std::fs::write(out_dir.join("OptiScaler/support.txt"), b"support").unwrap();
 
-        let output = Command::new("bash")
-            .arg(&script)
-            .arg("--build-dir")
-            .arg(&out_dir)
-            .arg("--out")
-            .arg(&dest_dir)
-            .arg("--version")
-            .arg("retoque-v0.3.0")
-            .output()
-            .unwrap();
+        let run = || {
+            Command::new("bash")
+                .arg(&script)
+                .arg("--build-dir")
+                .arg(&out_dir)
+                .arg("--out")
+                .arg(&dest_dir)
+                .arg("--version")
+                .arg("retoque-v0.3.0")
+                .output()
+                .unwrap()
+        };
+        // Without the any-window host the packager refuses (v0.3.0 shipped without it).
+        let output = run();
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("RetoqueWindowHost.exe"));
+        std::fs::write(out_dir.join(WINDOW_HOST), b"MZ synthetic window host").unwrap();
+
+        let output = run();
         assert!(
             output.status.success(),
             "script failed: {}",
@@ -1603,6 +1618,10 @@ pub(crate) mod tests {
         let record = cache.import_archive(&release, &zip_bytes, &sums_bytes).unwrap();
         assert_eq!(record.file_version.as_deref(), Some("10.0.0.1"));
         assert!(record.payload_dir.join("OptiScaler/support.txt").is_file());
+        assert_eq!(
+            std::fs::read(record.payload_dir.join(WINDOW_HOST)).unwrap(),
+            b"MZ synthetic window host"
+        );
         // Every optional menu text pack ships, byte for byte, and none is active at the archive root.
         for pack in ["pt-BR", "de", "es", "fr", "ja", "ko", "pl", "ru", "zh-CN"] {
             let rel = format!("translations/optional/{pack}.lang");
@@ -1616,6 +1635,10 @@ pub(crate) mod tests {
         }
         assert!(!record.payload_dir.join("OptiScaler.lang").exists());
         assert!(!is_allowed_payload_path("translations/ja.lang"));
+        // The any-window host is allowed at the root only (v0.3.0 shipped without it).
+        assert!(is_allowed_payload_path(WINDOW_HOST));
+        assert!(!is_allowed_payload_path("OptiScaler2/RetoqueWindowHost.exe"));
+        assert!(!is_allowed_payload_path("other.exe"));
         assert!(!is_allowed_payload_path("translations/optional/ja/ja.lang"));
 
         // Guard 1: Mismatched forwarder version must fail.

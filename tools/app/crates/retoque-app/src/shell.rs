@@ -81,7 +81,8 @@ impl RetoqueApp {
         let on_game = self.selected.is_some();
         let busy = self.jobs.busy() || self.library_pending;
         let layout = self.top_bar_layout(ui, on_game, busy);
-        let shown = |item: BarItem| !layout.overflow.contains(&item);
+        let offered = self.bar_item_offered();
+        let shown = |item: BarItem| offered(item) && !layout.overflow.contains(&item);
         ui.horizontal(|ui| {
             if ui
                 .add(
@@ -177,6 +178,21 @@ impl RetoqueApp {
     /// Which of the top bar's actions fit, measured from their laid-out text in the bar's own style: the full set when
     /// it fits, else the least used go into "More actions" (`OVERFLOW_ORDER`) until the rest fits. The brand, the way
     /// back to the library and Commands always stay. The tagline shows only with room to spare.
+    /// "NR on any window" has no control when the selected Retoque files cannot start it (no host).
+    fn bar_item_offered(&self) -> impl Fn(BarItem) -> bool + use<> {
+        #[cfg(windows)]
+        let any_window = self.any_window.active()
+            || self
+                .payload
+                .as_deref()
+                .is_some_and(crate::any_window::protocol::payload_has_host);
+        move |item: BarItem| match item {
+            #[cfg(windows)]
+            BarItem::AnyWindow => any_window,
+            _ => true,
+        }
+    }
+
     fn top_bar_layout(&self, ui: &egui::Ui, on_game: bool, busy: bool) -> BarLayout {
         let spacing = ui.spacing();
         let gap = spacing.item_spacing.x;
@@ -216,6 +232,7 @@ impl RetoqueApp {
             .iter()
             .copied()
             .filter(|i| on_game || *i != BarItem::GameList)
+            .filter(|i| self.bar_item_offered()(*i))
             .collect();
         let more = MORE_MARK.x + pad;
         // Every item and one gap after each but the last; one point of slack against rounding.

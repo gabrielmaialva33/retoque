@@ -47,7 +47,8 @@ class ReleaseEvidence(unittest.TestCase):
         with zipfile.ZipFile(self.archive, 'w', zipfile.ZIP_DEFLATED) as z:
             for name, data in [('OptiScaler.dll', payload), ('nvngx.dll_dlssnr.dll', b'forwarder'),
                                ('OptiScaler.ini', b'[DlssNr]\nEnabled=auto\n'),
-                               ('Licenses/RenoDX_ATTRIBUTION.txt', b'attribution'), *extra]:
+                               ('Licenses/RenoDX_ATTRIBUTION.txt', b'attribution'),
+                               ('RetoqueWindowHost.exe', b'window host'), *extra]:
                 z.writestr(name, data)
 
     def validate(self, value):
@@ -131,6 +132,14 @@ class ReleaseEvidence(unittest.TestCase):
     def test_missing_required_file_fails(self):
         with zipfile.ZipFile(self.archive, 'w') as z:
             z.writestr('OptiScaler.dll', b'not-enough')
+        with self.assertRaises(ValueError):
+            release.archive_inventory(self.archive)
+
+    def test_missing_window_host_fails(self):
+        # v0.3.0 shipped without RetoqueWindowHost.exe; a CI manifest now refuses such an archive.
+        with zipfile.ZipFile(self.archive, 'w') as z:
+            for name in ('OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'OptiScaler.ini', 'Licenses/RenoDX_ATTRIBUTION.txt'):
+                z.writestr(name, b'fixture')
         with self.assertRaises(ValueError):
             release.archive_inventory(self.archive)
 

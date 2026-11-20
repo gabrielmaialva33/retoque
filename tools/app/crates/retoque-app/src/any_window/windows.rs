@@ -22,7 +22,7 @@ use windows::{
     core::{PCWSTR, PWSTR},
 };
 
-pub(super) const FILES: [&str; 3] = ["RetoqueWindowHost.exe", "OptiScaler.dll", "nvngx.dll_dlssnr.dll"];
+pub(super) use super::protocol::HOST_FILES as FILES;
 fn err(e: windows::core::Error) -> io::Error {
     io::Error::other(e.to_string())
 }
