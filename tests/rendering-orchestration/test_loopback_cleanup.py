@@ -80,7 +80,7 @@ class LoopbackCleanup(unittest.TestCase):
         fixture.mkdir(parents=True)
         for filename in ('run.py', 'run_moving.py'):
             shutil.copy2(ROOT/'tests/dlssnr-loopback'/filename, fixture/filename)
-        for filename in ('run_all.py', '_suite_result.py'):
+        for filename in ('run_all.py', '_suite_result.py', '_gpu_guard.py'):
             shutil.copy2(ROOT/'tests'/filename, root/'tests'/filename)
         (root/'tools').mkdir()
         shutil.copy2(ROOT/'tools/build_local.py', root/'tools/build_local.py')

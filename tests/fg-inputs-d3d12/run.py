@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
 from _suite_result import result_run, write_result
+from _gpu_guard import guard_no_game
 OUT = HERE / 'artifacts'
 WORK = OUT / 'run'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
@@ -64,22 +65,7 @@ def generate():
 
 
 def guard():
-    for proc in Path('/proc').iterdir():
-        if not proc.name.isdigit():
-            continue
-        comm = ''
-        try:
-            comm = (proc / 'comm').read_text().strip().lower()
-            if comm in ('msbuild.exe', 'cl.exe', 'link.exe'):
-                raise RuntimeError('compiler prefix is already in use; retry after the build finishes')
-            if '/steamapps/common/' in (proc / 'maps').read_text():
-                raise RuntimeError('a game/Steam common application is mapped; close it before the GPU fixture')
-        except (FileNotFoundError, ProcessLookupError):
-            continue
-        except PermissionError:
-            # The user service manager/PAM session are non-dumpable and do not host games.
-            if proc.exists() and proc.stat().st_uid == os.getuid() and comm not in ('systemd', '(sd-pam)'):
-                raise RuntimeError('cannot inspect an owned process for active game mappings')
+    guard_no_game(WORK)
 
 
 def execute(args, env, log, timeout=180):

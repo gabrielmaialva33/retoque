@@ -7,6 +7,7 @@ import tempfile
 import time
 import sys
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -19,7 +20,21 @@ class LeaseGuard(unittest.TestCase):
             proc = Path(scratch)
             if cmdline is not None:
                 (proc / 'cmdline').write_bytes(cmdline)
-            return run_moving.unreadable_may_be_game(proc)
+            # cmdline alone is not identity: the shared guard also requires matching comm/executable
+            # and a root-owned, non-writable system binary. Model those proc facts without host dependencies.
+            name = cmdline.split(b'\0')[0].decode() if cmdline else 'unknown'
+            (proc / 'comm').write_text(name)
+            executable = Path('/usr/bin') / name if name in ('gpg-agent', 'ssh-agent') else proc / 'unknown'
+            (proc / 'exe').symlink_to(executable)
+            original_stat = Path.stat
+            def system_binary(path, *args, **kwargs):
+                if path == executable:
+                    values = list(original_stat(proc))
+                    values[0], values[4] = 0o100755, 0
+                    return os.stat_result(values)
+                return original_stat(path, *args, **kwargs)
+            with patch.object(Path, 'stat', system_binary):
+                return run_moving.unreadable_may_be_game(proc)
 
     def test_agents_are_not_games(self):
         # The 2026-10-22 false positive: another project's gpg-agent, non-dumpable, refused every fixture.

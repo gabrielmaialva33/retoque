@@ -39,9 +39,12 @@ def route_evidence(working='1600x900'):
              'model_messages': 6, 'model_vuids': 'VUID-vkCmdDraw-None-09600', 'device': '0x100',
              'wdx12_probed': False,
              'swapchains': [{'name': 'route', 'handle': '0x200', 'width': 632, 'height': 446, 'presents': 399,
-                             'readbacks': 395, 'exact': 268, 'sdr': True}],
+                             'readbacks': 395, 'exact': 268, 'sdr': True, 'images': 4}],
              'phases': [dict(zip(('name', 'presents', 'evaluates', 'readbacks', 'exact', 'mae_mean'), row))
                         for row in phase_rows]}
+    for phase in facts['phases']:
+        if phase['name'] in ('on', 'on-again', 'on-at-exit'):
+            phase['acquired'] = [i % 2 for i in range(phase['presents'])]
     host = 'DLSS-NR Vulkan present host: '
     device = host + 'device 0x100 #4: '
     route = 'DLSS-NR Vulkan: '
@@ -210,6 +213,28 @@ class ScaleEvidence(unittest.TestCase):
         broken = copy.deepcopy(facts)
         del next(p for p in broken['phases'] if p['name'] == 'on')['evaluates']
         self.assert_rejected(broken, log)
+
+    def test_wsi_three_and_four_image_orders_require_every_repeat_to_be_read_back(self):
+        for count in (3, 4):
+            facts, log = route_evidence()
+            for phase in facts['phases']:
+                if phase['name'] in ('on', 'on-again', 'on-at-exit'):
+                    phase['acquired'] = [i % count for i in range(phase['presents'])]
+                    phase['readbacks'] = phase['exact'] = phase['presents'] - count
+            self.assertEqual(vulkan.check_route('nr-route-scale125', facts, log)[0], [])
+            phase = next(p for p in facts['phases'] if p['name'] == 'on')
+            phase['readbacks'] -= 1
+            phase['exact'] -= 1
+            self.assert_rejected(facts, log)
+
+    def test_missing_invalid_and_incomplete_acquisition_evidence_is_refused(self):
+        for order in (None, [], [0] * 29, [0] * 31, [True] * 30, [-1] * 30, [4] * 30):
+            facts, log = route_evidence()
+            next(p for p in facts['phases'] if p['name'] == 'on')['acquired'] = order
+            self.assert_rejected(facts, log)
+        facts, log = route_evidence()
+        del facts['swapchains'][0]['images']
+        self.assert_rejected(facts, log)
 
     def test_all_eleven_phases_and_the_existing_cold_and_handback_gates_remain_required(self):
         facts, log = route_evidence()

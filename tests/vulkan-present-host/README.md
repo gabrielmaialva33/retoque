@@ -412,3 +412,31 @@ do not qualify that final device teardown.
 For an explicitly selected baseline DLL, `--source-root` names its corresponding source tree (read only)
 for the same stale-build guard. Harness, logs and runtime prefixes remain under this fixture, and results
 record the selected source root and DLL hash. This does not relax the isolated overlay fixture's revision requirement.
+
+### Deterministic fixture inputs (2026-11-20)
+
+The scale case records every acquired image index in each phase. WSI does not promise round-robin
+acquisition or reuse of exactly two images. For each active phase the checker derives the exact required
+readback count as presents minus distinct acquired images; every repeated image must be read back byte-exact.
+The complete sequence, index bounds, 30/30/10 successful evaluates, three enlarged model builds, all eleven
+phases, ownership, hand-back and validation remain mandatory. A missing readback still fails.
+
+`nr` and `nr-working-scale` request at least eight edited readbacks per SDR swapchain, with a 30-second
+deadline. They continue the same scene while the asynchronous model builds, including all warm-up frames
+in the evidence; they do not restart a failed process or discard unedited frames. The original checker still
+rejects unedited frames beyond the recorded build refusals, excessive colour changes, alpha/black errors,
+and lifecycle/validation failures. A model that never edits fails the deadline. This replaces the assumption
+that twelve presents always outlast a cold model build plus swapchain readback latency.
+
+HDR runs reapply the requested 632x446 client extent after the initial Wayland configure, before creating
+swapchains. Otherwise a tiling compositor can initially give this owned dialog the desktop extent. At
+3440x1414 the validation workload exceeded the estimator's 250 ms history-gap limit, so it repeatedly
+restarted its six-frame warm-up. The fixture keeps real HDR WSI, half working scale, motion and validation
+assertions; it does not change the runtime gap policy. The later 517x389 recreation remains covered.
+
+The shared `tests/_gpu_guard.py` checks readable mappings and fails closed on unknown same-user processes
+with unreadable maps. Only narrow native system-service identities can explain that restriction; Wine,
+Proton, executable/game arguments and mismatched executable identities remain refusals.
+
+The [dated investigation](../../docs/linux-proton/gpu-fixture-determinism-20261120.md) records source history,
+original/fixed controls and the distinction between a fixture correction and driver/game qualification.

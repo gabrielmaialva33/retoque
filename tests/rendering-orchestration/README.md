@@ -31,3 +31,9 @@ A host-only PASS means host checks only and reports `runtime_coverage=false`. A 
 Moving-scene metadata checks include real finite positive timing samples with consistent percentiles, geometric guide coverage, processing/repeat bounds, temporal sample identities, measured frame hashes, and staged build provenance. Replay requires its default functional seam gates; its named informational pixel-repeat metric remains informational. Original optional pixel-judge verdicts remain visible in a separate quality scope.
 
 Raw Vulkan validation/VUID/SYNC-HAZARD messages remain visible even when a fixture attributes its required scenario PASS. Reports retain full log snapshots, total matching-line counts, and bounded excerpts. This provides evidence for review without issuing a universal validation-clean verdict.
+
+The GPU process guard tests simulate unreadable same-user mappings, including capability-bearing native
+services, unknown processes, Wine/game arguments, executable mismatches and untrusted binaries. They also
+hold compiler/staged-file/game refusals and the moving fixture's existing Steam-runtime exception.
+The Vulkan scale evidence checks reject missing acquired-image sequences and missing readbacks, accepting
+WSI reuse of two, three or four images only when every required readback is exact.

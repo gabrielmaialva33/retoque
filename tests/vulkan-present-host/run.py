@@ -24,6 +24,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'tests'))
+from _gpu_guard import guard_no_game
 HERE = Path(__file__).resolve().parent
 OUT = HERE / 'artifacts'
 MSVC = Path(os.environ.get('MSVC_BIN', str(Path.home() / '.local/opt/msvc/bin/x64')))
@@ -115,10 +117,7 @@ def sha(path):
 def no_game():
     # The user's workstation is also the gaming machine. Check immediately before every prefix operation, including
     # each separate case, so a game started after the suite began prevents the next launch.
-    game = subprocess.run('grep -l steamapps/common /proc/[0-9]*/maps 2>/dev/null', shell=True,
-                          capture_output=True, text=True)
-    if game.stdout.strip():
-        raise RuntimeError('game running: refusing prefix operation: ' + game.stdout.strip())
+    guard_no_game()
 
 
 def run(args, *, env=None, cwd=ROOT, logfile=None, timeout=600):
@@ -996,6 +995,8 @@ SYNTH_WARMUP = 6
 
 # The test layer's timing knobs and the harness's arguments, for the cases that use them.
 NR_TIMING = {
+    'nr': ({}, ['--min-changed', '8']),
+    'nr-working-scale': ({}, ['--min-changed', '8']),
     'nr-hdr-off': ({'PROTON_ENABLE_WAYLAND': '1', 'PROTON_ENABLE_HDR': '1'}, ['--hdr', '--frames', '24']),
     'nr-hdr-half-synth': ({'PROTON_ENABLE_WAYLAND': '1', 'PROTON_ENABLE_HDR': '1'}, ['--hdr', '--frames', '32']),
     'nr-hdr-control': ({'PROTON_ENABLE_WAYLAND': '1', 'PROTON_ENABLE_HDR': '1'}, ['--hdr', '--frames', '24']),
@@ -1512,6 +1513,9 @@ def check_nr(name, facts, log):
                                                f'changed where the picture had to come back exactly (largest change '
                                                f'{s["max_diff"]}, mean {s["mae_mean"]:.3f})')
         else:
+            if name in ('nr', 'nr-working-scale'):
+                need(s['readbacks'] - s['exact'] >= 8,
+                     f'{where}: fewer than eight edited readbacks after bounded model readiness')
             # The model ran and its edit landed: changed, close, opaque, not black. Only the frames carried while it was
             # built (the first ones) may come back exactly.
             need(s['exact'] <= building.get(s['name'], 0) and s['exact'] < s['readbacks'],
@@ -1708,10 +1712,20 @@ def route_scale125_problems(facts, log):
         return problems
     phases = {p['name']: p for p in rows}
     need(len(phases) == len(rows), 'duplicate phase evidence')
-    for name, evaluates, readbacks in (('on', 30, 28), ('on-again', 30, 28), ('on-at-exit', 10, 8)):
+    swapchains = facts.get('swapchains', [])
+    image_count = swapchains[0].get('images') if len(swapchains) == 1 else None
+    need(type(image_count) is int and image_count > 0, 'missing swapchain image count')
+    for name, evaluates in (('on', 30), ('on-again', 30), ('on-at-exit', 10)):
         phase = phases.get(name, {})
-        need(phase.get('evaluates') == phase.get('presents') == evaluates and
-             phase.get('readbacks') == phase.get('exact') == readbacks,
+        acquired = phase.get('acquired')
+        valid_order = (type(image_count) is int and image_count > 0 and isinstance(acquired, list) and
+                       len(acquired) == evaluates and all(type(i) is int and 0 <= i < image_count for i in acquired))
+        need(valid_order, f'{name}: complete acquired-image sequence missing or invalid')
+        # Compare() counts only images last written in this phase. Each first acquisition carries the previous
+        # phase; every repeated acquisition must produce one exact readback. WSI need not rotate two images.
+        readbacks = evaluates - len(set(acquired)) if valid_order else None
+        need(phase.get('evaluates') == phase.get('presents') == evaluates and readbacks is not None and
+             readbacks > 0 and phase.get('readbacks') == phase.get('exact') == readbacks,
              f'{name}: expected {evaluates} successful evaluates/presents and {readbacks} exact readbacks: {phase}')
     need(sum(p['evaluates'] for p in rows) == 70, 'expected exactly 70 active route evaluates')
 
