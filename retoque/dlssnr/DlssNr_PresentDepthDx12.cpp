@@ -56,7 +56,10 @@ struct Owner
     Window window;
     AddressTable<kDescriptors> descriptors;
     AddressTable<kDescriptors> resources;
-    std::array<ListSlot, kLists> lists {};
+    // No braces: every member of ListSlot, Recording and Event has a default member initializer, so default
+    // initialization zeroes them the same way. With braces MSVC expands 512 x 1024 event initializers and ran out
+    // of heap on the 16 GB GitHub runner (C1060, retoque-v0.3.0 release workflow, 2026-11-20).
+    std::array<ListSlot, kLists> lists;
     std::array<QueueSlot, kQueues> queues {};
     std::array<Capture, 4> captures {};
     std::atomic<uint64_t> stamp { 0 }, calls { 0 }, samples { 0 }, sampledNs { 0 };

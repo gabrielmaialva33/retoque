@@ -306,7 +306,7 @@ class Model
 };
 struct Recording
 {
-    std::array<Event, kEvents> events {};
+    std::array<Event, kEvents> events; // no braces: Event's members all carry initializers (see ListSlot)
     size_t size = 0;
     Id bound = 0;
     bool known = false, closed = false, overflow = false;

@@ -19,7 +19,7 @@ template <size_t N> struct AddressTable
         std::atomic<uintptr_t> key { 0 };
         std::atomic<uint64_t> version { 0 }, id { 0 }, flags { 0 };
     };
-    std::array<Slot, N> slots {};
+    std::array<Slot, N> slots; // no braces: Slot's members all carry initializers, and N is 8192
     Slot* Find(uintptr_t key, bool insert)
     {
         if (!key)
