@@ -14,7 +14,12 @@ Tests the production portable ranking, refusal, recording and window headers und
 
 Ten seeded behavioral mutations must compile and fail the tests. Source guards check the startup gate, config
 round trip, existing submission seam, installation/teardown, exact interface-signature assertions, separate
-clock and absence of GPU commands or model/ring mutation in the adapter. When MinGW is installed, the whole
+clock and absence of GPU commands or model/ring mutation in the adapter. They also hold the lifetime proof to the
+observer's own destruction notice (registered once per resource, behind a private marker): the adapter names
+neither `TrackResourceRelease` nor HUDfix, reaches `ResTrack_Dx12` only for the NR queue hook and proxy
+unwrapping, and ResTrack's `ResourceDestroyed` and `TrackResourceRelease` do not name NR. Restoring the merged
+wiring (`ResTrack_Dx12::TrackResourceRelease` in the adapter, `PresentDepthDx12::Destroyed` in `ResourceDestroyed`)
+fails these guards, the optional MinGW check and `restrack-resource-references`. When MinGW is installed, the whole
 adapter is syntax/type-checked against its real D3D12 interfaces with minimal Config/State/Logger/ResTrack and Detours declarations;
 no DLL is linked and no Windows binary runs. That optional result is reported separately.
 

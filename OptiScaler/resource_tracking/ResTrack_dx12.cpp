@@ -153,7 +153,6 @@ void __stdcall ResTrack_Dx12::ResourceDestroyed(void* data)
         return;
 
     auto* resource = static_cast<ID3D12Resource*>(data);
-    DlssNr::PresentDepthDx12::Destroyed(resource);
     auto toClean = _trackedResources.Take(resource);
 
     Hudfix_Dx12::RemoveResourceFromTracking(resource);

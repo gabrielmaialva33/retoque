@@ -25,6 +25,7 @@ constexpr size_t kDescriptors = 8192, kLists = 512, kQueues = 32;
 constexpr uint64_t kInternal = UINT64_MAX;
 // Private CPU recording-generation stamp; never a GPU command or a resource reference.
 constexpr GUID kRecording = { 0xf75df2a4, 0x92e1, 0x49b7, { 0x89, 0x71, 0x6a, 0x50, 0xdb, 0x9c, 0x37, 0x21 } };
+constexpr GUID kReleaseNotice = { 0x18a9a576, 0xe24e, 0x4f19, { 0xa9, 0xb3, 0xa2, 0x86, 0xdd, 0xa7, 0x63, 0xfc } };
 int64_t Now()
 {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch())
@@ -250,6 +251,33 @@ ORIGINAL(Mesh, ID3D12GraphicsCommandList6, DispatchMesh);
 ORIGINAL(Enhanced, ID3D12GraphicsCommandList7, Barrier);
 #undef ORIGINAL
 
+void __stdcall Released(void* data)
+{
+    auto* s = Running();
+    if (!s || !data || State::Instance().isShuttingDown)
+        return;
+    std::lock_guard lock(s->mutex);
+    const auto key = reinterpret_cast<uintptr_t>(data);
+    s->model.Forget(s->resources.Get(key).id);
+    s->resources.Put(key, {});
+}
+bool NoticeRelease(ID3D12Resource* resource)
+{
+    if (State::Instance().isShuttingDown)
+        return false;
+    uint8_t noticed = 0;
+    UINT bytes = sizeof(noticed);
+    if (SUCCEEDED(resource->GetPrivateData(kReleaseNotice, &bytes, &noticed)) && bytes == sizeof(noticed) && noticed)
+        return true;
+    ComPtr<ID3DDestructionNotifier> notifier;
+    UINT callback = 0;
+    if (FAILED(resource->QueryInterface(IID_PPV_ARGS(&notifier))) ||
+        FAILED(notifier->RegisterDestructionCallback(&Released, resource, &callback)))
+        return false;
+    noticed = 1;
+    resource->SetPrivateData(kReleaseNotice, sizeof(noticed), &noticed);
+    return true;
+}
 // Resources created through unhooked creation variants can still be identified at DSV creation, but their state
 // and placement stay unknown. Never infer a creation state from the DSV or the optimized clear value.
 Id ResourceId(ID3D12Device* device, ID3D12Resource* resource, const D3D12_RESOURCE_DESC& desc, bool known,
@@ -261,7 +289,7 @@ Id ResourceId(ID3D12Device* device, ID3D12Resource* resource, const D3D12_RESOUR
     const auto key = reinterpret_cast<uintptr_t>(resource);
     if (const auto current = s->resources.Get(key).id)
         return current;
-    const bool lifetime = ResTrack_Dx12::TrackResourceRelease(resource); // outside observer lock
+    const bool lifetime = NoticeRelease(resource); // outside observer lock
     Shape shape;
     shape.width = uint32_t(std::min<uint64_t>(desc.Width, UINT32_MAX));
     shape.height = desc.Height;
@@ -629,16 +657,6 @@ void Created(ID3D12Device* device, const D3D12_RESOURCE_DESC* desc, ID3D12Resour
         !(desc->Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
         return;
     ResourceId(device, resource, *desc, true, uint32_t(state), heap, heap ? Placement::Placed : Placement::Committed);
-}
-void Destroyed(ID3D12Resource* resource)
-{
-    auto* s = Running();
-    if (!s)
-        return;
-    std::lock_guard lock(s->mutex);
-    const auto key = reinterpret_cast<uintptr_t>(resource);
-    s->model.Forget(s->resources.Get(key).id);
-    s->resources.Put(key, {});
 }
 void Captured(size_t slot, ID3D12Resource* source, bool inverted, bool fullExtent)
 {
