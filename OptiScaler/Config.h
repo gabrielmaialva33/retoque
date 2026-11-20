@@ -383,6 +383,10 @@ class Config
     // Present hosts: keep the model off pixels that stay still while the scene around them moves -- the
     // interface -- through its UI correction (hud-protection.md). Experimental. Default false.
     CustomOptional<bool> DlssNrUiProtection { false };
+    // Mask inspection, slice 0 (character-inspector.md): off (default) or log. log says, in the log only, which
+    // protections a recorded D3D12 present frame was sent with; it reads no pixel and changes none. Any other text
+    // is off, and the text asked for is what is saved, never what it resolved to.
+    CustomOptional<std::string> DlssNrMaskInspection { std::string("off") };
     // Below the frame's size (WorkingScale < 1): resample depth and motion to the model's working size
     // instead of handing it frame-size guides for a smaller colour (reduced-scale-guides.md). Needs the
     // guide resample's bytecode; without it the frame-size guides stay. Default true.

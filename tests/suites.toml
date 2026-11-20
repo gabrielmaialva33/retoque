@@ -1289,6 +1289,14 @@ tier = "host"
 timeout = 180
 summary = "Log-only D3D12 depth: independent rankings, refusals, identities, bounded recordings, atomic lookup, log windows and hook/config guards."
 
+[nr-mask-inspection]
+path = "nr-mask-inspection"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Log-only mask inspection (MaskInspection=log): off is inert with allocations counted, the key's round trip through the production read/save, what a line states and its rate and budget, Dispatch's own statements run as written; every seeded mutant must fail. No GPU."
+
 [frame-transport]
 path = "frame-transport"
 domain = "transport"

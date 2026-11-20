@@ -3,7 +3,7 @@
 from pathlib import Path
 import subprocess
 import tempfile
-from observer_scope import off_scope
+from observer_scope import mask_inspection, off_scope
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 main = (ROOT/'retoque/shaders/dlssnr/DlssNr_Dx12.cpp').read_text()
@@ -21,6 +21,8 @@ unit=(HERE/'fakes.h').read_text()+'\n#include <mutex>\n#include <type_traits>\n#
 unit+='#include "retoque/dlssnr/DlssNr_AdvisorRuntime.h"\n'
 # Compile the actual depth-observer scope against an off observer. No D3D12 hook is installed here.
 unit+=off_scope(ROOT, function)
+# And the actual mask-inspection gate, with the key unset: off, as shipped.
+unit+=mask_inspection(main)
 if 'struct NrDeviceOwner\n' in internal:
     unit+=function(internal,'struct NrDeviceOwner\n')+';\nNrDeviceOwner g_nrDeviceOwner;\n'
 for overload in ('bool DeviceChildBelongsTo(ID3D12Device* device, ID3D12DeviceChild* child)',
@@ -31,9 +33,11 @@ if 'bool PresentGuideCopyCompatible(' in resources:
     unit+=function(resources,'bool PresentGuideCopyCompatible(')
 unit+='''
 std::mutex g_nrMutex;
-struct Config { static Config* Instance() { static Config c; return &c; } };
+struct Config { struct { bool value_or_default() const { return true; } } DlssNrEnabled; std::optional<std::string> DlssNrMaskInspection;
+                static Config* Instance() { static Config c; return &c; } };
 struct { bool failed=false; bool reset=false; } g_nr;
-struct DlssNrFrameInfo { bool GameGuides=false; unsigned RenderSubrectWidth=1, RenderSubrectHeight=1; void* ExposureTexture=nullptr; uint64_t PictureEpoch=0; };
+struct DlssNrFrameInfo { bool GameGuides=false; unsigned RenderSubrectWidth=1, RenderSubrectHeight=1; void* ExposureTexture=nullptr; uint64_t PictureEpoch=0;
+                         bool PresentSource=false, BridgeHost=false, AfterRayReconstruction=false; };
 // The main-picture epoch gate (DlssNr_Pictures.h; tests/nr-main-picture covers it): no epoch here, so never Restart.
 DlssNr::Pictures::EpochGate g_pictureEpoch; void InvalidateExposureMeter() {}
 namespace DlssNr { namespace Detail { struct CoverageSample { const char* reason=""; }; }

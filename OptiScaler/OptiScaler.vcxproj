@@ -1077,6 +1077,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentDepthDx12.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentDepth.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentDepthTables.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_MaskInspection.h" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCapture.cpp" />
     <ClCompile Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.cpp" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_PairCaptureVk.h" />

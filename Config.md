@@ -520,6 +520,16 @@ SynthMotion=auto
 ; the game draws its interface.
 ; true or false - Default (auto) is false
 UiProtection=auto
+; Mask inspection (log only): says in OptiScaler.log which protections a frame of the D3D12 present pass
+; (HookMethod=2 or Auto's present route) was sent with: whether the UI alpha of UiProtection was handed to the
+; model and why not, the AutoMask and SkinStructure each pass was given, and which composition branches (the
+; luminance guard, ResidualLimit, HighlightRecovery, the MinRatio floor) the frame was composed with.
+; It reads no pixel, changes none and draws nothing: the facts are what the pass recorded, not what the GPU
+; finished, and never how much of the picture a protection covers. The model's own skin mask is not exposed.
+; One line when the answer changes, at most every two seconds and 256 times per run. Every other route says
+; once that it is unavailable. With off, auto or any other text nothing is observed, kept or logged.
+; off or log - Default (auto) is off
+MaskInspection=auto
 ; Model resolution below 100% (WorkingScale < 1): resample the game's depth and motion vectors to the
 ; model's working size, so the guides and the colour it reprojects agree pixel for pixel. Off hands the
 ; model frame-size guides for a smaller colour, which flickers and keeps "settling" after the camera
