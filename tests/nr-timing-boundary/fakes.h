@@ -115,4 +115,11 @@ void Clear()
     checkboxCalls = sliderCalls = 0;
 }
 } // namespace ImGui
+// Layout is covered with real ImGui by menu-preview. Keep the same scripted interactions here
+// so the extracted production timing controls still exercise their Config writes and readouts.
+namespace DlssNr::MenuLayout
+{
+bool Checkbox(const char* label, bool* value, const char* = nullptr) { return ImGui::Checkbox(label, value); }
+const char* FieldLabel(const char* label, bool = false) { return label; }
+} // namespace DlssNr::MenuLayout
 static void HelpMarker(const char*) {}
