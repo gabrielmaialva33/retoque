@@ -24,7 +24,7 @@ MAX_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024
 MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
 MAX_MEMBERS = 4096
 REQUIRED_FILES = {'OptiScaler.dll', 'nvngx.dll_dlssnr.dll', 'OptiScaler.ini',
-                  'Licenses/RenoDX_ATTRIBUTION.txt'}
+                  'Licenses/RenoDX_ATTRIBUTION.txt', 'RetoqueWindowHost.exe'}
 
 
 def validate_host_report(value: dict, commit: str, required: set[str],

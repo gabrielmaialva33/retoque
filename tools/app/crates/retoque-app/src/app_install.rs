@@ -14,7 +14,7 @@ pub mod windows;
 pub const EXE: &str = app_release::EXE;
 pub const OLD_EXE: &str = "retoque-app.old.exe";
 pub const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\Retoque";
-pub const ROOTS: [&str; 7] = [
+pub const ROOTS: [&str; 8] = [
     EXE,
     "OptiScaler.dll",
     "nvngx.dll_dlssnr.dll",
@@ -22,6 +22,7 @@ pub const ROOTS: [&str; 7] = [
     "Licenses",
     "translations",
     "OptiScaler",
+    payload_fetch::WINDOW_HOST,
 ];
 /// The packager checks this embedded marker against the requested release version.
 pub fn version() -> &'static str {
@@ -43,7 +44,7 @@ impl Paths {
             return Err(io::Error::other("Windows known folder must be absolute"));
         }
         Ok(Self {
-            install: local.join("Programs/Retoque"),
+            install: local.join("Programs").join("Retoque"),
             shortcuts: [programs.join("Retoque.lnk"), desktop.join("Retoque.lnk")],
         })
     }
@@ -167,7 +168,8 @@ impl InstallPlan {
         let source = exe.parent().ok_or_else(|| io::Error::other("missing app parent"))?;
         let mut files = vec![record(exe, EXE)?];
         for root in &ROOTS[1..] {
-            if *root == "OptiScaler" && !source.join(root).try_exists()? {
+            // Optional members: the support folder and the window host ("NR on any window") may be absent.
+            if matches!(*root, "OptiScaler" | payload_fetch::WINDOW_HOST) && !source.join(root).try_exists()? {
                 continue;
             }
             collect(source, root, &mut files)?;
@@ -337,7 +339,7 @@ mod tests {
     fn paths_registry_and_install_review() {
         let t = tempfile::tempdir().unwrap();
         let paths = Paths::new(t.path(), &t.path().join("start"), &t.path().join("desktop")).unwrap();
-        assert_eq!(paths.install, t.path().join("Programs/Retoque"));
+        assert_eq!(paths.install, t.path().join("Programs").join("Retoque"));
         assert_ne!(paths.install, t.path().join("Retoque"));
         assert_eq!(version(), env!("CARGO_PKG_VERSION"));
         let values = registry_values(&paths, "1.2.3", 1025);
@@ -350,10 +352,18 @@ mod tests {
         );
         let source = t.path().join("portable");
         fixture(&source);
+        // The window host is optional (0.3.0 bundles lack it) but copied when the bundle has it.
+        let without = InstallPlan::prepare(paths.clone(), &source.join(EXE)).unwrap();
+        assert!(!without.files.iter().any(|f| f.name == payload_fetch::WINDOW_HOST));
+        fs::write(source.join(payload_fetch::WINDOW_HOST), b"host").unwrap();
         let plan = InstallPlan::prepare(paths.clone(), &source.join(EXE)).unwrap();
         assert!(!paths.install.exists());
         plan.copy().unwrap();
         assert!(paths.is_installed(&paths.exe()));
+        assert_eq!(
+            fs::read(paths.install.join(payload_fetch::WINDOW_HOST)).unwrap(),
+            b"host"
+        );
         assert!(plan.copy().is_err());
         assert!(!t.path().join("Retoque").exists());
     }

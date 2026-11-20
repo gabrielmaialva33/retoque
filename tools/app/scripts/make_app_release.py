@@ -30,7 +30,7 @@ def allowed(name):
                  "lsfg-vk.dll", "version.dll", "optiscaler.lang"} or
         lower.endswith((".pdb", ".lib", ".exp", ".ilk", ".cso", ".spv"))):
         return False
-    return (name in REQUIRED or name == "SHA256SUMS" or
+    return (name in REQUIRED or name in {"SHA256SUMS", "RetoqueWindowHost.exe"} or
             len(parts) == 2 and parts[0] == "Licenses" and
             (leaf.endswith((".txt", ".md")) or leaf == "license") or
             len(parts) == 3 and parts[:2] == ["translations", "optional"] and name.endswith(".lang") or

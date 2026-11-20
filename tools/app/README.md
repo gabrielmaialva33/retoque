@@ -425,7 +425,7 @@ The “Retoque files” dialog, opened from the bottom status bar, supports thre
 
 Release assets follow [docs/releases/PAYLOAD.md](../../docs/releases/PAYLOAD.md):
 `retoque-payload-<version>-x64.zip` (containing `OptiScaler.dll`, `nvngx.dll_dlssnr.dll`, release-configured
-`OptiScaler.ini`, `Licenses/`, `translations/` and optional `OptiScaler/`) plus `SHA256SUMS`. Build them locally
+`OptiScaler.ini`, `Licenses/`, `translations/`, optional `OptiScaler/` and `RetoqueWindowHost.exe`) plus `SHA256SUMS`. Build them locally
 from `x64/out` and the repository with:
 
 ```bash
