@@ -187,7 +187,7 @@ assert 'uint64_t g_nrScratchGeneration = 1;' in units['DlssNr_Dx12.cpp']
 assert 'bool DescriptorReuseAvailable()' in units['DlssNr_Dx12.cpp']
 print('PASS: resource helper baselines and explicit hardening updates pinned; scratch generation/descriptor reuse remain in core')
 
-# Every extracted present-guide body remains the base body; linkage and whitespace may differ.
+# Every extracted present-guide body is pinned, with reviewed updates recorded separately.
 present_contract = json.loads((HERE / 'present-guides-contract.json').read_text())
 present_owner = 'DlssNr_Dx12_PresentGuides.cpp'
 from present_contract import definition_pattern, present_body, present_digest  # noqa: E402
@@ -217,6 +217,20 @@ assert units['DlssNr_Dx12.cpp'].count('long long Dx12Internal::NowMs()') == 1
 # The contract must reject missing/duplicate definitions and changed copy/track decisions.
 body = present_body(units[present_owner], 'CaptureGuides')
 expected = present_contract['definitions']['CaptureGuides']
+# 12a23174 adds only observer bookkeeping. Keep an independent pin on every original
+# decision/copy/track token, as well as the updated full-body pin above.
+capture_base = body
+for addition in (
+    '    DlssNr::PresentDepthDx12::InternalScope depthInternal;\n',
+    '    DlssNr::PresentDepthDx12::Captured(slot, source.depth, frame.DepthInverted,\n'
+    '                                       frame.DepthSubrectBaseX == 0 && frame.DepthSubrectBaseY == 0 &&\n'
+    '                                           frame.RenderSubrectWidth == depthDesc.Width &&\n'
+    '                                           frame.RenderSubrectHeight == depthDesc.Height);\n',
+):
+    assert capture_base.count(addition) == 1
+    capture_base = capture_base.replace(addition, '', 1)
+assert present_digest(capture_base) == '8dc612390c29321209cd383905adbbd3b0d5895e7295ebf0e8905a9a114ebe48', \
+    'CaptureGuides changed beyond the reviewed observer additions'
 for candidate in (units[present_owner].replace(body, '', 1), units[present_owner] + '\n' + body,
                   units[present_owner].replace('if (!trackedNow)', 'if (trackedNow)', 1),
                   units[present_owner].replace('DlssNr::Submission::Track(cmdList, clone.writeUsage) &&',
