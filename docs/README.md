@@ -41,8 +41,10 @@ Additional focused records: [non-graphics Vulkan presentation](linux-proton/vulk
 [FG swapchain lock and lifetime fixes](linux-proton/fork-fixes-20261030.md), [Dynamic MFG retry wait, NR pause guard and menu key polling](linux-proton/fork-ports-menu-pause-backoff-20261030.md),
 [game camera forwarding](linux-proton/streamline-game-camera.md), [Unreal plugin DLSS search](linux-proton/unreal-dlss-search-20261030.md),
 [D3D12 descriptor reverse-reference index](linux-proton/restrack-reference-index-20261030.md) and
-[Streamline interposer unhook](linux-proton/sl-interposer-unhook.md), and
-[Proton swapchain scope, Reflex ownership and forwarder version](linux-proton/fork-ports-shyvortex-20261109.md).
+[Streamline interposer unhook](linux-proton/sl-interposer-unhook.md),
+[Proton swapchain scope, Reflex ownership and forwarder version](linux-proton/fork-ports-shyvortex-20261109.md),
+[GPU fixture determinism](linux-proton/gpu-fixture-determinism-20261120.md) and
+[a scene cut on unchanged content from FidelityFX's scene-change sums](linux-proton/synth-motion-false-scene-cut-20261120.md).
 
 ## Historical evidence
 
