@@ -36,6 +36,9 @@ Mutation-checked on 2026-10-30: fifteen single-point mutations (`<` to `<=`, the
 create-site refusal and latch, the volatile setter, "Enable anyway", the hotkey, the disabled checkbox, the
 proxy latch) each fail it.
 
+The runner also rejects five Retry mutations on every run: unconditional or inverted refusal, a button outside
+the guard, a missing retry action, and an extra unguarded button. The check is independent of SameLine layout.
+
 ## What it does not cover
 
 It runs no NVAPI, NGX, model or GPU. Whether a real 576.88 driver reports 57688 through NVAPI, whether the model's own
