@@ -21,3 +21,9 @@ The `pause-request-*` cases drive the same production setter for PauseWithoutFra
 (`State::dlssgGameRequestsFg`): a call Streamline refused is not recorded, also on the own-DLSS-G path; a second
 accepted viewport stops any viewport from setting it, while a refused call from one is no viewport; and the menu's
 replay (`updateDlssgOptions`, also spliced in) is never taken for the game's request or viewport.
+
+`own-fg-replaces` drives the same setter after OptiScaler's frame generation replaced the game's DLSS-G (its hooks
+cleared at plugin load because OptiScaler makes the FG swapchain, `retoque/hooks/Streamline_OwnFgSwapchain.h`): the
+game's on and auto go out as off without `eRetainResourcesWhenOff`, a refusal is still returned to the game, the
+game's own request is still recorded, and FG Input DLSSG (which feeds the game's DLSS-G) is not forced off. Against
+`--baseline ba355423` it fails with "replaced DLSS-G not off".

@@ -10,6 +10,7 @@
 #include <mutex>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <string>
 #include <hooks/Streamline_DlssgRequest.h>
 #define SI_NO_CONVERSION
@@ -52,12 +53,14 @@ struct feature_version
 enum class FGInput
 {
     NoFG,
+    Upscaler,
     DLSSG
 };
 enum class FGOutput
 {
     NoFG,
-    DLSSG
+    DLSSG,
+    XeFG
 };
 enum class FGNvngxReplacement
 {
@@ -86,6 +89,7 @@ struct State
     bool dlssgGameDMFGSupported = false;
     std::atomic<bool> dlssgGameRequestsFg { false };
     std::atomic<uint64_t> dlssgGameViewports { 0 };
+    std::atomic<bool> gameDlssgReplacedByOwnFg { false };
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
     void* currentFG = nullptr;
     static State& Instance()

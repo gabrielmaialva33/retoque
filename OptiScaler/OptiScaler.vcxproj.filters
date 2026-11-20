@@ -608,6 +608,9 @@
     <ClInclude Include="..\retoque\hooks\Streamline_DlssgRequest.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\hooks\Streamline_OwnFgSwapchain.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="proxies\IGDExt_Proxy.h">
       <Filter>Header Files</Filter>
     </ClInclude>

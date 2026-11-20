@@ -341,6 +341,10 @@ class State
     std::atomic<bool> fgPresentVsync { false };
 
     bool dlssgGameDMFGSupported = false;
+    // The game's DLSS-G swapchain hooks were cleared at its plugin load because OptiScaler makes the frame generation
+    // swapchain with an FG Input other than DLSSG (retoque/hooks/Streamline_OwnFgSwapchain.h): its DLSS-G stays off for
+    // the session, even if OptiScaler's frame generation fails to start later
+    std::atomic<bool> gameDlssgReplacedByOwnFg { false };
     sl::DLSSGMode dlssgLastSetMode = sl::DLSSGMode::eOff;
     // DLSS-NR (docs/dlssnr/design/pause-without-frame-gen.md): whether the game itself asked Streamline for DLSS-G,
     // before any OptiScaler policy (menu interlock, interpolation override, own-instance substitution) touched it.

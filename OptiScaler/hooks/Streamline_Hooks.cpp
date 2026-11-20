@@ -15,6 +15,7 @@
 #include <hooks/DetourRecord.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
 #include <hooks/Streamline_DlssgRequest.h>
+#include <hooks/Streamline_OwnFgSwapchain.h>
 #include <hooks/Streamline_LogRepeat.h>
 #include <menu/menu_overlay_base.h>
 #include <framegen/nvngx/Nvngx_FG.h>
@@ -1315,9 +1316,23 @@ bool StreamlineHooks::hkdlssg_slOnPluginLoad(sl::param::IParameters* params, con
         return result;
     }
 
-    // Kill the DLSSG streamline swapchain hooks
-    if (State::Instance().activeFgInput == FGInput::DLSSG || State::Instance().activeFgOutput == FGOutput::DLSSG)
+    // Kill the DLSSG streamline swapchain hooks: OptiScaler feeds or provides DLSS-G, or makes the frame generation
+    // swapchain itself, which the game's hooks would wrap a second time (retoque/hooks/Streamline_OwnFgSwapchain.h)
+    auto& fgState = State::Instance();
+    const bool ownsFgSwapchain = StreamlineOwnFg::MakesFgSwapchainD3D12(renderApi == sl::RenderAPI::eVulkan,
+                                                                        fgState.activeFgInput, fgState.activeFgOutput);
+    if (fgState.activeFgInput == FGInput::DLSSG || fgState.activeFgOutput == FGOutput::DLSSG || ownsFgSwapchain)
     {
+        if (StreamlineOwnFg::ReplacesGameDlssg(true, fgState.activeFgInput))
+            fgState.gameDlssgReplacedByOwnFg.store(true, std::memory_order_relaxed);
+
+        if (ownsFgSwapchain && fgState.activeFgInput != FGInput::DLSSG && fgState.activeFgOutput != FGOutput::DLSSG)
+        {
+            LOG_INFO("Game's DLSS-G swapchain hooks cleared: OptiScaler makes the frame generation swapchain (FG Input "
+                     "{}, FG Output {})",
+                     magic_enum::enum_name(fgState.activeFgInput), magic_enum::enum_name(fgState.activeFgOutput));
+        }
+
         if (configJson.contains("/hooks"_json_pointer))
             configJson["hooks"].clear();
 
@@ -1675,6 +1690,23 @@ sl::Result StreamlineHooks::hkslDLSSGSetOptions(const sl::ViewportHandle& viewpo
     if (state.activeFgInput != FGInput::DLSSG && state.activeFgOutput == FGOutput::DLSSG)
     {
         newOptions.mode = sl::DLSSGMode::eOff;
+        return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));
+    }
+
+    // OptiScaler makes the frame generation swapchain, so the game's swapchain hooks were cleared at plugin load and
+    // its DLSS-G cannot run: OptiScaler's frame generation replaces it. Kept from plugin load, not re-checked, so it
+    // stays off without its hooks even if OptiScaler's FG fails to start later, and its resources are freed: it does
+    // not come back this session (retoque/hooks/Streamline_OwnFgSwapchain.h)
+    if (state.activeFgInput != FGInput::DLSSG && state.gameDlssgReplacedByOwnFg.load(std::memory_order_relaxed))
+    {
+        static std::atomic<bool> loggedReplaced { false };
+        if (!loggedReplaced.exchange(true))
+            LOG_INFO("The game's own DLSS-G is forced off: OptiScaler's frame generation replaces it (FG Input {}, FG "
+                     "Output {})",
+                     magic_enum::enum_name(state.activeFgInput), magic_enum::enum_name(state.activeFgOutput));
+
+        newOptions.mode = sl::DLSSGMode::eOff;
+        newOptions.flags &= ~sl::DLSSGFlags::eRetainResourcesWhenOff;
         return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));
     }
 
