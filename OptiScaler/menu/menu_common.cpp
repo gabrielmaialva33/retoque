@@ -5341,8 +5341,11 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
             ImGui::PopItemWidth();
         }
 
-        const bool dlssgInputOrOutput =
-            state.activeFgOutput == FGOutput::DLSSG || state.activeFgInput == FGInput::DLSSG;
+        // Also when OptiScaler's frame generation replaced the game's DLSS-G: it is forced off then
+        // (slDLSSGSetOptions), and these controls would do nothing
+        const bool dlssgInputOrOutput = state.activeFgOutput == FGOutput::DLSSG ||
+                                        state.activeFgInput == FGInput::DLSSG ||
+                                        state.gameDlssgReplacedByOwnFg.load(std::memory_order_relaxed);
 
         // The ratio combo and the DMFG checkbox share a line. With SameLine when the combo is not drawn, the checkbox
         // followed the FG selection table past the column edge, clipped out of sight (found by ShyVortex, 86054259)

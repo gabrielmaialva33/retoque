@@ -184,6 +184,35 @@ int main(int argc, char** argv)
         set();
         require(Provider::sent.mode == sl::DLSSGMode::eOff, "explicit off overridden");
     }
+    else if (name == "own-fg-replaces")
+    {
+        // OptiScaler makes the FG swapchain (OptiFG + XeFG), so the game's DLSS-G hooks were cleared at plugin load
+        // (retoque/hooks/Streamline_OwnFgSwapchain.h): its DLSS-G goes out off, without retained resources, whatever it
+        // or the ratio override asks, and its own request is still what PauseWithoutFrameGen reads
+        const auto retain = [] {
+            return (std::to_underlying(Provider::sent.flags) &
+                    std::to_underlying(sl::DLSSGFlags::eRetainResourcesWhenOff)) != 0;
+        };
+        options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
+        state.activeFgInput = FGInput::Upscaler;
+        state.activeFgOutput = FGOutput::XeFG;
+        require(set() == sl::Result::eOk && Provider::sent.mode == sl::DLSSGMode::eOn && retain(),
+                "not replaced yet: the game's DLSS-G changed");
+        state.gameDlssgReplacedByOwnFg = true;
+        require(set() == sl::Result::eOk && Provider::sent.mode == sl::DLSSGMode::eOff, "replaced DLSS-G not off");
+        require(!retain(), "replaced DLSS-G kept its resources");
+        require(state.dlssgGameRequestsFg, "the game's own request was lost");
+        options.mode = sl::DLSSGMode::eAuto;
+        set();
+        require(Provider::sent.mode == sl::DLSSGMode::eOff, "auto turned the replaced DLSS-G on");
+        options.mode = sl::DLSSGMode::eOn;
+        Provider::setResult = sl::Result::eErrorInvalidParameter;
+        require(set() == sl::Result::eErrorInvalidParameter, "the refusal was not returned to the game");
+        Provider::setResult = sl::Result::eOk;
+        state.activeFgInput = FGInput::DLSSG; // feeding the game's DLSS-G is not replacing it
+        set();
+        require(Provider::sent.mode == sl::DLSSGMode::eOn && retain(), "FG Input DLSSG forced the game's DLSS-G off");
+    }
     else if (name == "pause-request-failed")
     {
         // PauseWithoutFrameGen's signal: a call Streamline refused changed nothing (kkyleeb21's D18, 3f61eb29)

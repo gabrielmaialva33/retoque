@@ -46,7 +46,7 @@ unit += function(hooks, "void StreamlineHooks::updateDlssgOptions(")
 unit += (HERE / "cases.cpp").read_text()
 cases = ("setter-preference", "getter-preference", "setter-refresh", "getter-refresh", "downgrade",
          "query-failure", "old-structs", "menu-transitions", "stable-queries", "setter-rebind", "game-get-free", "patch-during-probe", "auto-off",
-         "pause-request-failed", "pause-request-viewports", "pause-request-replay")
+         "pause-request-failed", "pause-request-viewports", "pause-request-replay", "own-fg-replaces")
 with tempfile.TemporaryDirectory(prefix="retoque-mfg-capacity-") as folder:
     cpp, binary = Path(folder) / "cases.cpp", Path(folder) / "cases"
     cpp.write_text(unit)

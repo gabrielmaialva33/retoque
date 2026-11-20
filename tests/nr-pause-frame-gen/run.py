@@ -50,7 +50,7 @@ assert re.search(r'result == sl::Result::eOk\s*&&\s*!replayingDlssgOptions\s*&&\
                  r'\s*\(uint32_t\) viewport\)\)\s*State::Instance\(\)\.dlssgGameRequestsFg\.store\(gameRequestsFg,', publish)
 assert setter.count('dlssgGameRequestsFg.store(') == 1
 assert 'return o_slDLSSGSetOptions(' not in setter                     # every call to Streamline goes through it
-assert setter.count('return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));') == 2
+assert setter.count('return recordGameRequest(o_slDLSSGSetOptions(viewport, newOptions));') == 3
 assert 'std::atomic<uint64_t> dlssgGameViewports { 0 };' in state_h
 assert '#include <hooks/Streamline_DlssgRequest.h>' in hook
 update = body(hook, 'void StreamlineHooks::updateDlssgOptions(')       # our own replay is not the game's request
