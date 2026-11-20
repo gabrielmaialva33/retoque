@@ -62,11 +62,16 @@ Host coverage does not validate the clipboard result in a running game.
 
 ## In progress
 
-Character inspection and per-object rules, reopened by the owner 2026-11-19: **design under review** in
+Character inspection and per-object rules, reopened by the owner 2026-11-19:
 [character-inspector](design/character-inspector.md). The source audit distinguishes NeuRotic's active detection/
-overlay rules from its inactive regional NR requests. The recommendation starts with default-off observation of
-existing protections; no detector, runtime implementation or regional image change is authorized by this note.
-This supersedes the earlier decision not to promote character inspection merely for reference-fork parity.
+overlay rules from its inactive regional NR requests. **Slice 0 is implemented (2026-11-20):** `MaskInspection=log`
+says in the log which protections a recorded D3D12 present frame was sent with (UI alpha handed or why not, each
+pass's AutoMask and SkinStructure, the composition's guard, residual limit, highlight recovery and darkening floor);
+off by default and inert, no pixel read or changed, no menu control. Host contracts only
+([nr-mask-inspection](../../tests/nr-mask-inspection/README.md)); the integration build and a game run on the
+present route are pending, and the note lists what that run has to show. Next, still under review: a view of the
+actual UI mask and composition weights on the existing debug-view surface. No detector or regional image change is
+authorized. This supersedes the earlier decision not to promote character inspection merely for reference-fork parity.
 
 Real depth without an upscaler, reopened 2026-11-19: [step 0](design/present-depth-without-upscaler.md) is a
 D3D12 `PresentDepth=log` observer only, with independent ranking/refusal/comparison host contracts. No depth is
@@ -84,7 +89,7 @@ The guide-fidelity probe is designed and parked, not implemented. Its temporal p
 and recording/readback lifetime contracts must close before implementation; see
 [guide-fidelity-probe](design/guide-fidelity-probe.md). It supplies no current guide-quality verdict.
 Other unrelated capture features and closed reference DLLs are not adopted simply because another project
-advertises them. Character inspection moved to design review above on 2026-11-19. Ten-pass chains were parked
+advertises them. Character inspection moved to design review above on 2026-11-19 (slice 0 built 2026-11-20). Ten-pass chains were parked
 on that ground until the owner asked for them on 2026-11-11:
 `Passes` now goes to ten (default one, RR route still three), with the cost said under the control and in
 [bounded-chain](design/bounded-chain.md) ("Ten passes"); its memory and time at ten on an RTX 3060 and a 4090 are

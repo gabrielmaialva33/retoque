@@ -1,8 +1,10 @@
-# Character inspection and regional NR: design under review
+# Character inspection and regional NR: slice 0 implemented, the rest under review
 
-Date: 2026-11-19. **Design only; no implementation or runtime qualification.** The owner reopened character
-inspection and object rules on this date. The recommendation is to make existing protection understandable
-first, then require measured evidence before adding regional image changes. The proposed keys below do not exist.
+Date: 2026-11-19; slice 0 added 2026-11-20. **Slice 0 (section 4) is implemented: `[DlssNr] MaskInspection=log`,
+log only, off by default, host-tested, not yet built into a DLL or run in a game.** Everything after it is design
+under review with no implementation or runtime qualification. The owner reopened character inspection and object
+rules on 2026-11-19. The recommendation is to make existing protection understandable first, then require measured
+evidence before adding regional image changes. No other key named below exists.
 This note does not authorize a detector, dependencies, model acquisition or changes to defaults.
 
 ## 1. Evidence and the reference implementation
@@ -221,36 +223,86 @@ market the first slice as character recognition. These are author recommendation
 
 ### Slice 0: protection status in logs, no pixels changed
 
-Proposed single key under `[DlssNr]`: **`MaskInspection=off|log`**, default `off`; `auto`/unset resolves to off.
-Unknown or malformed values resolve to off, with only the existing config diagnostic mechanism, not a new
-per-frame warning. Keep the requested value distinct from the effective state. No overlay, threshold, detector,
-class list, confidence slider, capture directory or worker-path key in this slice.
+**Implemented 2026-11-20** in `retoque/dlssnr/DlssNr_MaskInspection.h`, published from
+`DlssNr_Dx12::Dispatch`; host contracts in [nr-mask-inspection](../../../tests/nr-mask-inspection/README.md). Not
+built into a DLL and not run in a game: what a game run still has to show is listed at the end of this section.
 
-At implementation, it must round-trip through declaration/default in `OptiScaler/Config.h`, parsing and saving
-in `OptiScaler/Config.cpp`, and a documented entry in shipped `OptiScaler.ini`, with Config.md updated. Test unset,
-auto, off, log, malformed and save/reload, preserving unrelated keys and not turning a volatile effective state
-into a saved choice. Changing this preference must not reset/rebuild the model or change cadence/pass settings.
+One key under `[DlssNr]`: **`MaskInspection=off|log`**, default `off`; `auto`/unset resolves to off.
+Unknown or malformed values resolve to off, with only the existing config diagnostic (the `DlssNr.MaskInspection:`
+entry every non-auto key gets), not a per-frame warning. The requested value is distinct from the effective state:
+the text asked for is what is saved, never what it resolved to. No overlay, threshold, detector, class list,
+confidence slider, capture directory or worker-path key in this slice, and no menu control.
 
-The first supported producer is the existing D3D12 NR dispatch boundary, after its ordinary UI-alpha decision.
-Publish a fixed-size value snapshot: route, real-frame sequence and generation (numeric local tokens only),
-pass index, working extent, AutoMask and SkinStructure settings, UI-alpha handed/not handed with a reason, and
-whether composition guard/highlight-recovery branches are applicable. Never retain a resource pointer for this
-report. Describe CPU recording facts as **recorded**, not GPU-completed or visually effective. Report model skin
-mask as internal/not exposed; do not infer pixel coverage from a setting or non-null pointer.
+It round-trips through declaration/default in `OptiScaler/Config.h`, reading and saving in `OptiScaler/Config.cpp`,
+and a documented entry in the shipped `OptiScaler.ini` and in Config.md. The suite runs unset, auto, off, log,
+malformed and save/reload through the production statements, with unrelated keys kept and a session-only value never
+saved as the user's. Nothing but the gate reads the key, so it cannot reset or rebuild the model or change
+cadence or pass settings.
 
-The existing diagnostic/status path emits one coalesced line on change, at most once per two seconds, without
-including sequence in the change signature. Each line can carry the latest sequence as provenance. No pixel
-histograms, extra queries, CPU texture map, synchronous logger in a hook, unbounded event queue, paths, labels,
-image hashes, game identities or capture dumps. A log request on an unsupported route reports unavailable once
-through that same bounded status path; it never installs hooks to find a substitute source.
+The producer is the existing D3D12 NR dispatch boundary on the present route (`d3d12-present`), after its ordinary
+UI-alpha decision. One fixed-size value snapshot per Dispatch, on its stack: route, the present's sequence and the
+observer generation (numeric local tokens only), the model feature's generation, working extent, passes evaluated of
+passes requested, AutoMask and SkinStructure of each evaluated pass, UI alpha handed or not handed with a reason, and
+which composition branches the resolve was sent with. No resource pointer is kept. A line states CPU recording facts
+as **recorded**, not GPU-completed or visually effective, reports the model's skin mask as internal and not exposed,
+and infers no pixel coverage from a setting or a non-null pointer.
+
+The line is said through the log the pass already writes its own diagnostics to, when what it states changed, at
+most once per two seconds; the sequence is not part of what makes a line new and each line carries the frame it was
+recorded on. No pixel histograms, extra queries, CPU texture map, logger or file of its own, event queue, paths,
+labels, image hashes, game identities or capture dumps. A log request on a route with no producer reports unavailable
+once through the same bounded path; no hook is installed to find a substitute source.
 
 **Off contract:** at startup off, or with NR disabled, no inspector allocation, process, thread, file, readback,
 GPU command, extra tag hook or model query; no change to the existing pass inputs, outputs, constants, resets,
-submission order or completion tracking. The gate precedes bookkeeping. Existing logging/tag inventory continues
-only under its own pre-existing rules. Switching off stops publication, invalidates the value snapshot and cancels
-pending inspector log emission; existing log text is not deleted. Re-enabling starts a new observer generation.
-Resize, route/pass change, device loss and NR disable invalidate the snapshot before any later observation. The
-observer never releases or takes ownership of GPU resources. If metadata cannot be read safely, skip the sample.
+submission order or completion tracking. The gate precedes bookkeeping: off is the config test and one bool of the
+observer, read under the lock Dispatch already holds. Existing logging and the tag inventory continue only under
+their own rules. Switching off stops publication and ends the generation, so nothing observed before can be said
+after; log text already written is not deleted. Re-enabling starts a new observer generation. Resize, route or pass
+change, a model rebuild (which a device change forces) and NR having been disabled each start a generation before
+any later observation is considered. The observer never releases or takes ownership of GPU resources. Metadata that
+cannot be trusted skips the sample.
+
+#### Choices made where this section left room (2026-11-20, author recommendations taken; owner review pending)
+
+- **Where the line is said.** At the end of the same Dispatch that recorded the frame, under the pass's own lock,
+  through `LOG_INFO`, like the composition and chain lines beside it. The alternative was the two-second status
+  line at Present; it runs on another thread and only on some routes, so it would have needed a lock of its own and
+  could have said a snapshot older than the frame it was said on. No lock, thread or queue is added, even with the
+  key on.
+- **What "why was this region changed or not" needs.** Beyond the fields listed above the line also states the
+  residual limit and the final darkening floor (the other two bounded branches of the resolve), whether the model's
+  edit reaches the picture at all (`ApplyModel` off, strength zero, a debug view, compare) and whether the frame
+  was a model frame or a carried one. Coverage is never stated, and the line ends by saying so.
+- **A declined frame.** "Nothing recorded for this frame" is a status of its own, never the previous frame's. A
+  decline between two recordings (a second Dispatch refused at the same present) is not said while a recording is
+  less than two seconds old; one that lasts is said. Without that rule a game that calls the pass twice per present
+  would alternate two lines forever.
+- **Model cadence.** Model frames and carried frames alternate by design, so which of the two a line saw is
+  provenance, like the frame number, not a change.
+- **Total volume.** The two-second rule bounds the rate; 256 lines per process bounds the total, and the last line
+  says it is the last. A line is at most 2 KB and is built from integers only (settings at two decimals).
+- **Routes.** `d3d12-present` only, as recommended in section 6 (5). The D3D11 bridge, before-upscale, after-RR and
+  after-upscale pass through the same Dispatch and say "unavailable on this route" once per generation; native
+  Vulkan says it once per process. The bridge would be the cheapest next route (same code, same UI-alpha decision)
+  but is not promoted without its own decision. The driver proxy says unavailable: it returns before the resolve.
+- **NR disabled.** The entry points that find the pass switched off already leave a flag for the next Dispatch
+  (`g_resetOnReturn`); the inspector reads it, behind its gate, where Dispatch takes it. The NR-disabled paths are
+  not touched.
+- **Malformed values** are kept as written on save (lowercased, as every string key is), not rewritten to `off`.
+
+#### What a game run has to show, and has not
+
+None of this has run in a process with a GPU. Still to be shown on the D3D12 present route (`HookMethod=2`), on
+Proton and on native Windows separately: that the unit compiles and links with MSVC; that with the key at `auto`
+the log has no `mask inspection` line and frame times and the picture are what they were; that with `log` the first
+line appears on the first recorded frame and matches the settings in the menu; that toggling `UiProtection`,
+`AutoMask`, `SkinStructure`, `HighlightRecovery`, `ResidualLimit`, `MinRatio`, `ApplyModel`, Compare and the debug
+views each produce one line within about two seconds and no others; that a resize, a preset change and the NR
+toggle key each start a generation; that an after-upscale or bridge title says unavailable once and a Vulkan title
+once per run; that a session with frame generation or model cadence on does not alternate lines; and that the line
+count stays far below the budget in an ordinary session. The UI alpha being handed says nothing about whether the
+mask covers the HUD: that needs the mask view of the follow-up below.
 
 ### Optional observational follow-up, still before regional edits
 
@@ -288,11 +340,13 @@ for the proposed feature today. A failing gate keeps regional editing deferred; 
 
 ## 5. Host validation plan and current verification boundary
 
-For slice 0 implementation, use a small pure observation policy with a fake clock and logger. Exercise config
-round-trip; off and NR-off zero side effects; repeated unchanged status; two-second coalescing; time rollback;
+Slice 0 has a small pure observation policy with a fake clock and logger
+([nr-mask-inspection](../../../tests/nr-mask-inspection/README.md)). It exercises the config round-trip; off and
+NR-off zero side effects, with allocations counted; repeated unchanged status; two-second coalescing; time rollback;
 unsupported route; UI mask disabled/not produced; internal skin mask unavailable; failed recording; turn-off with
-pending status; and resize/device/pass/route generations. Mutants must independently remove each admission and
-off gate. Source wiring checks accompany, not replace, behavior tests. Do not assert texture coverage on the host.
+pending status; and resize/rebuild/pass/route generations. Its seeded mutants independently remove each admission
+and off gate. Source wiring checks accompany, not replace, behavior tests: the statements added to `Dispatch` are
+also compiled and run as written. No texture coverage is asserted on the host.
 
 For later masks, synthetic silhouettes/depth/motion/crops exercise transforms and refusal. A fake detector can
 test late replies without downloading a model. Tests of a shader's math cannot certify its bytecode bindings,
@@ -311,13 +365,16 @@ MSVC, dxc, game deployment, model download or detector execution belongs to this
 ## 6. Owner decisions still open
 
 1. First benefit: **understand current protection / gentler skin / whole-character strength / visible object boxes**?
-2. Accept **log-only slice 0, then mask visualization** as the first scope: **yes/no**?
+2. Accept **log-only slice 0, then mask visualization** as the first scope: **yes/no**? Slice 0 was built on
+   2026-11-20 on the author's recommendation, with the owner's answer still to come at review; the visualization is
+   not started.
 3. For future regional edits, target **all valid characters / one persistent named character**? The second needs
    identity evidence beyond a transient track ID.
 4. May an optional future local detector receive frame pixels outside the game process, with no network or saved
    images: **yes/no**? “No” removes A; it does not remove B/C.
 5. Which route qualifies first: **D3D12 present / D3D12 after-upscale / native Vulkan**? Recommendation: D3D12
    present, where existing UI-alpha inspection has the clearest immediate use; no automatic expansion to all routes.
+   Slice 0 took the recommendation: every other route reports unavailable.
 6. Accept the proposed cost/precision budgets as the initial go/no-go bar: **yes/no**? If not, choose **stricter cost /
    greater coverage at higher cost** before a regional implementation plan.
 
@@ -328,4 +385,5 @@ actual frame-time/RAM/VRAM costs, Linux/Proton worker operation, Windows GPU cor
 regional effects. No per-object NR renderer consumer was found; no exposed skin-mask texture was found in
 Retoque. These absences are bounded to the named snapshots, not predictions about later versions. Existing
 experimental code, stored effect fields and upstream segmentation outputs must not be described as delivered
-regional rendering. The implementation and all runtime measurements recommended here remain pending review.
+regional rendering. Slice 0 is implemented and host-tested only; every later step and all runtime measurements
+recommended here remain pending review.

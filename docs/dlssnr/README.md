@@ -73,7 +73,7 @@ These are records, not designs.
 - [exposure-scan-capacity.md](design/exposure-scan-capacity.md): what makes an exposure-scan candidate safe to hold, copy and use; a full list and a feature release without losing the exposure.
 - [exposure-scan-match.md](design/exposure-scan-match.md): `ScanMatch`, the opt-in choice of the scan's candidate by correlation with the frame's light (adapted from janblade).
 - [hud-protection.md](design/hud-protection.md): protecting the HUD through the model's UI correction.
-- [character-inspector.md](design/character-inspector.md): character inspection and regional NR, reopened 2026-11-19; source audit of NeuRotic, existing-mask inspection first, and evidence gates before regional image changes (design under review; no implementation).
+- [character-inspector.md](design/character-inspector.md): character inspection and regional NR, reopened 2026-11-19; source audit of NeuRotic, existing-mask inspection first, and evidence gates before regional image changes. Slice 0 (`MaskInspection=log`, log only, default off) is implemented and host-tested since 2026-11-20, not run in a game; the rest is design under review.
 - [output-stabilizer.md](design/output-stabilizer.md): hold still pixels still and follow the model where the game moved.
 - [residual-limit.md](design/residual-limit.md): an optional flat bound, in stops, on how far the model may move a pixel's light, inside the guard.
 - [dlss-enlargement.md](design/dlss-enlargement.md): Transfer 2, the model's edit enlarged by a private DLSS Super Resolution.
