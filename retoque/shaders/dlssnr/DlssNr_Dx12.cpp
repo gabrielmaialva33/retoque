@@ -41,6 +41,7 @@
 #include <dlssnr/DlssNr_CrashNote.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dlssnr/DlssNr_SlTagInventory.h>
+#include <dlssnr/DlssNr_MaskInspection.h>
 #include <dlssnr/DlssNr_ModelFileFind.h>
 #include <dxgi1_4.h>
 
@@ -520,6 +521,16 @@ EnlargeSession g_enlarge;
 
 using namespace DlssNr::Dx12Internal;
 
+// Mask inspection, slice 0 (DlssNr_MaskInspection.h; log only, [DlssNr] MaskInspection=log). Under g_nrMutex. Constant
+// initialized and fixed size: with the key off nothing of it is written, and nothing is ever allocated for it.
+static DlssNr::MaskInspection::Observer g_maskInspection;
+static_assert(DlssNr::MaskInspection::kMaxPasses == DlssNr::PassConfig::MaxPasses);
+
+static uint64_t MaskInspectionNowMs() { return static_cast<uint64_t>(NowMs()); }
+
+// A function of its own so the log names it, as it names every other line's.
+static void MaskInspectionSay(const char* line) { LOG_INFO("{}", line); }
+
 // ---------------------------------------------------------------------------------------------
 // The pass itself. Everything above is what it is made of; everything below is the shape the rest
 // of OptiScaler sees.
@@ -758,6 +769,19 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 {
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
     const Config& cfg = *Config::Instance();
+
+    // Mask inspection (docs/dlssnr/design/character-inspector.md, slice 0): off, this is the config test and one bool
+    // of the observer, and every use of it below is behind `if (maskInspection)`. On, it is published when this
+    // Dispatch ends, whichever return it takes, after everything declared below it has been destroyed.
+    DlssNr::MaskInspection::Scope maskInspection(g_maskInspection, DlssNr::MaskInspection::Requested(cfg),
+                                                 &MaskInspectionNowMs, &MaskInspectionSay);
+    if (maskInspection)
+    {
+        maskInspection->route = DlssNr::MaskInspection::RouteOf(frame.PresentSource, frame.BridgeHost, colour != output,
+                                                                frame.AfterRayReconstruction);
+        maskInspection->sequence = State::Instance().frameCount;
+    }
+
     DlssNr::AdvisorRuntime::EvaluationScope advisorScope;
     const uint64_t advisorEvaluation = advisorScope.id;
     DlssNr::AdvisorRuntime::Decision advisor;
@@ -1237,6 +1261,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // out too long and the model warps its history past where the surface went.
     g_nr.guideMvScaleX = frame.MvScaleX;
     g_nr.guideMvScaleY = frame.MvScaleY;
+
+    // Mask inspection: the pass was found switched off since the last Dispatch, so what was observed before does not
+    // describe what follows. Read, not taken: the statement below owns the flag.
+    if (maskInspection && g_resetOnReturn.load(std::memory_order_relaxed))
+        maskInspection.Restart();
 
     if (g_resetOnReturn.exchange(false))
         g_nr.reset = true;
@@ -2791,6 +2820,12 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
               uiAlpha != nullptr ? workHeight : 0, frame.PresentSource ? workWidth : 0,
               frame.PresentSource ? workHeight : 0);
 
+    // Mask inspection: the decision just made, as a value. The mask itself is not read and its pointer is not kept.
+    if (maskInspection)
+        maskInspection->ui = uiAlpha != nullptr                          ? DlssNr::MaskInspection::Ui::Handed
+                             : cfg.DlssNrUiProtection.value_or_default() ? DlssNr::MaskInspection::Ui::NotProduced
+                                                                         : DlssNr::MaskInspection::Ui::Off;
+
     // The proxy path, when asked for. Same inputs, same model -- the difference is who calls it.
     //
     // Nothing falls back automatically. A silent fallback would mean never finding out the proxy
@@ -2816,6 +2851,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             LOG_ERROR("DLSS-NR (proxy): evaluate returned 0x{:X} ({}), disabling for this session", proxyResult,
                       NgxResultName(proxyResult));
         }
+
+        if (maskInspection)
+            maskInspection->outcome = DlssNr::MaskInspection::Outcome::DriverProxy;
 
         device->Release();
         return false;
@@ -3367,6 +3405,34 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             ReadResourceScope exposureRead(cmdList, exposureTex, exposureBarrierState);
             wrote = DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, motionIn,
                                  exposureTex, target, nullptr, originalInTarget);
+        }
+
+        // Mask inspection: what this recording gave the model and what the resolve above was sent, as values copied
+        // from what the pass already decided. Nothing here is read back by the pass, and a frame the resolve did not
+        // record keeps the "nothing recorded" it started with.
+        if (maskInspection && wrote)
+        {
+            DlssNr::MaskInspection::Snapshot& seen = *maskInspection;
+            seen.outcome =
+                carried ? DlssNr::MaskInspection::Outcome::Carried : DlssNr::MaskInspection::Outcome::Recorded;
+            seen.modelGeneration = g_nr.featureGeneration;
+            seen.width = workWidth;
+            seen.height = workHeight;
+            seen.requestedPasses = passSnapshot.Count;
+            seen.evaluatedPasses = carried ? g_nr.cadencePasses : chain.completed;
+            for (uint32_t i = 0; i < passSnapshot.Count && i < DlssNr::MaskInspection::kMaxPasses; ++i)
+                seen.passes[i] = { DlssNr::MaskInspection::Centi(passSnapshot.Settings[i].SkinStructure),
+                                   passSnapshot.Settings[i].AutoMask };
+            seen.detail = DlssNr::MaskInspection::Centi(resolveParams.TransferStrength);
+            seen.maxRatio = DlssNr::MaskInspection::Centi(std::max(resolveParams.MaxRatio, 1.0f));
+            seen.residualLimit = DlssNr::MaskInspection::Centi(resolveParams.ResidualLimit);
+            seen.minRatio = DlssNr::MaskInspection::Centi(resolveParams.MinRatio);
+            seen.compare = resolveParams.CompareMode;
+            seen.debugView = resolveParams.DebugView;
+            seen.reversibleMode = resolveParams.ReversibleMode;
+            seen.applyModel = resolveParams.ApplyModel != 0;
+            seen.passthrough = resolveParams.Passthrough != 0;
+            seen.highlightRecovery = resolveParams.HighlightRecovery != 0;
         }
         Barrier(cmdList, finalOutput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
                 D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

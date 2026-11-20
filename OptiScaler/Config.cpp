@@ -535,6 +535,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrZeroGuideReset.set_from_config(readBool("DlssNr", "ZeroGuideReset"));
             DlssNrSynthMotion.set_from_config(readBool("DlssNr", "SynthMotion"));
             DlssNrUiProtection.set_from_config(readBool("DlssNr", "UiProtection"));
+            DlssNrMaskInspection.set_from_config(readString("DlssNr", "MaskInspection", true));
             DlssNrMatchGuides.set_from_config(readBool("DlssNr", "MatchGuides"));
             DlssNrRenderMotionScale.set_from_config(readBool("DlssNr", "RenderMotionScale"));
             DlssNrSynthMotionSource.set_from_config(readString("DlssNr", "SynthMotionSource", true));
@@ -2036,6 +2037,7 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->DlssNrZeroGuideReset.value_for_config()).c_str());
         ini.SetValue("DlssNr", "SynthMotion", GetBoolValue(Instance()->DlssNrSynthMotion.value_for_config()).c_str());
         ini.SetValue("DlssNr", "UiProtection", GetBoolValue(Instance()->DlssNrUiProtection.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "MaskInspection", Instance()->DlssNrMaskInspection.value_for_config_or("auto").c_str());
         ini.SetValue("DlssNr", "MatchGuides", GetBoolValue(Instance()->DlssNrMatchGuides.value_for_config()).c_str());
         ini.SetValue("DlssNr", "RenderMotionScale",
                      GetBoolValue(Instance()->DlssNrRenderMotionScale.value_for_config()).c_str());

@@ -29,6 +29,7 @@
 #include <dlssnr/DlssNr_RenderSize.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dlssnr/DlssNr_SlTagInventory.h>
+#include <dlssnr/DlssNr_MaskInspection.h>
 #include <misc/DeferredRelease.h>
 #include <dlssnr/DlssNr_WorkingScale.h>
 
@@ -1524,12 +1525,26 @@ void DestroyMotionProbe()
     LoseMotionVerdict("the route freed its objects on the device");
 }
 
+// Mask inspection, slice 0 (DlssNr_MaskInspection.h) has no producer on Vulkan: with [DlssNr] MaskInspection=log a
+// Vulkan route says so once per process and observes nothing. Off, this is the config test.
+DlssNr::MaskInspection::RouteNotice g_vkMaskInspectionNotice;
+
+void SayMaskInspectionUnavailable(const Config& cfg)
+{
+    if (g_vkMaskInspectionNotice.Take(DlssNr::MaskInspection::Requested(cfg)))
+        LOG_INFO("{}", DlssNr::MaskInspection::kVulkanUnavailable);
+}
+
 // Both Vulkan routes set the encode's Transfer here. Transfer 2's private DLSS is D3D12 only: sent as is, the shader
 // would decode this path's plain answer as the carrier that DLSS writes; it runs matched residual instead
 // (docs/dlssnr/design/dlss-enlargement.md).
 void SetVulkanTransfer(DlssNrConstants& encode, const Config& cfg)
 {
     encode.Transfer = Enlarge::VulkanTransfer(cfg.DlssNrTransfer.value_or_default());
+
+    // The one statement all three Vulkan routes (after the upscaler, before it, the present host) run for each frame
+    // they encode, so the mask inspection notice is said from here rather than from each route's body.
+    SayMaskInspectionUnavailable(cfg);
 }
 
 // [DlssNr] ModelFile, or the default search as always (DlssNr_ModelFileFind.h).

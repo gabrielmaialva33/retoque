@@ -65,6 +65,7 @@ experiment.
 | File | Role |
 |---|---|
 | `DlssNr_PresentDepth.h`, `DlssNr_PresentDepthTables.h`, `DlssNr_PresentDepthDx12.h/.cpp` | Startup-only D3D12 `PresentDepth=log`: bounded CPU observation, independent ranks/refusals and separate clock; never supplies a guide to NR. [Design](../../docs/dlssnr/design/present-depth-without-upscaler.md), [host suite](../../tests/nr-present-depth/README.md); game/native qualification pending |
+| `DlssNr_MaskInspection.h` | `MaskInspection=log`, slice 0 of character inspection: a fixed-size value snapshot of what one D3D12 present Dispatch gave the model and its resolve, said in the log on change (two-second gap, 256 lines); reads no pixel, keeps no resource, off by default and inert. [Design](../../docs/dlssnr/design/character-inspector.md), [host suite](../../tests/nr-mask-inspection/README.md); not run in a game |
 | `DlssNr.h` | umbrella header; documents the call sites |
 | `DlssNrFeature_Dx12.h` | the namespace-level API the menu and the call sites use |
 | `DlssNr_Menu.cpp` | the settings panel |

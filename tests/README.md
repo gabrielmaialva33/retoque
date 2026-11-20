@@ -386,6 +386,10 @@ production headers or source slices with local fakes under AddressSanitizer and 
 - `nr-present-depth` — log-only D3D12 depth ranking, refusals, lifetime generations, bounded recordings, atomic
   descriptor lookup and log windows, plus hook/config source guards. Optional full adapter syntax check against
   MinGW D3D12 headers; no Detours runtime, GPU, game or DLL build.
+- `nr-mask-inspection` — log-only `MaskInspection=log`: off measured inert (allocations counted, clock unread,
+  observer untouched), the key through the production read/save statements and the shipped INI, what a line states,
+  its two-second rate and 256-line budget, generations, and the statements added to `Dispatch` compiled and run as
+  written against the production frame/constants/pass structs; each rule broken by a seeded mutant. No D3D12, shader, DLL build or game.
 - `nr-invariants` — the `DEVELOPMENT.md` §4 guards against the live tree: config
   round-trip for every `DlssNr` key, struct equals cbuffer, precompiled headers equal
   the committed bytecode, retired identifiers. Pure Python, no compiler.
