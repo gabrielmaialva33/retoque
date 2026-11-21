@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Build a Windows app archive from an exe and a previously packaged payload archive."""
+"""Build a Windows app archive from an exe and a previously packaged payload archive, and optionally the
+Retoque-Setup-<version>.exe that carries it (make_setup.py)."""
 import argparse
 import hashlib
 from pathlib import Path
@@ -55,7 +56,7 @@ def regular_bytes(path):
     return path.read_bytes()
 
 
-def build(exe, payload, out, raw_version):
+def build(exe, payload, out, raw_version, setup_stub=None, published_at=None):
     version = re.sub(r"^(?:retoque-v|v)", "", raw_version)
     if not re.fullmatch(r"(?:0|[1-9][0-9]{0,7})\.(?:0|[1-9][0-9]{0,7})\.(?:0|[1-9][0-9]{0,7})(?:-[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*)?", version):
         raise ValueError("invalid release version")
@@ -114,9 +115,15 @@ def build(exe, payload, out, raw_version):
         next_sums.write_text("".join(f"{digest}  {member}\n" for member, digest in sorted(old_sums.items())))
         dest.replace(out / name)
         next_sums.replace(sums_path)
+    assets = [str(out / name)]
+    if setup_stub is not None:
+        import make_setup
+        # The setup embeds the SHA256SUMS written above and adds its own line to it.
+        assets.append(str(make_setup.build(setup_stub, out / name, sums_path, out, tag=f"retoque-v{version}",
+                                           published_at=published_at or make_setup.utc_now())))
     print(f"Packaged: {out / name}\nChecksums: {sums_path}\nWould run (never executed automatically):")
     print(shlex.join(["gh", "release", "create", f"retoque-v{version}", "--repo", "gabrielmaialva33/retoque", "--draft",
-                      "--title", f"Retoque {version}", str(out / name), str(sums_path)]))
+                      "--title", f"Retoque {version}", *assets, str(sums_path)]))
 
 
 def main():
@@ -125,9 +132,14 @@ def main():
     parser.add_argument("--payload", type=Path, required=True, help="archive from make-payload-release.sh")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--version", required=True)
+    parser.add_argument("--setup-stub", type=Path,
+                        help="also build Retoque-Setup-<version>.exe from this retoque-setup.exe (x86_64-pc-windows-gnu)")
+    parser.add_argument("--published-at", help="with --setup-stub: release time in the setup's metadata (UTC, Z; default now)")
     args = parser.parse_args()
+    if args.published_at and not args.setup_stub:
+        parser.error("--published-at needs --setup-stub")
     try:
-        build(args.exe, args.payload, args.out, args.version)
+        build(args.exe, args.payload, args.out, args.version, args.setup_stub, args.published_at)
     except (OSError, ValueError, zipfile.BadZipFile) as error:
         parser.exit(1, f"REFUSING: {error}\n")
 

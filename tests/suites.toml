@@ -1257,6 +1257,14 @@ tier = "host"
 timeout = 120
 summary = "Forwarder resource shares OptiScaler's numeric file/product version, follows a synthetic version bump, and is wired into MSBuild and MSVC CMake; four source controls. No PE execution."
 
+[app-release-packaging]
+path = "app-release-packaging"
+domain = "tooling"
+requires = ["python"]
+tier = "host"
+timeout = 120
+summary = "Windows app release scripts on synthetic inputs: the app archive and Retoque-Setup-<version>.exe (appended bundle, trailer, release.json and SHA256SUMS cross-checks). Nothing is executed or published."
+
 [app-install-parity]
 path = "app-install-parity"
 domain = "platform"

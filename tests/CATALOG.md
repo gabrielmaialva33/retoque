@@ -171,6 +171,7 @@ This is a coverage index, not evidence that any suite or hardware passed.
 
 | Suite | Tier | Requirements | Evidence contract | Summary |
 |---|---|---|---|---|
+| [app-release-packaging](app-release-packaging/README.md) | host | python | process exit (see suite limits) | Windows app release scripts on synthetic inputs: the app archive and Retoque-Setup-<version>.exe (appended bundle, trailer, release.json and SHA256SUMS cross-checks). Nothing is executed or published. |
 | [build-lifecycle](build-lifecycle/README.md) | host | python | process exit (see suite limits) | Compiler-prefix exclusion, owned subprocess supervision, signals and complete output publication; no Wine. |
 | [menu-preview](menu-preview/README.md) | host | python, cxx | process exit (see suite limits) | Real NR panel and Dear ImGui, CPU rasterization, PNG validity, glyph pixels and deterministic named fixtures (FreeType required). |
 | [nr-forwarder-version](nr-forwarder-version/README.md) | host | python, cxx | process exit (see suite limits) | Forwarder resource shares OptiScaler's numeric file/product version, follows a synthetic version bump, and is wired into MSBuild and MSVC CMake; four source controls. No PE execution. |
