@@ -56,8 +56,17 @@ Tagged commit and CI evidence are in `Retoque-v0.3.3.zip.manifest.json`. Before 
   app's setup decisions (install, update, current) and helper choice, the new `app-release-packaging` host suite,
   app `clippy -D warnings` on Linux and for Windows, and a setup built from the published v0.3.2 assets and read back
   with the setup's own code.
-- The release commit: app `cargo fmt`, `clippy -D warnings` (Linux and Windows), the app test suite, the tooling
-  suites, Windows and Linux app builds, and the CI release workflow (strict host tier, Release build, manifest).
+- The release commit `285ccc6f`: app `cargo fmt`, `clippy -D warnings` (Linux and Windows), the app test suite (660
+  passed), the tooling suites, Windows and Linux app builds; the CI release workflow re-ran the strict host tier
+  (148 PASS), built Release with MSBuild 18.12.2.51402 and wrote the manifest (`dirty=false`, host PASS).
+- Shipped binaries (from the CI build): `OptiScaler.dll` `2c8fccd7e9f2a5038f93262e449ddebe51d6ec9bec93aa2ce73d58bcdd2697dc`,
+  `nvngx.dll_dlssnr.dll` forwarder `a3c9bee2078c2fe351e9eff17ba1b9e4cf55837e301d16c3c27cbb3317301936`,
+  `RetoqueWindowHost.exe` `957e298a92213901b252324e96572d2e50aa5ae13cb110dd84a9c0413f1ff961`.
+- `Retoque-Setup-0.3.3.exe` read back with the setup's own code: the bundle checks, the app's validator unpacks its 41
+  files and stages them as an update to 0.3.3. `SHA256SUMS` matches the four app assets as uploaded.
+- Packaging fix found while building this release: `make_setup.py` looked for the text `--setup` in the app to tell a
+  setup-capable app from an older one, but an optimized build never stores that short argument whole; it now uses
+  the app's version marker (0.3.3 and newer have the setup mode).
 
 **Not validated:** the setup on Windows. It has not run on a Windows PC yet: the install and update reviews in setup
 mode, the hand-off to an installed v0.3.0's updater, the temporary folder's cleanup and how SmartScreen and antivirus

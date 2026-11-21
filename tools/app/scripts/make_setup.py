@@ -136,6 +136,17 @@ def check_stub(stub):
         raise ValueError("stub already carries a setup bundle")
 
 
+# The first app version with the `--setup <dir>` mode.
+FIRST_SETUP_VERSION = (0, 3, 3)
+
+
+def version_tuple(version):
+    match = re.match(r"(\d+)\.(\d+)\.(\d+)", version)
+    if not match:
+        raise ValueError(f"unreadable app version {version!r}")
+    return tuple(int(part) for part in match.groups())
+
+
 def check_app_zip(zip_bytes, version, allow_without_setup=False):
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as archive:
         try:
@@ -148,9 +159,11 @@ def check_app_zip(zip_bytes, version, allow_without_setup=False):
     if f"RETOQUE_APP_VERSION={version};".encode() not in app:
         raise ValueError("the app in the archive is not version " + version)
     # The app's `--setup <dir>` mode opens the install/update review; an older app (retoque-v0.3.2 and before)
-    # would only open its window from the setup's temporary folder.
-    if b"--setup" not in app and not allow_without_setup:
-        raise ValueError("the app in the archive predates --setup, so the setup could only open it "
+    # would only open its window from the setup's temporary folder. Decided by the version marker checked above:
+    # the literal "--setup" is not a reliable probe, because an optimized build compares that short argument with
+    # integer loads and never stores the string whole (the v0.3.3 release build has no "--setup" bytes).
+    if version_tuple(version) < FIRST_SETUP_VERSION and not allow_without_setup:
+        raise ValueError("the app in the archive predates --setup (retoque-v0.3.3), so the setup could only open it "
                          "(--allow-app-without-setup packages it anyway, as a format check)")
 
 

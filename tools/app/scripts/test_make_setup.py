@@ -121,12 +121,14 @@ class Setup(unittest.TestCase):
         self.write_zip(version="1.2.4")
         self.write_sums()
         self.assertRefused("not version 1.2.3")
-        # An app from before the setup existed would only open its window; refused unless asked for explicitly.
-        self.write_zip(setup_mode=False)
-        self.write_sums()
-        self.assertRefused("predates --setup")
-        self.build(allow_without_setup=True)
-        (self.out / "Retoque-Setup-1.2.3.exe").unlink()
+        # An app from before the setup existed (v0.3.2 and older) would only open its window; refused unless asked
+        # for explicitly. Decided by the version marker: optimized builds do not store the "--setup" literal whole.
+        self.write_zip(version="0.3.2", setup_mode=False)
+        with self.assertRaisesRegex(ValueError, "predates --setup"):
+            setup.check_app_zip(self.zip.read_bytes(), "0.3.2")
+        setup.check_app_zip(self.zip.read_bytes(), "0.3.2", allow_without_setup=True)
+        self.write_zip(version="0.3.3", setup_mode=False)
+        setup.check_app_zip(self.zip.read_bytes(), "0.3.3")
         renamed = self.root / "app.zip"
         self.write_zip()
         self.write_sums()
