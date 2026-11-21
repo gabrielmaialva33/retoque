@@ -192,16 +192,49 @@ impl Drop for Lock {
     }
 }
 
-/// The staged helper is a copy of this trusted executable, not a command from release metadata.
+/// An ordinary update, from the installed app: the staged helper is a copy of this trusted executable, not a command
+/// from release metadata.
 pub fn schedule_update(staged: app_release::Staged) -> io::Result<()> {
-    let p = paths()?;
-    if !p.is_installed(&std::env::current_exe()?) {
-        return Err(io::Error::other("install the app before updating it"));
+    let helper = update_helper(&paths()?, &std::env::current_exe()?, false)?;
+    schedule_update_from(staged, &helper)
+}
+
+/// The registration's DisplayVersion: `None` without a registration, `Some("")` when it has no version.
+pub fn installed_version() -> io::Result<Option<String>> {
+    let key = match RegKey::predef(HKEY_CURRENT_USER).open_subkey_with_flags(UNINSTALL_KEY, KEY_READ) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e),
+        Ok(key) => key,
+    };
+    match key.get_value::<String, _>("DisplayVersion") {
+        Ok(version) => Ok(Some(version)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Some(String::new())),
+        Err(e) => Err(e),
     }
+}
+
+/// `--setup <dir>` from the Windows setup, which runs this app from its private folder.
+pub fn setup_dir() -> Option<PathBuf> {
+    setup_dir_from(&std::env::args_os().skip(1).collect::<Vec<_>>())
+}
+
+/// The setup's update of an older installed app: stage the bundle the setup carries inside the program folder and
+/// hand it to a helper copied from the INSTALLED executable (this one runs from the setup's folder and is newer).
+pub fn setup_update(dir: &Path) -> io::Result<()> {
+    let p = paths()?;
+    let helper = update_helper(&p, &std::env::current_exe()?, true)?;
+    let staged = stage_from_setup(dir, &p.install)?;
+    schedule_update_from(staged, &helper)
+}
+
+/// Every update ends here: recheck the staged bytes and the replacement plan, copy the helper next to them and start
+/// it with this process's id; the helper waits for this app to exit, replaces, re-registers and relaunches.
+pub fn schedule_update_from(staged: app_release::Staged, helper_source: &Path) -> io::Result<()> {
+    let p = paths()?;
     staged.manifest.verify(&staged.dir.path().join("payload"))?;
     replacement_steps(&p.install, staged.dir.path())?;
     let helper = staged.dir.path().join("updater.exe");
-    fs::copy(std::env::current_exe()?, &helper)?;
+    fs::copy(helper_source, &helper)?;
     Command::new(helper)
         .arg("--apply-app-update")
         .arg(std::process::id().to_string())
@@ -403,6 +436,8 @@ fn cleanup(wait: bool) -> io::Result<()> {
 }
 
 /// Called before opening the GUI or initializing app data. Returns true for an app-management invocation.
+/// `--setup <dir>` is not one: like a plain start it runs the (no-op outside the program folder) cleanup and opens
+/// the window, where [`setup_dir`] opens the setup's review.
 pub fn startup() -> bool {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
