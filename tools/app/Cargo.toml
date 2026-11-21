@@ -4,7 +4,7 @@ members = ["crates/retoque-core", "crates/retoque-discovery", "crates/retoque-da
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 license = "GPL-3.0-only"
 publish = false
