@@ -3427,6 +3427,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "retoque-setup"
+version = "0.3.2"
+dependencies = [
+ "retoque-data",
+ "serde_json",
+ "sha2",
+ "sys-locale",
+ "tempfile",
+ "windows",
+]
+
+[[package]]
 name = "rfd"
 version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

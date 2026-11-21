@@ -11,6 +11,8 @@ makes a normal draft; only a suffixed tag (`-rc1`) makes a pre-release, because 
 pre-releases.
 For the desktop app's payload-only release asset (`retoque-payload-<version>-x64.zip` and `SHA256SUMS`), see
 [PAYLOAD.md](PAYLOAD.md).
+For the Windows app assets (`retoque-app-<version>-windows-x64.zip` and `Retoque-Setup-<version>.exe`, both listed
+in the same `SHA256SUMS`), see [APP-UPDATE.md](APP-UPDATE.md#release-contract-and-packaging).
 The version-1 `retoque-release-manifest` sidecar records:
 
 - Full packaging checkout commit and dirty state, plus declared build configuration/mode/toolchain.

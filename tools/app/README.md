@@ -12,6 +12,7 @@ The window's building blocks, rules and glossary are in [crates/retoque-app/DESI
 | `retoque-data` | NR model catalog, the settings the app edits, log summary, diagnostic bundle |
 | `retoque-cli` | `retoque install / uninstall / status`, the scripts' command line |
 | `retoque-app` | The egui window on top of the three libraries |
+| `retoque-setup` | `Retoque-Setup-<version>.exe`: unpacks the app archive appended to it and opens the app's install or update review |
 
 ## Build and run
 
@@ -20,6 +21,7 @@ cd tools/app
 cargo run -p retoque-app                       # the window, from a checkout (uses x64/out as the payload)
 cargo run -p retoque-cli -- status "<game dir>"
 cargo build --release --target x86_64-pc-windows-gnu -p retoque-app -p retoque-cli   # Windows binaries
+cargo build --release --target x86_64-pc-windows-gnu -p retoque-setup                # the setup's stub
 cargo test --workspace
 ```
 
@@ -34,6 +36,10 @@ confirmation from our official GitHub releases (`gabrielmaialva33/retoque`).
 
 ## Install or update the Windows app
 
+`Retoque-Setup-<version>.exe` is the usual way in: it unpacks the app and its Retoque files into a private
+temporary folder and runs `retoque-app.exe --setup <folder>`, which opens the install review on a computer without
+Retoque, an update review over an older installed version, or says that the same or a newer version is installed.
+`tools/app/scripts/make_setup.py` (or `make-app-release.sh --setup-stub`) builds it from the release's app archive.
 Windows Preferences offers **Install Retoque on this computer…** for a portable copy with its complete payload
 beside the executable. Review the files, per-user program folder, Start Menu/Desktop shortcuts and Apps & features
 entry before installing. The installed app offers an explicitly confirmed update check, verified download and

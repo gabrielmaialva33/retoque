@@ -360,6 +360,92 @@ pub fn rollback(completed: &[Move]) -> io::Result<()> {
     Ok(())
 }
 
+/// `retoque-app.exe --setup <dir>`, as the Windows setup starts the app from its private folder: exactly these two
+/// arguments, with an absolute, existing, unlinked folder. Anything else is not a setup invocation.
+pub fn setup_dir_from(args: &[std::ffi::OsString]) -> Option<PathBuf> {
+    match args {
+        [flag, dir] if flag == "--setup" => {
+            let dir = PathBuf::from(dir);
+            (dir.is_absolute() && plain_path(&dir).is_ok() && fs::symlink_metadata(&dir).is_ok_and(|m| m.is_dir()))
+                .then_some(dir)
+        }
+        _ => None,
+    }
+}
+
+/// What the setup offers on this computer, from the Apps & features registration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SetupAction {
+    /// Nothing registered: the ordinary install review (which also replaces a retoque-v0.3.0 uninstall leftover and
+    /// refuses any other occupied program folder).
+    Install,
+    /// An older version is registered: update it from the setup's bundle.
+    Update { installed: String },
+    /// The same or a newer version is registered: nothing to change, only offer to open it.
+    Current { installed: String },
+}
+
+/// `registered` is the registration's DisplayVersion (`None` without a registration, `Some("")` when it has none).
+/// A version that cannot be compared is offered as an update: the update helper, a copy of the installed app, still
+/// refuses a bundle that is not newer than itself.
+pub fn setup_action(registered: Option<&str>, this: &str) -> SetupAction {
+    let Some(installed) = registered else {
+        return SetupAction::Install;
+    };
+    let installed = installed.to_owned();
+    match payload_fetch::compare_versions(&installed, this) {
+        Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater) => SetupAction::Current { installed },
+        _ => SetupAction::Update { installed },
+    }
+}
+
+/// The executable the update helper (`updater.exe`) is copied from. The helper refuses a manifest that is not newer
+/// than its own version, so it must be the installed version: the running app for an ordinary update (which must
+/// then be the installed copy), the installed executable for an update started by the setup from its own folder.
+pub fn update_helper(paths: &Paths, running: &Path, from_setup: bool) -> io::Result<PathBuf> {
+    if !from_setup {
+        return if paths.is_installed(running) {
+            Ok(running.to_path_buf())
+        } else {
+            Err(io::Error::other("install the app before updating it"))
+        };
+    }
+    let installed = paths.exe();
+    plain_path(&installed)?;
+    if !fs::symlink_metadata(&installed)?.is_file() {
+        return Err(io::Error::other("installed app is not a file"));
+    }
+    Ok(installed)
+}
+
+fn read_bounded(path: &Path, limit: u64) -> io::Result<Vec<u8>> {
+    plain_path(path)?;
+    let file = fs::File::open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(io::Error::other("setup file is not a regular file"));
+    }
+    let mut bytes = Vec::new();
+    io::Read::read_to_end(&mut io::Read::take(file, limit + 1), &mut bytes)?;
+    if bytes.len() as u64 > limit {
+        return Err(io::Error::other("setup file exceeds size limit"));
+    }
+    Ok(bytes)
+}
+
+/// Stage the update the setup carries (`<dir>/release.json`, `bundle.zip`, `SHA256SUMS`) inside the program folder,
+/// with exactly the checks of a downloaded update (both digests, archive policy, staged-byte manifest).
+pub fn stage_from_setup(dir: &Path, install: &Path) -> io::Result<app_release::Staged> {
+    let release: payload_fetch::Release = serde_json::from_slice(&read_bounded(
+        &dir.join(app_release::SETUP_RELEASE),
+        app_release::MAX_SETUP_RELEASE,
+    )?)
+    .map_err(|_| io::Error::other("setup release metadata is not valid"))?;
+    let sums = read_bounded(&dir.join(app_release::SETUP_SUMS), payload_fetch::MAX_SUMS_BYTES)?;
+    let zip = read_bounded(&dir.join(app_release::SETUP_ZIP), payload_fetch::MAX_DOWNLOAD)?;
+    plain_path(install)?;
+    app_release::stage(&release, &zip, &sums, install)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -472,6 +558,148 @@ mod tests {
         assert_eq!(fs::read(t.path().join(EXE)).unwrap(), b"original");
         assert!(replacement_steps(t.path(), &t.path().join("outside")).is_err());
     }
+    #[test]
+    fn setup_dir_needs_exactly_the_flag_and_an_absolute_existing_folder() {
+        use std::ffi::OsString;
+        let t = tempfile::tempdir().unwrap();
+        let args = |a: &[&str]| a.iter().map(OsString::from).collect::<Vec<_>>();
+        let dir = t.path().to_str().unwrap();
+        assert_eq!(setup_dir_from(&args(&["--setup", dir])), Some(t.path().to_path_buf()));
+        for bad in [
+            args(&[]),
+            args(&["--setup"]),
+            args(&["--setup", dir, "extra"]),
+            args(&["--setup", "relative"]),
+            args(&["--setup", t.path().join("missing").to_str().unwrap()]),
+            args(&["--setup=", dir]),
+            args(&["--finish-app-update"]),
+            args(&[dir, "--setup"]),
+        ] {
+            assert_eq!(setup_dir_from(&bad), None, "{bad:?}");
+        }
+        fs::write(t.path().join("file"), b"x").unwrap();
+        assert_eq!(
+            setup_dir_from(&args(&["--setup", t.path().join("file").to_str().unwrap()])),
+            None
+        );
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(t.path(), t.path().join("link")).unwrap();
+            assert_eq!(
+                setup_dir_from(&args(&["--setup", t.path().join("link").to_str().unwrap()])),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn setup_offers_install_update_or_only_opening_the_installed_app() {
+        use SetupAction::*;
+        assert_eq!(setup_action(None, "0.3.2"), Install);
+        let installed = |v: &str| v.to_owned();
+        assert_eq!(
+            setup_action(Some("0.3.1"), "0.3.2"),
+            Update {
+                installed: installed("0.3.1")
+            }
+        );
+        assert_eq!(
+            setup_action(Some("0.3.2-rc.1"), "0.3.2"),
+            Update {
+                installed: installed("0.3.2-rc.1")
+            }
+        );
+        assert_eq!(
+            setup_action(Some("0.3.2"), "0.3.2"),
+            Current {
+                installed: installed("0.3.2")
+            }
+        );
+        assert_eq!(
+            setup_action(Some("0.4.0"), "0.3.2"),
+            Current {
+                installed: installed("0.4.0")
+            }
+        );
+        assert_eq!(
+            setup_action(Some("0.10.0"), "0.9.9"),
+            Current {
+                installed: installed("0.10.0")
+            }
+        );
+        // No comparable version: the installed helper decides, so the update is offered.
+        assert_eq!(
+            setup_action(Some(""), "0.3.2"),
+            Update {
+                installed: installed("")
+            }
+        );
+        assert_eq!(
+            setup_action(Some("garbage"), "0.3.2"),
+            Update {
+                installed: installed("garbage")
+            }
+        );
+    }
+
+    #[test]
+    fn update_helper_is_the_installed_version() {
+        let t = tempfile::tempdir().unwrap();
+        let paths = Paths::new(t.path(), &t.path().join("start"), &t.path().join("desktop")).unwrap();
+        let portable = t.path().join("setup").join("payload");
+        fixture(&portable);
+        // Nothing installed: neither path has a helper.
+        assert!(update_helper(&paths, &portable.join(EXE), false).is_err());
+        assert!(update_helper(&paths, &portable.join(EXE), true).is_err());
+        fixture(&paths.install);
+        // An ordinary update runs from the installed copy and uses it.
+        assert_eq!(update_helper(&paths, &paths.exe(), false).unwrap(), paths.exe());
+        assert!(update_helper(&paths, &portable.join(EXE), false).is_err());
+        // The setup runs a newer app from its own folder; the helper must still be the installed (older) one.
+        assert_eq!(update_helper(&paths, &portable.join(EXE), true).unwrap(), paths.exe());
+        fs::remove_file(paths.exe()).unwrap();
+        fs::create_dir(paths.exe()).unwrap();
+        assert!(update_helper(&paths, &portable.join(EXE), true).is_err());
+    }
+
+    #[test]
+    fn setup_bundle_stages_like_a_download_and_refuses_tampering() {
+        let t = tempfile::tempdir().unwrap();
+        let (release, zip, sums) = app_release::synthetic_app_fixture(None);
+        let dir = t.path().join("setup");
+        let install = t.path().join("install");
+        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(&install).unwrap();
+        fs::write(
+            dir.join(app_release::SETUP_RELEASE),
+            serde_json::to_vec(&release).unwrap(),
+        )
+        .unwrap();
+        fs::write(dir.join(app_release::SETUP_SUMS), &sums).unwrap();
+        fs::write(dir.join(app_release::SETUP_ZIP), &zip).unwrap();
+        let staged = stage_from_setup(&dir, &install).unwrap();
+        assert_eq!(staged.manifest.release, release);
+        assert!(staged.dir.path().starts_with(&install));
+        assert!(staged.dir.path().join("payload").join(EXE).is_file());
+        drop(staged);
+        // A changed archive no longer matches release.json and SHA256SUMS.
+        let mut changed = zip.clone();
+        let last = changed.len() - 1;
+        changed[last] ^= 1;
+        fs::write(dir.join(app_release::SETUP_ZIP), &changed).unwrap();
+        assert!(stage_from_setup(&dir, &install).is_err());
+        fs::write(dir.join(app_release::SETUP_ZIP), &zip).unwrap();
+        fs::write(dir.join(app_release::SETUP_RELEASE), vec![b' '; 64 * 1024 + 1]).unwrap();
+        assert!(stage_from_setup(&dir, &install).is_err());
+        fs::remove_file(dir.join(app_release::SETUP_RELEASE)).unwrap();
+        assert!(stage_from_setup(&dir, &install).is_err());
+        assert_eq!(
+            fs::read_dir(&install).unwrap().count(),
+            0,
+            "a refused stage leaves nothing"
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn symlink_source_and_destination_are_refused() {

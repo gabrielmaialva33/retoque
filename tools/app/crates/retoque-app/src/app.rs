@@ -266,6 +266,11 @@ impl RetoqueApp {
         app.hash_payload();
         app.jobs.spawn("catalog", None, |_| model::catalog_list());
         app.clean_app_data();
+        // Started by the Windows setup: open its install or update review straight away.
+        #[cfg(windows)]
+        if let Some(dir) = crate::app_install::windows::setup_dir() {
+            app.app_installer.start_setup(dir);
+        }
         app
     }
 

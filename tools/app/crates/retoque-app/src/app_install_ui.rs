@@ -1,7 +1,8 @@
 //! Windows-only Preferences controls. Network and writes begin only after the matching consent dialog.
+//! The Windows setup (`retoque-app.exe --setup <dir>`) opens the same reviews at startup; see [`State::start_setup`].
 use crate::{
     app::RetoqueApp,
-    app_install::{self, InstallPlan, windows},
+    app_install::{self, InstallPlan, SetupAction, windows},
     i18n::{Lang, t},
     theme, widgets,
 };
@@ -9,7 +10,7 @@ use retoque_data::{
     app_release,
     payload_fetch::{GithubFetcher, Release},
 };
-use std::{io, sync::mpsc};
+use std::{io, path::PathBuf, sync::mpsc};
 
 #[derive(Default)]
 pub(crate) struct State {
@@ -18,17 +19,31 @@ pub(crate) struct State {
     result: Option<ResultState>,
     rx: Option<mpsc::Receiver<io::Result<ResultState>>>,
     error: Option<crate::error::AppError>,
+    /// The setup's private folder when this app was started by the Windows setup.
+    setup: Option<PathBuf>,
 }
 enum Review {
     Install(InstallPlan),
     Check,
     Download(Release),
     Restart,
+    /// The setup carries a newer app than the installed one.
+    SetupUpdate {
+        installed: String,
+    },
+    /// The installed app is the setup's version or newer.
+    SetupCurrent {
+        installed: String,
+    },
+    /// A setup step failed; the dialog shows why and offers to try again.
+    SetupFailed,
 }
 enum ResultState {
     Installed,
     Checked(Option<Release>),
     Staged(app_release::Staged),
+    /// The setup handed its update to the helper, which waits for this app to close.
+    UpdateScheduled,
 }
 
 impl State {
@@ -52,6 +67,23 @@ impl State {
     }
     fn failure(&mut self, error: io::Error) {
         self.error = Some(crate::error::AppError::io(std::path::PathBuf::from("Retoque"), error));
+    }
+    /// Started by the Windows setup: open the install review, the update review or the already-installed notice,
+    /// by the Apps & features registration (`app_install::setup_action`). Nothing is written before a confirmation.
+    pub(crate) fn start_setup(&mut self, dir: PathBuf) {
+        self.setup = Some(dir);
+        self.error = None;
+        let action = windows::installed_version()
+            .map(|registered| app_install::setup_action(registered.as_deref(), app_install::version()));
+        match action {
+            Ok(SetupAction::Install) => match windows::prepare() {
+                Ok(plan) => self.review = Some(Review::Install(plan)),
+                Err(e) => self.failure(e),
+            },
+            Ok(SetupAction::Update { installed }) => self.review = Some(Review::SetupUpdate { installed }),
+            Ok(SetupAction::Current { installed }) => self.review = Some(Review::SetupCurrent { installed }),
+            Err(e) => self.failure(e),
+        }
     }
 }
 
@@ -103,7 +135,8 @@ impl RetoqueApp {
                         self.app_installer.review = Some(Review::Restart);
                     }
                 }
-                None => {}
+                // Never kept: the app closes as soon as the setup's update is handed to the helper.
+                Some(ResultState::UpdateScheduled) | None => {}
             }
         });
         if self.app_installer.rx.is_some() {
@@ -120,6 +153,10 @@ impl RetoqueApp {
                 Ok(result) => {
                     self.app_installer.rx = None;
                     match result {
+                        Ok(ResultState::UpdateScheduled) => {
+                            // The helper waits for this process; closing lets it replace the installed files.
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                         Ok(result) => {
                             if matches!(result, ResultState::Installed | ResultState::Staged(_)) {
                                 self.app_installer.review = Some(Review::Restart);
@@ -137,10 +174,25 @@ impl RetoqueApp {
                 Err(mpsc::TryRecvError::Empty) => {}
             }
         }
+        let lang = self.lang;
+        if self.app_installer.setup.is_some() && self.app_installer.review.is_none() {
+            if self.app_installer.rx.is_some() {
+                // The setup has no Preferences open to show progress in.
+                egui::Modal::new(egui::Id::unique("app-install-setup-busy"))
+                    .frame(widgets::modal_frame(ctx))
+                    .show(ctx, |ui| {
+                        ui.set_width((ctx.content_rect().width() - 64.0).clamp(280.0, 520.0));
+                        widgets::busy(ui, lang, t(lang, "app_install.busy"), None, None);
+                    });
+                return;
+            }
+            if self.app_installer.error.is_some() {
+                self.app_installer.review = Some(Review::SetupFailed);
+            }
+        }
         let Some(review) = self.app_installer.review.as_ref() else {
             return;
         };
-        let lang = self.lang;
         let (title, body, confirm) = review_text(lang, review, self.app_installer.result.as_ref());
         let mut accepted = false;
         let mut cancelled = false;
@@ -186,6 +238,9 @@ impl RetoqueApp {
                         if matches!(review, Review::Check | Review::Download(_)) {
                             ui.label(t(lang, "payload.hosts_note"));
                         }
+                        if let (Review::SetupFailed, Some(error)) = (review, &self.app_installer.error) {
+                            crate::error::body(ui, error, lang, &self.cmd_tx);
+                        }
                         ui.label(t(lang, "app_install.preserve"));
                     });
                 if self.app_installer.waiting_host {
@@ -202,9 +257,14 @@ impl RetoqueApp {
                         .clicked();
                 });
             });
-        if cancelled || modal.should_close() {
+        // A setup's dialog is the whole setup: only Cancel ends it, and it closes the app it started.
+        let setup = self.app_installer.setup.is_some();
+        if cancelled || (modal.should_close() && !setup) {
             self.app_installer.review = None;
             self.app_installer.waiting_host = false;
+            if setup {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            }
             return;
         }
         if self.app_installer.waiting_host {
@@ -220,7 +280,7 @@ impl RetoqueApp {
         }
         let replaces_files = matches!(
             self.app_installer.review.as_ref(),
-            Some(Review::Install(_) | Review::Restart)
+            Some(Review::Install(_) | Review::Restart | Review::SetupUpdate { .. })
         );
         if replaces_files && self.any_window.active() {
             self.any_window.stop();
@@ -243,6 +303,24 @@ impl RetoqueApp {
                 app_install::plain_path(&p.install)?;
                 app_release::download(&GithubFetcher, &release, &p.install).map(ResultState::Staged)
             }),
+            Review::SetupUpdate { .. } => {
+                let Some(dir) = self.app_installer.setup.clone() else {
+                    return;
+                };
+                self.app_installer.run(ctx, move || {
+                    windows::setup_update(&dir)?;
+                    Ok(ResultState::UpdateScheduled)
+                })
+            }
+            Review::SetupCurrent { .. } => match windows::relaunch() {
+                Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+                Err(e) => self.app_installer.failure(e),
+            },
+            Review::SetupFailed => {
+                if let Some(dir) = self.app_installer.setup.clone() {
+                    self.app_installer.start_setup(dir);
+                }
+            }
             Review::Restart => {
                 let result = match self.app_installer.result.take() {
                     Some(ResultState::Staged(stage)) => windows::schedule_update(stage),
@@ -276,11 +354,32 @@ fn review_text(lang: Lang, review: &Review, result: Option<&ResultState>) -> (St
             },
             "app_install.restart_confirm",
         ),
+        Review::SetupUpdate { .. } => (
+            "app_install.update_title",
+            "app_install.setup_update_body",
+            "app_install.setup_update_confirm",
+        ),
+        Review::SetupCurrent { .. } => (
+            "app_install.setup_current_title",
+            "app_install.setup_current_body",
+            "app_install.setup_open",
+        ),
+        Review::SetupFailed => (
+            "app_install.setup_failed_title",
+            "app_install.failed",
+            "app_install.setup_retry",
+        ),
     };
     let confirm = if let Review::Download(release) = review {
         crate::format::download_label(lang, Some(release.size))
     } else {
         t(lang, confirm).into()
     };
-    (t(lang, title).into(), t(lang, body).into(), confirm)
+    let body = match review {
+        Review::SetupUpdate { installed } | Review::SetupCurrent { installed } => t(lang, body)
+            .replace("{installed}", if installed.is_empty() { "?" } else { installed })
+            .replace("{version}", app_install::version()),
+        _ => t(lang, body).into(),
+    };
+    (t(lang, title).into(), body, confirm)
 }
