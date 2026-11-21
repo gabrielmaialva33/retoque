@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/retoque-core", "crates/retoque-discovery", "crates/retoque-data", "crates/retoque-cli", "crates/retoque-app"]
+members = ["crates/retoque-core", "crates/retoque-discovery", "crates/retoque-data", "crates/retoque-cli", "crates/retoque-app", "crates/retoque-setup"]
 exclude = ["fuzz"]
 
 [workspace.package]

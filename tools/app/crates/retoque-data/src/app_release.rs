@@ -8,6 +8,13 @@ use std::{collections::BTreeMap, fs, io, path::Path};
 
 pub const EXE: &str = "retoque-app.exe";
 
+/// The parts of a Windows setup bundle as `retoque-setup` writes them into its private folder for
+/// `retoque-app.exe --setup <folder>`: the app archive, the release `SHA256SUMS` and the release metadata.
+pub const SETUP_ZIP: &str = "bundle.zip";
+pub const SETUP_SUMS: &str = "SHA256SUMS";
+pub const SETUP_RELEASE: &str = "release.json";
+pub const MAX_SETUP_RELEASE: u64 = 64 * 1024;
+
 pub fn newer(version: &str, current: &str) -> bool {
     payload::compare_versions(version, current) == Some(std::cmp::Ordering::Greater)
 }
@@ -170,41 +177,61 @@ pub fn stage(release: &Release, bytes: &[u8], sums: &[u8], install: &Path) -> io
     Ok(Staged { dir, manifest })
 }
 
+/// Check that release metadata, its `SHA256SUMS` and an app archive agree (both digests, sizes, official names),
+/// without unpacking. The Windows setup checks its bundled copies with this before starting the app.
+pub fn verify_bundle(release: &Release, bytes: &[u8], sums: &[u8]) -> io::Result<()> {
+    payload::verify_archive(release, bytes, sums, true).map(|_| ())
+}
+
+/// Unpack an app archive into `<dir>/payload` with the same validation as an update (allowlist, links, collisions,
+/// sizes, forwarder/OptiScaler checks, INI policy, x64 app). `dir` must be a fresh directory the caller owns.
+pub fn unpack_into(bytes: &[u8], dir: &Path) -> io::Result<BTreeMap<String, FileRecord>> {
+    let cap = Dir::open_ambient_dir(dir, ambient_authority())?;
+    Ok(payload::unpack_kind(bytes, &cap, true)?.files)
+}
+
+/// A synthetic, valid `retoque-app-1.2.3-windows-x64.zip` with its release metadata and `SHA256SUMS`, for tests in
+/// this and dependent crates. `extra` adds one more member (to check refusals).
+#[doc(hidden)]
+pub fn synthetic_app_fixture(extra: Option<&str>) -> (Release, Vec<u8>, Vec<u8>) {
+    use std::io::{Cursor, Write};
+    let (mut release, payload_zip, _, _) = payload::synthetic_release_fixture("v1.2.3", (1, 2, 3, 0), None);
+    let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    let mut input = zip::ZipArchive::new(Cursor::new(payload_zip)).unwrap();
+    for i in 0..input.len() {
+        let mut entry = input.by_index(i).unwrap();
+        out.start_file(entry.name(), options).unwrap();
+        io::copy(&mut entry, &mut out).unwrap();
+    }
+    let mut exe = payload::versioned_pe_fixture((1, 2, 3, 0), b"RETOQUE_APP_VERSION=1.2.3;");
+    exe[68..70].copy_from_slice(&0x8664u16.to_le_bytes());
+    exe[86..88].copy_from_slice(&2u16.to_le_bytes());
+    out.start_file(EXE, options).unwrap();
+    out.write_all(&exe).unwrap();
+    if let Some(extra) = extra {
+        out.start_file(extra, options).unwrap();
+        out.write_all(b"bad").unwrap();
+    }
+    let bytes = out.finish().unwrap().into_inner();
+    release.asset = payload::asset_name(&release.version, true);
+    release.url = format!("{}{}/{}", payload::ASSET_PREFIX, release.tag, release.asset);
+    release.size = bytes.len() as u64;
+    release.digest = format!("{:x}", Sha256::digest(&bytes));
+    let sums = format!("{}  {}\n", release.digest, release.asset).into_bytes();
+    release.sums_size = sums.len() as u64;
+    release.sums_digest = None;
+    (release, bytes, sums)
+}
+
 use std::io::Read;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Cursor, Write};
 
     fn fixture(extra: Option<&str>) -> (Release, Vec<u8>, Vec<u8>) {
-        let (mut release, payload_zip, _, _) = payload::synthetic_release_fixture("v1.2.3", (1, 2, 3, 0), None);
-        let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        let options = zip::write::SimpleFileOptions::default();
-        let mut input = zip::ZipArchive::new(Cursor::new(payload_zip)).unwrap();
-        for i in 0..input.len() {
-            let mut entry = input.by_index(i).unwrap();
-            out.start_file(entry.name(), options).unwrap();
-            io::copy(&mut entry, &mut out).unwrap();
-        }
-        let mut exe = payload::versioned_pe_fixture((1, 2, 3, 0), b"RETOQUE_APP_VERSION=1.2.3;");
-        exe[68..70].copy_from_slice(&0x8664u16.to_le_bytes());
-        exe[86..88].copy_from_slice(&2u16.to_le_bytes());
-        out.start_file(EXE, options).unwrap();
-        out.write_all(&exe).unwrap();
-        if let Some(extra) = extra {
-            out.start_file(extra, options).unwrap();
-            out.write_all(b"bad").unwrap();
-        }
-        let bytes = out.finish().unwrap().into_inner();
-        release.asset = payload::asset_name(&release.version, true);
-        release.url = format!("{}{}/{}", payload::ASSET_PREFIX, release.tag, release.asset);
-        release.size = bytes.len() as u64;
-        release.digest = format!("{:x}", Sha256::digest(&bytes));
-        let sums = format!("{}  {}\n", release.digest, release.asset).into_bytes();
-        release.sums_size = sums.len() as u64;
-        release.sums_digest = None;
-        (release, bytes, sums)
+        synthetic_app_fixture(extra)
     }
 
     #[test]
