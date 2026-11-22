@@ -731,3 +731,6 @@ Median (ms)	Median (ms)
 Mean (ms)	Mean (ms)
 Slowest (ms)	Slowest (ms)
 %.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused
+# 2026-11-22: the exposure governor (docs/dlssnr/design/exposure-governor.md): the control and its help.
+Steady exposure	稳定曝光
+Limits how fast the white point taken from the game's exposure may move: up to 4\nstops a second when the picture brightens, 0.5 when it relaxes, held inside a\nsmall band, held through a black frame or a loading screen, and taken from the\ngame again after its own history reset. It stops the whole picture pumping when\nthe game's exposure hunts. The game's own reading is untouched.\n\nIt uses the\nmeter's reading, a few frames late, instead of the zero-latency read, so a sudden\nflash reaches the model a few frames later than without it. Off keeps the white\npoint exactly as it was.	限制取自游戏曝光的白点变化的速度：画面变亮时每秒最多 4 档，恢复时 0.5 档；在小范围内保持不动，遇到黑帧或加载画面时保持不动，并在游戏自身的历史重置之后重新从游戏取值。当游戏曝光来回摆动时，可防止整个画面起伏。游戏自身的读数不会被改动。\n\n它使用晚几帧的测光读数，而不是零延迟读取，因此突然的闪光会比不开启时晚几帧到达模型。关闭则白点与之前完全一致。

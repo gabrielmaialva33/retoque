@@ -468,6 +468,14 @@ class Config
     // menu and logged at most every 10 s. D3D12 only. See docs/dlssnr/design/pulse-metric.md.
     CustomOptional<bool> DlssNrPulseMetric { false };
 
+    // The exposure governor: with WhitePointSource=1 the white point the pass applies moves toward the one the game's
+    // exposure implies at 4 stops a second up and 0.5 down, holds inside a 0.15 stop band, holds through a frame whose
+    // exposure reads as a black frame or a loading screen, and starts again from the game's reset. The game's reading
+    // is untouched; only what is applied is limited. It takes the white point from the CPU meter (a few frames late)
+    // instead of the shader's zero-latency read. D3D12 only. Off by default, which is the white point as it was.
+    // See docs/dlssnr/design/exposure-governor.md.
+    CustomOptional<bool> DlssNrExposureGovernor { false };
+
     // The most the pass may multiply or divide a pixel by. A detail pass has no business restyling a
     // light source, whatever the model returns.
     CustomOptional<float> DlssNrMaxRatio { 2.0f };

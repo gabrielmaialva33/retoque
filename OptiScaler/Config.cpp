@@ -636,6 +636,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCadenceSmoothing.set_from_config(readBool("DlssNr", "CadenceSmoothing"));
             DlssNrCadenceAdaptive.set_from_config(readBool("DlssNr", "CadenceAdaptive"));
             DlssNrPulseMetric.set_from_config(readBool("DlssNr", "PulseMetric"));
+            DlssNrExposureGovernor.set_from_config(readBool("DlssNr", "ExposureGovernor"));
             UseGenericAppIdWithDlss.set_from_config(readBool("DLSS", "UseGenericAppIdWithDlss"));
 
             RenderPresetOverride.set_from_config(readBool("DLSS", "RenderPresetOverride"));
@@ -2158,6 +2159,8 @@ bool Config::SaveIni()
         ini.SetValue("DlssNr", "CadenceSmoothing",
                      GetBoolValue(Instance()->DlssNrCadenceSmoothing.value_for_config()).c_str());
         ini.SetValue("DlssNr", "PulseMetric", GetBoolValue(Instance()->DlssNrPulseMetric.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "ExposureGovernor",
+                     GetBoolValue(Instance()->DlssNrExposureGovernor.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetOverride",
                      GetBoolValue(Instance()->RenderPresetOverride.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetForAll",

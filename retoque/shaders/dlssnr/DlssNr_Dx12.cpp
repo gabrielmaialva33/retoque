@@ -2229,6 +2229,35 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     float whitePoint =
         ResolveWhitePoint(whitePointSource, whitePointScale, whitePointTrim, isHdrBuffer, scanInverted, scanTrim);
 
+    // The exposure governor (docs/dlssnr/design/exposure-governor.md): the white point APPLIED from the game's exposure
+    // moves at a bounded rate toward the one the exposure implies, which is this value. It needs the CPU reading, so
+    // the shader's zero-latency read is off while it is on. A frame the pass holds, a game with no usable exposure and
+    // every other source leave the governor where it was and the white point as ResolveWhitePoint made it; a pause
+    // longer than the governor's gap starts it again.
+    const bool exposureGovernorWanted =
+        cfg.DlssNrExposureGovernor.value_or_default() && whitePointSource == 1 && isHdrBuffer;
+    if (exposureGovernorWanted && !holdingColor && !g_nr.exposureLatch.Latched() &&
+        DlssNr::Exposure::ValidSample(g_nr.gameExposure))
+    {
+        const float governedSeconds =
+            g_nr.exposureGovernorAt == std::chrono::steady_clock::time_point {}
+                ? 0.0f
+                : std::chrono::duration<float>(now - g_nr.exposureGovernorAt).count();
+        g_nr.exposureGovernorAt = now;
+        const float impliedWhite = g_nr.gamePreExposure / g_nr.gameExposure;
+        const auto governed = g_nr.exposureGovernor.Update(
+            whitePoint, governedSeconds, !DlssNr::ExposureGovernor::PlausibleImpliedWhite(impliedWhite),
+            frameReset && !frameResetIsPolicy);
+        whitePoint = std::clamp(governed.applied, 0.01f, 4096.0f);
+    }
+    else if (!(exposureGovernorWanted && holdingColor))
+    {
+        // Nothing to govern this frame: anything that is not the game's exposure starts over from the next reading.
+        // A frame the pass holds keeps the state.
+        g_nr.exposureGovernor.Reset();
+        g_nr.exposureGovernorAt = {};
+    }
+
     // Zero-latency exposure (D3D12, source 1): when the game hands us a live exposure texture, the
     // white point is recomputed in-shader every frame from it (ExposurePreMul / exposure) instead of
     // the 3-4 frame CPU meter readback. whitePoint above still rides along in gWhitePoint as the
@@ -2237,8 +2266,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     uint32_t useGameExposure = 0;
     float exposurePreMul = 0.0f;
 
-    if (DlssNr::Exposure::LiveWanted(whitePointSource, isHdrBuffer, usableExposure, holdingColor,
-                                     g_nr.exposureLatch.Latched()))
+    if (!exposureGovernorWanted && DlssNr::Exposure::LiveWanted(whitePointSource, isHdrBuffer, usableExposure,
+                                                                holdingColor, g_nr.exposureLatch.Latched()))
     {
         exposureTex = (ID3D12Resource*) frame.ExposureTexture;
         useGameExposure = 1;

@@ -115,6 +115,12 @@ struct PlausibilityLatch
 {
 };
 } // namespace Exposure
+namespace ExposureGovernor
+{
+struct State
+{
+};
+} // namespace ExposureGovernor
 namespace Submission
 {
 namespace Detail

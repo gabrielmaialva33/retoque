@@ -7,6 +7,7 @@
 #include <dlssnr/DlssNr.h>
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_Exposure.h>
+#include <dlssnr/DlssNr_ExposureGovernor.h>
 #include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_Submission.h>
 #include <dlssnr/DlssNr_Cadence.h>
@@ -367,6 +368,10 @@ struct NrState
     float gameExposure = 0.0f;
     float gamePreExposure = 1.0f;
     DlssNr::Exposure::PlausibilityLatch exposureLatch;
+
+    // The exposure governor (docs/dlssnr/design/exposure-governor.md): one state for the stream, and when it last stepped.
+    DlssNr::ExposureGovernor::State exposureGovernor;
+    std::chrono::steady_clock::time_point exposureGovernorAt {};
 
     // What the game OFFERS, as opposed to what has been read. Recorded from the parameter block every
     // frame whether or not the setting is on, and deliberately so: the menu has to be able to answer

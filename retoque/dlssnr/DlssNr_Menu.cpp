@@ -2563,6 +2563,25 @@ void RenderMenu(Config* config, float menuResScale)
                             ImVec4(0.45f, 0.8f, 0.45f, 1.0f),
                             Localization::Tr("This game supplies an exposure -- the option above would use it."));
                     }
+
+                    // The governor limits the white point applied from the game's exposure (exposure-governor.md). It
+                    // exists on D3D12 only: the Vulkan route reads the exposure by its own meter and is unchanged.
+                    if (source == 1 && !vk)
+                    {
+                        bool governor = config->DlssNrExposureGovernor.value_or_default();
+                        if (MenuLayout::Checkbox(Localization::Label("Steady exposure###nrExposureGovernor"),
+                                                 &governor))
+                            config->DlssNrExposureGovernor = governor;
+
+                        HelpMarker("Limits how fast the white point taken from the game's exposure may move: up to 4"
+                                   "\nstops a second when the picture brightens, 0.5 when it relaxes, held inside a"
+                                   "\nsmall band, held through a black frame or a loading screen, and taken from the"
+                                   "\ngame again after its own history reset. It stops the whole picture pumping when"
+                                   "\nthe game's exposure hunts. The game's own reading is untouched.\n\nIt uses the"
+                                   "\nmeter's reading, a few frames late, instead of the zero-latency read, so a sudden"
+                                   "\nflash reaches the model a few frames later than without it. Off keeps the white"
+                                   "\npoint exactly as it was.");
+                    }
                 }
 
                 // A measured suggestion for paper white used to sit here and has been withdrawn.
