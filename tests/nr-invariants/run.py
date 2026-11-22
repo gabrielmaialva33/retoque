@@ -164,6 +164,21 @@ elif hdr_cpp != hdr_cb:
 if len(failures) == before:
     print(f'PASS: {len(hdr_cpp)} ordered 4-byte constants match between DlssNr_PresentHdr_Dx12::Constants and its cbuffer')
 
+before = len(failures)
+clamp_pass = (nr / 'shaders/dlssnr/DlssNr_PassClamp_Dx12.h').read_text()
+clamp_hlsl = (nr / 'shaders/dlssnr/precompile/dlssnr_pass_clamp.hlsl').read_text()
+clamp_cpp = [(t.replace('uint32_t', 'uint'), n.lower()) for t, n in
+             re.findall(r'\b(uint32_t|float)\s+(\w+)\s*(?:=[^;]*)?;',
+                        re.sub(r'//[^\n]*', '', body(clamp_pass, 'struct alignas(256) Constants')))]
+clamp_cb = [(t, n[1:].lower() if n.startswith('g') else n.lower()) for t, n in
+            re.findall(r'\b(uint|float)\s+(\w+)\s*;', re.sub(r'//[^\n]*', '', body(clamp_hlsl, 'cbuffer Params')))]
+if not clamp_cpp:
+    fail('no fields parsed from DlssNr_PassClamp_Dx12::Constants')
+elif clamp_cpp != clamp_cb:
+    fail(f'DlssNr_PassClamp_Dx12::Constants {clamp_cpp} and the Params cbuffer of dlssnr_pass_clamp.hlsl {clamp_cb} differ')
+if len(failures) == before:
+    print(f'PASS: {len(clamp_cpp)} ordered 4-byte constants match between DlssNr_PassClamp_Dx12::Constants and its cbuffer')
+
 # Vulkan uses the same four scalars, packed to 16 bytes and placed at aligned dynamic offsets.
 hdr_vk = (nr / 'shaders/dlssnr/DlssNr_PresentHdr_Vk.h').read_text()
 hdr_vk_fields = [(t.replace('uint32_t', 'uint'), n.lower()) for t, n in
@@ -262,6 +277,10 @@ if (precompile / 'DlssNr_Cadence_Shader.cso').exists():
     targets.append(('DlssNr_Cadence_Shader.cso', 'DlssNr_Cadence_Shader.h', 'DlssNr_Cadence_cso', b'DXBC'))
 elif (precompile / 'DlssNr_Cadence_Shader.h').exists():
     fail('DlssNr_Cadence_Shader.h is committed without DlssNr_Cadence_Shader.cso beside it')
+if (precompile / 'DlssNr_PassClamp_Shader.cso').exists():
+    targets.append(('DlssNr_PassClamp_Shader.cso', 'DlssNr_PassClamp_Shader.h', 'DlssNr_PassClamp_cso', b'DXBC'))
+elif (precompile / 'DlssNr_PassClamp_Shader.h').exists():
+    fail('DlssNr_PassClamp_Shader.h is committed without DlssNr_PassClamp_Shader.cso beside it')
 # Detail stats (detail-measure.md). Optional bytecode like cadence: without the bytecode the pass is unavailable.
 if (precompile / 'DlssNr_DetailStats_Shader.cso').exists():
     targets.append(('DlssNr_DetailStats_Shader.cso', 'DlssNr_DetailStats_Shader.h', 'DlssNr_DetailStats_cso', b'DXBC'))

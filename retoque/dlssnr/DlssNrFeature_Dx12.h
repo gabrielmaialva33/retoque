@@ -449,6 +449,10 @@ const char* CadenceStatus();
 // is not offered.
 bool CadenceAvailable();
 
+// Whether this build carries the D3D12 interpass clamp/feedback shader
+// (docs/dlssnr/design/2026-11-22-interpass-clamp.md).
+bool PassClampAvailable();
+
 // Whether the buffer the last D3D12 dispatch worked on was linear HDR, i.e. the colour transform was on. False
 // until something has run. For the menu: highlight recovery acts only there
 // (docs/dlssnr/design/hdr-highlight-recovery.md).

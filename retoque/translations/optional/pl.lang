@@ -145,6 +145,10 @@ Sequential model passes	Kolejne przebiegi modelu
 Requested passes	Żądane przebiegi
 Last evaluation: %u successful model passes	Ostatnia ewaluacja: udane przebiegi modelu: %u
 Individual pass settings	Ustawienia poszczególnych przebiegów
+Interpass clamp	Ograniczenie między przebiegami
+Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	Zanim przebieg N+1 odczyta odpowiedź przebiegu N, ogranicza ją z zachowaniem barwy względem własnego wejścia przebiegu N i oczyszcza NaN/Inf. Tylko D3D12; wyłączone nie wprowadza zmian.
+Pass feedback	Sprzężenie między przebiegami
+Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	Miesza odpowiedź każdego przebiegu w stronę jego własnego wejścia przed przekazaniem jej do następnego przebiegu (1.00 = pełna odpowiedź, 0.00 = wejście bez zmian) i oczyszcza NaN/Inf. Tylko D3D12.
 Edit pass	Edytuj przebieg
 Editing pass 1	Edycja przebiegu 1
 Uncheck Override to inherit the live master value.	Odznacz Nadpisz, aby dziedziczyć bieżącą wartość główną.

@@ -4,6 +4,7 @@
 #include <dlssnr/DlssNr_AdvisorRuntime.h>
 #include <dlssnr/DlssNr_AdvisorPolicy.h>
 #include <dlssnr/DlssNr_PassSettings.h>
+#include <dlssnr/DlssNr_PassClamp.h>
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <shaders/dlssnr/DlssNr_Periphery.h>
 #include <dlssnr/DlssNr_Cadence.h>
@@ -170,6 +171,7 @@ inline const char* MultipassStatus() { return ""; }
 inline bool PreviousModelRetained() { return false; }
 inline const char* CadenceStatus() { return ""; }
 inline bool CadenceAvailable() { return true; }
+inline bool PassClampAvailable() { return true; }
 inline std::atomic_bool g_presentSyncWaits { false };
 inline const char* HookStatus() { return hdr.converted ? "Present: active (fixture)" : "Upscaled: active (fixture)"; }
 inline std::string PresentGuidesLine() { return {}; }

@@ -39,6 +39,7 @@ class DlssNr_UiMask_Dx12;
 class DlssNr_Cadence_Dx12;
 class DlssNr_GuideMatch_Dx12;
 class DlssNr_Periphery_Dx12;
+class DlssNr_PassClamp_Dx12;
 class DlssNr_PresentHdr_Dx12;
 class DlssNr_MotionProbe_Dx12;
 namespace DlssNr::MotionProbe
@@ -202,6 +203,12 @@ struct NrState
     static constexpr uint32_t kMaxPasses = DlssNr::PassConfig::MaxPasses;
     void* passFeature[kMaxPasses] = {};
     ID3D12Resource* passPing = nullptr;
+    ID3D12Resource* passClampScratch = nullptr;
+    ID3D12Resource* passClampScratch2 = nullptr;
+    DlssNr_PassClamp_Dx12* passClamp = nullptr;
+    bool builtPassClampActive = false;
+    bool builtPassClamp = false;
+    float builtPassFeedback = 1.0f;
     DlssNrResolvedPassSettings passBuilt[kMaxPasses] {};
     // Every pass starts with its history reset pending.
     std::array<bool, kMaxPasses> passReset = []
@@ -267,6 +274,8 @@ struct NrState
         ID3D12Resource* colorSmall = nullptr;
         ID3D12Resource* outputNative = nullptr;
         ID3D12Resource* passPing = nullptr;
+        ID3D12Resource* passClampScratch = nullptr;
+        ID3D12Resource* passClampScratch2 = nullptr;
     } alt;
 
     // The transfer of the frame the surfaces last served (docs/dlssnr/design/format-swap-history.md): an RGBA8/BGRA8
@@ -491,6 +500,7 @@ struct NrRetired
     std::shared_ptr<DlssNr_Dx12>* compose = nullptr;
     DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
     DlssNr_Periphery_Dx12* periphery = nullptr;
+    DlssNr_PassClamp_Dx12* passClamp = nullptr;
 };
 
 struct DetailMeasureSession

@@ -8,6 +8,7 @@
 
 #include "DlssNr.h"
 #include "DlssNr_Cadence.h"
+#include "DlssNr_PassClamp.h"
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
@@ -1192,6 +1193,25 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
 
     if (!showIndividualSettings)
         return;
+
+    if (snapshot.Count > 1 && DlssNr::PassClampAvailable())
+    {
+        bool passClamp = config->DlssNrPassClamp.value_or_default();
+        if (MenuLayout::Checkbox(Localization::Label("Interpass clamp###nrPassClamp"), &passClamp))
+            config->DlssNrPassClamp = passClamp;
+        HelpMarker("Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and "
+                   "sanitizes NaN/Inf. D3D12 only; off is unchanged.");
+
+        float passFeedback = DlssNr::PassClamp::SanitizeFeedback(config->DlssNrPassFeedback.value_or_default());
+        if (ImGui::SliderFloat(MenuLayout::FieldLabel(Localization::Label("Pass feedback###nrPassFeedback")),
+                               &passFeedback, 0.0f, 1.0f, "%.2f"))
+            config->DlssNrPassFeedback = DlssNr::PassClamp::SanitizeFeedback(passFeedback);
+        ImGui::SameLine();
+        if (ImGui::SmallButton(Localization::Label("Reset##passFeedback")))
+            config->DlssNrPassFeedback = 1.0f;
+        HelpMarker("Blends each pass's answer toward that pass's own input before handing it to the next pass "
+                   "(1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.");
+    }
 
     bool individual = snapshot.Individual;
     if (MenuLayout::Checkbox(Localization::Label("Individual pass settings###nrIndividualPassSettings"), &individual))

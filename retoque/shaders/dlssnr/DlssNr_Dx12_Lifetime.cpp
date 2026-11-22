@@ -17,6 +17,7 @@
 #include "DlssNr_MotionProbe_Dx12.h"
 #include "DlssNr_GuideMatch_Dx12.h"
 #include "DlssNr_Periphery_Dx12.h"
+#include "DlssNr_PassClamp_Dx12.h"
 #include <dlssnr/DlssNr_UntrackedRetire.h>
 #include <dlssnr/DlssNr_ModelStats.h>
 #include <algorithm>
@@ -259,8 +260,9 @@ static void ParkUntrackedGeneration(bool migrating = true)
         ParkNrFeature(feature);
     for (ID3D12Resource** resource :
          { &g_nr.colorCopy, &g_nr.output, &g_nr.hdrCopy, &g_nr.colorSmall, &g_nr.outputNative, &g_nr.passPing,
-           &g_nr.heldColor, &g_nr.meter, &g_nr.calib, &g_nr.depthClone, &g_nr.motionClone, &g_nr.depthConstant,
-           &g_nr.depthMatched, &g_nr.motionMatched, &g_nr.unpackedProxy, &g_nr.unpackedAnswer })
+           &g_nr.passClampScratch, &g_nr.passClampScratch2, &g_nr.heldColor, &g_nr.meter, &g_nr.calib, &g_nr.depthClone,
+           &g_nr.motionClone, &g_nr.depthConstant, &g_nr.depthMatched, &g_nr.motionMatched, &g_nr.unpackedProxy,
+           &g_nr.unpackedAnswer })
         ParkNrResource(*resource);
     for (auto& resource : g_nr.meterReadback)
         ParkNrResource(resource);
@@ -281,6 +283,7 @@ static void ParkUntrackedGeneration(bool migrating = true)
     shaders.compose = new std::shared_ptr<DlssNr_Dx12>(std::move(g_compose));
     shaders.guideMatch = std::exchange(g_nr.guideMatch, nullptr);
     shaders.periphery = std::exchange(g_nr.periphery, nullptr);
+    shaders.passClamp = std::exchange(g_nr.passClamp, nullptr);
     g_nrRetired.push_back(shaders);
     // Also protect objects parked before the request, without inventing tracked usage for them.
     if (migrating)
@@ -292,6 +295,9 @@ static void ParkUntrackedGeneration(bool migrating = true)
     g_nr.scratchRetry = {};
     g_nr.heldActive = false;
     g_nr.nrScaler = Scaler::Count;
+    g_nr.builtPassClampActive = false;
+    g_nr.builtPassClamp = false;
+    g_nr.builtPassFeedback = 1.0f;
     g_nr.reset = true;
     g_nr.passReset.fill(true);
     for (unsigned i = 0; i < NrState::kMaxPasses; ++i)
@@ -782,6 +788,7 @@ void TickNrRetired(bool shutdown)
         delete retired.compose;
         delete retired.guideMatch;
         delete retired.periphery;
+        delete retired.passClamp;
 
         if (retired.enlarger != nullptr)
             enlargers.push_back(retired.enlarger);
@@ -899,8 +906,9 @@ bool MakeRoomForGeneration()
         park(f);
     for (auto& reset : g_nr.passReset)
         reset = true;
-    for (ID3D12Resource** r : { &g_nr.output, &g_nr.colorCopy, &g_nr.hdrCopy, &g_nr.colorSmall, &g_nr.outputNative,
-                                &g_nr.passPing, &g_nr.depthMatched, &g_nr.motionMatched })
+    for (ID3D12Resource** r :
+         { &g_nr.output, &g_nr.colorCopy, &g_nr.hdrCopy, &g_nr.colorSmall, &g_nr.outputNative, &g_nr.passPing,
+           &g_nr.passClampScratch, &g_nr.passClampScratch2, &g_nr.depthMatched, &g_nr.motionMatched })
     {
         parked |= *r != nullptr;
         ParkNrResource(*r);
@@ -915,8 +923,8 @@ void ParkAltSurfaces()
 {
     auto& alt = g_nr.alt;
 
-    for (ID3D12Resource** r :
-         { &alt.output, &alt.colorCopy, &alt.hdrCopy, &alt.colorSmall, &alt.outputNative, &alt.passPing })
+    for (ID3D12Resource** r : { &alt.output, &alt.colorCopy, &alt.hdrCopy, &alt.colorSmall, &alt.outputNative,
+                                &alt.passPing, &alt.passClampScratch, &alt.passClampScratch2 })
         ParkNrResource(*r);
 
     alt = {};
@@ -1006,6 +1014,8 @@ void ReleaseSurfacesIfFormatChanged(DXGI_FORMAT needed, unsigned int width, unsi
     std::swap(g_nr.colorSmall, alt.colorSmall);
     std::swap(g_nr.outputNative, alt.outputNative);
     std::swap(g_nr.passPing, alt.passPing);
+    std::swap(g_nr.passClampScratch, alt.passClampScratch);
+    std::swap(g_nr.passClampScratch2, alt.passClampScratch2);
     alt.format = outputDesc.Format;
     alt.width = (unsigned int) frameDesc.Width;
     alt.height = frameDesc.Height;

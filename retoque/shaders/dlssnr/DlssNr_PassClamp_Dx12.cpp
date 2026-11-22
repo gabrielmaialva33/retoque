@@ -1,0 +1,140 @@
+#include "pch.h"
+
+#include "DlssNr_PassClamp_Dx12.h"
+#include <dlssnr/DlssNr_PassClamp.h>
+
+#include <cstddef>
+#include <cstring>
+
+#if __has_include("precompile/DlssNr_PassClamp_Shader.h")
+#include "precompile/DlssNr_PassClamp_Shader.h"
+#define DLSSNR_PASS_CLAMP_BYTECODE 1
+#else
+#define DLSSNR_PASS_CLAMP_BYTECODE 0
+#endif
+
+namespace
+{
+static_assert(offsetof(DlssNr_PassClamp_Dx12::Constants, PassFeedback) == 12,
+              "DlssNr_PassClamp_Dx12::Constants must match cbuffer Params");
+static_assert(sizeof(DlssNr_PassClamp_Dx12::Constants) % D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT == 0,
+              "a constant-buffer view must be a multiple of 256 bytes");
+
+constexpr uint32_t kSrvCount = 2;
+constexpr uint32_t kUavCount = 1;
+constexpr uint32_t kThreads = 8;
+} // namespace
+
+bool DlssNr_PassClamp_Dx12::Available() { return DLSSNR_PASS_CLAMP_BYTECODE != 0; }
+
+DlssNr_PassClamp_Dx12::DlssNr_PassClamp_Dx12(std::string InName, ID3D12Device* InDevice) : Shader_Dx12(InName, InDevice)
+{
+    if (InDevice == nullptr || !Available())
+        return;
+
+    if (!SetupRootSignature(InDevice, kSrvCount, kUavCount, 1))
+    {
+        LOG_ERROR("[{0}] Failed to setup root signature", _name);
+        return;
+    }
+
+    D3D12_RESOURCE_DESC desc = CD3DX12_RESOURCE_DESC::Buffer(sizeof(Constants));
+    auto heapProps = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+
+    for (uint32_t i = 0; i < DLSSNR_PASS_CLAMP_HEAPS; ++i)
+    {
+        if (InDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+                                              D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                              IID_PPV_ARGS(&_constantBuffers[i])) != S_OK)
+        {
+            LOG_ERROR("[{0}] constant buffer {1} could not be created", _name, i);
+            return;
+        }
+
+        const D3D12_RANGE noRead { 0, 0 };
+        if (FAILED(_constantBuffers[i]->Map(0, &noRead, &_mappedConstants[i])) || _mappedConstants[i] == nullptr)
+        {
+            LOG_ERROR("[{0}] constant buffer {1} could not be mapped", _name, i);
+            return;
+        }
+    }
+
+#if DLSSNR_PASS_CLAMP_BYTECODE
+    if (!CreateComputePipeline(InDevice, &_pipelineState, DlssNr_PassClamp_cso, sizeof(DlssNr_PassClamp_cso), nullptr))
+    {
+        LOG_ERROR("[{0}] Failed to create the compute pipeline", _name);
+        return;
+    }
+#endif
+
+    if (!InitHeaps(InDevice, _frameHeaps, DLSSNR_PASS_CLAMP_HEAPS))
+        return;
+
+    for (uint32_t i = 0; i < DLSSNR_PASS_CLAMP_HEAPS; ++i)
+    {
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cbv {};
+        cbv.BufferLocation = _constantBuffers[i]->GetGPUVirtualAddress();
+        cbv.SizeInBytes = sizeof(Constants);
+        InDevice->CreateConstantBufferView(&cbv, _frameHeaps[i].GetCbvCPU(0));
+    }
+
+    _init = true;
+}
+
+DlssNr_PassClamp_Dx12::~DlssNr_PassClamp_Dx12()
+{
+    for (uint32_t i = 0; i < DLSSNR_PASS_CLAMP_HEAPS; ++i)
+    {
+        if (_constantBuffers[i] == nullptr)
+            continue;
+
+        if (_mappedConstants[i] != nullptr)
+        {
+            _constantBuffers[i]->Unmap(0, nullptr);
+            _mappedConstants[i] = nullptr;
+        }
+
+        _constantBuffers[i]->Release();
+        _constantBuffers[i] = nullptr;
+    }
+}
+
+bool DlssNr_PassClamp_Dx12::Dispatch(ID3D12GraphicsCommandList* InCmdList, ID3D12Resource* InRaw,
+                                     ID3D12Resource* InProxy, ID3D12Resource* OutClamped, uint32_t InWidth,
+                                     uint32_t InHeight, bool InClampEnabled, float InPassFeedback)
+{
+    if (!_init || InCmdList == nullptr || _device == nullptr || InRaw == nullptr || InProxy == nullptr ||
+        OutClamped == nullptr || InWidth == 0 || InHeight == 0 || InRaw == OutClamped || InProxy == OutClamped)
+    {
+        return false;
+    }
+
+    const uint32_t slot = _heapIndex;
+    _heapIndex = (_heapIndex + 1) % DLSSNR_PASS_CLAMP_HEAPS;
+    FrameDescriptorHeap& heap = _frameHeaps[slot];
+
+    CreateShaderResourceView(_device, InRaw, heap.GetSrvCPU(0), DXGI_FORMAT_UNKNOWN, true);
+    CreateShaderResourceView(_device, InProxy, heap.GetSrvCPU(1), DXGI_FORMAT_UNKNOWN, true);
+    CreateUnorderedAccessView(_device, OutClamped, heap.GetUavCPU(0), 0, true);
+
+    Constants constants {};
+    constants.Width = InWidth;
+    constants.Height = InHeight;
+    constants.ClampEnabled = InClampEnabled ? 1u : 0u;
+    constants.PassFeedback = DlssNr::PassClamp::SanitizeFeedback(InPassFeedback);
+    std::memcpy(_mappedConstants[slot], &constants, sizeof(constants));
+
+    ID3D12DescriptorHeap* heaps[] = { heap.GetHeapCSU() };
+    InCmdList->SetDescriptorHeaps(_countof(heaps), heaps);
+    InCmdList->SetComputeRootSignature(_rootSignature);
+    InCmdList->SetPipelineState(_pipelineState);
+    InCmdList->SetComputeRootDescriptorTable(0, heap.GetTableGPUStart());
+    InCmdList->Dispatch((InWidth + kThreads - 1) / kThreads, (InHeight + kThreads - 1) / kThreads, 1);
+
+    D3D12_RESOURCE_BARRIER written {};
+    written.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    written.UAV.pResource = OutClamped;
+    InCmdList->ResourceBarrier(1, &written);
+
+    return true;
+}

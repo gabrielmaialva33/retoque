@@ -81,6 +81,8 @@
 #include "DlssNr_GuideMatch_Dx12.h"
 #include "DlssNr_Cadence_Dx12.h"
 #include <dlssnr/DlssNr_Cadence.h>
+#include "DlssNr_PassClamp_Dx12.h"
+#include <dlssnr/DlssNr_PassClamp.h>
 #include <dlssnr/DlssNr_PresentSync.h>
 #include <proxies/KernelBase_Proxy.h>
 #include <framegen/IFGFeature_Dx12.h>
@@ -1593,13 +1595,42 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             ParkNrResource(g_nr.colorSmall);
             ParkNrResource(g_nr.outputNative);
             ParkNrResource(g_nr.passPing);
+            ParkNrResource(g_nr.passClampScratch);
+            ParkNrResource(g_nr.passClampScratch2);
             ParkNrResource(g_nr.depthMatched);
             ParkNrResource(g_nr.motionMatched);
         }
     }
 
+    const bool passClampCfg = cfg.DlssNrPassClamp.value_or_default();
+    const float passFeedbackSanitized = DlssNr::PassClamp::SanitizeFeedback(cfg.DlssNrPassFeedback.value_or_default());
+    const bool passClampWanted =
+        chainEnabled && DlssNr::PassClamp::Active(passSnapshot.Count, passClampCfg, passFeedbackSanitized);
+    const bool passClampSecondWanted =
+        chainEnabled && DlssNr::PassClamp::NeedsSecondScratch(passSnapshot.Count, passClampCfg, passFeedbackSanitized);
+
+    if (!passClampWanted)
+    {
+        ParkNrResource(g_nr.passClampScratch);
+        ParkNrResource(g_nr.passClampScratch2);
+    }
+    else if (!passClampSecondWanted)
+    {
+        ParkNrResource(g_nr.passClampScratch2);
+    }
+
     if (chainEnabled)
     {
+        if (passClampWanted != g_nr.builtPassClampActive ||
+            (passClampWanted &&
+             (passClampCfg != g_nr.builtPassClamp || passFeedbackSanitized != g_nr.builtPassFeedback)))
+        {
+            for (unsigned i = 1; i < NrState::kMaxPasses; ++i)
+                g_nr.passReset[i] = true;
+            g_nr.builtPassClampActive = passClampWanted;
+            g_nr.builtPassClamp = passClampCfg;
+            g_nr.builtPassFeedback = passFeedbackSanitized;
+        }
         for (unsigned i = 1; i < NrState::kMaxPasses; ++i)
         {
             if (g_nr.passFeature[i] &&
@@ -1611,7 +1642,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             }
             else if (g_nr.passFeature[i] && g_nr.passBuilt[i] != passSnapshot.Settings[i])
             {
-                g_nr.passReset[i] = true;
+                for (unsigned downstream = i; downstream < NrState::kMaxPasses; ++downstream)
+                    g_nr.passReset[downstream] = true;
                 g_nr.passBuilt[i] = passSnapshot.Settings[i];
             }
             if (resolutionChanged || g_nr.passBuilt[i] != passSnapshot.Settings[i])
@@ -1636,6 +1668,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         retireMismatch(g_nr.colorCopy, width, height);
         retireMismatch(g_nr.hdrCopy, width, height);
         retireMismatch(g_nr.colorSmall, workWidth, workHeight);
+        retireMismatch(g_nr.passClampScratch, workWidth, workHeight);
+        retireMismatch(g_nr.passClampScratch2, workWidth, workHeight);
     }
     // Publish only after validation: admission above can defer a changed contract for another frame.
     scratchRetry.contract = scratchContract;
@@ -1899,6 +1933,15 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                      g_nr.measuredModelBytes);
             break;
         }
+        if (passClampWanted && g_nr.passFeature[1] != nullptr)
+        {
+            if (!g_nr.passClamp && DlssNr_PassClamp_Dx12::Available())
+                g_nr.passClamp = new DlssNr_PassClamp_Dx12("DLSS-NR pass clamp", device);
+            if (!g_nr.passClampScratch)
+                g_nr.passClampScratch = CreateScratch(device, desc.Format, workWidth, workHeight);
+            if (passClampSecondWanted && g_nr.passFeature[2] != nullptr && !g_nr.passClampScratch2)
+                g_nr.passClampScratch2 = CreateScratch(device, desc.Format, workWidth, workHeight);
+        }
     }
 
     // The upscaler has just written this, so it is a UAV. The model needs it readable.
@@ -2024,6 +2067,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         cadenceSettings = Cadence::Mix(cadenceSettings, pass.LocalTone);
         cadenceSettings = Cadence::Mix(cadenceSettings, pass.SkinStructure);
         cadenceSettings = Cadence::Mix(cadenceSettings, pass.AutoMask ? 1u : 0u);
+    }
+    if (passClampWanted)
+    {
+        cadenceSettings = Cadence::Mix(cadenceSettings, passClampCfg ? 1u : 0u);
+        cadenceSettings = Cadence::Mix(cadenceSettings, passFeedbackSanitized);
     }
     cadenceSettings = Cadence::Mix(cadenceSettings, isHdrBuffer ? 1u : 0u);
     cadenceSettings = Cadence::Mix(cadenceSettings, static_cast<uint32_t>(cfg.DlssNrReversibleMode.value_or_default()));
@@ -2968,19 +3016,57 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
         if (chainEnabled && result == 1)
         {
+            ID3D12Resource* prevPassInput = modelInput;
             for (unsigned i = 1; i < passSnapshot.Count; ++i)
             {
                 if (!g_nr.passFeature[i] || g_nr.passFailed[i] || observedFrame <= g_nr.creationFrame[i] ||
                     !DlssNr::Submission::Completed(g_nr.creation[i]))
                 {
+                    for (unsigned downstream = i; downstream < NrState::kMaxPasses; ++downstream)
+                        g_nr.passReset[downstream] = true;
                     ChainStatus(g_nr.passFailed[i]
                                     ? "Additional pass failed/admission refused; last successful answer retained"
                                     : "Additional pass waiting for creation and submitted GPU completion; last "
                                       "successful answer retained");
                     break;
                 }
+                if (passClampWanted &&
+                    (g_nr.passClamp == nullptr || !g_nr.passClamp->IsInit() || g_nr.passClampScratch == nullptr ||
+                     (i >= 2 && g_nr.passClampScratch2 == nullptr)))
+                {
+                    for (unsigned downstream = i; downstream < NrState::kMaxPasses; ++downstream)
+                        g_nr.passReset[downstream] = true;
+                    ChainStatus("Additional pass interpass clamp unavailable; last successful answer retained");
+                    break;
+                }
                 auto* input = chain.Input();
                 auto* answer = chain.Output();
+                if (passClampWanted)
+                {
+                    const auto boundary = DlssNr::PassClamp::PlanBoundary(
+                        i, input, prevPassInput, g_nr.passClampScratch, g_nr.passClampScratch2);
+                    Barrier(cmdList, boundary.raw, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    if (boundary.proxy != modelInput)
+                        Barrier(cmdList, boundary.proxy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                    const bool clampedOk =
+                        g_nr.passClamp->Dispatch(cmdList, boundary.raw, boundary.proxy, boundary.target, workWidth,
+                                                 workHeight, passClampCfg, passFeedbackSanitized);
+                    if (boundary.proxy != modelInput)
+                        Barrier(cmdList, boundary.proxy, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    Barrier(cmdList, boundary.raw, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                            D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                    if (!clampedOk)
+                    {
+                        for (unsigned downstream = i; downstream < NrState::kMaxPasses; ++downstream)
+                            g_nr.passReset[downstream] = true;
+                        ChainStatus("Additional pass interpass clamp failed; last successful answer retained");
+                        break;
+                    }
+                    input = boundary.target;
+                }
                 Barrier(cmdList, input, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 const auto& settings = passSnapshot.Settings[i];
@@ -3010,6 +3096,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                              i + 1, (unsigned) extraResult, chain.completed, cpuMs);
                     break;
                 }
+                prevPassInput = input;
                 g_nr.passReset[i] = false;
                 chain.Success();
                 if (isLogFrame)
@@ -7010,6 +7097,7 @@ const char* MultipassStatus() { return g_chainStatus.load(); }
 bool PreviousModelRetained() { return GenerationRetained(); }
 const char* CadenceStatus() { return g_cadenceStatus.load(); }
 bool CadenceAvailable() { return DlssNr_Cadence_Dx12::Available(); }
+bool PassClampAvailable() { return DlssNr_PassClamp_Dx12::Available(); }
 bool BufferIsLinearHdr() { return g_lastLinearHdr.load(); }
 
 // HDR at present, for the menu. Written by the present hosts on their threads, read by the menu on its own.
@@ -7212,6 +7300,24 @@ void Shutdown()
         g_nr.passPing = nullptr;
     }
 
+    for (ID3D12Resource** r : { &g_nr.passClampScratch, &g_nr.passClampScratch2 })
+    {
+        if (*r != nullptr)
+        {
+            (*r)->Release();
+            *r = nullptr;
+        }
+    }
+
+    if (g_nr.passClamp != nullptr)
+    {
+        delete g_nr.passClamp;
+        g_nr.passClamp = nullptr;
+    }
+    g_nr.builtPassClampActive = false;
+    g_nr.builtPassClamp = false;
+    g_nr.builtPassFeedback = 1.0f;
+
     if (g_pre.scratch != nullptr)
     {
         g_pre.scratch->Release();
@@ -7336,8 +7442,9 @@ void Shutdown()
         g_nr.outputNative = nullptr;
     }
 
-    for (ID3D12Resource** r : { &g_nr.alt.output, &g_nr.alt.colorCopy, &g_nr.alt.hdrCopy, &g_nr.alt.colorSmall,
-                                &g_nr.alt.outputNative, &g_nr.alt.passPing })
+    for (ID3D12Resource** r :
+         { &g_nr.alt.output, &g_nr.alt.colorCopy, &g_nr.alt.hdrCopy, &g_nr.alt.colorSmall, &g_nr.alt.outputNative,
+           &g_nr.alt.passPing, &g_nr.alt.passClampScratch, &g_nr.alt.passClampScratch2 })
     {
         if (*r != nullptr)
             (*r)->Release();

@@ -145,6 +145,10 @@ Sequential model passes	模型多遍顺序处理
 Requested passes	请求遍数
 Last evaluation: %u successful model passes	上次评估：成功完成 %u 遍模型处理
 Individual pass settings	每遍单独设置
+Interpass clamp	遍间钳制
+Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	在第 N+1 遍读取第 N 遍输出之前，相对第 N 遍自身的输入保持色相地钳制范围并清理 NaN/Inf。仅限 D3D12；关闭时不变。
+Pass feedback	遍间反馈混合
+Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	在传递给下一遍之前，将每一遍的输出向该遍自身的输入混合（1.00 = 完整输出，0.00 = 保持该遍输入不变）并清理 NaN/Inf。仅限 D3D12。
 Edit pass	编辑遍
 Editing pass 1	正在编辑第 1 遍
 Uncheck Override to inherit the live master value.	取消勾选“覆盖”即可继承当前主设置的值。

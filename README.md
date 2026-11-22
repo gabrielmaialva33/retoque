@@ -427,7 +427,8 @@ Retoque stands on other people's work. Full licence texts are in [`Licenses/`](L
   integration.
 - **[OptiScaler-F5-DLSSNR-Multipass](https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass)**
   (janblade, GPL-3.0): "Measure detail", per-thread scopes, the model cadence and ViT-skip ideas, the
-  shared D3D12 menu lock, and clearing a game's DLSS-G hooks when OptiScaler makes the FG swapchain (PR #347).
+  shared D3D12 menu lock, interpass clamping / `PassFeedback` and same-temporal-age hand-off (PRs #7,
+  #18, #41, #55, #61), and clearing a game's DLSS-G hooks when OptiScaler makes the FG swapchain (PR #347).
 - **ShyVortex** (via hhkbble's OptiScaler) and **[HelixSR-Scaler](https://github.com/lonewolf0622/HelixSR-Scaler)**
   (lonewolf0622, GPL-3.0): the alt-tab present re-entry fix and FG object lifetime fixes, adapted.
 - **[scottmudge's OptiScaler_DLSSNR](https://github.com/scottmudge/OptiScaler_DLSSNR)**: the present hook

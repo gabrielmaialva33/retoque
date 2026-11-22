@@ -145,6 +145,10 @@ Sequential model passes	Последовательные проходы моде
 Requested passes	Запрошено проходов
 Last evaluation: %u successful model passes	Последнее вычисление: успешных проходов модели -- %u
 Individual pass settings	Отдельные настройки проходов
+Interpass clamp	Межпроходное ограничение
+Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	Перед тем как проход N+1 прочитает ответ прохода N, ограничивает его с сохранением оттенка относительно собственного входа прохода N и очищает NaN/Inf. Только D3D12; выключено -- без изменений.
+Pass feedback	Межпроходная обратная связь
+Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	Смешивает ответ каждого прохода в сторону его собственного входа перед передачей следующему проходу (1.00 = полный ответ, 0.00 = вход без изменений) и очищает NaN/Inf. Только D3D12.
 Edit pass	Изменить проход
 Editing pass 1	Изменение прохода 1
 Uncheck Override to inherit the live master value.	Снимите флажок "Переопределить", чтобы наследовать текущее основное значение.

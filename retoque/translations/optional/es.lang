@@ -145,6 +145,10 @@ Sequential model passes	Pases secuenciales del modelo
 Requested passes	Pases solicitados
 Last evaluation: %u successful model passes	Última evaluación: %u pases del modelo correctos
 Individual pass settings	Ajustes individuales por pase
+Interpass clamp	Límite entre pases
+Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	Antes de que el pase N+1 lea la respuesta del pase N, la limita preservando el matiz frente a la propia entrada del pase N y sanea NaN/Inf. Solo D3D12; desactivado queda sin cambios.
+Pass feedback	Realimentación entre pases
+Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	Mezcla la respuesta de cada pase hacia su propia entrada antes de entregarla al siguiente pase (1.00 = respuesta completa, 0.00 = entrada sin cambios) y sanea NaN/Inf. Solo D3D12.
 Edit pass	Editar pase
 Editing pass 1	Editando el pase 1
 Uncheck Override to inherit the live master value.	Desmarca Anular para heredar el valor general actual.

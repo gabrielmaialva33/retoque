@@ -204,6 +204,13 @@ thresholds -- is **NVIDIA's, from RTX Remix's DLSS-NR integration**
 zlib). `Licenses/RTXRemix_ATTRIBUTION.txt` carries both texts and says which part is theirs;
 `../../docs/dlssnr/design/hdr-highlight-recovery.md` is the analysis.
 
+Interpass clamping and `PassFeedback` (`[DlssNr] PassClamp` and `PassFeedback`, off/1.0 by default) --
+clamping each chained pass's output hue-preservingly against that pass's own input, sanitizing `NaN`/`Inf`
+to that input, and keeping same-temporal-age hand-offs across 2..10 passes -- are adapted from
+**janblade's OptiScaler-F5-DLSSNR-Multipass** (https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass,
+PRs #7, #18, #41, #55, #61; GPL-3.0), building on **hhkbble's** `CubeScaleResidual`;
+`../../docs/dlssnr/design/2026-11-22-interpass-clamp.md` is the analysis.
+
 ## Why a forwarder DLL exists
 
 The model's snippet resolves the module that owns its caller's return address and refuses any whose
