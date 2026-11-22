@@ -219,6 +219,10 @@ struct DlssNr_DetailStats_Dx12
 {
 };
 
+struct DlssNr_DetailStability_Dx12
+{
+};
+
 // The pulse metric's pass belongs to another feature (tests/nr-pulse-metric); here it is only parked and deleted.
 struct DlssNr_Pulse_Dx12
 {

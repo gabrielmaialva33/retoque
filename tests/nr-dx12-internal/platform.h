@@ -127,6 +127,12 @@ struct Gate
 {
 };
 } // namespace LightLimit
+namespace DetailStability
+{
+struct Gate
+{
+};
+} // namespace DetailStability
 namespace Submission
 {
 namespace Detail

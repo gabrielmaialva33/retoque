@@ -316,6 +316,45 @@ int main()
     limiter();
     assert(ImGui::Saw(limiterCombo) && c.DlssNrLightLimiter.value == 7);
     c.DlssNrLightLimiter.value = 0;
+    // Detail stability (docs/dlssnr/design/detail-stability.md): nothing on native Vulkan or under the proxy; the blend and the
+    // repeat hold only once it is on; each writes only its key.
+    const std::string stabilityBox = "Detail stability###nrDetailStability";
+    const std::string stabilityBlend = "Detail stability blend###nrDetailStabilityBlend";
+    const std::string stabilityHold = "Hold repeated frames###nrDetailStabilityHold";
+    auto stability = [&](bool vulkan = false)
+    {
+        DlssNr::RenderDetailStability(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrDetailStability.value = false;
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    stability(true);
+    assert(!ImGui::Saw(stabilityBox));
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    stability();
+    assert(!ImGui::Saw(stabilityBox));
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    stability();
+    assert(ImGui::Saw(stabilityBox) && !ImGui::Saw(stabilityBlend) && !ImGui::Saw(stabilityHold));
+    ImGui::Reset();
+    ImGui::actions[stabilityBox] = true;
+    stability();
+    assert(c.DlssNrDetailStability.value);
+    ImGui::Reset();
+    stability();
+    assert(ImGui::Saw(stabilityBox) && ImGui::Saw(stabilityBlend) && ImGui::Saw(stabilityHold));
+    ImGui::Reset();
+    ImGui::actions[stabilityHold] = true;
+    stability();
+    assert(c.DlssNrDetailStabilityHold.value);
+    ImGui::Reset();
+    ImGui::actions[stabilityBox] = false;
+    stability();
+    assert(!c.DlssNrDetailStability.value);
     // The player view exposes appearance and capture; full-only settings remain untouched.
     Config simple;
     simple.master.Preset = 1;

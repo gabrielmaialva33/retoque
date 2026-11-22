@@ -54,6 +54,14 @@ tier = "host"
 timeout = 240
 summary = "Light limiter at any cadence (LightLimiter): the gate, the shader's regional rule over a CPU model of the dispatches, mutants, and wiring guards."
 
+[nr-detail-stability]
+path = "nr-detail-stability"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Detail stability (DetailStability): the shader's rule over synthetic sequences (clip, rejection, exact repeat, the dead end side by side), the gate, mutants and wiring guards."
+
 [nr-game-profiles]
 path = "nr-game-profiles"
 domain = "nr"

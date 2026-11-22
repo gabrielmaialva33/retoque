@@ -77,6 +77,7 @@
 #include <shaders/output_scaling/OS_Dx12.h>
 #include "DlssNr_Stabilizer_Dx12.h"
 #include "DlssNr_UiMask_Dx12.h"
+#include "DlssNr_DetailStability_Dx12.h"
 #include "DlssNr_GuideMatch.h"
 #include "DlssNr_GuideMatch_Dx12.h"
 #include "DlssNr_Cadence_Dx12.h"
@@ -1547,6 +1548,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // them.
     if (DlssNr::LightLimit::Requested(cfg.DlssNrLightLimiter.value_or_default()) == DlssNr::LightLimit::Mode::Off)
         ParkNrCadence(g_nr.lightLimiter);
+
+    // Detail stability switched off, or on the stage where it cannot run (docs/dlssnr/design/detail-stability.md): its
+    // history and output go back once the GPU is done with them.
+    if (!cfg.DlssNrDetailStability.value_or_default() || beforeUpscale)
+        ParkNrDetailStability(g_nr.detailStability);
 
     const bool resolutionChanged =
         g_nr.width != width || g_nr.height != height || g_nr.workWidth != workWidth || g_nr.workHeight != workHeight;
@@ -3322,12 +3328,73 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }
 
+        // Detail stability (docs/dlssnr/design/detail-stability.md, [DlssNr] DetailStability, off by default): the model's
+        // edit filtered over time, the history moved with the game's vectors, clipped to the current 3x3 and thrown away where
+        // the input moved under it. After the record, so a carried frame still carries the model's own edit; into a surface of
+        // its own, so nothing the model reads or writes changes; the light limiter below reads what it made. Off, nothing is
+        // built and nothing is dispatched.
+        ID3D12Resource* shownAnswer = finalOutput;
+        {
+            DlssNr::DetailStability::Inputs stability;
+            stability.enabled = cfg.DlssNrDetailStability.value_or_default();
+            stability.driverProxy = useProxy;
+            stability.beforeUpscale = beforeUpscale;
+            stability.gameGuides = frame.GameGuides;
+            stability.frameGeneration = FrameGenerationActive();
+            stability.cadence = cadenceInputs.requested > 1;
+            stability.surfaces = proxyAtWorkSize;
+            uint64_t stabilitySignature = Cadence::kMixSeed;
+            stabilitySignature = Cadence::Mix(stabilitySignature, workWidth);
+            stabilitySignature = Cadence::Mix(stabilitySignature, workHeight);
+            stabilitySignature = Cadence::Mix(stabilitySignature, static_cast<uint32_t>(desc.Format));
+            stabilitySignature = Cadence::Mix(stabilitySignature, isHdrBuffer ? 1u : 0u);
+            stabilitySignature = Cadence::Mix(stabilitySignature, frame.PresentSource ? 1u : 0u);
+            stabilitySignature = Cadence::Mix(stabilitySignature, uiAlpha != nullptr ? 1u : 0u);
+            stabilitySignature = Cadence::Mix(stabilitySignature, frame.MvScaleX);
+            stabilitySignature = Cadence::Mix(stabilitySignature, frame.MvScaleY);
+            const auto stabilityNow =
+                g_nr.detailGate.Decide(stability, observedFrame, cadenceNowMs, stabilitySignature, stabilizerReset);
+            if (stabilityNow.run)
+            {
+                if (g_nr.detailStability != nullptr && !g_nr.detailStability->Fits(device, workWidth, workHeight))
+                    ParkNrDetailStability(g_nr.detailStability);
+                if (g_nr.detailStability == nullptr)
+                    g_nr.detailStability =
+                        new DlssNr_DetailStability_Dx12("DLSS-NR detail stability", device, workWidth, workHeight);
+
+                bool filtered = false;
+                if (g_nr.detailStability->IsInit() && cadenceFrame.motion != nullptr)
+                {
+                    DlssNr_DetailStability_Dx12::Frame stabilityFrame {};
+                    stabilityFrame.proxy = modelInput;
+                    stabilityFrame.motion = cadenceFrame.motion;
+                    stabilityFrame.motionRegion = { cadenceFrame.motionRegion.baseX, cadenceFrame.motionRegion.baseY,
+                                                    cadenceFrame.motionRegion.width,
+                                                    cadenceFrame.motionRegion.height };
+                    stabilityFrame.mvToWorkX = cadenceFrame.mvToWorkX;
+                    stabilityFrame.mvToWorkY = cadenceFrame.mvToWorkY;
+                    stabilityFrame.uiAlpha = uiAlpha;
+                    DlssNr_DetailStability_Dx12::Settings stabilitySettings {};
+                    stabilitySettings.alpha =
+                        DlssNr::DetailStability::Blend(cfg.DlssNrDetailStabilityBlend.value_or_default());
+                    stabilitySettings.holdRepeats = cfg.DlssNrDetailStabilityHold.value_or_default();
+                    stabilitySettings.historyValid = stabilityNow.historyValid;
+                    if (ID3D12Resource* const stableAnswer =
+                            g_nr.detailStability->Filter(cmdList, stabilityFrame, finalOutput, stabilitySettings))
+                    {
+                        shownAnswer = stableAnswer;
+                        filtered = true;
+                    }
+                }
+                g_nr.detailGate.Ran(filtered);
+            }
+        }
+
         // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter, off by default): the
         // answer the resolve is about to read, with the light of the whole picture or of each tile held to the last
         // frame's where its own light stood still. After the record, so what a carried frame carries is still the model's
         // own edit; on every frame the cadence's own limiter did not hold; into a surface of its own, so nothing the
         // model reads or writes changes. Off, nothing is built and nothing is dispatched.
-        ID3D12Resource* shownAnswer = finalOutput;
         const auto lightMode = DlssNr::LightLimit::Requested(cfg.DlssNrLightLimiter.value_or_default());
         if (lightMode == DlssNr::LightLimit::Mode::Off)
         {
@@ -3369,7 +3436,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     light.regionMotion = DlssNr::LightLimit::RegionMotionPixels(cadenceFrame.scale);
                     light.passthrough = !isHdrBuffer;
                     if (ID3D12Resource* const limitedAnswer =
-                            g_nr.lightLimiter->LimitLight(cmdList, cadenceFrame, uiAlpha, light, finalOutput))
+                            g_nr.lightLimiter->LimitLight(cmdList, cadenceFrame, uiAlpha, light, shownAnswer))
                     {
                         shownAnswer = limitedAnswer;
                         limited = true;
@@ -7254,6 +7321,7 @@ void Shutdown()
         delete r.stabilizer;
         delete r.uiMask;
         delete r.cadence;
+        delete r.detailStability;
         delete r.detailStats;
         delete r.pulse;
         delete r.motionProbe;
@@ -7469,6 +7537,13 @@ void Shutdown()
         g_nr.lightLimiter = nullptr;
     }
     g_nr.lightGate.Reset();
+
+    if (g_nr.detailStability != nullptr)
+    {
+        delete g_nr.detailStability;
+        g_nr.detailStability = nullptr;
+    }
+    g_nr.detailGate.Reset();
 
     ShutdownExposureMeter();
 

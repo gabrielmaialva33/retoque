@@ -17,6 +17,11 @@ What is not theirs: the quantisation-aware minimum step in the creep, the linear
 luminance weights, the route and reset rules, and the resource lifetime. See
 docs/dlssnr/design/output-stabilizer.md.
 
+The detail stability filter's exact repeat (retoque/shaders/dlssnr/precompile/dlssnr_detail_stability_rule.h,
+[DlssNr] DetailStabilityHold) takes the idea of RESTORE_HOLD_REPEATS from shaders/DLSS5_Feed.fx (v2.0.0, 9bd0af3d): a
+repeated input frame shown exactly as before. What is not theirs: the test is per pixel (an input exactly the history's and
+a motion of exactly zero), on the filtered edit, in this fork's pass. See docs/dlssnr/design/detail-stability.md.
+
 Upstream licence
 ----------------
 

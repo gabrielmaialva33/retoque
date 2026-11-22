@@ -1299,6 +1299,43 @@ static void RenderLightLimiter(Config* config, bool nativeVulkan)
                "\nCompare.");
 }
 
+// Detail stability (docs/dlssnr/design/detail-stability.md): the model's edit filtered over time. It runs on the D3D12 resolve's
+// answer, so native Vulkan and the driver proxy have nothing for it to act on and are not offered the control.
+static void RenderDetailStability(Config* config, bool nativeVulkan)
+{
+    if (nativeVulkan || config->DlssNrUseProxy.value_or_default())
+        return;
+
+    bool stability = config->DlssNrDetailStability.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Detail stability###nrDetailStability"), &stability))
+        config->DlssNrDetailStability = stability;
+
+    HelpMarker("Stops fine detail from boiling. The model's edit is filtered over time: last frame's, moved with the"
+               "\ngame's motion vectors, is clipped to the range of the current edit around the pixel and thrown away"
+               "\nwhere the picture under it changed, then blended with the new one. It is not a blend of old answers:"
+               "\nwhere the picture moved, the model's answer is shown as it is.\n\nNeeds the game's depth and motion."
+               "\nIt stands down before the upscaler, with a model cadence above 1 and with frame generation. Costs three"
+               "\ntextures and a pass a frame while on; off costs nothing. Measure it with \"Measure detail\" under"
+               "\nCompare, and look for ghosting behind moving things.");
+
+    if (!stability)
+        return;
+
+    float blend = config->DlssNrDetailStabilityBlend.value_or_default();
+    if (DeferredSlider("Detail stability blend###nrDetailStabilityBlend", &blend, 0.05f, 1.0f, 0.15f))
+        config->DlssNrDetailStabilityBlend = blend;
+
+    HelpMarker("How much of the new frame is let in each frame. At 0.15 the filtered history keeps a weight of 0.85; lower is"
+               "\nsteadier and trails more; 1 is no filter.");
+
+    bool hold = config->DlssNrDetailStabilityHold.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Hold repeated frames###nrDetailStabilityHold"), &hold))
+        config->DlssNrDetailStabilityHold = hold;
+
+    HelpMarker("A frame the game shows twice (30 fps at 60 Hz) is shown exactly as it was the first time instead of the"
+               "\nmodel's new opinion of it. Only pixels whose input is exactly the same are held.");
+}
+
 static void RenderCadenceControls(Config* config, bool nativeVulkan)
 {
     if (nativeVulkan)
@@ -2430,6 +2467,7 @@ void RenderMenu(Config* config, float menuResScale)
         }
 
         RenderLightLimiter(config, nativeVulkan);
+        RenderDetailStability(config, nativeVulkan);
         RenderCadenceControls(config, nativeVulkan);
 
         ImGui::SeparatorText(Localization::Tr("Brightness and exposure"));

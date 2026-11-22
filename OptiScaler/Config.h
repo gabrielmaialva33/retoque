@@ -484,6 +484,18 @@ class Config
     // Anything else reads as 0. D3D12 only. Off allocates and dispatches nothing. See docs/dlssnr/design/light-limiter.md.
     CustomOptional<uint32_t> DlssNrLightLimiter { 0 };
 
+    // Detail stability: a temporal filter on the model's edit (log of its answer over its input) with the history
+    // reprojected by the game's motion vectors, clipped to the current 3x3 and rejected where the input moved under it, so
+    // fine detail that the model re-decides every frame stops boiling. Blend is the weight of the current frame per frame
+    // (0.05 to 1, 0.15 by default; 1 is no filter). Hold repeats shows an input frame that repeats exactly as it was before.
+    // It needs the game's depth and motion and stands down before the upscaler, with a cadence above 1 and with frame
+    // generation. Display only: the model's own history stays the model's. D3D12 only. Off by default, which changes
+    // nothing. This is not the temporal filtering of the answer that README.md records as a dead end: see
+    // docs/dlssnr/design/detail-stability.md.
+    CustomOptional<bool> DlssNrDetailStability { false };
+    CustomOptional<float> DlssNrDetailStabilityBlend { 0.15f };
+    CustomOptional<bool> DlssNrDetailStabilityHold { false };
+
     // The most the pass may multiply or divide a pixel by. A detail pass has no business restyling a
     // light source, whatever the model returns.
     CustomOptional<float> DlssNrMaxRatio { 2.0f };

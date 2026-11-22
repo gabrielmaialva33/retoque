@@ -145,7 +145,7 @@ assert pass_cpp.count('SAFE_RELEASE(_regionGrid);') >= 2 and pass_cpp.count('SAF
 assert renderer.count('new DlssNr_Cadence_Dx12("DLSS-NR light limiter"') == 1
 off = renderer.index('Requested(cfg.DlssNrLightLimiter.value_or_default()) == DlssNr::LightLimit::Mode::Off)')
 assert 'ParkNrCadence(g_nr.lightLimiter);' in renderer[off:off + 300]
-block = renderer.index('ID3D12Resource* shownAnswer = finalOutput;')
+block = renderer.index('const auto lightMode =')
 assert renderer.index('g_nr.cadence->ShowFaded(') < block < renderer.index('// Supersampling down-leg.')
 built = renderer.index('new DlssNr_Cadence_Dx12("DLSS-NR light limiter"')
 assert renderer.index('if (lightNow.run && proxyAtWorkSize)') < built
@@ -161,7 +161,7 @@ assert 'g_nr.periphery->Unpack(cmdList, periphery, modelInput, shownAnswer,' in 
 # g_nr.output / chain.answer is the model's own surface: the limiter reads it and never writes it, and it is still the
 # one moved back to UNORDERED_ACCESS for the next frame's model write.
 assert 'Barrier(cmdList, finalOutput, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,' in after
-assert 'LimitLight(cmdList, cadenceFrame, uiAlpha, light, finalOutput)' in renderer
+assert 'LimitLight(cmdList, cadenceFrame, uiAlpha, light, shownAnswer)' in renderer
 # The interface is out of the light and keeps its answer: the limiter gets the same mask the cadence does.
 assert 'light.passthrough = !isHdrBuffer;' in renderer
 # One object in the state, parked with the generation and deleted at shutdown.

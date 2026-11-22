@@ -14,9 +14,15 @@ estimate with asymmetric per-second limits (4 stops/s up, 0.5 stops/s down), a h
 0.15 stop, track until within 0.02), a hold on a frame that cannot be read, a re-prime on the game's reset,
 and one state per stream.
 
-What is not theirs: the host-side state and its clock, the unreadable-frame test (the game's own implied
-white point, not a frame histogram), the pause rule, and where it sits in the renderer. See
-docs/dlssnr/design/exposure-governor.md.
+Detail stability (retoque/dlssnr/DlssNr_DetailStability.h, retoque/shaders/dlssnr/DlssNr_DetailStability_Dx12.*,
+retoque/shaders/dlssnr/precompile/dlssnr_detail_stability*) takes its filter from shaders/look_compose.cs_5_1.hlsl and
+dlssnr.hpp: a history of the log edit, reprojected with the game's motion vectors, clipped to the current 3x3 range of
+the edit and rejected where the reprojected input leaves the current 3x3 range of the input, blended at alpha 0.15.
+
+What is not theirs: the governor's host-side state and its clock, its unreadable-frame test (the game's own implied
+white point, not a frame histogram), the pause rule, and where each sits in the renderer; the detail filter's
+per channel edit on the encoded proxy and answer, its near binary band in c / (1 + c), its half-rounded one-channel
+history and its exact repeat. See docs/dlssnr/design/exposure-governor.md and docs/dlssnr/design/detail-stability.md.
 
 Upstream licence
 ----------------

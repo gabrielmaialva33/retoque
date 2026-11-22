@@ -729,6 +729,26 @@ ExposureGovernor=auto
 ; 0 to 2 - Default (auto) is 0 (off)
 LightLimiter=auto
 
+; Detail stability (docs/dlssnr/design/detail-stability.md). The model re-decides fine detail (foliage, grass, hair, film
+; grain) a little every frame, and it boils. This filters the model's EDIT, the log of its answer over its input, over
+; time: the previous frame's filtered edit is moved with the game's motion vectors, clipped to the range of the current
+; edit in the 3x3 around the pixel, thrown away where the input under it changed (it leaves the range of the current 3x3 by
+; more than a small band), and blended with the new one. The model's own history is not changed, and nothing of an old
+; answer is kept where the picture moved under it, which is what made the temporal filtering recorded in
+; retoque/dlssnr/README.md ghost. Needs the game's depth and motion; stands down before the upscaler, with a Cadence above
+; 1 and with frame generation. Costs three working-size textures and one pass a frame while on. D3D12 only.
+; true or false - Default (auto) is false
+DetailStability=auto
+
+; The weight of the current frame per frame in DetailStability: 0.15 keeps 85% of the filtered history. 1 is no filter.
+; 0.05 to 1 - Default (auto) is 0.15
+DetailStabilityBlend=auto
+
+; With DetailStability: an input frame that repeats exactly as it was (a 30 fps game shown at 60 Hz) is shown exactly as it
+; was before, instead of the model's new opinion of it. Where the input is not exactly the same, the filter decides.
+; true or false - Default (auto) is false
+DetailStabilityHold=auto
+
 ; Compare the clean upscaler frame with the NR edit: 0 off, 1 side by side, 2 wipe.
 ; Both comparison modes keep working with the menu closed.
 ; 0 to 2 - Default (auto) is 0 (off)

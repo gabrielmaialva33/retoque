@@ -225,6 +225,9 @@ struct Config
     OptionalBool DlssNrCadenceSmoothing;
     OptionalBool DlssNrExposureGovernor;
     OptionalU32 DlssNrLightLimiter;
+    OptionalBool DlssNrDetailStability;
+    OptionalBool DlssNrDetailStabilityHold;
+    OptionalFloat DlssNrDetailStabilityBlend;
     OptionalBool DlssNrCadenceAdaptive;
     DlssNrResolvedPassSettings master;
     DlssNr::PassConfig::Overrides overrides;
