@@ -586,8 +586,10 @@ bool DlssNr_Cadence_Dx12::ShowRegional(ID3D12GraphicsCommandList* InCmdList, con
 
     const uint32_t passthrough = InSmooth.passthrough ? 1u : 0u;
     const uint32_t haveUi = InUiAlpha != nullptr ? 1u : 0u;
-    const auto regional = [&](Constants c)
+    // By const reference: Constants is alignas(256), which MSVC cannot pass by value (C2719).
+    const auto regional = [&](const Constants& in)
     {
+        Constants c = in;
         c.Passthrough = passthrough;
         c.HaveUi = haveUi;
         c.HaveMotion = InFrame.motion != nullptr ? 1u : 0u;

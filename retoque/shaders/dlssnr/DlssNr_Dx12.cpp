@@ -2109,7 +2109,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         frame.PresentSource
             ? (frame.RenderSequence != 0
                    ? frame.RenderSequence
-                   : (g_bridgeRead.active ? g_presentGuideRing.GetSlot(g_bridgeRead.slot).sequence : 0ull))
+                   : (g_bridgeRead.valid ? g_presentGuideRing.GetSlot(g_bridgeRead.slot).sequence : 0ull))
             : g_upscaleRenders;
     DlssNr::Dejitter::State nextDejitter = g_nr.dejitter;
     const auto dejitterPlan = DlssNr::Dejitter::Step(nextDejitter, dejitterInputs);
