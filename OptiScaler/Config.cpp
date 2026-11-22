@@ -637,6 +637,11 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCadenceSmoothing.set_from_config(readBool("DlssNr", "CadenceSmoothing"));
             DlssNrCadenceAdaptive.set_from_config(readBool("DlssNr", "CadenceAdaptive"));
             DlssNrPulseMetric.set_from_config(readBool("DlssNr", "PulseMetric"));
+            DlssNrExposureGovernor.set_from_config(readBool("DlssNr", "ExposureGovernor"));
+            DlssNrLightLimiter.set_from_config(readUInt("DlssNr", "LightLimiter"));
+            DlssNrDetailStability.set_from_config(readBool("DlssNr", "DetailStability"));
+            DlssNrDetailStabilityBlend.set_from_config(readFloat("DlssNr", "DetailStabilityBlend"));
+            DlssNrDetailStabilityHold.set_from_config(readBool("DlssNr", "DetailStabilityHold"));
             UseGenericAppIdWithDlss.set_from_config(readBool("DLSS", "UseGenericAppIdWithDlss"));
 
             RenderPresetOverride.set_from_config(readBool("DLSS", "RenderPresetOverride"));
@@ -2161,6 +2166,15 @@ bool Config::SaveIni()
         ini.SetValue("DlssNr", "CadenceSmoothing",
                      GetBoolValue(Instance()->DlssNrCadenceSmoothing.value_for_config()).c_str());
         ini.SetValue("DlssNr", "PulseMetric", GetBoolValue(Instance()->DlssNrPulseMetric.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "ExposureGovernor",
+                     GetBoolValue(Instance()->DlssNrExposureGovernor.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "LightLimiter", GetIntValue(Instance()->DlssNrLightLimiter.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DetailStability",
+                     GetBoolValue(Instance()->DlssNrDetailStability.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DetailStabilityBlend",
+                     GetFloatValue(Instance()->DlssNrDetailStabilityBlend.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DetailStabilityHold",
+                     GetBoolValue(Instance()->DlssNrDetailStabilityHold.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetOverride",
                      GetBoolValue(Instance()->RenderPresetOverride.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetForAll",

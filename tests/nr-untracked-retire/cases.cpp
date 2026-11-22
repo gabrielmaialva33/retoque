@@ -167,6 +167,9 @@ struct NrEnlarger
 struct DlssNr_DetailStats_Dx12
 {
 };
+struct DlssNr_DetailStability_Dx12
+{
+};
 struct DlssNr_Pulse_Dx12
 {
 };

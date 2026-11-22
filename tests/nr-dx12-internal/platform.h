@@ -115,6 +115,24 @@ struct PlausibilityLatch
 {
 };
 } // namespace Exposure
+namespace ExposureGovernor
+{
+struct State
+{
+};
+} // namespace ExposureGovernor
+namespace LightLimit
+{
+struct Gate
+{
+};
+} // namespace LightLimit
+namespace DetailStability
+{
+struct Gate
+{
+};
+} // namespace DetailStability
 namespace Submission
 {
 namespace Detail

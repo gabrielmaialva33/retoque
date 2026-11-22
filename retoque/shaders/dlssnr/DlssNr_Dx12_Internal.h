@@ -7,9 +7,12 @@
 #include <dlssnr/DlssNr.h>
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_Exposure.h>
+#include <dlssnr/DlssNr_ExposureGovernor.h>
 #include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_Submission.h>
 #include <dlssnr/DlssNr_Cadence.h>
+#include <dlssnr/DlssNr_LightLimit.h>
+#include <dlssnr/DlssNr_DetailStability.h>
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
 #include <dlssnr/DlssNr_DetailStats.h>
 #include <dlssnr/DlssNr_Pulse.h>
@@ -36,6 +39,7 @@ struct IDXGISwapChain3;
 class OS_Dx12;
 class DlssNr_Stabilizer_Dx12;
 class DlssNr_UiMask_Dx12;
+class DlssNr_DetailStability_Dx12;
 class DlssNr_Cadence_Dx12;
 class DlssNr_GuideMatch_Dx12;
 class DlssNr_Periphery_Dx12;
@@ -305,6 +309,19 @@ struct NrState
     uint64_t featureGeneration = 0;
     unsigned int cadencePasses = 0;
 
+    // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter): the cadence's pass
+    // built for the limiter alone, for one working size, parked when that changes or the key is off; and the gate that
+    // says on which frames it holds the answer's light and on which it starts over.
+    DlssNr_Cadence_Dx12* lightLimiter = nullptr;
+    DlssNr::LightLimit::Gate lightGate;
+    std::chrono::steady_clock::time_point lightLimiterAt {};
+
+    // Detail stability (docs/dlssnr/design/detail-stability.md, [DlssNr] DetailStability): the temporal filter on the
+    // model's edit, built for one working size, parked when that changes or the key goes off or the route cannot run
+    // it; and the gate that says on which frames it runs and whether its history is any use.
+    DlssNr_DetailStability_Dx12* detailStability = nullptr;
+    DlssNr::DetailStability::Gate detailGate;
+
     unsigned int workWidth = 0;
     unsigned int workHeight = 0;
 
@@ -367,6 +384,11 @@ struct NrState
     float gameExposure = 0.0f;
     float gamePreExposure = 1.0f;
     DlssNr::Exposure::PlausibilityLatch exposureLatch;
+
+    // The exposure governor (docs/dlssnr/design/exposure-governor.md): one state for the stream, and when it last
+    // stepped.
+    DlssNr::ExposureGovernor::State exposureGovernor;
+    std::chrono::steady_clock::time_point exposureGovernorAt {};
 
     // What the game OFFERS, as opposed to what has been read. Recorded from the parameter block every
     // frame whether or not the setting is on, and deliberately so: the menu has to be able to answer
@@ -480,6 +502,7 @@ struct NrRetired
     DlssNr_Stabilizer_Dx12* stabilizer = nullptr;
     DlssNr_UiMask_Dx12* uiMask = nullptr;
     DlssNr_Cadence_Dx12* cadence = nullptr;
+    DlssNr_DetailStability_Dx12* detailStability = nullptr;
     NrEnlarger* enlarger = nullptr;
     DlssNr_DetailStats_Dx12* detailStats = nullptr;
     DlssNr_Pulse_Dx12* pulse = nullptr;
@@ -887,6 +910,7 @@ void ParkNrFeature(void*& feature);
 void ParkNrScaler(OS_Dx12*& scaler);
 void ParkNrStabilizer(DlssNr_Stabilizer_Dx12*& stabilizer);
 void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask);
+void ParkNrDetailStability(DlssNr_DetailStability_Dx12*& detailStability);
 void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence);
 void TickNrRetired(bool shutdown = false);
 void ForgetCalibration();

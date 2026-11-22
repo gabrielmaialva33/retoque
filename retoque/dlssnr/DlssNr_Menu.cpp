@@ -8,6 +8,7 @@
 
 #include "DlssNr.h"
 #include "DlssNr_Cadence.h"
+#include "DlssNr_LightLimit.h"
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
@@ -1271,6 +1272,73 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
 // without its shader cannot run it, so none of them is offered the control -- a cadence saved in the ini that
 // does nothing here gets one line saying so instead. The frame-generation opt-in exists only for a cadence
 // above 1, and so does the status line.
+// The light limiter at any cadence (docs/dlssnr/design/light-limiter.md). It runs on the D3D12 resolve's answer, so
+// native Vulkan and the driver proxy have nothing for it to act on, and a build without the cadence shader does not
+// carry its bytecode: none of them is offered the control.
+static void RenderLightLimiter(Config* config, bool nativeVulkan)
+{
+    if (nativeVulkan || config->DlssNrUseProxy.value_or_default() || !DlssNr::CadenceAvailable())
+        return;
+
+    ImGui::SeparatorText(Localization::Tr("Light stability"));
+
+    const char* limiterNames[] = { Localization::Tr("Off"), Localization::Tr("Whole picture"),
+                                   Localization::Tr("By region") };
+    int limiter = static_cast<int>(DlssNr::LightLimit::Requested(config->DlssNrLightLimiter.value_or_default()));
+    if (ImGui::Combo(MenuLayout::FieldLabel(Localization::Label("Light limiter###nrLightLimiter")), &limiter,
+                     limiterNames, IM_ARRAYSIZE(limiterNames)))
+        config->DlssNrLightLimiter = static_cast<uint32_t>(std::clamp(limiter, 0, 2));
+
+    HelpMarker("Stops the model's light from breathing. The light of what is shown may move by only a little a second"
+               "\nwhile the picture's own light holds still, and is let go the moment the picture itself changes.\n"
+               "\nWhole picture: the mean light of the frame, at 1.5 stops a second. By region: each 32 pixel tile"
+               "\nat 0.75 stops a second, which also holds a lamp that pulses in one part of the picture; it lets go"
+               "\nwhere the content moves fast or the model really changed its mind. The detail finer than a tile is"
+               "\nnot held.\n\nOnly what is shown changes, never the model's own history. Costs a texture and three"
+               "\nsmall passes a frame while on; off costs nothing. Measure it with \"Measure the light step\" under"
+               "\nCompare.");
+}
+
+// Detail stability (docs/dlssnr/design/detail-stability.md): the model's edit filtered over time. It runs on the D3D12
+// resolve's answer, so native Vulkan and the driver proxy have nothing for it to act on and are not offered the
+// control.
+static void RenderDetailStability(Config* config, bool nativeVulkan)
+{
+    if (nativeVulkan || config->DlssNrUseProxy.value_or_default())
+        return;
+
+    bool stability = config->DlssNrDetailStability.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Detail stability###nrDetailStability"), &stability))
+        config->DlssNrDetailStability = stability;
+
+    HelpMarker(
+        "Stops fine detail from boiling. The model's edit is filtered over time: last frame's, moved with the"
+        "\ngame's motion vectors, is clipped to the range of the current edit around the pixel and thrown away"
+        "\nwhere the picture under it changed, then blended with the new one. It is not a blend of old answers:"
+        "\nwhere the picture moved, the model's answer is shown as it is.\n\nNeeds the game's depth and motion."
+        "\nIt stands down before the upscaler, with a model cadence above 1 and with frame generation. Costs three"
+        "\ntextures and a pass a frame while on; off costs nothing. Measure it with \"Measure detail\" under"
+        "\nCompare, and look for ghosting behind moving things.");
+
+    if (!stability)
+        return;
+
+    float blend = config->DlssNrDetailStabilityBlend.value_or_default();
+    if (DeferredSlider("Detail stability blend###nrDetailStabilityBlend", &blend, 0.05f, 1.0f, 0.15f))
+        config->DlssNrDetailStabilityBlend = blend;
+
+    HelpMarker(
+        "How much of the new frame is let in each frame. At 0.15 the filtered history keeps a weight of 0.85; lower is"
+        "\nsteadier and trails more; 1 is no filter.");
+
+    bool hold = config->DlssNrDetailStabilityHold.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Hold repeated frames###nrDetailStabilityHold"), &hold))
+        config->DlssNrDetailStabilityHold = hold;
+
+    HelpMarker("A frame the game shows twice (30 fps at 60 Hz) is shown exactly as it was the first time instead of the"
+               "\nmodel's new opinion of it. Only pixels whose input is exactly the same are held.");
+}
+
 static void RenderCadenceControls(Config* config, bool nativeVulkan)
 {
     if (nativeVulkan)
@@ -2401,6 +2469,8 @@ void RenderMenu(Config* config, float menuResScale)
             }
         }
 
+        RenderLightLimiter(config, nativeVulkan);
+        RenderDetailStability(config, nativeVulkan);
         RenderCadenceControls(config, nativeVulkan);
 
         ImGui::SeparatorText(Localization::Tr("Brightness and exposure"));
@@ -2562,6 +2632,25 @@ void RenderMenu(Config* config, float menuResScale)
                         ImGui::TextColored(
                             ImVec4(0.45f, 0.8f, 0.45f, 1.0f),
                             Localization::Tr("This game supplies an exposure -- the option above would use it."));
+                    }
+
+                    // The governor limits the white point applied from the game's exposure (exposure-governor.md). It
+                    // exists on D3D12 only: the Vulkan route reads the exposure by its own meter and is unchanged.
+                    if (source == 1 && !vk)
+                    {
+                        bool governor = config->DlssNrExposureGovernor.value_or_default();
+                        if (MenuLayout::Checkbox(Localization::Label("Steady exposure###nrExposureGovernor"),
+                                                 &governor))
+                            config->DlssNrExposureGovernor = governor;
+
+                        HelpMarker("Limits how fast the white point taken from the game's exposure may move: up to 4"
+                                   "\nstops a second when the picture brightens, 0.5 when it relaxes, held inside a"
+                                   "\nsmall band, held through a black frame or a loading screen, and taken from the"
+                                   "\ngame again after its own history reset. It stops the whole picture pumping when"
+                                   "\nthe game's exposure hunts. The game's own reading is untouched.\n\nIt uses the"
+                                   "\nmeter's reading, a few frames late, instead of the zero-latency read, so a sudden"
+                                   "\nflash reaches the model a few frames later than without it. Off keeps the white"
+                                   "\npoint exactly as it was.");
                     }
                 }
 

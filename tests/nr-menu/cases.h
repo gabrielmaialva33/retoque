@@ -270,6 +270,91 @@ int main()
     ImGui::Reset();
     cadence();
     assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive));
+    // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, DEVELOPMENT.md rule 2): nothing on native Vulkan,
+    // under the driver proxy or without the cadence shader (its bytecode); a three-way choice that writes only its key; a
+    // hand-edited out-of-range value reads as off.
+    const std::string limiterCombo = "Light limiter###nrLightLimiter";
+    auto limiter = [&](bool vulkan = false)
+    {
+        DlssNr::RenderLightLimiter(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrLightLimiter.value = 0;
+    c.DlssNrUseProxy.value = false;
+    DlssNr::cadenceAvailable = true;
+    ImGui::Reset();
+    limiter(true);
+    assert(!ImGui::Saw(limiterCombo) && ImGui::sections.empty());
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    limiter();
+    assert(!ImGui::Saw(limiterCombo));
+    c.DlssNrUseProxy.value = false;
+    DlssNr::cadenceAvailable = false;
+    ImGui::Reset();
+    limiter();
+    assert(!ImGui::Saw(limiterCombo));
+    DlssNr::cadenceAvailable = true;
+    ImGui::Reset();
+    limiter();
+    assert(ImGui::Saw(limiterCombo) && c.DlssNrLightLimiter.value == 0);
+    ImGui::Reset();
+    ImGui::actions[limiterCombo] = 1;
+    limiter();
+    assert(c.DlssNrLightLimiter.value == 1);
+    ImGui::Reset();
+    ImGui::actions[limiterCombo] = 2;
+    limiter();
+    assert(c.DlssNrLightLimiter.value == 2);
+    ImGui::Reset();
+    ImGui::actions[limiterCombo] = 0;
+    limiter();
+    assert(c.DlssNrLightLimiter.value == 0);
+    c.DlssNrLightLimiter.value = 7;
+    ImGui::Reset();
+    limiter();
+    assert(ImGui::Saw(limiterCombo) && c.DlssNrLightLimiter.value == 7);
+    c.DlssNrLightLimiter.value = 0;
+    // Detail stability (docs/dlssnr/design/detail-stability.md): nothing on native Vulkan or under the proxy; the blend and the
+    // repeat hold only once it is on; each writes only its key.
+    const std::string stabilityBox = "Detail stability###nrDetailStability";
+    const std::string stabilityBlend = "Detail stability blend###nrDetailStabilityBlend";
+    const std::string stabilityHold = "Hold repeated frames###nrDetailStabilityHold";
+    auto stability = [&](bool vulkan = false)
+    {
+        DlssNr::RenderDetailStability(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrDetailStability.value = false;
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    stability(true);
+    assert(!ImGui::Saw(stabilityBox));
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    stability();
+    assert(!ImGui::Saw(stabilityBox));
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    stability();
+    assert(ImGui::Saw(stabilityBox) && !ImGui::Saw(stabilityBlend) && !ImGui::Saw(stabilityHold));
+    ImGui::Reset();
+    ImGui::actions[stabilityBox] = true;
+    stability();
+    assert(c.DlssNrDetailStability.value);
+    ImGui::Reset();
+    stability();
+    assert(ImGui::Saw(stabilityBox) && ImGui::Saw(stabilityBlend) && ImGui::Saw(stabilityHold));
+    ImGui::Reset();
+    ImGui::actions[stabilityHold] = true;
+    stability();
+    assert(c.DlssNrDetailStabilityHold.value);
+    ImGui::Reset();
+    ImGui::actions[stabilityBox] = false;
+    stability();
+    assert(!c.DlssNrDetailStability.value);
     // The player view exposes appearance and capture; full-only settings remain untouched.
     Config simple;
     simple.master.Preset = 1;

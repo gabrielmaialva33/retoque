@@ -13,6 +13,7 @@
 #include <shaders/output_scaling/OS_Dx12.h>
 #include "DlssNr_Stabilizer_Dx12.h"
 #include "DlssNr_UiMask_Dx12.h"
+#include "DlssNr_DetailStability_Dx12.h"
 #include "DlssNr_Cadence_Dx12.h"
 #include "DlssNr_MotionProbe_Dx12.h"
 #include "DlssNr_GuideMatch_Dx12.h"
@@ -272,6 +273,8 @@ static void ParkUntrackedGeneration(bool migrating = true)
     ParkNrStabilizer(g_nr.stabilizer);
     ParkNrUiMask(g_nr.uiMask);
     ParkNrCadence(g_nr.cadence);
+    ParkNrCadence(g_nr.lightLimiter);
+    ParkNrDetailStability(g_nr.detailStability);
     ParkNrEnlarger(g_enlarge.live);
     ParkTrackingDiagnostics();
 
@@ -659,6 +662,25 @@ void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask)
     g_nrRetired.push_back(r);
 }
 
+// Detail stability owns its history, output, descriptor heaps and constants, which the last recordings still reference;
+// a new working size, the key off or a route that cannot run it parks it rather than deleting it.
+void ParkNrDetailStability(DlssNr_DetailStability_Dx12*& detailStability)
+{
+    if (!detailStability)
+        return;
+
+    NrRetired r;
+    r.tracked = g_tracked;
+    r.requiresPresentFence = !r.tracked && s_trackingTransition;
+    if (g_tracked)
+        r.usage = g_usage;
+    else
+        r.presentSerial = SnapshotUntrackedPresentSerial();
+    r.detailStability = detailStability;
+    detailStability = nullptr;
+    g_nrRetired.push_back(r);
+}
+
 // The cadence's surfaces, descriptor heaps and constants are still referenced by the last recordings; a new
 // working size, the cadence switched off, or a route it cannot run on parks them rather than deleting them.
 void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence)
@@ -776,6 +798,7 @@ void TickNrRetired(bool shutdown)
         delete retired.stabilizer;
         delete retired.uiMask;
         delete retired.cadence;
+        delete retired.detailStability;
         delete retired.detailStats;
         delete retired.pulse;
         delete retired.motionProbe;

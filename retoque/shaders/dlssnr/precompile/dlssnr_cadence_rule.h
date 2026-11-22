@@ -633,4 +633,32 @@ CR_FN CadenceLimit CadenceLimitLight(float raw, float input, float prevShown, fl
     return r;
 }
 
+// The regional limiter (docs/dlssnr/design/light-limiter.md): the same rule as CadenceLimitLight, one per tile of the
+// frame, so a lamp's light can not breathe in a part of the picture whose own light stood still. Skynizz's anti light
+// pop-in (optiscaler-dlss5 v1.2.1, GPL-3.0): where a region's own light changed by less than inputTol, the edit's light in
+// it may move by at most `step` a frame; where the frame's own light moved, or the region moves fast, the edit is
+// let go. Two additions of this fork's, both so a real change is never held back: the hold weakens between
+// releaseLow and releaseHigh stops of drift between what the model now says and what was shown (a light that really
+// came on is the model's to say), and a region whose content moves by `motionRelease` pixels a frame or more is not
+// held (its light follows the content, not the model). Same units as CadenceLimitLight: stops.
+CR_FN CadenceLimit CadenceLimitRegion(float raw, float input, float prevShown, float prevInput, int valid, float step,
+                                      float inputTol, float releaseLow, float releaseHigh, float motion,
+                                      float motionRelease, float maxGain)
+{
+    CadenceLimit r;
+    r.shown = raw;
+    r.gainStops = 0.0f;
+    if (valid == 0 || !isfinite(raw) || !isfinite(input) || !isfinite(prevShown) || !isfinite(prevInput))
+        return r;
+    if (abs(input - prevInput) >= inputTol)
+        return r;
+    if (isfinite(motion) && motion >= motionRelease)
+        return r;
+    const float held = clamp(raw, prevShown - step, prevShown + step);
+    const float weight = 1.0f - smoothstep(releaseLow, releaseHigh, abs(raw - prevShown));
+    r.gainStops = clamp((held - raw) * weight, -maxGain, maxGain);
+    r.shown = raw + r.gainStops;
+    return r;
+}
+
 #endif

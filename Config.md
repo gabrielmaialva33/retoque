@@ -709,6 +709,46 @@ CadenceAdaptive=auto
 ; true or false - Default (auto) is false
 PulseMetric=auto
 
+; The exposure governor (docs/dlssnr/design/exposure-governor.md). With WhitePointSource=1 the white point the pass
+; applies follows the one the game's exposure implies at a bounded rate: up to 4 stops a second when the picture
+; brightens, 0.5 when it relaxes, held inside a 0.15 stop band, held through a frame whose exposure reads as a black
+; frame or a loading screen, and taken from the game's value again after the game's own reset or a pause. The game's
+; reading is not changed, only what is applied. It uses the CPU meter's reading (a few frames late) instead of the
+; shader's zero-latency one while on. D3D12 only; the Vulkan route is unchanged.
+; true or false - Default (auto) is false
+ExposureGovernor=auto
+
+; The light limiter at any cadence (docs/dlssnr/design/light-limiter.md). The limiter inside the cadence's smoothing holds
+; the light of what the cadence shows to 1.5 stops a second while the frame's own light holds still; it only ever
+; ran with Cadence above 1 and CadenceSmoothing on, so a default single pass on every frame had no light stabilization.
+; This runs it on the answer of any frame the cadence's own does not hold. 1 holds the whole picture's light. 2 holds the
+; light of each 32 pixel tile at 0.75 stops a second where that tile's own light stood still, and lets go where the
+; tile's own light moved, where its content moves fast, or where the model's answer has really changed by about
+; 0.35 stop: lamp breathing and light pop-in are held, and the detail finer than a tile is not. What is shown only: the
+; model's own history is not changed. Costs one working-size texture and three small passes a frame while on. D3D12 only.
+; 0 to 2 - Default (auto) is 0 (off)
+LightLimiter=auto
+
+; Detail stability (docs/dlssnr/design/detail-stability.md). The model re-decides fine detail (foliage, grass, hair, film
+; grain) a little every frame, and it boils. This filters the model's EDIT, the log of its answer over its input, over
+; time: the previous frame's filtered edit is moved with the game's motion vectors, clipped to the range of the current
+; edit in the 3x3 around the pixel, thrown away where the input under it changed (it leaves the range of the current 3x3 by
+; more than a small band), and blended with the new one. The model's own history is not changed, and nothing of an old
+; answer is kept where the picture moved under it, which is what made the temporal filtering recorded in
+; retoque/dlssnr/README.md ghost. Needs the game's depth and motion; stands down before the upscaler, with a Cadence above
+; 1 and with frame generation. Costs three working-size textures and one pass a frame while on. D3D12 only.
+; true or false - Default (auto) is false
+DetailStability=auto
+
+; The weight of the current frame per frame in DetailStability: 0.15 keeps 85% of the filtered history. 1 is no filter.
+; 0.05 to 1 - Default (auto) is 0.15
+DetailStabilityBlend=auto
+
+; With DetailStability: an input frame that repeats exactly as it was (a 30 fps game shown at 60 Hz) is shown exactly as it
+; was before, instead of the model's new opinion of it. Where the input is not exactly the same, the filter decides.
+; true or false - Default (auto) is false
+DetailStabilityHold=auto
+
 ; Compare the clean upscaler frame with the NR edit: 0 off, 1 side by side, 2 wipe.
 ; Both comparison modes keep working with the menu closed.
 ; 0 to 2 - Default (auto) is 0 (off)

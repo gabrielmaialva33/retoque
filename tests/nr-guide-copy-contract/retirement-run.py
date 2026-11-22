@@ -50,7 +50,7 @@ bool CaptureReusable(const Usage& usage) {
 }
 }
 struct OS_Dx12 {}; struct DlssNr_Stabilizer_Dx12 {}; struct DlssNr_UiMask_Dx12 {};
-struct DlssNr_Cadence_Dx12 {}; struct NrEnlarger {}; struct DlssNr_DetailStats_Dx12 {};
+struct DlssNr_Cadence_Dx12 {}; struct NrEnlarger {}; struct DlssNr_DetailStats_Dx12 {}; struct DlssNr_DetailStability_Dx12 {};
 struct DlssNr_Pulse_Dx12 {}; struct DlssNr_MotionProbe_Dx12 {};
 struct DlssNr_Dx12 {}; struct DlssNr_GuideMatch_Dx12 {}; struct DlssNr_Periphery_Dx12 {};
 bool UntrackedPresentCompleted() { return true; }

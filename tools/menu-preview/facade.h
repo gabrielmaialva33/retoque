@@ -7,6 +7,7 @@
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <shaders/dlssnr/DlssNr_Periphery.h>
 #include <dlssnr/DlssNr_Cadence.h>
+#include <dlssnr/DlssNr_LightLimit.h>
 #include <dlssnr/DlssNr_DiagnosticReport.h>
 #include <dlssnr/DlssNr_DriverGate.h>
 #include <dlssnr/DlssNr_Dx11Route.h>
