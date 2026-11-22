@@ -497,6 +497,14 @@ class Config
     CustomOptional<float> DlssNrDetailStabilityBlend { 0.15f };
     CustomOptional<bool> DlssNrDetailStabilityHold { false };
 
+    // When the pass skips frames between frames it runs on -- a refused recording, a settling gate, anything that
+    // leaves the game's own frame in place -- the picture alternates the model's with the plain one. With this on, an
+    // alternation (three runs of skipped frames between runs of the pass inside 32 evaluations) holds the pass off for
+    // one second, with a status, instead of alternating every frame; the history is reset when it resumes. The
+    // alternation is counted and logged either way. D3D12 only. Off by default, which changes nothing. See
+    // docs/dlssnr/design/frame-breaks.md.
+    CustomOptional<bool> DlssNrSkipStandDown { false };
+
     // The most the pass may multiply or divide a pixel by. A detail pass has no business restyling a
     // light source, whatever the model returns.
     CustomOptional<float> DlssNrMaxRatio { 2.0f };

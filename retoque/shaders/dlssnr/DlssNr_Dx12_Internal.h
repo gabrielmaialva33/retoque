@@ -8,6 +8,7 @@
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_Exposure.h>
 #include <dlssnr/DlssNr_ExposureGovernor.h>
+#include <dlssnr/DlssNr_FrameBreaks.h>
 #include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_Submission.h>
 #include <dlssnr/DlssNr_Cadence.h>
@@ -400,6 +401,15 @@ struct NrState
     // stepped.
     DlssNr::ExposureGovernor::State exposureGovernor;
     std::chrono::steady_clock::time_point exposureGovernorAt {};
+    // Frame breaks (docs/dlssnr/design/frame-breaks.md): how often a frame the pass was asked about was left as the
+    // game drew it between frames it ran on, and how often the model was sent a history reset, by cause.
+    DlssNr::FrameBreaks::SkipTracker skips;
+    DlssNr::FrameBreaks::ResetRate resetRate;
+    int64_t skipLoggedMs = 0;
+    uint64_t skipPresent = 0; // the present whose calls are being merged into one outcome
+    bool skipPresentValid = false;
+    bool skipPresentRan = false;
+    const char* skipWhy = nullptr;
 
     // What the game OFFERS, as opposed to what has been read. Recorded from the parameter block every
     // frame whether or not the setting is on, and deliberately so: the menu has to be able to answer
@@ -874,6 +884,9 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
 bool BeginMeterDispatch(ID3D12GraphicsCommandList* cmdList);
 void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound);
 void ConsumeMeterReadback();
+void NoteFrameOutcome(bool ran, bool standDownOn, const char* why);
+void NoteResetSent(bool frameReset, bool isPolicy, bool isSceneCut);
+bool FrameBreakHeld(bool enabled);
 void InvalidateExposureMeter();
 void ShutdownExposureMeter();
 float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,

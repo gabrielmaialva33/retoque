@@ -232,6 +232,7 @@ struct Config
     OptionalBool DlssNrDetailStability;
     OptionalBool DlssNrDetailStabilityHold;
     OptionalFloat DlssNrDetailStabilityBlend;
+    OptionalBool DlssNrSkipStandDown;
     OptionalBool DlssNrCadenceAdaptive;
     DlssNrResolvedPassSettings master;
     DlssNr::PassConfig::Overrides overrides;

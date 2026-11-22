@@ -139,6 +139,15 @@ struct Gate
 {
 };
 } // namespace DetailStability
+namespace FrameBreaks
+{
+struct SkipTracker
+{
+};
+struct ResetRate
+{
+};
+} // namespace FrameBreaks
 namespace Submission
 {
 namespace Detail

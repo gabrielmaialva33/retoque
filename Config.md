@@ -749,6 +749,14 @@ DetailStabilityBlend=auto
 ; true or false - Default (auto) is false
 DetailStabilityHold=auto
 
+; Frame breaks (docs/dlssnr/design/frame-breaks.md). A frame the pass skips -- a refused recording, a settling gate, a
+; resource that was not ready -- is shown as the game drew it, so a pass that skips every other frame alternates the model's
+; picture with the plain one. This is counted and logged either way. On, an alternation (three runs of skipped frames between
+; frames the pass ran on, inside 32 evaluations) holds the pass off for one second with a status, instead of alternating
+; every frame, and resets the model's history when it resumes. D3D12 only.
+; true or false - Default (auto) is false
+SkipStandDown=auto
+
 ; Compare the clean upscaler frame with the NR edit: 0 off, 1 side by side, 2 wipe.
 ; Both comparison modes keep working with the menu closed.
 ; 0 to 2 - Default (auto) is 0 (off)

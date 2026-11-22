@@ -645,6 +645,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrDetailStability.set_from_config(readBool("DlssNr", "DetailStability"));
             DlssNrDetailStabilityBlend.set_from_config(readFloat("DlssNr", "DetailStabilityBlend"));
             DlssNrDetailStabilityHold.set_from_config(readBool("DlssNr", "DetailStabilityHold"));
+            DlssNrSkipStandDown.set_from_config(readBool("DlssNr", "SkipStandDown"));
             UseGenericAppIdWithDlss.set_from_config(readBool("DLSS", "UseGenericAppIdWithDlss"));
 
             RenderPresetOverride.set_from_config(readBool("DLSS", "RenderPresetOverride"));
@@ -2183,6 +2184,8 @@ bool Config::SaveIni()
                      GetFloatValue(Instance()->DlssNrDetailStabilityBlend.value_for_config()).c_str());
         ini.SetValue("DlssNr", "DetailStabilityHold",
                      GetBoolValue(Instance()->DlssNrDetailStabilityHold.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "SkipStandDown",
+                     GetBoolValue(Instance()->DlssNrSkipStandDown.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetOverride",
                      GetBoolValue(Instance()->RenderPresetOverride.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetForAll",

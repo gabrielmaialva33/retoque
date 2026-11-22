@@ -1070,6 +1070,7 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_ExposureGovernor.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_LightLimit.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_DetailStability.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_FrameBreaks.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Chain.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Cadence.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_CadenceAdaptive.h" />

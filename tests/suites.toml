@@ -62,6 +62,14 @@ tier = "host"
 timeout = 300
 summary = "Detail stability (DetailStability): the shader's rule over synthetic sequences (clip, rejection, exact repeat, the dead end side by side), the gate, mutants and wiring guards."
 
+[nr-frame-breaks]
+path = "nr-frame-breaks"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 240
+summary = "Frame breaks: skip-alternation tracker and stand-down, history-reset counter by cause, mutants and wiring guards."
+
 [nr-game-profiles]
 path = "nr-game-profiles"
 domain = "nr"
