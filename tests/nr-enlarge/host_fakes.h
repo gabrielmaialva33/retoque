@@ -219,6 +219,10 @@ struct DlssNr_DetailStats_Dx12
 {
 };
 
+struct DlssNr_DetailStability_Dx12
+{
+};
+
 // The pulse metric's pass belongs to another feature (tests/nr-pulse-metric); here it is only parked and deleted.
 struct DlssNr_Pulse_Dx12
 {
@@ -226,6 +230,12 @@ struct DlssNr_Pulse_Dx12
 
 // Zero-motion detection's probe belongs to another feature (tests/nr-zero-motion); here it is only parked and deleted.
 struct DlssNr_MotionProbe_Dx12
+{
+};
+struct DlssNr_PassClamp_Dx12
+{
+};
+struct DlssNr_Dejitter_Dx12
 {
 };
 

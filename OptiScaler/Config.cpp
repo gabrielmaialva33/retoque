@@ -609,6 +609,9 @@ bool Config::Reload(std::filesystem::path iniPath)
                         .transform([](uint32_t interval) { return std::clamp(interval, 1u, 10000u); }));
                 DlssNrPasses.set_from_config(DlssNr::PassConfig::Count(ini.GetValue("DlssNr", "Passes")));
                 DlssNrIndividualPassSettings.set_from_config(readBool("DlssNr", "IndividualPassSettings"));
+                DlssNrPassClamp.set_from_config(readBool("DlssNr", "PassClamp"));
+                DlssNrPassFeedback.set_from_config(readFloat("DlssNr", "PassFeedback"));
+                DlssNrDejitterMotionVectors.set_from_config(readBool("DlssNr", "DejitterMotionVectors"));
                 // Strict parsing is scoped to NR model settings; unrelated INI readers are unchanged.
                 DlssNrPreset.set_from_config(DlssNr::PassConfig::UInt(ini.GetValue("DlssNr", "Preset"), 3));
                 DlssNrStyle.set_from_config(DlssNr::PassConfig::UInt(ini.GetValue("DlssNr", "Style"), 2));
@@ -637,6 +640,12 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrCadenceSmoothing.set_from_config(readBool("DlssNr", "CadenceSmoothing"));
             DlssNrCadenceAdaptive.set_from_config(readBool("DlssNr", "CadenceAdaptive"));
             DlssNrPulseMetric.set_from_config(readBool("DlssNr", "PulseMetric"));
+            DlssNrExposureGovernor.set_from_config(readBool("DlssNr", "ExposureGovernor"));
+            DlssNrLightLimiter.set_from_config(readUInt("DlssNr", "LightLimiter"));
+            DlssNrDetailStability.set_from_config(readBool("DlssNr", "DetailStability"));
+            DlssNrDetailStabilityBlend.set_from_config(readFloat("DlssNr", "DetailStabilityBlend"));
+            DlssNrDetailStabilityHold.set_from_config(readBool("DlssNr", "DetailStabilityHold"));
+            DlssNrSkipStandDown.set_from_config(readBool("DlssNr", "SkipStandDown"));
             UseGenericAppIdWithDlss.set_from_config(readBool("DLSS", "UseGenericAppIdWithDlss"));
 
             RenderPresetOverride.set_from_config(readBool("DLSS", "RenderPresetOverride"));
@@ -2134,6 +2143,11 @@ bool Config::SaveIni()
                              .c_str());
             ini.SetValue("DlssNr", "IndividualPassSettings",
                          GetBoolValue(config->DlssNrIndividualPassSettings.value_for_config()).c_str());
+            ini.SetValue("DlssNr", "PassClamp", GetBoolValue(config->DlssNrPassClamp.value_for_config()).c_str());
+            ini.SetValue("DlssNr", "PassFeedback",
+                         GetFloatValue(config->DlssNrPassFeedback.value_for_config()).c_str());
+            ini.SetValue("DlssNr", "DejitterMotionVectors",
+                         GetBoolValue(config->DlssNrDejitterMotionVectors.value_for_config()).c_str());
             ini.SetValue("DlssNr", "Preset", GetIntValue(Instance()->DlssNrPreset.value_for_config()).c_str());
             ini.SetValue("DlssNr", "Intensity", GetFloatValue(Instance()->DlssNrIntensity.value_for_config()).c_str());
             ini.SetValue("DlssNr", "Style", GetIntValue(Instance()->DlssNrStyle.value_for_config()).c_str());
@@ -2161,6 +2175,17 @@ bool Config::SaveIni()
         ini.SetValue("DlssNr", "CadenceSmoothing",
                      GetBoolValue(Instance()->DlssNrCadenceSmoothing.value_for_config()).c_str());
         ini.SetValue("DlssNr", "PulseMetric", GetBoolValue(Instance()->DlssNrPulseMetric.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "ExposureGovernor",
+                     GetBoolValue(Instance()->DlssNrExposureGovernor.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "LightLimiter", GetIntValue(Instance()->DlssNrLightLimiter.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DetailStability",
+                     GetBoolValue(Instance()->DlssNrDetailStability.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DetailStabilityBlend",
+                     GetFloatValue(Instance()->DlssNrDetailStabilityBlend.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "DetailStabilityHold",
+                     GetBoolValue(Instance()->DlssNrDetailStabilityHold.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "SkipStandDown",
+                     GetBoolValue(Instance()->DlssNrSkipStandDown.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetOverride",
                      GetBoolValue(Instance()->RenderPresetOverride.value_for_config()).c_str());
         ini.SetValue("DLSS", "RenderPresetForAll",

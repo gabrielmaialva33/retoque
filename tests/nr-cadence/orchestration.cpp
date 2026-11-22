@@ -173,7 +173,7 @@ class DlssNr_Cadence_Dx12
         bool pending = false, ignored = false;
     };
     std::array<ProbeSlot, 4> _probes;
-    bool _init = true, _smoothing = true;
+    bool _init = true, _smoothing = true, _lightOnly = false;
     bool failShow = false;
     unsigned showCalls = 0;
     void* _device = this;
@@ -210,7 +210,8 @@ class DlssNr_Cadence_Dx12
     ID3D12Resource* ModelMotion(ID3D12GraphicsCommandList*, const Frame&);
     bool Fade(ID3D12GraphicsCommandList*, const Frame&, ID3D12Resource*, ID3D12Resource*, const Smooth&);
     void Probe(ID3D12GraphicsCommandList*, const Frame&, ID3D12Resource*, bool, bool, uint64_t, int64_t);
-    bool Show(ID3D12GraphicsCommandList*, const Frame&, ID3D12Resource*, const Smooth&, ID3D12Resource*)
+    bool Show(ID3D12GraphicsCommandList*, const Frame&, ID3D12Resource*, const Smooth&, ID3D12Resource*,
+              ID3D12Resource*)
     {
         ++showCalls;
         if (failShow)

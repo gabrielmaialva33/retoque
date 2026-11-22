@@ -79,7 +79,7 @@ assert '-T cs_6_0 -E CSMain' in shader
 
 # Off allocates nothing: the pass is built in one place, only where the scheduler says the cadence would run,
 # and given back where it says the cadence is off or cannot exist.
-assert renderer.count('new DlssNr_Cadence_Dx12(') == 1
+assert renderer.count('new DlssNr_Cadence_Dx12("DLSS-NR cadence"') == 1  # the light limiter's light-only object is built beside it
 released = renderer.index('if (Cadence::ReleasesSurfaces(cadenceRefusal))')
 built = renderer.index('else if (Cadence::BuildsSurfaces(cadenceRefusal))')
 assert released < renderer.index('ParkNrCadence(g_nr.cadence);', released) < built

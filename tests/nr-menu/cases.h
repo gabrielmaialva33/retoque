@@ -53,6 +53,8 @@ int main()
     c.DlssNrUseProxy.value = false;
     run();
     assert(ImGui::Saw("Requested passes###nrPassCount"));
+    assert(!ImGui::Saw("Interpass clamp###nrPassClamp"));
+    assert(!ImGui::Saw("Pass feedback###nrPassFeedback"));
     assert(!ImGui::Saw("Edit pass###nrEditPass"));
     assert(c.writes == 0);
     ImGui::Reset();
@@ -89,6 +91,24 @@ int main()
     ImGui::actions["Edit pass###nrEditPass"] = 3;
     run();
     assert(c.snapshot.Count == 3);
+    assert(ImGui::Saw("Interpass clamp###nrPassClamp"));
+    assert(ImGui::Saw("Pass feedback###nrPassFeedback"));
+    ImGui::Reset();
+    ImGui::actions["Interpass clamp###nrPassClamp"] = true;
+    ImGui::actions["Pass feedback###nrPassFeedback"] = 0.65;
+    run();
+    assert(c.DlssNrPassClamp.value);
+    assert(std::abs(c.DlssNrPassFeedback.value - 0.65f) < 1e-5f);
+    ImGui::Reset();
+    ImGui::actions["Reset##passFeedback"] = true;
+    run();
+    assert(c.DlssNrPassFeedback.value == 1.0f);
+    DlssNr::passClampAvailable = false;
+    ImGui::Reset();
+    run();
+    assert(!ImGui::Saw("Interpass clamp###nrPassClamp"));
+    assert(!ImGui::Saw("Pass feedback###nrPassFeedback"));
+    DlssNr::passClampAvailable = true;
     ImGui::Reset();
     ImGui::actions["3/Local structure/Override###override"] = true;
     ImGui::actions["3/Local tone/Override###override"] = true;
@@ -270,6 +290,121 @@ int main()
     ImGui::Reset();
     cadence();
     assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive));
+    // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, DEVELOPMENT.md rule 2): nothing on native Vulkan,
+    // under the driver proxy or without the cadence shader (its bytecode); a three-way choice that writes only its key; a
+    // hand-edited out-of-range value reads as off.
+    const std::string limiterCombo = "Light limiter###nrLightLimiter";
+    auto limiter = [&](bool vulkan = false)
+    {
+        DlssNr::RenderLightLimiter(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrLightLimiter.value = 0;
+    c.DlssNrUseProxy.value = false;
+    DlssNr::cadenceAvailable = true;
+    ImGui::Reset();
+    limiter(true);
+    assert(!ImGui::Saw(limiterCombo) && ImGui::sections.empty());
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    limiter();
+    assert(!ImGui::Saw(limiterCombo));
+    c.DlssNrUseProxy.value = false;
+    DlssNr::cadenceAvailable = false;
+    ImGui::Reset();
+    limiter();
+    assert(!ImGui::Saw(limiterCombo));
+    DlssNr::cadenceAvailable = true;
+    ImGui::Reset();
+    limiter();
+    assert(ImGui::Saw(limiterCombo) && c.DlssNrLightLimiter.value == 0);
+    ImGui::Reset();
+    ImGui::actions[limiterCombo] = 1;
+    limiter();
+    assert(c.DlssNrLightLimiter.value == 1);
+    ImGui::Reset();
+    ImGui::actions[limiterCombo] = 2;
+    limiter();
+    assert(c.DlssNrLightLimiter.value == 2);
+    ImGui::Reset();
+    ImGui::actions[limiterCombo] = 0;
+    limiter();
+    assert(c.DlssNrLightLimiter.value == 0);
+    c.DlssNrLightLimiter.value = 7;
+    ImGui::Reset();
+    limiter();
+    assert(ImGui::Saw(limiterCombo) && c.DlssNrLightLimiter.value == 7);
+    c.DlssNrLightLimiter.value = 0;
+    // Detail stability (docs/dlssnr/design/detail-stability.md): nothing on native Vulkan or under the proxy; the blend and the
+    // repeat hold only once it is on; each writes only its key.
+    const std::string stabilityBox = "Detail stability###nrDetailStability";
+    const std::string stabilityBlend = "Detail stability blend###nrDetailStabilityBlend";
+    const std::string stabilityHold = "Hold repeated frames###nrDetailStabilityHold";
+    auto stability = [&](bool vulkan = false)
+    {
+        DlssNr::RenderDetailStability(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrDetailStability.value = false;
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    stability(true);
+    assert(!ImGui::Saw(stabilityBox));
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    stability();
+    assert(!ImGui::Saw(stabilityBox));
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    stability();
+    assert(ImGui::Saw(stabilityBox) && !ImGui::Saw(stabilityBlend) && !ImGui::Saw(stabilityHold));
+    ImGui::Reset();
+    ImGui::actions[stabilityBox] = true;
+    stability();
+    assert(c.DlssNrDetailStability.value);
+    ImGui::Reset();
+    stability();
+    assert(ImGui::Saw(stabilityBox) && ImGui::Saw(stabilityBlend) && ImGui::Saw(stabilityHold));
+    ImGui::Reset();
+    ImGui::actions[stabilityHold] = true;
+    stability();
+    assert(c.DlssNrDetailStabilityHold.value);
+    ImGui::Reset();
+    ImGui::actions[stabilityBox] = false;
+    stability();
+    assert(!c.DlssNrDetailStability.value);
+    // Frame breaks (docs/dlssnr/design/frame-breaks.md): nothing on native Vulkan or under the proxy; one checkbox that writes only
+    // its key.
+    const std::string standDownBox = "Hold NR off when it alternates###nrSkipStandDown";
+    auto standDown = [&](bool vulkan = false)
+    {
+        DlssNr::RenderSkipStandDown(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrSkipStandDown.value = false;
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    standDown(true);
+    assert(!ImGui::Saw(standDownBox));
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    standDown();
+    assert(!ImGui::Saw(standDownBox));
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    standDown();
+    assert(ImGui::Saw(standDownBox) && !c.DlssNrSkipStandDown.value);
+    ImGui::Reset();
+    ImGui::actions[standDownBox] = true;
+    standDown();
+    assert(c.DlssNrSkipStandDown.value);
+    ImGui::Reset();
+    ImGui::actions[standDownBox] = false;
+    standDown();
+    assert(!c.DlssNrSkipStandDown.value);
     // The player view exposes appearance and capture; full-only settings remain untouched.
     Config simple;
     simple.master.Preset = 1;
@@ -371,6 +506,22 @@ int main()
         auto expected = DlssNrResolvedPassSettings {};
         expected.Preset = simple.master.Preset; // looks never touch the weight set
         assert(simple.master == expected && simple.DlssNrTransferStrength.value == 1.0f);
+    }
+    // De-jitter motion vectors: D3D12 only, hidden on native Vulkan or without shader bytecode.
+    {
+        Config dj {};
+        ImGui::Reset();
+        DlssNr::RenderDejitterControl(&dj, true);
+        assert(!ImGui::Saw("De-jitter motion vectors###nrDejitterMvs"));
+        DlssNr::dejitterAvailable = false;
+        ImGui::Reset();
+        DlssNr::RenderDejitterControl(&dj, false);
+        assert(!ImGui::Saw("De-jitter motion vectors###nrDejitterMvs"));
+        DlssNr::dejitterAvailable = true;
+        ImGui::Reset();
+        ImGui::actions["De-jitter motion vectors###nrDejitterMvs"] = true;
+        DlssNr::RenderDejitterControl(&dj, false);
+        assert(ImGui::Saw("De-jitter motion vectors###nrDejitterMvs") && dj.DlssNrDejitterMotionVectors.value);
     }
     std::cout << "PASS: simple/full visibility, same Config writes, retained hidden settings, preset and backend "
                  "gates, read-only timing and balanced item widths\n";

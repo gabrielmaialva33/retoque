@@ -145,6 +145,12 @@ Sequential model passes	模型多遍顺序处理
 Requested passes	请求遍数
 Last evaluation: %u successful model passes	上次评估：成功完成 %u 遍模型处理
 Individual pass settings	每遍单独设置
+Interpass clamp	遍间钳制
+Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	在第 N+1 遍读取第 N 遍输出之前，相对第 N 遍自身的输入保持色相地钳制范围并清理 NaN/Inf。仅限 D3D12；关闭时不变。
+Pass feedback	遍间反馈混合
+Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	在传递给下一遍之前，将每一遍的输出向该遍自身的输入混合（1.00 = 完整输出，0.00 = 保持该遍输入不变）并清理 NaN/Inf。仅限 D3D12。
+De-jitter motion vectors	运动矢量去抖动
+When the game supplies render-resolution jittered motion vectors, removes the camera jitter step since the last render frame before NR reads them. Aimed at fine detail shimmer after DLSS Super Resolution. Resets on cuts, skipped frames and size changes. D3D12 only; native Vulkan is not covered. Off is unchanged.	当游戏提供渲染分辨率下带抖动的运动矢量时，在 NR 读取前移除自上一渲染帧以来的相机抖动步进。用于减轻 DLSS Super Resolution 之后的细微细节闪烁。在镜头切换、跳帧和尺寸变化时重置。仅限 D3D12；原生 Vulkan 不受支持。关闭时不变。
 Edit pass	编辑遍
 Editing pass 1	正在编辑第 1 遍
 Uncheck Override to inherit the live master value.	取消勾选“覆盖”即可继承当前主设置的值。
@@ -731,3 +737,22 @@ Median (ms)	Median (ms)
 Mean (ms)	Mean (ms)
 Slowest (ms)	Slowest (ms)
 %.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused
+# 2026-11-22: the exposure governor (docs/dlssnr/design/exposure-governor.md): the control and its help.
+Steady exposure	稳定曝光
+Limits how fast the white point taken from the game's exposure may move: up to 4\nstops a second when the picture brightens, 0.5 when it relaxes, held inside a\nsmall band, held through a black frame or a loading screen, and taken from the\ngame again after its own history reset. It stops the whole picture pumping when\nthe game's exposure hunts. The game's own reading is untouched.\n\nIt uses the\nmeter's reading, a few frames late, instead of the zero-latency read, so a sudden\nflash reaches the model a few frames later than without it. Off keeps the white\npoint exactly as it was.	限制取自游戏曝光的白点变化的速度：画面变亮时每秒最多 4 档，恢复时 0.5 档；在小范围内保持不动，遇到黑帧或加载画面时保持不动，并在游戏自身的历史重置之后重新从游戏取值。当游戏曝光来回摆动时，可防止整个画面起伏。游戏自身的读数不会被改动。\n\n它使用晚几帧的测光读数，而不是零延迟读取，因此突然的闪光会比不开启时晚几帧到达模型。关闭则白点与之前完全一致。
+# 2026-11-22: the light limiter at any cadence (docs/dlssnr/design/light-limiter.md): the section, the control and its help.
+Light stability	亮度稳定性
+Light limiter	亮度限制器
+Whole picture	整个画面
+By region	按区域
+Stops the model's light from breathing. The light of what is shown may move by only a little a second\nwhile the picture's own light holds still, and is let go the moment the picture itself changes.\n\nWhole picture: the mean light of the frame, at 1.5 stops a second. By region: each 32 pixel tile\nat 0.75 stops a second, which also holds a lamp that pulses in one part of the picture; it lets go\nwhere the content moves fast or the model really changed its mind. The detail finer than a tile is\nnot held.\n\nOnly what is shown changes, never the model's own history. Costs a texture and three\nsmall passes a frame while on; off costs nothing. Measure it with "Measure the light step" under\nCompare.	防止模型的亮度起伏。当画面自身的亮度不变时，所显示的亮度每秒只能移动一点点；一旦画面本身发生变化就立即放开。\n\n整个画面：整帧的平均亮度，每秒 1.5 档。按区域：每个 32 像素的图块每秒 0.75 档，这也能压住画面某一部分里闪烁的灯；在内容快速移动或模型确实改变主意的地方会放开。比图块更细的细节不会被压住。\n\n只改变所显示的内容，从不改变模型自身的历史。开启时每帧需要一张纹理和三个小通道；关闭则没有开销。可用“比较”下的“测量亮度阶跃”来测量。
+# 2026-11-22: detail stability (docs/dlssnr/design/detail-stability.md): the controls and their help.
+Detail stability	细节稳定
+Detail stability blend	细节稳定混合
+Hold repeated frames	保持重复帧
+Stops fine detail from boiling. The model's edit is filtered over time: last frame's, moved with the\ngame's motion vectors, is clipped to the range of the current edit around the pixel and thrown away\nwhere the picture under it changed, then blended with the new one. It is not a blend of old answers:\nwhere the picture moved, the model's answer is shown as it is.\n\nNeeds the game's depth and motion.\nIt stands down before the upscaler, with a model cadence above 1 and with frame generation. Costs three\ntextures and a pass a frame while on; off costs nothing. Measure it with "Measure detail" under\nCompare, and look for ghosting behind moving things.	防止细微细节“沸腾”。对模型的编辑做时间滤波：把上一帧的编辑用游戏的运动矢量移动过来，限制在像素周围当前编辑的范围内，并在其下方画面发生变化的地方丢弃，再与新的编辑混合。这不是旧答案的混合：画面移动的地方，直接显示模型的答案。\n\n需要游戏的深度和运动信息。\n在放大器之前、模型节奏高于 1 以及帧生成时不会工作。开启时需要三张纹理和每帧一个通道；关闭则没有开销。可用“比较”下的“测量细节”来测量，并留意运动物体后面的拖影。
+How much of the new frame is let in each frame. At 0.15 the filtered history keeps a weight of 0.85; lower is\nsteadier and trails more; 1 is no filter.	每一帧放入多少新帧。0.15 时滤波后的历史保持 0.85 的权重；越低越稳定但拖影越多；1 表示不滤波。
+A frame the game shows twice (30 fps at 60 Hz) is shown exactly as it was the first time instead of the\nmodel's new opinion of it. Only pixels whose input is exactly the same are held.	游戏显示两次的帧（60 Hz 下 30 fps）会与第一次显示的完全一样，而不是模型对它的新判断。只保持输入完全相同的像素。
+# 2026-11-22: frame breaks (docs/dlssnr/design/frame-breaks.md): the control and its help.
+Hold NR off when it alternates	交替出现时暂停 NR
+A frame the pass skips -- a refused recording, a gate that is still settling -- is shown as the game drew\nit, so a pass that skips every other frame alternates the model's picture with the plain one. With this\non, three such breaks inside 32 evaluations hold the pass off for one second, with a status, instead of\nalternating every frame, and the model's history is reset when it resumes. The log counts the\nalternation either way. Off changes nothing.	被该通道跳过的帧（被拒绝的录制、仍在稳定的门限等）会按游戏绘制的样子显示，因此隔帧跳过的通道会让模型画面与原始画面交替出现。开启后，在 32 次评估内出现三次这样的中断时，会暂停该通道一秒并显示状态，而不是每帧交替，恢复时会重置模型的历史。无论是否开启，日志都会统计交替次数。关闭则没有任何变化。

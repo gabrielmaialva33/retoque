@@ -16,6 +16,11 @@
 //   6 light         the shown answer's and the proxy's light, summed over a 16x16 grid of tiles, the interface out
 //   7 limit         one group: the grid summed, the edit's light held to the last frame's, the gain kept
 //   8 apply         the shown answer times the gain (not on the interface), into the surface the resolve reads
+// The regional light limiter (docs/dlssnr/design/light-limiter.md), with [DlssNr] LightLimiter=2, on an answer of any
+// cadence: the global limiter's three steps over tiles of gRegionTile pixels instead of one picture's light
+//  10 region light  the answer's, the proxy's and the motion's sum per tile, the interface out
+//  11 region limit  one thread a tile: that tile's edit light held to its last frame's, the gain kept
+//  12 region apply  the answer times the tile gains, bilinear between tile centres (not on the interface)
 //
 // Precompiled like dlssnr.hlsl: editing this or the rule alone changes nothing. From this directory (dxc under
 // the msvc-wine prefix on Linux, never while a build is using it):
@@ -56,6 +61,14 @@ cbuffer Params : register(b0)
     float gLimitInputTol; // limit: a step of the frame's own light, in stops, that lets the limit go
     float gLimitMaxGain;  // limit: the most the gain may move a frame's light, in stops
     uint gProbeHistory; // adaptive probe only: a valid previous model edit exists
+    uint  gRegionTile;          // modes 10-12: working pixels per tile edge
+    uint  gRegionTilesX;        // the tile grid
+    uint  gRegionTilesY;
+    uint  gHaveMotion;          // mode 10: t3 is this frame's motion
+    float gRegionStep;          // mode 11: how far a tile's edit light may move this frame, in stops
+    float gRegionReleaseLow;    // mode 11: the drift, in stops, where the hold starts to let go ...
+    float gRegionReleaseHigh;   // ... and where it has let go
+    float gRegionMotionPixels;  // mode 11: the tile's mean motion, in working pixels, at which it is not held
 };
 
 Texture2D<float4>   gAnswer      : register(t0); // record: the model's final answer
@@ -283,6 +296,49 @@ void LightGrid(uint3 groupId, uint3 groupThreadId)
         gOut0[groupId.xy] = float4(gLightSum[0], 0.0, 0.0);
 }
 
+// The regional limiter's group-wide pass: one group a tile, every second pixel each way as the global grid does, summing
+// the answer's light, the proxy's light, the motion's length and the weight (the interface out) for mode 11.
+groupshared float4 gRegionSum[64];
+
+void RegionGrid(uint3 groupId, uint3 groupThreadId)
+{
+    const uint lane = groupThreadId.y * 8u + groupThreadId.x;
+    const uint x0 = groupId.x * gRegionTile;
+    const uint x1 = min(x0 + gRegionTile, gWidth);
+    const uint y0 = groupId.y * gRegionTile;
+    const uint y1 = min(y0 + gRegionTile, gHeight);
+
+    float4 sum = 0.0;
+    [loop] for (uint y = y0 + groupThreadId.y * 2u; y < y1; y += 16u)
+    {
+        [loop] for (uint x = x0 + groupThreadId.x * 2u; x < x1; x += 16u)
+        {
+            const int3 p = int3(x, y, 0);
+            const float scenery = gHaveUi != 0u ? 1.0 - saturate(gUi.Load(p).x) : 1.0;
+            float speed = 0.0;
+            if (gHaveMotion != 0u)
+            {
+                const float2 motion = MotionAt(int(x), int(y));
+                speed = CadenceFinite2(motion) ? length(motion) : 0.0;
+            }
+            sum += scenery * float4(CadenceLight(gAnswer.Load(p).rgb, int(gPassthrough)),
+                                    CadenceLight(gProxy.Load(p).rgb, int(gPassthrough)), speed, 1.0);
+        }
+    }
+
+    gRegionSum[lane] = sum;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint stride = 32u; stride > 0u; stride >>= 1u)
+    {
+        if (lane < stride)
+            gRegionSum[lane] += gRegionSum[lane + stride];
+        GroupMemoryBarrierWithGroupSync();
+    }
+
+    if (lane == 0u)
+        gOut0[groupId.xy] = gRegionSum[0];
+}
+
 void LightLimit(uint3 groupThreadId)
 {
     const uint lane = groupThreadId.y * 8u + groupThreadId.x;
@@ -319,6 +375,55 @@ void LightLimit(uint3 groupThreadId)
     }
 }
 
+// The regional limiter's per-tile step: one thread a tile. State: four R32F texels a tile in u2, at x = 4 * tile: the edit's
+// light shown last frame, the tile's own light last frame, whether they hold anything, and this frame's gain -- all in stops.
+void RegionLimit(uint3 id)
+{
+    if (id.x >= gRegionTilesX || id.y >= gRegionTilesY)
+        return;
+    const float4 tile = gAnswer.Load(int3(id.xy, 0));
+    const bool measurable = tile.x > 0.0 && tile.y > 0.0 && tile.w > 0.0;
+    const float raw = measurable ? log2(tile.x / tile.y) : 0.0;
+    const float input = measurable ? log2(tile.y / tile.w) : 0.0;
+    const float motion = measurable ? tile.z / tile.w : 0.0;
+    const uint s = id.x * 4u;
+    const int valid = measurable && gLimitValid != 0u && gOut2[uint2(s + 2u, id.y)] > 0.5 ? 1 : 0;
+    const CadenceLimit limit = CadenceLimitRegion(raw, input, gOut2[uint2(s, id.y)], gOut2[uint2(s + 1u, id.y)], valid,
+                                                  gRegionStep, gLimitInputTol, gRegionReleaseLow, gRegionReleaseHigh,
+                                                  motion, gRegionMotionPixels, gLimitMaxGain);
+    gOut2[uint2(s, id.y)] = limit.shown;
+    gOut2[uint2(s + 1u, id.y)] = input;
+    gOut2[uint2(s + 2u, id.y)] = measurable ? 1.0 : 0.0;
+    gOut2[uint2(s + 3u, id.y)] = limit.gainStops;
+}
+
+// The tile gains, bilinear between tile centres, so the band the limiter moves is a tile wide and what is finer than that
+// -- the detail -- passes with the answer's own light. A pixel taken for interface keeps its answer.
+void RegionApply(uint3 id)
+{
+    if (id.x >= gWidth || id.y >= gHeight)
+        return;
+    const int px = int(id.x);
+    const int py = int(id.y);
+    const float4 shown = gAnswer.Load(int3(id.xy, 0));
+    const float keep = gHaveUi != 0u ? 1.0 - saturate(UiAt(px, py)) : 1.0;
+    const float2 centre = (float2(id.xy) + 0.5) / float(gRegionTile) - 0.5;
+    const float2 base = floor(centre);
+    const float2 weight = centre - base;
+    const int lastX = int(gRegionTilesX) - 1;
+    const int lastY = int(gRegionTilesY) - 1;
+    const int x0 = clamp(int(base.x), 0, lastX);
+    const int x1 = clamp(int(base.x) + 1, 0, lastX);
+    const int y0 = clamp(int(base.y), 0, lastY);
+    const int y1 = clamp(int(base.y) + 1, 0, lastY);
+    const float g00 = gOut2[uint2(uint(x0) * 4u + 3u, uint(y0))];
+    const float g10 = gOut2[uint2(uint(x1) * 4u + 3u, uint(y0))];
+    const float g01 = gOut2[uint2(uint(x0) * 4u + 3u, uint(y1))];
+    const float g11 = gOut2[uint2(uint(x1) * 4u + 3u, uint(y1))];
+    const float gain = lerp(lerp(g00, g10, weight.x), lerp(g01, g11, weight.x), weight.y);
+    gOut0[id.xy] = float4(CadenceApplyGain(shown.rgb, (isfinite(gain) ? gain : 0.0) * keep, int(gPassthrough)), shown.a);
+}
+
 [numthreads(8, 8, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID)
 {
@@ -333,6 +438,22 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint3 gr
     {
         if (groupId.x == 0u && groupId.y == 0u)
             LightLimit(groupThreadId);
+        return;
+    }
+    if (gMode == 10)
+    {
+        if (groupId.x < gRegionTilesX && groupId.y < gRegionTilesY)
+            RegionGrid(groupId, groupThreadId);
+        return;
+    }
+    if (gMode == 11)
+    {
+        RegionLimit(id);
+        return;
+    }
+    if (gMode == 12)
+    {
+        RegionApply(id);
         return;
     }
     PixelModes(id);

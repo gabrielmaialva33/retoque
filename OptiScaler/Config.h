@@ -468,6 +468,43 @@ class Config
     // menu and logged at most every 10 s. D3D12 only. See docs/dlssnr/design/pulse-metric.md.
     CustomOptional<bool> DlssNrPulseMetric { false };
 
+    // The exposure governor: with WhitePointSource=1 the white point the pass applies moves toward the one the game's
+    // exposure implies at 4 stops a second up and 0.5 down, holds inside a 0.15 stop band, holds through a frame whose
+    // exposure reads as a black frame or a loading screen, and starts again from the game's reset. The game's reading
+    // is untouched; only what is applied is limited. It takes the white point from the CPU meter (a few frames late)
+    // instead of the shader's zero-latency read. D3D12 only. Off by default, which is the white point as it was.
+    // See docs/dlssnr/design/exposure-governor.md.
+    CustomOptional<bool> DlssNrExposureGovernor { false };
+
+    // The light limiter at any cadence: the cadence smoothing's limiter, which held the mean light of what the cadence
+    // shows to 1.5 stops a second while the frame's own light holds still, on the answer of any frame -- so a default
+    // single pass on every frame has it too. 0 off; 1 the whole picture's light; 2 the light of each 32 pixel tile
+    // (Skynizz's anti light pop-in: 0.75 stops a second where the tile's own light held still, released by a real
+    // change or by motion), the band a tile wide and the detail finer than it untouched. Display only: the model's own
+    // history stays the model's. Anything else reads as 0. D3D12 only. Off allocates and dispatches nothing. See
+    // docs/dlssnr/design/light-limiter.md.
+    CustomOptional<uint32_t> DlssNrLightLimiter { 0 };
+
+    // Detail stability: a temporal filter on the model's edit (log of its answer over its input) with the history
+    // reprojected by the game's motion vectors, clipped to the current 3x3 and rejected where the input moved under it,
+    // so fine detail that the model re-decides every frame stops boiling. Blend is the weight of the current frame per
+    // frame (0.05 to 1, 0.15 by default; 1 is no filter). Hold repeats shows an input frame that repeats exactly as it
+    // was before. It needs the game's depth and motion and stands down before the upscaler, with a cadence above 1 and
+    // with frame generation. Display only: the model's own history stays the model's. D3D12 only. Off by default, which
+    // changes nothing. This is not the temporal filtering of the answer that README.md records as a dead end: see
+    // docs/dlssnr/design/detail-stability.md.
+    CustomOptional<bool> DlssNrDetailStability { false };
+    CustomOptional<float> DlssNrDetailStabilityBlend { 0.15f };
+    CustomOptional<bool> DlssNrDetailStabilityHold { false };
+
+    // When the pass skips frames between frames it runs on -- a refused recording, a settling gate, anything that
+    // leaves the game's own frame in place -- the picture alternates the model's with the plain one. With this on, an
+    // alternation (three runs of skipped frames between runs of the pass inside 32 evaluations) holds the pass off for
+    // one second, with a status, instead of alternating every frame; the history is reset when it resumes. The
+    // alternation is counted and logged either way. D3D12 only. Off by default, which changes nothing. See
+    // docs/dlssnr/design/frame-breaks.md.
+    CustomOptional<bool> DlssNrSkipStandDown { false };
+
     // The most the pass may multiply or divide a pixel by. A detail pass has no business restyling a
     // light source, whatever the model returns.
     CustomOptional<float> DlssNrMaxRatio { 2.0f };
@@ -726,6 +763,14 @@ class Config
     // Bounded, opt-in sequential model passes. Native Vulkan uses the master single pass.
     CustomOptional<uint32_t> DlssNrPasses { 1 };
     CustomOptional<bool> DlssNrIndividualPassSettings { false };
+    // D3D12 interpass hand-off between sequential model passes (docs/dlssnr/design/2026-11-22-interpass-clamp.md):
+    // PassClamp restores each pass's output hue-preservingly against that pass's own input; PassFeedback blends
+    // toward that input (1.0 = unchanged). Both off by default.
+    CustomOptional<bool> DlssNrPassClamp { false };
+    CustomOptional<float> DlssNrPassFeedback { 1.0f };
+    // De-jitter render-resolution motion vectors handed to post-upscale NR on D3D12
+    // (docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md). Off by default.
+    CustomOptional<bool> DlssNrDejitterMotionVectors { false };
 
     // Opt-in timestamp collection. Interval counts each GPU timing stream's own eligible events (NR evaluations,
     // Present-route recordings, guide captures), never presented frames; the Present CPU stream does not use it.

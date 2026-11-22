@@ -121,6 +121,10 @@ experiment.
 | `shaders/dlssnr/DlssNr_Stabilizer_Dx12.h/.cpp`, `precompile/dlssnr_stabilizer.hlsl` | the output stabilizer, off by default; `../../docs/dlssnr/design/output-stabilizer.md` |
 | `shaders/dlssnr/DlssNr_PresentHdr_Dx12.h/.cpp`, `precompile/dlssnr_present_hdr.hlsl` | HDR10 and scRGB at present (`[DlssNr] HdrPresent`, off by default): the decode into linear Rec.709 before the composition and the encode back with the original as reference after it, on the D3D12 present route and the D3D11 bridge; DXIL only (the Vulkan present host has its own HDR10/scRGB conversion with the same `HdrPresent` key, `DlssNr_VkPresentNr.h` `PlanColour` and `DlssNrFeature_Vk.cpp`), the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/hdr-present-conversion.md` |
 | `DlssNr_Cadence.h`, `shaders/dlssnr/DlssNr_Cadence_Dx12.h/.cpp`, `precompile/dlssnr_cadence.hlsl`, `precompile/dlssnr_cadence_rule.h` | model cadence, off by default: the model every Nth frame, its edit carried along the motion in between, and its smoothing (each new answer walked in over the interval, the shown light rate-limited); the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/model-cadence.md`, `../../docs/dlssnr/design/cadence-smoothing.md` |
+| `DlssNr_DetailStability.h`, `shaders/dlssnr/DlssNr_DetailStability_Dx12.h/.cpp`, `precompile/dlssnr_detail_stability.hlsl`, `precompile/dlssnr_detail_stability_rule.h` | detail stability (`[DlssNr] DetailStability`, off by default): a temporal filter on the model's edit (log of answer over input), history reprojected with the game's motion vectors, clipped to the current 3x3 and rejected where the input moved under it, alpha 0.15, with an optional exact hold of repeated input frames; display only, D3D12 only, with the game's guides; not the dead end below, and it does not reverse it; `../../docs/dlssnr/design/detail-stability.md`, tested by `tests/nr-detail-stability` |
+| `DlssNr_LightLimit.h` | the light limiter at any cadence (`[DlssNr] LightLimiter`, off by default): the cadence smoothing's light limiter on the answer of any frame, whole-picture (1) or per 32 px tile (2, Skynizz's anti light pop-in); the gate that says on which frames it runs and when it starts over, and the regional numbers; the passes are modes 10 to 12 of `dlssnr_cadence.hlsl` on a light-only `DlssNr_Cadence_Dx12`; D3D12 only; `../../docs/dlssnr/design/light-limiter.md`, tested by `tests/nr-light-limiter` |
+| `DlssNr_ExposureGovernor.h` | the exposure governor (`[DlssNr] ExposureGovernor`, off by default): the white point applied from the game's exposure (`WhitePointSource=1`) moved at 4 stops/s up and 0.5 down with a hysteresis hold, a hold on unreadable frames and a re-prime on the game's reset; pure, host-side, D3D12 only, and it turns the shader's zero-latency read off while on; `../../docs/dlssnr/design/exposure-governor.md`, tested by `tests/nr-exposure-governor` |
+| `DlssNr_FrameBreaks.h` | frame breaks: a tracker of frames the pass skipped between frames it ran on (counted and logged; `[DlssNr] SkipStandDown`, off by default, holds the pass off for 1 s on an alternation) and a counter of history resets sent to the model by cause (logged every 10 s); pure, D3D12 only; `../../docs/dlssnr/design/frame-breaks.md`, tested by `tests/nr-frame-breaks` |
 | `DlssNr_DetailStats.h`, `shaders/dlssnr/DlssNr_DetailStats_Dx12.h/.cpp`, `precompile/dlssnr_detail_stats.hlsl` | in-game detail and temporal stability metrics ("Measure detail") across 60 evaluations on a still scene; the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/detail-measure.md` |
 | `DlssNr_MotionProbe.h`, `shaders/dlssnr/DlssNr_MotionProbe_Dx12.h/.cpp`, `precompile/dlssnr_motion_probe.hlsl` | zero-motion detection: a 32x32 probe of the game's depth and motion every eighth evaluate with its guides, read back without a wait; two readings of an all-zero field while depth moved past jitter call the vectors dead, and `ZeroGuideReset` then drops the model's history on them as on zero guides. The bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/zero-motion-detection.md`, tested by `tests/nr-zero-motion` |
 | `DlssNr_VkMotionProbe.h`, `shaders/dlssnr/DlssNr_MotionProbe_Vk.h/.cpp`, `precompile/DlssNr_MotionProbe_Shader_Vk.h` | the same probe on the Vulkan after-upscale route, from the same HLSL under `VK_MODE`: four readback slots each exclusive to the recording that reserved it (refused for a recording that may run twice at once), retired through the recording registry, a sentinel for recordings that never ran, probes fed in recording order, and a verdict that acts only on the device it was read on while the probe observes the frames. Standard-library route state, a plain-handle pass; the SPIR-V header is optional; `../../docs/dlssnr/design/zero-motion-detection.md`, "Vulkan", tested by `tests/nr-vk-zero-motion` (host only) |
@@ -129,6 +133,8 @@ experiment.
 | `shaders/dlssnr/DlssNr_GuideMatch.h`, `DlssNr_GuideMatch_Dx12.h/.cpp`, `precompile/dlssnr_guides.hlsl` | below the frame's size: depth and motion point-resampled to the model's working size, and the motion-vector scale for the texture handed over; the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/reduced-scale-guides.md` |
 | `shaders/dlssnr/DlssNr_GuideMatch_Vk.h/.cpp`, `precompile/DlssNr_Guides_Shader_Vk.h` | the same resample on the Vulkan after-upscale route, from the same HLSL under `VK_MODE` (push constants, four bindings, no sampler): the pure rules for which of the game's views it may read and what the outputs need, and the pass, a plain handle bundle freed only after a drain and abandoned with a lost device; its SPIR-V header is required; where the resample is wanted and cannot run the route refuses the frame rather than hand over frame-size guides; `../../docs/dlssnr/design/reduced-scale-guides-vk.md`, tested by `tests/nr-vk-guides` and, on a real device, `tests/guide-match-vk` |
 | `shaders/dlssnr/DlssNr_Periphery.h`, `DlssNr_Periphery_Dx12.h/.cpp`, `precompile/dlssnr_periphery_warp.h`, `precompile/dlssnr_periphery.hlsl` | peripheral compression, off by default: the model's input packed denser in the centre than at the edges, the guides packed with it, the answer unpacked onto the uniform grid before the resolve; D3D12 only; the three bytecode headers are optional (`__has_include`); `../../docs/dlssnr/design/peripheral-compression.md` |
+| `DlssNr_PassClamp.h`, `shaders/dlssnr/DlssNr_PassClamp_Dx12.h/.cpp`, `precompile/dlssnr_pass_clamp_rule.h`, `precompile/dlssnr_pass_clamp.hlsl` | D3D12 interpass clamping and `PassFeedback` (`[DlssNr] PassClamp`, `PassFeedback`, off/1.0 by default): hue-preserving `CubeScaleResidual`, `NaN`/`Inf` proxy fallback and two-scratch ping-pong across 2..10 sequential passes; bytecode header optional (`__has_include`); `../../docs/dlssnr/design/2026-11-22-interpass-clamp.md`, tested by `tests/nr-pass-clamp` |
+| `DlssNr_Dejitter.h`, `shaders/dlssnr/DlssNr_Dejitter_Dx12.h/.cpp`, `precompile/dlssnr_dejitter_rule.h`, `precompile/dlssnr_dejitter.hlsl` | D3D12 post-upscale motion-vector de-jittering (`[DlssNr] DejitterMotionVectors`, off by default): removes `(jitterNow - jitterPrev) / mvScale` from consecutive `MVLowRes + MVJittered` motion buffers before NR reads them and resets on sequence or contract breaks; bytecode header optional (`__has_include`); `../../docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md`, tested by `tests/nr-dejitter` |
 
 ### Editing the shader
 
@@ -191,6 +197,25 @@ The output stabilizer's gate -- the 3x3 input box held against an anchor from wh
 (https://github.com/jlrouzies-fr/DLSS5-Feeder, MIT). `Licenses/DLSS5-Feeder_LICENSE.txt` carries their
 licence and says which parts are theirs.
 
+Detail stability's filter (`[DlssNr] DetailStability`, off by default) -- the log edit's history reprojected with the game's
+vectors, clipped to the current 3x3, rejected where the input left the current 3x3 range, alpha 0.15 -- is **DLSS5-NR-Nexus's
+"Detail stability" temporal filter by williamstosh** (https://github.com/williamstosh/DLSS5-NR-Nexus, MIT, commit
+`8fabd388e9`; `Licenses/NRNexus_LICENSE.txt`), its exact repeat is **DLSS5-Feeder's `RESTORE_HOLD_REPEATS`** (MIT,
+`Licenses/DLSS5-Feeder_LICENSE.txt`), and the near binary rejection band is A-ENTROPY's note (GPL-3.0). NeuralScreen's idea
+(PolyForm Strict) was read; no code of it was.
+
+The light limiter at any cadence (`[DlssNr] LightLimiter`, off by default) -- the regional form: the cadence smoothing's
+light limiter per tile, the edit's regional light held to 0.75 stops a second where the tile's own light held still, let go
+by a real change or by motion -- is the idea of **Skynizz's anti light pop-in** (optiscaler-dlss5 v1.2.1, GPL-3.0,
+https://github.com/Skynizz/optiscaler-dlss5), with A-ENTROPY's "lamp breathing" measurement behind it
+(https://github.com/A-ENTROPY/magpie-dlss5-amd, GPL-3.0). No code of either is ported.
+
+The exposure governor's rule (`[DlssNr] ExposureGovernor`, off by default) -- the applied divisor rate-limited toward a fresh
+estimate, 4 stops/s up and 0.5 down, the 0.15 / 0.02 stop hysteresis hold, the hold on a frame that cannot be read, the
+re-prime on the game's reset, one state per stream -- is **DLSS5-NR-Nexus's normalization governor by williamstosh**
+(https://github.com/williamstosh/DLSS5-NR-Nexus, MIT, commit `8fabd388e9`). `Licenses/NRNexus_LICENSE.txt` carries their
+licence and says which parts are theirs.
+
 Model cadence's carry -- the depth mismatch, the colour gate, the validated motion chain, the 9-tap
 acceptance, the ring fill and its "no match, no fill" rule, the off-picture vectors handed to the model
 -- is **taken from BeliyG3's optimizer-fps-dlss5 by Yuri Grib**
@@ -203,6 +228,19 @@ thresholds -- is **NVIDIA's, from RTX Remix's DLSS-NR integration**
 (https://github.com/NVIDIAGameWorks/dxvk-remix, commit `ecf646d3ea`; per-file MIT-style grant, repository
 zlib). `Licenses/RTXRemix_ATTRIBUTION.txt` carries both texts and says which part is theirs;
 `../../docs/dlssnr/design/hdr-highlight-recovery.md` is the analysis.
+
+Interpass clamping and `PassFeedback` (`[DlssNr] PassClamp` and `PassFeedback`, off/1.0 by default) --
+clamping each chained pass's output hue-preservingly against that pass's own input, sanitizing `NaN`/`Inf`
+to that input, and keeping same-temporal-age hand-offs across 2..10 passes -- are adapted from
+**janblade's OptiScaler-F5-DLSSNR-Multipass** (https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass,
+PRs #7, #18, #41, #55, #61; GPL-3.0), building on **hhkbble's** `CubeScaleResidual`;
+`../../docs/dlssnr/design/2026-11-22-interpass-clamp.md` is the analysis.
+
+Post-upscale motion-vector de-jittering (`[DlssNr] DejitterMotionVectors`, off by default) -- removing the
+render-frame camera jitter step `(jitterNow - jitterPrev) / mvScale` from `MVLowRes + MVJittered` vectors
+and re-priming history across sequence gaps, cuts and contract changes -- is adapted from **kkyleeb21's
+OptiScaler_DLSSNR** (https://github.com/kkyleeb21/OptiScaler_DLSSNR, `research/dlssnr-internal-scaling-d18`,
+GPL-3.0); `../../docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md` is the analysis.
 
 ## Why a forwarder DLL exists
 
@@ -295,6 +333,9 @@ model file at startup; it does not select the caller module.
   CadenceSmoothing is separately opt-in (default false) and acts only while cadence is active. When enabled, the
   shown contribution walks toward the new answer over the interval; the stored model edit/history is not a
   temporal blend.
+  Detail stability (`../../docs/dlssnr/design/detail-stability.md`, 2026-11-22, opt-in, **not measured here**) is a new experiment on
+  the same question, with the two things the old attempts lacked: the history is clipped to the current 3x3 and thrown away where
+  the input moved under it. It does not reverse this record; the record stands until a measurement says otherwise.
 - **The model's own UI correction went with it.** It only ever acted on a UI layer the game tagged
   through Streamline, which almost no title does, and it could not be shown to change anything when
   one did. Removing it removed the Streamline tag hook as well, so the module no longer touches that

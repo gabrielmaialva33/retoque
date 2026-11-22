@@ -7,9 +7,13 @@
 #include <dlssnr/DlssNr.h>
 #include <dlssnr/DlssNr_Capture.h>
 #include <dlssnr/DlssNr_Exposure.h>
+#include <dlssnr/DlssNr_ExposureGovernor.h>
+#include <dlssnr/DlssNr_FrameBreaks.h>
 #include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_Submission.h>
 #include <dlssnr/DlssNr_Cadence.h>
+#include <dlssnr/DlssNr_LightLimit.h>
+#include <dlssnr/DlssNr_DetailStability.h>
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
 #include <dlssnr/DlssNr_DetailStats.h>
 #include <dlssnr/DlssNr_Pulse.h>
@@ -18,6 +22,7 @@
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_FormatTwin.h>
 #include <dlssnr/DlssNr_PrivateSr.h>
+#include <dlssnr/DlssNr_Dejitter.h>
 #include "DlssNr_DetailStats_Dx12.h"
 #include "DlssNr_Pulse_Dx12.h"
 #include <Config.h>
@@ -36,9 +41,12 @@ struct IDXGISwapChain3;
 class OS_Dx12;
 class DlssNr_Stabilizer_Dx12;
 class DlssNr_UiMask_Dx12;
+class DlssNr_DetailStability_Dx12;
 class DlssNr_Cadence_Dx12;
 class DlssNr_GuideMatch_Dx12;
 class DlssNr_Periphery_Dx12;
+class DlssNr_PassClamp_Dx12;
+class DlssNr_Dejitter_Dx12;
 class DlssNr_PresentHdr_Dx12;
 class DlssNr_MotionProbe_Dx12;
 namespace DlssNr::MotionProbe
@@ -202,6 +210,12 @@ struct NrState
     static constexpr uint32_t kMaxPasses = DlssNr::PassConfig::MaxPasses;
     void* passFeature[kMaxPasses] = {};
     ID3D12Resource* passPing = nullptr;
+    ID3D12Resource* passClampScratch = nullptr;
+    ID3D12Resource* passClampScratch2 = nullptr;
+    DlssNr_PassClamp_Dx12* passClamp = nullptr;
+    bool builtPassClampActive = false;
+    bool builtPassClamp = false;
+    float builtPassFeedback = 1.0f;
     DlssNrResolvedPassSettings passBuilt[kMaxPasses] {};
     // Every pass starts with its history reset pending.
     std::array<bool, kMaxPasses> passReset = []
@@ -267,6 +281,8 @@ struct NrState
         ID3D12Resource* colorSmall = nullptr;
         ID3D12Resource* outputNative = nullptr;
         ID3D12Resource* passPing = nullptr;
+        ID3D12Resource* passClampScratch = nullptr;
+        ID3D12Resource* passClampScratch2 = nullptr;
     } alt;
 
     // The transfer of the frame the surfaces last served (docs/dlssnr/design/format-swap-history.md): an RGBA8/BGRA8
@@ -304,6 +320,19 @@ struct NrState
     DlssNr_Cadence_Dx12* cadence = nullptr;
     uint64_t featureGeneration = 0;
     unsigned int cadencePasses = 0;
+
+    // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter): the cadence's pass
+    // built for the limiter alone, for one working size, parked when that changes or the key is off; and the gate that
+    // says on which frames it holds the answer's light and on which it starts over.
+    DlssNr_Cadence_Dx12* lightLimiter = nullptr;
+    DlssNr::LightLimit::Gate lightGate;
+    std::chrono::steady_clock::time_point lightLimiterAt {};
+
+    // Detail stability (docs/dlssnr/design/detail-stability.md, [DlssNr] DetailStability): the temporal filter on the
+    // model's edit, built for one working size, parked when that changes or the key goes off or the route cannot run
+    // it; and the gate that says on which frames it runs and whether its history is any use.
+    DlssNr_DetailStability_Dx12* detailStability = nullptr;
+    DlssNr::DetailStability::Gate detailGate;
 
     unsigned int workWidth = 0;
     unsigned int workHeight = 0;
@@ -368,6 +397,20 @@ struct NrState
     float gamePreExposure = 1.0f;
     DlssNr::Exposure::PlausibilityLatch exposureLatch;
 
+    // The exposure governor (docs/dlssnr/design/exposure-governor.md): one state for the stream, and when it last
+    // stepped.
+    DlssNr::ExposureGovernor::State exposureGovernor;
+    std::chrono::steady_clock::time_point exposureGovernorAt {};
+    // Frame breaks (docs/dlssnr/design/frame-breaks.md): how often a frame the pass was asked about was left as the
+    // game drew it between frames it ran on, and how often the model was sent a history reset, by cause.
+    DlssNr::FrameBreaks::SkipTracker skips;
+    DlssNr::FrameBreaks::ResetRate resetRate;
+    int64_t skipLoggedMs = 0;
+    uint64_t skipPresent = 0; // the present whose calls are being merged into one outcome
+    bool skipPresentValid = false;
+    bool skipPresentRan = false;
+    const char* skipWhy = nullptr;
+
     // What the game OFFERS, as opposed to what has been read. Recorded from the parameter block every
     // frame whether or not the setting is on, and deliberately so: the menu has to be able to answer
     // "would this do anything here?" before the user turns it on, and reading a pointer for null costs
@@ -392,6 +435,11 @@ struct NrState
     ID3D12Resource* depthMatched = nullptr;
     ID3D12Resource* motionMatched = nullptr;
     DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
+
+    // Render-resolution motion-vector de-jittering (2026-11-22-dejitter-motion-vectors.md).
+    ID3D12Resource* motionDejittered = nullptr;
+    DlssNr_Dejitter_Dx12* dejitterPass = nullptr;
+    DlssNr::Dejitter::State dejitter {};
 
     // Peripheral compression (peripheral-compression.md). While it runs, the working size above is the
     // packed extent and depthMatched/motionMatched hold the packed guides. periphery is the pass that packs
@@ -480,6 +528,7 @@ struct NrRetired
     DlssNr_Stabilizer_Dx12* stabilizer = nullptr;
     DlssNr_UiMask_Dx12* uiMask = nullptr;
     DlssNr_Cadence_Dx12* cadence = nullptr;
+    DlssNr_DetailStability_Dx12* detailStability = nullptr;
     NrEnlarger* enlarger = nullptr;
     DlssNr_DetailStats_Dx12* detailStats = nullptr;
     DlssNr_Pulse_Dx12* pulse = nullptr;
@@ -491,6 +540,8 @@ struct NrRetired
     std::shared_ptr<DlssNr_Dx12>* compose = nullptr;
     DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
     DlssNr_Periphery_Dx12* periphery = nullptr;
+    DlssNr_PassClamp_Dx12* passClamp = nullptr;
+    DlssNr_Dejitter_Dx12* dejitterPass = nullptr;
 };
 
 struct DetailMeasureSession
@@ -833,6 +884,9 @@ void UpdatePulse(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool 
 bool BeginMeterDispatch(ID3D12GraphicsCommandList* cmdList);
 void CopyMeterToReadback(ID3D12GraphicsCommandList* cmdList, ID3D12Device* device, bool exposureBound);
 void ConsumeMeterReadback();
+void NoteFrameOutcome(bool ran, bool standDownOn, const char* why);
+void NoteResetSent(bool frameReset, bool isPolicy, bool isSceneCut);
+bool FrameBreakHeld(bool enabled);
 void InvalidateExposureMeter();
 void ShutdownExposureMeter();
 float ResolveWhitePoint(int whitePointSource, float whitePointScale, float whitePointTrim, bool isHdrBuffer,
@@ -887,6 +941,7 @@ void ParkNrFeature(void*& feature);
 void ParkNrScaler(OS_Dx12*& scaler);
 void ParkNrStabilizer(DlssNr_Stabilizer_Dx12*& stabilizer);
 void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask);
+void ParkNrDetailStability(DlssNr_DetailStability_Dx12*& detailStability);
 void ParkNrCadence(DlssNr_Cadence_Dx12*& cadence);
 void TickNrRetired(bool shutdown = false);
 void ForgetCalibration();
