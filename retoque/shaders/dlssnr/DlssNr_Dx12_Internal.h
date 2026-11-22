@@ -11,6 +11,7 @@
 #include <dlssnr/DlssNr_GpuTiming.h>
 #include <dlssnr/DlssNr_Submission.h>
 #include <dlssnr/DlssNr_Cadence.h>
+#include <dlssnr/DlssNr_LightLimit.h>
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
 #include <dlssnr/DlssNr_DetailStats.h>
 #include <dlssnr/DlssNr_Pulse.h>
@@ -305,6 +306,13 @@ struct NrState
     DlssNr_Cadence_Dx12* cadence = nullptr;
     uint64_t featureGeneration = 0;
     unsigned int cadencePasses = 0;
+
+    // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter): the cadence's pass built
+    // for the limiter alone, for one working size, parked when that changes or the key is off; and the gate that says on which
+    // frames it holds the answer's light and on which it starts over.
+    DlssNr_Cadence_Dx12* lightLimiter = nullptr;
+    DlssNr::LightLimit::Gate lightGate;
+    std::chrono::steady_clock::time_point lightLimiterAt {};
 
     unsigned int workWidth = 0;
     unsigned int workHeight = 0;

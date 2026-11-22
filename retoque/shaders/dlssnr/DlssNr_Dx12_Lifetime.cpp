@@ -272,6 +272,7 @@ static void ParkUntrackedGeneration(bool migrating = true)
     ParkNrStabilizer(g_nr.stabilizer);
     ParkNrUiMask(g_nr.uiMask);
     ParkNrCadence(g_nr.cadence);
+    ParkNrCadence(g_nr.lightLimiter);
     ParkNrEnlarger(g_enlarge.live);
     ParkTrackingDiagnostics();
 

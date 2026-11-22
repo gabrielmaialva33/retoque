@@ -46,6 +46,14 @@ tier = "host"
 timeout = 240
 summary = "Exposure governor (WhitePointSource=1): per-second attack and release limits, hysteresis, hold on unreadable frames, re-prime on reset, mutants and wiring guards."
 
+[nr-light-limiter]
+path = "nr-light-limiter"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 240
+summary = "Light limiter at any cadence (LightLimiter): the gate, the shader's regional rule over a CPU model of the dispatches, mutants, and wiring guards."
+
 [nr-game-profiles]
 path = "nr-game-profiles"
 domain = "nr"

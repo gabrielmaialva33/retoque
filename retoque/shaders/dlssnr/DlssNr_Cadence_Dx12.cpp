@@ -3,6 +3,7 @@
 #include "DlssNr_Cadence_Dx12.h"
 
 #include <dlssnr/DlssNr_Cadence.h>
+#include <dlssnr/DlssNr_LightLimit.h>
 
 #include <algorithm>
 #include <cmath>
@@ -88,10 +89,11 @@ ID3D12Resource* DlssNr_Cadence_Dx12::CreateTexture(ID3D12Device* device, DXGI_FO
 }
 
 DlssNr_Cadence_Dx12::DlssNr_Cadence_Dx12(std::string InName, ID3D12Device* InDevice, UINT InWidth, UINT InHeight,
-                                         bool InSmoothing)
+                                         bool InSmoothing, bool InLightOnly)
     : Shader_Dx12(InName, InDevice), _smoothingAsked(InSmoothing), _width(InWidth), _height(InHeight),
       _lowWidth(DlssNr::Cadence::LowExtent(InWidth)), _lowHeight(DlssNr::Cadence::LowExtent(InHeight))
 {
+    _lightOnly = InLightOnly;
     if (InDevice == nullptr || !Available() || InWidth == 0 || InHeight == 0)
         return;
 
@@ -145,34 +147,52 @@ DlssNr_Cadence_Dx12::DlssNr_Cadence_Dx12(std::string InName, ID3D12Device* InDev
         InDevice->CreateConstantBufferView(&cbv, _frameHeaps[i].GetCbvCPU(0));
     }
 
-    _residual = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence edit");
-    _proxyThen = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence proxy");
-    _depthThen = CreateTexture(InDevice, DXGI_FORMAT_R32_FLOAT, _width, _height, L"DLSS-NR cadence depth");
-    _residualLow =
-        CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _lowWidth, _lowHeight, L"DLSS-NR cadence coarse edit");
-    // 32-bit float: displacements in pixels reach the thousands, where 16-bit float has lost the sub-pixel.
-    _chain[0] = CreateTexture(InDevice, DXGI_FORMAT_R32G32_FLOAT, _width, _height, L"DLSS-NR cadence chain A");
-    _chain[1] = CreateTexture(InDevice, DXGI_FORMAT_R32G32_FLOAT, _width, _height, L"DLSS-NR cadence chain B");
-
-    if (_residual == nullptr || _proxyThen == nullptr || _depthThen == nullptr || _residualLow == nullptr ||
-        _chain[0] == nullptr || _chain[1] == nullptr)
+    // The cadence's own surfaces. A light-only object (docs/dlssnr/design/light-limiter.md) has none of them: no edit, no
+    // snapshots, no chain.
+    if (!_lightOnly)
     {
-        LOG_WARN("[{}] Could not allocate the cadence surfaces for {}x{}", _name, _width, _height);
-        return;
+        _residual = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence edit");
+        _proxyThen = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence proxy");
+        _depthThen = CreateTexture(InDevice, DXGI_FORMAT_R32_FLOAT, _width, _height, L"DLSS-NR cadence depth");
+        _residualLow = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _lowWidth, _lowHeight,
+                                     L"DLSS-NR cadence coarse edit");
+        // 32-bit float: displacements in pixels reach the thousands, where 16-bit float has lost the sub-pixel.
+        _chain[0] = CreateTexture(InDevice, DXGI_FORMAT_R32G32_FLOAT, _width, _height, L"DLSS-NR cadence chain A");
+        _chain[1] = CreateTexture(InDevice, DXGI_FORMAT_R32G32_FLOAT, _width, _height, L"DLSS-NR cadence chain B");
+
+        if (_residual == nullptr || _proxyThen == nullptr || _depthThen == nullptr || _residualLow == nullptr ||
+            _chain[0] == nullptr || _chain[1] == nullptr)
+        {
+            LOG_WARN("[{}] Could not allocate the cadence surfaces for {}x{}", _name, _width, _height);
+            return;
+        }
     }
 
     // Smoothing (docs/dlssnr/design/cadence-smoothing.md): the fade, the shown answer, and the light limiter's grid and
     // state. The state is read and written in place by one thread, so it lives in UNORDERED_ACCESS. If they cannot be
     // had, the carry still runs, unsmoothed: refusing the whole cadence over them would cost more than it saves.
+    // A light-only object keeps the shown answer, the grid and the state, no fade, and adds the regional limiter's tile
+    // grid and state (R32F: a typed UAV load every adapter has); it is only any use with all of them.
     if (_smoothingAsked)
     {
-        _fade = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence fade");
+        if (!_lightOnly)
+            _fade = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence fade");
         _shown = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence shown");
         _lightGrid = CreateTexture(InDevice, DXGI_FORMAT_R32G32_FLOAT, DlssNr::Cadence::kLightGrid,
                                    DlssNr::Cadence::kLightGrid, L"DLSS-NR cadence light grid");
         _lightState = CreateTexture(InDevice, DXGI_FORMAT_R32_FLOAT, 4, 1, L"DLSS-NR cadence light state", kWrite);
+        if (_lightOnly)
+        {
+            _tilesX = DlssNr::LightLimit::TilesFor(_width);
+            _tilesY = DlssNr::LightLimit::TilesFor(_height);
+            _regionGrid = CreateTexture(InDevice, DXGI_FORMAT_R32G32B32A32_FLOAT, _tilesX, _tilesY,
+                                        L"DLSS-NR light limiter tile grid");
+            _regionState = CreateTexture(InDevice, DXGI_FORMAT_R32_FLOAT, _tilesX * 4, _tilesY,
+                                         L"DLSS-NR light limiter tile state", kWrite);
+        }
 
-        _smoothing = _fade != nullptr && _shown != nullptr && _lightGrid != nullptr && _lightState != nullptr;
+        _smoothing = (_lightOnly || _fade != nullptr) && _shown != nullptr && _lightGrid != nullptr &&
+                     _lightState != nullptr && (!_lightOnly || (_regionGrid != nullptr && _regionState != nullptr));
         if (!_smoothing)
         {
             LOG_WARN("[{}] Could not allocate the cadence smoothing surfaces for {}x{}; carrying without smoothing",
@@ -181,7 +201,19 @@ DlssNr_Cadence_Dx12::DlssNr_Cadence_Dx12(std::string InName, ID3D12Device* InDev
             SAFE_RELEASE(_shown);
             SAFE_RELEASE(_lightGrid);
             SAFE_RELEASE(_lightState);
+            SAFE_RELEASE(_regionGrid);
+            SAFE_RELEASE(_regionState);
         }
+    }
+
+    if (_lightOnly)
+    {
+        if (!_smoothing)
+            return;
+        LOG_INFO("DLSS-NR light limiter: surfaces built for {}x{} (about {:.0f} MB)", _width, _height,
+                 (double) _width * _height * 8 / (1024.0 * 1024.0));
+        _init = true;
+        return;
     }
 
     const double megabytes =
@@ -225,6 +257,8 @@ DlssNr_Cadence_Dx12::~DlssNr_Cadence_Dx12()
     SAFE_RELEASE(_shown);
     SAFE_RELEASE(_lightGrid);
     SAFE_RELEASE(_lightState);
+    SAFE_RELEASE(_regionGrid);
+    SAFE_RELEASE(_regionState);
 
     for (uint32_t i = 0; i < DLSSNR_CADENCE_NUM_OF_HEAPS; ++i)
     {
@@ -319,8 +353,8 @@ bool DlssNr_Cadence_Dx12::Run(ID3D12GraphicsCommandList* cmdList, const Constant
 
 bool DlssNr_Cadence_Dx12::Record(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InAnswer)
 {
-    if (!_init || InCmdList == nullptr || _device == nullptr || InAnswer == nullptr || InFrame.proxy == nullptr ||
-        InFrame.depth == nullptr)
+    if (!_init || _lightOnly || InCmdList == nullptr || _device == nullptr || InAnswer == nullptr ||
+        InFrame.proxy == nullptr || InFrame.depth == nullptr)
     {
         return false;
     }
@@ -345,8 +379,8 @@ bool DlssNr_Cadence_Dx12::Record(ID3D12GraphicsCommandList* InCmdList, const Fra
 bool DlssNr_Cadence_Dx12::Carry(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, bool InChainStart,
                                 ID3D12Resource* InUiAlpha, const Smooth& InSmooth, ID3D12Resource* InOut)
 {
-    if (!_init || InCmdList == nullptr || _device == nullptr || InOut == nullptr || InFrame.proxy == nullptr ||
-        InFrame.depth == nullptr || InFrame.motion == nullptr)
+    if (!_init || _lightOnly || InCmdList == nullptr || _device == nullptr || InOut == nullptr ||
+        InFrame.proxy == nullptr || InFrame.depth == nullptr || InFrame.motion == nullptr)
     {
         return false;
     }
@@ -408,7 +442,7 @@ bool DlssNr_Cadence_Dx12::Carry(ID3D12GraphicsCommandList* InCmdList, const Fram
     if (limited)
     {
         Transition(InCmdList, _shown, kWrite, kRest);
-        return Show(InCmdList, InFrame, InUiAlpha, InSmooth, InOut);
+        return Show(InCmdList, InFrame, InUiAlpha, InSmooth, _shown, InOut);
     }
 
     // The caller moves InOut out of UNORDERED_ACCESS for the resolve, which orders the write; this orders it
@@ -422,8 +456,8 @@ bool DlssNr_Cadence_Dx12::Carry(ID3D12GraphicsCommandList* InCmdList, const Fram
 
 ID3D12Resource* DlssNr_Cadence_Dx12::ModelMotion(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame)
 {
-    if (!_init || InCmdList == nullptr || _device == nullptr || InFrame.proxy == nullptr || InFrame.depth == nullptr ||
-        InFrame.motion == nullptr)
+    if (!_init || _lightOnly || InCmdList == nullptr || _device == nullptr || InFrame.proxy == nullptr ||
+        InFrame.depth == nullptr || InFrame.motion == nullptr)
     {
         return nullptr;
     }
@@ -447,7 +481,7 @@ ID3D12Resource* DlssNr_Cadence_Dx12::ModelMotion(ID3D12GraphicsCommandList* InCm
 bool DlssNr_Cadence_Dx12::Fade(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
                                ID3D12Resource* InAnswer, const Smooth& InSmooth)
 {
-    if (!_init || !_smoothing || InCmdList == nullptr || _device == nullptr || InAnswer == nullptr ||
+    if (!_init || _lightOnly || !_smoothing || InCmdList == nullptr || _device == nullptr || InAnswer == nullptr ||
         InFrame.proxy == nullptr || InFrame.depth == nullptr || InFrame.motion == nullptr)
     {
         return false;
@@ -476,14 +510,14 @@ bool DlssNr_Cadence_Dx12::Fade(ID3D12GraphicsCommandList* InCmdList, const Frame
 bool DlssNr_Cadence_Dx12::ShowFaded(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame,
                                     ID3D12Resource* InUiAlpha, const Smooth& InSmooth, ID3D12Resource* InOut)
 {
-    return Show(InCmdList, InFrame, InUiAlpha, InSmooth, InOut);
+    return Show(InCmdList, InFrame, InUiAlpha, InSmooth, _shown, InOut);
 }
 
 bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
-                               const Smooth& InSmooth, ID3D12Resource* InOut)
+                               const Smooth& InSmooth, ID3D12Resource* InSource, ID3D12Resource* InOut)
 {
-    if (!_init || !_smoothing || InCmdList == nullptr || _device == nullptr || InOut == nullptr ||
-        InFrame.proxy == nullptr)
+    if (!_init || !_smoothing || InCmdList == nullptr || _device == nullptr || InSource == nullptr ||
+        InOut == nullptr || InFrame.proxy == nullptr)
     {
         return false;
     }
@@ -497,8 +531,8 @@ bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame
         Constants c = Base(6, InFrame);
         c.Passthrough = passthrough;
         c.HaveUi = haveUi;
-        ID3D12Resource* const srvs[kSrvCount] = { _shown,  InFrame.proxy, nullptr, nullptr, nullptr,
-                                                  nullptr, nullptr,       nullptr, nullptr, InUiAlpha };
+        ID3D12Resource* const srvs[kSrvCount] = { InSource, InFrame.proxy, nullptr, nullptr, nullptr,
+                                                  nullptr,  nullptr,       nullptr, nullptr, InUiAlpha };
         ID3D12Resource* const uavs[kUavCount] = { _lightGrid };
         Run(InCmdList, c, srvs, uavs, DlssNr::Cadence::kLightGrid, DlssNr::Cadence::kLightGrid);
     }
@@ -524,8 +558,8 @@ bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame
         Constants c = Base(8, InFrame);
         c.Passthrough = passthrough;
         c.HaveUi = haveUi;
-        ID3D12Resource* const srvs[kSrvCount] = { _shown,  nullptr, nullptr, nullptr, nullptr,
-                                                  nullptr, nullptr, nullptr, nullptr, InUiAlpha };
+        ID3D12Resource* const srvs[kSrvCount] = { InSource, nullptr, nullptr, nullptr, nullptr,
+                                                  nullptr,  nullptr, nullptr, nullptr, InUiAlpha };
         ID3D12Resource* const uavs[kUavCount] = { InOut, nullptr, _lightState };
         Run(InCmdList, c, srvs, uavs, (_width + kThreads - 1) / kThreads, (_height + kThreads - 1) / kThreads);
     }
@@ -533,6 +567,89 @@ bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame
     // As Carry: the caller's transition orders the write for the resolve; this orders it against a UAV reader.
     UavBarrier(InCmdList, InOut);
     return true;
+}
+
+// The regional limiter (docs/dlssnr/design/light-limiter.md): the three steps of Show over tiles. The tile grid sums the answer's
+// light, the proxy's, the motion's length and the weight per tile, the interface left out; one thread a tile holds that
+// tile's edit light to its last frame's where the tile's own light stood still; the gains are applied bilinear between
+// tile centres, so the band that moves is a tile wide and the detail finer than that keeps the answer's own light.
+bool DlssNr_Cadence_Dx12::ShowRegional(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame,
+                                       ID3D12Resource* InUiAlpha, const Smooth& InSmooth, ID3D12Resource* InSource,
+                                       ID3D12Resource* InOut)
+{
+    if (!_init || !_smoothing || _regionGrid == nullptr || _regionState == nullptr || InCmdList == nullptr ||
+        _device == nullptr || InSource == nullptr || InOut == nullptr || InFrame.proxy == nullptr)
+    {
+        return false;
+    }
+
+    const uint32_t passthrough = InSmooth.passthrough ? 1u : 0u;
+    const uint32_t haveUi = InUiAlpha != nullptr ? 1u : 0u;
+    const auto regional = [&](Constants c)
+    {
+        c.Passthrough = passthrough;
+        c.HaveUi = haveUi;
+        c.HaveMotion = InFrame.motion != nullptr ? 1u : 0u;
+        c.RegionTile = DlssNr::LightLimit::kRegionTile;
+        c.RegionTilesX = _tilesX;
+        c.RegionTilesY = _tilesY;
+        return c;
+    };
+
+    Transition(InCmdList, _regionGrid, kRest, kWrite);
+    {
+        ID3D12Resource* const srvs[kSrvCount] = { InSource, InFrame.proxy, nullptr, InFrame.motion, nullptr,
+                                                  nullptr,  nullptr,       nullptr, nullptr,         InUiAlpha };
+        ID3D12Resource* const uavs[kUavCount] = { _regionGrid };
+        Run(InCmdList, regional(Base(10, InFrame)), srvs, uavs, _tilesX, _tilesY);
+    }
+    Transition(InCmdList, _regionGrid, kWrite, kRest);
+
+    UavBarrier(InCmdList, _regionState);
+    {
+        Constants c = regional(Base(11, InFrame));
+        c.LimitValid = InSmooth.limit && !InSmooth.limitReset ? 1u : 0u;
+        c.LimitInputTol = DlssNr::Cadence::kLightInputStops;
+        c.LimitMaxGain = DlssNr::Cadence::kLightMaxGainStops;
+        c.RegionStep = std::isfinite(InSmooth.regionStep) && InSmooth.regionStep > 0.0f ? InSmooth.regionStep : 0.0f;
+        c.RegionReleaseLow = DlssNr::LightLimit::kRegionReleaseLow;
+        c.RegionReleaseHigh = DlssNr::LightLimit::kRegionReleaseHigh;
+        c.RegionMotionPixels = std::isfinite(InSmooth.regionMotion) && InSmooth.regionMotion > 0.0f
+                                   ? InSmooth.regionMotion
+                                   : DlssNr::LightLimit::kRegionMotionPixels;
+        ID3D12Resource* const srvs[kSrvCount] = { _regionGrid };
+        ID3D12Resource* const uavs[kUavCount] = { nullptr, nullptr, _regionState };
+        Run(InCmdList, c, srvs, uavs, (_tilesX + kThreads - 1) / kThreads, (_tilesY + kThreads - 1) / kThreads);
+    }
+    UavBarrier(InCmdList, _regionState);
+
+    {
+        ID3D12Resource* const srvs[kSrvCount] = { InSource, nullptr, nullptr, nullptr, nullptr,
+                                                  nullptr,  nullptr, nullptr, nullptr, InUiAlpha };
+        ID3D12Resource* const uavs[kUavCount] = { InOut, nullptr, _regionState };
+        Run(InCmdList, regional(Base(12, InFrame)), srvs, uavs, (_width + kThreads - 1) / kThreads,
+            (_height + kThreads - 1) / kThreads);
+    }
+
+    UavBarrier(InCmdList, InOut);
+    return true;
+}
+
+ID3D12Resource* DlssNr_Cadence_Dx12::LimitLight(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame,
+                                                ID3D12Resource* InUiAlpha, const Smooth& InSmooth,
+                                                ID3D12Resource* InAnswer)
+{
+    if (!_init || !_lightOnly || !_smoothing || _shown == nullptr || InCmdList == nullptr || _device == nullptr ||
+        InAnswer == nullptr || InFrame.proxy == nullptr || !InSmooth.limit)
+    {
+        return nullptr;
+    }
+
+    Transition(InCmdList, _shown, kRest, kWrite);
+    const bool limited = InSmooth.regional ? ShowRegional(InCmdList, InFrame, InUiAlpha, InSmooth, InAnswer, _shown)
+                                           : Show(InCmdList, InFrame, InUiAlpha, InSmooth, InAnswer, _shown);
+    Transition(InCmdList, _shown, kWrite, kRest);
+    return limited ? _shown : nullptr;
 }
 
 // The owning NR generation must be tracked before any call to Probe. Retirement then retains
@@ -611,7 +728,7 @@ std::array<DlssNr::Cadence::Adaptive::Sample, DlssNr_Cadence_Dx12::kProbeSlots> 
 void DlssNr_Cadence_Dx12::Probe(ID3D12GraphicsCommandList* cmd, const Frame& frame, ID3D12Resource* ui, bool history,
                                 bool chainStart, uint64_t present, int64_t ms)
 {
-    if (!_init || !cmd || !frame.proxy || !frame.depth || !frame.motion)
+    if (!_init || _lightOnly || !cmd || !frame.proxy || !frame.depth || !frame.motion)
         return;
     auto available =
         std::find_if(_probes.begin(), _probes.end(), [this](auto& slot) { return !slot.pending && InitProbe(slot); });

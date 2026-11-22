@@ -1,6 +1,7 @@
 #include <dlssnr/DlssNr_PassSettings.h>
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <dlssnr/DlssNr_Cadence.h>
+#include <dlssnr/DlssNr_LightLimit.h>
 #include <algorithm>
 #include <map>
 #include <cassert>
@@ -223,6 +224,7 @@ struct Config
     OptionalBool DlssNrCadenceWithFrameGen;
     OptionalBool DlssNrCadenceSmoothing;
     OptionalBool DlssNrExposureGovernor;
+    OptionalU32 DlssNrLightLimiter;
     OptionalBool DlssNrCadenceAdaptive;
     DlssNrResolvedPassSettings master;
     DlssNr::PassConfig::Overrides overrides;

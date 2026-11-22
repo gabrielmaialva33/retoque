@@ -1543,6 +1543,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (!cfg.DlssNrUiProtection.value_or_default() || !frame.PresentSource)
         ParkNrUiMask(g_nr.uiMask);
 
+    // The light limiter switched off (docs/dlssnr/design/light-limiter.md): its surfaces go back once the GPU is done with
+    // them.
+    if (DlssNr::LightLimit::Requested(cfg.DlssNrLightLimiter.value_or_default()) == DlssNr::LightLimit::Mode::Off)
+        ParkNrCadence(g_nr.lightLimiter);
+
     const bool resolutionChanged =
         g_nr.width != width || g_nr.height != height || g_nr.workWidth != workWidth || g_nr.workHeight != workHeight;
 
@@ -3317,6 +3322,64 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }
 
+        // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter, off by default): the
+        // answer the resolve is about to read, with the light of the whole picture or of each tile held to the last
+        // frame's where its own light stood still. After the record, so what a carried frame carries is still the model's
+        // own edit; on every frame the cadence's own limiter did not hold; into a surface of its own, so nothing the
+        // model reads or writes changes. Off, nothing is built and nothing is dispatched.
+        ID3D12Resource* shownAnswer = finalOutput;
+        const auto lightMode = DlssNr::LightLimit::Requested(cfg.DlssNrLightLimiter.value_or_default());
+        if (lightMode == DlssNr::LightLimit::Mode::Off)
+        {
+            g_nr.lightGate.Reset();
+        }
+        else
+        {
+            uint64_t lightSignature = Cadence::kMixSeed;
+            lightSignature = Cadence::Mix(lightSignature, workWidth);
+            lightSignature = Cadence::Mix(lightSignature, workHeight);
+            lightSignature = Cadence::Mix(lightSignature, static_cast<uint32_t>(desc.Format));
+            lightSignature = Cadence::Mix(lightSignature, isHdrBuffer ? 1u : 0u);
+            lightSignature = Cadence::Mix(lightSignature, beforeUpscale ? 1u : 0u);
+            lightSignature = Cadence::Mix(lightSignature, uiAlpha != nullptr ? 1u : 0u);
+            const bool cadenceLimited =
+                cadenceFaded || (carried && cadence.limit && g_nr.cadence != nullptr && g_nr.cadence->Smoothing());
+            const auto lightNow = g_nr.lightGate.Decide(lightMode, cadenceLimited, observedFrame, cadenceNowMs,
+                                                        lightSignature, stabilizerReset);
+            if (lightNow.run && proxyAtWorkSize)
+            {
+                if (g_nr.lightLimiter != nullptr && !g_nr.lightLimiter->Fits(device, workWidth, workHeight, true, true))
+                    ParkNrCadence(g_nr.lightLimiter);
+                if (g_nr.lightLimiter == nullptr)
+                    g_nr.lightLimiter =
+                        new DlssNr_Cadence_Dx12("DLSS-NR light limiter", device, workWidth, workHeight, true, true);
+
+                bool limited = false;
+                if (g_nr.lightLimiter->IsInit())
+                {
+                    const float lightSeconds = g_nr.lightLimiterAt == std::chrono::steady_clock::time_point {}
+                                                   ? 0.0f
+                                                   : std::chrono::duration<float>(now - g_nr.lightLimiterAt).count();
+                    DlssNr_Cadence_Dx12::Smooth light {};
+                    light.limit = true;
+                    light.limitReset = lightNow.reset;
+                    light.limitStep = Cadence::LimitStep(lightSeconds);
+                    light.regional = lightMode == DlssNr::LightLimit::Mode::Regional;
+                    light.regionStep = DlssNr::LightLimit::RegionStep(lightSeconds);
+                    light.regionMotion = DlssNr::LightLimit::RegionMotionPixels(cadenceFrame.scale);
+                    light.passthrough = !isHdrBuffer;
+                    if (ID3D12Resource* const limitedAnswer =
+                            g_nr.lightLimiter->LimitLight(cmdList, cadenceFrame, uiAlpha, light, finalOutput))
+                    {
+                        shownAnswer = limitedAnswer;
+                        limited = true;
+                    }
+                }
+                g_nr.lightLimiterAt = now;
+                g_nr.lightGate.Ran(limited);
+            }
+        }
+
         // Supersampling down-leg. Average the Nx model answer back to native with the chosen filter, so
         // the resolve composites a native answer against the native proxy 1:1 -- a real area resample,
         // not the single bilinear tap the Nx answer would otherwise get in the resolve (which aliases
@@ -3325,7 +3388,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // falls back to the Nx pair. g_nr.output is NPSR here; outputNative is UAV from last frame.
         bool superDownOk = false;
         if (workScale > 1.0f && g_nr.superDown != nullptr && g_nr.outputNative != nullptr &&
-            g_nr.superDown->Dispatch(cmdList, finalOutput, g_nr.outputNative))
+            g_nr.superDown->Dispatch(cmdList, shownAnswer, g_nr.outputNative))
         {
             Barrier(cmdList, g_nr.outputNative, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -3333,7 +3396,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         }
 
         const auto resolved =
-            DlssNr::Chain::Resolve(g_nr.colorCopy, modelInput, g_nr.outputNative, finalOutput, superDownOk);
+            DlssNr::Chain::Resolve(g_nr.colorCopy, modelInput, g_nr.outputNative, shownAnswer, superDownOk);
         ID3D12Resource* resolveProxy = resolved.proxy;
         ID3D12Resource* resolveAnswer = resolved.answer;
 
@@ -3353,7 +3416,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                 g_nr.unpackedAnswer = CreateScratch(device, DXGI_FORMAT_R16G16B16A16_FLOAT, gridWidth, gridHeight);
 
             if (g_nr.unpackedProxy != nullptr && g_nr.unpackedAnswer != nullptr &&
-                g_nr.periphery->Unpack(cmdList, periphery, modelInput, finalOutput, g_nr.unpackedProxy,
+                g_nr.periphery->Unpack(cmdList, periphery, modelInput, shownAnswer, g_nr.unpackedProxy,
                                        g_nr.unpackedAnswer, gridWidth, gridHeight))
             {
                 Barrier(cmdList, g_nr.unpackedProxy, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -7399,6 +7462,13 @@ void Shutdown()
         g_nr.cadence = nullptr;
     }
     g_cadence.Drop();
+
+    if (g_nr.lightLimiter != nullptr)
+    {
+        delete g_nr.lightLimiter;
+        g_nr.lightLimiter = nullptr;
+    }
+    g_nr.lightGate.Reset();
 
     ShutdownExposureMeter();
 

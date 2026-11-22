@@ -121,6 +121,12 @@ struct State
 {
 };
 } // namespace ExposureGovernor
+namespace LightLimit
+{
+struct Gate
+{
+};
+} // namespace LightLimit
 namespace Submission
 {
 namespace Detail

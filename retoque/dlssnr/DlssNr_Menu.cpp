@@ -8,6 +8,7 @@
 
 #include "DlssNr.h"
 #include "DlssNr_Cadence.h"
+#include "DlssNr_LightLimit.h"
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
@@ -1271,6 +1272,33 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
 // without its shader cannot run it, so none of them is offered the control -- a cadence saved in the ini that
 // does nothing here gets one line saying so instead. The frame-generation opt-in exists only for a cadence
 // above 1, and so does the status line.
+// The light limiter at any cadence (docs/dlssnr/design/light-limiter.md). It runs on the D3D12 resolve's answer, so native Vulkan
+// and the driver proxy have nothing for it to act on, and a build without the cadence shader does not carry its bytecode:
+// none of them is offered the control.
+static void RenderLightLimiter(Config* config, bool nativeVulkan)
+{
+    if (nativeVulkan || config->DlssNrUseProxy.value_or_default() || !DlssNr::CadenceAvailable())
+        return;
+
+    ImGui::SeparatorText(Localization::Tr("Light stability"));
+
+    const char* limiterNames[] = { Localization::Tr("Off"), Localization::Tr("Whole picture"),
+                                   Localization::Tr("By region") };
+    int limiter = static_cast<int>(DlssNr::LightLimit::Requested(config->DlssNrLightLimiter.value_or_default()));
+    if (ImGui::Combo(MenuLayout::FieldLabel(Localization::Label("Light limiter###nrLightLimiter")), &limiter,
+                     limiterNames, IM_ARRAYSIZE(limiterNames)))
+        config->DlssNrLightLimiter = static_cast<uint32_t>(std::clamp(limiter, 0, 2));
+
+    HelpMarker("Stops the model's light from breathing. The light of what is shown may move by only a little a second"
+               "\nwhile the picture's own light holds still, and is let go the moment the picture itself changes.\n"
+               "\nWhole picture: the mean light of the frame, at 1.5 stops a second. By region: each 32 pixel tile"
+               "\nat 0.75 stops a second, which also holds a lamp that pulses in one part of the picture; it lets go"
+               "\nwhere the content moves fast or the model really changed its mind. The detail finer than a tile is"
+               "\nnot held.\n\nOnly what is shown changes, never the model's own history. Costs a texture and three"
+               "\nsmall passes a frame while on; off costs nothing. Measure it with \"Measure the light step\" under"
+               "\nCompare.");
+}
+
 static void RenderCadenceControls(Config* config, bool nativeVulkan)
 {
     if (nativeVulkan)
@@ -2401,6 +2429,7 @@ void RenderMenu(Config* config, float menuResScale)
             }
         }
 
+        RenderLightLimiter(config, nativeVulkan);
         RenderCadenceControls(config, nativeVulkan);
 
         ImGui::SeparatorText(Localization::Tr("Brightness and exposure"));

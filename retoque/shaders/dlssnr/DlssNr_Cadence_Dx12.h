@@ -16,6 +16,10 @@
 // answer and the light limiter's grid and state; whether it has them is part of what it was built for, so a toggle
 // builds a new object (and the scheduler, which folds the switch into the settings it watches, drops the stored edit
 // with it).
+//
+// A light-only object ([DlssNr] LightLimiter, docs/dlssnr/design/light-limiter.md) is the same pass built for the light
+// limiter alone: the shown surface, the global limiter's grid and state, and the regional limiter's tile grid and
+// state, none of the cadence's edit, snapshots or chain. Its one entry is LimitLight; every other call refuses.
 
 #include <dlssnr/DlssNr_CadenceAdaptive.h>
 #include <dlssnr/DlssNr_Submission.h>
@@ -63,6 +67,9 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
         bool limitReset = false;  // ... with nothing before this frame to hold it to
         float limitStep = 0.0f;   // DlssNr::Cadence::LimitStep
         bool passthrough = false; // the frame is already tone mapped: its values are its light
+        bool regional = false;    // LimitLight: the regional limiter (per tile) instead of the whole picture's
+        float regionStep = 0.0f;  // DlssNr::LightLimit::RegionStep
+        float regionMotion = 0.0f; // DlssNr::LightLimit::RegionMotionPixels: working pixels a frame at which a tile is not held
     };
 
   private:
@@ -99,6 +106,14 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
         float LimitInputTol = 0.0f;
         float LimitMaxGain = 0.0f;
         uint32_t ProbeHistory = 0;
+        uint32_t RegionTile = 0;
+        uint32_t RegionTilesX = 0;
+        uint32_t RegionTilesY = 0;
+        uint32_t HaveMotion = 0;
+        float RegionStep = 0.0f;
+        float RegionReleaseLow = 0.0f;
+        float RegionReleaseHigh = 0.0f;
+        float RegionMotionPixels = 0.0f;
     };
 
     static constexpr uint32_t kSrvCount = 11;
@@ -126,6 +141,14 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     ID3D12Resource* _shown = nullptr;      // RGBA16F: what this frame shows, before the light limit
     ID3D12Resource* _lightGrid = nullptr;  // R32G32F, kLightGrid square: summed light of the shown answer, the proxy
     ID3D12Resource* _lightState = nullptr; // R32F 4x1: shown light, frame light, valid, gain (stops)
+
+    // Light-only objects (the regional limiter): a tile grid of the answer's light, the proxy's, the motion and the weight, and
+    // the per-tile state, four R32F texels a tile (shown light, tile light, valid, gain). The state rests in UNORDERED_ACCESS.
+    bool _lightOnly = false;
+    UINT _tilesX = 0;
+    UINT _tilesY = 0;
+    ID3D12Resource* _regionGrid = nullptr;  // R32G32B32A32F, one texel a tile
+    ID3D12Resource* _regionState = nullptr; // R32F, 4 texels a tile
 
     // Adaptive only. Every pending recording owns all resources it can still read/write.
     static constexpr size_t kProbeSlots = 4;
@@ -162,23 +185,30 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
 
     Constants Base(uint32_t mode, const Frame& frame) const;
 
-    // The light limiter over _shown, then _shown times its gain into InOut (UNORDERED_ACCESS, left so). Interface
-    // pixels (InUiAlpha, may be null) are left out of the light and keep their answer as it is.
+    // The light limiter over InSource (readable), then InSource times its gain into InOut (UNORDERED_ACCESS, left so).
+    // Interface pixels (InUiAlpha, may be null) are left out of the light and keep their answer as it is. The cadence's
+    // own call passes _shown as the source.
     bool Show(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
-              const Smooth& InSmooth, ID3D12Resource* InOut);
+              const Smooth& InSmooth, ID3D12Resource* InSource, ID3D12Resource* InOut);
+
+    // The regional limiter's three dispatches, with the same contract as Show.
+    bool ShowRegional(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
+                      const Smooth& InSmooth, ID3D12Resource* InSource, ID3D12Resource* InOut);
 
   public:
     // Whether this build carries the pass's bytecode at all.
     static bool Available();
 
-    DlssNr_Cadence_Dx12(std::string InName, ID3D12Device* InDevice, UINT InWidth, UINT InHeight, bool InSmoothing);
+    DlssNr_Cadence_Dx12(std::string InName, ID3D12Device* InDevice, UINT InWidth, UINT InHeight, bool InSmoothing,
+                        bool InLightOnly = false);
     ~DlssNr_Cadence_Dx12();
 
     // Whether this object was built for this working size, with or without smoothing, on this device. A failed object
     // still fits, so it is not rebuilt, and logged again, every frame.
-    bool Fits(ID3D12Device* InDevice, UINT InWidth, UINT InHeight, bool InSmoothing) const
+    bool Fits(ID3D12Device* InDevice, UINT InWidth, UINT InHeight, bool InSmoothing, bool InLightOnly = false) const
     {
-        return InDevice == _device && InWidth == _width && InHeight == _height && InSmoothing == _smoothingAsked;
+        return InDevice == _device && InWidth == _width && InHeight == _height && InSmoothing == _smoothingAsked &&
+               InLightOnly == _lightOnly;
     }
 
     bool Smoothing() const { return _smoothing; }
@@ -209,6 +239,13 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     // way back to the carried one is kept as the shown answer. InAnswer is readable.
     bool Fade(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
               ID3D12Resource* InAnswer, const Smooth& InSmooth);
+
+    // A light-only object: InAnswer (readable, the answer the resolve would read) held to the light limit, the whole picture's
+    // or each tile's (InSmooth.regional), into the object's own surface, which is returned readable and stays so. Nothing else
+    // is written. InSmooth.limit and limitReset are the gate's decision. nullptr if this object is not light-only, could not be
+    // built, or the pass could not be recorded.
+    ID3D12Resource* LimitLight(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
+                               const Smooth& InSmooth, ID3D12Resource* InAnswer);
 
     // After Fade and Record: the shown answer, held to the light limit, into InOut -- the surface the resolve reads,
     // at the working size, in UNORDERED_ACCESS, left so.

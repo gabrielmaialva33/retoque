@@ -476,6 +476,14 @@ class Config
     // See docs/dlssnr/design/exposure-governor.md.
     CustomOptional<bool> DlssNrExposureGovernor { false };
 
+    // The light limiter at any cadence: the cadence smoothing's limiter, which held the mean light of what the cadence shows
+    // to 1.5 stops a second while the frame's own light holds still, on the answer of any frame -- so a default single pass
+    // on every frame has it too. 0 off; 1 the whole picture's light; 2 the light of each 32 pixel tile (Skynizz's anti
+    // light pop-in: 0.75 stops a second where the tile's own light held still, released by a real change or by motion), the
+    // band a tile wide and the detail finer than it untouched. Display only: the model's own history stays the model's.
+    // Anything else reads as 0. D3D12 only. Off allocates and dispatches nothing. See docs/dlssnr/design/light-limiter.md.
+    CustomOptional<uint32_t> DlssNrLightLimiter { 0 };
+
     // The most the pass may multiply or divide a pixel by. A detail pass has no business restyling a
     // light source, whatever the model returns.
     CustomOptional<float> DlssNrMaxRatio { 2.0f };
