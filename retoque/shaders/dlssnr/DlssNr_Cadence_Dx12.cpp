@@ -147,8 +147,8 @@ DlssNr_Cadence_Dx12::DlssNr_Cadence_Dx12(std::string InName, ID3D12Device* InDev
         InDevice->CreateConstantBufferView(&cbv, _frameHeaps[i].GetCbvCPU(0));
     }
 
-    // The cadence's own surfaces. A light-only object (docs/dlssnr/design/light-limiter.md) has none of them: no edit, no
-    // snapshots, no chain.
+    // The cadence's own surfaces. A light-only object (docs/dlssnr/design/light-limiter.md) has none of them: no edit,
+    // no snapshots, no chain.
     if (!_lightOnly)
     {
         _residual = CreateTexture(InDevice, DXGI_FORMAT_R16G16B16A16_FLOAT, _width, _height, L"DLSS-NR cadence edit");
@@ -569,10 +569,11 @@ bool DlssNr_Cadence_Dx12::Show(ID3D12GraphicsCommandList* InCmdList, const Frame
     return true;
 }
 
-// The regional limiter (docs/dlssnr/design/light-limiter.md): the three steps of Show over tiles. The tile grid sums the answer's
-// light, the proxy's, the motion's length and the weight per tile, the interface left out; one thread a tile holds that
-// tile's edit light to its last frame's where the tile's own light stood still; the gains are applied bilinear between
-// tile centres, so the band that moves is a tile wide and the detail finer than that keeps the answer's own light.
+// The regional limiter (docs/dlssnr/design/light-limiter.md): the three steps of Show over tiles. The tile grid sums
+// the answer's light, the proxy's, the motion's length and the weight per tile, the interface left out; one thread a
+// tile holds that tile's edit light to its last frame's where the tile's own light stood still; the gains are applied
+// bilinear between tile centres, so the band that moves is a tile wide and the detail finer than that keeps the
+// answer's own light.
 bool DlssNr_Cadence_Dx12::ShowRegional(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame,
                                        ID3D12Resource* InUiAlpha, const Smooth& InSmooth, ID3D12Resource* InSource,
                                        ID3D12Resource* InOut)
@@ -599,7 +600,7 @@ bool DlssNr_Cadence_Dx12::ShowRegional(ID3D12GraphicsCommandList* InCmdList, con
     Transition(InCmdList, _regionGrid, kRest, kWrite);
     {
         ID3D12Resource* const srvs[kSrvCount] = { InSource, InFrame.proxy, nullptr, InFrame.motion, nullptr,
-                                                  nullptr,  nullptr,       nullptr, nullptr,         InUiAlpha };
+                                                  nullptr,  nullptr,       nullptr, nullptr,        InUiAlpha };
         ID3D12Resource* const uavs[kUavCount] = { _regionGrid };
         Run(InCmdList, regional(Base(10, InFrame)), srvs, uavs, _tilesX, _tilesY);
     }

@@ -6,9 +6,10 @@
 #include <cmath>
 #include <cstdint>
 
-// Detail stability ([DlssNr] DetailStability, docs/dlssnr/design/detail-stability.md): a temporal filter on the model's edit in
-// the log domain, history reprojected with the game's motion vectors, clipped to the current 3x3 and rejected where the input
-// moved under it. The per-pixel rule is shaders/dlssnr/precompile/dlssnr_detail_stability_rule.h; this is its scheduling.
+// Detail stability ([DlssNr] DetailStability, docs/dlssnr/design/detail-stability.md): a temporal filter on the model's
+// edit in the log domain, history reprojected with the game's motion vectors, clipped to the current 3x3 and rejected
+// where the input moved under it. The per-pixel rule is shaders/dlssnr/precompile/dlssnr_detail_stability_rule.h; this
+// is its scheduling.
 //
 // Pure: flags, ids and times in, a decision out, so tests/nr-detail-stability pins it without a device.
 namespace DlssNr::DetailStability
@@ -34,12 +35,12 @@ enum class Reason : uint8_t
 {
     None,
     Off,
-    DriverProxy,    // the proxy returns before the resolve
-    BeforeUpscale,  // the input is the jittered render-resolution frame: every pixel moves
-    NoGameGuides,   // no motion to reproject with
+    DriverProxy,     // the proxy returns before the resolve
+    BeforeUpscale,   // the input is the jittered render-resolution frame: every pixel moves
+    NoGameGuides,    // no motion to reproject with
     FrameGeneration, // generated frames are not frames of the model's history
-    Cadence,        // the carried frames are not frames of the model's history
-    NoPresentCount, // two views in one present cannot be told apart
+    Cadence,         // the carried frames are not frames of the model's history
+    NoPresentCount,  // two views in one present cannot be told apart
     NoSurfaces,
 };
 
@@ -80,10 +81,10 @@ struct Decision
     Reason reason = Reason::None;
 };
 
-// Whether the filter runs on this frame and whether its history is any use. The history is the last frame's filtered edit:
-// it is dropped by a refusal, a second call in one present (another view), a gap longer than the cadence's, a change of the
-// signature (size, format, route, the settings the edit depends on), a reset of the model, and a frame the pass did not
-// record.
+// Whether the filter runs on this frame and whether its history is any use. The history is the last frame's filtered
+// edit: it is dropped by a refusal, a second call in one present (another view), a gap longer than the cadence's, a
+// change of the signature (size, format, route, the settings the edit depends on), a reset of the model, and a frame
+// the pass did not record.
 class Gate
 {
     uint64_t _lastPresent = 0;

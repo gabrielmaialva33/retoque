@@ -1,13 +1,13 @@
 #pragma once
 
-// Detail stability for Neural Rendering ([DlssNr] DetailStability): a temporal filter on the model's edit in the log domain,
-// the history reprojected with the game's motion vectors, clipped to the current 3x3 and rejected where the input moved under
-// it. docs/dlssnr/design/detail-stability.md is the reasoning; dlssnr/DlssNr_DetailStability.h decides which frames run it and
-// precompile/dlssnr_detail_stability_rule.h is the per-pixel rule.
+// Detail stability for Neural Rendering ([DlssNr] DetailStability): a temporal filter on the model's edit in the log
+// domain, the history reprojected with the game's motion vectors, clipped to the current 3x3 and rejected where the
+// input moved under it. docs/dlssnr/design/detail-stability.md is the reasoning; dlssnr/DlssNr_DetailStability.h
+// decides which frames run it and precompile/dlssnr_detail_stability_rule.h is the per-pixel rule.
 //
-// One object serves one working size on one device. Its history and its output are sized at construction; a different size gets
-// a new object, and the old one is parked with the pass's other retired objects rather than freed, because the recordings that
-// used it may still be on the GPU.
+// One object serves one working size on one device. Its history and its output are sized at construction; a different
+// size gets a new object, and the old one is parked with the pass's other retired objects rather than freed, because
+// the recordings that used it may still be on the GPU.
 
 #include <d3d12.h>
 #include <d3dx/d3dx12.h>
@@ -20,7 +20,8 @@
 class DlssNr_DetailStability_Dx12 : public Shader_Dx12
 {
   public:
-    // Where in the motion texture this frame's vectors lie; mapped point-wise onto the working size, the cadence's rule.
+    // Where in the motion texture this frame's vectors lie; mapped point-wise onto the working size, the cadence's
+    // rule.
     struct Region
     {
         uint32_t baseX = 0;
@@ -71,8 +72,8 @@ class DlssNr_DetailStability_Dx12 : public Shader_Dx12
     void* _mappedConstants[DLSSNR_DETAILSTABILITY_NUM_OF_HEAPS] = {};
     uint32_t _heapIndex = 0;
 
-    // Last frame's and this frame's, swapped every dispatch, so no pixel reads a neighbour another thread is writing. RGBA16F:
-    // .xyz the filtered edit, .w the input. Both rest in NON_PIXEL_SHADER_RESOURCE between dispatches.
+    // Last frame's and this frame's, swapped every dispatch, so no pixel reads a neighbour another thread is writing.
+    // RGBA16F: .xyz the filtered edit, .w the input. Both rest in NON_PIXEL_SHADER_RESOURCE between dispatches.
     ID3D12Resource* _history[2] = {};
     ID3D12Resource* _out = nullptr; // what the resolve reads; rests in NON_PIXEL_SHADER_RESOURCE
     int _current = 0;
@@ -93,9 +94,9 @@ class DlssNr_DetailStability_Dx12 : public Shader_Dx12
         return InDevice == _device && InWidth == _width && InHeight == _height;
     }
 
-    // InAnswer is the model's answer at this object's size, readable and left so. Returns the filtered answer, readable,
-    // valid until the next Filter; nullptr if this object could not be built or the pass could not be recorded. Binds its own
-    // descriptor heap and root signature: the caller re-binds its own afterwards.
+    // InAnswer is the model's answer at this object's size, readable and left so. Returns the filtered answer,
+    // readable, valid until the next Filter; nullptr if this object could not be built or the pass could not be
+    // recorded. Binds its own descriptor heap and root signature: the caller re-binds its own afterwards.
     ID3D12Resource* Filter(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InAnswer,
                            const Settings& InSettings);
 };

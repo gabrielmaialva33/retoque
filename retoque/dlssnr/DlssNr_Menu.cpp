@@ -1272,9 +1272,9 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
 // without its shader cannot run it, so none of them is offered the control -- a cadence saved in the ini that
 // does nothing here gets one line saying so instead. The frame-generation opt-in exists only for a cadence
 // above 1, and so does the status line.
-// The light limiter at any cadence (docs/dlssnr/design/light-limiter.md). It runs on the D3D12 resolve's answer, so native Vulkan
-// and the driver proxy have nothing for it to act on, and a build without the cadence shader does not carry its bytecode:
-// none of them is offered the control.
+// The light limiter at any cadence (docs/dlssnr/design/light-limiter.md). It runs on the D3D12 resolve's answer, so
+// native Vulkan and the driver proxy have nothing for it to act on, and a build without the cadence shader does not
+// carry its bytecode: none of them is offered the control.
 static void RenderLightLimiter(Config* config, bool nativeVulkan)
 {
     if (nativeVulkan || config->DlssNrUseProxy.value_or_default() || !DlssNr::CadenceAvailable())
@@ -1299,8 +1299,9 @@ static void RenderLightLimiter(Config* config, bool nativeVulkan)
                "\nCompare.");
 }
 
-// Detail stability (docs/dlssnr/design/detail-stability.md): the model's edit filtered over time. It runs on the D3D12 resolve's
-// answer, so native Vulkan and the driver proxy have nothing for it to act on and are not offered the control.
+// Detail stability (docs/dlssnr/design/detail-stability.md): the model's edit filtered over time. It runs on the D3D12
+// resolve's answer, so native Vulkan and the driver proxy have nothing for it to act on and are not offered the
+// control.
 static void RenderDetailStability(Config* config, bool nativeVulkan)
 {
     if (nativeVulkan || config->DlssNrUseProxy.value_or_default())
@@ -1310,13 +1311,14 @@ static void RenderDetailStability(Config* config, bool nativeVulkan)
     if (MenuLayout::Checkbox(Localization::Label("Detail stability###nrDetailStability"), &stability))
         config->DlssNrDetailStability = stability;
 
-    HelpMarker("Stops fine detail from boiling. The model's edit is filtered over time: last frame's, moved with the"
-               "\ngame's motion vectors, is clipped to the range of the current edit around the pixel and thrown away"
-               "\nwhere the picture under it changed, then blended with the new one. It is not a blend of old answers:"
-               "\nwhere the picture moved, the model's answer is shown as it is.\n\nNeeds the game's depth and motion."
-               "\nIt stands down before the upscaler, with a model cadence above 1 and with frame generation. Costs three"
-               "\ntextures and a pass a frame while on; off costs nothing. Measure it with \"Measure detail\" under"
-               "\nCompare, and look for ghosting behind moving things.");
+    HelpMarker(
+        "Stops fine detail from boiling. The model's edit is filtered over time: last frame's, moved with the"
+        "\ngame's motion vectors, is clipped to the range of the current edit around the pixel and thrown away"
+        "\nwhere the picture under it changed, then blended with the new one. It is not a blend of old answers:"
+        "\nwhere the picture moved, the model's answer is shown as it is.\n\nNeeds the game's depth and motion."
+        "\nIt stands down before the upscaler, with a model cadence above 1 and with frame generation. Costs three"
+        "\ntextures and a pass a frame while on; off costs nothing. Measure it with \"Measure detail\" under"
+        "\nCompare, and look for ghosting behind moving things.");
 
     if (!stability)
         return;
@@ -1325,8 +1327,9 @@ static void RenderDetailStability(Config* config, bool nativeVulkan)
     if (DeferredSlider("Detail stability blend###nrDetailStabilityBlend", &blend, 0.05f, 1.0f, 0.15f))
         config->DlssNrDetailStabilityBlend = blend;
 
-    HelpMarker("How much of the new frame is let in each frame. At 0.15 the filtered history keeps a weight of 0.85; lower is"
-               "\nsteadier and trails more; 1 is no filter.");
+    HelpMarker(
+        "How much of the new frame is let in each frame. At 0.15 the filtered history keeps a weight of 0.85; lower is"
+        "\nsteadier and trails more; 1 is no filter.");
 
     bool hold = config->DlssNrDetailStabilityHold.value_or_default();
     if (MenuLayout::Checkbox(Localization::Label("Hold repeated frames###nrDetailStabilityHold"), &hold))

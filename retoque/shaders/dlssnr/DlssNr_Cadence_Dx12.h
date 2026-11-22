@@ -69,7 +69,8 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
         bool passthrough = false; // the frame is already tone mapped: its values are its light
         bool regional = false;    // LimitLight: the regional limiter (per tile) instead of the whole picture's
         float regionStep = 0.0f;  // DlssNr::LightLimit::RegionStep
-        float regionMotion = 0.0f; // DlssNr::LightLimit::RegionMotionPixels: working pixels a frame at which a tile is not held
+        float regionMotion =
+            0.0f; // DlssNr::LightLimit::RegionMotionPixels: working pixels a frame at which a tile is not held
     };
 
   private:
@@ -142,8 +143,9 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     ID3D12Resource* _lightGrid = nullptr;  // R32G32F, kLightGrid square: summed light of the shown answer, the proxy
     ID3D12Resource* _lightState = nullptr; // R32F 4x1: shown light, frame light, valid, gain (stops)
 
-    // Light-only objects (the regional limiter): a tile grid of the answer's light, the proxy's, the motion and the weight, and
-    // the per-tile state, four R32F texels a tile (shown light, tile light, valid, gain). The state rests in UNORDERED_ACCESS.
+    // Light-only objects (the regional limiter): a tile grid of the answer's light, the proxy's, the motion and the
+    // weight, and the per-tile state, four R32F texels a tile (shown light, tile light, valid, gain). The state rests
+    // in UNORDERED_ACCESS.
     bool _lightOnly = false;
     UINT _tilesX = 0;
     UINT _tilesY = 0;
@@ -240,10 +242,10 @@ class DlssNr_Cadence_Dx12 : public Shader_Dx12
     bool Fade(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
               ID3D12Resource* InAnswer, const Smooth& InSmooth);
 
-    // A light-only object: InAnswer (readable, the answer the resolve would read) held to the light limit, the whole picture's
-    // or each tile's (InSmooth.regional), into the object's own surface, which is returned readable and stays so. Nothing else
-    // is written. InSmooth.limit and limitReset are the gate's decision. nullptr if this object is not light-only, could not be
-    // built, or the pass could not be recorded.
+    // A light-only object: InAnswer (readable, the answer the resolve would read) held to the light limit, the whole
+    // picture's or each tile's (InSmooth.regional), into the object's own surface, which is returned readable and stays
+    // so. Nothing else is written. InSmooth.limit and limitReset are the gate's decision. nullptr if this object is not
+    // light-only, could not be built, or the pass could not be recorded.
     ID3D12Resource* LimitLight(ID3D12GraphicsCommandList* InCmdList, const Frame& InFrame, ID3D12Resource* InUiAlpha,
                                const Smooth& InSmooth, ID3D12Resource* InAnswer);
 

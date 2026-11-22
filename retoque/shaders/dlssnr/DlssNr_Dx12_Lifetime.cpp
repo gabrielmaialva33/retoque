@@ -662,8 +662,8 @@ void ParkNrUiMask(DlssNr_UiMask_Dx12*& uiMask)
     g_nrRetired.push_back(r);
 }
 
-// Detail stability owns its history, output, descriptor heaps and constants, which the last recordings still reference; a new
-// working size, the key off or a route that cannot run it parks it rather than deleting it.
+// Detail stability owns its history, output, descriptor heaps and constants, which the last recordings still reference;
+// a new working size, the key off or a route that cannot run it parks it rather than deleting it.
 void ParkNrDetailStability(DlssNr_DetailStability_Dx12*& detailStability)
 {
     if (!detailStability)

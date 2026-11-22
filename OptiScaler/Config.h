@@ -476,21 +476,22 @@ class Config
     // See docs/dlssnr/design/exposure-governor.md.
     CustomOptional<bool> DlssNrExposureGovernor { false };
 
-    // The light limiter at any cadence: the cadence smoothing's limiter, which held the mean light of what the cadence shows
-    // to 1.5 stops a second while the frame's own light holds still, on the answer of any frame -- so a default single pass
-    // on every frame has it too. 0 off; 1 the whole picture's light; 2 the light of each 32 pixel tile (Skynizz's anti
-    // light pop-in: 0.75 stops a second where the tile's own light held still, released by a real change or by motion), the
-    // band a tile wide and the detail finer than it untouched. Display only: the model's own history stays the model's.
-    // Anything else reads as 0. D3D12 only. Off allocates and dispatches nothing. See docs/dlssnr/design/light-limiter.md.
+    // The light limiter at any cadence: the cadence smoothing's limiter, which held the mean light of what the cadence
+    // shows to 1.5 stops a second while the frame's own light holds still, on the answer of any frame -- so a default
+    // single pass on every frame has it too. 0 off; 1 the whole picture's light; 2 the light of each 32 pixel tile
+    // (Skynizz's anti light pop-in: 0.75 stops a second where the tile's own light held still, released by a real
+    // change or by motion), the band a tile wide and the detail finer than it untouched. Display only: the model's own
+    // history stays the model's. Anything else reads as 0. D3D12 only. Off allocates and dispatches nothing. See
+    // docs/dlssnr/design/light-limiter.md.
     CustomOptional<uint32_t> DlssNrLightLimiter { 0 };
 
     // Detail stability: a temporal filter on the model's edit (log of its answer over its input) with the history
-    // reprojected by the game's motion vectors, clipped to the current 3x3 and rejected where the input moved under it, so
-    // fine detail that the model re-decides every frame stops boiling. Blend is the weight of the current frame per frame
-    // (0.05 to 1, 0.15 by default; 1 is no filter). Hold repeats shows an input frame that repeats exactly as it was before.
-    // It needs the game's depth and motion and stands down before the upscaler, with a cadence above 1 and with frame
-    // generation. Display only: the model's own history stays the model's. D3D12 only. Off by default, which changes
-    // nothing. This is not the temporal filtering of the answer that README.md records as a dead end: see
+    // reprojected by the game's motion vectors, clipped to the current 3x3 and rejected where the input moved under it,
+    // so fine detail that the model re-decides every frame stops boiling. Blend is the weight of the current frame per
+    // frame (0.05 to 1, 0.15 by default; 1 is no filter). Hold repeats shows an input frame that repeats exactly as it
+    // was before. It needs the game's depth and motion and stands down before the upscaler, with a cadence above 1 and
+    // with frame generation. Display only: the model's own history stays the model's. D3D12 only. Off by default, which
+    // changes nothing. This is not the temporal filtering of the answer that README.md records as a dead end: see
     // docs/dlssnr/design/detail-stability.md.
     CustomOptional<bool> DlssNrDetailStability { false };
     CustomOptional<float> DlssNrDetailStabilityBlend { 0.15f };

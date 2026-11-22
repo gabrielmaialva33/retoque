@@ -33,11 +33,12 @@ constexpr Mode Requested(uint32_t configured)
     return configured == 1 ? Mode::Global : configured == 2 ? Mode::Regional : Mode::Off;
 }
 
-// The regional limiter's numbers, fixed as the global one's are. Skynizz: tent about 36 px, 0.15 stop of the region's own
-// light as the gate, 0.75 stop/s, released as the step nears 0.35 stop and by motion over about 6 px a frame.
-constexpr uint32_t kRegionTile = 32;       // working pixels per tile edge; the band is one tile wide
-constexpr float kRegionRate = 0.75f;       // stops per second
-constexpr float kRegionReleaseLow = 0.30f; // drift between the answer and what was shown, in stops, where the hold starts to let go
+// The regional limiter's numbers, fixed as the global one's are. Skynizz: tent about 36 px, 0.15 stop of the region's
+// own light as the gate, 0.75 stop/s, released as the step nears 0.35 stop and by motion over about 6 px a frame.
+constexpr uint32_t kRegionTile = 32; // working pixels per tile edge; the band is one tile wide
+constexpr float kRegionRate = 0.75f; // stops per second
+constexpr float kRegionReleaseLow =
+    0.30f; // drift between the answer and what was shown, in stops, where the hold starts to let go
 constexpr float kRegionReleaseHigh = 0.40f; // ... and has let go
 constexpr float kRegionMotionPixels = 6.0f; // mean motion of a tile, in pixels of a frame, at which it is not held
 
@@ -76,9 +77,10 @@ class Gate
     bool _limited = false; // the last frame the gate was asked about was limited
 
   public:
-    // otherLimiter: the cadence's own limiter held this frame (smoothing on a running cadence). resetPending: the model's
-    // history resets this frame -- the game's reset, a tuning pulse -- so what it says now is a new decision.
-    Decision Decide(Mode mode, bool otherLimiter, uint64_t present, int64_t nowMs, uint64_t signature, bool resetPending)
+    // otherLimiter: the cadence's own limiter held this frame (smoothing on a running cadence). resetPending: the
+    // model's history resets this frame -- the game's reset, a tuning pulse -- so what it says now is a new decision.
+    Decision Decide(Mode mode, bool otherLimiter, uint64_t present, int64_t nowMs, uint64_t signature,
+                    bool resetPending)
     {
         Decision d;
         d.mode = mode;

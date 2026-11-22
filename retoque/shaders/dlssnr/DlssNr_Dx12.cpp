@@ -1544,8 +1544,8 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (!cfg.DlssNrUiProtection.value_or_default() || !frame.PresentSource)
         ParkNrUiMask(g_nr.uiMask);
 
-    // The light limiter switched off (docs/dlssnr/design/light-limiter.md): its surfaces go back once the GPU is done with
-    // them.
+    // The light limiter switched off (docs/dlssnr/design/light-limiter.md): its surfaces go back once the GPU is done
+    // with them.
     if (DlssNr::LightLimit::Requested(cfg.DlssNrLightLimiter.value_or_default()) == DlssNr::LightLimit::Mode::Off)
         ParkNrCadence(g_nr.lightLimiter);
 
@@ -2250,10 +2250,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     if (exposureGovernorWanted && !holdingColor && !g_nr.exposureLatch.Latched() &&
         DlssNr::Exposure::ValidSample(g_nr.gameExposure))
     {
-        const float governedSeconds =
-            g_nr.exposureGovernorAt == std::chrono::steady_clock::time_point {}
-                ? 0.0f
-                : std::chrono::duration<float>(now - g_nr.exposureGovernorAt).count();
+        const float governedSeconds = g_nr.exposureGovernorAt == std::chrono::steady_clock::time_point {}
+                                          ? 0.0f
+                                          : std::chrono::duration<float>(now - g_nr.exposureGovernorAt).count();
         g_nr.exposureGovernorAt = now;
         const float impliedWhite = g_nr.gamePreExposure / g_nr.gameExposure;
         const auto governed = g_nr.exposureGovernor.Update(
@@ -3328,11 +3327,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         }
 
-        // Detail stability (docs/dlssnr/design/detail-stability.md, [DlssNr] DetailStability, off by default): the model's
-        // edit filtered over time, the history moved with the game's vectors, clipped to the current 3x3 and thrown away where
-        // the input moved under it. After the record, so a carried frame still carries the model's own edit; into a surface of
-        // its own, so nothing the model reads or writes changes; the light limiter below reads what it made. Off, nothing is
-        // built and nothing is dispatched.
+        // Detail stability (docs/dlssnr/design/detail-stability.md, [DlssNr] DetailStability, off by default): the
+        // model's edit filtered over time, the history moved with the game's vectors, clipped to the current 3x3 and
+        // thrown away where the input moved under it. After the record, so a carried frame still carries the model's
+        // own edit; into a surface of its own, so nothing the model reads or writes changes; the light limiter below
+        // reads what it made. Off, nothing is built and nothing is dispatched.
         ID3D12Resource* shownAnswer = finalOutput;
         {
             DlssNr::DetailStability::Inputs stability;
@@ -3369,8 +3368,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
                     stabilityFrame.proxy = modelInput;
                     stabilityFrame.motion = cadenceFrame.motion;
                     stabilityFrame.motionRegion = { cadenceFrame.motionRegion.baseX, cadenceFrame.motionRegion.baseY,
-                                                    cadenceFrame.motionRegion.width,
-                                                    cadenceFrame.motionRegion.height };
+                                                    cadenceFrame.motionRegion.width, cadenceFrame.motionRegion.height };
                     stabilityFrame.mvToWorkX = cadenceFrame.mvToWorkX;
                     stabilityFrame.mvToWorkY = cadenceFrame.mvToWorkY;
                     stabilityFrame.uiAlpha = uiAlpha;
@@ -3390,11 +3388,11 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             }
         }
 
-        // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter, off by default): the
-        // answer the resolve is about to read, with the light of the whole picture or of each tile held to the last
-        // frame's where its own light stood still. After the record, so what a carried frame carries is still the model's
-        // own edit; on every frame the cadence's own limiter did not hold; into a surface of its own, so nothing the
-        // model reads or writes changes. Off, nothing is built and nothing is dispatched.
+        // The light limiter at any cadence (docs/dlssnr/design/light-limiter.md, [DlssNr] LightLimiter, off by
+        // default): the answer the resolve is about to read, with the light of the whole picture or of each tile held
+        // to the last frame's where its own light stood still. After the record, so what a carried frame carries is
+        // still the model's own edit; on every frame the cadence's own limiter did not hold; into a surface of its own,
+        // so nothing the model reads or writes changes. Off, nothing is built and nothing is dispatched.
         const auto lightMode = DlssNr::LightLimit::Requested(cfg.DlssNrLightLimiter.value_or_default());
         if (lightMode == DlssNr::LightLimit::Mode::Off)
         {
