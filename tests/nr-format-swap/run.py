@@ -101,6 +101,8 @@ struct NrState
     ID3D12Resource* colorSmall = nullptr;
     ID3D12Resource* outputNative = nullptr;
     ID3D12Resource* passPing = nullptr;
+    ID3D12Resource* passClampScratch = nullptr;
+    ID3D12Resource* passClampScratch2 = nullptr;
     struct AltSurfaces
     {
         DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
@@ -114,6 +116,8 @@ struct NrState
         ID3D12Resource* colorSmall = nullptr;
         ID3D12Resource* outputNative = nullptr;
         ID3D12Resource* passPing = nullptr;
+        ID3D12Resource* passClampScratch = nullptr;
+        ID3D12Resource* passClampScratch2 = nullptr;
     } alt;
     DlssNr::FormatTwin::Transfer surfaceTransfer {};
     bool reset = true;

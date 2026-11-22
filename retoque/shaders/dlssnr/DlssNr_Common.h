@@ -258,6 +258,15 @@ struct DlssNrFrameInfo
     // output in the caller's list. An untracked history made only of these can be left behind whole when passes
     // are raised (docs/dlssnr/design/chain-in-flight.md, "Live opt-in from the upscaler's output").
     bool AfterUpscaleRecording = false;
+
+    // Motion-vector jitter contract from the game's upscaler evaluate
+    // (docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md).
+    bool MotionVectorsJittered = false;
+    bool HaveJitter = false;
+    float JitterOffsetX = 0.0f;
+    float JitterOffsetY = 0.0f;
+    // Monotonic render-frame sequence when captured guides travel to Present (0 when taken from the direct counter).
+    uint64_t RenderSequence = 0;
 };
 
 struct alignas(256) DlssNrConstants

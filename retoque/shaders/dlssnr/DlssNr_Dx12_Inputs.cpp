@@ -110,6 +110,7 @@ DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)
     frame.DepthInverted = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_DepthInverted) != 0;
     frame.ColourIsLinearHdr = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_IsHDR) != 0;
     frame.MotionVectorsLowResolution = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes) != 0;
+    frame.MotionVectorsJittered = (createFlags & NVSDK_NGX_DLSS_Feature_Flags_MVJittered) != 0;
     // The picture this evaluate is, judged by the seam that asked first (DlssNr_PictureGate.h).
     frame.PictureEpoch = DlssNr::Pictures::EvaluateEpoch(params);
 
@@ -149,6 +150,19 @@ DlssNrFrameInfo GatherGuideFrame(NVSDK_NGX_Parameter* params)
     if (params->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &frame.MvScaleY) != NVSDK_NGX_Result_Success ||
         !std::isfinite(frame.MvScaleY) || frame.MvScaleY == 0.0f)
         frame.MvScaleY = 1.0f;
+
+    {
+        float jitterX = 0.0f;
+        float jitterY = 0.0f;
+        if (params->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &jitterX) == NVSDK_NGX_Result_Success &&
+            params->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &jitterY) == NVSDK_NGX_Result_Success &&
+            std::isfinite(jitterX) && std::isfinite(jitterY))
+        {
+            frame.HaveJitter = true;
+            frame.JitterOffsetX = jitterX;
+            frame.JitterOffsetY = jitterY;
+        }
+    }
 
     return frame;
 }

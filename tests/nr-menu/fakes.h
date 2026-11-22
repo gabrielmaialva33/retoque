@@ -1,4 +1,5 @@
 #include <dlssnr/DlssNr_PassSettings.h>
+#include <dlssnr/DlssNr_PassClamp.h>
 #include <shaders/dlssnr/DlssNr_Common.h>
 #include <dlssnr/DlssNr_Cadence.h>
 #include <dlssnr/DlssNr_LightLimit.h>
@@ -190,6 +191,9 @@ struct Config
     OptionalU32 DlssNrStyle;
     OptionalFloat DlssNrIntensity, DlssNrLocalStructure, DlssNrLocalTone, DlssNrSkinStructure;
     OptionalBool DlssNrAutoMask;
+    OptionalBool DlssNrPassClamp;
+    OptionalFloat DlssNrPassFeedback { 1.0f };
+    OptionalBool DlssNrDejitterMotionVectors;
     struct Timing
     {
         bool Enabled = false;
@@ -273,6 +277,10 @@ const char* MultipassStatus() { return "Restart required"; }
 bool PreviousModelRetained() { return false; }
 bool cadenceAvailable = true;
 bool CadenceAvailable() { return cadenceAvailable; }
+bool passClampAvailable = true;
+bool PassClampAvailable() { return passClampAvailable; }
+bool dejitterAvailable = true;
+bool DejitterAvailable() { return dejitterAvailable; }
 const char* CadenceStatus() { return DlssNr::Cadence::Describe(DlssNr::Cadence::Reason::Carried, 2); }
 } // namespace DlssNr
 

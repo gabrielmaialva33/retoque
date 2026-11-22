@@ -755,6 +755,14 @@ class Config
     // Bounded, opt-in sequential model passes. Native Vulkan uses the master single pass.
     CustomOptional<uint32_t> DlssNrPasses { 1 };
     CustomOptional<bool> DlssNrIndividualPassSettings { false };
+    // D3D12 interpass hand-off between sequential model passes (docs/dlssnr/design/2026-11-22-interpass-clamp.md):
+    // PassClamp restores each pass's output hue-preservingly against that pass's own input; PassFeedback blends
+    // toward that input (1.0 = unchanged). Both off by default.
+    CustomOptional<bool> DlssNrPassClamp { false };
+    CustomOptional<float> DlssNrPassFeedback { 1.0f };
+    // De-jitter render-resolution motion vectors handed to post-upscale NR on D3D12
+    // (docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md). Off by default.
+    CustomOptional<bool> DlssNrDejitterMotionVectors { false };
 
     // Opt-in timestamp collection. Interval counts each GPU timing stream's own eligible events (NR evaluations,
     // Present-route recordings, guide captures), never presented frames; the Present CPU stream does not use it.

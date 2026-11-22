@@ -145,6 +145,12 @@ Sequential model passes	Passes successives du modèle
 Requested passes	Passes demandées
 Last evaluation: %u successful model passes	Dernière évaluation : %u passes du modèle réussies
 Individual pass settings	Réglages par passe
+Interpass clamp	Limitation inter-passe
+Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	Avant que la passe N+1 lise la réponse de la passe N, la limite en préservant la teinte par rapport à l'entrée propre de la passe N et assainit NaN/Inf. D3D12 uniquement; désactivé reste inchangé.
+Pass feedback	Rétroaction inter-passe
+Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	Mélange la réponse de chaque passe vers sa propre entrée avant de la transmettre à la passe suivante (1.00 = réponse complète, 0.00 = entrée inchangée) et assainit NaN/Inf. D3D12 uniquement.
+De-jitter motion vectors	Retirer le jitter des vecteurs de mouvement
+When the game supplies render-resolution jittered motion vectors, removes the camera jitter step since the last render frame before NR reads them. Aimed at fine detail shimmer after DLSS Super Resolution. Resets on cuts, skipped frames and size changes. D3D12 only; native Vulkan is not covered. Off is unchanged.	Lorsque le jeu fournit des vecteurs de mouvement avec jitter à la résolution de rendu, retire le pas de jitter de caméra depuis la dernière image rendue avant que NR ne les lise. Vise le scintillement des détails fins après DLSS Super Resolution. Se réinitialise lors des coupures, images sautées et changements de taille. D3D12 uniquement; Vulkan natif n'est pas couvert. Désactivé reste inchangé.
 Edit pass	Modifier la passe
 Editing pass 1	Modification de la passe 1
 Uncheck Override to inherit the live master value.	Décochez Remplacer pour hériter de la valeur principale actuelle.

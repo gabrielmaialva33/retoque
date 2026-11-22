@@ -318,6 +318,22 @@ tier = "host"
 timeout = 300
 summary = "Portable multi-pass chain helpers."
 
+[nr-pass-clamp]
+path = "nr-pass-clamp"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "D3D12 interpass clamp and PassFeedback between sequential passes: hue-preserving CubeScaleResidual, NaN/Inf proxy fallback, passthrough super-white preservation, zero SRV/UAV aliasing and same-temporal-age routing across 2..10 passes (eight rule mutants and four source mutants rejected). No GPU."
+
+[nr-dejitter]
+path = "nr-dejitter"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "D3D12 post-upscale motion-vector de-jittering ([DlssNr] DejitterMotionVectors): eligibility, (jitterNow - jitterPrev) / mvScale sign cancellation, sequence/contract reset priming, overflow guards and lifetime wiring (eight rule mutants and six source mutants rejected). No GPU."
+
 [nr-sl-native-nr]
 path = "nr-sl-native-nr"
 domain = "nr"

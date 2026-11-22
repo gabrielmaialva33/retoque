@@ -53,6 +53,8 @@ int main()
     c.DlssNrUseProxy.value = false;
     run();
     assert(ImGui::Saw("Requested passes###nrPassCount"));
+    assert(!ImGui::Saw("Interpass clamp###nrPassClamp"));
+    assert(!ImGui::Saw("Pass feedback###nrPassFeedback"));
     assert(!ImGui::Saw("Edit pass###nrEditPass"));
     assert(c.writes == 0);
     ImGui::Reset();
@@ -89,6 +91,24 @@ int main()
     ImGui::actions["Edit pass###nrEditPass"] = 3;
     run();
     assert(c.snapshot.Count == 3);
+    assert(ImGui::Saw("Interpass clamp###nrPassClamp"));
+    assert(ImGui::Saw("Pass feedback###nrPassFeedback"));
+    ImGui::Reset();
+    ImGui::actions["Interpass clamp###nrPassClamp"] = true;
+    ImGui::actions["Pass feedback###nrPassFeedback"] = 0.65;
+    run();
+    assert(c.DlssNrPassClamp.value);
+    assert(std::abs(c.DlssNrPassFeedback.value - 0.65f) < 1e-5f);
+    ImGui::Reset();
+    ImGui::actions["Reset##passFeedback"] = true;
+    run();
+    assert(c.DlssNrPassFeedback.value == 1.0f);
+    DlssNr::passClampAvailable = false;
+    ImGui::Reset();
+    run();
+    assert(!ImGui::Saw("Interpass clamp###nrPassClamp"));
+    assert(!ImGui::Saw("Pass feedback###nrPassFeedback"));
+    DlssNr::passClampAvailable = true;
     ImGui::Reset();
     ImGui::actions["3/Local structure/Override###override"] = true;
     ImGui::actions["3/Local tone/Override###override"] = true;
@@ -456,6 +476,22 @@ int main()
         auto expected = DlssNrResolvedPassSettings {};
         expected.Preset = simple.master.Preset; // looks never touch the weight set
         assert(simple.master == expected && simple.DlssNrTransferStrength.value == 1.0f);
+    }
+    // De-jitter motion vectors: D3D12 only, hidden on native Vulkan or without shader bytecode.
+    {
+        Config dj {};
+        ImGui::Reset();
+        DlssNr::RenderDejitterControl(&dj, true);
+        assert(!ImGui::Saw("De-jitter motion vectors###nrDejitterMvs"));
+        DlssNr::dejitterAvailable = false;
+        ImGui::Reset();
+        DlssNr::RenderDejitterControl(&dj, false);
+        assert(!ImGui::Saw("De-jitter motion vectors###nrDejitterMvs"));
+        DlssNr::dejitterAvailable = true;
+        ImGui::Reset();
+        ImGui::actions["De-jitter motion vectors###nrDejitterMvs"] = true;
+        DlssNr::RenderDejitterControl(&dj, false);
+        assert(ImGui::Saw("De-jitter motion vectors###nrDejitterMvs") && dj.DlssNrDejitterMotionVectors.value);
     }
     std::cout << "PASS: simple/full visibility, same Config writes, retained hidden settings, preset and backend "
                  "gates, read-only timing and balanced item widths\n";

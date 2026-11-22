@@ -409,6 +409,14 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Cadence_Dx12.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\dlssnr_cadence_rule.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_Cadence_Shader.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PassClamp.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_PassClamp_Dx12.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\precompile\dlssnr_pass_clamp_rule.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_PassClamp_Shader.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_Dejitter.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\DlssNr_Dejitter_Dx12.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\precompile\dlssnr_dejitter_rule.h" />
+    <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_Dejitter_Shader.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_PeripheryColour_Shader.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_PeripheryGuides_Shader.h" />
     <ClInclude Include="..\retoque\shaders\dlssnr\precompile\DlssNr_PeripheryUnpack_Shader.h" />
@@ -941,6 +949,8 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_GuideMatch_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_GuideMatch_Vk.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Cadence_Dx12.cpp" />
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_PassClamp_Dx12.cpp" />
+    <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Dejitter_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Periphery_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_DetailStats_Dx12.cpp" />
     <ClCompile Include="..\retoque\shaders\dlssnr\DlssNr_Pulse_Dx12.cpp" />

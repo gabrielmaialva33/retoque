@@ -22,6 +22,12 @@ struct Transfer // DlssNr_FormatTwin.h; g_nr holds one by value
 {
 };
 } // namespace DlssNr::FormatTwin
+namespace DlssNr::Dejitter
+{
+struct State // DlssNr_Dejitter.h; g_nr holds one by value
+{
+};
+} // namespace DlssNr::Dejitter
 using HMODULE = void*;
 using HANDLE = void*;
 using UINT64 = uint64_t;
