@@ -124,6 +124,7 @@ pub fn facts_for_with_ini(
             .iter()
             .chain(RTX30_NR.iter())
             .chain(RTX30_SM86_NR.iter())
+            .chain(ADA_MFG.iter())
             .filter_map(|(section, key, _)| {
                 ini.get(section, key)
                     .map(str::trim)
@@ -200,8 +201,16 @@ pub const RTX30_NR: [(&str, &str, &str); 2] = [
 ];
 const RTX30_SM86_NR: [(&str, &str, &str); 1] = [("DlssNr", "WorkingScale", "0.5")];
 const RTX30_NR_KEEP: [(&str, &str); 1] = [("DlssNr", "WorkingScale")];
+/// Multi Frame Generation on RTX 40 (Ada): the game's own DLSS-G gives anything below Blackwell one generated frame;
+/// Retoque's unlock ([DLSSG] AdaMfgUnlock, retoque/framegen/dlssg/MfgUnlock.h) lets it offer 3x, 4x and 6x. Under
+/// Proton it needs the game's own nvngx_dlssg.dll instead of the driver's Wine copy, which Retoque does by default
+/// since [DLSSG] AdaPreferGameProvider (The Witcher 3, RTX 4090, Proton, 2026-11-22: 2x -> 4x). The multiplier stays
+/// the game's or the menu's choice. An explicit value in the game (false included) is the user's and is kept.
+pub const ADA_MFG: [(&str, &str, &str); 1] = [("DLSSG", "AdaMfgUnlock", "true")];
+const ADA_MFG_KEEP: [(&str, &str); 1] = [("DLSSG", "AdaMfgUnlock")];
+const ADA_FIELD_EVIDENCE: &str = "The Witcher 3, RTX 4090, Proton, 2026-11-22";
 /// Recommendations that tune what is already there; they never choose a frame-generation provider.
-pub const PROFILE_IDS: [&str; 2] = ["rtx30_nr", "sm86_mfg"];
+pub const PROFILE_IDS: [&str; 3] = ["rtx30_nr", "sm86_mfg", "ada_mfg"];
 const FIELD_EVIDENCE: &str = "Dying Light: The Beast, RTX 3060, Windows, 2026-11-10";
 
 /// The profile edits whose value differs from the game's (numbers compare as numbers: the menu saves 1.500000). A key in
@@ -215,6 +224,7 @@ fn missing(edits: &[(&str, &str, &str)], game: &GameFacts) -> Vec<(String, Strin
         SM86_MFG_KEEP
             .iter()
             .chain(RTX30_NR_KEEP.iter())
+            .chain(ADA_MFG_KEEP.iter())
             .any(|(s, k)| s.eq_ignore_ascii_case(section) && k.eq_ignore_ascii_case(key))
     };
     edits
@@ -347,6 +357,27 @@ pub fn recommend(gpu: Option<&Gpu>, game: &GameFacts) -> Vec<Recommendation> {
             },
         });
     }
+    // MFG on RTX 40: the game's DLSS-G, unlocked; the game already chose frame generation, so no provider is picked.
+    // Not with sm86 in the game: it replaces the DLSS-G provider, and the unlock knows only NVIDIA's builds.
+    if gpu.arch == Arch::Ada && game.installed && game.has_dlssg && !game.sm86_installed && !game.sm86_legacy {
+        let edits = missing(&ADA_MFG, game);
+        if !edits.is_empty() {
+            out.push(Recommendation {
+                id: "ada_mfg",
+                title_key: "rec.ada_mfg.title",
+                why_key: "rec.ada_mfg.why",
+                actions: ini_actions(edits),
+                needs: None,
+                evidence: {
+                    let mut facts = evidence(Some(gpu), game);
+                    facts.push(FactEvidence::new("evidence.field", ADA_FIELD_EVIDENCE));
+                    facts
+                },
+                caveat_key: None,
+                confidence: Confidence::StaticMatchUntested,
+            });
+        }
+    }
     // Peripheral compression is D3D12 only; an explicit other API from the last session gets no profile.
     if gpu.arch == Arch::Ampere && game.last_session_api.as_deref().is_none_or(|api| api == "D3D12") {
         let mut edits = missing(&RTX30_NR, game);
@@ -477,6 +508,74 @@ mod tests {
                 name: "dxgi.dll".into(),
             }],
         }
+    }
+
+    #[test]
+    fn ada_with_dlssg_unlocks_mfg_and_keeps_an_explicit_choice() {
+        let (mut game, target, mut status) = fixture();
+        game.dlss_anywhere = vec!["nvngx_dlssg.dll".into()];
+        status.optiscaler_proxies.push("dxgi.dll".into());
+        status.receipt = Some(receipt());
+        let unlocks = |arch, facts: &GameFacts| {
+            recommend(Some(&gpu(arch)), facts).iter().any(|r| {
+                r.id == "ada_mfg"
+                    && r.confidence == Confidence::StaticMatchUntested
+                    && r.actions.iter().any(|a| {
+                        matches!(a, Action::SetIni { section, key, value }
+                            if section == "DLSSG" && key == "AdaMfgUnlock" && value == "true")
+                    })
+            })
+        };
+        // Absent or auto: offered on Ada only, also under Proton (not experimental there).
+        for text in ["", "[DLSSG]\nAdaMfgUnlock=auto\n"] {
+            let ini = retoque_core::ini::Ini::parse(text.as_bytes());
+            let facts = facts_for_with_ini(&game, &target, Some(&status), &[], Some(&ini));
+            assert!(facts.has_dlssg);
+            assert!(unlocks(Arch::Ada, &facts), "{text:?}");
+            assert!(unlocks(
+                Arch::Ada,
+                &GameFacts {
+                    runtime: Runtime::Proton,
+                    ..facts.clone()
+                }
+            ));
+            for other in [Arch::Turing, Arch::Ampere, Arch::Blackwell] {
+                assert!(!unlocks(other, &facts), "{other:?}");
+            }
+            assert!(!unlocks(
+                Arch::Ada,
+                &GameFacts {
+                    has_dlssg: false,
+                    ..facts.clone()
+                }
+            ));
+            assert!(!unlocks(
+                Arch::Ada,
+                &GameFacts {
+                    sm86_installed: true,
+                    ..facts.clone()
+                }
+            ));
+            assert!(!unlocks(
+                Arch::Ada,
+                &GameFacts {
+                    installed: false,
+                    ..facts
+                }
+            ));
+        }
+        // Already on, or turned off by the user: nothing to propose.
+        for value in ["true", "false", " TRUE "] {
+            let ini = retoque_core::ini::Ini::parse(format!("[DLSSG]\nAdaMfgUnlock={value}\n").as_bytes());
+            let facts = facts_for_with_ini(&game, &target, Some(&status), &[], Some(&ini));
+            assert!(!unlocks(Arch::Ada, &facts), "{value:?}");
+            assert!(
+                recommend(Some(&gpu(Arch::Ada)), &facts)
+                    .iter()
+                    .all(|r| r.id != "ada_mfg")
+            );
+        }
+        assert!(PROFILE_IDS.contains(&"ada_mfg"));
     }
 
     #[test]

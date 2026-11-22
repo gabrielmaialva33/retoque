@@ -2660,6 +2660,16 @@ const TEXT: &[(&str, &str, &str)] = &[
         "O sm86 está instalado e este jogo tem DLSS-G: tira a geração de quadros do Retoque do caminho e, se o jogo ainda não tem uma escolha, pede dois quadros gerados para cada real (x3), que fica mais estável que x4 numa RTX 30. Abaixo de uns 30 quadros reais por segundo, escolha DLSS Balanceado ou Desempenho no jogo. Dá para mudar em Ajustes.",
     ),
     (
+        "rec.ada_mfg.title",
+        "Multi Frame Generation on your RTX 40",
+        "Geração de múltiplos quadros na sua RTX 40",
+    ),
+    (
+        "rec.ada_mfg.why",
+        "This game has DLSS frame generation, which gives an RTX 40 one generated frame per real one (x2). Retoque unlocks 3x, 4x and 6x in memory (no file is changed) and, under Proton, uses the game's own frame generation file. Choose the multiplier in the game, or with Override DLSSG Ratio in Retoque's in-game menu. You can turn it off in Settings.",
+        "Este jogo tem geração de quadros DLSS, que numa RTX 40 dá um quadro gerado para cada real (x2). O Retoque libera 3x, 4x e 6x na memória (nenhum arquivo é alterado) e, no Proton, usa o arquivo de geração de quadros do próprio jogo. Escolha o multiplicador no jogo, ou em Override DLSSG Ratio no menu do Retoque dentro do jogo. Dá para desligar em Ajustes.",
+    ),
+    (
         "rec.rtx30_nr.title",
         "Neural Rendering (NR) tuned for RTX 30",
         "Renderização neural (NR) ajustada para RTX 30",
