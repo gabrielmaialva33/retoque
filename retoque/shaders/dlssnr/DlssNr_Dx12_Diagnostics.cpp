@@ -1127,6 +1127,87 @@ float ResolveWhitePoint(int whitePointSource, float whitePointScale, float white
                                         g_nr.exposureLatch.Latched());
 }
 
+static int64_t BreaksNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+// One present's outcome, for the alternation the pass can make with the game's own frame (frame-breaks.md). The calls
+// of one present are one outcome (a second view or a second call in the chain's present declines by design and is not a
+// break): it ran if any of them did, and it is committed when the next present's first call arrives. Called with
+// g_nrMutex held. The alternation is logged either way; with SkipStandDown it also starts a hold.
+static void CommitFrameOutcome(bool ran, bool standDownOn, const char* why)
+{
+    namespace FB = DlssNr::FrameBreaks;
+    const int64_t ms = BreaksNowMs();
+    if (g_nr.skips.Note(ran, standDownOn, ms))
+    {
+        LOG_WARN("DLSS-NR: the pass alternated with the game's own frame (last skip: {}); holding it off for {} ms "
+                 "(SkipStandDown). {} frames run, {} skipped so far",
+                 why != nullptr ? why : "none", (long long) FB::kHoldMs, (unsigned long long) g_nr.skips.Ran(),
+                 (unsigned long long) g_nr.skips.Skipped());
+        return;
+    }
+    if (!standDownOn && !ran && g_nr.skips.Alternation() >= FB::kMinBreaks && ms - g_nr.skipLoggedMs > 10000)
+    {
+        g_nr.skipLoggedMs = ms;
+        LOG_INFO(
+            "DLSS-NR: frames between frames the pass ran on were shown as the game drew them ({} breaks in the last {} "
+            "evaluations, last reason: {}); SkipStandDown would hold the pass off instead of alternating",
+            g_nr.skips.Alternation(), FB::kWindow, why != nullptr ? why : "none");
+        g_nr.skips.ClearWindow();
+    }
+}
+
+void NoteFrameOutcome(bool ran, bool standDownOn, const char* why)
+{
+    const uint64_t present = State::Instance().frameCount;
+    if (present != 0 && g_nr.skipPresentValid && present == g_nr.skipPresent)
+    {
+        g_nr.skipPresentRan = g_nr.skipPresentRan || ran;
+        if (!ran && why != nullptr)
+            g_nr.skipWhy = why;
+        return;
+    }
+    if (g_nr.skipPresentValid)
+        CommitFrameOutcome(g_nr.skipPresentRan, standDownOn, g_nr.skipWhy);
+    g_nr.skipPresent = present;
+    g_nr.skipPresentRan = ran;
+    g_nr.skipWhy = ran ? nullptr : why;
+    g_nr.skipPresentValid = true;
+    if (present == 0)
+    {
+        CommitFrameOutcome(ran, standDownOn, g_nr.skipWhy);
+        g_nr.skipPresentValid = false;
+    }
+}
+
+// The model is sent a history reset on this evaluation. Said at most every ten seconds, with the cause.
+void NoteResetSent(bool frameReset, bool isPolicy, bool isSceneCut)
+{
+    namespace FB = DlssNr::FrameBreaks;
+    const int64_t ms = BreaksNowMs();
+    const auto cause = !frameReset  ? FB::ResetCause::Internal
+                       : isPolicy   ? FB::ResetCause::Policy
+                       : isSceneCut ? FB::ResetCause::SceneCut
+                                    : FB::ResetCause::Game;
+    g_nr.resetRate.Note(cause, ms);
+    if (!g_nr.resetRate.ShouldReport(ms))
+        return;
+    const auto s = g_nr.resetRate.Summarize(ms, FB::ResetRate::kReportMs);
+    LOG_INFO("DLSS-NR resets: {} sent to the model in the last 10 s (game {}, zero-guide policy {}, scene cut {}, this "
+             "fork's own {}); at most {} in one second; {} since the session began",
+             s.total, s.byCause[static_cast<size_t>(FB::ResetCause::Game)],
+             s.byCause[static_cast<size_t>(FB::ResetCause::Policy)],
+             s.byCause[static_cast<size_t>(FB::ResetCause::SceneCut)],
+             s.byCause[static_cast<size_t>(FB::ResetCause::Internal)], s.peakPerSecond,
+             (unsigned long long) g_nr.resetRate.Total());
+}
+
+// Whether an alternation is being held off this frame (SkipStandDown). Not a skip: the pass was not asked.
+bool FrameBreakHeld(bool enabled) { return g_nr.skips.StandDown(enabled, BreaksNowMs()); }
+
 // Every way out of the pass before it does anything is silent on purpose -- an evaluate that carries
 // no depth is normal and would otherwise print every frame forever. That silence is fine until the
 // pass does nothing at all and the log has no opinion about why.

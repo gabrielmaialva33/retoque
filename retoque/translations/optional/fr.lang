@@ -731,3 +731,6 @@ Median (ms)	Median (ms)
 Mean (ms)	Mean (ms)
 Slowest (ms)	Slowest (ms)
 %.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused
+# 2026-11-22: frame breaks (docs/dlssnr/design/frame-breaks.md): the control and its help.
+Hold NR off when it alternates	Suspendre NR quand il alterne
+A frame the pass skips -- a refused recording, a gate that is still settling -- is shown as the game drew\nit, so a pass that skips every other frame alternates the model's picture with the plain one. With this\non, three such breaks inside 32 evaluations hold the pass off for one second, with a status, instead of\nalternating every frame, and the model's history is reset when it resumes. The log counts the\nalternation either way. Off changes nothing.	Une image que la passe saute -- un enregistrement refusé, une porte qui se stabilise encore -- est affichée telle que le jeu l'a dessinée,\ndonc une passe qui saute une image sur deux alterne l'image du modèle et l'image simple. Activé,\ntrois de ces ruptures en 32 évaluations suspendent la passe pendant une seconde, avec un statut, au lieu\nd'alterner à chaque image, et l'historique du modèle est réinitialisé à la reprise. Le journal compte\nl'alternance dans tous les cas. Désactivé ne change rien.

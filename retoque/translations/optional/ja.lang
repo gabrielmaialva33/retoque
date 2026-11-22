@@ -731,3 +731,6 @@ Median (ms)	Median (ms)
 Mean (ms)	Mean (ms)
 Slowest (ms)	Slowest (ms)
 %.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused
+# 2026-11-22: frame breaks (docs/dlssnr/design/frame-breaks.md): the control and its help.
+Hold NR off when it alternates	交互になるときNRを止める
+A frame the pass skips -- a refused recording, a gate that is still settling -- is shown as the game drew\nit, so a pass that skips every other frame alternates the model's picture with the plain one. With this\non, three such breaks inside 32 evaluations hold the pass off for one second, with a status, instead of\nalternating every frame, and the model's history is reset when it resumes. The log counts the\nalternation either way. Off changes nothing.	パスがスキップするフレーム(拒否された記録、まだ落ち着いていないゲートなど)はゲームが描いたままで表示されるため、1フレームおきにスキップするパスはモデルの画像と素の画像を交互に見せます。オンにすると、32回の評価の中でこのような途切れが3回あった場合、毎フレーム交互になる代わりに、ステータスを表示してパスを1秒間止め、再開時にモデルの履歴をリセットします。ログは設定に関係なく交互の回数を数えます。オフなら何も変わりません。

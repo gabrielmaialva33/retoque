@@ -33,7 +33,7 @@ if 'bool PresentGuideCopyCompatible(' in resources:
     unit+=function(resources,'bool PresentGuideCopyCompatible(')
 unit+='''
 std::mutex g_nrMutex;
-struct Config { struct { bool value_or_default() const { return true; } } DlssNrEnabled; std::optional<std::string> DlssNrMaskInspection;
+struct Config { struct { bool value_or_default() const { return true; } } DlssNrEnabled; struct { bool value_or_default() const { return false; } } DlssNrSkipStandDown; std::optional<std::string> DlssNrMaskInspection;
                 static Config* Instance() { static Config c; return &c; } };
 struct { bool failed=false; bool reset=false; } g_nr;
 struct DlssNrFrameInfo { bool GameGuides=false; unsigned RenderSubrectWidth=1, RenderSubrectHeight=1; void* ExposureTexture=nullptr; uint64_t PictureEpoch=0;
@@ -43,7 +43,7 @@ DlssNr::Pictures::EpochGate g_pictureEpoch; void InvalidateExposureMeter() {}
 namespace DlssNr { namespace Detail { struct CoverageSample { const char* reason=""; }; }
 namespace Chain { struct RecordingLease {}; } namespace PairCapture { void Poll() {} } }
 struct State { unsigned frameCount=1; static State& Instance() { static State s; return s; } };
-void ReportSkipOnce(const char*) {} void AdvanceNrClock() {} void NoteModelFault() {} void NotePulsePresent(unsigned) {}
+void ReportSkipOnce(const char*) {} void NoteFrameOutcome(bool, bool, const char*) {} bool FrameBreakHeld(bool) { return false; } void AdvanceNrClock() {} void NoteModelFault() {} void NotePulsePresent(unsigned) {}
 // The game's own Streamline NR stand-down (DlssNr_SlNativeNr.h; tests/nr-sl-native-nr covers it): never here.
 static const char* GameNrStandDown() { return nullptr; }
 std::atomic<bool> g_resetOnReturn { false };

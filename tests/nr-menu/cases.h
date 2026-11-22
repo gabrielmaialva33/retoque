@@ -270,6 +270,36 @@ int main()
     ImGui::Reset();
     cadence();
     assert(ImGui::Saw(combo) && !ImGui::Saw(optIn) && !ImGui::Saw(smooth) && !ImGui::Saw(adaptive));
+    // Frame breaks (docs/dlssnr/design/frame-breaks.md): nothing on native Vulkan or under the proxy; one checkbox that writes only
+    // its key.
+    const std::string standDownBox = "Hold NR off when it alternates###nrSkipStandDown";
+    auto standDown = [&](bool vulkan = false)
+    {
+        DlssNr::RenderSkipStandDown(&c, vulkan);
+        assert(ImGui::stack.empty());
+        assert(ImGui::actions.empty());
+    };
+    c.DlssNrSkipStandDown.value = false;
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    standDown(true);
+    assert(!ImGui::Saw(standDownBox));
+    c.DlssNrUseProxy.value = true;
+    ImGui::Reset();
+    standDown();
+    assert(!ImGui::Saw(standDownBox));
+    c.DlssNrUseProxy.value = false;
+    ImGui::Reset();
+    standDown();
+    assert(ImGui::Saw(standDownBox) && !c.DlssNrSkipStandDown.value);
+    ImGui::Reset();
+    ImGui::actions[standDownBox] = true;
+    standDown();
+    assert(c.DlssNrSkipStandDown.value);
+    ImGui::Reset();
+    ImGui::actions[standDownBox] = false;
+    standDown();
+    assert(!c.DlssNrSkipStandDown.value);
     // The player view exposes appearance and capture; full-only settings remain untouched.
     Config simple;
     simple.master.Preset = 1;

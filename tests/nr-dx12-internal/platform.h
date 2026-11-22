@@ -115,6 +115,15 @@ struct PlausibilityLatch
 {
 };
 } // namespace Exposure
+namespace FrameBreaks
+{
+struct SkipTracker
+{
+};
+struct ResetRate
+{
+};
+} // namespace FrameBreaks
 namespace Submission
 {
 namespace Detail

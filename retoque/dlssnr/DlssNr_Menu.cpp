@@ -1271,6 +1271,26 @@ static void RenderPassControls(Config* config, bool vulkan, bool showIndividualS
 // without its shader cannot run it, so none of them is offered the control -- a cadence saved in the ini that
 // does nothing here gets one line saying so instead. The frame-generation opt-in exists only for a cadence
 // above 1, and so does the status line.
+// Frame breaks (docs/dlssnr/design/frame-breaks.md): hold the pass off, with a status, when it alternates with the
+// game's own frame. The D3D12 pass skips; native Vulkan and the driver proxy never reach it and are not offered the
+// control.
+static void RenderSkipStandDown(Config* config, bool nativeVulkan)
+{
+    if (nativeVulkan || config->DlssNrUseProxy.value_or_default())
+        return;
+
+    bool standDown = config->DlssNrSkipStandDown.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("Hold NR off when it alternates###nrSkipStandDown"), &standDown))
+        config->DlssNrSkipStandDown = standDown;
+
+    HelpMarker(
+        "A frame the pass skips -- a refused recording, a gate that is still settling -- is shown as the game drew"
+        "\nit, so a pass that skips every other frame alternates the model's picture with the plain one. With this"
+        "\non, three such breaks inside 32 evaluations hold the pass off for one second, with a status, instead of"
+        "\nalternating every frame, and the model's history is reset when it resumes. The log counts the"
+        "\nalternation either way. Off changes nothing.");
+}
+
 static void RenderCadenceControls(Config* config, bool nativeVulkan)
 {
     if (nativeVulkan)
@@ -2402,6 +2422,7 @@ void RenderMenu(Config* config, float menuResScale)
         }
 
         RenderCadenceControls(config, nativeVulkan);
+        RenderSkipStandDown(config, nativeVulkan);
 
         ImGui::SeparatorText(Localization::Tr("Brightness and exposure"));
 

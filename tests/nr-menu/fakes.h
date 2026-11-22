@@ -222,6 +222,7 @@ struct Config
     OptionalU32 DlssNrCadence;
     OptionalBool DlssNrCadenceWithFrameGen;
     OptionalBool DlssNrCadenceSmoothing;
+    OptionalBool DlssNrSkipStandDown;
     OptionalBool DlssNrCadenceAdaptive;
     DlssNrResolvedPassSettings master;
     DlssNr::PassConfig::Overrides overrides;

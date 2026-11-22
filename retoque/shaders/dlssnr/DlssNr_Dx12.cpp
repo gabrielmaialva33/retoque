@@ -785,8 +785,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     DlssNr::AdvisorRuntime::EvaluationScope advisorScope;
     const uint64_t advisorEvaluation = advisorScope.id;
     DlssNr::AdvisorRuntime::Decision advisor;
-    const auto reportSkip = [coverage, &advisor](const char* why)
+    const auto reportSkip = [coverage, &advisor, &cfg](const char* why)
     {
+        NoteFrameOutcome(false, cfg.DlssNrSkipStandDown.value_or_default(), why);
         if (coverage != nullptr)
             coverage->reason = why;
         DlssNr::AdvisorRuntime::Refuse(why, advisor.token);
@@ -807,6 +808,20 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     // capture recorded on an earlier frame is handed to its writer -- or given up on -- whatever this frame does.
     // Idle, one relaxed load.
     DlssNr::PairCapture::Poll();
+
+    // An alternation of the pass with the game's own frame is being held off (frame-breaks.md, [DlssNr] SkipStandDown):
+    // not asked, so not counted as a skip; the history is owed a reset for when it resumes.
+    if (FrameBreakHeld(cfg.DlssNrSkipStandDown.value_or_default()))
+    {
+        g_nr.reset = true;
+        static const char* const heldWhy =
+            "held off for a second: the pass alternated with the game's own frame (SkipStandDown)";
+        if (coverage != nullptr)
+            coverage->reason = heldWhy;
+        DlssNr::AdvisorRuntime::Refuse(heldWhy, advisor.token);
+        ReportSkipOnce(heldWhy);
+        return false;
+    }
 
     // A caller may have acquired this generation before another thread began its retirement.
     // Keep the CPU object alive through the call, but never record on a detached generation.
@@ -2939,6 +2954,9 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         // Preserve the single/master call and anchor. Each extra layer has independent history.
         const auto firstCpuStart =
             chainEnabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
+        if (g_nr.reset)
+            NoteResetSent(frameReset, frameResetIsPolicy, frameResetIsSceneCut);
+
         result = g_nr.evaluate(cmdList, g_nr.feature, g_nr.capabilityParams, modelInput, depthForModel, motionForModel,
                                g_nr.output, workWidth, workHeight, modelDepthWidth, modelDepthHeight, modelMotionWidth,
                                modelMotionHeight, modelDepthBaseX, modelDepthBaseY, modelMotionBaseX, modelMotionBaseY,
@@ -3824,6 +3842,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
 
     // restoreOutput hands the output back in its arrival state on every exit.
     device->Release();
+    NoteFrameOutcome(wrote, cfg.DlssNrSkipStandDown.value_or_default(), "the composition was not written");
     return wrote;
 }
 

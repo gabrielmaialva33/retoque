@@ -38,6 +38,14 @@ tier = "host"
 timeout = 60
 summary = "Exposure plausibility latch (WhitePointSource=1): out-of-range readings, swinging window, reset, and white-point fallback."
 
+[nr-frame-breaks]
+path = "nr-frame-breaks"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 240
+summary = "Frame breaks: skip-alternation tracker and stand-down, history-reset counter by cause, mutants and wiring guards."
+
 [nr-game-profiles]
 path = "nr-game-profiles"
 domain = "nr"

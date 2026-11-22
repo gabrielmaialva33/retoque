@@ -731,3 +731,6 @@ Median (ms)	Median (ms)
 Mean (ms)	Mean (ms)
 Slowest (ms)	Slowest (ms)
 %.0f%% / %u: %u model evaluations, %u reused	%.0f%% / %u: %u model evaluations, %u reused
+# 2026-11-22: frame breaks (docs/dlssnr/design/frame-breaks.md): the control and its help.
+Hold NR off when it alternates	交替出现时暂停 NR
+A frame the pass skips -- a refused recording, a gate that is still settling -- is shown as the game drew\nit, so a pass that skips every other frame alternates the model's picture with the plain one. With this\non, three such breaks inside 32 evaluations hold the pass off for one second, with a status, instead of\nalternating every frame, and the model's history is reset when it resumes. The log counts the\nalternation either way. Off changes nothing.	被该通道跳过的帧（被拒绝的录制、仍在稳定的门限等）会按游戏绘制的样子显示，因此隔帧跳过的通道会让模型画面与原始画面交替出现。开启后，在 32 次评估内出现三次这样的中断时，会暂停该通道一秒并显示状态，而不是每帧交替，恢复时会重置模型的历史。无论是否开启，日志都会统计交替次数。关闭则没有任何变化。
