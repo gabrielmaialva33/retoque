@@ -225,3 +225,22 @@ A controlled follow-up needs the same 2.14.1/provider/runtime with a fresh proce
 and override unset/3 (forced dynamic off), plus a presentation/pacing trace. Native Windows would
 separate a Proton runtime limitation from a capability exposed by the unlock. These are the missing
 controls, not tests performed by this change.
+
+## Proton: the driver's Wine DLSS-G (2026-11-22)
+
+Under Proton the Linux driver's Wine build ships its own `nvngx_dlssg.dll` in `/usr/lib/nvidia/wine`, and its NGX
+core loads that copy as the DLSS-G provider even when the game ships a newer one. In The Witcher 3 (RTX 4090, driver
+620.73.04, `sl.dlss_g` 2.14.1, `AdaMfgUnlock=true`, `OverrideInterpolationCount=3`) the log showed both:
+
+- the game's `nvngx_dlssg.dll 310.9.16.0` mapped first and patched (`advertise=ok validate=ok blackwellKernels=ok`);
+- 30 ms later `Z:\run\host\usr\lib\nvidia\wine\nvngx_dlssg.dll` (310.2.1.0) mapped and not recognised
+  (`advertise=MISS validate=MISS blackwellKernels=MISS`);
+- Streamline: `Multi-frame not supported, max generated frames 1 (SL Plugin supports 5, NGX feature supports 1)`, and
+  the override `numFramesToGenerate 1 -> 1 (2x)`.
+
+`[DLSSG] AdaPreferGameProvider` (default true; acts only with `AdaMfgUnlock` on, under Wine) answers the load of the
+driver's copy with the game's own file when that file is newer (`retoque/framegen/dlssg/ProtonDlssgProvider.h`, the
+nvngx_dlssg branch of `LibraryLoad_Hooks.cpp`). It is the NVIDIA-signed file as the game ships it, already mapped and
+patched; nothing on disk changes. An older, equal or missing game copy leaves NGX's choice alone, and the log says
+which one was kept. Host contract: `tests/proton-dlssg-provider`. Whether NGX accepts the game's file in its place,
+and how many frames it then generates, is shown by a game run, not by the suite.

@@ -418,6 +418,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGDLSSGReflexBoost.set_from_config(readBool("DLSSG", "ReflexBoost"));
             FGDLSSGAdaMfgUnlock.set_from_config(readBool("DLSSG", "AdaMfgUnlock"));
             FGDLSSGAdaBlackwellKernels.set_from_config(readBool("DLSSG", "AdaBlackwellKernels"));
+            FGDLSSGAdaPreferGameProvider.set_from_config(readBool("DLSSG", "AdaPreferGameProvider"));
         }
 
         {
@@ -1847,6 +1848,8 @@ bool Config::SaveIni()
         ini.SetValue("DLSSG", "AdaMfgUnlock", GetBoolValue(Instance()->FGDLSSGAdaMfgUnlock.value_for_config()).c_str());
         ini.SetValue("DLSSG", "AdaBlackwellKernels",
                      GetBoolValue(Instance()->FGDLSSGAdaBlackwellKernels.value_for_config()).c_str());
+        ini.SetValue("DLSSG", "AdaPreferGameProvider",
+                     GetBoolValue(Instance()->FGDLSSGAdaPreferGameProvider.value_for_config()).c_str());
     }
 
     // Reprojection
