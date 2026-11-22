@@ -18,6 +18,7 @@
 #include <dlssnr/DlssNr_Enlarge.h>
 #include <dlssnr/DlssNr_FormatTwin.h>
 #include <dlssnr/DlssNr_PrivateSr.h>
+#include <dlssnr/DlssNr_Dejitter.h>
 #include "DlssNr_DetailStats_Dx12.h"
 #include "DlssNr_Pulse_Dx12.h"
 #include <Config.h>
@@ -40,6 +41,7 @@ class DlssNr_Cadence_Dx12;
 class DlssNr_GuideMatch_Dx12;
 class DlssNr_Periphery_Dx12;
 class DlssNr_PassClamp_Dx12;
+class DlssNr_Dejitter_Dx12;
 class DlssNr_PresentHdr_Dx12;
 class DlssNr_MotionProbe_Dx12;
 namespace DlssNr::MotionProbe
@@ -402,6 +404,11 @@ struct NrState
     ID3D12Resource* motionMatched = nullptr;
     DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
 
+    // Render-resolution motion-vector de-jittering (2026-11-22-dejitter-motion-vectors.md).
+    ID3D12Resource* motionDejittered = nullptr;
+    DlssNr_Dejitter_Dx12* dejitterPass = nullptr;
+    DlssNr::Dejitter::State dejitter {};
+
     // Peripheral compression (peripheral-compression.md). While it runs, the working size above is the
     // packed extent and depthMatched/motionMatched hold the packed guides. periphery is the pass that packs
     // and unpacks, built on first use, only when its bytecode is in the build, and kept until shutdown like
@@ -501,6 +508,7 @@ struct NrRetired
     DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
     DlssNr_Periphery_Dx12* periphery = nullptr;
     DlssNr_PassClamp_Dx12* passClamp = nullptr;
+    DlssNr_Dejitter_Dx12* dejitterPass = nullptr;
 };
 
 struct DetailMeasureSession

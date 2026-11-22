@@ -149,6 +149,8 @@ Interpass clamp	Interpass-Begrenzung
 Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	Bevor Pass N+1 die Antwort von Pass N liest, wird sie farbtonerhaltend gegen den eigenen Eingang von Pass N begrenzt und auf NaN/Inf bereinigt. Nur D3D12; aus bleibt unverändert.
 Pass feedback	Pass-Rückkopplung
 Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	Mischt die Antwort jedes Passes vor der Übergabe an den nächsten Pass in Richtung seines eigenen Eingangs (1.00 = volle Antwort, 0.00 = Eingang unverändert) und bereinigt NaN/Inf. Nur D3D12.
+De-jitter motion vectors	Jitter aus Bewegungsvektoren entfernen
+When the game supplies render-resolution jittered motion vectors, removes the camera jitter step since the last render frame before NR reads them. Aimed at fine detail shimmer after DLSS Super Resolution. Resets on cuts, skipped frames and size changes. D3D12 only; native Vulkan is not covered. Off is unchanged.	Wenn das Spiel Bewegungsvektoren mit Jitter in Renderauflösung liefert, wird der Kamera-Jitter-Schritt seit dem letzten gerenderten Frame entfernt, bevor NR sie liest. Gedacht gegen feines Detailflimmern nach DLSS Super Resolution. Setzt bei Schnitten, übersprungenen Frames und Größenänderungen zurück. Nur D3D12; natives Vulkan wird nicht abgedeckt. Aus bleibt unverändert.
 Edit pass	Pass bearbeiten
 Editing pass 1	Pass 1 wird bearbeitet
 Uncheck Override to inherit the live master value.	Überschreiben abwählen, um den aktuellen Hauptwert zu übernehmen.

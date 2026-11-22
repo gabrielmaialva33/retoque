@@ -149,6 +149,8 @@ Interpass clamp	패스 간 클램프
 Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	패스 N+1이 패스 N의 출력을 읽기 전에 패스 N 자체 입력을 기준으로 색상을 유지하며 클램프하고 NaN/Inf를 정화합니다. D3D12 전용이며 끄면 변경되지 않습니다.
 Pass feedback	패스 피드백
 Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	다음 패스로 넘기기 전에 각 패스의 출력을 해당 패스의 입력 쪽으로 블렌딩하고 (1.00 = 전체 출력, 0.00 = 패스 입력 유지) NaN/Inf를 정화합니다. D3D12 전용.
+De-jitter motion vectors	모션 벡터 지터 제거
+When the game supplies render-resolution jittered motion vectors, removes the camera jitter step since the last render frame before NR reads them. Aimed at fine detail shimmer after DLSS Super Resolution. Resets on cuts, skipped frames and size changes. D3D12 only; native Vulkan is not covered. Off is unchanged.	게임이 렌더 해상도의 지터가 포함된 모션 벡터를 제공할 때 NR이 읽기 전에 직전 렌더 프레임 이후의 카메라 지터 변화량을 제거합니다. DLSS Super Resolution 이후 미세 디테일 깜빡임을 줄이기 위한 옵션입니다. 화면 전환, 프레임 누락, 크기 변경 시 초기화됩니다. D3D12 전용이며 네이ティブ Vulkan은 지원하지 않습니다. 끄면 변경되지 않습니다.
 Edit pass	패스 편집
 Editing pass 1	패스 1 편집 중
 Uncheck Override to inherit the live master value.	현재 마스터 값을 상속하려면 재정의를 해제하세요.

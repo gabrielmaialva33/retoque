@@ -76,7 +76,8 @@ struct DlssNr_GuideMatch_Dx12
 struct Nr
 {
     ID3D12Resource *output = nullptr, *colorCopy = nullptr, *hdrCopy = nullptr, *colorSmall = nullptr;
-    ID3D12Resource *depthMatched = nullptr, *motionMatched = nullptr;
+    ID3D12Resource *passClampScratch = nullptr, *passClampScratch2 = nullptr;
+    ID3D12Resource *depthMatched = nullptr, *motionMatched = nullptr, *motionDejittered = nullptr;
     DlssNr_GuideMatch_Dx12* guideMatch = nullptr;
     unsigned workWidth = 0, workHeight = 0;
     // Production scratch retry state.

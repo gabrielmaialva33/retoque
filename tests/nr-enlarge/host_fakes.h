@@ -228,6 +228,12 @@ struct DlssNr_Pulse_Dx12
 struct DlssNr_MotionProbe_Dx12
 {
 };
+struct DlssNr_PassClamp_Dx12
+{
+};
+struct DlssNr_Dejitter_Dx12
+{
+};
 
 struct NrState
 {

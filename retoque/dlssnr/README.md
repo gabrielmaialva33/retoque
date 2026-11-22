@@ -129,6 +129,8 @@ experiment.
 | `shaders/dlssnr/DlssNr_GuideMatch.h`, `DlssNr_GuideMatch_Dx12.h/.cpp`, `precompile/dlssnr_guides.hlsl` | below the frame's size: depth and motion point-resampled to the model's working size, and the motion-vector scale for the texture handed over; the bytecode header is optional (`__has_include`); `../../docs/dlssnr/design/reduced-scale-guides.md` |
 | `shaders/dlssnr/DlssNr_GuideMatch_Vk.h/.cpp`, `precompile/DlssNr_Guides_Shader_Vk.h` | the same resample on the Vulkan after-upscale route, from the same HLSL under `VK_MODE` (push constants, four bindings, no sampler): the pure rules for which of the game's views it may read and what the outputs need, and the pass, a plain handle bundle freed only after a drain and abandoned with a lost device; its SPIR-V header is required; where the resample is wanted and cannot run the route refuses the frame rather than hand over frame-size guides; `../../docs/dlssnr/design/reduced-scale-guides-vk.md`, tested by `tests/nr-vk-guides` and, on a real device, `tests/guide-match-vk` |
 | `shaders/dlssnr/DlssNr_Periphery.h`, `DlssNr_Periphery_Dx12.h/.cpp`, `precompile/dlssnr_periphery_warp.h`, `precompile/dlssnr_periphery.hlsl` | peripheral compression, off by default: the model's input packed denser in the centre than at the edges, the guides packed with it, the answer unpacked onto the uniform grid before the resolve; D3D12 only; the three bytecode headers are optional (`__has_include`); `../../docs/dlssnr/design/peripheral-compression.md` |
+| `DlssNr_PassClamp.h`, `shaders/dlssnr/DlssNr_PassClamp_Dx12.h/.cpp`, `precompile/dlssnr_pass_clamp_rule.h`, `precompile/dlssnr_pass_clamp.hlsl` | D3D12 interpass clamping and `PassFeedback` (`[DlssNr] PassClamp`, `PassFeedback`, off/1.0 by default): hue-preserving `CubeScaleResidual`, `NaN`/`Inf` proxy fallback and two-scratch ping-pong across 2..10 sequential passes; bytecode header optional (`__has_include`); `../../docs/dlssnr/design/2026-11-22-interpass-clamp.md`, tested by `tests/nr-pass-clamp` |
+| `DlssNr_Dejitter.h`, `shaders/dlssnr/DlssNr_Dejitter_Dx12.h/.cpp`, `precompile/dlssnr_dejitter_rule.h`, `precompile/dlssnr_dejitter.hlsl` | D3D12 post-upscale motion-vector de-jittering (`[DlssNr] DejitterMotionVectors`, off by default): removes `(jitterNow - jitterPrev) / mvScale` from consecutive `MVLowRes + MVJittered` motion buffers before NR reads them and resets on sequence or contract breaks; bytecode header optional (`__has_include`); `../../docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md`, tested by `tests/nr-dejitter` |
 
 ### Editing the shader
 
@@ -210,6 +212,12 @@ to that input, and keeping same-temporal-age hand-offs across 2..10 passes -- ar
 **janblade's OptiScaler-F5-DLSSNR-Multipass** (https://github.com/janblade/OptiScaler-F5-DLSSNR-Multipass,
 PRs #7, #18, #41, #55, #61; GPL-3.0), building on **hhkbble's** `CubeScaleResidual`;
 `../../docs/dlssnr/design/2026-11-22-interpass-clamp.md` is the analysis.
+
+Post-upscale motion-vector de-jittering (`[DlssNr] DejitterMotionVectors`, off by default) -- removing the
+render-frame camera jitter step `(jitterNow - jitterPrev) / mvScale` from `MVLowRes + MVJittered` vectors
+and re-priming history across sequence gaps, cuts and contract changes -- is adapted from **kkyleeb21's
+OptiScaler_DLSSNR** (https://github.com/kkyleeb21/OptiScaler_DLSSNR, `research/dlssnr-internal-scaling-d18`,
+GPL-3.0); `../../docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md` is the analysis.
 
 ## Why a forwarder DLL exists
 

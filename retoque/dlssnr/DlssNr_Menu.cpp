@@ -9,6 +9,7 @@
 #include "DlssNr.h"
 #include "DlssNr_Cadence.h"
 #include "DlssNr_PassClamp.h"
+#include "DlssNr_Dejitter.h"
 #include "DlssNr_DiagnosticReport.h"
 #include "DlssNr_DriverGate.h"
 #include "DlssNr_Dx11Upscaler.h"
@@ -1509,6 +1510,20 @@ static bool RenderSimpleView(Config* config, bool nativeVulkan, float menuResSca
     return true;
 }
 
+static void RenderDejitterControl(Config* config, bool nativeVulkan)
+{
+    if (nativeVulkan || !DlssNr::DejitterAvailable())
+        return;
+
+    bool dejitter = config->DlssNrDejitterMotionVectors.value_or_default();
+    if (MenuLayout::Checkbox(Localization::Label("De-jitter motion vectors###nrDejitterMvs"), &dejitter))
+        config->DlssNrDejitterMotionVectors = dejitter;
+    HelpMarker("When the game supplies render-resolution jittered motion vectors, removes the camera jitter step since "
+               "the last render frame before NR reads them. Aimed at fine detail shimmer after DLSS Super Resolution. "
+               "Resets on cuts, skipped frames and size changes. D3D12 only; native Vulkan is not covered. Off is "
+               "unchanged.");
+}
+
 void RenderMenu(Config* config, float menuResScale)
 {
 
@@ -2098,6 +2113,8 @@ void RenderMenu(Config* config, float menuResScale)
                        "\n\nOnly after the game's frame generation was seen on, after half a second off,"
                        "\nand never while this menu is open (the menu turns frame generation off itself).");
         }
+
+        RenderDejitterControl(config, nativeVulkan);
 
         RenderPeriphery(config);
 

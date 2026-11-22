@@ -149,6 +149,8 @@ Interpass clamp	Межпроходное ограничение
 Before pass N+1 reads pass N's answer, clamps it hue-preservingly against pass N's own input and sanitizes NaN/Inf. D3D12 only; off is unchanged.	Перед тем как проход N+1 прочитает ответ прохода N, ограничивает его с сохранением оттенка относительно собственного входа прохода N и очищает NaN/Inf. Только D3D12; выключено -- без изменений.
 Pass feedback	Межпроходная обратная связь
 Blends each pass's answer toward that pass's own input before handing it to the next pass (1.00 = full answer, 0.00 = pass input unchanged) and sanitizes NaN/Inf. D3D12 only.	Смешивает ответ каждого прохода в сторону его собственного входа перед передачей следующему проходу (1.00 = полный ответ, 0.00 = вход без изменений) и очищает NaN/Inf. Только D3D12.
+De-jitter motion vectors	Убрать джиттер векторов движения
+When the game supplies render-resolution jittered motion vectors, removes the camera jitter step since the last render frame before NR reads them. Aimed at fine detail shimmer after DLSS Super Resolution. Resets on cuts, skipped frames and size changes. D3D12 only; native Vulkan is not covered. Off is unchanged.	Когда игра передает векторы движения с джиттером в разрешении рендеринга, убирает шаг джиттера камеры с прошлого отрендеренного кадра перед чтением в NR. Рассчитано на мерцание мелких деталей после DLSS Super Resolution. Сбрасывается на склейках, пропущенных кадрах и смене размера. Только D3D12; нативный Vulkan не охвачен. Выключено -- без изменений.
 Edit pass	Изменить проход
 Editing pass 1	Изменение прохода 1
 Uncheck Override to inherit the live master value.	Снимите флажок "Переопределить", чтобы наследовать текущее основное значение.

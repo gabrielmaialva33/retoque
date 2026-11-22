@@ -192,6 +192,7 @@ struct Config
     OptionalBool DlssNrAutoMask;
     OptionalBool DlssNrPassClamp;
     OptionalFloat DlssNrPassFeedback { 1.0f };
+    OptionalBool DlssNrDejitterMotionVectors;
     struct Timing
     {
         bool Enabled = false;
@@ -272,6 +273,8 @@ bool cadenceAvailable = true;
 bool CadenceAvailable() { return cadenceAvailable; }
 bool passClampAvailable = true;
 bool PassClampAvailable() { return passClampAvailable; }
+bool dejitterAvailable = true;
+bool DejitterAvailable() { return dejitterAvailable; }
 const char* CadenceStatus() { return DlssNr::Cadence::Describe(DlssNr::Cadence::Reason::Carried, 2); }
 } // namespace DlssNr
 

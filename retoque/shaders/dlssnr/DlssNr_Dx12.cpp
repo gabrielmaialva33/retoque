@@ -83,6 +83,8 @@
 #include <dlssnr/DlssNr_Cadence.h>
 #include "DlssNr_PassClamp_Dx12.h"
 #include <dlssnr/DlssNr_PassClamp.h>
+#include "DlssNr_Dejitter_Dx12.h"
+#include <dlssnr/DlssNr_Dejitter.h>
 #include <dlssnr/DlssNr_PresentSync.h>
 #include <proxies/KernelBase_Proxy.h>
 #include <framegen/IFGFeature_Dx12.h>
@@ -1599,6 +1601,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
             ParkNrResource(g_nr.passClampScratch2);
             ParkNrResource(g_nr.depthMatched);
             ParkNrResource(g_nr.motionMatched);
+            ParkNrResource(g_nr.motionDejittered);
         }
     }
 
@@ -2053,6 +2056,50 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
     cadenceInputs.surfaces = proxyAtWorkSize && g_nr.cadence != nullptr && g_nr.cadence->IsInit() &&
                              g_nr.cadence->Fits(device, workWidth, workHeight, cadenceInputs.smoothing);
 
+    DlssNr::Dejitter::Inputs dejitterInputs {};
+    dejitterInputs.enabled = cfg.DlssNrDejitterMotionVectors.value_or_default() && DlssNr_Dejitter_Dx12::Available();
+    dejitterInputs.beforeUpscale = beforeUpscale;
+    dejitterInputs.held = holdFrame || g_nr.heldActive;
+    dejitterInputs.gameGuides = frame.GameGuides;
+    dejitterInputs.mvJittered = frame.MotionVectorsJittered;
+    dejitterInputs.mvLowResolution = frame.MotionVectorsLowResolution;
+    dejitterInputs.haveJitter = frame.HaveJitter;
+    dejitterInputs.reset = frameResetIsPolicy ? resetBeforeFrameFlag : g_nr.reset;
+    dejitterInputs.renderWidth = renderReferenceWidth;
+    dejitterInputs.renderHeight = renderReferenceHeight;
+    dejitterInputs.motionWidth = motionWidth;
+    dejitterInputs.motionHeight = motionHeight;
+    dejitterInputs.outputWidth = width;
+    dejitterInputs.outputHeight = static_cast<uint32_t>(height);
+    dejitterInputs.jitterX = frame.JitterOffsetX;
+    dejitterInputs.jitterY = frame.JitterOffsetY;
+    dejitterInputs.mvScaleX = frame.MvScaleX;
+    dejitterInputs.mvScaleY = frame.MvScaleY;
+    dejitterInputs.route = frame.NativeDx11Scene ? DlssNr::Dejitter::Route::NativeDx11Scene
+                                                 : (frame.PresentSource ? DlssNr::Dejitter::Route::Present
+                                                                        : DlssNr::Dejitter::Route::AfterUpscale);
+    dejitterInputs.pictureEpoch = frame.PictureEpoch;
+    dejitterInputs.renderSequence =
+        frame.PresentSource
+            ? (frame.RenderSequence != 0
+                   ? frame.RenderSequence
+                   : (g_bridgeRead.active ? g_presentGuideRing.GetSlot(g_bridgeRead.slot).sequence : 0ull))
+            : g_upscaleRenders;
+    DlssNr::Dejitter::State nextDejitter = g_nr.dejitter;
+    const auto dejitterPlan = DlssNr::Dejitter::Step(nextDejitter, dejitterInputs);
+    if (!dejitterPlan.active)
+    {
+        g_nr.dejitter = nextDejitter;
+        if (!cfg.DlssNrDejitterMotionVectors.value_or_default())
+            ParkNrResource(g_nr.motionDejittered);
+    }
+    if (dejitterPlan.pulseReset)
+    {
+        g_nr.reset = true;
+        for (auto& reset : g_nr.passReset)
+            reset = true;
+    }
+
     // Everything whose change makes the stored edit describe another picture: what the model reads, and the
     // proxy it reads it from. Composition sliders stay out -- the edit is taken before composition.
     uint64_t cadenceSettings = Cadence::kMixSeed;
@@ -2080,6 +2127,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         Cadence::Mix(cadenceSettings, frame.PresentSource && cfg.DlssNrUiProtection.value_or_default() ? 1u : 0u);
     cadenceSettings = Cadence::Mix(cadenceSettings, cfg.DlssNrMatchGuides.value_or_default() ? 1u : 0u);
     cadenceSettings = Cadence::Mix(cadenceSettings, cfg.DlssNrRenderMotionScale.value_or_default() ? 1u : 0u);
+    cadenceSettings = Cadence::Mix(cadenceSettings, dejitterPlan.active ? 1u : 0u);
     cadenceSettings = Cadence::Mix(cadenceSettings, frame.DepthInverted ? 1u : 0u);
     cadenceSettings = Cadence::Mix(cadenceSettings, frame.MotionVectorsLowResolution ? 1u : 0u);
     cadenceSettings = Cadence::Mix(cadenceSettings, frame.MvScaleX);
@@ -2365,6 +2413,58 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         probeShape.motionLowResolution = frame.MotionVectorsLowResolution;
         UpdateMotionProbe(cmdList, device, depthIn, motionIn, probeShape, cfg.DlssNrZeroGuideReset.value_or_default());
     }
+
+    ID3D12Resource* const rawMotionIn = motionIn;
+    ID3D12Resource* dejitteredMotionReadTarget = nullptr;
+    if (dejitterPlan.active)
+    {
+        if (!dejitterPlan.dispatch)
+        {
+            g_nr.dejitter = nextDejitter;
+        }
+        else
+        {
+            const unsigned int dejitterOutWidth = motionBaseX + motionWidth;
+            const unsigned int dejitterOutHeight = motionBaseY + motionHeight;
+            if (g_nr.motionDejittered != nullptr)
+            {
+                const auto actual = g_nr.motionDejittered->GetDesc();
+                if (actual.Width != dejitterOutWidth || actual.Height != dejitterOutHeight)
+                    ParkNrResource(g_nr.motionDejittered);
+            }
+            if (g_nr.dejitterPass != nullptr && !g_nr.dejitterPass->IsInit())
+            {
+                delete g_nr.dejitterPass;
+                g_nr.dejitterPass = nullptr;
+            }
+            if (g_nr.dejitterPass == nullptr && DlssNr_Dejitter_Dx12::Available())
+                g_nr.dejitterPass = new DlssNr_Dejitter_Dx12("DLSS-NR dejitter", device);
+            if (g_nr.motionDejittered == nullptr)
+                g_nr.motionDejittered =
+                    CreateScratch(device, DXGI_FORMAT_R32G32_FLOAT, dejitterOutWidth, dejitterOutHeight);
+
+            if (g_nr.dejitterPass != nullptr && g_nr.dejitterPass->IsInit() && g_nr.motionDejittered != nullptr &&
+                g_nr.dejitterPass->Dispatch(cmdList, motionIn, g_nr.motionDejittered, motionBaseX, motionBaseY,
+                                            motionWidth, motionHeight, dejitterPlan.deltaMvX, dejitterPlan.deltaMvY))
+            {
+                Barrier(cmdList, g_nr.motionDejittered, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                dejitteredMotionReadTarget = g_nr.motionDejittered;
+                motionIn = g_nr.motionDejittered;
+                g_nr.dejitter = nextDejitter;
+            }
+            else
+            {
+                g_nr.dejitter.Reset();
+                g_nr.reset = true;
+                for (auto& reset : g_nr.passReset)
+                    reset = true;
+            }
+        }
+    }
+    RestoreResourceState motionDejitteredRead { cmdList, dejitteredMotionReadTarget,
+                                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS };
 
     // What the model is handed as guides, and the motion-vector scale that goes with them
     // (reduced-scale-guides.md; both faults and both fixes are jlrouzies-fr's, v0.8.92 of wilsjo2's fork).
@@ -3495,7 +3595,7 @@ bool DlssNr_Dx12::Dispatch(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* c
         if (resolvable)
         {
             ReadResourceScope exposureRead(cmdList, exposureTex, exposureBarrierState);
-            wrote = DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, motionIn,
+            wrote = DispatchPass(cmdList, resolveParams, resolveProxy, resolveAnswer, g_nr.hdrCopy, rawMotionIn,
                                  exposureTex, target, nullptr, originalInTarget);
         }
 
@@ -5370,6 +5470,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             frame.MotionState = (int) D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
             temporalValid = (depth != nullptr && motion != nullptr);
             temporalSeq = g_presentGuideRing.GetSlot(usableSlot).sequence;
+            frame.RenderSequence = temporalSeq;
             if (temporalValid && routeTimingArmed)
             {
                 const auto& selected = g_presentGuideRing.GetSlot(usableSlot);
@@ -7098,6 +7199,7 @@ bool PreviousModelRetained() { return GenerationRetained(); }
 const char* CadenceStatus() { return g_cadenceStatus.load(); }
 bool CadenceAvailable() { return DlssNr_Cadence_Dx12::Available(); }
 bool PassClampAvailable() { return DlssNr_PassClamp_Dx12::Available(); }
+bool DejitterAvailable() { return DlssNr_Dejitter_Dx12::Available(); }
 bool BufferIsLinearHdr() { return g_lastLinearHdr.load(); }
 
 // HDR at present, for the menu. Written by the present hosts on their threads, read by the menu on its own.
@@ -7256,6 +7358,8 @@ void Shutdown()
         delete r.compose;
         delete r.guideMatch;
         delete r.periphery;
+        delete r.passClamp;
+        delete r.dejitterPass;
         if (r.feature != nullptr && g_nr.release != nullptr)
             g_nr.release(r.feature);
 
@@ -7371,6 +7475,19 @@ void Shutdown()
         delete g_nr.guideMatch;
         g_nr.guideMatch = nullptr;
     }
+
+    if (g_nr.motionDejittered != nullptr)
+    {
+        g_nr.motionDejittered->Release();
+        g_nr.motionDejittered = nullptr;
+    }
+
+    if (g_nr.dejitterPass != nullptr)
+    {
+        delete g_nr.dejitterPass;
+        g_nr.dejitterPass = nullptr;
+    }
+    g_nr.dejitter.Reset();
 
     ShutdownMotionProbe();
 

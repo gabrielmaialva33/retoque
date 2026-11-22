@@ -610,6 +610,7 @@ bool Config::Reload(std::filesystem::path iniPath)
                 DlssNrIndividualPassSettings.set_from_config(readBool("DlssNr", "IndividualPassSettings"));
                 DlssNrPassClamp.set_from_config(readBool("DlssNr", "PassClamp"));
                 DlssNrPassFeedback.set_from_config(readFloat("DlssNr", "PassFeedback"));
+                DlssNrDejitterMotionVectors.set_from_config(readBool("DlssNr", "DejitterMotionVectors"));
                 // Strict parsing is scoped to NR model settings; unrelated INI readers are unchanged.
                 DlssNrPreset.set_from_config(DlssNr::PassConfig::UInt(ini.GetValue("DlssNr", "Preset"), 3));
                 DlssNrStyle.set_from_config(DlssNr::PassConfig::UInt(ini.GetValue("DlssNr", "Style"), 2));
@@ -2136,6 +2137,8 @@ bool Config::SaveIni()
             ini.SetValue("DlssNr", "PassClamp", GetBoolValue(config->DlssNrPassClamp.value_for_config()).c_str());
             ini.SetValue("DlssNr", "PassFeedback",
                          GetFloatValue(config->DlssNrPassFeedback.value_for_config()).c_str());
+            ini.SetValue("DlssNr", "DejitterMotionVectors",
+                         GetBoolValue(config->DlssNrDejitterMotionVectors.value_for_config()).c_str());
             ini.SetValue("DlssNr", "Preset", GetIntValue(Instance()->DlssNrPreset.value_for_config()).c_str());
             ini.SetValue("DlssNr", "Intensity", GetFloatValue(Instance()->DlssNrIntensity.value_for_config()).c_str());
             ini.SetValue("DlssNr", "Style", GetIntValue(Instance()->DlssNrStyle.value_for_config()).c_str());

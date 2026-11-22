@@ -453,6 +453,10 @@ bool CadenceAvailable();
 // (docs/dlssnr/design/2026-11-22-interpass-clamp.md).
 bool PassClampAvailable();
 
+// Whether this build carries the D3D12 motion-vector de-jitter shader
+// (docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md).
+bool DejitterAvailable();
+
 // Whether the buffer the last D3D12 dispatch worked on was linear HDR, i.e. the colour transform was on. False
 // until something has run. For the menu: highlight recovery acts only there
 // (docs/dlssnr/design/hdr-highlight-recovery.md).

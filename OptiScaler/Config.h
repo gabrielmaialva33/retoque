@@ -731,6 +731,9 @@ class Config
     // toward that input (1.0 = unchanged). Both off by default.
     CustomOptional<bool> DlssNrPassClamp { false };
     CustomOptional<float> DlssNrPassFeedback { 1.0f };
+    // De-jitter render-resolution motion vectors handed to post-upscale NR on D3D12
+    // (docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md). Off by default.
+    CustomOptional<bool> DlssNrDejitterMotionVectors { false };
 
     // Opt-in timestamp collection. Interval counts each GPU timing stream's own eligible events (NR evaluations,
     // Present-route recordings, guide captures), never presented frames; the Present CPU stream does not use it.

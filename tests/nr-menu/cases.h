@@ -392,6 +392,22 @@ int main()
         expected.Preset = simple.master.Preset; // looks never touch the weight set
         assert(simple.master == expected && simple.DlssNrTransferStrength.value == 1.0f);
     }
+    // De-jitter motion vectors: D3D12 only, hidden on native Vulkan or without shader bytecode.
+    {
+        Config dj {};
+        ImGui::Reset();
+        DlssNr::RenderDejitterControl(&dj, true);
+        assert(!ImGui::Saw("De-jitter motion vectors###nrDejitterMvs"));
+        DlssNr::dejitterAvailable = false;
+        ImGui::Reset();
+        DlssNr::RenderDejitterControl(&dj, false);
+        assert(!ImGui::Saw("De-jitter motion vectors###nrDejitterMvs"));
+        DlssNr::dejitterAvailable = true;
+        ImGui::Reset();
+        ImGui::actions["De-jitter motion vectors###nrDejitterMvs"] = true;
+        DlssNr::RenderDejitterControl(&dj, false);
+        assert(ImGui::Saw("De-jitter motion vectors###nrDejitterMvs") && dj.DlssNrDejitterMotionVectors.value);
+    }
     std::cout << "PASS: simple/full visibility, same Config writes, retained hidden settings, preset and backend "
                  "gates, read-only timing and balanced item widths\n";
     std::cout << "PASS: 33 scripted menu frames: unsupported paths, inheritance, seven fields, clear, retained "
