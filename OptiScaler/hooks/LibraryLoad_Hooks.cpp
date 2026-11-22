@@ -5,6 +5,7 @@
 #include <DllNames.h>
 
 #include <framegen/dlssg/MfgUnlock.h>
+#include <framegen/dlssg/ProtonDlssgProvider.h>
 
 #include <proxies/Ntdll_Proxy.h>
 #include <proxies/Kernel32_Proxy.h>
@@ -110,7 +111,40 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     // here runs. Patching at the first GetState is one call too late.
     if (libName.contains(L"nvngx_dlssg"))
     {
-        auto dlssgSnippet = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
+        // Under Proton NGX loads the driver's Wine copy even when the game ships a newer, unlockable one
+        // (retoque/framegen/dlssg/ProtonDlssgProvider.h). Answered with the game's own file, as shipped.
+        std::wstring dlssgPath = lpLibFullPath;
+        // The full path, not libName: the ntdll hook hands the bare name and the resolved path separately.
+        auto fullLowered = std::filesystem::path(dlssgPath).lexically_normal().wstring();
+        to_lower_in_place(fullLowered);
+        if (ProtonDlssgProvider::IsDriverWineCopy(fullLowered) && State::Instance().NVNGX_DLSSG_Path.has_value())
+        {
+            const auto& gamePath = State::Instance().NVNGX_DLSSG_Path.value();
+            version_t game {}, driver {};
+            const bool known = Util::GetFileVersion(gamePath, &game) && Util::GetFileVersion(lpLibFullPath, &driver);
+            const ProtonDlssgProvider::Version gameVersion { game.major, game.minor, game.patch, game.reserved };
+            const ProtonDlssgProvider::Version driverVersion { driver.major, driver.minor, driver.patch,
+                                                               driver.reserved };
+            if (ProtonDlssgProvider::UseGameCopy(Config::Instance()->FGDLSSGAdaMfgUnlock.value_or_default(),
+                                                 Config::Instance()->FGDLSSGAdaPreferGameProvider.value_or_default(),
+                                                 State::Instance().isRunningOnLinux, true, known, gameVersion,
+                                                 driverVersion))
+            {
+                LOG_INFO("MFG unlock: NGX asked for the driver's DLSS-G {}.{}.{}.{} at {}; answering with the game's "
+                         "{}.{}.{}.{} at {}",
+                         driver.major, driver.minor, driver.patch, driver.reserved, libNameA, game.major, game.minor,
+                         game.patch, game.reserved, wstring_to_string(gamePath));
+                dlssgPath = gamePath;
+            }
+            else if (known && Config::Instance()->FGDLSSGAdaMfgUnlock.value_or_default())
+            {
+                LOG_INFO("MFG unlock: the driver's DLSS-G {}.{}.{}.{} is kept (the game's is {}.{}.{}.{})",
+                         driver.major, driver.minor, driver.patch, driver.reserved, game.major, game.minor, game.patch,
+                         game.reserved);
+            }
+        }
+
+        auto dlssgSnippet = NtdllProxy::LoadLibraryExW_Ldr(dlssgPath.c_str(), NULL, 0);
 
         if (dlssgSnippet != nullptr)
             MfgUnlock::TryApply(dlssgSnippet);

@@ -1265,6 +1265,9 @@ class Config
 
     CustomOptional<bool> FGDLSSGAdaMfgUnlock { false };        // See framegen/dlssg/MfgUnlock.h
     CustomOptional<bool> FGDLSSGAdaBlackwellKernels { false }; // See framegen/dlssg/MfgUnlock.h
+    // With AdaMfgUnlock under Proton: answer the driver's Wine DLSS-G with the game's newer copy
+    // (retoque/framegen/dlssg/ProtonDlssgProvider.h)
+    CustomOptional<bool> FGDLSSGAdaPreferGameProvider { true };
 
     // Flip Meter
     CustomOptional<int> FGFlipMeterInterpolationCount { 1 };

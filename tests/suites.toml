@@ -310,6 +310,14 @@ tier = "host"
 timeout = 300
 summary = "[DlssNr] ModelFile: the rule on a fake filesystem (twelve rule mutants must fail), auto unchanged at every loader, UseProxy keeping the driver's file and refusing a named one, identity by path and the four config points frozen at start-up. Not run in a game."
 
+[proton-dlssg-provider]
+path = "proton-dlssg-provider"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 300
+summary = "Under Proton, with the Ada MFG unlock on, the driver's Wine nvngx_dlssg.dll is answered with the game's newer copy: the rule on real paths and every input (seven mutants must fail), the load hook's wiring and the AdaPreferGameProvider round trip read off the source. Not run under Wine."
+
 [sl-own-fg-swapchain]
 path = "sl-own-fg-swapchain"
 domain = "fg"
