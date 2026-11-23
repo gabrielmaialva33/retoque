@@ -185,6 +185,14 @@ GateMatch ForeignGate(uintptr_t constantAt)
     return match;
 }
 
+// Whether the module's advertise gate is NVIDIA's as shipped. Both patterns include the bytes the patch
+// rewrites (the 310.9 jl, the older build's cmovl), so a patched image matches neither.
+bool ShippedGateMapped(HMODULE module)
+{
+    return module != nullptr && (scanner::GetAddress(module, kAdvertisePattern309) != 0 ||
+                                 scanner::GetAddress(module, kAdvertisePattern) != 0);
+}
+
 // Plans the rewrite of the count and the neutralisation of the architecture clamp, so
 // MultiFrameCountMax is published as five.
 //
@@ -719,6 +727,24 @@ void MfgUnlock::TryApply(HMODULE provider)
     {
         HMODULE module = provider != nullptr ? provider : GetModuleHandleW(L"nvngx_dlssg.dll");
         observedProvider = module;
+
+        // A module NGX unloaded and loaded again can come back at the same address, so the same HMODULE,
+        // as NVIDIA shipped it: Cyberpunk 2077 under Proton (2026-11-22) mapped the game's provider twice
+        // at one base, the second time unpatched, and NGX published one generated frame. The Witcher 3,
+        // same files, got a new base the second time and was patched again. A handle the load hooks hand
+        // over again whose advertise gate still matches NVIDIA's bytes is a fresh image: patched again.
+        // Only on a load (provider given): the scan reads the whole module.
+        if (provider != nullptr && ShippedGateMapped(module))
+        {
+            const auto done = std::find(snippetsDone.begin(), snippetsDone.end(), module);
+            if (done != snippetsDone.end())
+            {
+                LOG_INFO("MFG unlock: {} was mapped again at the same address with NVIDIA's gates; patching it "
+                         "again",
+                         Describe(module));
+                snippetsDone.erase(done);
+            }
+        }
 
         if (module != nullptr && std::find(snippetsDone.begin(), snippetsDone.end(), module) == snippetsDone.end())
         {
