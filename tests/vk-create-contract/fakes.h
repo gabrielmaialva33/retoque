@@ -636,10 +636,17 @@ static const Received& ReceivedBy(VkDevice device)
     return reinterpret_cast<FakeDevice*>(device)->received;
 }
 
+// How often the device extension query was looked up through an instance. The NR block must never do it: the
+// instance it would use is only the last one OptiScaler saw (GTA V Enhanced under Proton: destroyed already).
+inline std::atomic<int> gInstanceEnumerateLookups { 0 };
+
 static VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL FakeGetInstanceProcAddr(VkInstance, const char* pName)
 {
     if (std::strcmp(pName, "vkEnumerateDeviceExtensionProperties") == 0)
+    {
+        ++gInstanceEnumerateLookups;
         return reinterpret_cast<PFN_vkVoidFunction>(&FakeEnumerateDeviceExtensionProperties);
+    }
     if (std::strcmp(pName, "vkGetPhysicalDeviceFeatures2KHR") == 0)
         return reinterpret_cast<PFN_vkVoidFunction>(&FakeGetPhysicalDeviceFeatures2);
     return nullptr;

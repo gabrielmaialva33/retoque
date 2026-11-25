@@ -47,19 +47,18 @@ struct Merged
     std::vector<std::string> owned;
 };
 
-// Everything the physical device is willing to offer, by name.
-inline std::vector<std::string> SupportedDeviceExtensions(PFN_vkGetInstanceProcAddr getInstanceProcAddr,
-                                                          VkInstance instance, VkPhysicalDevice physicalDevice)
+// Everything the physical device is willing to offer, by name. vkEnumerateDeviceExtensionProperties dispatches through
+// the physical device, so no VkInstance is involved: the last instance OptiScaler captured may belong to another
+// client or be destroyed already. GTA V Enhanced under Proton: DXVK's instance for socialclub.dll's D3D11 device is
+// never seen, the captured one is torn down, the loader rejects it and Wine aborts the game (ShyVortex/OptiScaler-NR-
+// PreSR-MFG #42, GPL-3.0). Pass the unhooked function (VulkanSpoofing::RealEnumerateDeviceExtensionProperties): the
+// extension spoofing hook adds entries the driver does not have.
+inline std::vector<std::string> SupportedDeviceExtensions(PFN_vkEnumerateDeviceExtensionProperties enumerate,
+                                                          VkPhysicalDevice physicalDevice)
 {
     std::vector<std::string> out;
 
-    if (getInstanceProcAddr == nullptr || physicalDevice == VK_NULL_HANDLE)
-        return out;
-
-    auto enumerate = (PFN_vkEnumerateDeviceExtensionProperties) getInstanceProcAddr(
-        instance, "vkEnumerateDeviceExtensionProperties");
-
-    if (enumerate == nullptr)
+    if (enumerate == nullptr || physicalDevice == VK_NULL_HANDLE)
         return out;
 
     uint32_t count = 0;
@@ -72,6 +71,7 @@ inline std::vector<std::string> SupportedDeviceExtensions(PFN_vkGetInstanceProcA
     if (enumerate(physicalDevice, nullptr, &count, props.data()) != VK_SUCCESS)
         return out;
 
+    props.resize(count);
     out.reserve(count);
 
     for (const auto& p : props)
