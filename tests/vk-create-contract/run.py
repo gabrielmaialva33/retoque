@@ -124,6 +124,7 @@ CASES = [
     'antilag-crosstalk',
     'capabilities-native',
     'capabilities-nr',
+    'nr-stale-instance',
     'push-descriptor-off',
     'push-descriptor-supported',
     'bda-never-both',

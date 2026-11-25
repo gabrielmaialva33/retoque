@@ -815,8 +815,10 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
 
         if (Config::Instance()->DlssNrEnabled.value_or_default())
         {
+            // Never through a captured VkInstance: this device may come from an instance OptiScaler never saw, and
+            // the last one it saw may be destroyed already (DlssNr_VkExtensions.h).
             const auto supported = DlssNr::VkExt::SupportedDeviceExtensions(
-                o_vkGetInstanceProcAddr, State::Instance().VulkanInstance, physicalDevice);
+                VulkanSpoofing::RealEnumerateDeviceExtensionProperties(), physicalDevice);
 
             nrExtensions.names.assign(localCreateInfo.ppEnabledExtensionNames,
                                       localCreateInfo.ppEnabledExtensionNames + localCreateInfo.enabledExtensionCount);

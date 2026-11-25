@@ -884,6 +884,32 @@ void CapabilitiesNr()
     std::cout << "  " << runs << " creates\n";
 }
 
+// The NR block asks the physical device what it offers without any VkInstance: the captured one can be a stale
+// handle from a client torn down already (GTA V Enhanced under Proton, ShyVortex/OptiScaler-NR-PreSR-MFG #42). With
+// a dead handle captured and the extension spoofing on and off, the query never goes through an instance and the
+// NVX extensions still reach the driver of a device that has them.
+void NrStaleInstance()
+{
+    for (bool spoofing : { false, true })
+    {
+        auto gpu = NvidiaGpu(VK_API_VERSION_1_3);
+        Setup setup;
+        setup.nr = true;
+        setup.spoofing = spoofing;
+        Apply(setup, { gpu.get() });
+        State::Instance().VulkanInstance = reinterpret_cast<VkInstance>(uintptr_t(0xDEAD0000));
+        if (!spoofing)
+            o_vkEnumerateDeviceExtensionProperties = nullptr; // not hooked: the loader's export
+        gInstanceEnumerateLookups = 0;
+        const auto outcome = CreateShape(setup, *gpu, Shape::Modern, spoofing ? "stale+spoofing" : "stale");
+        Check(gInstanceEnumerateLookups == 0, "NR looked the extension query up through the captured instance");
+        Check(outcome.got.Has("VK_NVX_binary_import") && outcome.got.Has("VK_NVX_image_view_handle"),
+              "NR on with a stale instance: the NVX extensions reach the driver of a device that has them");
+        o_vkEnumerateDeviceExtensionProperties = &FakeEnumerateDeviceExtensionProperties;
+        State::Instance().VulkanInstance = kInstance;
+    }
+}
+
 void PushDescriptor(bool supported)
 {
     for (bool nr : { false, true })
@@ -1248,6 +1274,7 @@ int main(int argc, char** argv)
         { "antilag-crosstalk", AntiLagCrosstalk },
         { "capabilities-native", CapabilitiesNative },
         { "capabilities-nr", CapabilitiesNr },
+        { "nr-stale-instance", NrStaleInstance },
         { "push-descriptor-off", [] { PushDescriptor(false); } },
         { "push-descriptor-supported", [] { PushDescriptor(true); } },
         { "bda-never-both", BdaNeverBoth },
