@@ -6,6 +6,7 @@
 #include <Logger.h>
 #include <Config.h>
 #include <mutex>
+#include <menu/MenuWindowOwnerPolicy.h>
 
 #include <imgui/imgui_impl_dx11.h>
 #include <imgui/imgui_impl_dx12.h>
@@ -741,6 +742,14 @@ void MenuOverlayDx::CleanupRenderTarget(bool clearQueue, HWND hWnd)
         CleanupRenderTargetDx12(clearQueue);
 }
 
+// Called only under g_dx12OverlayMutex, including the owner update and all renderer work.
+static bool ClaimMenuWindow(HWND hWnd)
+{
+    static MenuWindowOwnerPolicy::Owner<HWND> owner;
+    const bool ownerIsWindow = owner.Handle() != nullptr && IsWindow(owner.Handle());
+    return owner.Accept(hWnd, ownerIsWindow, GetTickCount64());
+}
+
 void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags,
                             const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP)
 {
@@ -755,6 +764,9 @@ void MenuOverlayDx::Present(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
     // data. MenuOverlayVk stands down for vkd3d-proton D3D12 swapchains; this covers the reverse
     // order, where it claimed the backend first.
     if (State::Instance().menuOverlayIsVulkan)
+        return;
+
+    if (!ClaimMenuWindow(hWnd))
         return;
 
     LOG_DEBUG("");

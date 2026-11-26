@@ -1376,3 +1376,11 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Unwired GPU frame protocol: bounded framing, negotiation, identity/ownership and abandonment under sanitizers; ten independently rejected mutants. No GPU or IPC."
+
+[menu-status-owner]
+path = "menu-status-owner"
+domain = "tooling"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 60
+summary = "DX menu window lease, NCDESTROY forwarding and HWND reuse through production WndProc, and read-only NR Status wording and wiring."

@@ -1103,6 +1103,12 @@
     <ClInclude Include="..\retoque\menu\input\kcd_input_fix.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\retoque\menu\MenuWindowOwnerPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\menu\NrStatusRules.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\menu\input\native_key_state.h">
       <Filter>Header Files</Filter>
     </ClInclude>

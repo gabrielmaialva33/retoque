@@ -10221,6 +10221,12 @@ void MenuCommon::RenderStatusInfo(RenderMenuContext& ctx)
         ImGui::TableSetupColumn("##v2", ImGuiTableColumnFlags_WidthStretch, 1.1f);
     };
 
+    if (ScopedCard::Shows("status_nr"))
+    {
+        ScopedCard card { "Neural Rendering" };
+        DlssNr::RenderStatus(config);
+    }
+
     // SYSTEM -----------------------------
     if (ScopedCard::Shows("status_system"))
     {
@@ -10488,6 +10494,7 @@ const MenuCommon::MenuBox* MenuCommon::GetMenuBoxes(size_t& count)
         { "loaded_asi_plugins", "Quirks / ASI", "Loaded ASI Plugins", nullptr, RenderQuirksSettings },
 
         { "status_system", "Status", "System", nullptr, RenderStatusInfo },
+        { "status_nr", "Status", "Neural Rendering", nullptr, RenderStatusInfo },
         { "status_detected", "Status", "Detected", nullptr, RenderStatusInfo },
         { "status_hooks", "Status", "Hooks", nullptr, RenderStatusInfo },
         { "status_init", "Status", "Init Flags (active)", nullptr, RenderStatusInfo },

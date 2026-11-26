@@ -336,6 +336,8 @@ class ScopedPreUpscale
 
 // The settings panel, drawn inside OptiScaler's menu.
 void RenderMenu(::Config* config, float menuResScale);
+// Read-only summary for the upstream Status page.
+void RenderStatus(::Config* config);
 
 // Clears the session failure latch, so a failure caused by transient thrash does not cost a restart.
 void RetryAfterFailure();

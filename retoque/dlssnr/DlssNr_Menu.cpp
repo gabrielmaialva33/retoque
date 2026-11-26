@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <menu/NrStatusRules.h>
 #include "DlssNr_AdvisorRuntime.h"
 #include "DlssNr_AdvisorPolicy.h"
 #include "DlssNr_AdvisorMenu.h"
@@ -25,6 +26,7 @@
 #include "DlssNr_ModelLogParse.h"
 #include "DlssNr_ModelStats.h"
 #include "DlssNr_NgxInfo.h"
+#include "DlssNr_ModelFile.h"
 #include "DlssNr_ModelFileFind.h"
 #include "DlssNr_PresentBoundary.h"
 #include "DlssNr_PresentHdr.h"
@@ -381,6 +383,61 @@ static void RenderReplayRecorder(Config* config, bool nativeVulkan)
                             status.folder.c_str(), Localization::Tr(status.reason != nullptr ? status.reason : ""));
     else if (status.phase == RR::Phase::Failed && status.reason != nullptr)
         ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "%s", Localization::Tr(status.reason));
+}
+
+// Lightweight subset of the sources read by CollectDiagnosticReport. No file search, timing
+// contract assembly, NGX describe, model initialization or mutation while the Status card draws.
+static DlssNr::StatusPage::Inputs CollectStatusInputs(Config* config)
+{
+    DlssNr::StatusPage::Inputs in;
+    in.enabled = config->DlssNrEnabled.value_or_default();
+    if (!in.enabled)
+        return in;
+
+    const bool vulkan = DlssNr::IsRunningVk();
+    in.backend = vulkan                ? DlssNr::StatusPage::Backend::Vulkan
+                 : DlssNr::IsRunning() ? DlssNr::StatusPage::Backend::D3D12
+                                       : DlssNr::StatusPage::Backend::None;
+    if (DlssNr::DriverGate::Refuses())
+        in.failure = DlssNr::DriverGate::Process().Reason();
+    else if (in.backend == DlssNr::StatusPage::Backend::None)
+        in.failure = DlssNr::FailureReason();
+    in.apply = config->DlssNrApplyModel.value_or_default();
+    if (const char* status = DlssNr::HookStatus())
+        in.hook = status;
+    const auto routeReport = DlssNr::Dx11RouteReport();
+    in.hideHook = routeReport == DlssNr::Dx11Route::Report::NoPass;
+    if (const char* route = DlssNr::Dx11Route::ReportText(routeReport))
+        in.route = route;
+    if (const char* scene = DlssNr::NativeDx11SceneStatus())
+        in.route = scene;
+    in.passes = config->DlssNrPasses.value_or_default();
+    in.scale = DlssNr::WorkingScale();
+    in.rrScale = DlssNr::RRWorkingScale();
+    const auto& model = config->DlssNrModelFileAtStart();
+    if (!DlssNr::ModelFile::IsAuto(model))
+        in.model = DlssNr::ModelFile::Trimmed(model);
+    in.cadence = config->DlssNrCadence.value_or_default();
+    if (in.backend == DlssNr::StatusPage::Backend::D3D12)
+        if (const char* status = DlssNr::CadenceStatus())
+            in.cadenceStatus = status;
+    return in;
+}
+
+void RenderStatus(Config* config)
+{
+    if (!ImGui::BeginTable("statusNr", 2, ImGuiTableFlags_SizingFixedFit))
+        return;
+    ImGui::TableSetupColumn("##label");
+    ImGui::TableSetupColumn("##value", ImGuiTableColumnFlags_WidthStretch);
+    for (const auto& row : StatusPage::Rows(CollectStatusInputs(config)))
+    {
+        ImGui::TableNextColumn();
+        ImGui::TextDisabled("%s", row.label);
+        ImGui::TableNextColumn();
+        ImGui::TextWrapped("%s", row.value.c_str());
+    }
+    ImGui::EndTable();
 }
 
 // "Copy NR diagnostics" (docs/dlssnr/design/diagnostic-export.md): the getters the panel already reads, read once

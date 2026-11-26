@@ -113,3 +113,10 @@ stays English: it is read by whoever answers the issue, and it quotes getters wh
 6. A game installed under a path with the user's name (or a failure naming the model path): confirm the pasted text
    holds `<path>` and no user name.
 7. With the optional pt-BR pack active, the button and tooltip are translated and the report is English.
+
+## Status page subset (2026-11-26)
+
+The read-only [NR Status card](menu-status-owner.md) uses a lightweight subset of these getters, plus the frozen
+startup model name and resolved working-scale settings. It does not assemble this export on every menu frame.
+It labels retained models as loaded and settings as requested/resolved; no current-frame execution or cost is
+inferred. The export and its on-click-only behavior are unchanged. Host evidence only; MSVC/game checks pending.

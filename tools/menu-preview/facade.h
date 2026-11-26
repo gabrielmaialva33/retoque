@@ -11,6 +11,8 @@
 #include <dlssnr/DlssNr_Cadence.h>
 #include <dlssnr/DlssNr_LightLimit.h>
 #include <dlssnr/DlssNr_DiagnosticReport.h>
+#include <dlssnr/DlssNr_ModelFile.h>
+#include <menu/NrStatusRules.h>
 #include <dlssnr/DlssNr_DriverGate.h>
 #include <dlssnr/DlssNr_Dx11Route.h>
 #include <dlssnr/DlssNr_Enlarge.h>
@@ -58,6 +60,11 @@ struct Config
     {
         static Config c;
         return &c;
+    }
+    const std::string& DlssNrModelFileAtStart() const
+    {
+        static const std::string model = "auto";
+        return model;
     }
     DlssNr::PassConfig::Overrides overrides;
     DlssNrResolvedPassSettings GetDlssNrMasterSettings() const
