@@ -332,6 +332,7 @@ class Config
     CustomOptional<bool> CreateDumps { false };
 
     // XeSS
+    CustomOptional<bool> XeSSUnrealDepth { true };
     CustomOptional<bool> BuildPipelines { true };
     CustomOptional<int32_t> NetworkModel { 0 };
     CustomOptional<bool> CreateHeaps { true };

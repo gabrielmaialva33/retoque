@@ -4,6 +4,12 @@ Generated from `suites.toml`; do not edit this table by hand.
 Regenerate with `python3 tools/check_docs.py --write-catalog` from the repository root.
 This is a coverage index, not evidence that any suite or hardware passed.
 
+## compat
+
+| Suite | Tier | Requirements | Evidence contract | Summary |
+|---|---|---|---|---|
+| [xess-unreal](xess-unreal/README.md) | host | python, cxx | process exit (see suite limits) | XeSS UE View decoder, hook commit rollback, first-device copy admission and startup config gate with host fakes and mutants. |
+
 ## fg
 
 | Suite | Tier | Requirements | Evidence contract | Summary |

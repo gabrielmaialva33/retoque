@@ -1,5 +1,8 @@
 #include "pch.h"
 #include "XeSS_UE_Dx12.h"
+#include "XeSS_UE_Decode.h"
+
+#include <Config.h>
 
 #include <State.h>
 
@@ -609,7 +612,16 @@ bool InitCopy(ID3D12GraphicsCommandList* commandList, ID3D12Device* device)
     DetourAttach(&(PVOID&) o_CommandListReset, hkCommandListReset);
     DetourAttach(&(PVOID&) o_ResourceBarrier, hkResourceBarrier);
     DetourAttach(&(PVOID&) o_ExecuteCommandLists, hkExecuteCommandLists);
-    DetourTransactionCommit();
+    if (auto result = DetourTransactionCommit(); result != NO_ERROR)
+    {
+        // Adapted from janblade/OptiScaler-F5-DLSSNR-Multipass 3617472e (GPL-3.0).
+        // Detours rolled back the transaction; these pointers must not advertise installed hooks.
+        LOG_ERROR("Hooking ResourceBarrier, Reset and ExecuteCommandLists failed: {}, no scene depth copies", result);
+        o_CommandListReset = nullptr;
+        o_ResourceBarrier = nullptr;
+        o_ExecuteCommandLists = nullptr;
+        return false;
+    }
 
     LOG_INFO("Hooked ResourceBarrier, Reset and ExecuteCommandLists to copy the scene depth in queue order");
 
@@ -628,16 +640,30 @@ ID3D12Resource* RequestCopy(ID3D12GraphicsCommandList* commandList, ID3D12Resour
 
     std::scoped_lock lock(_mutex);
 
+    ID3D12Device* device = nullptr;
+
+    if (FAILED(commandList->GetDevice(IID_PPV_ARGS(&device))))
+        return nullptr;
+
     if (_shader == nullptr)
-    {
-        ID3D12Device* device = nullptr;
-
-        if (FAILED(commandList->GetDevice(IID_PPV_ARGS(&device))))
-            return nullptr;
-
-        // The game's device outlives the copy, it is kept without a reference
         InitCopy(commandList, device);
-        device->Release();
+
+    // The game's device outlives the copy, it is kept without a reference.
+    device->Release();
+
+    // Copy objects belong to the first device; never hand its texture to a second device.
+    // Adapted from janblade/OptiScaler-F5-DLSSNR-Multipass 3617472e (GPL-3.0).
+    if (device != _device)
+    {
+        static bool logged = false;
+
+        if (!logged)
+        {
+            logged = true;
+            LOG_WARN("XeSS runs on another device than the scene depth copy was made for, no scene depth");
+        }
+
+        return nullptr;
     }
 
     if (!_shader->IsInit() || o_ExecuteCommandLists == nullptr)
@@ -855,66 +881,6 @@ uintptr_t CallTarget(uintptr_t address, uintptr_t next)
 
 constexpr uint32_t VolatileRegisters = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 8) | (1 << 9) | (1 << 10) | (1 << 11);
 
-// Follows which general purpose registers (bit per register, rax = 0 ... r15 = 15) hold the View pointer through
-// register copies, and reports a load from [viewRegister + disp32]. Only the instruction forms the plugin uses to
-// copy View and read its fields are decoded: mov r64, r64, mov r64, [r + disp32], movups xmm, [r + disp32] and lea.
-void TrackViewRegisters(uintptr_t address, uint32_t& viewRegisters, int32_t& loadOffset)
-{
-    auto code = (uint8_t*) address;
-    uint8_t rex = 0;
-
-    if ((code[0] & 0xF0) == 0x40)
-    {
-        rex = code[0];
-        code++;
-    }
-
-    auto movups = code[0] == 0x0F && code[1] == 0x10;
-    auto opcode = code[0];
-
-    if (!movups && opcode != 0x8B && opcode != 0x89 && opcode != 0x8D)
-        return;
-
-    auto modrm = movups ? code[2] : code[1];
-    auto displacement = movups ? code + 3 : code + 2;
-    auto mod = modrm >> 6;
-    auto reg = ((modrm >> 3) & 7) | ((rex & 4) << 1);
-    auto rm = (modrm & 7) | ((rex & 1) << 3);
-    auto wide = (rex & 8) != 0;
-
-    if (opcode == 0x8D)
-    {
-        viewRegisters &= ~(1u << reg);
-        return;
-    }
-
-    if (mod == 3 && !movups)
-    {
-        if (!wide)
-            return;
-
-        auto destination = opcode == 0x8B ? reg : rm;
-        auto source = opcode == 0x8B ? rm : reg;
-
-        if (viewRegisters & (1u << source))
-            viewRegisters |= 1u << destination;
-        else
-            viewRegisters &= ~(1u << destination);
-
-        return;
-    }
-
-    if (opcode == 0x89)
-        return;
-
-    // [rm + disp32] without a SIB byte
-    if (mod == 2 && (rm & 7) != 4 && (viewRegisters & (1u << rm)) && (movups || wide) && loadOffset == 0)
-        loadOffset = *(int32_t*) displacement;
-
-    if (!movups)
-        viewRegisters &= ~(1u << reg);
-}
-
 // Every plugin version calls GetSecondaryViewRectSize(View) in the flattening, View being the 4th argument, and the
 // first View field it loads is ViewRect: in the flattening itself (UE4 1.x, UE5), or in the helper the XeSS wrapper
 // calls right after naming the texture (UE4 2.x, modular UE5 builds)
@@ -976,7 +942,8 @@ void FindViewSizeAccess(uintptr_t function, uintptr_t nameReference, uintptr_t& 
                                  return true;
                              }
 
-                             TrackViewRegisters(address, viewRegisters, viewRectOffset);
+                             XeSSUnrealDecode::TrackViewRegisters((const uint8_t*) address, viewRegisters,
+                                                                  viewRectOffset);
                              return true;
                          });
     };
@@ -1095,7 +1062,13 @@ bool HookModule(HMODULE module)
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());
         DetourAttach(&(PVOID&) o_FlattenVelocity, hkFlattenVelocity);
-        DetourTransactionCommit();
+        if (auto result = DetourTransactionCommit(); result != NO_ERROR)
+        {
+            LOG_ERROR("Hooking the UE XeSS plugin's velocity flattening at {:X} failed: {}", flattening, result);
+            o_FlattenVelocity = nullptr;
+            _xessVelocityName = nullptr;
+            return false;
+        }
 
         LOG_INFO("Hooked the UE XeSS plugin's velocity flattening at {:X}, called from {:X}, for scene depth and "
                  "render resolution motion vectors",
@@ -1123,7 +1096,14 @@ bool HookModule(HMODULE module)
     if (o_GetSecondaryViewRectSize != nullptr)
         DetourAttach(&(PVOID&) o_GetSecondaryViewRectSize, hkGetSecondaryViewRectSize);
 
-    DetourTransactionCommit();
+    if (auto result = DetourTransactionCommit(); result != NO_ERROR)
+    {
+        LOG_ERROR("Hooking the UE XeSS plugin's velocity flattening at {:X} failed: {}", function, result);
+        o_AddVelocityFlatteningXeSSPass = nullptr;
+        o_GetSecondaryViewRectSize = nullptr;
+        _viewRectOffset = 0;
+        return false;
+    }
 
     LOG_INFO("Hooked the UE XeSS plugin's velocity flattening at {:X} for scene depth", function);
 
@@ -1149,6 +1129,10 @@ void XeSSUnreal::Hook()
     std::scoped_lock lock(mutex);
 
     if (Hooked())
+        return;
+
+    // Startup switch: existing detours are never removed while the game is running.
+    if (!Config::Instance()->XeSSUnrealDepth.value_or_default())
         return;
 
     auto exe = GetModuleHandle(nullptr);

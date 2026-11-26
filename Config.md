@@ -112,6 +112,11 @@ These can be changed from the in-game menu with real-time results (except `UseDe
 
 ```ini
 [XeSS]
+; Recover scene depth and render-resolution motion vectors from the Unreal Engine XeSS plugin
+; Startup setting: restart the game after changing it
+; true or false - Default (auto) is true
+UnrealDepth=auto
+
 ; Building pipeline for XeSS before init
 ; true or false - Default (auto) is true
 BuildPipelines=auto 
@@ -136,6 +141,10 @@ Enabled=auto
 ; Possible values are at the end of the file - Default (auto) is 0
 ColorSpaceConversion=auto
 ```
+
+`UnrealDepth=false` disables the Unreal Engine XeSS plugin hooks for recovered scene depth and
+render-resolution motion vectors. Set it before starting the game; changing it requires a restart.
+`auto`/`true` preserves the existing automatic recovery. It does not disable XeSS inputs or upscaling.
 
 The `BuildPipelines` parameter allows XeSS pipelines to be built during context creation to prevent stuttering later.
 

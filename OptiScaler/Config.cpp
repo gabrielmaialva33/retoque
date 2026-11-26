@@ -497,6 +497,7 @@ bool Config::Reload(std::filesystem::path iniPath)
 
         // XeSS
         {
+            XeSSUnrealDepth.set_from_config(readBool("XeSS", "UnrealDepth"));
             BuildPipelines.set_from_config(readBool("XeSS", "BuildPipelines"));
             NetworkModel.set_from_config(readInt("XeSS", "NetworkModel"));
             CreateHeaps.set_from_config(readBool("XeSS", "CreateHeaps"));
@@ -1994,6 +1995,7 @@ bool Config::SaveIni()
 
     // XeSS
     {
+        ini.SetValue("XeSS", "UnrealDepth", GetBoolValue(Instance()->XeSSUnrealDepth.value_for_config()).c_str());
         ini.SetValue("XeSS", "BuildPipelines", GetBoolValue(Instance()->BuildPipelines.value_for_config()).c_str());
         ini.SetValue("XeSS", "CreateHeaps", GetBoolValue(Instance()->CreateHeaps.value_for_config()).c_str());
         ini.SetValue("XeSS", "NetworkModel", GetIntValue(Instance()->NetworkModel.value_for_config()).c_str());
