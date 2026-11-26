@@ -54,7 +54,7 @@ static auto o_vkDestroyDevice=&destroyed;
 static std::mutex _hookedDevicesMutex,_passThroughSwapchainsMutex;
 static std::unordered_set<uint64_t> _hookedDevices;
 static std::vector<std::pair<VkDevice,int>> _passThroughSwapchains;
-static VkDevice _lowLatency2Device=nullptr,_fifoLatestReadyDevice=nullptr;
+static VkDevice _lowLatency2Device=nullptr,_fifoLatestReadyDevice=nullptr,_device=nullptr;
 struct VulkanHooks {static void* LowLatencySwapchain(){return nullptr;}static void ForgetLowLatencySwapchain(void*){}static void DestroyDevice(PFN_vkDestroyDevice,VkDevice,const VkAllocationCallbacks*);};
 namespace ReflexHooks { void deviceDestroyed(void*){} }
 namespace InputCommon { void vk_device_destroyed(void*){} }
@@ -74,8 +74,10 @@ main=r'''
 int main(int argc,char**argv){
  assert(argc==2);const int mode=std::atoi(argv[1]);VkDevice d=(void*)42;
  tracked=(mode==1 || mode==2);drain=mode<2;DeferredRelease::RegisterOwner(H(d));
+ _device=mode%2==0?d:(void*)43;
  if(mode==0 || mode==3)hkvkDestroyDevice(d,nullptr);else OnDestroyDevice(hkvkDestroyDevice,d,nullptr);
  assert(realDestroy==1);
+ assert(_device==(mode%2==0?nullptr:(void*)43)); // Clear only the destroyed game device.
  assert(prepareCalls==1); // Both actual hook bodies must share one prepare.
  assert(waitCalls==((mode==0 || mode==3)?1:0)); // Never retry a tracked failed drain after the first hook forgot it.
  assert(callbacks==(drain?(mode==0?2:3):0)); // HudCopy and menu children enqueue before retirement.

@@ -5,7 +5,9 @@ Run `python3 tests/fg-command-objects/run.py` with Python and g++.
 Ports from lonewolf0622/HelixSR-Scaler (GPL-3.0), verified against this tree. The suite compiles, verbatim and under
 ASan/UBSan, the command-object members of `IFGFeature_Dx12`, its UI/SC list getters and
 `DropIncompleteCommandObjects`, both `DLSSG_Dx12::CreateObjects` and `XeFG_Dx12::CreateObjects`, and the HUD-less
-format gate from both backends' `SetResource`.
+format gate from both backends' `SetResource`. The production `ReplaceWithRealObject` helper is also compiled;
+a reference-counted proxy verifies that its borrowed real object is retained before releasing the proxy,
+with no leak and no change when the object is already unwrapped.
 
 - 01b95a7d97: a device failing at each of the 18 creation calls in turn leaves no partial set behind (only the shared
   fences survive), the next request on a healthy device builds the whole set, and every object is released once.

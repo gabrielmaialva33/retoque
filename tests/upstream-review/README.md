@@ -7,7 +7,8 @@
 The Vulkan case compiles both actual destroy hooks, the shared protocol and the real deferred queue.
 Boundary fakes supply model/driver outcomes and child-owner releases. It checks single preparation through
 stacked hooks, children before retirement, successful release before the real destroy and no retry after
-failed drain. This does not replace Vulkan validation, driver execution or native Windows qualification.
+failed drain. It also checks that destroying the game device clears the cached handle, while destroying
+another device leaves it intact. This does not replace Vulkan validation, driver execution or native Windows qualification.
 
 The other groups compile actual Get/Allocate/DestroyParameters entries and the proxy destructor getters,
 all six inline UI submission sites with the allocator/wait helper, FG release/resize queue boundaries,

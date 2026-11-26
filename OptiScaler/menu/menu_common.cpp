@@ -41,6 +41,7 @@
 #include <nvapi/fakenvapi.h>
 #include <hooks/Reflex_Hooks.h>
 #include <hooks/Vulkan_Hooks.h>
+#include <hooks/LibraryLoad_Hooks.h>
 
 #include <BuildInfo.h>
 #include <version_check.h>
@@ -95,6 +96,7 @@ constexpr uint64_t debounceThreshold = 1000;
 
 static bool hasGamepad = false;
 static bool ffxInitTried = false;
+static bool ffxVkInitTried = false;
 static bool xefgInitTried = false;
 
 // Detect the compatibility proxy by its exports, not its filename: it may be
@@ -367,8 +369,22 @@ enum OverlayRow : int
     OverlayRow_COUNT,
 };
 
-static const char* overlayRowKeys[] = { "fps",      "upscale",       "frametime", "frametimegraph",
-                                        "upscaler", "upscalergraph", "lowlatency" };
+template <> struct EnumConfig<OverlayRow>
+{
+    // Unknown keys are skipped
+    static constexpr auto default_value = OverlayRow_COUNT;
+
+    static constexpr std::pair<OverlayRow, std::string_view> mapping[] = {
+        { OverlayRow_Fps, "fps" },
+        { OverlayRow_Upscale, "upscale" },
+        { OverlayRow_FrameTime, "frametime" },
+        { OverlayRow_FrameTimeGraph, "frametimegraph" },
+        { OverlayRow_UpscalerTime, "upscaler" },
+        { OverlayRow_UpscalerTimeGraph, "upscalergraph" },
+        { OverlayRow_LowLatency, "lowlatency" },
+    };
+};
+
 static const char* overlayRowNames[] = {
     "FPS",           "Upscale Ratio",       "Frame Time",         "Frame Time Graph",
     "Upscaler Time", "Upscaler Time Graph", "Low Latency Timings"
@@ -441,11 +457,8 @@ static std::vector<OverlayRowEntry> OverlayRows(FpsOverlay type)
         if (!shown)
             name.remove_prefix(1);
 
-        for (int row = 0; row < OverlayRow_COUNT; row++)
-        {
-            if (name == overlayRowKeys[row] && !listed(row))
-                rows.push_back({ row, shown });
-        }
+        if (const auto row = CodeToEnum<OverlayRow>(name); row != OverlayRow_COUNT && !listed(row))
+            rows.push_back({ row, shown });
     }
 
     for (int row = 0; row < OverlayRow_COUNT; row++)
@@ -462,7 +475,7 @@ static void SetOverlayRows(const std::vector<OverlayRowEntry>& rows)
     std::string keys;
 
     for (const auto& entry : rows)
-        keys += (keys.empty() ? "" : ",") + std::string(entry.shown ? "" : "-") + overlayRowKeys[entry.row];
+        keys += (keys.empty() ? "" : ",") + std::string(entry.shown ? "" : "-") + EnumToCode((OverlayRow) entry.row);
 
     Config::Instance()->FpsOverlayRows = keys;
 }
@@ -1303,17 +1316,21 @@ void MenuCommon::RenderUpscalerCombo(const API api, Upscaler currentUpscaler, co
             State::Instance().newBackend = entry.upscaler;
 
             // Regular and custom entries share an upscaler type, which the backend change check compares,
-            // so a switch between them is marked here
+            // so a switch between them is marked here. A regular entry always clears the custom name, which the
+            // ini would otherwise save in place of it.
             if (auto& customSetting = CustomProviders::NameSetting(api);
-                !selected && entry.custom != customSetting.value_or("") &&
-                (!entry.custom.empty() || CustomProviders::Runs(customSetting.value_or(""), api, entry.upscaler)))
+                !selected && entry.custom != customSetting.value_or(""))
             {
+                const bool typeUnchanged =
+                    !entry.custom.empty() || CustomProviders::Runs(customSetting.value_or(""), api, entry.upscaler);
+
                 if (entry.custom.empty())
                     customSetting.reset();
                 else
                     customSetting = entry.custom;
 
-                MARK_ALL_BACKENDS_CHANGED();
+                if (typeUnchanged)
+                    MARK_ALL_BACKENDS_CHANGED();
             }
         }
 
@@ -2702,6 +2719,19 @@ void MenuCommon::UpdateVersionAndStartupNotifications(RenderMenuContext& ctx)
         state.postDone = true;
     }
 
+    static bool macTypeNoticeShown = false;
+    if (!macTypeNoticeShown && LibraryLoadHooks::macTypeRejections.load(std::memory_order_relaxed) >= 20)
+    {
+        macTypeNoticeShown = true;
+
+        ImGuiToast notification { ImGuiToastType::Warning, 20000 };
+        notification.setTitle("MacType detected");
+        notification.setContent("MacType is known to cause performance issues,\n"
+                                "especially with high polling rate mice.\n"
+                                "Please disable it while playing.");
+        ImGui::InsertNotification(notification);
+    }
+
     // Initialize splash timing and select the splash text once per process.
     if (splashLimit < 1.0f)
     {
@@ -3152,8 +3182,14 @@ void MenuCommon::RenderPerformanceOverlay(RenderMenuContext& ctx)
                              : std::format("{} x{}", fg->Name(), fg->GetInterpolatedFrameCount() + 1);
 
             const int fakeFramesCount = state.DlssgDetectedInterpolationCount();
+
+            // Nvngx/DLSSG paths report generation through the game's DLSSG frame count, not IsGenerating()
+            bool nvngxFgGenerating = false;
+
             auto formatFg = [&](std::string_view name, int maxFakeFrames)
             {
+                nvngxFgGenerating = fakeFramesCount > 0 && fakeFramesCount <= maxFakeFrames;
+
                 if (fakeFramesCount > maxFakeFrames)
                     return std::format("{} Doesn't support more than {}x", name, maxFakeFrames);
 
@@ -3313,10 +3349,10 @@ void MenuCommon::RenderPerformanceOverlay(RenderMenuContext& ctx)
                 shownAt = now;
             }
 
-            // With frame generation also the base frame rate: a game's own DLSS-G from its source telemetry,
-            // otherwise the measured base frame rate, the same as FPS shows that FG isn't generating
+            // Prefer the game's own DLSS-G source telemetry. Measured base FPS is shown only while FG generates.
+            const bool fgGenerating = (fg != nullptr && fg->IsGenerating()) || nvngxFgGenerating;
             const std::string fpsValue = externalFg ? StrFmt("%.1f/%.1f", shown.frameRate, externalTelemetry.base_fps)
-                                         : shown.baseFrameTime > 0.0
+                                         : (shown.baseFrameTime > 0.0 && fgGenerating)
                                              ? StrFmt("%.1f/%.1f", shown.frameRate, 1000.0 / shown.baseFrameTime)
                                              : StrFmt("%.1f", shown.frameRate);
 
@@ -4843,12 +4879,6 @@ static void RenderFGStatus(State& state, Config* config)
                     "You might need to select %s first",
                     name, name);
     }
-    else if (input != FGInput::NvngxFG && !config->IsFGEnabled())
-    {
-        // The game controls Nvngx FG, the rest is set by Frame Gen in the output's settings
-        ImGui::SameLine();
-        ImGui::TextColored(StatusWarn(), "(turn on Frame Gen below)");
-    }
 }
 
 void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
@@ -5076,8 +5106,16 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
 
     auto constexpr fgNvngxFfxIndex = (uint32_t) FGNvngxReplacement::FFX;
     if (state.swapchainApi == API::Vulkan)
+    {
+        // The Vulkan FFX dlls are only loaded with the device when FSR FG is the output
+        if (!ffxVkInitTried && !FfxApiProxy::IsFGReadyVk())
+        {
+            ffxVkInitTried = true;
+            FfxApiProxy::InitFfxVk();
+        }
         nvngxOptions[fgNvngxFfxIndex].set_disabled(!FfxApiProxy::IsFGReadyVk() && !FSR4DriverProviderVk::InitFg(),
                                                    "Missing amd_fidelityfx_framegeneration_vk.dll");
+    }
     else
         nvngxOptions[fgNvngxFfxIndex].set_disabled(!FfxApiProxy::IsFGReady(false),
                                                    "Missing amd_fidelityfx_framegeneration_dx12.dll");
@@ -6366,7 +6404,38 @@ void MenuCommon::RenderFrameGenerationRuntimeSettings(RenderMenuContext& ctx)
             const auto status = swapChain->GetStatus();
 
             // While no frames are generated the FG status already says it's off
-            if (status.metering)
+            if (status.metering && FAILED(status.presentResult))
+            {
+                ImGui::TextColored(StatusError(), "Driver pacing: the driver doesn't pace the flips (%08X, status %u)",
+                                   (UINT) status.presentResult, status.presentStatus);
+
+                switch (status.presentStatus)
+                {
+                case AmdExtFlipMeterStatus_WindowNotEligible:
+                    ImGui::TextWrapped("The driver doesn't see the game as a fullscreen app flipped straight to the "
+                                       "display. Try exclusive fullscreen and closing overlays (Discord, Steam, Game "
+                                       "Bar, RTSS) and windows on top of the game.");
+                    ShowTooltip("Status 7: the driver's window manager doesn't report the swapchain's window\n"
+                                "in its fullscreen state, the window is likely composed by DWM\n"
+                                "or shown on an overlay plane");
+                    break;
+
+                case AmdExtFlipMeterStatus_NoPacingInfo:
+                    ImGui::TextWrapped("The driver got flips without usable pacing info.");
+                    ShowTooltip("Status 8: a flip came without a flip meter Present, with a target time of 0\n"
+                                "or with more generated frames than configured");
+                    break;
+
+                case AmdExtFlipMeterStatus_Retry:
+                    ImGui::TextWrapped("The driver has no pacing config for the swapchain.");
+                    break;
+
+                default:
+                    ImGui::TextWrapped("The driver hasn't reported on the flips yet.");
+                    break;
+                }
+            }
+            else if (status.metering)
             {
                 ImGui::TextColored(StatusOk(), "Driver pacing: %s",
                                    status.mode == AmdExtFlipMeterMode_FrameIndex ? "frame index mode"
@@ -7745,7 +7814,7 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                 selectedMode = 1;
             else if (currentShader == SharpenShader::DepthAware)
                 selectedMode = 2;
-            else if (currentShader == SharpenShader::LocalContrastDepthAware)
+            else if (currentShader == SharpenShader::DepthAwareDAS)
                 selectedMode = 3;
             else if (currentShader == SharpenShader::BabaNeural)
                 selectedMode = 4;
@@ -7770,7 +7839,7 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                 else if (selectedMode == 2)
                     Config::Instance()->SharpnessShader = SharpenShader::DepthAware;
                 else if (selectedMode == 3)
-                    Config::Instance()->SharpnessShader = SharpenShader::LocalContrastDepthAware;
+                    Config::Instance()->SharpnessShader = SharpenShader::DepthAwareDAS;
                 else if (selectedMode == 4)
                     Config::Instance()->SharpnessShader = SharpenShader::BabaNeural;
                 else if (selectedMode == 5)
@@ -7884,18 +7953,19 @@ void MenuCommon::RenderActiveImageSettings(RenderMenuContext& ctx)
                     ScopedIndent indent {};
                     ImGui::Spacing();
 
-                    const char* optiModels[] = { "Clean", "TAA", "TAA Wide", "TAA Wide 12", "Punch 10", "Punch 15" };
-                    int optiModel = std::clamp(config->OptiSharpenModel.value_or_default(), 0, 5);
+                    const char* optiModels[] = { "Natural D10", "Crisp D10 p50", "Natural D10 (fp16 packed)",
+                                                 "Crisp D10 p50 (fp16 packed)" };
+                    int optiModel = std::clamp(config->OptiSharpenModel.value_or_default(), 0, 3);
 
                     if (ImGui::Combo("Model", &optiModel, optiModels, IM_ARRAYSIZE(optiModels)))
                         config->OptiSharpenModel = optiModel;
 
-                    ShowTooltip("Clean: The first 3x3 model.\n"
-                                "TAA: Model trained for TAA / upscaler output.\n"
-                                "TAA Wide: TAA model with a wider 13 tap window.\n"
-                                "TAA Wide 12 (default): TAA Wide with a larger network (12 hidden units).\n"
-                                "Punch 10: Stronger TAA Wide 12, allowed to overshoot the local range a little.\n"
-                                "Punch 15: Stronger than Punch 10, overshoots a bit more.");
+                    ShowTooltip("Natural D10 (default): Natural sharpening.\n"
+                                "Crisp D10 p50: Stronger.\n"
+                                "(fp16 packed): The same networks in half precision, written for packed math.\n"
+                                "Faster on Dx12 / Vulkan, Dx11 runs them in fp32.\n"
+                                "All use a 25 tap (5x5) window and overshoot the local range by up to 15%.\n"
+                                "Each model scales the strength, the top of the slider is its best point.");
 
                     const char* optiViews[] = { "Normal", "Sharpening map", "Change magnitude" };
                     int optiView = std::clamp(config->OptiSharpenDebugView.value_or_default(), 0, 2);
@@ -9052,7 +9122,7 @@ void MenuCommon::RenderFpsOverlaySettings(RenderMenuContext& ctx)
                 for (size_t i = 0; i < shownRows.size(); i++)
                 {
                     const int row = shownRows[i].row;
-                    ScopedID rowId { overlayRowKeys[row] };
+                    ScopedID rowId { EnumToCode((OverlayRow) row).c_str() };
 
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
