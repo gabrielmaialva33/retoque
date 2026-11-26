@@ -145,6 +145,12 @@ class NvApiHooks
     static NvAPI_Status hkNvAPI_DRS_GetSetting(NvDRSSessionHandle hSession, NvDRSProfileHandle hProfile,
                                                NvU32 settingId, NVDRS_SETTING* pSetting);
 };
+// The DLSS-G adapter is tested by mfg-wrapper-preset. This suite keeps its default Auto boundary.
+namespace DlssgPresetPolicy
+{
+constexpr std::uint32_t kSettingId = 0x10E41DF1;
+inline NvAPI_Status AnswerRead(NvAPI_Status result, NVDRS_SETTING*) { return result; }
+}
 """ + hook + (here / 'cases.h').read_text()
 
 with tempfile.TemporaryDirectory(prefix='optiscaler-nr-drs-override-') as directory:

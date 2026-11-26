@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <framegen/dlssg/DlssgPresetMenu.h>
 #include <dlssnr/DlssNr_AdvisorMenu.h>
 #include <misc/Localization.h>
 #include <misc/MenuFonts.h>
@@ -5384,6 +5385,9 @@ void MenuCommon::RenderFrameGenerationSelection(RenderMenuContext& ctx)
         const bool dlssgInputOrOutput = state.activeFgOutput == FGOutput::DLSSG ||
                                         state.activeFgInput == FGInput::DLSSG ||
                                         state.gameDlssgReplacedByOwnFg.load(std::memory_order_relaxed);
+
+        DlssgPresetPolicy::RenderMenu(state.activeFgOutput == FGOutput::DLSSG ||
+                                      (!dlssgInputOrOutput && state.dlssgMfgMax.value_or(0) >= 1));
 
         // The ratio combo and the DMFG checkbox share a line. With SameLine when the combo is not drawn, the checkbox
         // followed the FG selection table past the column edge, clipped out of sight (found by ShyVortex, 86054259)

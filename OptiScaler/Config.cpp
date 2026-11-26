@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "Config.h"
+#include <framegen/dlssg/DlssgPresetPolicy.h>
 
 #include "Util.h"
 #include "dlssnr/DlssNr_ModelFile.h"
@@ -407,6 +408,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGDLSSGForceDMFG.set_from_config(readBool("DLSSG", "ForceDMFG"));
             FGDLSSGReflexBoost.set_from_config(readBool("DLSSG", "ReflexBoost"));
             FGDLSSGAdaMfgUnlock.set_from_config(readBool("DLSSG", "AdaMfgUnlock"));
+            FGDLSSGAdaMfgPreset.set_from_config(readString("DLSSG", "AdaMfgPreset", true));
+            if (!DlssgPresetPolicy::Parse(FGDLSSGAdaMfgPreset.value_or_default()))
+                FGDLSSGAdaMfgPreset.reset();
             FGDLSSGAdaBlackwellKernels.set_from_config(readBool("DLSSG", "AdaBlackwellKernels"));
             FGDLSSGAdaPreferGameProvider.set_from_config(readBool("DLSSG", "AdaPreferGameProvider"));
         }
@@ -1838,6 +1842,7 @@ bool Config::SaveIni()
         ini.SetValue("DLSSG", "ForceDMFG", GetBoolValue(Instance()->FGDLSSGForceDMFG.value_for_config()).c_str());
         ini.SetValue("DLSSG", "ReflexBoost", GetBoolValue(Instance()->FGDLSSGReflexBoost.value_for_config()).c_str());
         ini.SetValue("DLSSG", "AdaMfgUnlock", GetBoolValue(Instance()->FGDLSSGAdaMfgUnlock.value_for_config()).c_str());
+        ini.SetValue("DLSSG", "AdaMfgPreset", Instance()->FGDLSSGAdaMfgPreset.value_for_config().value_or("auto").c_str());
         ini.SetValue("DLSSG", "AdaBlackwellKernels",
                      GetBoolValue(Instance()->FGDLSSGAdaBlackwellKernels.value_for_config()).c_str());
         ini.SetValue("DLSSG", "AdaPreferGameProvider",

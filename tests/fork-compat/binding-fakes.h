@@ -18,6 +18,11 @@
 #define LOG_WARN(...) ((void) 0)
 #define LOG_ERROR(...) ((void) 0)
 using HMODULE = void*;
+// MFG patching is covered by mfg-wrapper-preset; binding tests own only plugin resolution.
+namespace MfgUnlock
+{
+inline void TryApply(HMODULE = nullptr, HMODULE = nullptr) {}
+} // namespace MfgUnlock
 using LPCWSTR = const wchar_t*;
 constexpr unsigned GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS = 4;
 constexpr unsigned GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT = 2;

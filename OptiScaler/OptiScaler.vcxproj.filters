@@ -2511,6 +2511,18 @@
     <ClCompile Include="..\retoque\lsfg\presenter\MfgSwapChain_DebugPacing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClInclude Include="..\retoque\framegen\dlssg\MfgWrapperPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetDrs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetMenu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\framegen\dlssg\MfgProbe.h">
       <Filter>Header Files</Filter>
     </ClInclude>

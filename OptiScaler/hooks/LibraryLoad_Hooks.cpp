@@ -315,7 +315,7 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
             // before this plugin, so the TryApply on that load found no wrapper, and the game asked
             // GetState before SetOptions, so the later TryApply never ran: mfgMax stayed 3 and the
             // "4x" ran at 2x. Idempotent; the snippet half already reports done.
-            MfgUnlock::TryApply();
+            MfgUnlock::TryApply(nullptr, dlssgModule);
         }
         else
         {

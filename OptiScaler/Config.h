@@ -1309,6 +1309,7 @@ class Config
     CustomOptional<bool> FGDLSSGForceDMFG { false };           // Overrides Opti's DLSSG mode to Dynamic
     CustomOptional<float> FGDLSSGFramerateTargetDMFG { 0.0f }; // 0.0 means auto-detects the display refresh rate
 
+    CustomOptional<std::string> FGDLSSGAdaMfgPreset { "auto" }; // Process-local DRS read, restart required
     CustomOptional<bool> FGDLSSGAdaMfgUnlock { false };        // See framegen/dlssg/MfgUnlock.h
     CustomOptional<bool> FGDLSSGAdaBlackwellKernels { false }; // See framegen/dlssg/MfgUnlock.h
     // With AdaMfgUnlock under Proton: answer the driver's Wine DLSS-G with the game's newer copy

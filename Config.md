@@ -1042,3 +1042,13 @@ DLSSG provider without replacing its FG backend. See
 
 
 
+
+### DLSS-G process preset (Retoque)
+
+`[DLSSG] AdaMfgPreset=auto` leaves the driver response unchanged. With `AdaMfgUnlock=true`,
+`a`, `b` or `c` answers only the process's read of the DLSS-G preset setting; the saved NVIDIA
+profile is never written. Unknown text falls back to auto. Save and restart after changing it.
+Preset C is answered only when all observed provider versions are known and at least 310.9.16.
+An old or unknown provider keeps the original answer. The menu control appears only on a native
+DLSS-G route with the unlock enabled, a provider observed and the DRS hook available; C is disabled until its version
+gate is satisfied. This adds neither an RTX 20/30 loader nor another multiplier control.

@@ -47,7 +47,13 @@ namespace MfgUnlock
 // provider: the DLSS-G snippet the load hook just mapped. Without one, the game's nvngx_dlssg.dll is
 // looked up by name -- which cannot find the driver's own copy, a <hash>.bin under
 // ProgramData\NVIDIA\NGX\models\dlssg\, so the load hook hands that one over itself.
-void TryApply(HMODULE provider = nullptr);
+// wrapper: the actual freshly loaded sl.dlss_g module, including private/OTA copies. Its original
+// bytes invalidate the per-module latch after a remap at the same address.
+void TryApply(HMODULE provider = nullptr, HMODULE wrapper = nullptr);
+
+// Lowest known version across observed providers (zero includes unknown), for the fail-closed C gate.
+uint64_t PresetRuntimeVersion();
+bool PresetProviderObserved();
 
 // Cheap invalidation token: changes after a different provider is observed or a module is handled.
 // No module lookup, patcher lock or capability query. Load hooks publish after patching completes.

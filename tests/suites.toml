@@ -1391,3 +1391,10 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "XeSS UE View decoder, hook commit rollback, first-device copy admission and startup config gate with host fakes and mutants."
+[mfg-wrapper-preset]
+path = "mfg-wrapper-preset"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "MFG wrapper unique executable match, ceiling/reload identity and opt-in DRS preset answer under ASan/UBSan."

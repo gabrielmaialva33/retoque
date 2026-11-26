@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "NvApiHooks.h"
+#include <framegen/dlssg/DlssgPresetDrs.h>
 #include <NvApiDriverSettings.h>
 #include <dlssnr/DlssNr_DrsOverride.h>
 #include <dlssnr/DlssNr_KernelProfile.h>
@@ -66,6 +67,9 @@ NvAPI_Status __stdcall NvApiHooks::hkNvAPI_DRS_GetSetting(NvDRSSessionHandle hSe
         return NVAPI_ERROR;
 
     auto result = o_NvAPI_DRS_GetSetting(hSession, hProfile, settingId, pSetting);
+    if (settingId == DlssgPresetPolicy::kSettingId)
+        return DlssgPresetPolicy::AnswerRead(result, pSetting);
+
     if (pSetting && result == NVAPI_OK)
     {
 #ifdef LOG_ALL_DRS_GET_CALLS

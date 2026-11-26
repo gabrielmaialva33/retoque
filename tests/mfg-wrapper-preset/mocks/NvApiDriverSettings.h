@@ -1,0 +1,2 @@
+#pragma once
+constexpr unsigned NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION_ID = 0x10E41DF1;

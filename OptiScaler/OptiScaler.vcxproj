@@ -222,6 +222,10 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\framegen\dlssg\MfgUnlock.h" />
     <ClInclude Include="..\retoque\framegen\dlssg\ProtonDlssgProvider.h" />
     <ClInclude Include="..\retoque\framegen\dlssg\MfgPatchPlan.h" />
+    <ClInclude Include="..\retoque\framegen\dlssg\MfgWrapperPolicy.h" />
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetPolicy.h" />
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetDrs.h" />
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetMenu.h" />
     <ClInclude Include="framegen\dlssg\DLSSG_Vk.h" />
     <ClInclude Include="framegen\ffx\FSRFG_Dx12.h" />
     <ClInclude Include="framegen\ffx\FSRFG_Vk.h" />
