@@ -12,6 +12,8 @@
 #include <dlssnr/DlssNr_SlBoundaryProbe.h>
 #include <dlssnr/DlssNr_SlNativeNr.h>
 #include <dlssnr/DlssNr_SlTagInventory.h>
+#include <dlssnr/DlssNr_PresentReset.h>
+#include <dlssnr/DlssNr_SlPresentGuides.h>
 #include <hooks/DetourRecord.h>
 #include <dlssnr/DlssNr_VkPresentHost.h>
 #include <hooks/Streamline_DlssgRequest.h>
@@ -582,6 +584,12 @@ static void NoteTagInventory(const sl::ResourceTag* tags, uint32_t count, uint32
 sl::Result StreamlineHooks::hkslSetTagNoteOnly(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
                                                uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
+    if (DlssNr::SlPresent::Enabled())
+    {
+        DlssNr::SlPresent::Tags(0, static_cast<uint32_t>(viewport), tags, numTags, cmdBuffer, false,
+                                renderApi == sl::RenderAPI::eD3D12);
+    }
+
     DlssNr::SlNativeNr::OnTags(tags, numTags);
     NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);
     return o_slSetTag(viewport, tags, numTags, cmdBuffer);
@@ -591,6 +599,13 @@ sl::Result StreamlineHooks::hkslSetTagForFrameNoteOnly(const sl::FrameToken& fra
                                                        const sl::ResourceTag* resources, uint32_t numResources,
                                                        sl::CommandBuffer* cmdBuffer)
 {
+    if (DlssNr::SlPresent::Enabled())
+    {
+        const void* volatile nrFrame = &frame;
+        DlssNr::SlPresent::Tags(nrFrame ? static_cast<uint32_t>(frame) : 0, static_cast<uint32_t>(viewport), resources,
+                                numResources, cmdBuffer, nrFrame != nullptr, renderApi == sl::RenderAPI::eD3D12);
+    }
+
     DlssNr::SlNativeNr::OnTags(resources, numResources);
     NoteTagInventory(resources, numResources, DlssNr::SlTagInventory::kViaSetTagForFrame, renderApi);
     return o_slSetTagForFrame(frame, viewport, resources, numResources, cmdBuffer);
@@ -599,6 +614,12 @@ sl::Result StreamlineHooks::hkslSetTagForFrameNoteOnly(const sl::FrameToken& fra
 sl::Result StreamlineHooks::hkslSetTag(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
                                        uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
+    if (DlssNr::SlPresent::Enabled())
+    {
+        DlssNr::SlPresent::Tags(0, static_cast<uint32_t>(viewport), tags, numTags, cmdBuffer, false,
+                                renderApi == sl::RenderAPI::eD3D12);
+    }
+
     // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).
     DlssNr::SlNativeNr::OnTags(tags, numTags);
     NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);
@@ -693,6 +714,13 @@ sl::Result StreamlineHooks::hkslSetTagForFrame(const sl::FrameToken& frame, cons
                                                const sl::ResourceTag* resources, uint32_t numResources,
                                                sl::CommandBuffer* cmdBuffer)
 {
+    if (DlssNr::SlPresent::Enabled())
+    {
+        const void* volatile nrFrame = &frame;
+        DlssNr::SlPresent::Tags(nrFrame ? static_cast<uint32_t>(frame) : 0, static_cast<uint32_t>(viewport), resources,
+                                numResources, cmdBuffer, nrFrame != nullptr, renderApi == sl::RenderAPI::eD3D12);
+    }
+
     // The game's own NR's uplift buffers, recorded only (DlssNr_SlNativeNr.h).
     DlssNr::SlNativeNr::OnTags(resources, numResources);
     NoteTagInventory(resources, numResources, DlssNr::SlTagInventory::kViaSetTagForFrame, renderApi);
@@ -933,6 +961,8 @@ bool StreamlineHooks::hkslSetConstants_sl1(const sl1::Constants& values, uint32_
 
     LOG_TRACE("SL1 slSetConstants frameIndex: {}, id: {}", frameIndex, id);
 
+    DlssNr::PresentReset::Instance().Observe(Config::Instance()->DlssNrEnabled.value_or_default(),
+                                             values.reset == sl1::Boolean::eTrue);
     if (IsSL1AndFGActive())
         State::Instance().s_sl1FGInputs.setConstants(values, frameIndex, id);
 
@@ -1508,7 +1538,14 @@ sl::Result StreamlineHooks::hkslSetConstants(const sl::Constants& values, const 
     std::scoped_lock lock(setConstantsMutex);
     LOG_TRACE("called with frameIndex: {}, viewport: {}", (unsigned int) frame, (unsigned int) viewport);
 
-    State::Instance().slFGInputs.setConstants(values, (uint32_t) frame);
+    DlssNr::PresentReset::Instance().Observe(Config::Instance()->DlssNrEnabled.value_or_default(),
+                                             values.reset == sl::Boolean::eTrue);
+    if (State::Instance().activeFgInput == FGInput::NvngxFG || State::Instance().activeFgInput == FGInput::DLSSG)
+        State::Instance().slFGInputs.setConstants(values, (uint32_t) frame);
+
+    const void* volatile nrFrame = &frame;
+    if (DlssNr::SlPresent::Enabled() && nrFrame && renderApi == sl::RenderAPI::eD3D12)
+        DlssNr::SlPresent::Constants(values, static_cast<uint32_t>(frame), static_cast<uint32_t>(viewport));
 
     return o_slSetConstants(values, frame, viewport);
 }
@@ -2193,12 +2230,16 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(PFN_slGetPluginFunction orig
 sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
 {
     if (o_slPCLSetMarker == nullptr)
+    {
+        DlssNr::SlPresent::MarkerEnd();
         return sl::Result::eErrorFeatureMissing;
+    }
 
     // Indiana Jones sends a nullptr on startup :)
     const void* volatile framePtr = &frame;
     if (framePtr == nullptr)
     {
+        DlssNr::SlPresent::MarkerEnd();
         LOG_WARN("Null frame token for marker {}", (uint32_t) marker);
         return o_slPCLSetMarker(marker, frame);
     }
@@ -2267,7 +2308,18 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
         }
     }
 
-    return o_slPCLSetMarker(marker, frame);
+    const auto result = o_slPCLSetMarker(marker, frame);
+    if (DlssNr::SlPresent::Enabled() && marker == sl::PCLMarker::ePresentStart)
+    {
+        if (result == sl::Result::eOk && renderApi == sl::RenderAPI::eD3D12 &&
+            State::Instance().streamlineVersion.major >= 2)
+            DlssNr::SlPresent::MarkerStart(static_cast<uint32_t>(frame));
+        else
+            DlssNr::SlPresent::MarkerEnd();
+    }
+    else if (marker == sl::PCLMarker::ePresentEnd)
+        DlssNr::SlPresent::MarkerEnd();
+    return result;
 }
 
 bool StreamlineHooks::hkpcl_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
@@ -2298,7 +2350,9 @@ void* StreamlineHooks::hkpcl_slGetPluginFunction(PFN_slGetPluginFunction origina
 
     if (strcmp(functionName, "slPCLSetMarker") == 0 &&
         (State::Instance().gameQuirks & GameQuirk::FixSlSimulationMarkers ||
-         State::Instance().activeFgInput == FGInput::DLSSG))
+         State::Instance().activeFgInput == FGInput::DLSSG ||
+         (DlssNr::SlPresent::Enabled() && State::Instance().streamlineVersion.major >= 2 &&
+          renderApi == sl::RenderAPI::eD3D12)))
     {
         o_slPCLSetMarker = (decltype(&slPCLSetMarker)) original(functionName);
         return &hkslPCLSetMarker;
@@ -2686,7 +2740,11 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                 }
                 else if (nrOn)
                 {
-                    // No Streamline FG input: the tag calls are only noted and forwarded untouched.
+                    // Constants carry camera cuts even when the game keeps its own FG provider.
+                    if (o_slSetConstants != nullptr)
+                        AttachInterposerHook(&(PVOID&) o_slSetConstants, (PVOID) hkslSetConstants);
+
+                    // No Streamline FG input: inventory and optional b1 transport; original tags are forwarded untouched.
                     if (o_slSetTag != nullptr)
                     {
                         AttachInterposerHook(&(PVOID&) o_slSetTag, (PVOID) hkslSetTagNoteOnly);
@@ -2779,13 +2837,16 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
                 if (o_slInit_sl1)
                     AttachInterposerHook(&(PVOID&) o_slInit_sl1, (PVOID) hkslInit_sl1);
 
+                if (IsSL1AndFGActive() || Config::Instance()->DlssNrEnabled.value_or_default())
+                {
+                    if (o_slSetConstants_interposer_sl1)
+                        AttachInterposerHook(&(PVOID&) o_slSetConstants_interposer_sl1, (PVOID) hkslSetConstants_sl1);
+                }
+
                 if (IsSL1AndFGActive())
                 {
                     if (o_slSetTag_sl1)
                         AttachInterposerHook(&(PVOID&) o_slSetTag_sl1, (PVOID) hkslSetTag_sl1);
-
-                    if (o_slSetConstants_interposer_sl1)
-                        AttachInterposerHook(&(PVOID&) o_slSetConstants_interposer_sl1, (PVOID) hkslSetConstants_sl1);
 
                     if (o_slEvaluateFeature_sl1)
                         AttachInterposerHook(&(PVOID&) o_slEvaluateFeature_sl1, (PVOID) hkslEvaluateFeature_sl1);

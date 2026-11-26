@@ -2,7 +2,8 @@
 
 Status: **step 0 implemented, log only; game/native qualification pending**, 2026-11-19.
 The owner reopened this work on this date. The revalidation below is against `6972e2d7`; the original design
-was written on 2026-10-14 against `27f89456`. This slice supplies no depth to NR. Step 0b is specified only,
+was written on 2026-10-14 against `27f89456`. This observer slice supplies no depth to NR.
+The separately enabled b1 transport is described in the 2026-11-26 section below. Step 0b is specified only,
 not built or run. Step 1 still waits for the game's measurements.
 
 Retoque source anchors below refer to `6972e2d7`. The NeuRotic comparison is explicitly historical, against
@@ -16,6 +17,90 @@ this note reuses), [nr-present-hook.md](nr-present-hook.md) (the present host),
 stepped note), [nr-dx11-bridge-host.md](nr-dx11-bridge-host.md) (the D3D11 host),
 [reduced-scale-guides.md](reduced-scale-guides.md) (guide formats and sizes, and the native-Windows lesson) and
 [DEVELOPMENT.md](DEVELOPMENT.md).
+
+## Streamline tag option b1 review, 2026-11-26
+
+**Owner-approved restricted b1 implementation, 2026-11-26; host evidence only, no DLL/GPU qualification.**
+`PresentSlGuides=false` is independent of the log-only heuristic observer above. Camera-reset observation is now
+implemented independently ([reset forwarding](scene-cut-detection.md#camera-reset-forwarding-2026-11-26)), with
+host evidence only. It is not a constants/guide frame-matching contract and does not qualify tag resources for NR.
+
+The review identified these choices; the approved restricted implementation below resolves only the admitted slice:
+
+- **Identity and boundary ownership.** `slSetTagForFrame` supplies a frame token and viewport; legacy `slSetTag`
+  does not supply a token. The original ring stamp used an upscaler-evaluate ordinal and the present tracker's epoch,
+  not a Streamline frame ID. `AskGuideIdentity` still returns before `AtPresent` when no capture was ever recorded;
+  warm-up/early present refusals can also skip that clock. The diagnostic clock accepted for step 0 above cannot
+  silently become the production identity clock. Decide a token/viewport/presenter mapping and how real-present
+  boundaries advance even with no capture, with regressions for the existing upscaler lag rules. Never substitute
+  a 250 ms freshness timer for identity.
+- **Tag lifecycle and incomplete pairs.** Depth, motion and constants can arrive in separate calls or lists, and
+  only frame-based tags identify which frame to assemble. The ring currently commits a complete pair. Decide the
+  bounded partial-capture owner and how all producer recordings are tracked. `eOnlyValidNow` must be copied during
+  its valid call; a null command list cannot become permission to retain its resource. `eValidUntilPresent` is a
+  content-lifetime declaration, not a queue-order/state proof. Removal, replacement, resize, abandoned/unsubmitted
+  lists and cross-queue completion must all refuse or retire through recording evidence, never wall-clock age.
+- **HUD-less role and current-frame refusal.** b1 describes depth/motion transport; it does not decide whether a
+  HUD-less tag supplies an H1 HUD mask or replaces colour under H3. Those are different changes
+  ([HUD choices](nr-before-dlssg.md#the-hud-at-the-boundary-three-policies)). The requested refusal when more than 30% differs needs a defined
+  per-pixel difference threshold, colour space (including HDR), sampling/extent and same-frame validity. The
+  MFGAdaUnlock-RenoDx `1912c33` idea uses a three-frame-old statistic; that cannot certify this frame's refusal.
+  Retoque has no such same-frame tag comparison pass. A prior readback or an unmeasured threshold must not be
+  treated as a current-frame safety check.
+
+The owner approved the smallest slice: `[DlssNr] PresentSlGuides=false` with full config
+round trip and no menu entry; admit only token-matched, single-viewport, complete D3D12 pairs on tracked DIRECT
+lists, preserving the existing upscaler capture's priority. Refuse legacy tokenless, ambiguous or incomplete
+frames. Extend the production boundary contract with tests rather than borrowing the log-only clock. Preserve
+H1; use HUD-less only for a separately approved same-frame mask/guard, never as the model's colour. A HUD-less
+refusal leaves accepted depth/motion eligible. Select the difference metric and a GPU-ordered reduction/guard
+before implementing that part; no CPU wait or stale readback is an implicit substitute. H3/tag replacement is a
+separate decision. The owner explicitly approved these restrictions; legacy tokenless tagging remains refused.
+
+Evidence here is source inspection of the current ring/identity/hooks and source ideas `7dabaa6`/`1912c33` from
+MFGAdaUnlock-RenoDx, not GPU/game qualification. Host implementation evidence is listed below. Its one-slot, 250 ms selection and 2 s retirement policy were
+not copied. MSVC build, GPU/game measurements, debug-layer validation and native Windows remain pending.
+
+### Approved b1 implementation contract
+
+- **Activation:** NR enabled, `HookMethod=2`, `[DlssNr] PresentSlGuides=true` before startup. Default false;
+  declaration/read/save/shipped INI and config reference agree. No menu entry. D3D12 only; D3D11/Vulkan and legacy
+  tokenless tags cannot supply this transport.
+- **Real boundary first:** the owning boundary advances the production tracker before warmup, failed-model,
+  allocator and optional-pass refusals, including an empty ring. The pick uses that observed epoch without ticking
+  again. Default/bridge callers retain `AtPresent`. Tests preserve the one-boundary lag limit, relaxed lower-route
+  rule and consumption behavior, and reject stale/concurrently superseded boundary snapshots.
+- **Identity:** one exact boundary swapchain, device and presenter are pinned; a second owner refuses the session.
+  One explicit viewport is admitted; a second viewport refuses the session. Constants precede a complete same-call
+  depth/motion pair with the same frame token/viewport. A successful Streamline 2 PresentStart marker on the Present
+  thread supplies the token, consumed once at the real boundary. Missing/repeated/out-of-order tokens, duplicates,
+  removals, incomplete pairs and overwritten bounded metadata refuse. No latest-token guess or freshness timer
+  grants admission. Existing age limits can only reject, never prove identity.
+- **Restricted recording contract:** only `eOnlyValidNow` is implemented: copy during the valid tag call, then
+  forward the original tags unchanged. UntilEvaluate/UntilPresent are refused because their stated usage state
+  does not prove the state is already valid at this call. A tracked DIRECT list must have an observed successful
+  Reset, still be open, and be outside a render pass. First contact installs state on the list object and refuses
+  until Reset. Failed hooks/private-data writes, incompatible vtables, suspended/resumed passes, unknown/closed
+  recordings and unsupported layouts/formats refuse. No partial pair or raw game-resource pointer is saved for a
+  future call. Constants must explicitly describe finite 2D camera-inclusive motion; motion scales convert from
+  normalized SL units to pixel units using the motion texture extent.
+- **One existing ring and lifetime proof:** the four-slot guide ring, write/read usages, same-queue submission or
+  observed completion, and retirement remain authoritative. Source resources receive owned references before
+  recording copies and retire through the existing tracked `ParkNrClone` path; `eOnlyValidNow` cannot leave a
+  dangling source after the game releases its reference. Capacity is reserved first, otherwise capture refuses.
+  A current upscaler capture takes priority even when a tag pair was captured first. Tag slots never qualify in
+  the D3D11 bridge or lower/generated Present routes.
+- **HUD policy:** H1 is unchanged. HUD-less tags are never copied, substituted, retagged or used as model colour.
+  The same-frame GPU guard is unspecified/unavailable, so HUD-less use is always refused. The policy test verifies
+  that an unknown guard refuses and a known changed fraction above 30% disables only that HUD-less permission;
+  it is not a GPU comparison implementation or an approved pixel-difference metric. Accepted depth/motion does
+  not depend on HUD-less admission. No HLSL or bytecode change was needed.
+
+Implementation: `DlssNr_SlPresentPolicy.h`, `DlssNr_SlPresentRecording.cpp` and the existing present-guide adapter.
+[Host suite](../../../tests/nr-sl-present-guides/README.md): executable identity/clock tests, actual adapter functions
+with vendored Streamline types and D3D12 fakes, production recording hooks with fake Detours/private-data APIs,
+refusal mutants and source-boundary checks. MSVC/DLL compilation, detour coexistence, native Windows, Proton,
+GPU ordering/state correctness, image quality and performance remain pending. An enabled key is not qualification.
 
 ## Revalidated 2026-11-19
 

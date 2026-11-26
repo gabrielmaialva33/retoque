@@ -1086,6 +1086,10 @@ copy NUL "$(SolutionDir)x64\Release\a\!! EXTRACT ALL FILES TO GAME FOLDER !!" /Y
     <ClInclude Include="..\retoque\dlssnr\DlssNr_LightLimit.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_DetailStability.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_FrameBreaks.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_PresentReset.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_SlPresentGuides.h" />
+    <ClInclude Include="..\retoque\dlssnr\DlssNr_SlPresentPolicy.h" />
+    <ClCompile Include="..\retoque\dlssnr\DlssNr_SlPresentRecording.cpp" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Chain.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_Cadence.h" />
     <ClInclude Include="..\retoque\dlssnr\DlssNr_CadenceAdaptive.h" />

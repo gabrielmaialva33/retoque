@@ -5,6 +5,39 @@ Status 2026-10-30: **phase 1, the rule only.** A pure, host-tested detector (`re
 any route. Its thresholds are calibrated on synthetic grids only. Phase 2, below, proposes the feed, the key and the
 wiring; none of it is implementation authorization.
 
+## Camera-reset forwarding, 2026-11-26
+
+Implemented separately from the detector above; host validation only. Streamline 1/2 `Constants::reset`
+(explicit `eTrue`, not `eInvalid`) is observed even without an OptiScaler FG input when NR was enabled at hook
+installation. The existing NGX FG observation also forwards `DLSSG.Reset` from the first MFG evaluation
+(`MultiFrameIndex <= 1`); it does not depend on the boundary probe being installed. With NR disabled no reset
+request is stored. The original Streamline call still receives the original arguments and its result is returned.
+
+`DlssNr_PresentReset.h` holds camera cuts outside the guide ring. The D3D12 main-picture capture path observes
+reset before missing-resource/capture admission, and the native D3D11 capture wrapper before the ring can refuse
+it. A later false reset does not clear it. Both present consumers apply the pending snapshot as a **game reset**
+(`ResetIsPolicy=false`, `ResetIsSceneCut=false`) after choosing their guides, including the zero/synthesized
+fallback. Thus the bridge's metadata overwrite and a skipped capture no longer discard the request, and a delayed
+slot cannot replay an already acknowledged reset. Existing `NoteResetSent`/frame-break logging counts it at the
+model call; no separate observed-request counter is passed off as a model reset.
+
+Acknowledgment requires a model recording and successful submission: `SubmitPresentList` on D3D12,
+`PresentHost::ConfirmExecuted` on the bridge. A skip, abandoned recording or failed submit retains it. A newer
+cut arriving during submission remains pending. This changes no resource, fence, retirement or shader contract.
+The mailbox follows the renderer's existing single NR history; it does not introduce per-viewport histories.
+
+Limits: `DLSSG.Reset` can arrive after the game's Present (the measured ordering in
+[nr-before-dlssg](nr-before-dlssg.md)), so it resets the next eligible present, not the frame already shown.
+Streamline constants and NGX do not expose a shared frame identity here: requests arriving before acknowledgment
+coalesce, but an additional late NGX reset can reset again after the constants reset was submitted. No timer or
+unproven frame matching suppresses a real cut. Runtime measurement must check duplicate/late signals with the
+existing reset-rate log. NR enabled only after startup cannot install missing constants hooks until restart.
+
+Evidence: `tests/nr-present-reset` covers the mailbox and production constants hooks; `tests/nr-present-host`
+executes the actual bridge host with fakes, including no captured guides, model refusal and abandoned recording.
+The new bridge regression fails before this change. MSVC, GPU, game, quality and native Windows are **not run**.
+The source idea is MFGAdaUnlock-RenoDx `1912c33` (N1); implementation and lifetime rules are Retoque's own.
+
 ## Why
 
 The model drops its history only when `DlssNrFrameInfo::Reset` is set (`shaders/dlssnr/DlssNr_Common.h:112`). Today
@@ -16,7 +49,7 @@ that flag comes from:
   ([zero-motion-detection.md](zero-motion-detection.md)), marked `ResetIsPolicy` because nothing cut;
 - synthesized motion's FidelityFX scene-change passes, when the pass estimates its own motion (`DlssNr_Dx12.cpp:5244`).
 
-So a cut is missed wherever the game's flag does not reach the pass or the game never sets it: every present-time
+Before the forwarding fix above, a cut was missed wherever the game's flag does not reach the pass or the game never sets it: every present-time
 route with the game's own guides (the D3D11 bridge's host replaces the captured frame's `Reset` with its own,
 `DlssNr_PresentHost.cpp:719`), and any title that does not flag its cutscene cuts. A missed cut warps one picture's
 history into the next for a few frames. [synthesized-motion.md](synthesized-motion.md) lists cuts as an open risk

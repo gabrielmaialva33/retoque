@@ -374,6 +374,7 @@ class Config
     CustomOptional<uint32_t> DlssNrHookMethod { 1 };
     // Present hook: require DLSS temporal inputs or fall back to zero/dummy guides. Default false.
     CustomOptional<bool> DlssNrRequireDlss { false };
+    CustomOptional<bool> DlssNrPresentSlGuides { false };
     // Startup-only D3D12 observer: constant (default) or log; never hands depth to NR.
     CustomOptional<std::string> DlssNrPresentDepth { std::string("constant") };
     // Present hosts on zero guides: start the model's history over every frame. Default false.

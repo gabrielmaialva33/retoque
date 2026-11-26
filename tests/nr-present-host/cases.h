@@ -746,6 +746,36 @@ int main()
         CASE("and back to a format it can store, the model runs on the first frame, with the reset it is owed");
     }
 
+    {
+        Fresh();
+        Rig r;
+        r.Size(1920, 1080);
+        assert(r.Frame());
+        assert(r.Frame() && !DlssNr::g_lastPassReset);
+        auto& pending = DlssNr::PresentReset::Instance();
+        pending.Observe(true, true); // the cut's capture was skipped; the host has no real guides
+        const auto ticket = pending.Snapshot();
+        assert(ticket != 0);
+        DlssNr::g_refuseModel = true;
+        assert(!r.Frame() && pending.Snapshot() == ticket);
+        DlssNr::g_refuseModel = false;
+        assert(r.Frame() && DlssNr::g_lastPassReset);
+        assert(!DlssNr::g_lastPassFrame.ResetIsPolicy && !DlssNr::g_lastPassFrame.ResetIsSceneCut);
+        assert(pending.Snapshot() == 0);
+        assert(r.Frame() && !DlssNr::g_lastPassReset);
+        CASE("a camera cut survives skipped capture and model refusal, then resets one submitted frame");
+
+        pending.Observe(true, true);
+        ID3D12GraphicsCommandList list;
+        r.source.state = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        assert(r.host.Record(&r.device, &list, &r.source, D3D12_RESOURCE_STATE_COPY_SOURCE, &r.queue));
+        assert(DlssNr::g_lastPassReset);
+        r.host.AbandonRecording();
+        assert(pending.Snapshot() != 0);
+        assert(r.Frame() && DlssNr::g_lastPassReset && pending.Snapshot() == 0);
+        CASE("abandoning a recorded camera reset leaves it owed to the next submitted frame");
+    }
+
     assert(g_transferBuffersLive == 0);
     std::cout << "present host: " << cases << " cases passed\n";
     return 0;

@@ -122,7 +122,9 @@ assert re.search(r'if \(\+\+resets <= 3 \|\| resets % 100 == 0\)\s*\{\s*LOG_INFO
 # the pick itself, so a refused capture is never tracked or read. The skip stays, before any read, and is counted.
 present = function(renderer, 'void RunPresentPass(')
 pick = ('const size_t pickedSlot = g_presentGuideRing.PickForPresent(isEligible, nowMs);\n')
-ask = ('const GuideAsk guides = AskPresentPassGuides(device, presenter, width, height, pickedSlot, boundary);\n'
+ask = ('const GuideAsk guides =\n'
+       '        slBoundaryObserved ? AskObservedPresentGuides(slObservedPresent, device, presenter, width, height, pickedSlot)\n'
+       '                           : AskPresentPassGuides(device, presenter, width, height, pickedSlot, boundary);\n'
        '    const size_t usableSlot = guides.decision.slot;\n')
 assert present.count(pick) == 1 and present.count('PickForPresent(') == 1
 assert present.count(ask) == 1 and present.index(pick) < present.index(ask)
@@ -130,7 +132,7 @@ assert present.count('AskPresentPassGuides(') == 1
 assert 'const void* const presenter = PresentGuidePresenter(swapchain);' in present
 assert present.index('PresentGuidePresenter(swapchain)') < present.index('std::unique_lock<std::mutex> nrLock(g_nrMutex);')
 # pickedSlot is handed to the identity and the record only, and read for its sequence when it was refused.
-assert len(re.findall(r'\bpickedSlot\b', present)) == 5, re.findall(r'.*\bpickedSlot\b.*', present)
+assert len(re.findall(r'\bpickedSlot\b', present)) == 6, re.findall(r'.*\bpickedSlot\b.*', present)
 for read in ('if (usableSlot < DlssNr::PresentGuides::kRingSize)', 'auto& clone = g_presentGuideClones[usableSlot];',
              'trackedSlot = usableSlot;', 'temporalSeq = g_presentGuideRing.GetSlot(usableSlot).sequence;'):
     assert present.count(read) == 1, f'the read changed: {read}'
@@ -217,9 +219,11 @@ assert core.count('StampPresentGuide(') == 1 and core.count(stamp) == 1
 assert core.index('cmdList->CopyTextureRegion(&dstMotion') < core.index(stamp)
 assert core.index('stamp.device = devId;') < core.index(stamp)
 assert renderer.count('StampPresentGuide(') == 2  # its definition and its one call
-assert renderer.count('CaptureGuides(cmdList, source, frame);') == 1
-assert renderer.count('return CaptureGuides(cmdList, source, GatherGuideFrame(params));') == 1
-assert renderer.count('CaptureGuides(') == 3  # its definition and its two producers
+assert renderer.count('CaptureGuides(cmdList, source, frame);') == 2
+bridge_capture = function(renderer, 'bool CaptureBridgedGuides(')
+assert 'const auto frame = GatherGuideFrame(params);' in bridge_capture
+assert bridge_capture.index('PresentReset::Instance().Observe(') < bridge_capture.index('return CaptureGuides(cmdList, source, frame);')
+assert renderer.count('CaptureGuides(') == 4  # its definition, two existing producers and opt-in Streamline tags
 
 def assert_capture_guides_contract(core_src):
     assert 'g_presentGuideRing.AcquireForRecord(isReadInFlight, isWriteInFlight, isShapeMatch, &acquire)' in core_src
@@ -262,8 +266,8 @@ assert 'D3D12OutputExtent(params, &outputWidth, &outputHeight);' in temporal
 assert 'cfg.DepthResourceBarrier.value_or(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)' in temporal
 assert renderer.count('CaptureTemporal(cmdList, params, frame);') == 1
 # The capture happens only when a present pass would use it, decided by DlssNr_PresentBoundary.h.
-assert 'if (DlssNr::PresentBoundary::UpscaledCapturesForPresent(boundary, PresentHookLive()))\n' \
-       '        CaptureTemporal(cmdList, params, frame);' in renderer
+assert 'const bool captureForPresent = DlssNr::PresentBoundary::UpscaledCapturesForPresent(boundary, PresentHookLive());' in renderer
+assert 'if (captureForPresent)\n        CaptureTemporal(cmdList, params, frame);' in renderer
 
 # Shutdown forgets the identity together with the ring.
 release = function(renderer, 'static void ReleasePresentTemporal(')

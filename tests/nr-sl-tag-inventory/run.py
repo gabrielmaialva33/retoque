@@ -154,6 +154,8 @@ def check(s):
             ('slSetTagForFrame', 'sl::Result StreamlineHooks::hkslSetTagForFrameNoteOnly(',
              'return o_slSetTagForFrame(frame, viewport, resources, numResources, cmdBuffer);')):
         hook = body(hooks, signature)
+        # b1 adds a separately tested opt-in adapter; its parameters are immutable and forwarding stays exact.
+        hook = re.sub(r'    if \(DlssNr::SlPresent::Enabled\(\)\)\n    \{[^{}]*\n    \}\n', '', hook)
         statements = [line.strip() for line in hook.split('{', 1)[1].rsplit('}', 1)[0].splitlines() if line.strip()]
         assert len(statements) == 3, f'the note-only {name} hook does more than note and forward: {statements}'
         assert statements[0].startswith('DlssNr::SlNativeNr::OnTags(')
@@ -188,7 +190,7 @@ def check(s):
     for line in ('AttachInterposerHook(&(PVOID&) o_slSetTag, (PVOID) hkslSetTagNoteOnly);',
                  'AttachInterposerHook(&(PVOID&) o_slSetTagForFrame, (PVOID) hkslSetTagForFrameNoteOnly);'):
         assert line in note_block, f'the note-only install lost: {line}'
-    assert 'hkslSetConstants' not in note_block, 'the note-only branch hooks more than the tags'
+    assert 'AttachInterposerHook(&(PVOID&) o_slSetConstants, (PVOID) hkslSetConstants);' in note_block, 'NR observes camera reset without an FG input'
     assert attach.count('NoteOnly') == 2
 
     # --- Detach: exactly what was attached, whichever tag hooks those were (tests/sl-interposer-unhook).
@@ -217,8 +219,8 @@ print('PASS: hooks note with NR on only, note-only hooks forward untouched, deta
 SOURCE_MUTANTS = {
     'armed with NR off': ('hooks', 'if (nrOn)\n                    DlssNr::SlTagInventory::Instance().Arm();',
                           'DlssNr::SlTagInventory::Instance().Arm();'),
-    'note-only with NR off': ('hooks', '                else if (nrOn)\n                {\n                    // No Streamline FG',
-                              '                else\n                {\n                    // No Streamline FG'),
+    'note-only with NR off': ('hooks', '                else if (nrOn)\n                {\n                    // Constants carry camera cuts',
+                              '                else\n                {\n                    // Constants carry camera cuts'),
     'detach what was not attached': ('hooks', '    s_interposerHooks.DetachAll(',
                                      '    DetourDetach(&(PVOID&) o_slSetConstants, hkslSetConstants);\n    s_interposerHooks.DetachAll('),
     'note-only edits the tags': ('hooks', '    NoteTagInventory(tags, numTags, DlssNr::SlTagInventory::kViaSetTag, renderApi);\n'

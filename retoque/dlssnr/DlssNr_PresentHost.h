@@ -181,6 +181,7 @@ class PresentHost
     bool _recordedPass = false;
     uint32_t _hdrRecordedProfile = 0;
     bool _resetOwed = true;
+    uint64_t _gameResetTicket = 0; // acknowledged only by ConfirmExecuted, never by AbandonRecording
     // The motion estimator's own reset: owed after a rebuild, and paid by the first list that carried it
     // and executed. Not _resetOwed, which stays owed until the model runs: while the model is refused or
     // settling, the estimator still sees consecutive frames, and resetting it on each would keep it warming

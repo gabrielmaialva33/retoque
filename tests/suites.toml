@@ -1405,3 +1405,18 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Vulkan NGX device/generation ownership, recent native activity and formatless storage contracts; host only."
+[nr-present-reset]
+path = "nr-present-reset"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Present camera reset: skipped capture, failed/abandoned submission, concurrent cuts, Streamline and NGX wiring."
+
+[nr-sl-present-guides]
+path = "nr-sl-present-guides"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "Opt-in Streamline Present guides: real boundary clock, explicit identity, recording/order refusal and priority."

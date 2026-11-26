@@ -203,6 +203,14 @@ check_present('CaptureGuides', present_contract['definitions']['CaptureGuides'],
               {**units, present_owner: units[present_owner] + '\nif (CaptureGuides(x)) { }\n'})
 for name, expected in present_contract['definitions'].items():
     check_present(name, expected, units)
+# 2026-11-26: the bridge wrapper latches a reset before capture admission; its resource/copy body stays pinned.
+bridge_reset = present_body(units[present_owner], 'CaptureBridgedGuides')
+bridge_reset = bridge_reset.replace(
+    '    const auto frame = GatherGuideFrame(params);\n'
+    '    PresentReset::Instance().Observe(Config::Instance()->DlssNrEnabled.value_or_default(), frame.Reset);\n'
+    '    return CaptureGuides(cmdList, source, frame);',
+    '    return CaptureGuides(cmdList, source, GatherGuideFrame(params));')
+assert present_digest(bridge_reset) == '328ea6beb2b62c4d8d2ab8cfc952882e1994291da86f376c315c37d79ac6c6ca', 'bridge capture changed beyond reset forwarding'
 # Private helpers are defined in Dx12Internal; feature APIs stay in DlssNr.
 public_present = {'CaptureBridgedGuides', 'BridgePresentedExtent', 'CapturedPresentGuides',
                   'AbandonCapturedGuides', 'NotePresentGuideFallback', 'PresentGuidesLine'}
@@ -220,6 +228,10 @@ expected = present_contract['definitions']['CaptureGuides']
 # 12a23174 adds only observer bookkeeping. Keep an independent pin on every original
 # decision/copy/track token, as well as the updated full-body pin above.
 capture_base = body
+# b1 admission and owned source references reuse the existing retirement proof; every old token stays pinned.
+for addition in ('    // All tag metadata is rechecked under the same lock as the ring, before allocation or GPU recording.\n    if (source.output.streamline &&\n        (!SlPresent::Enabled() || slGuides.ambiguous || slGuides.device != device ||\n         slGuides.width != source.output.outputWidth || slGuides.height != source.output.outputHeight ||\n         SlUpscalerCaptured(g_guideIdentity.tracker.Epoch()) ||\n         !slGuides.frames.Capture(source.output.slToken, source.output.slRevision, g_guideIdentity.tracker.Epoch())))\n    {\n        device->Release();\n        return false;\n    }\n', '    if (source.output.streamline && !SlSourceRetirementCapacity(2 + size_t(replaceDepth) + size_t(replaceMotion)))\n    {\n        device->Release();\n        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::RetiredCap, acquire, ResidentGuideBytes(),\n                         ParkedGuideBytes());\n        return false;\n    }\n\n', '    if (source.output.streamline)\n    {\n        // Track succeeded and retirement capacity was reserved before any AddRef/copy. ParkNrClone consumes\n        // these references; release requires Settled on captureWriteUsage, including reset/replay/device loss.\n        ID3D12Resource* retainedDepth = depth;\n        ID3D12Resource* retainedMotion = motion;\n        retainedDepth->AddRef();\n        retainedMotion->AddRef();\n        ParkNrClone(retainedDepth, clone.captureWriteUsage, true);\n        ParkNrClone(retainedMotion, clone.captureWriteUsage, true);\n    }\n\n'):
+    assert capture_base.count(addition) == 1
+    capture_base = capture_base.replace(addition, '', 1)
 for addition in (
     '    DlssNr::PresentDepthDx12::InternalScope depthInternal;\n',
     '    DlssNr::PresentDepthDx12::Captured(slot, source.depth, frame.DepthInverted,\n'

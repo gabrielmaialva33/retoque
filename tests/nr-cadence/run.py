@@ -96,11 +96,14 @@ for field in ('driverProxy = useProxy', 'available = DlssNr_Cadence_Dx12::Availa
               'frameGeneration = FrameGenerationActive()', 'hold = holdFrame || g_nr.heldActive',
               'capture = g_capture.isActive()'):
     assert f'cadenceInputs.{field};' in renderer, field
-# Only an upscaler's own guides count as the game's: a present host with nothing captured has none.
+# Real upscaler or explicitly matched Streamline guides count as the game's; a present host with none has none.
 assert 'bool GameGuides = false;' in read_nr('shaders/dlssnr/DlssNr_Common.h')
-# Set once, in GatherGuideFrame, the guide description every capture of the game's guides is made from: the after-
-# upscale route's GatherFrame calls it, and so does the native D3D11 guide transport (CaptureBridgedGuides).
-assert renderer.count('frame.GameGuides = true;') == 1
+# GatherGuideFrame serves the existing evaluate/bridge captures. The opt-in SL constants adapter stores a candidate
+# description only; b1's identity/recording/order checks must accept its captured slot before the model receives it.
+assert renderer.count('frame.GameGuides = true;') == 2
+sl_constants = renderer[renderer.index('void Constants(const sl::Constants&'):]
+assert sl_constants.index('if (!Enabled())') < sl_constants.index('slGuides.frames.Constants(') < \
+       sl_constants.index('frame.GameGuides = true;') < sl_constants.index('\n}\n')
 guide = renderer[renderer.index('DlssNrFrameInfo GatherGuideFrame('):]
 assert guide.index('frame.GameGuides = true;') < guide.index('\n}\n')
 gather = renderer[renderer.index('DlssNrFrameInfo GatherFrame('):]

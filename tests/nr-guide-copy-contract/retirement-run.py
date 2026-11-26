@@ -36,6 +36,7 @@ def unit(guides):
 #include <mutex>
 #include <optional>
 #include "retoque/dlssnr/DlssNr_PresentGuideIdentity.h"
+#include "retoque/dlssnr/DlssNr_SlPresentPolicy.h"
 #include "retoque/dlssnr/DlssNr_SubmissionModel.h"
 #include "retoque/dlssnr/DlssNr_UntrackedRetire.h"
 namespace DlssNr::Submission {
@@ -87,7 +88,7 @@ void NoteGuideCapture(Reason reason, const DlssNr::PresentGuides::AcquireReport&
 }
 uint64_t ResidentGuideBytes() { return 0; }
 uint64_t ParkedGuideBytes() { return 0; }
-struct GuideCapture { ID3D12Resource* depth=nullptr; ID3D12Resource* motion=nullptr; };
+struct GuideCapture { ID3D12Resource* depth=nullptr; ID3D12Resource* motion=nullptr; DlssNr::PresentGuideIdentity::Stamp output {}; };
 struct DlssNrFrameInfo {};
 struct PresentGuideClone {
     ID3D12Resource* depth=nullptr; ID3D12Resource* motion=nullptr;
@@ -101,8 +102,15 @@ struct PresentGuideClone {
 };
 std::array<PresentGuideClone, DlssNr::PresentGuides::kRingSize> g_presentGuideClones {};
 DlssNr::PresentGuides::Ring g_presentGuideRing;
-struct { struct { void SetBytes(uint64_t, uint64_t) {} } producer; } g_guideIdentity;
+struct { struct { void SetBytes(uint64_t, uint64_t) {} } producer; DlssNr::PresentGuideIdentity::Tracker tracker; } g_guideIdentity;
+// This fixture proves the default capture/collector contract. b1 admission stays off; its actual helper bodies still compile.
+namespace DlssNr::SlPresent { bool Enabled() { return false; } }
+struct { bool ambiguous = false; ID3D12Device* device = nullptr; uint32_t width = 0, height = 0;
+         DlssNr::SlPresent::Frames frames; } slGuides;
+using namespace DlssNr;
 '''
+    text += function(guides, 'bool SlSourceRetirementCapacity(')
+    text += function(guides, 'bool SlUpscalerCaptured(')
     text += function(guides, 'static bool PresentGuideRetirementCapacity(')
     text += function(guides, 'static void NoteCaptureSkipUnlocked(')
     capture = function(guides, 'static bool CaptureGuides(')

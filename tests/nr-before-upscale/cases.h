@@ -978,6 +978,41 @@ int main()
         ++checks;
     }
 
+    // A cut on a missing-guide frame survives before capture admission; after-upscale-only stays inert.
+    {
+        Fixture f;
+        f.cfg.DlssNrStage = 0;
+        f.cfg.DlssNrHookMethod = 2u;
+        f.params.typed.erase("Depth");
+        f.params.numbers["Reset"] = 1;
+        auto& pending = DlssNr::PresentReset::Instance();
+        assert(pending.Snapshot() == 0);
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false);
+        const auto ticket = pending.Snapshot();
+        assert(ticket != 0 && DlssNr_Dx12::calls == 0);
+        f.params.numbers["Reset"] = 0;
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false);
+        assert(pending.Snapshot() == ticket);
+        pending.Confirm(ticket, true, true);
+        f.params.numbers["Reset"] = 1;
+        DlssNr::EvaluateAfterUpscale(nullptr, &f.params, nullptr, false);
+        assert(pending.Snapshot() != 0);
+        pending.Confirm(pending.Snapshot(), true, true);
+        f.cfg.DlssNrStage = 1;
+        DlssNr::EvaluateAfterUpscale(nullptr, &f.params, nullptr, false);
+        assert(pending.Snapshot() == 0); // stage 1 owns this frame, even when its list is absent
+        f.cfg.DlssNrStage = 0;
+        f.cfg.DlssNrHookMethod = 1u;
+        f.params.numbers["Reset"] = 1;
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false);
+        assert(pending.Snapshot() == 0);
+        f.cfg.DlssNrHookMethod = 2u;
+        f.cfg.DlssNrEnabled = false;
+        DlssNr::EvaluateAfterUpscale(&f.cmd, &f.params, nullptr, false);
+        assert(pending.Snapshot() == 0);
+        ++checks;
+    }
+
     assert(checks >= 56 && "ZERO COVERAGE");
     std::printf("PASS: %u boundary cases; allocation-failure and DRS loops: 1000 each\n", checks);
 }

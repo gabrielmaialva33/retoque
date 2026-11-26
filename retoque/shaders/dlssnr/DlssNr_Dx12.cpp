@@ -2,6 +2,7 @@
 #include <dlssnr/DlssNr_AdvisorRuntime.h>
 #include <dlssnr/DlssNr_AdvisorPolicy.h>
 #include <dlssnr/DlssNr_PresentDepthDx12.h>
+#include <dlssnr/DlssNr_PresentReset.h>
 #include <dlssnr/DlssNr_Dx11Scene.h>
 
 #include "DlssNr_Dx12_Internal.h"
@@ -5280,6 +5281,14 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
         return;
     }
 
+    PresentGuideIdentity::Present slObservedPresent {};
+    // The opt-in owning real boundary exists even while NR warms up or refuses optional work.
+    const bool slBoundaryObserved = boundary &&
+                                    !(!fgHook && State::Instance().activeFgInput == FGInput::Synthesized &&
+                                      (State::Instance().swapchainInteropApi == SwapchainInteropApi::Dx11wDx12 ||
+                                       State::Instance().currentFGSwapchain != nullptr)) &&
+                                    ObserveSlPresentBoundary(swapchain, queue, slObservedPresent);
+
     if (!boundary)
         DlssNr::SlBoundaryProbe::NoteWrappedPresent(queue, fgHook);
 
@@ -5574,9 +5583,9 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
 
     // Pick from the owned guide snapshot ring: newest capture completed on CPU or submitted on same queue
     const auto nowMs = NowMs();
-    const auto isEligible = [queue, &admittedSameQueue, &admittedCompleted](void* token) -> bool
+    const auto isEligible = [queue, boundary, &admittedSameQueue, &admittedCompleted](void* token) -> bool
     {
-        if (token == nullptr)
+        if (token == nullptr || !SlPresentSlotEligible(token, boundary))
             return false;
         auto& writeUsage = *static_cast<DlssNr::Submission::Usage*>(token);
         // RenoDX same-queue rule (present_path.hpp:96-100):
@@ -5600,7 +5609,9 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     // The identity rules over that pick (present-real-guides.md, step 1). The pass reads the slot they return: the
     // pick, or none when a rule refused it, and then the frame falls back below exactly as with no capture. A refused
     // slot is never tracked or read. Rule 6 (lag) is enforced at the game's own Present only, where it was measured.
-    const GuideAsk guides = AskPresentPassGuides(device, presenter, width, height, pickedSlot, boundary);
+    const GuideAsk guides =
+        slBoundaryObserved ? AskObservedPresentGuides(slObservedPresent, device, presenter, width, height, pickedSlot)
+                           : AskPresentPassGuides(device, presenter, width, height, pickedSlot, boundary);
     const size_t usableSlot = guides.decision.slot;
     DlssNr::PresentDepthDx12::Eligible(usableSlot);
 
@@ -5642,6 +5653,8 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
             depth = clone.depth;
             motion = clone.motion;
             frame = clone.frame;
+            // The cut was latched before capture admission. A delayed slot must not replay it after confirmation.
+            frame.Reset = false;
             frame.DepthState = (int) D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
             frame.MotionState = (int) D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
             temporalValid = (depth != nullptr && motion != nullptr);
@@ -5879,6 +5892,8 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     // the two present transports drifted: ExtentIsStable and the reason string each existed on one
     // side only, on paths facing the identical situation.
     // On an HDR frame the pass runs on the decode, and only if the decode was recorded.
+    const auto gameResetTicket = PresentReset::Instance().Snapshot();
+    PresentReset::Pending::Apply(gameResetTicket, frame);
     frame.PrivatePresentRecording = true;
     const char* reason = "";
     bool recorded = false;
@@ -5961,6 +5976,7 @@ void RunPresentPass(IDXGISwapChain3* swapchain, ID3D12CommandQueue* queue, bool 
     cpuSample.recordMs = DlssNr::PresentCpu::SinceMs(cpuTimed, cpuRecordStart);
     const auto cpuSubmitStart = DlssNr::PresentCpu::Mark(cpuTimed);
     const bool executed = SubmitPresentList(queue, slot);
+    PresentReset::Instance().Confirm(gameResetTicket, recorded, executed);
     cpuSample.submitMs = DlssNr::PresentCpu::SinceMs(cpuTimed, cpuSubmitStart);
     const bool convertedHdr = presentHdr && executed && writeBack == g_hdrOut;
     if (presentHdr)
@@ -6217,6 +6233,17 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                            : preUpscaleDeclined ? (isRayReconstruction ? 3 : 2)
                                                 : -1);
 
+    // Capture admission (including a missing list or resources) must not erase a camera cut. Respect the
+    // main-picture and stage decisions, but observe the flag before capture can be refused.
+    const auto boundary = BoundaryInputs(cfg.DlssNrHookMethod.value_or_default(), false);
+    const bool captureForPresent = DlssNr::PresentBoundary::UpscaledCapturesForPresent(boundary, PresentHookLive());
+    if (params != nullptr && (dlssNrStage != 1 || preUpscaleDeclined) && captureForPresent)
+    {
+        unsigned int gameReset = 0;
+        if (params->Get(NVSDK_NGX_Parameter_Reset, &gameReset) == NVSDK_NGX_Result_Success)
+            PresentReset::Instance().Observe(true, gameReset != 0);
+    }
+
     if (cmdList == nullptr || params == nullptr)
     {
         coverage.sample.reason = "no command list or parameter block";
@@ -6281,8 +6308,7 @@ void EvaluateAfterUpscale(ID3D12GraphicsCommandList* cmdList, NVSDK_NGX_Paramete
                           static_cast<unsigned>(contractOutput.Width), contractOutput.Height);
 
     // Auto that has seen the game's own DLSS-G stays here (DlssNr_PresentBoundary.h).
-    const auto boundary = BoundaryInputs(cfg.DlssNrHookMethod.value_or_default(), false);
-    if (DlssNr::PresentBoundary::UpscaledCapturesForPresent(boundary, PresentHookLive()))
+    if (captureForPresent)
         CaptureTemporal(cmdList, params, frame);
 
     if (DlssNr::PresentBoundary::UpscaledDefersToPresent(boundary, PresentHookLive(), g_temporalValid.load()))

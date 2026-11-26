@@ -499,6 +499,11 @@ RequireDlss=auto
 ; constant or log - Default (auto) is constant. D3D11 and Vulkan discovery are not implemented.
 PresentDepth=auto
 
+; Opt-in D3D12 Streamline guide transport; enable before startup.
+; Explicit frame token/viewport, complete pair and recording/order proof required.
+; HUD-less use is refused without a separately specified same-frame GPU guard.
+PresentSlGuides=false
+
 ; Present hosts running on zero guides (no upscaler handed over depth and motion): start the model's
 ; history over every frame. With zero motion the model believes nothing moved and blends the new frame
 ; with where things used to be -- ghosts and doubled edges whenever the camera moves, worst in fast

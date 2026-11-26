@@ -1,5 +1,10 @@
 #include "pch.h"
 #include <dlssnr/DlssNr_PresentDepthDx12.h>
+#include <dlssnr/DlssNr_PresentReset.h>
+#include <dlssnr/DlssNr_SlPresentGuides.h>
+#include <dlssnr/DlssNr_SlPresentPolicy.h>
+#include <sl.h>
+#include <new>
 
 #include "DlssNr_Dx12_Internal.h"
 
@@ -453,6 +458,57 @@ struct GuideCapture
 };
 } // namespace Dx12Internal
 
+namespace
+{
+struct SlGuideState
+{
+    SlPresent::Frames frames;
+    std::array<DlssNrFrameInfo, SlPresent::Frames::Capacity> constants {};
+    const void* device = nullptr;
+    const void* presenter = nullptr;
+    const void* chain = nullptr;
+    uint32_t width = 0, height = 0;
+    uint64_t boundaryEpoch = 0;
+    uint32_t presentToken = 0;
+    bool ambiguous = false, tokenMatched = false;
+};
+// Guarded by g_nrMutex; no game resource/list reference is retained.
+SlGuideState slGuides;
+thread_local SlPresent::Marker slMarker;
+
+// eOnlyValidNow permits the caller to release its resource after this call. Keep our source references
+// through the same exact recording proof used by the cloned guides; never through a timer or a bare fence.
+bool SlSourceRetirementCapacity(size_t reservations)
+{
+    size_t stuck = 0;
+    for (const auto& retired : g_nrRetired)
+        stuck += retired.stuck;
+    const size_t counted = g_nrRetired.size() - std::min<size_t>(stuck, 64);
+    if (!reservations || !Chain::RetirementAllowed(counted + reservations - 1))
+        return false;
+    try
+    {
+        g_nrRetired.reserve(g_nrRetired.size() + reservations);
+        return true;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return false;
+    }
+}
+
+bool SlUpscalerCaptured(uint64_t epoch)
+{
+    for (size_t i = 0; i < PresentGuides::kRingSize; ++i)
+    {
+        const auto& stamp = g_guideIdentity.tracker.Stamped()[i];
+        if (g_presentGuideRing.GetSlot(i).recorded && !stamp.streamline && stamp.presentEpoch == epoch)
+            return true;
+    }
+    return false;
+}
+} // namespace
+
 namespace Dx12Internal
 {
 static uint64_t PresentGuideCloneBytes(ID3D12Device* device, ID3D12Resource* res)
@@ -590,6 +646,17 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
     const void* const devId = static_cast<const void*>(device);
 
     std::lock_guard<std::mutex> nrLock(g_nrMutex);
+
+    // All tag metadata is rechecked under the same lock as the ring, before allocation or GPU recording.
+    if (source.output.streamline &&
+        (!SlPresent::Enabled() || slGuides.ambiguous || slGuides.device != device ||
+         slGuides.width != source.output.outputWidth || slGuides.height != source.output.outputHeight ||
+         SlUpscalerCaptured(g_guideIdentity.tracker.Epoch()) ||
+         !slGuides.frames.Capture(source.output.slToken, source.output.slRevision, g_guideIdentity.tracker.Epoch())))
+    {
+        device->Release();
+        return false;
+    }
     TickNrRetired();
     g_guideIdentity.producer.SetBytes(ResidentGuideBytes(), ParkedGuideBytes());
 
@@ -668,6 +735,14 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         return false;
     }
 
+    if (source.output.streamline && !SlSourceRetirementCapacity(2 + size_t(replaceDepth) + size_t(replaceMotion)))
+    {
+        device->Release();
+        NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::RetiredCap, acquire, ResidentGuideBytes(),
+                         ParkedGuideBytes());
+        return false;
+    }
+
     Microsoft::WRL::ComPtr<ID3D12Resource> newDepth;
     Microsoft::WRL::ComPtr<ID3D12Resource> newMotion;
     if (needDepth)
@@ -729,6 +804,18 @@ static bool CaptureGuides(ID3D12GraphicsCommandList* cmdList, const GuideCapture
         NoteGuideCapture(DlssNr::PresentGuideIdentity::ProducerReason::TrackRefused, acquire, ResidentGuideBytes(),
                          ParkedGuideBytes());
         return false;
+    }
+
+    if (source.output.streamline)
+    {
+        // Track succeeded and retirement capacity was reserved before any AddRef/copy. ParkNrClone consumes
+        // these references; release requires Settled on captureWriteUsage, including reset/replay/device loss.
+        ID3D12Resource* retainedDepth = depth;
+        ID3D12Resource* retainedMotion = motion;
+        retainedDepth->AddRef();
+        retainedMotion->AddRef();
+        ParkNrClone(retainedDepth, clone.captureWriteUsage, true);
+        ParkNrClone(retainedMotion, clone.captureWriteUsage, true);
     }
 
     const uint64_t nextDepthBytes = needDepth ? PresentGuideCloneBytes(device, newDepth.Get()) : clone.depthBytes;
@@ -892,7 +979,9 @@ bool CaptureBridgedGuides(ID3D12GraphicsCommandList* cmdList, ID3D12Resource* de
     source.motionState = state;
     source.output = EvaluateOutput(params, nullptr, outputWidth, outputHeight);
 
-    return CaptureGuides(cmdList, source, GatherGuideFrame(params));
+    const auto frame = GatherGuideFrame(params);
+    PresentReset::Instance().Observe(Config::Instance()->DlssNrEnabled.value_or_default(), frame.Reset);
+    return CaptureGuides(cmdList, source, frame);
 }
 
 unsigned long long BridgePresentedExtent() { return g_bridgePresentedExtent.load(); }
@@ -1000,3 +1089,216 @@ void AbandonCapturedGuides()
 }
 
 } // namespace DlssNr
+
+namespace DlssNr::Dx12Internal
+{
+bool ObserveSlPresentBoundary(IDXGISwapChain3* chain, ID3D12CommandQueue* queue,
+                              PresentGuideIdentity::Present& observed)
+{
+    if (!SlPresent::Enabled())
+        return false;
+    ID3D12Device* device = nullptr;
+    DXGI_SWAP_CHAIN_DESC1 desc {};
+    if (queue)
+        queue->GetDevice(IID_PPV_ARGS(&device));
+    if (chain)
+        chain->GetDesc1(&desc);
+    observed.device = device;
+    observed.swapchain = chain ? PresentGuidePresenter(chain) : nullptr;
+    observed.width = desc.Width;
+    observed.height = desc.Height;
+    observed.nowMs = NowMs();
+    observed.enforceLag = true;
+    observed.allowStreamline = true;
+    {
+        std::lock_guard<std::mutex> lock(g_nrMutex);
+        g_guideIdentity.tracker.ObservePresent(observed);
+        // Pin the exact boundary chain as well as its window; no timer can make a second owner eligible.
+        if (slGuides.chain && (slGuides.chain != chain || slGuides.device != device ||
+                               slGuides.presenter != observed.swapchain || slGuides.boundaryEpoch >= observed.epoch))
+            slGuides.ambiguous = true;
+        slGuides.chain = chain;
+        slGuides.device = device;
+        slGuides.presenter = observed.swapchain;
+        slGuides.width = desc.Width;
+        slGuides.height = desc.Height;
+        slGuides.boundaryEpoch = observed.epoch;
+        uint32_t token = 0;
+        const bool explicitToken = slMarker.Take(token);
+        slGuides.presentToken = token;
+        slGuides.tokenMatched = slGuides.frames.Present(token, observed.epoch, explicitToken);
+    }
+    if (device)
+        device->Release();
+    return true;
+}
+
+bool SlPresentSlotEligible(void* writeToken, bool boundary)
+{
+    const auto& stamps = g_guideIdentity.tracker.Stamped();
+    for (size_t i = 0; i < PresentGuides::kRingSize; ++i)
+    {
+        if (g_presentGuideRing.GetSlot(i).writeToken != writeToken)
+            continue;
+        const auto& stamp = stamps[i];
+        if (!stamp.streamline)
+            return true;
+        return boundary && SlPresent::Enabled() && !slGuides.ambiguous && slGuides.tokenMatched &&
+               stamp.device == slGuides.device && stamp.swapchain == slGuides.presenter &&
+               stamp.slToken == slGuides.presentToken && stamp.presentEpoch + 1 == slGuides.boundaryEpoch &&
+               slGuides.boundaryEpoch == g_guideIdentity.tracker.Epoch() &&
+               slGuides.frames.Matches(stamp.slToken, stamp.slRevision) && !SlUpscalerCaptured(stamp.presentEpoch);
+    }
+    return false;
+}
+
+GuideAsk AskObservedPresentGuides(const PresentGuideIdentity::Present& observed, ID3D12Device* device,
+                                  const void* presenter, unsigned int width, unsigned int height, size_t picked)
+{
+    GuideAsk ask;
+    ask.asked = true;
+    ask.present = observed;
+    ask.present.lastConsumed = g_guideIdentity.present.LastConsumed();
+    if (observed.device != device || observed.swapchain != presenter || observed.width != width ||
+        observed.height != height)
+    {
+        ask.decision.reason = PresentGuideIdentity::Reason::Extent;
+        return ask;
+    }
+    ask.decision = g_guideIdentity.tracker.AtObservedPresent(picked, g_presentGuideRing, ask.present);
+    return ask;
+}
+} // namespace DlssNr::Dx12Internal
+
+namespace DlssNr::SlPresent
+{
+bool Enabled()
+{
+    const auto& cfg = *Config::Instance();
+    return cfg.DlssNrEnabled.value_or_default() && cfg.DlssNrPresentSlGuides.value_or_default() &&
+           cfg.DlssNrHookMethod.value_or_default() == 2;
+}
+void MarkerStart(uint32_t token)
+{
+    if (Enabled())
+        slMarker.Start(token);
+}
+void MarkerEnd() { slMarker.End(); }
+
+void Constants(const sl::Constants& values, uint32_t token, uint32_t viewport)
+{
+    if (!Enabled())
+        return;
+    const auto boolean = [](sl::Boolean value) { return value == sl::Boolean::eTrue || value == sl::Boolean::eFalse; };
+    const auto provided = [](float value) { return std::isfinite(value) && value != sl::INVALID_FLOAT; };
+    const bool valid = boolean(values.depthInverted) && boolean(values.motionVectorsJittered) &&
+                       values.cameraMotionIncluded == sl::Boolean::eTrue &&
+                       values.motionVectors3D == sl::Boolean::eFalse &&
+                       values.orthographicProjection == sl::Boolean::eFalse && provided(values.mvecScale.x) &&
+                       provided(values.mvecScale.y) && values.mvecScale.x != 0 && values.mvecScale.y != 0 &&
+                       provided(values.jitterOffset.x) && provided(values.jitterOffset.y);
+    std::lock_guard<std::mutex> lock(g_nrMutex);
+    if (!slGuides.frames.Constants(token, viewport, valid))
+        return;
+    DlssNrFrameInfo frame {};
+    frame.GameGuides = true;
+    frame.DepthInverted = values.depthInverted == sl::Boolean::eTrue;
+    frame.MotionVectorsJittered = values.motionVectorsJittered == sl::Boolean::eTrue;
+    frame.MvScaleX = values.mvecScale.x;
+    frame.MvScaleY = values.mvecScale.y;
+    frame.JitterOffsetX = values.jitterOffset.x;
+    frame.JitterOffsetY = values.jitterOffset.y;
+    slGuides.constants[token % Frames::Capacity] = frame;
+}
+
+void Tags(uint32_t token, uint32_t viewport, const sl::ResourceTag* tags, uint32_t count, void* commandList,
+          bool hasToken, bool d3d12)
+{
+    if (!Enabled() || !d3d12 || !tags)
+        return;
+    const sl::ResourceTag* depth = nullptr;
+    const sl::ResourceTag* motion = nullptr;
+    bool duplicate = false;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        if (tags[i].type == sl::kBufferTypeDepth)
+        {
+            duplicate |= depth != nullptr;
+            depth = &tags[i];
+        }
+        if (tags[i].type == sl::kBufferTypeMotionVectors)
+        {
+            duplicate |= motion != nullptr;
+            motion = &tags[i];
+        }
+        // HUD-less tags do not alter this pair. Unknown same-frame guard = no HUD-less use, including H3.
+    }
+    if (!depth && !motion)
+        return;
+    GuideCapture source;
+    DlssNrFrameInfo frame {};
+    {
+        std::lock_guard<std::mutex> lock(g_nrMutex);
+        if (!hasToken)
+        {
+            slGuides.frames.Tokenless();
+            return;
+        }
+        const auto revision = slGuides.frames.Tags(token, viewport, depth && motion && !duplicate);
+        if (!revision || !slGuides.chain || slGuides.ambiguous)
+            return;
+        source.output.streamline = true;
+        source.output.slToken = token;
+        source.output.slRevision = revision;
+        source.output.outputWidth = slGuides.width;
+        source.output.outputHeight = slGuides.height;
+        frame = slGuides.constants[token % Frames::Capacity];
+    }
+    const auto validTag = [](const sl::ResourceTag* tag)
+    {
+        // OnlyValidNow states/resources describe this exact call. Future-lifetime declarations do not prove
+        // the state is already usable here; no raw pointer or partial pair is retained until Evaluate/Present.
+        if (!tag || tag->next || tag->lifecycle != sl::ResourceLifecycle::eOnlyValidNow || !tag->resource ||
+            tag->resource->next || tag->resource->type != sl::ResourceType::eTex2d || !tag->resource->native ||
+            tag->resource->state == UINT_MAX || tag->extent.left || tag->extent.top)
+            return false;
+        const uint32_t state = tag->resource->state;
+        constexpr uint32_t read =
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        return state == D3D12_RESOURCE_STATE_COMMON || state == D3D12_RESOURCE_STATE_COPY_SOURCE ||
+               state == D3D12_RESOURCE_STATE_DEPTH_WRITE || state == D3D12_RESOURCE_STATE_DEPTH_READ ||
+               (state != 0 && (state & ~read) == 0);
+    };
+    auto* list = static_cast<ID3D12GraphicsCommandList*>(commandList);
+    if (!validTag(depth) || !validTag(motion) || !CopyRecording(list))
+        return;
+    source.depth = static_cast<ID3D12Resource*>(depth->resource->native);
+    source.motion = static_cast<ID3D12Resource*>(motion->resource->native);
+    const auto dd = source.depth->GetDesc();
+    const auto md = source.motion->GetDesc();
+    const auto full = [](const sl::ResourceTag* tag, const D3D12_RESOURCE_DESC& desc)
+    {
+        return (tag->extent.width == 0 && tag->extent.height == 0) ||
+               (tag->extent.width == desc.Width && tag->extent.height == desc.Height);
+    };
+    if (!full(depth, dd) || !full(motion, md) || dd.MipLevels != 1 || md.MipLevels != 1 ||
+        (dd.Format != DXGI_FORMAT_R32_FLOAT && dd.Format != DXGI_FORMAT_R32_TYPELESS &&
+         dd.Format != DXGI_FORMAT_D32_FLOAT) ||
+        (md.Format != DXGI_FORMAT_R16G16_FLOAT && md.Format != DXGI_FORMAT_R32G32_FLOAT) ||
+        !((md.Width == dd.Width && md.Height == dd.Height) ||
+          (md.Width == source.output.outputWidth && md.Height == source.output.outputHeight)))
+        return;
+    source.depthState = static_cast<D3D12_RESOURCE_STATES>(depth->resource->state);
+    source.motionState = static_cast<D3D12_RESOURCE_STATES>(motion->resource->state);
+    frame.RenderSubrectWidth = static_cast<uint32_t>(dd.Width);
+    frame.RenderSubrectHeight = dd.Height;
+    frame.DisplayWidth = source.output.outputWidth;
+    frame.DisplayHeight = source.output.outputHeight;
+    frame.MotionVectorsLowResolution = md.Width == dd.Width && md.Height == dd.Height;
+    frame.MvScaleX *= static_cast<float>(md.Width);
+    frame.MvScaleY *= static_cast<float>(md.Height);
+    if (!std::isfinite(frame.MvScaleX) || !std::isfinite(frame.MvScaleY))
+        return;
+    CaptureGuides(list, source, frame);
+}
+} // namespace DlssNr::SlPresent

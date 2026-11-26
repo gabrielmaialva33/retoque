@@ -967,6 +967,11 @@ long long NowMs();
 const void* PresentGuidePresenter(IDXGISwapChain3* swapchain);
 GuideAsk AskPresentPassGuides(ID3D12Device* device, const void* presenter, unsigned int width, unsigned int height,
                               size_t picked, bool boundary);
+bool ObserveSlPresentBoundary(IDXGISwapChain3* chain, ID3D12CommandQueue* queue,
+                              DlssNr::PresentGuideIdentity::Present& observed);
+GuideAsk AskObservedPresentGuides(const DlssNr::PresentGuideIdentity::Present& observed, ID3D12Device* device,
+                                  const void* presenter, unsigned int width, unsigned int height, size_t picked);
+bool SlPresentSlotEligible(void* writeToken, bool boundary);
 void CountPresentPassGuides(const GuideAsk& ask, size_t picked, DlssNr::PresentGuideIdentity::Outcome outcome);
 bool NotePresentPassGuideSource(bool game, bool routeStarts);
 void NotePresentGuideWaiting();
