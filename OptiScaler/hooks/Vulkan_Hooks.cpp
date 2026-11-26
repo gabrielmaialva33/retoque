@@ -612,7 +612,10 @@ static VkResult hkvkCreateInstance(const VkInstanceCreateInfo* pCreateInfo, cons
     VkResult result;
     {
         ScopedSkipSpoofingGlobal skipSpoofingGlobal {};
+        const bool previousCreatingInstance = State::Instance().creatingVulkanInstance;
+        State::Instance().creatingVulkanInstance = true;
         result = o_vkCreateInstance(&localCreateInfo, pAllocator, pInstance);
+        State::Instance().creatingVulkanInstance = previousCreatingInstance;
     }
 
     // OptiScaler's own Streamline only makes short lived ones
@@ -687,6 +690,9 @@ void VulkanHooks::DestroyDevice(PFN_vkDestroyDevice next, VkDevice device, const
 
         if (device == _fifoLatestReadyDevice)
             _fifoLatestReadyDevice = VK_NULL_HANDLE;
+
+        if (device == _device)
+            _device = VK_NULL_HANDLE;
 
         ReflexHooks::deviceDestroyed(device);
         InputCommon::vk_device_destroyed(device);
@@ -1414,6 +1420,21 @@ static VkResult hkvkGetSwapchainImagesKHR(VkDevice device, VkSwapchainKHR swapch
         fg != nullptr && fg->OwnsSwapchain(swapchain) && !FromFGOutput(_ReturnAddress()))
     {
         ScopedFGCall fgCall {};
+
+        // A count above the swapchain's is legal, Streamline's proxy swapchain then
+        // leaves null images in the array and the game's vkCreateImageView crashes the driver
+        if (pSwapchainImages != nullptr && pSwapchainImageCount != nullptr)
+        {
+            uint32_t available = 0;
+
+            if (fg->GetSwapchainImages(device, swapchain, &available, nullptr) == VK_SUCCESS &&
+                *pSwapchainImageCount > available)
+            {
+                LOG_DEBUG("Clamping the requested swapchain image count {} to {}", *pSwapchainImageCount, available);
+                *pSwapchainImageCount = available;
+            }
+        }
+
         auto result = fg->GetSwapchainImages(device, swapchain, pSwapchainImageCount, pSwapchainImages);
 
         if (result == VK_SUCCESS && pSwapchainImages != nullptr)
@@ -1641,6 +1662,10 @@ HWND VulkanHooks::SurfaceWindow(VkSurfaceKHR surface)
 // A promoted core function is missing on a device that only has its extension (RDR2's vkGetSemaphoreCounterValue and
 // vkCmdPushDescriptorSetWithTemplate are null), the extension's name then gives the same function. FFX and OptiScaler
 // ask for the core names.
+VkDevice VulkanHooks::GameDevice() { return _device; }
+
+VkPhysicalDevice VulkanHooks::GamePhysicalDevice() { return _device != VK_NULL_HANDLE ? _PD : VK_NULL_HANDLE; }
+
 PFN_vkVoidFunction VulkanHooks::GetDeviceProcAddr(VkDevice device, const char* pName)
 {
     auto getProc = o_vkGetDeviceProcAddr != nullptr ? o_vkGetDeviceProcAddr : vkGetDeviceProcAddr;

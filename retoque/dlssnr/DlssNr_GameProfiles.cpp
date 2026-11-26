@@ -92,7 +92,7 @@ void Apply()
     {
         const auto results =
             ApplyProfile(*profile, cfg->DlssNrHookMethod, cfg->DlssNrZeroGuideReset, cfg->DlssNrVulkanPresentHost,
-                         cfg->Dx11Upscaler, [](const char* code) { return CodeToUpscaler(code); });
+                         cfg->Dx11Upscaler, [](const char* code) { return CodeToEnum<Upscaler>(code); });
         const std::string keys = Describe(results);
         LOG_INFO("DLSS-NR game profile: {} ({}): {} [{}]", profile->name, exe, keys, profile->evidence);
         summary = std::string(profile->name) + ": " + keys;

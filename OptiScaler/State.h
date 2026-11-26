@@ -93,6 +93,18 @@ enum class FGNvngxReplacement : uint32_t
     Custom, // State::fgNvngxCustom folder in custom
 };
 
+template <> struct EnumConfig<FGNvngxReplacement>
+{
+    // Any other value is the name of a custom folder
+    static constexpr auto default_value = FGNvngxReplacement::Custom;
+
+    static constexpr std::pair<FGNvngxReplacement, std::string_view> mapping[] = {
+        { FGNvngxReplacement::None, "None" },     { FGNvngxReplacement::Nukems, "Nukems" },
+        { FGNvngxReplacement::Arturs, "Arturs" }, { FGNvngxReplacement::FFX, "FFX" },
+        { FGNvngxReplacement::Combo, "Combo" },
+    };
+};
+
 enum class WorkingMode : uint32_t
 {
     Dxgi,
@@ -459,6 +471,8 @@ class State
     // Per thread, it's only meant for the call chain of the thread creating the device
     // and overlapping ScopedCreatingD3DDevice from different threads could leave it stuck
     inline static thread_local bool creatingD3DDevice = false;
+    // Per thread, set while vkCreateInstance runs, layers load dlls from inside it
+    inline static thread_local bool creatingVulkanInstance = false;
     VkInstance VulkanInstance = nullptr;
 
     // Framegraph

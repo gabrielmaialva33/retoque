@@ -83,6 +83,7 @@ struct IUnknown
     int refs = 1;
     virtual ~IUnknown() = default;
     IUnknown() { ++objectsAlive; }
+    unsigned long AddRef() { return ++refs; }
     unsigned long Release()
     {
         if (refs <= 0)
@@ -160,7 +161,12 @@ inline HANDLE CreateEvent(void*, BOOL, BOOL, void*)
     return reinterpret_cast<HANDLE>(0x100 + eventsAlive);
 }
 inline DWORD WaitForSingleObject(HANDLE, DWORD) { return WAIT_OBJECT_0; }
-inline bool CheckForRealObject(const char*, IUnknown*, IUnknown**) { return false; }
+static IUnknown* borrowedReal = nullptr;
+inline bool CheckForRealObject(std::string, IUnknown*, IUnknown** out)
+{
+    *out = borrowedReal;
+    return borrowedReal != nullptr;
+}
 
 struct State
 {
@@ -177,6 +183,7 @@ class IFGFeature_Dx12
 {
   public:
     virtual ~IFGFeature_Dx12() = default;
+    // @replace-with-real-object@
     int index = 0;
     int GetIndex() { return index; }
 

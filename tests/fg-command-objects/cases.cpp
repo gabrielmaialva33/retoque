@@ -140,8 +140,31 @@ template <typename Gate> void HudlessFormat(const char* name, Gate gate)
     check(gate(Depth, &frame, 0) && !state.fgChanged, label + ": depth is not format-gated");
 }
 
+static void ReplaceOwnedProxy()
+{
+    struct ProxyAllocator : ID3D12CommandAllocator
+    {
+        ID3D12CommandAllocator* real;
+        explicit ProxyAllocator(ID3D12CommandAllocator* value) : real(value) {}
+        ~ProxyAllocator() override { real->Release(); }
+    };
+    DLSSG_Dx12 fg;
+    auto* real = new ID3D12CommandAllocator();
+    ID3D12CommandAllocator* owned = new ProxyAllocator(real);
+    borrowedReal = real;
+    fg.ReplaceWithRealObject("test", owned);
+    borrowedReal = nullptr;
+    check(owned == real && real->refs == 1 && objectsAlive == 1,
+          "proxy released and its borrowed real object retained exactly once");
+    fg.ReplaceWithRealObject("test", owned);
+    check(owned == real && real->refs == 1, "unwrapped object left unchanged");
+    owned->Release();
+    check(objectsAlive == 0, "replacement leaves no leaked reference");
+}
+
 int main()
 {
+    ReplaceOwnedProxy();
     HudlessFormat("DLSSG", HudlessGate_DLSSG);
     HudlessFormat("XeFG", HudlessGate_XeFG);
     PartialCreation<DLSSG_Dx12>("DLSSG");

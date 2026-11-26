@@ -79,6 +79,10 @@ for name, source in backends.items():
         failures.append(f"{name}_Dx12::CreateObjects creates a fence without reusing the existing one")
 
 fakes = (HERE / "fakes.h").read_text().replace("    // @command-object-members@\n", members)
+# The upstream ownership adapter is production code, not a no-op boundary fake.
+common_header = (FG / "IFGFeature.h").read_text()
+replace_real = function(common_header, "    template <typename T> void ReplaceWithRealObject(")
+fakes = fakes.replace("    // @replace-with-real-object@", replace_real)
 unit = fakes + "\n".join(parts) + (HERE / "cases.cpp").read_text()
 with tempfile.TemporaryDirectory(prefix="retoque-fg-command-objects-") as folder:
     cpp, binary = Path(folder) / "cases.cpp", Path(folder) / "cases"
