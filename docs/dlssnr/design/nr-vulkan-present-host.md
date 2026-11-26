@@ -2091,3 +2091,61 @@ cycles. This task did not deploy or run DOOM and makes no game-visual-quality cl
 Rafael's native Windows run must repeat real HDR10/scRGB validation and readbacks (especially A2R10's reorder),
 exercise resize/overlapping swapchains and teardown, and judge game colour/highlights/HUD. The current tests cover
 API correctness and numerical identity/control properties, not the appearance of the real game's edited frame.
+
+## Shared core and shader format bookkeeping (2026-11-26)
+
+The present host now retains the driver's NGX **device and start/stop generation**, separately from the
+forwarder's own device. A successful application init advances that generation even on the same device;
+a device-specific stop invalidates only its recorded device. Borrowing an already initialized core gives
+no shutdown ownership. The host's owned token is consumed only if it still names the current core, so
+application shutdown/restart cannot make a later host cleanup stop the replacement core. Capability
+blocks, queued builds, current products and retired feature handles carry the generation they came from.
+A stale core prevents model recording and its stale NGX handles are dropped without release/destroy calls;
+Vulkan images, submissions, fences and retirement follow their existing rules. A foreign-device core is
+refused instead of borrowed. `Nvngx_RRDllProxy` owns a separate custom provider, not this shared core.
+
+The metadata lock is a leaf lock, never held across an opaque NGX call. This closes observed sequential
+start/stop interleavings; it does **not** serialize an application shutdown racing inside an already-running
+NGX call. That concurrency remains an integration risk requiring a separate lifetime protocol, not extra
+waits or speculative resource destruction in this bookkeeping patch. Source inspiration: janblade's
+OptiScaler-F5-DLSSNR-Multipass, GPL-3.0, `c4dd476e`, `86686b81`, `76327eb6`.
+
+Both common composition and HDR SPIR-V previously declared `Rgba32f` storage images. The common pass's
+resolve can bind the game's output format (including packed float or UNORM), its keep uses FP16,
+and its meter uses R32F; HDR encode targets `EncodedFormat(raw)` (10-bit UNORM or FP16). They
+therefore use `[[vk::image_format("unknown")]]` under `VK_MODE`, not a fixed `rgba16f` annotation.
+Admission uses the observed effective device request: the enabled
+`shaderStorageImageWriteWithoutFormat` feature, physical-device API >= 1.3, or enabled
+`VK_KHR_format_feature_flags2`. The latter two paths query `VkFormatProperties3` through
+`vkGetPhysicalDeviceFormatProperties2` (or its KHR alias) and require
+`VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT` for each actual optimal-tiling target.
+The common pass checks RGBA16F; native pre/post routes also check R32F and the game's colour format every frame (pre-upscale's scratch preserves that format);
+present admission checks HDR's encoded format before requesting a build. Refusals are cached and
+logged once per device generation/format, without latching unrelated formats off. HDR retains its
+additional image usage/size checks. The host's extension planner reuses the same enabled-feature
+parser; the leaf registry is separate from transport locks so the builder and native route can read it.
+
+**Owner decision, 2026-11-26:** with NR enabled at device creation, game devices that qualify by none
+of these paths request the core feature only if physical feature queries report it supported. Both
+the present-host stage 3 hook and the after-upscale device hook apply the shared request helper.
+The helper copies `pEnabledFeatures`, or clones the `pNext` chain and edits the copied Features2 node;
+it never edits application memory or supplies both representations. NR off and internal devices leave
+the request untouched and perform no new storage-capability queries, observations or logging. Empty
+registry teardown is a no-op; an existing observation is retired even if NR has since been disabled. Unsupported hardware keeps the refusal and its reason. An unknown chain node
+that prevents a complete safe copy also refuses that feature addition. Successful requests are logged,
+and admission observes the effective request. The lower host's observation takes precedence over the
+outer hook because it sees any additional extensions. No setting or new feature is enabled on existing
+devices. See the [SPIR-V environment rules](https://docs.vulkan.org/spec/latest/appendices/spirvenv.html).
+
+The live backend can switch through `FeatureProvider_Vk::ChangeFeature` to an `_on12` upscaler, which skips
+native NR. `IsRunningVk` now reads an atomic timestamp published only after a successful native composition
+(pre or post) and expires at one second. A retained feature no longer keeps native menu/capture readiness
+true indefinitely. Failure/release/shutdown clears it. Inspiration: the same fork's `f853ec4e`.
+
+Validation boundary: `tests/nr-vk-core` exercises the production proxy adapters with fake NGX calls, generation
+interleavings, activity time boundaries, all three capability paths, per-format refusal and copied feature requests and both committed SPIR-V/header pairs.
+Native Linux DXC regenerates SPIR-V and `spirv-val --target-env vulkan1.0` accepts it. Native DXC compiling the
+baseline and edited HLSL produces identical DXIL (including OriginalInTarget); it does not reproduce the
+older committed DX12 blobs, which are preserved byte for byte. Integrated MSVC build, Wine/Proton, GPU,
+game and native Windows validation remain pending. No resource completion or image-quality claim follows
+from these host contracts.

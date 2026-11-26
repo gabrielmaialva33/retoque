@@ -17,6 +17,7 @@
 
 #include <Config.h>
 #include <State.h>
+#include "DlssNr_VkStorageRuntime.h"
 #include <misc/DeferredRelease.h>
 #include <hooks/Vulkan_Hooks.h>
 #include <proxies/KernelBase_Proxy.h>
@@ -3874,20 +3875,7 @@ VkResult VKAPI_CALL hkEnumeratePhysicalDevices(VkInstance instance, uint32_t* co
 
 // Whether the application enabled shaderStorageImageWriteWithoutFormat, in pEnabledFeatures or a
 // VkPhysicalDeviceFeatures2 in its pNext chain.
-bool StorageWithoutFormatEnabled(const VkDeviceCreateInfo* info)
-{
-    if (info->pEnabledFeatures != nullptr && info->pEnabledFeatures->shaderStorageImageWriteWithoutFormat)
-        return true;
-
-    for (auto chain = static_cast<const VkBaseInStructure*>(info->pNext); chain != nullptr; chain = chain->pNext)
-    {
-        if (chain->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 &&
-            reinterpret_cast<const VkPhysicalDeviceFeatures2*>(chain)->features.shaderStorageImageWriteWithoutFormat)
-            return true;
-    }
-
-    return false;
-}
+bool StorageWithoutFormatEnabled(const VkDeviceCreateInfo* info) { return DlssNr::VkStorage::Enabled(info); }
 
 // What the application's create info says about bufferDeviceAddress.
 BdaChain ReadBdaChain(const VkDeviceCreateInfo* info)
@@ -3991,14 +3979,16 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
     DlssNr::DriverInitGate::OwnCode ownCode;
     void* const returnAddress = _ReturnAddress();
     const bool internal = Internal();
+    const bool nr = Config::Instance()->DlssNrEnabled.value_or_default();
+    const bool storageEnabled = nr && !internal;
     const bool chainRequested = !internal && Config::Instance()->DlssNrEnabled.value_or_default() &&
                                 Config::Instance()->DlssNrPasses.value_or_default() > 1;
     HostActivity activity("vkCreateDevice");
 
     // Stage 3: on a device the host will carry presents on, the model's device extensions the device offers are
     // appended to a copy of the create info -- exactly the after-upscale route's list, decided before the call and
-    // never by retrying one: a device's extensions are fixed at creation. Everything else goes down as it came; no
-    // feature or queue is added. OptiScaler's own devices get nothing.
+    // never by retrying one: a device's extensions are fixed at creation. The supported formatless-write feature
+    // is requested on a copy when NR needs it (owner decision 2026-11-26). Internal devices get nothing.
     ExtensionPlan extensions;
     BdaAction bda = BdaAction::Already;
     VkDeviceCreateInfo withExtensions {};
@@ -4009,6 +3999,8 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
     VkPhysicalDeviceBufferDeviceAddressFeaturesEXT bdaFeaturesExt {
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT
     };
+    DlssNr::VkStorage::PhysicalFacts storagePhysical;
+    std::unique_ptr<DlssNr::VkStorage::Request> storageRequest;
     bool edited = false;
     bool chainBudgetEnabled = false;
     if (!internal && info != nullptr)
@@ -4033,10 +4025,22 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
                    (VK_API_VERSION_MAJOR(apiVersion) == 1 && VK_API_VERSION_MINOR(apiVersion) >= minor);
         };
 
+        if (storageEnabled)
+        {
+            storagePhysical = DlssNr::VkStorage::Query(physical, As<VkInstance>(instanceOfPhysical),
+                                                       g_getInstanceProcAddr, apiVersion);
+            storageRequest = std::make_unique<DlssNr::VkStorage::Request>(info, nr, internal, storagePhysical.supported,
+                                                                          storagePhysical.apiVersion);
+            info = storageRequest->Info(info);
+            DlssNr::VkStorage::Note(*storageRequest);
+        }
+
         DeviceCreateFacts facts;
         facts.properties2 = properties2;
         facts.vulkan11 = atLeast(1);
-        facts.storageWithoutFormat = atLeast(3) || StorageWithoutFormatEnabled(info);
+        facts.storageWithoutFormat = storageEnabled
+                                         ? DlssNr::VkStorage::Describe(info, storagePhysical.apiVersion).Capable()
+                                         : atLeast(3) || StorageWithoutFormatEnabled(info);
         for (auto node = static_cast<const VkBaseInStructure*>(info->pNext); node != nullptr; node = node->pNext)
         {
             if (node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES)
@@ -4090,12 +4094,13 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
         }
     }
 
+    const auto* effectiveInfo = edited ? &withExtensions : info;
     VkResult result = VK_ERROR_INITIALIZATION_FAILED;
     {
         DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::DeviceCreate,
                                            Config::Instance()->DlssNrEnabled.value_or_default(),
                                            "vkCreateDevice (present host)");
-        result = o_CreateDevice(physical, edited ? &withExtensions : info, allocator, device);
+        result = o_CreateDevice(physical, effectiveInfo, allocator, device);
     }
 
     if (edited && result != VK_SUCCESS)
@@ -4168,10 +4173,14 @@ VkResult VKAPI_CALL hkCreateDevice(VkPhysicalDevice physical, const VkDeviceCrea
 
     LOG_INFO("{}", line);
 
+    if (storageEnabled)
+        DlssNr::VkStorage::Registry().Created(*device,
+                                              DlssNr::VkStorage::Describe(effectiveInfo, storagePhysical.apiVersion),
+                                              physical, storagePhysical.formats);
     DeferredRelease::RegisterOwner(H(*device));
     HookDevice(*device, chainRequested);
     if (!internal)
-        DlssNr::VkPre::Runtime::Install(*device, edited ? &withExtensions : info, instanceApiVersion);
+        DlssNr::VkPre::Runtime::Install(*device, effectiveInfo, instanceApiVersion);
 
     // The round trip's own submits go through the host's trampoline of the device's vkQueueSubmit. The next layer
     // can still be Vulkan_wDx12 (as in DOOM), so even fence-only submits need a non-null submit array. The borrowed
@@ -4252,6 +4261,7 @@ template <typename Pfn> void Attach(Pfn& original, void* hook)
 
 void DlssNr::VkPresentHost::FinishDeviceDestroy(VkDevice device)
 {
+    DlssNr::VkStorage::Registry().Destroyed(device);
     {
         std::lock_guard lock(g_registryMutex);
         g_registry.OnDeviceDestroyed(H(device));

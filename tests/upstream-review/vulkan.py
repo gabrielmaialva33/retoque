@@ -20,6 +20,7 @@ pre=r'''
 #define LOG_INFO(...) ((void)0)
 struct State { bool isShuttingDown=false; static State& Instance(){static State s;return s;} };
 '''
+pre += '#define EXPECT_STORAGE_FORGET ' + str(int('VkStorage::Registry().Destroyed(device);' in host)) + '\n'
 queue=stripped(source('OptiScaler/misc/DeferredRelease.h'))+stripped(source('OptiScaler/misc/DeferredRelease.cpp'))
 fakes=r'''
 using VkDevice=void*;struct VkAllocationCallbacks{};using PFN_vkDestroyDevice=void(*)(VkDevice,const VkAllocationCallbacks*);
@@ -44,12 +45,16 @@ struct Trace { std::vector<std::string> FlushDevice(uint64_t,StreamlineCounts){r
 struct Registry { void OnDeviceDestroyed(uint64_t){} } g_registry;
 static void Log(const std::vector<std::string>&){}
 static void EraseQueueLocks(VkDevice){queuesAlive=false;}
+namespace DlssNr::VkStorage {
+struct Devices { bool known=true; void Destroyed(VkDevice){known=false;} };
+static Devices& Registry(){static Devices devices;return devices;}
+}
 namespace DlssNr::VkPresentHost { std::optional<bool> PrepareForDeviceDestroy(VkDevice);void FinishDeviceDestroy(VkDevice); }
 namespace MenuOverlayVk { void ReleaseDevice(VkDevice d,std::optional<bool> =std::nullopt){DeferredRelease::Enqueue([]{++callbacks;},H(d));} }
 static int idle(VkDevice){++waitCalls;assert(lockDepth && queuesAlive);return drain?VK_SUCCESS:-1;}
 static PFN_vkDeviceWaitIdle lookup(VkDevice,const char*){return idle;}
 [[maybe_unused]] static auto o_vkGetDeviceProcAddr=&lookup;
-static void destroyed(VkDevice,const VkAllocationCallbacks*){++realDestroy;events.push_back(callbacks);}
+static void destroyed(VkDevice,const VkAllocationCallbacks*){assert(!EXPECT_STORAGE_FORGET || !DlssNr::VkStorage::Registry().known);++realDestroy;events.push_back(callbacks);}
 static auto o_vkDestroyDevice=&destroyed;
 static std::mutex _hookedDevicesMutex,_passThroughSwapchainsMutex;
 static std::unordered_set<uint64_t> _hookedDevices;

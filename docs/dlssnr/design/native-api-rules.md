@@ -113,7 +113,15 @@ source and the committed bytecode:
 
 Each check fails on a violation seeded into a copy of a real pass first.
 
-The Vulkan modules' `Rgba32f` storage declarations remain mechanical known exceptions (check 11).
+The Vulkan modules' `Rgba32f` storage declarations were corrected on 2026-11-26: both now use
+`Unknown` plus `StorageImageWriteWithoutFormat`, admitted by the enabled feature or device API 1.3 /
+format_feature_flags2 with per-format WRITE_WITHOUT_FORMAT checks before pipeline creation. Check 11 has no exceptions; reintroducing a declared format fails. The earlier storage-format finding
+above is retained as historical evidence. [Implementation and host-only limits](nr-vulkan-present-host.md#shared-core-and-shader-format-bookkeeping-2026-11-26).
+Owner decision, **2026-11-26**: NR-enabled game devices that qualify by none of the three paths request
+`shaderStorageImageWriteWithoutFormat` only when physically supported. Both device-create hooks use
+copied legacy features or a copied Features2 chain, never application memory; NR-off/internal requests
+remain untouched, with zero additional storage queries, registry writes or logs. Unsupported capability or an uncopyable chain keeps the refusal with its reason.
+
 The integer-view exception (check 10) was removed with the upstream UNORM mapping on 2026-11-09. A new instance fails,
 and so does a fixed one until it is taken off the list.
 

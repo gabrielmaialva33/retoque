@@ -136,6 +136,16 @@ experiment.
 | `DlssNr_PassClamp.h`, `shaders/dlssnr/DlssNr_PassClamp_Dx12.h/.cpp`, `precompile/dlssnr_pass_clamp_rule.h`, `precompile/dlssnr_pass_clamp.hlsl` | D3D12 interpass clamping and `PassFeedback` (`[DlssNr] PassClamp`, `PassFeedback`, off/1.0 by default): hue-preserving `CubeScaleResidual`, `NaN`/`Inf` proxy fallback and two-scratch ping-pong across 2..10 sequential passes; bytecode header optional (`__has_include`); `../../docs/dlssnr/design/2026-11-22-interpass-clamp.md`, tested by `tests/nr-pass-clamp` |
 | `DlssNr_Dejitter.h`, `shaders/dlssnr/DlssNr_Dejitter_Dx12.h/.cpp`, `precompile/dlssnr_dejitter_rule.h`, `precompile/dlssnr_dejitter.hlsl` | D3D12 post-upscale motion-vector de-jittering (`[DlssNr] DejitterMotionVectors`, off by default): removes `(jitterNow - jitterPrev) / mvScale` from consecutive `MVLowRes + MVJittered` motion buffers before NR reads them and resets on sequence or contract breaks; bytecode header optional (`__has_include`); `../../docs/dlssnr/design/2026-11-22-dejitter-motion-vectors.md`, tested by `tests/nr-dejitter` |
 
+### Vulkan core and storage admission
+
+`DlssNr_VkCore.h` tracks the shared driver's device/start-stop generation; `DlssNr_VkActivity.h`
+publishes recent successful native compositions for the menu. `DlssNr_VkStorage.h` records the
+effective formatless-write capability at observed device creation: enabled feature or device 1.3/flags2
+with per-format checks. `DlssNr_VkStorageRequest.h` requests the supported feature on copies only for
+NR-enabled game devices that need it (owner decision 2026-11-26). Missing observation refuses pipelines. These are metadata contracts, not GPU retirement.
+See [the 2026-11-26 design entry](../../docs/dlssnr/design/nr-vulkan-present-host.md#shared-core-and-shader-format-bookkeeping-2026-11-26)
+and [host tests](../../tests/nr-vk-core/README.md), including the remaining concurrent-NGX-call risk.
+
 ### Editing the shader
 
 `dlssnr.hlsl` is **precompiled**; editing it alone changes nothing. Rebuild **both** targets and

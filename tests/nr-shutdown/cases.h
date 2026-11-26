@@ -100,13 +100,13 @@ void VulkanCases()
     expectedVk = &device;
 
     // Uninitialised: neither consumer reaches the core.
-    ShutdownPresentCore(&device);
+    ShutdownPresentCore(NVNGXProxy::VulkanCore());
     assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
     assert(vkCalls == 0 && vkAllCalls == 0 && Nvngx_FG::shutdown1Calls == 1 && Nvngx_FG::shutdownCalls == 1);
     ExpectPublicBracket(0, &device, false); // the host's helper logs nothing of its own; the input brackets its call
     debugLog.clear();
 
-    NVNGXProxy::_vulkanInited = true;
+    NVNGXProxy::SetVulkanInited(true, &device);
     auto vk = NVNGXProxy::VULKAN_Shutdown1();
     assert(vk != nullptr);
     // Nothing logged until a device call is made; then the entry and the core's own answer, failure included.
@@ -123,37 +123,39 @@ void VulkanCases()
     NVNGXProxy::_module.VULKAN_Shutdown = &CoreVkAllShutdown;
     assert(debugLog.size() == 4); // the all-devices routes log nothing: no device call was made
 
-    // The NR present host: the device-specific entry, the runtime left initialised for its caller to clear.
-    ShutdownPresentCore(&device);
-    assert(vkCalls == 3 && vkAllCalls == 1 && NVNGXProxy::_vulkanInited);
+    // The NR present host: consume the exact owned generation before the device-specific entry.
+    ShutdownPresentCore(NVNGXProxy::VulkanCore());
+    assert(vkCalls == 3 && vkAllCalls == 1 && !NVNGXProxy::IsVulkanInited());
     ExpectCoreCallLogged(4, &device, 1, 5);
+
+    NVNGXProxy::SetVulkanInited(true, &device);
 
     // The SDK input: the device entry once, the runtime cleared, so the all-devices shutdown it ends in is not
     // repeated.
     assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
-    assert(vkCalls == 4 && vkAllCalls == 1 && !NVNGXProxy::_vulkanInited);
+    assert(vkCalls == 4 && vkAllCalls == 1 && !NVNGXProxy::IsVulkanInited());
     ExpectPublicBracket(6, &device, true);
     assert(Nvngx_FG::shutdown1Calls == 2 && Nvngx_FG::shutdownCalls == 2 && !State::Instance().nvngxVkInited);
 
     // A null device from the game selects the all-devices entry instead of dereferencing null inside the core.
-    NVNGXProxy::_vulkanInited = true;
+    NVNGXProxy::SetVulkanInited(true, &device);
     assert(NVSDK_NGX_VULKAN_Shutdown1(nullptr) == NVSDK_NGX_Result_Success);
-    assert(vkCalls == 4 && vkAllCalls == 2 && !NVNGXProxy::_vulkanInited);
+    assert(vkCalls == 4 && vkAllCalls == 2 && !NVNGXProxy::IsVulkanInited());
     ExpectPublicBracket(10, nullptr, false);
 
     // A failing core result does not stop the input's cleanup.
-    NVNGXProxy::_vulkanInited = true;
+    NVNGXProxy::SetVulkanInited(true, &device);
     result = 0xBAD00002;
     assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
-    assert(vkCalls == 5 && vkAllCalls == 2 && !NVNGXProxy::_vulkanInited && Nvngx_FG::shutdown1Calls == 4);
+    assert(vkCalls == 5 && vkAllCalls == 2 && !NVNGXProxy::IsVulkanInited() && Nvngx_FG::shutdown1Calls == 4);
     ExpectPublicBracket(12, &device, true, 0xBAD00002); // the core's failure logged; the public return is not it
     result = 1;
 
     // DLSS off: the input leaves the proxy's core alone.
-    NVNGXProxy::_vulkanInited = true;
+    NVNGXProxy::SetVulkanInited(true, &device);
     Config::Instance()->DLSSEnabled.value = false;
     assert(NVSDK_NGX_VULKAN_Shutdown1(&device) == NVSDK_NGX_Result_Success);
-    assert(vkCalls == 5 && vkAllCalls == 2 && NVNGXProxy::_vulkanInited);
+    assert(vkCalls == 5 && vkAllCalls == 2 && NVNGXProxy::IsVulkanInited());
     ExpectPublicBracket(16, &device, false);
     Config::Instance()->DLSSEnabled.value = true;
 
@@ -162,9 +164,9 @@ void VulkanCases()
     NVNGXProxy::LoadVulkan();
     assert(NVNGXProxy::VULKAN_Shutdown1() == nullptr);
     const auto logged = debugLog.size();
-    ShutdownPresentCore(&device);
+    ShutdownPresentCore(NVNGXProxy::VulkanCore());
     assert(vkCalls == 5 && vkAllCalls == 2 && debugLog.size() == logged); // no call, so no evidence of one
-    NVNGXProxy::_vulkanInited = false;
+    NVNGXProxy::SetVulkanInited(false);
     NVNGXProxy::_module.VULKAN_Shutdown = nullptr;
 
     assert((std::is_same_v<decltype(NVNGXProxy::VULKAN_Shutdown1()), PFN_VULKAN_Shutdown1>) );

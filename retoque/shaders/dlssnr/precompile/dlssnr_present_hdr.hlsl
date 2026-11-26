@@ -43,6 +43,9 @@ Texture2D<float4>   gOriginal  : register(t0); // the backbuffer's copy, in its 
 Texture2D<float4>   gProcessed : register(t1); // encode: the work texture as the composition left it; decode: unread
 #ifdef VK_MODE
 [[vk::binding(3, 0)]]
+// Storage-format audit: janblade/OptiScaler-F5-DLSSNR-Multipass (GPL-3.0), 10a27d1d/88cd342b.
+// This binding also receives non-FP16 outputs; require formatless writes at device admission.
+[[vk::image_format("unknown")]]
 #endif
 RWTexture2D<float4> gOut       : register(u0); // decode: the FP16 work texture; encode: the swapchain's format
 

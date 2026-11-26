@@ -6,7 +6,9 @@ D3D11, D3D12 and Vulkan adapters and public-signature getters with host fakes un
 The D3D11 and Vulkan fixtures also compile the real raw slot and loader assignment, including its cast.
 The Vulkan fixture also compiles both consumers of the public getter: the SDK input's
 `NVSDK_NGX_VULKAN_Shutdown1` with the `NVSDK_NGX_VULKAN_Shutdown` it ends in, and the NR present host's
-`ShutdownPresentCore`. It runs them before the type checks, so a one-argument slot fails on behaviour.
+`ShutdownPresentCore`, together with its production device/generation bookkeeping and owned-stop adapter.
+The host consumes its exact token before the core call; the SDK sequence starts a fresh generation.
+It runs them before the type checks, so a one-argument slot fails on behaviour.
 The fake core writes to the mandatory second argument, verifies its initial value and the forwarded
 device, and returns success/failure codes. Tests verify that results are preserved, uninitialized or
 missing entries are not exposed, and a null device selects the all-devices API instead of dereferencing

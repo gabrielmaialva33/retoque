@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "DlssNrFeature_Vk.h"
+#include "DlssNr_VkActivity.h"
 #include "DlssNr_PairCaptureVk.h"
 #include "DlssNr_VkPreRuntime.h"
 
@@ -60,6 +61,8 @@ namespace DlssNr
 
 namespace
 {
+
+VkActivity::State g_nativeActivity;
 
 // The forwarder's Vulkan surface. The model checks its caller's module path and requires nvngx.dll in
 // it, whichever API is being used, so these calls go through the same shim the D3D12 path does.
@@ -380,6 +383,7 @@ bool ClaimModelForAfterUpscale(VkDevice device)
 
 void Fail(const char* why)
 {
+    g_nativeActivity.Clear();
     if (g_vk.failed)
         return;
 
@@ -1557,7 +1561,7 @@ std::optional<std::filesystem::path> FindSnippet()
 
 // ---------------------------------------------------------------------------------------------
 
-bool IsRunningVk() { return g_vk.feature != nullptr && !g_vk.failed; }
+bool IsRunningVk() { return g_nativeActivity.Running(OwnerNowMs()); }
 
 const char* FailureReasonVk() { return g_vk.failed ? g_vk.reason : ""; }
 
@@ -1781,6 +1785,10 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
 
         return;
     }
+
+    if (!VkStorage::Allows(
+            device, { colour->Resource.ImageViewInfo.Format, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R32_SFLOAT }))
+        return;
 
     const uint32_t width = colour->Resource.ImageViewInfo.Width;
     const uint32_t height = colour->Resource.ImageViewInfo.Height;
@@ -2856,6 +2864,8 @@ void EvaluateAfterUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* para
         }
     }
 
+    g_nativeActivity.Recorded(OwnerNowMs());
+
     static bool reported = false;
 
     if (!reported && g_vk.frames > 2)
@@ -3031,6 +3041,10 @@ static bool RecordPreUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* p
 
         return false;
     }
+
+    if (!VkStorage::Allows(
+            device, { colour->Resource.ImageViewInfo.Format, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R32_SFLOAT }))
+        return false;
 
     const uint32_t width = colour->Resource.ImageViewInfo.Width;
     const uint32_t height = colour->Resource.ImageViewInfo.Height;
@@ -3781,6 +3795,7 @@ static bool RecordPreUpscaleVk(VkCommandBuffer cmdBuffer, NVSDK_NGX_Parameter* p
     }
 
     Transition(cmdBuffer, g_vk.preScratch, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    g_nativeActivity.Recorded(OwnerNowMs());
     return true;
 }
 
@@ -4112,6 +4127,7 @@ void FreeRouteObjects()
     if (g_vk.feature != nullptr && g_fwd.release != nullptr)
         g_fwd.release(g_vk.feature);
 
+    g_nativeActivity.Clear();
     g_vk.feature = nullptr;
     g_vk.modelVramBytes = DlssNr::ModelStats::kUnknown;
 
@@ -4179,6 +4195,7 @@ void FreeRouteObjects()
 
 void ShutdownVk(bool deviceAlive)
 {
+    g_nativeActivity.Clear();
     if (!deviceAlive)
     {
         VkPresentHost::AbandonCreationObserver(g_vk.device);
@@ -4396,7 +4413,7 @@ constexpr uint64_t kPresentPassSlots = 18;
 // The device the present host brought the driver's NGX core up on (NVNGXProxy holds one), if it did, and the device it
 // last initialised NGX on through the forwarder. Written by the model's builder thread, read at vkDestroyDevice: both
 // under g_presentNgxMutex (below).
-VkDevice g_presentCoreDevice = VK_NULL_HANDLE;
+VkCore::Token g_presentCore;
 VkDevice g_presentForwarderDevice = VK_NULL_HANDLE;
 
 // A feature and images replaced while frames that used them were in flight: freed once every one of those frames is
@@ -4404,19 +4421,17 @@ VkDevice g_presentForwarderDevice = VK_NULL_HANDLE;
 struct RetiredSet
 {
     void* feature = nullptr;
+    VkCore::Token coreToken;
     std::vector<OwnedImage> images;
     SynthMotion::VkImages synth; // the synthesized-motion estimator's images for that size, if it had them
     PresentHdr::VkConversion hdr;
     std::vector<uint64_t> waitFor;
 };
 
-// The core's shutdown on one device. Its device-specific entry takes an out count of what is left; called without one,
-// the core wrote the count through whatever was in the register (a null write inside _nvngx.dll, 2026-10-14).
-// NVNGXProxy's public getter supplies it (NVNGXProxy::ShutdownVulkanDevice), as it does for the SDK input.
-void ShutdownPresentCore(VkDevice device)
+// Metadata identity is checked and consumed before the proxy calls the existing ABI adapter.
+void ShutdownPresentCore(VkCore::Token token, bool forgetOnly = false)
 {
-    if (const auto shutdown = NVNGXProxy::VULKAN_Shutdown1())
-        shutdown(device);
+    NVNGXProxy::ShutdownOwnedVulkan(token, forgetOnly);
 }
 
 // The forwarder's record of an NGX call's result (an exported int), as NGX names it.
@@ -4488,6 +4503,7 @@ struct PresentBuildJob
 
     // Outputs, written by the builder before `state` leaves Running (release), read after (acquire).
     bool ngxInitialised = false;
+    VkCore::Token coreToken;
     bool coreReady = false;
     NVSDK_NGX_Parameter* newParams = nullptr;
     bool floatSlotKnown = false;
@@ -4533,7 +4549,7 @@ void FreeBuild(PresentBuildJob& job)
 {
     VkDevice d = job.dev.device;
 
-    if (job.feature != nullptr && g_fwd.release != nullptr)
+    if (job.feature != nullptr && g_fwd.release != nullptr && NVNGXProxy::VulkanCoreMatches(job.coreToken))
         g_fwd.release(job.feature);
     job.feature = nullptr;
 
@@ -4554,7 +4570,9 @@ void FreeBuild(PresentBuildJob& job)
 
     if (job.newParams != nullptr)
     {
-        if (const auto destroy = NVNGXProxy::VULKAN_DestroyParameters())
+        if (!NVNGXProxy::VulkanCoreMatches(job.coreToken))
+            job.newParams = nullptr;
+        if (const auto destroy = NVNGXProxy::VULKAN_DestroyParameters(); destroy && job.newParams)
             destroy(job.newParams);
         job.newParams = nullptr;
     }
@@ -4655,38 +4673,34 @@ void RunBuild(PresentBuildJob& job)
         activity.Stage("bringing the driver's NGX core up on the device");
         // The lock guards the two device records only, never an NGX call: vkDestroyDevice takes it under the host's
         // transport lock, and must not wait behind an opaque bring-up.
-        VkDevice olderCore = VK_NULL_HANDLE;
+        VkCore::Token olderCore;
         {
             std::lock_guard<std::mutex> lock(g_presentNgxMutex);
             g_presentForwarderDevice = d;
-
-            // Brought up by an earlier model of the host's on another device, still alive: shut down there first,
-            // since NVNGXProxy holds one (taken over here, so that device's destruction does not shut it down too).
-            // Brought up by anything else (a game's own NGX through OptiScaler): used as it is.
-            if (g_presentCoreDevice != VK_NULL_HANDLE && g_presentCoreDevice != d)
+            if (g_presentCore && g_presentCore.device != reinterpret_cast<uintptr_t>(d))
             {
-                olderCore = g_presentCoreDevice;
-                g_presentCoreDevice = VK_NULL_HANDLE;
+                olderCore = g_presentCore;
+                g_presentCore = {};
             }
         }
-        if (olderCore != VK_NULL_HANDLE)
-        {
+        if (olderCore)
             ShutdownPresentCore(olderCore);
-            NVNGXProxy::SetVulkanInited(false);
-        }
 
-        if (!NVNGXProxy::IsVulkanInited())
+        VkCore::Token started;
         {
-            {
-                DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
-                                                   "the driver's NGX core bring-up (Vulkan present host)");
-                NVNGXProxy::InitVulkan(job.dev.instance, pd, d, vkGetInstanceProcAddr, vkGetDeviceProcAddr);
-            }
-            if (!NVNGXProxy::IsVulkanInited())
-                return stop("the driver's NGX core would not initialise on this device");
-            std::lock_guard<std::mutex> lock(g_presentNgxMutex);
-            g_presentCoreDevice = d;
+            DlssNr::DriverInitGate::Scope gate(DlssNr::DriverInitGate::Hold::Ngx, true,
+                                               "the driver's NGX core bring-up (Vulkan present host)");
+            if (!NVNGXProxy::InitVulkan(job.dev.instance, pd, d, vkGetInstanceProcAddr, vkGetDeviceProcAddr, &started))
+                return stop("the driver's NGX core is unavailable or belongs to another device");
         }
+        if (started)
+        {
+            std::lock_guard<std::mutex> lock(g_presentNgxMutex);
+            g_presentCore = started;
+        }
+        job.coreToken = NVNGXProxy::VulkanCore();
+        if (!job.coreToken || job.coreToken.device != reinterpret_cast<uintptr_t>(d))
+            return stop("the driver's NGX core changed during bring-up");
         job.coreReady = true;
 
         activity.Stage("reading the driver core's capability block");
@@ -4698,6 +4712,8 @@ void RunBuild(PresentBuildJob& job)
             return stop("the driver's NGX core gave no capability parameters");
         }
         params = job.newParams;
+        if (!NVNGXProxy::VulkanCoreMatches(job.coreToken))
+            return stop("the driver core went away while reading its capabilities");
 
         // Before anything is written to it, where this block keeps floats.
         DiscoverFloatSlotFor(job.floatSlotKnown, params);
@@ -4735,6 +4751,8 @@ void RunBuild(PresentBuildJob& job)
 
     if (job.orphaned.load(std::memory_order_acquire))
         return stop("its model was abandoned");
+    if (job.coreToken && !NVNGXProxy::VulkanCoreMatches(job.coreToken))
+        return stop("the driver core changed before the model build");
 
     // Synthesized motion's device part (stage 5): whether the device can run the estimator at all, and its pipelines,
     // once per model. Neither ever fails the build: the product is then made without the estimator, on zero motion.
@@ -4749,6 +4767,8 @@ void RunBuild(PresentBuildJob& job)
 
     if (job.orphaned.load(std::memory_order_acquire))
         return stop("its model was abandoned");
+    if (job.coreToken && !NVNGXProxy::VulkanCoreMatches(job.coreToken))
+        return stop("the driver core changed before the model build");
 
     // The images for this size. The guides are made at the working size: a resample of a constant is the constant,
     // so this is the source-to-working scaling done once, exactly.
@@ -4777,7 +4797,7 @@ void RunBuild(PresentBuildJob& job)
             !CreateImageOn(d, pd, job.hdrLinear, k.width, k.height, working, true, &job.lost) ||
             !CreateImageOn(d, pd, job.hdrEncoded, k.width, k.height, PresentHdr::VkConversion::EncodedFormat(raw), true,
                            &job.lost) ||
-            !job.hdr.Create(d, pd, k.width, k.height, k.hdrProfile, job.hdrOriginal.view, job.hdrLinear.view,
+            !job.hdr.Create(d, pd, k.width, k.height, k.hdrProfile, raw, job.hdrOriginal.view, job.hdrLinear.view,
                             job.hdrEncoded.view))
         {
             job.lost = job.lost || job.hdr.lost;
@@ -4794,6 +4814,8 @@ void RunBuild(PresentBuildJob& job)
 
     if (job.orphaned.load(std::memory_order_acquire))
         return stop("its model was abandoned");
+    if (job.coreToken && !NVNGXProxy::VulkanCoreMatches(job.coreToken))
+        return stop("the driver core changed before the model build");
 
     // One command buffer of the builder's own: the pass's one-time setup, the guides' clear, and the feature's creation
     // with its initialisation.
@@ -5048,6 +5070,7 @@ struct VkPresentModel::Impl
     // The device's, from the model's first build.
     bool deviceReady = false;
     bool ngxInitialised = false;
+    VkCore::Token coreToken;
     bool coreReady = false;                // the driver's NGX core is up on this device (NVNGXProxy)
     NVSDK_NGX_Parameter* params = nullptr; // the core's capability block
     std::unique_ptr<DlssNr_Vk> pass;
@@ -5166,7 +5189,7 @@ struct VkPresentModel::Impl
 
     void Free(RetiredSet& set)
     {
-        if (set.feature != nullptr && g_fwd.release != nullptr)
+        if (set.feature != nullptr && g_fwd.release != nullptr && NVNGXProxy::VulkanCoreMatches(set.coreToken))
             g_fwd.release(set.feature);
 
         set.feature = nullptr;
@@ -5219,6 +5242,7 @@ struct VkPresentModel::Impl
         estimator.Restart();
         synthRecorded = false;
         old.waitFor = pending;
+        old.coreToken = coreToken;
         feature = nullptr;
         built = false;
         width = height = workWidth = workHeight = 0;
@@ -5237,6 +5261,7 @@ struct VkPresentModel::Impl
         next->key = want;
         next->needDevice = !deviceReady;
         next->params = params;
+        next->coreToken = coreToken;
         next->config.preset = (int) cfg.DlssNrPreset.value_or_default();
         next->config.intensity = cfg.DlssNrIntensity.value_or_default();
         next->config.style = (int) cfg.DlssNrStyle.value_or_default();
@@ -5282,6 +5307,7 @@ struct VkPresentModel::Impl
             deviceReady = true;
             ngxInitialised = over->ngxInitialised;
             coreReady = over->coreReady;
+            coreToken = over->coreToken;
             params = over->newParams;
             over->newParams = nullptr;
             pass = std::move(over->pass);
@@ -5411,6 +5437,22 @@ VkPresentAdmission VkPresentModel::Admit(uint32_t width, uint32_t height, uint32
 {
     Impl& m = *_impl;
 
+    // Format refusals are not model faults: a different transport format may be admitted next frame.
+    if (!VkStorage::Allows(m.dev.device, { VK_FORMAT_R16G16B16A16_SFLOAT }) ||
+        (hdrProfile != 0 && !VkStorage::Allows(m.dev.device, { PresentHdr::VkConversion::EncodedFormat(
+                                                                 static_cast<VkFormat>(rawFormat)) })))
+        return { NrSkip::Unavailable, "the target format does not support formatless storage writes" };
+
+    if (m.coreReady && !NVNGXProxy::VulkanCoreMatches(m.coreToken))
+    {
+        m.params = nullptr;
+        m.feature = nullptr;
+        for (auto& retired : m.retired)
+            retired.feature = nullptr;
+        m.Latch(NrSkip::Unavailable, "the shared driver NGX core stopped or restarted");
+        return { NrSkip::Unavailable, m.failure };
+    }
+
     if (m.failed && m.hdrFailure && !m.deviceLost &&
         (m.hdrFailure->hdrProfile != hdrProfile || m.hdrFailure->rawFormat != rawFormat ||
          m.hdrFailure->width != width || m.hdrFailure->height != height))
@@ -5532,9 +5574,9 @@ bool VkPresentModel::Record(const VkPresentNrFrame& input)
     auto& cfg = *Config::Instance();
     VkCommandBuffer cmd = frame.cmd;
 
-    if (m.failed || !m.built || m.Building() || m.feature == nullptr || m.pass == nullptr || cmd == VK_NULL_HANDLE ||
-        (frame.hdrProfile == 0 && frame.view == VK_NULL_HANDLE) || frame.width != m.width || frame.height != m.height ||
-        frame.hdrProfile != m.key.hdrProfile)
+    if (!NVNGXProxy::VulkanCoreMatches(m.coreToken) || m.failed || !m.built || m.Building() || m.feature == nullptr ||
+        m.pass == nullptr || cmd == VK_NULL_HANDLE || (frame.hdrProfile == 0 && frame.view == VK_NULL_HANDLE) ||
+        frame.width != m.width || frame.height != m.height || frame.hdrProfile != m.key.hdrProfile)
         return false;
 
     // The host begins/resets its own buffers explicitly. Reserve before its first NR command or image mutation.
@@ -5871,13 +5913,14 @@ void VkPresentModel::Release()
         set.waitFor.clear();
     m.FreeRetired();
 
-    if (m.feature != nullptr && g_fwd.release != nullptr)
+    if (m.feature != nullptr && g_fwd.release != nullptr && NVNGXProxy::VulkanCoreMatches(m.coreToken))
         g_fwd.release(m.feature);
     m.feature = nullptr;
 
     if (m.params != nullptr)
     {
-        if (const auto destroy = NVNGXProxy::VULKAN_DestroyParameters())
+        if (const auto destroy = NVNGXProxy::VULKAN_DestroyParameters();
+            destroy && NVNGXProxy::VulkanCoreMatches(m.coreToken))
             destroy(m.params);
         m.params = nullptr;
     }
@@ -5961,17 +6004,19 @@ void ShutdownPresentNgx(VkDevice device, bool forgetOnly, std::vector<std::strin
     // Called after the device's model build, if one was under way, is over (or orphaned): the builder writes these.
     std::lock_guard<std::mutex> ngx(g_presentNgxMutex);
 
-    if (g_presentCoreDevice == device)
+    if (g_presentCore.device == reinterpret_cast<uintptr_t>(device))
     {
-        if (!forgetOnly)
-            ShutdownPresentCore(device);
-        NVNGXProxy::SetVulkanInited(false);
-        g_presentCoreDevice = VK_NULL_HANDLE;
-        lines.push_back(forgetOnly
-                            ? "DLSS-NR Vulkan present host: the driver's NGX core on the device is forgotten, "
-                              "not shut down (it is lost, or frames on it never completed)"
-                            : "DLSS-NR Vulkan present host: the driver's NGX core shut down on the device before "
-                              "it goes");
+        const bool current = NVNGXProxy::VulkanCoreMatches(g_presentCore);
+        ShutdownPresentCore(g_presentCore, forgetOnly);
+        g_presentCore = {};
+        if (!current)
+            lines.push_back("DLSS-NR Vulkan present host: stale core ownership dropped; no shutdown called");
+        else
+            lines.push_back(forgetOnly
+                                ? "DLSS-NR Vulkan present host: the driver's NGX core on the device is forgotten, "
+                                  "not shut down (it is lost, or frames on it never completed)"
+                                : "DLSS-NR Vulkan present host: the driver's NGX core shut down on the device before "
+                                  "it goes");
     }
 
     // The forwarder answers only for the device it initialised (-1 otherwise), so this is asked for every device: one

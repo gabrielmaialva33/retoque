@@ -52,6 +52,17 @@ platform evidence means pending/unknown, never inferred success.
 | NR on any window (capture, no hook in the game) | **In progress, not qualified**; Windows only, no control on Linux/Proton. Phases 0-2 on `feat/nr-anything-20261111`: capture probe, gated `RetoqueWindow_*` export (inert unless the capture program sets `RETOQUE_WINDOW_HOST=1`), `RetoqueWindowHost.exe` with a preview window. Phase 3 (2026-11-19) adds opt-in `--overlay`, pure interaction/visibility contracts and recorder exclusion off by default; no app screen, upscaling or depth estimation | [Seam](../retoque/dlssnr/DlssNr_WindowHost.cpp), [host](../retoque/window_host/README.md); [seam contracts](../tests/nr-window-host/README.md), [host rules](../tests/nr-window-host-rules/README.md), [probe build](../tests/window-capture-probe/README.md) | [Design and decisions](dlssnr/design/nr-anything.md), 2026-11-11: built (MSVC under Wine) and host-tested only. Never run on Windows, on a GPU or with the model; the first native RTX 3060 run is described in the design. Phase 3: host test binary built, MinGW syntax checked (Main with an apartment-init stand-in); integrated MSVC build pending, not run on Windows. |
 | ViT reuse | Proposal/re-evaluation; profiler exists, reuse is not promoted by this index | [Design](dlssnr/design/vit-skip.md), [profiler contracts](../tests/nr-kernel-profile/README.md) | Earlier study has known limitations; an external fork's newer implementation still needs current code review and target-hardware measurement |
 
+### Vulkan maintenance, 2026-11-26
+
+Host-only changes: NGX device/generation ownership prevents stale present-host cleanup from stopping a
+replacement core or destroying its old capability blocks; native activity expires after one second when
+switching to the D3D12 bridge. Composition/HDR SPIR-V uses Unknown storage formats with observed
+feature/1.3/flags2 admission and per-format checks. NR-enabled game device creation may request the
+supported core feature on a copy when needed (owner decision 2026-11-26). [Design and limits](dlssnr/design/nr-vulkan-present-host.md#shared-core-and-shader-format-bookkeeping-2026-11-26),
+[host contracts](../tests/nr-vk-core/README.md). SPIR-V validated; committed DX12 bytecode unchanged.
+MSVC build, GPU/game, Proton and native Windows are pending; overlapping application NGX calls are not
+serialized by the generation bookkeeping.
+
 ## Reliability and tooling
 
 | Capability | Source state | Evidence / next boundary |

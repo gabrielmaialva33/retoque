@@ -235,10 +235,14 @@ Texture2D<float4>   gExposure : register(t4);
 #endif
 #ifdef VK_MODE
 [[vk::binding(5, 0)]]
+// Storage-format audit: janblade/OptiScaler-F5-DLSSNR-Multipass (GPL-3.0), 10a27d1d/88cd342b.
+// This binding also receives non-FP16 outputs; require formatless writes at device admission.
+[[vk::image_format("unknown")]]
 #endif
 RWTexture2D<float4> gTarget   : register(u0);  // encode: the proxy. resolve: the frame.
 #ifdef VK_MODE
 [[vk::binding(6, 0)]]
+[[vk::image_format("unknown")]]
 #endif
 RWTexture2D<float4> gKeep     : register(u1);  // encode: the frame value for value. unused by the resolve.
 #ifdef VK_MODE

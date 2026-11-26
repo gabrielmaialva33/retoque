@@ -4,6 +4,7 @@
 #include "Util.h"
 #include "Config.h"
 #include "Logger.h"
+#include <dlssnr/DlssNr_VkCore.h>
 
 #include <proxies/Ntdll_Proxy.h>
 #include <proxies/KernelBase_Proxy.h>
@@ -746,7 +747,7 @@ class NVNGXProxy
     inline static bool _cudaInited = false;
     inline static bool _dx11Inited = false;
     inline static bool _dx12Inited = false;
-    inline static bool _vulkanInited = false;
+    inline static DlssNr::VkCore::State _vulkanCore;
 
     // How many times the D3D12 core has been shut down. Every feature created on it is gone after one, so an
     // owner that kept a handle (DLSS-NR's private SR) compares this rather than calling into a new core with it.
@@ -983,7 +984,7 @@ class NVNGXProxy
 
     static bool IsNVNGXInited()
     {
-        return _module.dll != nullptr && (_dx11Inited || _dx12Inited || _vulkanInited) &&
+        return _module.dll != nullptr && (_dx11Inited || _dx12Inited || IsVulkanInited()) &&
                Config::Instance()->DLSSEnabled.value_or_default();
     }
 
@@ -1275,25 +1276,50 @@ class NVNGXProxy
 
     // Vulkan
     static bool InitVulkan(VkInstance InInstance, VkPhysicalDevice InPD, VkDevice InDevice,
-                           PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA)
+                           PFN_vkGetInstanceProcAddr InGIPA, PFN_vkGetDeviceProcAddr InGDPA,
+                           DlssNr::VkCore::Token* started = nullptr)
     {
-        if (_vulkanInited)
-            return true;
+        if (started != nullptr)
+            *started = {};
+        const auto current = _vulkanCore.Current();
+        if (current)
+            return started == nullptr || current.device == reinterpret_cast<uintptr_t>(InDevice);
+        const auto before = current.generation;
 
         InitNVNGX();
 
         if (_module.dll == nullptr)
             return false;
 
-        _vulkanInited =
-            InitVulkanModule(_module, InInstance, InPD, InDevice, InGIPA, InGDPA) == NVSDK_NGX_Result_Success;
-
-        return _vulkanInited;
+        if (InitVulkanModule(_module, InInstance, InPD, InDevice, InGIPA, InGDPA) != NVSDK_NGX_Result_Success)
+            return false;
+        const auto token = _vulkanCore.StartIfUnchanged(reinterpret_cast<uintptr_t>(InDevice), before);
+        if (started != nullptr)
+            *started = token;
+        return static_cast<bool>(token);
     }
 
-    static void SetVulkanInited(bool value) { _vulkanInited = value; }
+    static void SetVulkanInited(bool value, VkDevice device = VK_NULL_HANDLE)
+    {
+        if (value)
+            _vulkanCore.Start(reinterpret_cast<uintptr_t>(device));
+        else
+            _vulkanCore.Stop(reinterpret_cast<uintptr_t>(device));
+    }
 
-    static bool IsVulkanInited() { return _vulkanInited; }
+    static DlssNr::VkCore::Token VulkanCore() { return _vulkanCore.Current(); }
+    static bool VulkanCoreMatches(DlssNr::VkCore::Token token) { return _vulkanCore.Matches(token); }
+    static bool IsVulkanInited() { return static_cast<bool>(_vulkanCore.Current()); }
+
+    // Only the exact private start may be stopped; the game's later start on the same device wins.
+    static bool ShutdownOwnedVulkan(DlssNr::VkCore::Token token, bool forgetOnly)
+    {
+        if (!_vulkanCore.StopIfCurrent(token))
+            return false;
+        if (!forgetOnly && _module.VULKAN_Shutdown1 != nullptr)
+            ShutdownVulkanDevice(reinterpret_cast<VkDevice>(token.device));
+        return true;
+    }
 
     static PFN_VULKAN_Init_ProjectID VULKAN_Init_ProjectID() { return _module.VULKAN_Init_ProjectID; }
 
@@ -1334,7 +1360,7 @@ class NVNGXProxy
 
     static PFN_VULKAN_CreateFeature VULKAN_CreateFeature()
     {
-        if (!_vulkanInited)
+        if (!IsVulkanInited())
             return nullptr;
 
         return _module.VULKAN_CreateFeature;
@@ -1342,7 +1368,7 @@ class NVNGXProxy
 
     static PFN_VULKAN_CreateFeature1 VULKAN_CreateFeature1()
     {
-        if (!_vulkanInited)
+        if (!IsVulkanInited())
             return nullptr;
 
         return _module.VULKAN_CreateFeature1;
@@ -1350,7 +1376,7 @@ class NVNGXProxy
 
     static PFN_VULKAN_EvaluateFeature VULKAN_EvaluateFeature()
     {
-        if (!_vulkanInited)
+        if (!IsVulkanInited())
             return nullptr;
 
         return _module.VULKAN_EvaluateFeature;
@@ -1358,7 +1384,7 @@ class NVNGXProxy
 
     static PFN_VULKAN_ReleaseFeature VULKAN_ReleaseFeature()
     {
-        if (!_vulkanInited)
+        if (!IsVulkanInited())
             return nullptr;
 
         return _module.VULKAN_ReleaseFeature;
@@ -1366,7 +1392,7 @@ class NVNGXProxy
 
     static PFN_VULKAN_Shutdown VULKAN_Shutdown()
     {
-        if (!_vulkanInited)
+        if (!IsVulkanInited())
             return nullptr;
 
         return _module.VULKAN_Shutdown;
@@ -1374,7 +1400,7 @@ class NVNGXProxy
 
     static PFN_VULKAN_Shutdown1 VULKAN_Shutdown1()
     {
-        if (!_vulkanInited)
+        if (!IsVulkanInited())
             return nullptr;
 
         return _module.VULKAN_Shutdown1 != nullptr ? &ShutdownVulkanDevice : nullptr;

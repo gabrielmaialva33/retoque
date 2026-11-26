@@ -30,7 +30,17 @@ def run():
         source = (ROOT/file).read_text()
         original = subprocess.check_output(['git', 'show', 'HEAD:'+file], cwd=ROOT, text=True)
         current = body(source, name)
-        assert current == body(original, name), f'evaluate behavior changed: {name}'
+        # 2026-11-26: admit only the exact activity stamp and format refusal gate; hash everything else.
+        stamp = '    g_nativeActivity.Recorded(OwnerNowMs());\n\n'
+        assert current.count(stamp) == 1
+        current = current.replace(stamp, '', 1)
+        gate = ('    if (!VkStorage::Allows(\n'
+                '            device, { colour->Resource.ImageViewInfo.Format, VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R32_SFLOAT }))\n'
+                '        return;\n\n')
+        assert current.count(gate) == 1
+        current = current.replace(gate, '', 1)
+        baseline = body(original, name).replace(stamp, '', 1).replace(gate, '', 1)
+        assert current == baseline, f'evaluate behavior changed: {name}'
         assert hashlib.sha256(current.encode()).hexdigest() == expected, name
         # Self-check the guard with an actual executable mutation of each protected body.
         mutant = current.replace('{', '{ return {};', 1)
@@ -68,7 +78,7 @@ def run():
             continue
         raise AssertionError('source mutant survived: '+name)
     print(f'PASS: {len(mutations)} placement/layout/lifetime source mutants rejected')
-    print('PASS: post-upscale body byte-identical; scope-only NR before each single SR, restore-before-End, layouts, no new waits/submits')
+    print('PASS: post-upscale body preserved apart from the exact activity stamp and format gate; scope-only NR before each single SR, restore-before-End, layouts, no new waits/submits')
 
 
 def validate(implementation, inputs, header):

@@ -93,7 +93,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext2(
             LOG_INFO("NVNGXProxy::VULKAN_Init_Ext2 result: {0:X}", (UINT) result);
 
             if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+                NVNGXProxy::SetVulkanInited(true, InDevice);
         }
     }
 
@@ -203,7 +203,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_Ext(unsigned long long InAp
             LOG_INFO("NVNGXProxy::VULKAN_Init_Ext result: {0:X}", (UINT) result);
 
             if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+                NVNGXProxy::SetVulkanInited(true, InDevice);
         }
     }
 
@@ -246,7 +246,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init_ProjectID_Ext(
             LOG_INFO("NVNGXProxy::VULKAN_Init_ProjectID_Ext result: {0:X}", (UINT) result);
 
             if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+                NVNGXProxy::SetVulkanInited(true, InDevice);
         }
     }
 
@@ -310,7 +310,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Init(unsigned long long InApplic
             LOG_INFO("NVNGXProxy::VULKAN_Init result: {0:X}", (UINT) result);
 
             if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+                NVNGXProxy::SetVulkanInited(true, InDevice);
         }
     }
 
@@ -356,7 +356,7 @@ NVSDK_NGX_VULKAN_Init_ProjectID(const char* InProjectId, NVSDK_NGX_EngineType In
             LOG_INFO("NVNGXProxy::VULKAN_Init_ProjectID result: {0:X}", (UINT) result);
 
             if (result == NVSDK_NGX_Result_Success)
-                NVNGXProxy::SetVulkanInited(true);
+                NVNGXProxy::SetVulkanInited(true, InDevice);
         }
     }
 
@@ -1225,7 +1225,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)
         NVNGXProxy::VULKAN_Shutdown1() != nullptr)
     {
         auto result = NVNGXProxy::VULKAN_Shutdown1()(InDevice);
-        NVNGXProxy::SetVulkanInited(false);
+        NVNGXProxy::SetVulkanInited(false, InDevice);
     }
 
     Nvngx_FG::VULKAN_Shutdown1(InDevice);

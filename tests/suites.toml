@@ -1398,3 +1398,10 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 180
 summary = "MFG wrapper unique executable match, ceiling/reload identity and opt-in DRS preset answer under ASan/UBSan."
+[nr-vk-core]
+path = "nr-vk-core"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Vulkan NGX device/generation ownership, recent native activity and formatless storage contracts; host only."

@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "DlssNr_Vk.h"
+#include <dlssnr/DlssNr_VkStorageRuntime.h>
 
 #include "precompile/DlssNr_Shader_Vk.h"
 
@@ -13,6 +14,12 @@ DlssNr_Vk::DlssNr_Vk(std::string InName, VkDevice InDevice, VkPhysicalDevice InP
     if (InDevice == VK_NULL_HANDLE || InPhysicalDevice == VK_NULL_HANDLE)
     {
         LOG_ERROR("DLSS-NR Vulkan pass: no device");
+        _init = false;
+        return;
+    }
+
+    if (!DlssNr::VkStorage::Allows(InDevice, { VK_FORMAT_R16G16B16A16_SFLOAT }))
+    {
         _init = false;
         return;
     }
