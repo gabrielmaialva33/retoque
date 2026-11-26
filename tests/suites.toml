@@ -1420,3 +1420,10 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 180
 summary = "Opt-in Streamline Present guides: real boundary clock, explicit identity, recording/order refusal and priority."
+[nr-controlmask-matrix]
+path = "nr-controlmask-matrix"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "ControlMask full matrix and typed setter, coverage receipts and synthetic pixel-analysis rejection controls; no NGX, Wine or GPU."

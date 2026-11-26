@@ -32,6 +32,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: ControlMask analyzer host-test dependencies
+        run: python3 -m pip install numpy Pillow
       - name: Host prerequisites only
         run: |
           git submodule update --init --depth 1 external/simpleini external/spdlog external/vulkan external/nvapi

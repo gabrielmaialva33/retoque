@@ -7,6 +7,7 @@
 #include <tuple>
 #include <cmath>
 #include "hud_fixture.h"
+#include "mask_matrix.h"
 #include "../../retoque/shaders/dlssnr/DlssNr_Common.h"
 #include "../../retoque/shaders/dlssnr/precompile/DlssNr_Shader.h"
 
@@ -68,6 +69,8 @@ struct Host
     // only 310.9.16 reads; -1 leaves it unwritten, as production does. maskSubrect false leaves the four
     // ControlMaskSubrect* keys unwritten; see the trial table for why that trial has to run first.
     bool maskAb = false;
+    bool maskMatrix = false;
+    bool maskResourceSetter = false;
     int maskPattern = -1; // -1 null, 0 all zero, 1 all one, 2 one over the HUD and zero elsewhere, 3 maskInside/Outside
     std::array<unsigned char, 4> maskInside {}, maskOutside {};
     int maskBlendMode = -1;
@@ -695,7 +698,7 @@ struct Host
     }
 
     // The same block serves every trial, so a trial without a mask must write null over the last one.
-    // Written through the unsigned-long-long slot, which is how the forwarder writes every resource.
+    // Legacy: unsigned-long-long slot, as the forwarder writes resources. Full matrix: selected typed slot.
     // Called before create and before every evaluate. All six keys are read back each time: the five
     // written must round-trip, and an unwritten one is logged with its Get result, because the block
     // belongs to the driver and nothing here can clear a key once written.
@@ -703,7 +706,11 @@ struct Host
     {
         ID3D12Resource* resource = maskPattern >= 0 ? mask.p : nullptr;
         const auto value = static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(resource));
-        params->Set("DLSSNR.ControlMask", value);
+        if (maskMatrix)
+            Require(MaskMatrix::SetResource(*params, resource, maskResourceSetter),
+                    "ControlMask selected setter did not round-trip");
+        else
+            params->Set("DLSSNR.ControlMask", value);
         const unsigned subrect[4] = { 0u, 0u, resource ? width : 0u, resource ? height : 0u };
         const char* subrectKeys[4] = { "DLSSNR.ControlMaskSubrectBaseX", "DLSSNR.ControlMaskSubrectBaseY",
                                        "DLSSNR.ControlMaskSubrectWidth", "DLSSNR.ControlMaskSubrectHeight" };
@@ -712,9 +719,12 @@ struct Host
                 params->Set(subrectKeys[i], subrect[i]);
         if (maskBlendMode >= 0)
             params->Set("DLSSNR.MaskBlendMode", static_cast<unsigned>(maskBlendMode));
-        unsigned long long read = ~0ull;
-        ColdNr::NgxResult("ControlMask Get", params->Get("DLSSNR.ControlMask", &read));
-        Require(read == value, "ControlMask did not round-trip");
+        if (!maskMatrix)
+        {
+            unsigned long long read = ~0ull;
+            ColdNr::NgxResult("ControlMask Get", params->Get("DLSSNR.ControlMask", &read));
+            Require(read == value, "ControlMask did not round-trip");
+        }
         unsigned got[5] = { ~0u, ~0u, ~0u, ~0u, ~0u };
         unsigned results[5] {};
         for (unsigned i = 0; i < 4; ++i)
@@ -1164,7 +1174,7 @@ struct Host
 static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D12CommandQueue* queue,
                 ID3D12CommandAllocator* alloc, ID3D12GraphicsCommandList* list, ID3D12Fence* fence, HANDLE event,
                 bool hud = false, bool composition = false, bool maskAb = false, bool transferAb = false,
-                bool resetCost = false, bool uiProtect = false, unsigned preset = 0)
+                bool resetCost = false, bool uiProtect = false, unsigned preset = 0, bool maskMatrix = false)
 {
     Host host { device, queue, alloc, list, fence, event };
     try
@@ -1175,6 +1185,7 @@ static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D1
                 : "  UICorrection=1\n");
         host.hud = hud || maskAb || uiProtect;
         host.maskAb = maskAb;
+        host.maskMatrix = maskMatrix;
         // The model preset at create: 0 is what every mode has always passed. 310.9.16 maps 1 to the
         // September weight set and everything else to the October one (model-310-9-16.md).
         host.preset = preset;
@@ -1296,6 +1307,40 @@ static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D1
                 host.ReleaseGeneration();
             }
             host.uiProtect = false;
+        }
+        else if (maskMatrix)
+        {
+            // All full-matrix cases use the same pipeline, automatic mask=1, skin=-1, UI=1.
+            // Every value is uniform across the image; regions remain available to inspect HUD vs scenery.
+            host.width = 1280;
+            host.height = 720;
+            host.CoverHud();
+            for (const auto& t : MaskMatrix::Trials())
+            {
+                host.trial = t.name;
+                host.maskPattern = t.masked ? 3 : -1;
+                host.maskInside = host.maskOutside = t.rgba;
+                host.maskFormat = t.r8 ? DXGI_FORMAT_R8_UNORM : DXGI_FORMAT_R8G8B8A8_UNORM;
+                host.maskSubrect = true;
+                host.maskBlendMode = static_cast<int>(t.blend);
+                host.maskResourceSetter = t.resourceSetter;
+                host.maskLogged = false;
+                host.useAutoMask = 1;
+                host.skinStructure = -1.0f;
+                host.intensity = host.localTone = host.localStructure = 1;
+                Say("  MASK-MATRIX trial=%s setter=%s\n", t.name.c_str(), t.resourceSetter ? "resource" : "u64");
+                host.Allocate(1280, 720);
+                for (unsigned frame = 0; frame < 32; ++frame)
+                {
+                    host.Record(frame);
+                    host.Submit();
+                    host.ReadTiming(frame);
+                    host.Inspect(frame);
+                    host.Present();
+                }
+                Check(queue->Signal(fence, ++host.serial), "matrix post-Present Signal");
+                host.ReleaseGeneration();
+            }
         }
         else if (maskAb)
         {
@@ -1496,6 +1541,10 @@ static void Run(IDXGIFactory4* factory, HWND window, ID3D12Device* device, ID3D1
         else if (uiProtect)
             Say("UI-PROTECT-AB PASS: trials=8 attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
                 host.attempts, host.successes, host.presents, host.controls, host.captures);
+        else if (maskMatrix)
+            Say("MASK-MATRIX PASS: trials=%zu attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
+                MaskMatrix::Trials().size(), host.attempts, host.successes, host.presents, host.controls,
+                host.captures);
         else if (maskAb)
             Say("MASK-AB PASS: trials=24 attempts=%u successes=%u presents=%u controls=%u capture_pairs=%u\n",
                 host.attempts, host.successes, host.presents, host.controls, host.captures);

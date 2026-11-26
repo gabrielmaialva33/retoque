@@ -110,13 +110,14 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
                      cold_ui=None, cold_sdk=None, cold_load_opti=False, cold_from_d3d11=False,
                      cold_siblings=False, mask_ab=False, transfer_ab=False, reset_cost=False,
                      ui_protect_ab=False, moving_scene=False, dll=None, replay_nr=False, replay_quality=False,
-                     replay_profile='temporal-v1', preset=None):
+                     replay_profile='temporal-v1', preset=None, mask_matrix=False):
     """Run the harness the way a Steam game runs: through Proton, in a compatdata prefix of its own.
 
     Hand-mirroring what Proton provides (vkd3d-proton, dxvk-nvapi, the driver's nvngx pair and the
     NGXCore registry key) got the NR model as far as FAIL_PlatformError and then to a page fault;
     the model links NVAPI (45 NvAPI_ references) and expects the full environment. Proton's own
     script assembles that environment; nothing here reproduces it by hand."""
+    mask_ab = mask_ab or mask_matrix
     steam = Path.home() / '.local/share/Steam'
     proton = next((p for p in [steam / 'steamapps/common/Proton - Experimental/proton',
                                steam / 'steamapps/common/Proton Hotfix/proton'] if p.exists()), None)
@@ -163,7 +164,7 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
                 stale.unlink()
     print(f'running under {proton.parent.name}')
     p = subprocess.run([str(proton), 'run', str(RUN / 'dlssnr-loopback.exe'), 'OptiScaler.dll'] +
-                       (['--present-composition-ab'] if composition_ab else ['--present-mask-ab'] if mask_ab else
+                       (['--present-composition-ab'] if composition_ab else ['--present-mask-matrix'] if mask_matrix else ['--present-mask-ab'] if mask_ab else
                         ['--present-ui-protect-ab'] if ui_protect_ab else ['--present-transfer-ab'] if transfer_ab else ['--present-reset-cost'] if reset_cost else ['--present-hud-ab'] if hud_ab else ['--present-nr'] if present_nr else ['--cold-nr'] if cold_nr else [])
                        + (['--cold-size', cold_size] if cold_nr and cold_size else [])
                        + (['--cold-ui-correction', cold_ui] if cold_nr and cold_ui else [])
@@ -202,11 +203,12 @@ def run_under_proton(cold_nr=False, present_nr=False, hud_ab=False, composition_
                 raise SystemExit('ZERO COVERAGE: incomplete UI protection A/B')
             run([sys.executable, HERE / 'analyze_uiprotect.py', RUN])
         elif mask_ab:
-            import re
-            # 24 trials x 32 frames; one ApplyModel=0 control and seven kept frames (0, 1, 8, 15, 16, 24, 31) each.
-            if not re.search(r'^MASK-AB PASS: trials=24 attempts=768 successes=768 presents=768 controls=24 capture_pairs=168$', harness, re.M):
-                raise SystemExit('ZERO COVERAGE: incomplete ControlMask A/B')
-            run([sys.executable, HERE / 'analyze_mask.py', RUN])
+            from mask_matrix import check_coverage
+            try:
+                check_coverage(harness, full=mask_matrix)
+            except ValueError as error:
+                raise SystemExit(str(error)) from error
+            run([sys.executable, HERE / 'analyze_mask.py', RUN] + (['--matrix'] if mask_matrix else []))
         elif hud_ab:
             import re
             if not re.search(r'^HUD-AB PASS: trials=6 attempts=192 successes=192 presents=192 controls=6 capture_pairs=192$', harness, re.M):
@@ -276,7 +278,7 @@ def parse_args(argv=None):
                          "folder has them and OptiScaler loads them. The identity diff found this to be "
                          "the only named difference left between this process and production.")
     ap.add_argument('--preset', default=None, type=int, choices=range(0, 4), metavar='N',
-                    help='with --mask-ab: DLSSNR.Hint.Render.Preset at create (default 0, what every mode '
+                    help='with --mask-ab/--mask-matrix: DLSSNR.Hint.Render.Preset at create (default 0, what every mode '
                          'passes). On 310.9.16, 1 is the September weight set and anything else the October '
                          'one (docs/dlssnr/design/model-310-9-16.md); 310.8 has one set.')
     ap.add_argument('--skip-build', action='store_true',
@@ -304,6 +306,7 @@ def parse_args(argv=None):
     experiments = ap.add_mutually_exclusive_group()
     experiments.add_argument('--hud-ab', action='store_true', help='with --present-nr: paired HUD/UICorrection experiment')
     experiments.add_argument('--composition-ab', action='store_true', help='with --present-nr: direct/composed and strength sweep')
+    experiments.add_argument('--mask-matrix', action='store_true', help='with --present-nr: full ControlMask format/value/blend/setter matrix (184 trials)')
     experiments.add_argument('--mask-ab', action='store_true', help='with --present-nr: whether DLSSNR.ControlMask changes the output')
     experiments.add_argument('--ui-protect-ab', action='store_true',
                              help='with --present-nr: the UI correction contract with UI/UIAlpha/Backbuffer layers '
@@ -315,10 +318,10 @@ def parse_args(argv=None):
         ap.error('--composition-ab requires --present-nr')
     if args.hud_ab and not args.present_nr:
         ap.error('--hud-ab requires --present-nr')
-    if args.mask_ab and not args.present_nr:
-        ap.error('--mask-ab requires --present-nr')
-    if args.preset is not None and not args.mask_ab:
-        ap.error('--preset requires --mask-ab')
+    if (args.mask_ab or args.mask_matrix) and not args.present_nr:
+        ap.error('--mask-ab/--mask-matrix requires --present-nr')
+    if args.preset is not None and not (args.mask_ab or args.mask_matrix):
+        ap.error('--preset requires --mask-ab/--mask-matrix')
     if args.ui_protect_ab and not args.present_nr:
         ap.error('--ui-protect-ab requires --present-nr')
     if args.transfer_ab and not args.present_nr:
@@ -341,7 +344,7 @@ def parse_args(argv=None):
             ap.error(str(error))
     if args.present_nr and args.runtime != 'proton':
         ap.error('--present-nr requires --runtime proton')
-    if args.hud_ab or args.composition_ab or args.mask_ab or args.transfer_ab or args.ui_protect_ab:
+    if args.hud_ab or args.composition_ab or args.mask_ab or args.mask_matrix or args.transfer_ab or args.ui_protect_ab:
         import importlib.util
         for module in ('numpy', 'PIL'):
             if importlib.util.find_spec(module) is None:
@@ -367,7 +370,7 @@ def main(args=None, *, lease_held=False):
     scene = args.moving_scene or args.replay_nr or args.replay_quality
     standalone = args.cold_nr or args.present_nr
     if args.present_nr:
-        RUN = OUT / ('composition-run' if args.composition_ab else 'mask-run' if args.mask_ab else
+        RUN = OUT / ('composition-run' if args.composition_ab else 'mask-matrix-run' if args.mask_matrix else 'mask-run' if args.mask_ab else
                      'ui-protect-run' if args.ui_protect_ab else
                      'transfer-run' if args.transfer_ab else 'reset-run' if args.reset_cost else
                      'hud-run' if args.hud_ab else 'present-run')
@@ -493,7 +496,7 @@ def main(args=None, *, lease_held=False):
     if args.runtime == 'proton':
         return run_under_proton(args.cold_nr, args.present_nr, args.hud_ab, args.composition_ab, args.cold_size,
                                 args.cold_ui_correction, args.cold_core_sdk, args.cold_load_optiscaler,
-                                args.cold_device_from_d3d11, args.cold_sibling_snippets, mask_ab=args.mask_ab,
+                                args.cold_device_from_d3d11, args.cold_sibling_snippets, mask_ab=args.mask_ab, mask_matrix=args.mask_matrix,
                                 transfer_ab=args.transfer_ab, reset_cost=args.reset_cost,
                                 ui_protect_ab=args.ui_protect_ab, moving_scene=args.moving_scene, dll=dll,
                                 replay_nr=args.replay_nr, replay_quality=args.replay_quality,

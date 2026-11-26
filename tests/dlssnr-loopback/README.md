@@ -109,6 +109,58 @@ source inside the cover, and how close it is to base outside it, and writes
 contract half of [hud-protection.md](../../docs/dlssnr/design/hud-protection.md). The detector
 half needs a moving scene, which this fixture does not have.
 
+**2026-11-26 — full ControlMask matrix: five measured model hashes, one create refusal.**
+The existing `--mask-ab` still selects the 24-case experiment below, with the same names and
+24/768/168 trial/evaluation/capture-pair counts. The separate `--mask-matrix` mode selects **184 trials**:
+
+| Axis | Full matrix |
+|---|---|
+| Mask arm | R8; RGBA=(R,0,0,1); RGBA=(R,1,1,1); RGBA=(R,R,R,1) |
+| R | requested 0, 0.25, 0.5, 0.75, 1; UNORM bytes 0, 64, 128, 191, 255 |
+| MaskBlendMode | 0, 1, 2, 3 |
+| Setter | `unsigned long long` and `ID3D12Resource*`, each over the entire matrix |
+| Fixed controls | AutoMask=1, skin=-1, intensity/tone/structure=1, UI correction=1, full subrect, uniform mask |
+| History | New feature and first-frame reset for each trial; 32 frames per trial |
+
+There are 160 masked cases (4 × 5 × 4 × 2), plus 24 null controls: before/repeat/after for each
+setter/mode group. Full mode clears **both** resource setter overloads to null before its selected
+write/read at create and every evaluate, so separate typed slots cannot retain a previous mask.
+Legacy mode retains its original integer writes. This isolates the final setter overload within
+full mode; it does not establish compatibility with the model's resource getter.
+
+The test-only portable `mask_matrix.h` drives the GPU loop. The host suite
+[`nr-controlmask-matrix`](../nr-controlmask-matrix/README.md) compiles that plan and the actual
+full-matrix orchestration branch against recording fakes, and compares all trial metadata with
+`mask_matrix.py`, which drives coverage validation and analysis. It runs no NGX/GPU code.
+
+After the coordinator builds the harness in the serialized MSVC slot, run each model **serially**:
+
+```bash
+LOOPBACK_MODEL=/path/to/model.dll python3 tests/dlssnr-loopback/run.py --present-nr --mask-matrix --skip-build --dll /path/to/OptiScaler.dll
+python3 tests/dlssnr-loopback/analyze_mask.py tests/dlssnr-loopback/artifacts/mask-matrix-run --matrix
+```
+
+Omitting `--skip-build` compiles `harness.cpp`; the worker must wait for coordinator authorization.
+Full mode uses `artifacts/mask-matrix-run`, separate from legacy `artifacts/mask-run`, but successive
+full runs overwrite that same directory. Each full run writes approximately **7.1 GB** of PPMs:
+184 × 7 capture pairs at 1280×720 RGB8. Preserve evidence before the next model/preset run.
+The receipt must report 184 trials, 5888 attempts/successes/presents, 184 ApplyModel=0 controls and
+1288 capture pairs; missing, duplicate, old-mode or partial receipts are rejected.
+
+`analyze_mask.py --matrix` reads all seven frames per trial (0, 1, 8, 15, 16, 24, 31), hashes every
+capture, and requires the model-file identity/preset record. It rejects differing input images,
+nonidentity frame-0 controls, nonzero repeat/closing/null-setter differences and unmasked output
+with maximum change ≤1 in either HUD/rest region at any measured frame. Missing/corrupt images or
+an empty region also reject the run. An invalid run removes a stale report and publishes no success.
+The report contains source MAE/max/fraction changed, mask-versus-null, channel-arm and setter-pair
+comparisons, and edit-MAE/unmasked-MAE ratios (null if the rounded denominator is zero).
+Passing these **evidence controls** makes the comparisons interpretable; it does not imply any
+particular mask semantics. No monotonicity, channel interpretation, GPU cost or game claim is assumed.
+The [dated note](../../docs/dlssnr/design/controlmask-retest-20261126.md) records five complete
+analyses on RTX 4090 / 620.73.04: u64 arms equal null, typed-resource masks affect pixels, R8 equals
+RGBA=(R,0,0,1), and compat 310.9.16 distinguishes blend modes. The official file refused creation;
+310.8.2 needed analysis after a recovered launcher timeout. These are synthetic measurements only.
+
 **2026-10-30 — ControlMask re-test: written, not yet run.**
 `--mask-ab` now runs the re-test that [hud-protection.md](../../docs/dlssnr/design/hud-protection.md)
 ("ControlMask re-test lead") calls for. Two outside sources, not reproduced here, say the mask is RGBA8 with R

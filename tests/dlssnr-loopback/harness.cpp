@@ -380,7 +380,8 @@ int main(int argc, char** argv)
     const bool coldNr = hasFlag("--cold-nr");
     const bool hudAb = hasFlag("--present-hud-ab");
     const bool compositionAb = hasFlag("--present-composition-ab");
-    const bool maskAb = hasFlag("--present-mask-ab");
+    const bool maskMatrix = hasFlag("--present-mask-matrix");
+    const bool maskAb = hasFlag("--present-mask-ab") || maskMatrix;
     const bool transferAb = hasFlag("--present-transfer-ab");
     const bool resetCost = hasFlag("--present-reset-cost");
     const bool uiProtectAb = hasFlag("--present-ui-protect-ab");
@@ -486,6 +487,7 @@ int main(int argc, char** argv)
                 "present delay requires --moving-scene and --moving-present");
         if (sawPresentDelay)
             Say("MOVING-PRESENT delay_ms=%u\n", movingPresentDelayMs);
+        Require(!(maskMatrix && hasFlag("--present-mask-ab")), "mask experiments are mutually exclusive");
         Require(!hasFlag("--present-preset") || maskAb, "--present-preset requires --present-mask-ab");
 
         Say("dlssnr-loopback: driving the production NR path\n");
@@ -612,7 +614,7 @@ int main(int argc, char** argv)
         if (presentNr)
         {
             PresentNr::Run(factory, window, device, queue, alloc, list, fence, fenceEvent, hudAb, compositionAb, maskAb,
-                           transferAb, resetCost, uiProtectAb, presentPreset);
+                           transferAb, resetCost, uiProtectAb, presentPreset, maskMatrix);
             DestroyWindow(window);
             CloseHandle(fenceEvent);
             return 0;
