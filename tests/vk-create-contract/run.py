@@ -110,7 +110,7 @@ production = '\n'.join(production) + '\n'
 
 # The production code reads the NR helpers through its own include root.
 unit = (fakes + '#include <dlssnr/DlssNr_VkExtensions.h>\n#include <hooks/Vulkan_OwnedDeviceRequest.h>\n'
-        '#include <dlssnr/DlssNr_DriverInitGate.h>\n' + production +
+        '#include <dlssnr/DlssNr_DriverInitGate.h>\n#include <dlssnr/DlssNr_VkStorageRuntime.h>\n' + production +
         (HERE / 'cases.cpp').read_text())
 
 CASES = [

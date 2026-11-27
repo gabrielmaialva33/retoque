@@ -1376,3 +1376,54 @@ requires = ["python", "cxx"]
 tier = "host"
 timeout = 120
 summary = "Unwired GPU frame protocol: bounded framing, negotiation, identity/ownership and abandonment under sanitizers; ten independently rejected mutants. No GPU or IPC."
+
+[menu-status-owner]
+path = "menu-status-owner"
+domain = "tooling"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 60
+summary = "DX menu window lease, NCDESTROY forwarding and HWND reuse through production WndProc, and read-only NR Status wording and wiring."
+[xess-unreal]
+path = "xess-unreal"
+domain = "compat"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "XeSS UE View decoder, hook commit rollback, first-device copy admission and startup config gate with host fakes and mutants."
+[mfg-wrapper-preset]
+path = "mfg-wrapper-preset"
+domain = "fg"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "MFG wrapper unique executable match, ceiling/reload identity and opt-in DRS preset answer under ASan/UBSan."
+[nr-vk-core]
+path = "nr-vk-core"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Vulkan NGX device/generation ownership, recent native activity and formatless storage contracts; host only."
+[nr-present-reset]
+path = "nr-present-reset"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "Present camera reset: skipped capture, failed/abandoned submission, concurrent cuts, Streamline and NGX wiring."
+
+[nr-sl-present-guides]
+path = "nr-sl-present-guides"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 180
+summary = "Opt-in Streamline Present guides: real boundary clock, explicit identity, recording/order refusal and priority."
+[nr-controlmask-matrix]
+path = "nr-controlmask-matrix"
+domain = "nr"
+requires = ["python", "cxx"]
+tier = "host"
+timeout = 120
+summary = "ControlMask full matrix and typed setter, coverage receipts and synthetic pixel-analysis rejection controls; no NGX, Wine or GPU."

@@ -332,6 +332,7 @@ class Config
     CustomOptional<bool> CreateDumps { false };
 
     // XeSS
+    CustomOptional<bool> XeSSUnrealDepth { true };
     CustomOptional<bool> BuildPipelines { true };
     CustomOptional<int32_t> NetworkModel { 0 };
     CustomOptional<bool> CreateHeaps { true };
@@ -373,6 +374,7 @@ class Config
     CustomOptional<uint32_t> DlssNrHookMethod { 1 };
     // Present hook: require DLSS temporal inputs or fall back to zero/dummy guides. Default false.
     CustomOptional<bool> DlssNrRequireDlss { false };
+    CustomOptional<bool> DlssNrPresentSlGuides { false };
     // Startup-only D3D12 observer: constant (default) or log; never hands depth to NR.
     CustomOptional<std::string> DlssNrPresentDepth { std::string("constant") };
     // Present hosts on zero guides: start the model's history over every frame. Default false.
@@ -1308,6 +1310,7 @@ class Config
     CustomOptional<bool> FGDLSSGForceDMFG { false };           // Overrides Opti's DLSSG mode to Dynamic
     CustomOptional<float> FGDLSSGFramerateTargetDMFG { 0.0f }; // 0.0 means auto-detects the display refresh rate
 
+    CustomOptional<std::string> FGDLSSGAdaMfgPreset { "auto" }; // Process-local DRS read, restart required
     CustomOptional<bool> FGDLSSGAdaMfgUnlock { false };        // See framegen/dlssg/MfgUnlock.h
     CustomOptional<bool> FGDLSSGAdaBlackwellKernels { false }; // See framegen/dlssg/MfgUnlock.h
     // With AdaMfgUnlock under Proton: answer the driver's Wine DLSS-G with the game's newer copy

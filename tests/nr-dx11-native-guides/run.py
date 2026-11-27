@@ -193,7 +193,8 @@ assert set(re.findall(r'Dx11DeviceContext->(\w+)\(', code(upstream_bridge))) <= 
 
 # --- The capture core both producers share ---------------------------------------------------------------------
 bridged = function(renderer, 'bool CaptureBridgedGuides(')
-assert 'return CaptureGuides(cmdList, source, GatherGuideFrame(params));' in bridged
+assert 'const auto frame = GatherGuideFrame(params);' in bridged
+assert bridged.index('PresentReset::Instance().Observe(') < bridged.index('return CaptureGuides(cmdList, source, frame);')
 assert 'source.output = EvaluateOutput(params, nullptr, outputWidth, outputHeight);' in bridged
 assert 'GetResource(' not in bridged, 'a D3D11 block holds no D3D12 resources'
 guide_frame = function(renderer, 'DlssNrFrameInfo GatherGuideFrame(')

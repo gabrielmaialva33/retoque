@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "Config.h"
+#include <framegen/dlssg/DlssgPresetPolicy.h>
 
 #include "Util.h"
 #include "dlssnr/DlssNr_ModelFile.h"
@@ -407,6 +408,9 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGDLSSGForceDMFG.set_from_config(readBool("DLSSG", "ForceDMFG"));
             FGDLSSGReflexBoost.set_from_config(readBool("DLSSG", "ReflexBoost"));
             FGDLSSGAdaMfgUnlock.set_from_config(readBool("DLSSG", "AdaMfgUnlock"));
+            FGDLSSGAdaMfgPreset.set_from_config(readString("DLSSG", "AdaMfgPreset", true));
+            if (!DlssgPresetPolicy::Parse(FGDLSSGAdaMfgPreset.value_or_default()))
+                FGDLSSGAdaMfgPreset.reset();
             FGDLSSGAdaBlackwellKernels.set_from_config(readBool("DLSSG", "AdaBlackwellKernels"));
             FGDLSSGAdaPreferGameProvider.set_from_config(readBool("DLSSG", "AdaPreferGameProvider"));
         }
@@ -497,6 +501,7 @@ bool Config::Reload(std::filesystem::path iniPath)
 
         // XeSS
         {
+            XeSSUnrealDepth.set_from_config(readBool("XeSS", "UnrealDepth"));
             BuildPipelines.set_from_config(readBool("XeSS", "BuildPipelines"));
             NetworkModel.set_from_config(readInt("XeSS", "NetworkModel"));
             CreateHeaps.set_from_config(readBool("XeSS", "CreateHeaps"));
@@ -522,6 +527,7 @@ bool Config::Reload(std::filesystem::path iniPath)
             DlssNrToggleKey.set_from_config(readInt("DlssNr", "ToggleKey"));
             DlssNrHookMethod.set_from_config(readUInt("DlssNr", "HookMethod"));
             DlssNrRequireDlss.set_from_config(readBool("DlssNr", "RequireDlss"));
+            DlssNrPresentSlGuides.set_from_config(readBool("DlssNr", "PresentSlGuides"));
             DlssNrPresentDepth.set_from_config(readString("DlssNr", "PresentDepth", true));
             DlssNrZeroGuideReset.set_from_config(readBool("DlssNr", "ZeroGuideReset"));
             DlssNrSynthMotion.set_from_config(readBool("DlssNr", "SynthMotion"));
@@ -1837,6 +1843,7 @@ bool Config::SaveIni()
         ini.SetValue("DLSSG", "ForceDMFG", GetBoolValue(Instance()->FGDLSSGForceDMFG.value_for_config()).c_str());
         ini.SetValue("DLSSG", "ReflexBoost", GetBoolValue(Instance()->FGDLSSGReflexBoost.value_for_config()).c_str());
         ini.SetValue("DLSSG", "AdaMfgUnlock", GetBoolValue(Instance()->FGDLSSGAdaMfgUnlock.value_for_config()).c_str());
+        ini.SetValue("DLSSG", "AdaMfgPreset", Instance()->FGDLSSGAdaMfgPreset.value_for_config().value_or("auto").c_str());
         ini.SetValue("DLSSG", "AdaBlackwellKernels",
                      GetBoolValue(Instance()->FGDLSSGAdaBlackwellKernels.value_for_config()).c_str());
         ini.SetValue("DLSSG", "AdaPreferGameProvider",
@@ -1994,6 +2001,7 @@ bool Config::SaveIni()
 
     // XeSS
     {
+        ini.SetValue("XeSS", "UnrealDepth", GetBoolValue(Instance()->XeSSUnrealDepth.value_for_config()).c_str());
         ini.SetValue("XeSS", "BuildPipelines", GetBoolValue(Instance()->BuildPipelines.value_for_config()).c_str());
         ini.SetValue("XeSS", "CreateHeaps", GetBoolValue(Instance()->CreateHeaps.value_for_config()).c_str());
         ini.SetValue("XeSS", "NetworkModel", GetIntValue(Instance()->NetworkModel.value_for_config()).c_str());
@@ -2026,6 +2034,8 @@ bool Config::SaveIni()
         }
         ini.SetValue("DlssNr", "HookMethod", GetIntValue(Instance()->DlssNrHookMethod.value_for_config()).c_str());
         ini.SetValue("DlssNr", "RequireDlss", GetBoolValue(Instance()->DlssNrRequireDlss.value_for_config()).c_str());
+        ini.SetValue("DlssNr", "PresentSlGuides",
+                     GetBoolValue(Instance()->DlssNrPresentSlGuides.value_for_config()).c_str());
         ini.SetValue("DlssNr", "PresentDepth", Instance()->DlssNrPresentDepth.value_for_config_or("auto").c_str());
         ini.SetValue("DlssNr", "ZeroGuideReset",
                      GetBoolValue(Instance()->DlssNrZeroGuideReset.value_for_config()).c_str());

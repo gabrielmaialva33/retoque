@@ -6,6 +6,7 @@
 #include "DlssNr_GpuTiming.h"
 #include "DlssNr_Identity.h"
 #include "DlssNr_PresentColour.h"
+#include "DlssNr_PresentReset.h"
 
 #include <shaders/dlssnr/DlssNr_PresentHdr_Dx12.h>
 #include <shaders/format_transfer/FT_Dx12.h>
@@ -767,6 +768,8 @@ bool PresentHost::Record(ID3D12Device* device, ID3D12GraphicsCommandList* cmdLis
 
     // Which present host this is, for a comparison capture's provenance only.
     frame.BridgeHost = true;
+    _gameResetTicket = PresentReset::Instance().Snapshot();
+    PresentReset::Pending::Apply(_gameResetTicket, frame);
 
     const char* frameReason = "";
     const bool passed = EvaluateAtPresent(cmdList, _toWorking->Buffer(), depth, motion, frame, queue, &frameReason);
@@ -834,6 +837,7 @@ void PresentHost::ConfirmExecuted()
 
     if (_recordedPass)
     {
+        PresentReset::Instance().Confirm(_gameResetTicket, true, true);
         if (_hdrRecordedProfile != 0)
             NotePresentHdr(static_cast<PresentColour>(_hdrRecordedProfile), nullptr, true);
         // The model has seen a frame, so the next one has a history to continue from, and the serial

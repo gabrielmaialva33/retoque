@@ -141,7 +141,9 @@ def verdicts(pairs, source):
     return out
 
 
-def main(directory):
+def main(directory, matrix=False):
+    if matrix:
+        return full_matrix(directory)
     root = Path(directory)
     hashes = {}
     cover = read(root / 'mask-hud-cover.ppm', hashes)[..., 0] > 127
@@ -192,5 +194,84 @@ def main(directory):
     print(f'report: {root / "mask-report.json"}')
 
 
+def full_matrix(directory):
+    """Fail closed on invalid evidence; mask response itself remains a descriptive measurement."""
+    from mask_matrix import trials, pairs as matrix_pairs
+    root = Path(directory)
+    destination = root / 'mask-report.json'
+    destination.unlink(missing_ok=True)  # A failed analysis must not leave an older accepted report.
+    hashes = {}
+    model = json.loads((root / 'mask-model.json').read_text())
+    if (not isinstance(model.get('model'), str) or not model['model'] or
+            type(model.get('bytes')) is not int or model['bytes'] <= 0 or
+            not isinstance(model.get('sha256'), str) or len(model['sha256']) != 64 or
+            any(c not in '0123456789abcdefABCDEF' for c in model['sha256']) or
+            type(model.get('preset')) is not int or model['preset'] not in range(4)):
+        raise RuntimeError('invalid model provenance')
+    cover = read(root / 'mask-hud-cover.ppm', hashes)[..., 0] > 127
+    if not cover.any() or cover.all():
+        raise RuntimeError('mask cover must contain both HUD and rest pixels')
+    regions = {'hud': cover, 'rest': ~cover}
+    rows = trials()
+    source, control = {}, {}
+
+    def image(name, frame, side):
+        return read(root / f'{name}-f{frame}-{side}.ppm', hashes)
+
+    for row in rows:
+        name = row['name']
+        source[name] = {}
+        for frame in (0, *FRAMES):
+            before = image(name, frame, 'before')
+            after = image(name, frame, 'after')
+            reference = image(rows[0]['name'], frame, 'before')
+            if not np.array_equal(before, reference):
+                raise RuntimeError(f'source identity changed: {name} frame {frame}')
+            delta = compare(after, before, regions)
+            if frame == 0:
+                if any(value['max'] != 0 for value in delta.values()):
+                    raise RuntimeError(f'ApplyModel=0 control changed source: {name}')
+                control[name] = delta
+            else:
+                source[name][frame] = delta
+                if not row['masked'] and any(value['max'] <= 1 for value in delta.values()):
+                    raise RuntimeError(f'unmasked positive control is inert: {name} frame {frame}')
+    comparisons = []
+    for a, b, kind in matrix_pairs():
+        frames = {f: compare(image(a, f, 'after'), image(b, f, 'after'), regions) for f in FRAMES}
+        if kind in ('repeat', 'null-after', 'null-setter') and any(
+                metric['max'] != 0 for regions_at_frame in frames.values() for metric in regions_at_frame.values()):
+            raise RuntimeError(f'unstable {kind}: {a} vs {b}')
+        comparisons.append({'a': a, 'b': b, 'kind': kind, 'frames': frames})
+    response = {}
+    for row in rows:
+        if not row['masked']:
+            continue
+        name = row['name']
+        base = f"{row['setter']}-m{row['blend']}-null-r0"
+        response[name] = {f: {region: (round(source[name][f][region]['mae'] / source[base][f][region]['mae'], 6)
+                                         if source[base][f][region]['mae'] else None)
+                             for region in regions} for f in FRAMES}
+    report = {'matrix': 'full-v1', 'model': model, 'trials': rows, 'frames': FRAMES,
+              'hud_pixels': int(cover.sum()), 'rest_pixels': int((~cover).sum()),
+              'source': source, 'pairs': comparisons, 'apply_model_0': control,
+              'edit_mae_over_unmasked': response,
+              'acceptance': {'controls': {'met': True, 'criterion':
+                  'all captures present, identical inputs, exact ApplyModel=0, repeated/closing/null-setter '
+                  'controls identical, unmasked output differs by >1 level in both regions at every frame'}},
+              'limits': 'Synthetic SDR fixture only. Mask responses and channel/setter differences are '
+                        'descriptive, not GPU/game support or perceptual acceptance.', 'sha256': hashes}
+    destination.write_text(json.dumps(report, indent=1))
+    print(f'full-v1: {len(rows)} trials, {len(comparisons)} comparisons; evidence controls met')
+    print(f'report: {destination}')
+
+
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parent / 'artifacts/mask-run')
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('directory', nargs='?')
+    parser.add_argument('--matrix', action='store_true', help='analyze the separate full-v1 matrix')
+    args = parser.parse_args()
+    directory = args.directory or Path(__file__).resolve().parent / 'artifacts' / (
+        'mask-matrix-run' if args.matrix else 'mask-run')
+    main(directory, matrix=args.matrix)

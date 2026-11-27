@@ -120,7 +120,8 @@ struct ID3D12Resource : ID3D12DeviceChild
 {
     D3D12_RESOURCE_DESC desc;
     auto GetDesc() { return desc; }
-    unsigned releases = 0;
+    unsigned releases = 0, adds = 0;
+    void AddRef() { ++adds; }
     bool gpuOutstanding = false;
     void Release()
     {

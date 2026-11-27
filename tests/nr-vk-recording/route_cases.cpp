@@ -1,3 +1,5 @@
+#include <dlssnr/DlssNr_VkActivity.h>
+DlssNr::VkActivity::State g_nativeActivity;
 #include "pch.h"
 #include <vulkan/vulkan.h>
 #include "SysUtils.h"

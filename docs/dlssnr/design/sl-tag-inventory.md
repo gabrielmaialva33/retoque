@@ -13,6 +13,14 @@ that keeps it valid until Present (`sl::eValidUntilPresent`). With `eOnlyValidNo
 Streamline may copy the buffer and the game may reuse the texture before Present. Which titles qualify was not
 known, so this note adds the measurement only.
 
+## Separate b1 transport (2026-11-26)
+
+`PresentSlGuides=false` adds an independently gated D3D12 adapter to the existing hooks. It accepts only complete,
+explicitly matched depth/motion pairs under the [restricted b1 contract](present-depth-without-upscaler.md#approved-b1-implementation-contract).
+The inventory does not grant that adapter permission. Its existing notes and original forwarding are preserved;
+with the option off, no b1 recording hook, copy, allocation or boundary-clock change runs. HUD-less tags remain
+unused. The historical "note only" hook names distinguish them from upstream FG tag processing.
+
 ## What it records
 
 `retoque/dlssnr/DlssNr_SlTagInventory.h` (standard library only) keeps, for each buffer type the game tags with a
@@ -41,8 +49,11 @@ valid until Present only sometimes (both kinds of lifecycle seen).
 ## Where it is fed and said
 
 - **Fed** by the Streamline hooks: upstream's `hkslSetTag`/`hkslSetTagForFrame` when a Streamline FG input
-  installed them, and the evaluate hook, which is always installed. The hooks only note: atomics, no lock, no
-  log, no allocation and no config read in the hook.
+  installed them, and the evaluate hook, which is always installed. The inventory itself only notes: atomics, no lock, no
+  log, no allocation and no config read. The separate b1 adapter has its own activation and capture checks.
+- **2026-11-26 reset forwarding:** with NR enabled, the same installation branch also observes `slSetConstants`
+  for camera cuts (including Streamline 1). Constants do not populate the FG input when that input is inactive.
+  The inventory itself stays log only; the separate opt-in b1 adapter below may capture guides. See [reset forwarding](scene-cut-detection.md#camera-reset-forwarding-2026-11-26).
 - **No Streamline FG input** (the usual case for a game running its own DLSS-G, such as Cyberpunk 2077 with
   `FGInput=auto`): upstream does not install the tag hooks. With NR on, `hkslSetTagNoteOnly` and
   `hkslSetTagForFrameNoteOnly` are installed in their place. They note and forward the call untouched: none of

@@ -38,11 +38,9 @@ native hardware to be found. The audit behind it is docs/dlssnr/design/native-ap
 8. Zero-guide clears are settled. Every object a file calls RecordClear on (a one-way UNORDERED_ACCESS -> rest
    transition recorded once), the same file answers with ConfirmExecuted and AbandonRecording, so a dropped list
    does not leave the guides believed to be in a state they never reached.
-10-11. Open findings, held where the audit left them. Two findings are mechanical but not fixed (the fix changes
-   pixels or needs a shader rebuild): upstream's TranslateTypelessFormats maps R10G10B10A2_TYPELESS to an integer view
-   that the NR passes read through float declarations, and the NR and HDR Vulkan modules declare their storage images
-   Rgba32f while their slots take views of other formats. Each is listed with its reason; a new instance fails, and a
-   listed one that is gone fails until the list and native-api-rules.md are updated.
+10-11. Former audit findings: integer views for float shaders and fixed-format declarations on multi-format
+   storage bindings. Both exception lists are now empty. A reintroduced instance fails. The NR/HDR Vulkan loaders
+   must use the observed enabled-feature gate; the original findings remain in native-api-rules.md as history.
 9. Shader module words. VkShaderModuleCreateInfo::pCode is an array of uint32_t; a create_header.py array is
    unsigned char, so pCode is never one of them cast (VUID-VkShaderModuleCreateInfo-pCode-parameter).
 
@@ -514,11 +512,9 @@ KNOWN_INTEGER_VIEWS = {}
 
 # 11. Vulkan storage images declared with a format in modules whose slots take views of several formats. The NR and HDR
 # modules write the proxy, the meter, the game's output and the HDR targets through one declaration each.
-KNOWN_DECLARED_STORAGE = {
-    'DlssNr_Shader_Vk.spv': 'gTarget/gKeep declared Rgba32f, bound to RGBA16F, R32_SFLOAT and the game\'s format; fix is '
-                            'a rebuild with -fspv-use-unknown-image-format (native-api-rules.md, open)',
-    'DlssNr_PresentHdr_Shader_Vk.spv': 'gOut declared Rgba32f, bound to RGBA16F and A2B10G10R10 (same fix)',
-}
+# Closed 2026-11-26: both modules use Unknown with an observed enabled-feature gate.
+KNOWN_DECLARED_STORAGE = {}
+
 MULTI_FORMAT_MODULES = ('DlssNr_Shader_Vk.spv', 'DlssNr_PresentHdr_Shader_Vk.spv')
 
 
@@ -661,11 +657,24 @@ def check_spirv(modules, loaders, fail):
             fail(f'{rel(path)}: a storage image of format Unknown is accessed without the matching capability')
         stem = path.name.replace('_Shader_Vk.spv', '').replace('.spv', '')
         for want in feature:
-            users = [p for p, t in loaders.items() if re.search(rf'\b{re.escape(stem)}\w*_spv\b', t)]
+            aliases = {'DlssNr_Shader_Vk.spv': 'dlssnr_spv',
+                       'DlssNr_PresentHdr_Shader_Vk.spv': 'dlssnr_present_hdr_spv'}
+            symbol = aliases.get(path.name)
+            users = [p for p, t in loaders.items() if
+                     re.search(rf'\b{re.escape(stem)}\w*_spv\b', t) or
+                     (symbol and re.search(rf'\b{symbol}\b', strip_comments(t)))]
             if not users:
                 fail(f'{rel(path)}: needs {want} and no source loads it under a name this suite can match')
             for user in users:
-                if want not in loaders[user]:
+                checked = want in loaders[user]
+                if path.name in MULTI_FORMAT_MODULES:
+                    # The shared gate admits the enabled feature or a per-format 1.3/flags2 query. A mention in a log is not a check.
+                    policy = next((strip_comments(t) for p, t in loaders.items()
+                                   if p.name == 'DlssNr_VkStorage.h'), '')
+                    checked = (want == 'shaderStorageImageWriteWithoutFormat' and want in policy and
+                               re.search(r'if\s*\(\s*!\s*(?:DlssNr::)?VkStorage::Allows\(',
+                                         strip_comments(loaders[user])) is not None)
+                if not checked:
                     fail(f'{rel(user)}: dispatches {path.name}, which needs {want}, and never checks the feature')
     return blocks_seen
 
@@ -870,8 +879,8 @@ def self_test():
     at, patched = 5, False
     while at < len(words):
         count, op = words[at] >> 16, words[at] & 0xFFFF
-        if op == OP_TYPE_IMAGE and words[at + 7] == 2 and words[at + 8] != 0:
-            words[at + 8] = 0  # the output storage image loses its format
+        if op == OP_CAPABILITY and words[at + 1] == CAP_WRITE_WITHOUT_FORMAT:
+            words[at + 1] = 1  # Lose write capability while the storage type stays Unknown.
             patched = True
         at += count
     seeded = struct.pack(f'<{len(words)}I', *words)
@@ -883,11 +892,18 @@ def self_test():
     check_spirv({Path('DlssNr_Shader_Vk.spv'): seeded}, {Path('loader.cpp'): 'DlssNr_Shader_Vk_spv'}, found.append)
     if not any('never checks the feature' in f for f in found):
         problems.append(f'unchecked feature: expected a failure, got {found or "none"}')
-    # 11. The NR module with its storage images made format-less: the list must be updated.
+    # 11. A declared format reintroduced on a multi-format binding must fail.
+    at, patched = 5, False
+    while at < len(words):
+        count, op = words[at] >> 16, words[at] & 0xFFFF
+        if op == OP_TYPE_IMAGE and words[at + 7] == 2:
+            words[at + 8] = 1  # Rgba32f regression
+            patched = True
+        at += count
     found = []
-    check_declared_storage({Path('DlssNr_Shader_Vk.spv'): seeded}, found.append)
-    if not any('no storage image declares a format' in f for f in found):
-        problems.append(f'fixed declared storage: expected a failure, got {found or "none"}')
+    check_declared_storage({nr_vk: struct.pack(f'<{len(words)}I', *words)}, found.append)
+    if not patched or not any('storage image declared with a format' in f for f in found):
+        problems.append(f'declared storage regression: expected a failure, got {found or "none"}')
     return problems
 
 

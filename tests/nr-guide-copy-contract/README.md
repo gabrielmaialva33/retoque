@@ -43,3 +43,7 @@ sides resolve to one device. `wrapped-device` makes and reuses a guide clone thr
 guide from another adapter. `owner-run.py` adds `dispatch-wrapped` (a pass on the wrapper accepts the game's resources
 on the device beneath), `dispatch-wrapped-foreign` (not from another adapter) and `dispatch-wrapped-list` (a pass on
 the real device still refuses the wrapper's list: lists are held to the exact device).
+
+The 2026-11-26 b1 case also executes the production capture replacement/retention fragment: source references
+are acquired only after capacity and both tracking admissions succeed, and parking uses the capture write Usage.
+Capacity/Track refusal acquires no source reference. This is host ownership evidence, not a GPU lifetime run.

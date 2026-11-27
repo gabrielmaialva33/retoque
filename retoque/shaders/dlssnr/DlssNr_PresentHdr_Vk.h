@@ -4,6 +4,7 @@
 // and uniform records: decode and encode. No per-frame mutation, allocation or descriptor ring. This is a plain
 // handle bundle on purpose: only Destroy() frees it, after all product tickets complete. Zeroing it abandons it.
 #include <vulkan/vulkan.h>
+#include <dlssnr/DlssNr_VkStorageRuntime.h>
 #include <array>
 #include <cstring>
 #include <cstdint>
@@ -106,8 +107,10 @@ struct VkConversion
     }
 
     bool Create(VkDevice device, VkPhysicalDevice physical, uint32_t width, uint32_t height, uint32_t profile,
-                VkImageView original, VkImageView linear, VkImageView encoded)
+                VkFormat raw, VkImageView original, VkImageView linear, VkImageView encoded)
     {
+        if (!VkStorage::Allows(device, { VK_FORMAT_R16G16B16A16_SFLOAT, EncodedFormat(raw) }))
+            return false;
         const auto fail = [&]()
         {
             if (!lost)

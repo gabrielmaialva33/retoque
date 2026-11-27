@@ -15,6 +15,7 @@
 #include "retoque/dlssnr/DlssNr_Coverage.h"
 #include "retoque/dlssnr/DlssNr_Chain.h"
 #include "retoque/dlssnr/DlssNr_PresentBoundary.h"
+#include "retoque/dlssnr/DlssNr_PresentReset.h"
 #include "retoque/dlssnr/DlssNr_DeviceMatch.h"
 #include "retoque/dlssnr/DlssNr_MultiView.h"
 #define FMT_HEADER_ONLY
@@ -78,6 +79,7 @@ constexpr auto NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X = "X";
 constexpr auto NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y = "Y";
 constexpr auto NVSDK_NGX_Parameter_Width = "NVSDK_Width";
 constexpr auto NVSDK_NGX_Parameter_Height = "NVSDK_Height";
+constexpr auto NVSDK_NGX_Parameter_Reset = "Reset";
 constexpr auto NVSDK_NGX_Parameter_OutWidth = "OutWidth";
 constexpr auto NVSDK_NGX_Parameter_OutHeight = "OutHeight";
 constexpr auto NVSDK_NGX_Parameter_DLSS_Feature_Create_Flags = "Flags";

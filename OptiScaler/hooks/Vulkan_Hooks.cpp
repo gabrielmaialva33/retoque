@@ -1,4 +1,5 @@
 #include "pch.h"
+#include <dlssnr/DlssNr_VkStorageRuntime.h>
 
 #include "Vulkan_Hooks.h"
 
@@ -725,6 +726,7 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
                                  const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
 {
     LOG_FUNC();
+    const bool nr = Config::Instance()->DlssNrEnabled.value_or_default();
 
     VkDeviceCreateInfo localCreateInfo {};
     memcpy(&localCreateInfo, pCreateInfo, sizeof(VkDeviceCreateInfo));
@@ -874,6 +876,19 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
             }
         }
 
+        const bool storageInternal = ScopedSkipVulkanHooks::Active();
+        const bool storageEnabled = nr && !storageInternal;
+        const auto storagePhysical = storageEnabled
+                                         ? DlssNr::VkStorage::Query(physicalDevice, physicalDeviceInstance,
+                                                                    o_vkGetInstanceProcAddr, requestedApiVersion)
+                                         : DlssNr::VkStorage::PhysicalFacts {};
+        DlssNr::VkStorage::Request storageRequest(&localCreateInfo, nr, storageInternal, storagePhysical.supported,
+                                                  storagePhysical.apiVersion);
+        if (storageRequest.Added())
+            localCreateInfo = *storageRequest.Info(&localCreateInfo);
+        if (storageEnabled)
+            DlssNr::VkStorage::Note(storageRequest);
+
         {
             // With NR on, never at the same moment as the model's NGX calls: the driver can freeze the two against
             // each other (retoque/dlssnr/DlssNr_DriverInitGate.h). NR off, the call is what it was.
@@ -881,6 +896,11 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
                                                Config::Instance()->DlssNrEnabled.value_or_default(), "vkCreateDevice");
             result = o_vkCreateDevice(physicalDevice, &localCreateInfo, pAllocator, pDevice);
         }
+
+        if (result == VK_SUCCESS && storageEnabled)
+            DlssNr::VkStorage::Registry().Created(
+                *pDevice, DlssNr::VkStorage::Describe(&localCreateInfo, storagePhysical.apiVersion), physicalDevice,
+                storagePhysical.formats, false);
 
         // Observe while deviceFeatures and nrExtensions still own the effective request's pointers.
         // The driver-init gate is already released; installation must not run under it.

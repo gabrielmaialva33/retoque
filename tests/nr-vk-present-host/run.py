@@ -195,7 +195,7 @@ assert own_calls == {'g_getDeviceProcAddr', 'g_getQueueFamilies', 'g_getSurfaceC
 # Every hook hands its arguments down exactly once on each path, and only two things are ever edited on the way.
 for call, times in (('o_CreateInstance(info, allocator, instance)', 1), ('o_DestroyInstance(instance, allocator)', 1),
                     ('o_EnumeratePhysicalDevices(instance, count, devices)', 1),
-                    ('o_CreateDevice(physical, edited ? &withExtensions : info, allocator, device)', 1),
+                    ('o_CreateDevice(physical, effectiveInfo, allocator, device)', 1),
                     ('o_CreateWin32Surface(instance, info, allocator, surface)', 1),
                     ('o_DestroySurface(instance, surface, allocator)', 1), ('VulkanHooks::DestroyDevice(next, device, allocator)', 1),
                     ('next(device, family, index, queue)', 1), ('next(device, info, queue)', 1),
@@ -402,8 +402,8 @@ assert 'Guarded(g_vk.shutdown1, device, &remaining)' in forwarder
 assert 'using PFN_NrVkShutdown1 = int(__cdecl*)(void*, unsigned int*);' in forwarder
 # The core's own entry is reached through NVNGXProxy's adapter, which supplies that count (tests/nr-shutdown runs both);
 # the host keeps the public one-argument signature and no cast of it to the private one.
-core_shutdown = code(function(feature_vk, 'void ShutdownPresentCore(VkDevice device)'))
-assert 'NVNGXProxy::VULKAN_Shutdown1()' in core_shutdown and 'shutdown(device);' in core_shutdown
+core_shutdown = code(function(feature_vk, 'void ShutdownPresentCore(VkCore::Token token, bool forgetOnly = false)'))
+assert 'NVNGXProxy::ShutdownOwnedVulkan(token, forgetOnly);' in core_shutdown
 assert 'cast' not in core_shutdown and 'unsigned int' not in core_shutdown and 'PFN_' not in core_shutdown
 assert 'reinterpret_cast<PFN_Shutdown1>' not in code(feature_vk)
 assert 'VULKAN_Shutdown1()(' not in code(model)
@@ -553,7 +553,9 @@ print('PASS: the way back (begun only with no model here and the route quiet sin
 for name, text in (('Admit', admit), ('Record', record_model)):
     for forbidden in ('g_fwd.init', 'g_fwd.create', 'g_fwd.probe', 'NVNGXProxy::', 'CreateImageOn(', 'DlssNr_Vk>(',
                       'vkCreate', 'vkAllocate', 'LoadForwarderShared', 'vkCmdClearColorImage'):
-        assert forbidden not in text, (name, forbidden)
+        # Metadata-only read; still forbid every opaque NGX call on the present path.
+        checked = text.replace('NVNGXProxy::VulkanCoreMatches(', 'CoreMatches(')
+        assert forbidden not in checked, (name, forbidden)
 assert admit.index('DecideBuild(') < admit.index('m.Adopt();') and 'm.Request(want);' in admit
 assert admit.index('DecideBuild(') < admit.index('pending.size() >= VkPresentHost::kNrInFlightMax')
 assert re.search(r'return \{ NrSkip::Building,', admit)
@@ -658,7 +660,9 @@ for forbidden in ('LOG_', 'QueueSubmit', 'WaitIdle', 'WaitForFences', 'vkGetFenc
     assert forbidden not in code(synth_vk), forbidden
 for name, text in (('Admit', admit), ('Record', record_model)):
     for forbidden in ('CreateVkImages(', 'CreateVkPipelines(', 'VkUnsupported('):
-        assert forbidden not in text, (name, forbidden)
+        # Metadata-only read; still forbid every opaque NGX call on the present path.
+        checked = text.replace('NVNGXProxy::VulkanCoreMatches(', 'CoreMatches(')
+        assert forbidden not in checked, (name, forbidden)
 # The estimator at the model's working size; and an adoption that latched it off is the product this frame wants (the
 # want is asked again after it), never a second build asking for it again.
 assert 'SynthWanted(synthConfigured, !m.synthOff.empty(), workWidth, workHeight)' in flat(admit)

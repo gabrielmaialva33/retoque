@@ -46,10 +46,11 @@ kibblerz probed feature 18 of the same 310.8 package directly
   and the finished `Backbuffer`. On a present source the two are the same image, so that mechanism
   cannot find the HUD, and an explicit alpha is needed. This is a hypothesis; the harness mode
   below does not test it yet.
-- **The ControlMask disagreement is not settled.** kibblerz reports that `DLSSNR.ControlMask`
-  overrides the automatic mask. control-mask.md found no effect in 13 trials, with the mask written
-  through the same `unsigned long long` slot the forwarder uses for `Color`, which works. Both used
-  310.8. This slice does not depend on ControlMask. `--mask-ab` stays available to re-ask.
+- **2026-11-26: the parameter overload explains the fixture disagreement.** The historical
+  u64 no-effect result is reproduced across five model files, while `ID3D12Resource*` masks change
+  pixels, including the same 310.8.2 hash. R8 matches RGBA=(R,0,0,1); changing G/B changes response.
+  See the [dated measurements and limits](controlmask-retest-20261126.md). This slice still does
+  not use ControlMask; the experiment is not production/game qualification.
 - **2026-10-30: the "no effect" result may be specific to 310.8. This is a re-test lead, not a result.** Two
   later sources, read with `gh api` and not reproduced here:
   - **NVIDIA's RTX Remix** (`NVIDIAGameWorks/dxvk-remix` commit `09808cc70`, 2026-10-16) now always passes a
@@ -67,6 +68,12 @@ kibblerz probed feature 18 of the same 310.8 package directly
     non-uniform R channel.
 
 ## Where a UI alpha can come from
+
+**2026-11-26 re-test:** the [184-case paired-setter experiment](controlmask-retest-20261126.md)
+measured four 310.8 files and 310.9.16 compat-FP16 on RTX 4090 / 620.73.04. The official
+310.9.16 file refused feature creation, so it has no mask-effect result. Host validation passed
+156/156; one launcher timeout was recovered after complete capture and strict analysis.
+No production behavior changed; the original 24-case mode remains available.
 
 | Route | Source | Cost | Quality |
 |---|---|---|---|
@@ -210,7 +217,7 @@ capture the HUD.
 - A debug view of the mask. It needs a slot in the NR shader's debug views, which means both shader
   targets rebuilt, so it is left for the next slice.
 - Vulkan.
-- The ControlMask disagreement with kibblerz's findings.
+- Production/route qualification of ControlMask after the [paired-setter measurements](controlmask-retest-20261126.md).
 - Building the mask at the frame's size, or testing stillness on the full-size source. The mask is at
   the working size and stretched by the resolve; at 50% a protected edge is 2 px wide on screen.
 

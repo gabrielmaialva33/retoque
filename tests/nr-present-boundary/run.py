@@ -37,6 +37,18 @@ if gate not in install or install.index(gate) > install.index('DetourTransaction
 for note in ('NoteWrappedPresent(', 'NoteDlssgEvaluate(', 'NoteExecute('):
     body = probe[probe.index(f'void DlssNr::SlBoundaryProbe::{note}'):]
     first = body[body.index('{') + 1:].lstrip()
+    if note == 'NoteDlssgEvaluate(':
+        # Camera reset observation is independent of this diagnostic probe, but still NR-gated.
+        reset_prefix = '''if (Config::Instance()->DlssNrEnabled.value_or_default() && params != nullptr)
+    {
+        unsigned int reset = 0;
+        unsigned int multiFrameIndex = 1;
+        params->Get("DLSSG.MultiFrameIndex", &multiFrameIndex);
+        if (multiFrameIndex <= 1 && params->Get("DLSSG.Reset", &reset) == NVSDK_NGX_Result_Success)
+            PresentReset::Instance().Observe(true, reset != 0);
+    }'''
+        assert first.startswith(reset_prefix), 'NGX reset forwarding changed outside its NR-only contract'
+        first = first[len(reset_prefix):].lstrip()
     if not first.startswith('if (!g_installed.load()'):
         failures.append(f'{note} does work before checking that the probe is installed')
 for hook in ('hkPresent(', 'hkPresent1('):

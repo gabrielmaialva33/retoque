@@ -530,6 +530,7 @@ struct DlssNrFrameInfo
 {
     bool Reset = false;
     bool ResetIsPolicy = false;
+    bool ResetIsSceneCut = false;
     bool ColourIsLinearHdr = true;
     void* ExposureTexture = nullptr;
     float PreExposure = 1.0f;

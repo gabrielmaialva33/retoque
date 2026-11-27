@@ -64,6 +64,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: ControlMask analyzer host-test dependencies
+        run: python3 -m pip install numpy Pillow
+
       - name: Toolchain versions
         run: |
           g++ --version | head -1

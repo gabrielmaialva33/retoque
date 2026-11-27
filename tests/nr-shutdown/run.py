@@ -56,9 +56,15 @@ vk_getter = between('    static PFN_VULKAN_Shutdown1 VULKAN_Shutdown1()', '    s
 # Both consumers of the public getter: the SDK input (with the all-devices shutdown it ends in) and the NR present host.
 vk_public = (definition(vk_input, 'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown(void)') +
              definition(vk_input, 'NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_VULKAN_Shutdown1(VkDevice InDevice)'))
-vk_host = definition(feature_vk, 'void ShutdownPresentCore(VkDevice device)')
+vk_host = definition(feature_vk, 'void ShutdownPresentCore(VkCore::Token token, bool forgetOnly = false)')
+vk_bookkeeping = '\n'.join(definition(source, signature) for signature in (
+    '    static void SetVulkanInited(', '    static DlssNr::VkCore::Token VulkanCore()',
+    '    static bool VulkanCoreMatches(', '    static bool IsVulkanInited()',
+    '    static bool ShutdownOwnedVulkan('))
 unit = """
 #include <cassert>
+#include <dlssnr/DlssNr_VkCore.h>
+namespace VkCore = DlssNr::VkCore;
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -107,10 +113,9 @@ class NVNGXProxy
     inline static Module _module;
     inline static bool _dx12Inited = false;
     inline static bool _dx11Inited = false;
-    inline static bool _vulkanInited = false;
-    static void SetVulkanInited(bool value) { _vulkanInited = value; }
-    static bool IsVulkanInited() { return _vulkanInited; }
-    static PFN_VULKAN_Shutdown VULKAN_Shutdown() { return _vulkanInited ? _module.VULKAN_Shutdown : nullptr; }
+    inline static DlssNr::VkCore::State _vulkanCore;
+""" + vk_bookkeeping + """
+    static PFN_VULKAN_Shutdown VULKAN_Shutdown() { return IsVulkanInited() ? _module.VULKAN_Shutdown : nullptr; }
     // The loader line as NvngxModule::LoadExports has it, its Export resolved through KernelBaseProxy.
     static void* Export(const char*, const char* name) { return KernelBaseProxy::GetProcAddress_()(_module.dll, name); }
     static void LoadDx11() {
@@ -176,7 +181,7 @@ with tempfile.TemporaryDirectory(prefix='optiscaler-ngx-shutdown-') as directory
     cpp.write_text(unit)
     subprocess.run(['g++', '-std=c++20', '-O1', '-g', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', '-fno-omit-frame-pointer',
-                    str(cpp), '-o', str(binary)], check=True)
+                    '-I'+str(root/'retoque'), str(cpp), '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True)
 # The runtime evidence judge for the existing Vulkan cases, against synthetic runs (no Wine or GPU here).
 subprocess.run([sys.executable, str(here / 'test_vk_shutdown_evidence.py')], check=True)

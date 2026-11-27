@@ -104,7 +104,7 @@ class StreamlineProxy
             auto dlssgPath = localSlPath / L"nvngx_dlssg.dll"; // TODO: maybe some search?
             State::Instance().optiDLSSG = NtdllProxy::LoadLibraryExW_Ldr(dlssgPath.c_str(), NULL, NULL);
 
-            MfgUnlock::TryApply();
+            MfgUnlock::TryApply(State::Instance().optiDLSSG);
 
             return HookStreamline(_dll);
         }
@@ -184,6 +184,8 @@ class StreamlineProxy
         std::filesystem::path localSlPath(Config::Instance()->MainDllPath.value());
         localSlPath = localSlPath / L"streamline" / L"sl.dlss_g.dll";
         auto dlssg = NtdllProxy::LoadLibraryExW_Ldr(localSlPath.c_str(), NULL, NULL);
+
+        MfgUnlock::TryApply(nullptr, dlssg);
 
         // if already hooked
         if (_slDLSSGSetOptions != nullptr)

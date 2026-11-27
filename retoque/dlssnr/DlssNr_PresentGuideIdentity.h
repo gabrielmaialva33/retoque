@@ -63,6 +63,9 @@ struct Stamp
     uint64_t presentEpoch = 0;       // the frame boundary count when the capture was made
     uint32_t evalsSincePresent = 0;  // this capture's ordinal since that boundary, on its device at its output extent
     const void* swapchain = nullptr; // the device's one presenter (see Present::swapchain); null for none or several
+    bool streamline = false;
+    uint32_t slToken = 0;
+    uint64_t slRevision = 0;
 };
 
 using Stamps = std::array<Stamp, kRingSize>;
@@ -81,6 +84,7 @@ struct Present
     uint64_t lastConsumed = 0;       // ring sequence of the capture this consumer last used; 0 for none
     int64_t nowMs = 0;
     bool enforceLag = true; // rule 6 refuses; false: a capture past kLag is accepted and marked (Decision::lagBeyond)
+    bool allowStreamline = false;
 };
 
 // In the order the rules are checked; the first that fails is the answer.
@@ -158,7 +162,8 @@ inline Extent RenderExtent(uint32_t subrectWidth, uint32_t subrectHeight, uint32
 inline bool SameFrame(const Stamp& a, const Stamp& b)
 {
     return a.device == b.device && a.outputWidth == b.outputWidth && a.outputHeight == b.outputHeight &&
-           a.presentEpoch == b.presentEpoch;
+           a.presentEpoch == b.presentEpoch && a.streamline == b.streamline &&
+           (!a.streamline || a.slToken == b.slToken);
 }
 
 // How many captures fed the picked one's frame at its extent: those before it, which its ordinal counts even after
@@ -200,6 +205,9 @@ inline Decision Decide(size_t picked, const PresentGuides::Ring& ring, const Sta
     const auto refuse = [](Reason reason) { return Decision { kRingSize, reason }; };
     const PresentGuides::Slot& slot = ring.GetSlot(picked);
     const Stamp& stamp = stamps[picked];
+
+    if (stamp.streamline && !present.allowStreamline)
+        return refuse(Reason::Ambiguous);
 
     // 1. The copies live on the device that will read them. Unknown on either side is not a match.
     if (stamp.device == nullptr || stamp.device != present.device)
@@ -404,20 +412,34 @@ class Tracker
             return;
 
         stamp.presentEpoch = _epoch;
-        stamp.evalsSincePresent = _frame.Next(stamp.device, stamp.outputWidth, stamp.outputHeight, _epoch);
+        stamp.evalsSincePresent =
+            stamp.streamline ? 1 : _frame.Next(stamp.device, stamp.outputWidth, stamp.outputHeight, _epoch);
         stamp.swapchain = _presenters.Sole(stamp.device, nowMs);
         _stamps[slot] = stamp;
     }
 
-    // At a present, after PickForPresent. Marks a frame boundary, notes the presenter, fills the present's epoch and
-    // swapchain count, and decides.
-    Decision AtPresent(size_t picked, const PresentGuides::Ring& ring, Present& present)
+    // Mark a real boundary, note its presenter and fill the epoch/count, independently of capture or selection.
+    void ObservePresent(Present& present)
     {
         ++_epoch;
         _presenters.Note(present.device, present.swapchain, present.nowMs);
         present.epoch = _epoch;
         present.swapchainsOnDevice = _presenters.Count(present.device, present.nowMs);
+    }
+
+    // Opt-in callers observe the owning real boundary before optional work, even with an empty ring.
+    // A concurrent boundary cannot lend its epoch to this decision.
+    Decision AtObservedPresent(size_t picked, const PresentGuides::Ring& ring, const Present& present) const
+    {
+        if (present.epoch == 0 || present.epoch != _epoch)
+            return { kRingSize, Reason::Lag };
         return Decide(picked, ring, _stamps, present);
+    }
+
+    Decision AtPresent(size_t picked, const PresentGuides::Ring& ring, Present& present)
+    {
+        ObservePresent(present);
+        return AtObservedPresent(picked, ring, present);
     }
 
     const Stamps& Stamped() const { return _stamps; }

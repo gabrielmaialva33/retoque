@@ -2,6 +2,8 @@
 
 #include "MfgUnlock.h"
 #include "MfgPatchPlan.h"
+#include "MfgWrapperPolicy.h"
+#include "DlssgPresetPolicy.h"
 #include "MfgProbe.h"
 
 #include <Config.h>
@@ -20,6 +22,8 @@ namespace
 {
 std::atomic<uint64_t> g_mfgProviderGeneration { 0 };
 std::atomic<HMODULE> g_mfgLastProvider { nullptr };
+// Conservative minimum across all observed providers; unknown version vetoes preset C.
+std::atomic<uint64_t> g_presetRuntime { UINT64_MAX };
 
 static void PublishProviderGeneration(HMODULE provider, bool updated)
 {
@@ -41,24 +45,7 @@ constexpr std::string_view kAdvertisePattern = "BB 01 00 00 00 41 B8 ? 00 00 00 
 // is followed by a signed branch and a count test.
 constexpr std::string_view kValidatePattern = "3D B0 01 00 00 7C ? 83 FB 03 76";
 
-// sl.dlss_g.dll, where the count nvngx published is taken as min(published, 3):
-//     mov   r8d, 0x3
-//     cmp   ecx, r8d
-//     cmovb r8d, ecx
-// The wrapper carries its own ceiling, so raising nvngx alone gets three back.
-//
-// The ceiling is a wildcard so a build that already carries five is recognised rather than missed.
-// This register allocation is Streamline 2.7.1's (Cyberpunk 2077) and no other build seen here.
-constexpr std::string_view kWrapperClampPattern = "41 B8 ? 00 00 00 41 3B C8 44 0F 42 C1";
-
-// The same clamp in every other wrapper seen: 2.7.3, 2.7.30, 2.8.0, 2.9.0, 2.9.1 and 2.14.1, each one
-// match in .text across eleven copies from ten games (2026-10-14).
-//     mov   edx, 0x3          five in 2.14, which already allows 6X and needs no write
-//     cmp   ecx, edx
-//     cmovb edx, ecx
-// The r8d pattern alone missed all of them, so on 2.7.3 to 2.9 the unlock stopped at 4X; and the
-// "wrapperClamp=MISS" of the Crimson Desert run was this shape on 2.14.1, where it cost nothing.
-constexpr std::string_view kWrapperClampPatternEdx = "BA ? 00 00 00 3B CA 0F 42 D1";
+// Wrapper maximum shapes and their unique-match/ceiling policy live in MfgWrapperPolicy.h.
 
 // The four gate shapes with the architecture constant's low byte left open. Tried only after the
 // exact pattern missed: a hit means the gate is there but compares against something other than
@@ -446,36 +433,49 @@ KernelSwap PatchBlackwellKernels(HMODULE module, LiveOps& ops)
 }
 
 // Plans raising the wrapper's own ceiling to match, so the min() keeps what nvngx published. A
-// ceiling that is already five or more is planned as a site with nothing to write.
-bool PlanWrapperClamp(HMODULE module, std::vector<MfgPatch::Site>& plan, LiveOps& ops)
+// ceiling that is already five is planned as a site with nothing to write; other values are refused.
+// The load hook owns a mapped module; never retain section pointers after this call.
+std::vector<MfgWrapper::Section> WrapperSections(HMODULE module)
 {
-    // The ceiling's immediate sits at offset 2 behind the 41 B8 of mov r8d, and at offset 1 behind the
-    // BA of mov edx.
-    uintptr_t countAt = 0;
-    const char* shape = "";
+    std::vector<MfgWrapper::Section> out;
+    const auto base = reinterpret_cast<const uint8_t*>(module);
+    if (!base)
+        return out;
+    const auto dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0)
+        return out;
+    const auto nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        return out;
+    const auto section = IMAGE_FIRST_SECTION(nt);
+    for (unsigned i = 0; i < nt->FileHeader.NumberOfSections; ++i)
+    {
+        const auto& entry = section[i];
+        const size_t imageSize = nt->OptionalHeader.SizeOfImage;
+        if (!(entry.Characteristics & IMAGE_SCN_MEM_EXECUTE) || entry.VirtualAddress >= imageSize)
+            continue;
+        const size_t length = std::min<size_t>(entry.Misc.VirtualSize, imageSize - entry.VirtualAddress);
+        out.push_back({ base + entry.VirtualAddress, length, true });
+    }
+    return out;
+}
 
-    if (const auto address = scanner::GetAddress(module, kWrapperClampPattern); address != 0)
+bool PlanWrapperClamp(std::span<const MfgWrapper::Section> sections, std::vector<MfgPatch::Site>& plan, LiveOps& ops)
+{
+    const auto match = MfgWrapper::Scan(sections);
+    if (match.matches != 1)
     {
-        countAt = address + 2;
-        shape = "r8d";
-    }
-    else if (const auto address = scanner::GetAddress(module, kWrapperClampPatternEdx); address != 0)
-    {
-        countAt = address + 1;
-        shape = "edx";
-    }
-    else
-    {
-        LOG_WARN("MFG unlock: the wrapper clamp signature did not match, sl.dlss_g.dll's ceiling left alone");
+        LOG_WARN("MFG unlock: wrapper clamp has {} executable matches (expected exactly 1); left alone", match.matches);
         return false;
     }
-
-    const uint8_t current = *(const uint8_t*) countAt;
-    const uint8_t count[] = { std::max(current, kMaxGeneratedFrames) };
-
-    LOG_INFO("MFG unlock: wrapper clamp ({}) at {:X}, count {} -> {}", shape, countAt, current, count[0]);
-
-    return MfgPatch::AddSite(plan, ops, countAt, count, sizeof(count));
+    if (!match.Accepted())
+    {
+        LOG_WARN("MFG unlock: wrapper clamp built-in maximum {} is not 1, 3 or 5; left alone", match.maximum);
+        return false;
+    }
+    const uint8_t count[] = { kMaxGeneratedFrames, 0, 0, 0 };
+    LOG_INFO("MFG unlock: wrapper clamp at {:X}, count {} -> {}", match.countAt, match.maximum, kMaxGeneratedFrames);
+    return MfgPatch::AddSite(plan, ops, match.countAt, count, sizeof(count));
 }
 
 // Plans removing the driver profile's cap on generated frames. Only seen in Streamline 2.14 so far; the
@@ -648,7 +648,7 @@ version_t ModuleVersion(HMODULE module)
     wchar_t modulePath[MAX_PATH] = {};
     GetModuleFileNameW(module, modulePath, MAX_PATH);
 
-    version_t v;
+    version_t v {};
     Util::GetFileVersion(modulePath, &v);
     return v;
 }
@@ -691,7 +691,15 @@ MfgUnlock::GateReport MfgUnlock::ProbeGates(HMODULE provider)
 
 uint64_t MfgUnlock::ProviderGeneration() { return g_mfgProviderGeneration.load(std::memory_order_acquire); }
 
-void MfgUnlock::TryApply(HMODULE provider)
+bool MfgUnlock::PresetProviderObserved() { return g_presetRuntime.load(std::memory_order_acquire) != UINT64_MAX; }
+
+uint64_t MfgUnlock::PresetRuntimeVersion()
+{
+    const auto version = g_presetRuntime.load(std::memory_order_acquire);
+    return version == UINT64_MAX ? 0 : version;
+}
+
+void MfgUnlock::TryApply(HMODULE provider, HMODULE wrapper)
 {
     // The step-0 MFG-below-Ada probe (MfgProbe.h) looks first: before the option check, so it runs with the
     // unlock off, and before any write below, so it describes the provider as NVIDIA shipped it. Both load
@@ -718,7 +726,7 @@ void MfgUnlock::TryApply(HMODULE provider)
     // recognisable name, so only the load hook can hand it over; asked without one, this can find only
     // the game's copy.
     static std::vector<HMODULE> snippetsDone;
-    static bool wrapperDone = false;
+    static MfgWrapper::Attempts wrappersDone;
 
     LiveOps ops;
     HMODULE observedProvider = provider;
@@ -727,6 +735,17 @@ void MfgUnlock::TryApply(HMODULE provider)
     {
         HMODULE module = provider != nullptr ? provider : GetModuleHandleW(L"nvngx_dlssg.dll");
         observedProvider = module;
+
+        // Read every explicit provider load, even if its gates are foreign/unrecognized and the
+        // patch latch will not retry it. An older remap must never inherit a newer preset-C version.
+        if (module != nullptr &&
+            (provider != nullptr || std::find(snippetsDone.begin(), snippetsDone.end(), module) == snippetsDone.end()))
+        {
+            const auto v = ModuleVersion(module);
+            const auto version = DlssgPresetPolicy::Version(v.major, v.minor, v.patch);
+            g_presetRuntime.store(std::min(g_presetRuntime.load(std::memory_order_relaxed), version),
+                                  std::memory_order_release);
+        }
 
         // A module NGX unloaded and loaded again can come back at the same address, so the same HMODULE,
         // as NVIDIA shipped it: Cyberpunk 2077 under Proton (2026-11-22) mapped the game's provider twice
@@ -841,40 +860,55 @@ void MfgUnlock::TryApply(HMODULE provider)
         }
     }
 
-    if (!wrapperDone)
+    // Actual load handle first: GetModuleHandleW alone cannot distinguish the game's and the
+    // private plugin (or an OTA plugin with another basename). Fallbacks cover pre-existing loads.
+    const HMODULE candidates[] = { wrapper, GetModuleHandleW(L"sl.dlss_g.dll") };
+    for (auto module : candidates)
     {
-        if (auto module = GetModuleHandleW(L"sl.dlss_g.dll"); module != nullptr)
+        const auto identity = reinterpret_cast<uintptr_t>(module);
+        if (!module || (module != wrapper && wrappersDone.Contains(identity)))
+            continue;
+        const auto sections = WrapperSections(module);
+        if (!wrappersDone.NeedsAttempt(identity, module == wrapper, sections))
+            continue;
+        wrappersDone.Remember(identity, {});
+
+        const auto interposer = GetModuleHandleW(L"sl.interposer.dll");
+        const bool legacy =
+            interposer && MfgWrapper::LegacyInterposer(GetProcAddress(interposer, "slInit") != nullptr,
+                                                       GetProcAddress(interposer, "slGetFeatureFunction") != nullptr);
+        if (legacy || ModuleVersion(module).major == 1)
         {
-            wrapperDone = true;
-            updated = true;
-
-            // The two wrapper patches are independent ceilings, so each is its own commit: one missing
-            // does not make the other wrong.
-            std::vector<MfgPatch::Site> clampPlan;
-            const PatchStatus wrapperClamp = PlanWrapperClamp(module, clampPlan, ops)
-                                                 ? FromOutcome(MfgPatch::Commit(clampPlan, ops))
-                                                 : PatchStatus::Miss;
-
-            std::vector<MfgPatch::Site> drsPlan;
-            PatchStatus drsClamp = PatchStatus::Skip;
-            if (PlanSlDrsClamp(module, drsPlan, ops))
-                drsClamp = FromOutcome(MfgPatch::Commit(drsPlan, ops));
-            else if (ModuleVersion(module) >= version_t(2, 14, 0, 0))
-                drsClamp = PatchStatus::Miss;
-
-            // Same one-line summary for the wrapper. This is the patch that half-applied in the
-            // Crimson Desert run - wrapperClamp missed while everything else took - and the miss was
-            // one line lost in the log; here it is the level of the whole summary.
-            const auto line = std::format("MFG unlock summary ({}): wrapperClamp={} drsClamp={}", Describe(module),
-                                          Status(wrapperClamp), Status(drsClamp));
-
-            if (wrapperClamp == PatchStatus::Broken || drsClamp == PatchStatus::Broken)
-                LOG_ERROR("{}", line);
-            else if (Faulted(wrapperClamp) || Faulted(drsClamp))
-                LOG_WARN("{}", line);
-            else
-                LOG_INFO("{}", line);
+            LOG_INFO("MFG unlock: {} is on a Streamline 1.x route; wrapper patches skipped", Describe(module));
+            continue;
         }
+        updated = true;
+        std::vector<MfgPatch::Site> committed;
+        std::vector<MfgPatch::Site> clampPlan;
+        const PatchStatus wrapperClamp = PlanWrapperClamp(sections, clampPlan, ops)
+                                             ? FromOutcome(MfgPatch::Commit(clampPlan, ops))
+                                             : PatchStatus::Miss;
+        if (Applied(wrapperClamp))
+            committed.insert(committed.end(), clampPlan.begin(), clampPlan.end());
+
+        std::vector<MfgPatch::Site> drsPlan;
+        PatchStatus drsClamp = PatchStatus::Skip;
+        if (Applied(wrapperClamp) && PlanSlDrsClamp(module, drsPlan, ops))
+            drsClamp = FromOutcome(MfgPatch::Commit(drsPlan, ops));
+        else if (Applied(wrapperClamp) && ModuleVersion(module) >= version_t(2, 14, 0, 0))
+            drsClamp = PatchStatus::Miss;
+        if (Applied(drsClamp))
+            committed.insert(committed.end(), drsPlan.begin(), drsPlan.end());
+        wrappersDone.Remember(identity, committed);
+
+        const auto line = std::format("MFG unlock summary ({}): wrapperClamp={} drsClamp={}", Describe(module),
+                                      Status(wrapperClamp), Status(drsClamp));
+        if (wrapperClamp == PatchStatus::Broken || drsClamp == PatchStatus::Broken)
+            LOG_ERROR("{}", line);
+        else if (Faulted(wrapperClamp) || Faulted(drsClamp))
+            LOG_WARN("{}", line);
+        else
+            LOG_INFO("{}", line);
     }
 
     // Publish only after all writes/rollbacks, so a query can capture a completed patch generation.

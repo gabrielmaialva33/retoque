@@ -98,6 +98,8 @@ inline bool Track(ID3D12GraphicsCommandList*, Usage& u) {
     return true;
 }
 }
+static bool g_slRetireCapOk = true;
+static bool SlSourceRetirementCapacity(size_t reservations) { assert(reservations >= 2 && reservations <= 4); return g_slRetireCapOk; }
 static bool g_retireCapOk = true;
 static bool PresentGuideRetirementCapacity() { return g_retireCapOk; }
 static uint64_t PresentGuideCloneBytes(ID3D12Device*, ID3D12Resource* res) {
@@ -132,7 +134,8 @@ struct FakeSlotClone {
     unsigned sourceMotionFlags = 0;
 };
 bool RunCaptureReplaceStep(FakeSlotClone& clone, ID3D12Device* device, ID3D12GraphicsCommandList* cmdList,
-                           ID3D12Resource* depth, ID3D12Resource* motion) {
+                           ID3D12Resource* depth, ID3D12Resource* motion, bool streamline = false) {
+    struct { struct { bool streamline; } output; } source { { streamline } };
     device->AddRef();
     const void* const devId = static_cast<const void*>(device);
     const auto depthDesc = depth->GetDesc();
@@ -172,6 +175,26 @@ int main(int argc,char**argv) {
         assert(!RejectUnusableClone(false));assert(g_presentGuideRing.invalidations==1);
         assert(g_lastSkipReason==DlssNr::PresentGuideIdentity::ProducerReason::Incompatible);
         assert(!RejectUnusableClone(true));assert(g_presentGuideRing.invalidations==1);
+    } else if(which=="capture-sl-source-refs") {
+        FakeSlotClone clone;
+        auto d = std::make_unique<ID3D12Resource>(); auto m = std::make_unique<ID3D12Resource>();
+        d->device = m->device = &a;
+        // The real b1 source-retention fragment runs only after capacity and both tracks succeeded.
+        g_slRetireCapOk = false;
+        const auto allocs = allocations;
+        assert(!RunCaptureReplaceStep(clone, &a, &cmd, d.get(), m.get(), true));
+        assert(allocations == allocs && d->adds == 0 && m->adds == 0 && g_parkedClones == 0);
+        g_slRetireCapOk = true; DlssNr::Submission::g_trackOk = false;
+        assert(!RunCaptureReplaceStep(clone, &a, &cmd, d.get(), m.get(), true));
+        assert(d->adds == 0 && m->adds == 0 && g_parkedClones == 0);
+        DlssNr::Submission::g_trackOk = true;
+        assert(RunCaptureReplaceStep(clone, &a, &cmd, d.get(), m.get(), true));
+        assert(d->adds == 1 && m->adds == 1 && d->releases == 0 && m->releases == 0);
+        assert(g_parkedClones == 2 && g_lastParkedWriteTag == clone.captureWriteUsage.tag);
+        // The fixture's parking container owns these source objects now, as well as the cloned resources below.
+        d.release(); m.release();
+        ParkNrClone(clone.depth, clone.writeUsage, clone.tracked);
+        ParkNrClone(clone.motion, clone.writeUsage, clone.tracked);
     } else if(which=="capture-prepark-order") {
         FakeSlotClone clone;
         assert(RunCaptureReplaceStep(clone, &a, &cmd, &depth, &motion));
@@ -275,7 +298,7 @@ with tempfile.TemporaryDirectory(prefix='retoque-device-owner-') as temp:
                  'dispatch-output','dispatch-exposure','dispatch-owner','dispatch-valid','dispatch-stale','dispatch-detached',
                  'dispatch-wrapped','dispatch-wrapped-foreign','dispatch-wrapped-list',
                  'capture-cmd','capture-motion','capture-planes','capture-quality','capture-mips',
-                 'capture-two-planes','capture-valid','capture-postallocation','capture-prepark-order'):
+                 'capture-two-planes','capture-valid','capture-postallocation','capture-prepark-order','capture-sl-source-refs'):
         r=subprocess.run([str(binary),name], timeout=15)
         if r.returncode:failures.append(name)
         else:print('PASS:',name,flush=True)

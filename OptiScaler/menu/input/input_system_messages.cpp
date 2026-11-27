@@ -716,6 +716,23 @@ static WNDPROC OriginalWndProcLocked(HWND hwnd)
 
 LRESULT CALLBACK OptiInputWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    // ShyVortex/OptiScaler-DLSSNR-PreSR-Multipass 66d9ff2d (GPL-3.0): a lost chain
+    // lives until its window's last message. Forward without the mutex, then forget the HWND.
+    // Do this before input handling, so even a consumed message cannot retain a stale entry.
+    if (msg == WM_NCDESTROY)
+    {
+        WNDPROC originalWndProc = nullptr;
+        {
+            std::unique_lock lock(_state.Mutex);
+            originalWndProc = OriginalWndProcLocked(hwnd);
+        }
+        const LRESULT result = originalWndProc != nullptr ? CallWindowProcW(originalWndProc, hwnd, msg, wParam, lParam)
+                                                          : DefWindowProcW(hwnd, msg, wParam, lParam);
+        std::unique_lock lock(_state.Mutex);
+        _state.OriginalWndProcs.erase(hwnd);
+        return result;
+    }
+
     if (msg == WM_NULL)
     {
         WNDPROC originalWndProc = nullptr;

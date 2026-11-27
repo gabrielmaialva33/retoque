@@ -1,6 +1,7 @@
 #include "pch.h"
 
 #include "DlssNr_SlBoundaryProbe.h"
+#include "DlssNr_PresentReset.h"
 #include "DlssNr.h"
 
 #include <Config.h>
@@ -611,6 +612,15 @@ void DlssNr::SlBoundaryProbe::NoteWrappedPresent(ID3D12CommandQueue* queue, bool
 
 void DlssNr::SlBoundaryProbe::NoteDlssgEvaluate(ID3D12GraphicsCommandList* list, NVSDK_NGX_Parameter* params)
 {
+    if (Config::Instance()->DlssNrEnabled.value_or_default() && params != nullptr)
+    {
+        unsigned int reset = 0;
+        unsigned int multiFrameIndex = 1;
+        params->Get("DLSSG.MultiFrameIndex", &multiFrameIndex);
+        if (multiFrameIndex <= 1 && params->Get("DLSSG.Reset", &reset) == NVSDK_NGX_Result_Success)
+            PresentReset::Instance().Observe(true, reset != 0);
+    }
+
     if (!g_installed.load())
         return;
 

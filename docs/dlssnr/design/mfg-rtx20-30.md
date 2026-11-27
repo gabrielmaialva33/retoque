@@ -753,3 +753,35 @@ frames, or only the interface.
 7. **Where should the admission answer for G1 be armed when `slInit` precedes the provider load?** Hashing the provider
    file on disk at `slInit` is one answer; it misses OTA and DriverStore substitutions.
 8. **The licences** (Legal, above), before step 3 ships.
+
+## Wrapper and preset hardening (2026-11-26, host evidence only)
+
+The Ada unlock now receives the actual `sl.dlss_g` load handle, including private/OTA copies,
+and retains independent attempts per module. On a load notification, NVIDIA's original bytes
+at a previously committed site invalidate the latch even at the same address (provider twin:
+`15282cd3`). New executable-section bounds are checked before reading such a site. Repeated
+loads of an unchanged image and refused/failed attempts remain latched. A same-address reload
+of a previously refused image is not retried; no patch had succeeded there to distinguish it.
+
+Both known maximum-clamp shapes are counted across executable sections. Exactly one match and
+a built-in DWORD maximum of 1, 3 or 5 are required; an ambiguous or unsupported image gets no
+wrapper writes, including the optional DRS count clamp. Streamline 1.x interposers (`slInit`
+without `slGetFeatureFunction`), and wrappers reporting major version 1, are skipped. This
+adapts the conservative admission idea of `dashdogy/RTX40MFG-Unlock` at `bb2c902` (MIT), not its
+control route, loader or ceiling implementation. The transactional patch/rollback layer stays.
+
+`[DLSSG] AdaMfgPreset=auto|a|b|c` adapts only shyvortex-presr `1397ca97`'s GPL-3.0 preset policy
+and process-local DRS answer. Auto is unchanged. With the unlock on, only key `0x10E41DF1` can
+be answered; a missing key becomes a current-profile DWORD. Other driver errors, types and
+struct versions stay untouched. No profile is written. The preset selection latches on its
+first read; save and restart to change it. C requires a known provider version >=310.9.16;
+the minimum across observed providers is used, so an older or unknown copy vetoes C for the
+session, even if subsequently unloaded. A/B do not require the C version gate.
+
+The control is absent without the unlock, a native DLSS-G route, an observed provider, or a DRS function to intercept.
+C is disabled while its version gate is not satisfied. The existing interpolation-count setting
+remains the sole multiplier control; no RTX 20/30 loader or unified hardware switch was ported.
+
+Evidence: [host policies](../../../tests/mfg-wrapper-preset/README.md) exercise synthetic
+reload/section/ceiling and preset-answer cases. Pending: MSVC DLL build, real module load/unload,
+Proton/game/GPU behavior and native Windows validation. No runtime qualification is implied.

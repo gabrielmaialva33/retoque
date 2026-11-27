@@ -112,6 +112,11 @@ These can be changed from the in-game menu with real-time results (except `UseDe
 
 ```ini
 [XeSS]
+; Recover scene depth and render-resolution motion vectors from the Unreal Engine XeSS plugin
+; Startup setting: restart the game after changing it
+; true or false - Default (auto) is true
+UnrealDepth=auto
+
 ; Building pipeline for XeSS before init
 ; true or false - Default (auto) is true
 BuildPipelines=auto 
@@ -136,6 +141,10 @@ Enabled=auto
 ; Possible values are at the end of the file - Default (auto) is 0
 ColorSpaceConversion=auto
 ```
+
+`UnrealDepth=false` disables the Unreal Engine XeSS plugin hooks for recovered scene depth and
+render-resolution motion vectors. Set it before starting the game; changing it requires a restart.
+`auto`/`true` preserves the existing automatic recovery. It does not disable XeSS inputs or upscaling.
 
 The `BuildPipelines` parameter allows XeSS pipelines to be built during context creation to prevent stuttering later.
 
@@ -489,6 +498,11 @@ RequireDlss=auto
 ; Never supplies depth to the model. No observer hooks/bookkeeping with constant, auto or an invalid value.
 ; constant or log - Default (auto) is constant. D3D11 and Vulkan discovery are not implemented.
 PresentDepth=auto
+
+; Opt-in D3D12 Streamline guide transport; enable before startup.
+; Explicit frame token/viewport, complete pair and recording/order proof required.
+; HUD-less use is refused without a separately specified same-frame GPU guard.
+PresentSlGuides=false
 
 ; Present hosts running on zero guides (no upscaler handed over depth and motion): start the model's
 ; history over every frame. With zero motion the model believes nothing moved and blends the new frame
@@ -1033,3 +1047,13 @@ DLSSG provider without replacing its FG backend. See
 
 
 
+
+### DLSS-G process preset (Retoque)
+
+`[DLSSG] AdaMfgPreset=auto` leaves the driver response unchanged. With `AdaMfgUnlock=true`,
+`a`, `b` or `c` answers only the process's read of the DLSS-G preset setting; the saved NVIDIA
+profile is never written. Unknown text falls back to auto. Save and restart after changing it.
+Preset C is answered only when all observed provider versions are known and at least 310.9.16.
+An old or unknown provider keeps the original answer. The menu control appears only on a native
+DLSS-G route with the unlock enabled, a provider observed and the DRS hook available; C is disabled until its version
+gate is satisfied. This adds neither an RTX 20/30 loader nor another multiplier control.

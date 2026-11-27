@@ -27,7 +27,7 @@ expected = {'#include "DlssNr_AdvisorRuntime.h"', '#include "pch.h"', '#include 
             '#include <Logger.h>', '#include "DlssNr_ZeroGuides.h"', '#include <d3d12.h>', '#include <chrono>',
             '#include <cstdint>', '#include <memory>', '#include "DlssNr_PresentColour.h"',
             '#include "DlssNr_GpuTiming.h"', '#include <shaders/dlssnr/DlssNr_PresentHdr_Dx12.h>',
-            '#include <optional>'}
+            '#include <optional>', '#include "DlssNr_PresentReset.h"'}
 found = {l.strip() for l in (source + '\n' + header).splitlines() if l.startswith('#include')}
 assert found == expected, f'production include boundary changed: {sorted(found ^ expected)}'
 
@@ -53,6 +53,7 @@ assert book_includes == {'#include "DlssNr_PresentColour.h"', '#include <mutex>'
 
 unit = (here / 'fakes.h').read_text().replace('#pragma once\n', '', 1)
 unit += '\n#include <dlssnr/DlssNr_AdvisorRuntime.h>\n'
+unit += '\n#include <dlssnr/DlssNr_PresentReset.h>\n'
 unit += '\n' + strip_includes(colour)
 unit += '\n' + strip_includes(hdr_numbers)
 unit += '\n' + strip_includes(book)

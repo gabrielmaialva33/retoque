@@ -449,6 +449,9 @@
     <ClInclude Include="inputs\XeSS_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="inputs\XeSS_UE_Decode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="inputs\XeSS_UE_Dx12.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -1101,6 +1104,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\retoque\menu\input\kcd_input_fix.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\menu\MenuWindowOwnerPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\menu\NrStatusRules.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\retoque\menu\input\native_key_state.h">
@@ -2502,6 +2511,18 @@
     <ClCompile Include="..\retoque\lsfg\presenter\MfgSwapChain_DebugPacing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClInclude Include="..\retoque\framegen\dlssg\MfgWrapperPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetPolicy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetDrs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\retoque\framegen\dlssg\DlssgPresetMenu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\retoque\framegen\dlssg\MfgProbe.h">
       <Filter>Header Files</Filter>
     </ClInclude>
